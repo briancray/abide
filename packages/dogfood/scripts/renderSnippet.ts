@@ -17,8 +17,12 @@ export type SnippetAddress = { example: string; file: string; anchor: string }
 
 const TAG = /<\/?([a-zA-Z][\w-]*)|\/>/g
 
-// Depth after one line of markup. `<input …>` is void so it nets zero, `<select …>`
-// opens one, `</select>` closes it, and `<Stepper …/>` closes itself.
+/**
+ * Depth after one line of markup.
+ *
+ * `<input …>` is void so it nets zero, `<select …>` opens one, `</select>` closes it, and
+ * `<Stepper …/>` closes itself.
+ */
 function tagDepthOf(line: string): number {
     let depth = 0
     TAG.lastIndex = 0
@@ -34,9 +38,12 @@ function tagDepthOf(line: string): number {
     return depth
 }
 
-// Depth after one line of code, skipping brackets that are inside a string or a comment.
-// A template literal's `${…}` nests, so the quote arm counts brackets rather than
-// swallowing to the closing backtick.
+/**
+ * Depth after one line of code, skipping brackets that are inside a string or a comment.
+ *
+ * A template literal's `${…}` nests, so the quote arm counts brackets rather than swallowing to
+ * the closing backtick.
+ */
 function bracketDepthOf(line: string, depth: number): number {
     let quote = ''
     for (let index = 0; index < line.length; index += 1) {
@@ -69,9 +76,13 @@ function dedent(lines: string[]): string {
     return out.join('\n')
 }
 
-// EXACTLY ONE match is the contract, and both ways of missing it are errors worth
-// telling apart: none means the code moved, two means the anchor stopped identifying
-// anything. Either way the page is making a claim the file no longer supports.
+/**
+ * The first and last line of the construct the one line starting with `anchor` opens.
+ *
+ * EXACTLY ONE match is the contract, and both ways of missing it are errors worth telling apart:
+ * none means the code moved, two means the anchor stopped identifying anything. Either way the
+ * page is making a claim the file no longer supports.
+ */
 function runOf(
     lines: string[],
     anchor: string,
@@ -101,12 +112,17 @@ function runOf(
     return [start, Math.min(end, lines.length - 1)]
 }
 
-// SEVERAL ANCHORS, one fence. A section's claim is often two lines that are not one
-// construct — a declaration and the markup that reads it — and showing them as two
-// captioned blocks reads as two subjects. `…` is the separator because it is the mark
-// that goes BETWEEN the runs in the output too, and because no line of code contains one.
+/**
+ * The separator between a snippet's anchors, and between their runs in its fence.
+ *
+ * SEVERAL ANCHORS, one fence. A section's claim is often two lines that are not one construct — a
+ * declaration and the markup that reads it — and showing them as two captioned blocks reads as
+ * two subjects. `…` is the separator because it is the mark that goes BETWEEN the runs in the
+ * output too, and because no line of code contains one.
+ */
 export const ELISION = ' … '
 
+/** The dedented lines each anchor addresses, in file order, with a `…` line over each gap. */
 export function slice(source: string, anchor: string, where: string): string {
     const lines = source.split('\n')
     const runs: [number, number][] = []
@@ -135,6 +151,7 @@ export function slice(source: string, anchor: string, where: string): string {
     return dedent(out).trimEnd()
 }
 
+/** The slice a snippet address names, refused unless the file is one of its example's. */
 async function readSlice(address: SnippetAddress): Promise<string> {
     const { example, file, anchor } = address
     // A SNIPPET QUOTES AN EXAMPLE, not the app at large: the file has to be one the example is
@@ -148,21 +165,27 @@ async function readSlice(address: SnippetAddress): Promise<string> {
     return slice(source, anchor, `snippet ${example} ${file}`)
 }
 
-// The caption, the language and the SPINE are all derived from the address — an author
-// names a file and a line, never a colour or a suffix, so a snippet cannot claim a seam
-// its path contradicts. An anchored slice is partial BY CONSTRUCTION, so it says so.
+/**
+ * The snippet's caption: its file as an author imports it, marked as an excerpt when anchored.
+ *
+ * The caption, the language and the SPINE are all derived from the address — an author names a
+ * file and a line, never a color or a suffix, so a snippet cannot claim a seam its path
+ * contradicts. An anchored slice is partial BY CONSTRUCTION, so it says so.
+ */
 function captionOf(address: SnippetAddress): string {
     return displayPath(
         address.anchor ? `${address.file} — excerpt` : address.file,
     )
 }
 
+/** The snippet as a captioned, highlighted `<figure>` for the site. */
 export async function snippetHtml(address: SnippetAddress): Promise<string> {
     const code = await readSlice(address)
     return `<figure class="snippet" data-side="${sideOf(address.file)}">
 <figcaption>${escapeAttribute(captionOf(address))}</figcaption><pre><code>${highlight(code)}</code></pre></figure>`
 }
 
+/** The snippet as a captioned fence for the markdown twin. */
 export async function snippetMarkdown(
     address: SnippetAddress,
 ): Promise<string> {

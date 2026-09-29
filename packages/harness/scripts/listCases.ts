@@ -5,7 +5,7 @@
 // moved. A COUNT IS NOT A COST, and converting one to the other is what this file is.
 //
 // IN `scripts/` AND BROWSER-ONLY, for the same two reasons the reactive cases are.
-// `batch()` refuses a duration whose op touched an emulated DOM (44.18) and it is
+// `batch()` refuses a duration whose op touched an emulated DOM (44.23) and it is
 // right to: a reorder in happy-dom is a fact about happy-dom, because only a real
 // engine puts the moved element in a reflow. So there is no bun-side entry here —
 // these run through `e2e/list.spec.ts` and nowhere else.
@@ -26,10 +26,14 @@ import {
 
 type Case = {
     name: string
-    // What the case is FOR. A benchmark case earns its place by DISTINGUISHING
-    // implementations, not by being representative.
+    /**
+     * What the case is FOR.
+     *
+     * A benchmark case earns its place by DISTINGUISHING implementations, not by being
+     * representative.
+     */
     distinguishes: string
-    // Rebuilt per rep, because every arm MUTATES the document it was given.
+    /** Builds the three arms over fresh hosts; every arm MUTATES the document it was given. */
     setup: () => {
         vanilla: () => void
         abide: () => void
@@ -55,7 +59,7 @@ function markup(rows: Datum[]): string {
     return out
 }
 
-/** A `<ul>` holding the region anchors and `count` rendered rows, attached to the document. */
+/** A `<ul>` holding the region anchors and `rows` rendered, attached to the document. */
 function host(rows: Datum[]): {
     list: HTMLElement
     region: { open: Comment; close: Comment }
@@ -209,6 +213,7 @@ function listCase(
     }
 }
 
+/** The four keyed-reorder cases, from the distinguishing swap to the full reverse. */
 export const listCases = (): Case[] => [
     listCase(
         'two adjacent rows swap, 200 keyed rows',

@@ -26,7 +26,11 @@ const BASELINE: Record<string, string[]> = {
     'form-action': ["'self'"],
 }
 
-// 29.3, 29.4 — this response's nonce, readable in a request scope alone.
+/**
+ * This response's nonce, minted on first ask.
+ *
+ * 29.3, 29.4 — readable in a request scope alone.
+ */
 function nonce(): string {
     const scope = within('csp.nonce')
     scope.nonce ??= randomToken(16, 'base64')

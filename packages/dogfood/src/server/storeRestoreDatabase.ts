@@ -7,7 +7,7 @@
 
 const SETTINGS = new Map<string, string>()
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     settings: {
         async read(name: string): Promise<string | null> {

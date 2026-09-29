@@ -1,6 +1,10 @@
 import type { Diagnosis } from './TypeSession.ts'
 
-// 38.3 — an offset into a file's text as the line and column an editor shows, both from 1.
+/**
+ * An offset into a file's text as the line and column an editor shows, both from 1.
+ *
+ * 38.3.
+ */
 export function lineOf(
     text: string,
     offset: number,
@@ -16,7 +20,7 @@ export function lineOf(
     return { line, column: end - lineStart + 1 }
 }
 
-// abide's own finding at `offset` into `text`, or at line 0 where the text was not handed in.
+/** abide's own finding at `offset` into `text`, or at line 0 where the text was not handed in. */
 export function diagnosisAt(
     path: string,
     text: string | undefined,

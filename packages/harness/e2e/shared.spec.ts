@@ -25,6 +25,6 @@ test('shared allocations, current against candidate, in this engine', async ({
             }
         ).__SHARED_BENCH__(60_000_000_000),
     )) as SharedRow[]
-    const { printShared } = await import('../scripts/sharedRun.ts')
-    console.log(`\n=== ${testInfo.project.name} ===\n${printShared(rows)}`)
+    const { formatShared } = await import('../scripts/sharedRun.ts')
+    console.log(`\n=== ${testInfo.project.name} ===\n${formatShared(rows)}`)
 })

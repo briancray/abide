@@ -19,12 +19,12 @@ import type { BrowserFrame, ServerFrame } from '#shared/socket.ts'
 import { applyPatch } from './applyPatch.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
 
-// How many productions a subscriber's copy retains for a cursor to replay.
+/** How many productions a subscriber's copy retains for a cursor to replay. */
 const COPY_HISTORY = 100
 const RETRY_FLOOR_MS = 250
 const RETRY_CEILING_MS = 10_000
 
-// A SOCKET SUBSCRIBED: a log, numbered by its owner (9.14), resumed from where it stood (18.13).
+/** A socket subscribed: an owner-numbered log (9.14), resumed from where it stood (18.13). */
 class Subscription {
     id: number
     address: string
@@ -36,7 +36,9 @@ class Subscription {
     seq: number | undefined
     epoch: string | undefined
 
-    // 9.29 — BUSY UNTIL THE FIRST PRODUCTION ARRIVES, which settles the value it was built over.
+    /**
+     * 9.29 — BUSY UNTIL THE FIRST PRODUCTION ARRIVES, which settles the value it was built over.
+     */
     constructor(id: number, address: string, args: unknown) {
         this.id = id
         this.address = address
@@ -105,9 +107,13 @@ class Subscription {
     }
 }
 
-// 18.17 — A HANDLER FOLLOWED, beside the sockets on the same mux. Its copy is the `Rpc`'s entry for
-// these args, reached through `entry` — a lookup by then, the follow starting once it has loaded.
-// STATE, NOT A LOG: it names the version it holds (18.24) and takes whatever value it is sent (18.25).
+/**
+ * A handler followed over the socket mux, its copy the `Rpc`'s entry for these args.
+ *
+ * 18.17 — beside the sockets on the same mux. The copy is reached through `entry` — a lookup by
+ * then, the follow starting once it has loaded. STATE, NOT A LOG: it names the version it holds
+ * (18.24) and takes whatever value it is sent (18.25).
+ */
 class Following {
     id: number
     address: string
@@ -131,9 +137,13 @@ class Following {
         this.expiry = undefined
     }
 
-    // 18.29 — THE COPY GOES STALE WHEN THE ANSWER'S `max-age` RUNS OUT, which is what is left of the
-    // production's own life on the server (21.8). Stale rather than dropped: it goes on being served
-    // until a read runs the producer (7.17). The later answer's timer replaces the earlier.
+    /**
+     * Marks the copy stale when the answer's `max-age` runs out.
+     *
+     * 18.29 — the `max-age` is what is left of the production's own life on the server (21.8).
+     * Stale rather than dropped: it goes on being served until a read runs the producer (7.17). The
+     * later answer's timer replaces the earlier.
+     */
     expireAfter(life: string | null | undefined): void {
         clearTimeout(this.expiry)
         // `max-age=0` is a life the server rounded down to nothing, and stale now — only an answer
@@ -178,6 +188,7 @@ class Following {
     }
 }
 
+/** One web socket carrying every socket and followed handler under one address. */
 class Mux {
     url: string
     socket: WebSocket | null
@@ -204,8 +215,12 @@ class Mux {
         }
     }
 
-    // A subscription is never queued: `onopen` sends every one standing, so one registered before
-    // the socket opens goes out with them.
+    /**
+     * Registers a subscription and sends it, opening the socket where it is not open.
+     *
+     * A subscription is never queued: `onopen` sends every one standing, so one registered before
+     * the socket opens goes out with them.
+     */
     subscribe(subscription: Subscription | Following): void {
         this.subscriptions.set(subscription.id, subscription)
         if (this.socket?.readyState === WebSocket.OPEN)
@@ -245,8 +260,12 @@ class Mux {
 
 const MUXES = new Map<string, Mux>()
 
-// The mux a socket's or a handler's address is carried over: `SOCKET_ADDRESS` under whatever the
-// address stands below, so an app under a sub-path opens its own.
+/**
+ * The mux a socket's or a handler's address is carried over, made on first use.
+ *
+ * `SOCKET_ADDRESS` under whatever the address stands below, so an app under a sub-path opens its
+ * own.
+ */
 function muxFor(address: string): Mux {
     const below = address.indexOf(ABIDE_ADDRESS)
     const path = `${below === -1 ? '' : address.slice(0, below)}${SOCKET_ADDRESS}`
@@ -260,6 +279,7 @@ function muxFor(address: string): Mux {
     return mux
 }
 
+/** The browser's socket for `address`: a call per args answering a subscriber's copy. */
 export function socketWire(address: string): unknown {
     const copies = new Map<string, Reactive<unknown>>()
     const call = (args?: unknown): Reactive<unknown> => {
@@ -282,10 +302,15 @@ export function socketWire(address: string): unknown {
     return Object.assign(call, { address, isError: isFailedNamed })
 }
 
-// ONE FOLLOW PER HANDLER AND ARGS for the life of the page, however often the entry loads. A later
-// answer names a later version, which is what a reconnect then names (18.24).
+/**
+ * The follow standing per handler and args, one for the life of the page.
+ *
+ * One however often the entry loads. A later answer names a later version, which is what a
+ * reconnect then names (18.24).
+ */
 const FOLLOWING = new Map<string, Following>()
 
+/** Follows a loaded `GET`'s copy over the mux, raising its version and resetting its expiry. */
 export function followRpc(
     address: string,
     args: unknown,

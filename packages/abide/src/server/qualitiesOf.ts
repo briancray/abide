@@ -1,6 +1,9 @@
-// A `;q=`-weighted list header — `accept`, `accept-encoding` — as each token's quality, in the order
-// the header lists them. A QUALITY THAT DOES NOT PARSE REFUSES, rather than reading as the default
-// of 1, and `q=0` is a refusal rather than a low preference.
+/**
+ * Each token of a `;q=`-weighted list header, to its quality, in the order the header lists them.
+ *
+ * For `accept` and `accept-encoding`. A QUALITY THAT DOES NOT PARSE REFUSES, rather than reading as
+ * the default of 1, and `q=0` is a refusal rather than a low preference.
+ */
 export function qualitiesOf(header: string): Map<string, number> {
     const qualities = new Map<string, number>()
     for (const part of header.split(',')) {

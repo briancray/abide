@@ -7,6 +7,7 @@
 
 import { MOUNT_META } from './MOUNT_META.ts'
 
+/** The app's mount, `''` for the root: the document's `<meta>` until a server fills the slot. */
 export const MOUNT: { current: () => string } = { current: documentMount }
 
 // READ ONCE PER DOCUMENT. A document abide did not render carries no `<meta>`, and a selector that
@@ -24,14 +25,16 @@ function documentMount(): string {
     return documentMountRead
 }
 
-// An address below the app's root, as the address it is served at.
+/** An address below the app's root, as the address it is served at. */
 export function mounted(address: string): string {
     const mount = MOUNT.current()
     return mount === '' ? address : `${mount}${address}`
 }
 
-// A served pathname, as the address below the app's root — or `undefined` where it is not under the
-// mount at all.
+/**
+ * A served pathname, as the address below the app's root — or `undefined` where it is not under
+ * the mount at all.
+ */
 export function unmounted(pathname: string): string | undefined {
     const mount = MOUNT.current()
     if (mount === '') return pathname

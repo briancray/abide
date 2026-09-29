@@ -15,21 +15,28 @@ import type { Origin, Span } from './projectShadow.ts'
 // A `.abide` IMPORT NAMES ITS CHECKED MODULE, so a component a page imports resolves to something
 // the checker can read rather than to a file it cannot parse. What a checked module exports as its
 // default is a component taking what its `props` call declares, so a tag is held to it (38.41).
+
+/** What a `.abide`'s checked module is registered with the checker as, beside the `.abide`. */
 export const CHECKED_SUFFIX = '.check.ts'
 
-// `refusals` are at projection offsets (`Lowering.refusals`).
+/** A `.abide` lowered as the program it runs as, with its runs mapped back to the projection. */
 export type CheckedShadow = {
     text: string
     origins: Origin[]
+    /** What the lowering refused, at projection offsets (`Lowering.refusals`). */
     refusals: { at: number; message: string }[]
 }
 
-// What a checked module's default export is declared as. Scaffolding, so a jump to it is a jump to
-// the component's file (`TypeSession.inspect`).
+/**
+ * What a checked module's default export is declared as. Scaffolding, so a jump to it is a jump to
+ * the component's file (`TypeSession.inspect`).
+ */
 export const COMPONENT_STAND_IN = '__component'
 
-// The whole of what a checked module exports, and so all a module importing one sees of it: a
-// component, called with the record its tag passes (`projectShadow`'s `invocation`).
+/**
+ * The whole of what a checked module exports, and so all a module importing one sees of it: a
+ * component, called with the record its tag passes (`projectShadow`'s `invocation`).
+ */
 function componentModule(props: string): string {
     return `
 declare const ${COMPONENT_STAND_IN}: (record: ${props}) => void
@@ -37,13 +44,18 @@ export default ${COMPONENT_STAND_IN}
 `
 }
 
-// A component nothing has lowered takes anything, which is no finding rather than a wrong one.
+/** A component nothing has lowered takes anything, which is no finding rather than a wrong one. */
 export const COMPONENT_MODULE = componentModule('any')
 
-// 33.2 — a component with no `props` call takes no prop of its own; 33.16 — `children` is the one
-// key every component takes, and the tag's body passes it rather than an attribute.
+/**
+ * The props type of a component with no `props` call.
+ *
+ * 33.2 — a component with no `props` call takes no prop of its own; 33.16 — `children` is the one
+ * key every component takes, and the tag's body passes it rather than an attribute.
+ */
 const NO_PROPS = '{ [key: string]: never }'
 
+/** The file lowered the way the emitters lower it, for the checker to report on. */
 export function checkedShadow(
     file: AbideFile,
     reads: readonly Read[],
@@ -106,9 +118,13 @@ export function checkedShadow(
     }
 }
 
-// 33.4 — WHAT THE CHILD DECLARES IS WHAT A CALLER IS HELD TO: the type `props<X>()` hands back, read
-// off the call as the author wrote it, which stands at the top of the module where this is
-// declared. 33.3 — `props()` with no argument hands back the untyped record, and takes anything.
+/**
+ * The props type a caller is held to, spelled off the file's `props` call.
+ *
+ * 33.4 — WHAT THE CHILD DECLARES IS WHAT A CALLER IS HELD TO: the type `props<X>()` hands back, read
+ * off the call as the author wrote it, which stands at the top of the module where this is
+ * declared. 33.3 — `props()` with no argument hands back the untyped record, and takes anything.
+ */
 function propsOf(text: string, reads: readonly Read[]): string {
     for (const read of reads)
         if (read.shape === 'props')
@@ -118,12 +134,19 @@ function propsOf(text: string, reads: readonly Read[]): string {
     return NO_PROPS
 }
 
-// An import of a `.abide`, static or dynamic: what precedes the specifier, its quote, and the
-// specifier.
+/**
+ * An import of a `.abide`, static or dynamic: what precedes the specifier, its quote, and the
+ * specifier.
+ */
 const ABIDE_IMPORT = /(\bfrom\s*|\bimport\s*\(?\s*)(['"])([^'"\n]+\.abide)\2/g
 
-// `from '…/Card.abide'` becomes `from '…/Card.abide.check.ts'` in the script blocks, which are all
-// that can import. Each insertion moves every run after it, and splits the run it lands in.
+/**
+ * Points each `.abide` import in the script blocks at its checked module, and moves `origins` to
+ * match.
+ *
+ * `from '…/Card.abide'` becomes `from '…/Card.abide.check.ts'` in the script blocks, which are all
+ * that can import. Each insertion moves every run after it, and splits the run it lands in.
+ */
 function pointAtCheckedModules(
     text: string,
     origins: Origin[],
@@ -178,9 +201,11 @@ function pointAtCheckedModules(
     return { text: out, origins: moved }
 }
 
-// Where a position in `text` came from: the start of the run holding it, plus how far in. A
-// position in scaffolding — between runs — is placed at the end of the run before it, which is the
-// source the scaffolding was written for.
+/**
+ * Where a position in `text` came from: the start of the run holding it, plus how far in. A
+ * position in scaffolding — between runs — is placed at the end of the run before it, which is the
+ * source the scaffolding was written for.
+ */
 export function mapBack(origins: readonly Origin[], position: number): number {
     let low = 0
     let high = origins.length
@@ -194,8 +219,10 @@ export function mapBack(origins: readonly Origin[], position: number): number {
     return origin.source + Math.min(position - origin.at, origin.length)
 }
 
-// Where the run holding `position` was copied from, or `undefined` where no run holds it — the
-// strict `mapBack`, for a position that may be scaffolding.
+/**
+ * Where the run holding `position` was copied from, or `undefined` where no run holds it — the
+ * strict `mapBack`, for a position that may be scaffolding.
+ */
 export function copiedFrom(
     origins: readonly Origin[],
     position: number,
@@ -206,9 +233,13 @@ export function copiedFrom(
     return undefined
 }
 
-// The other way, for a position the author points at: where the run copied from `position` stands
-// in `text`, or `undefined` where nothing copied it — markup, or a read the lowering rewrote.
-// Runs are ascending by where they stand, not by where they came from, so this is a scan.
+/**
+ * Where the run copied from source `position` stands in the text, or `undefined`.
+ *
+ * The other way, for a position the author points at: where the run copied from `position` stands
+ * in `text`, or `undefined` where nothing copied it — markup, or a read the lowering rewrote.
+ * Runs are ascending by where they stand, not by where they came from, so this is a scan.
+ */
 export function mapForward(
     origins: readonly Origin[],
     position: number,

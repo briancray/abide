@@ -9,6 +9,7 @@
 
 import { ambient } from './reactive/index.ts'
 
+/** Whether the caller can reach the app, as a `Reactive<boolean>`. */
 export const online = /* @__PURE__ */ (() => {
     if (typeof window === 'undefined') return ambient<boolean>(true)
     const value = ambient<boolean>(navigator.onLine)

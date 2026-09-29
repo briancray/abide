@@ -10,10 +10,14 @@
 import { countExportedNames } from './countExportedNames.ts'
 import { countLines } from './countLines.ts'
 
-// 44.1 — FIVE ENTRIES, THREE LANES. The package's whole public surface, in the order the lanes are
-// read in: `measure` counts DOM calls from inside the page, `engine` is what Blink did, `server` is
-// bytes and turns on bun, and the two that are not lanes are `report` (the Sample, the clock, the
-// batcher, `ratio()`) and `gate` (the bun-side test vocabulary).
+/**
+ * The harness package's public entries, in the order the lanes are read in.
+ *
+ * 44.1 — FIVE ENTRIES, THREE LANES. The package's whole public surface: `measure` counts DOM calls
+ * from inside the page, `engine` is what Blink did, `server` is bytes and turns on bun, and the two
+ * that are not lanes are `report` (the Sample, the clock, the batcher, `ratio()`) and `gate` (the
+ * bun-side test vocabulary).
+ */
 const HARNESS_ENTRIES: readonly string[] = [
     'harness/measure',
     'harness/engine',

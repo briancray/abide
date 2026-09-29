@@ -19,6 +19,7 @@ const HEALTH_LOG = namedLogger('abide:health')
 
 const STARTED_AT = new Date(performance.timeOrigin).toISOString()
 
+/** The account of the app: the baseline with every `onHealth` report merged over it. */
 export async function reportHealth(): Promise<Health> {
     await config
     const account: Record<string, unknown> = {
@@ -46,5 +47,9 @@ export async function reportHealth(): Promise<Health> {
     return account as Health
 }
 
-// A `ttl` of 0, so a read is the account as it stands rather than the one the first reader got.
+/**
+ * The account of the app, as a reactive value.
+ *
+ * A `ttl` of 0, so a read is the account as it stands rather than the one the first reader got.
+ */
 export const health = reactive(reportHealth, { global: true, ttl: 0 })

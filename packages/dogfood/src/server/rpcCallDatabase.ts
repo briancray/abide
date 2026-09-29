@@ -6,7 +6,7 @@ const INVOICES: Record<string, Invoice> = {
     '4021': { number: 'INV-4021', dueOn: '2026-09-14', total: '$1,240.00' },
 }
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     invoices: {
         async find(id: string): Promise<Invoice> {

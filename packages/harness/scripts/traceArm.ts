@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 import { durationOf, measuresNamed, shares } from '../src/engine/shares.ts'
 import { traceOp } from '../src/engine/traceOp.ts'
 
+/** What one traced click reports: the op and layer durations, the layer's share, the counters. */
 export type ArmSample = {
     opNanoseconds: number
     layerNanoseconds: number
@@ -12,7 +13,7 @@ export type ArmSample = {
     layoutCount: number
 }
 
-// ONE CLICK ON `#button`, traced from the click to the frame after `layer` reported done.
+/** Traces one click on the element with id `button`, to the frame after `layer` reported done. */
 export async function traceArm(
     page: Page,
     button: string,

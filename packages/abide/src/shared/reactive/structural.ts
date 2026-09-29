@@ -1,12 +1,15 @@
-// THE BY-VALUE COMPARATOR AN APP PASSES. Not the default: the default is the
-// reference, and this is what a value whose producer RE-MATERIALISES declares —
-// `reactive(() => getInvoice({ id }), { identity: structural })`. A fresh-but-equal
-// payload waking every reader is why it exists at all; what it stops being is the
-// price every other value pays.
-//
-// 5.5: it answers "not equal" wherever it cannot decide. A comparator that guessed
-// would collapse a production a reader needed, and the failure is silent — the value
-// stays right while the wake goes missing.
+/**
+ * The by-value comparator an app passes as `identity`: deep equality over arrays and plain objects.
+ *
+ * Not the default: the default is the reference, and this is what a value whose producer
+ * RE-MATERIALISES declares — `reactive(() => getInvoice({ id }), { identity: structural })`. A
+ * fresh-but-equal payload waking every reader is why it exists at all; what it stops being is the
+ * price every other value pays.
+ *
+ * 5.5: it answers "not equal" wherever it cannot decide. A comparator that guessed would collapse
+ * a production a reader needed, and the failure is silent — the value stays right while the wake
+ * goes missing.
+ */
 export function structural(next: unknown, previous: unknown): boolean {
     if (Object.is(next, previous)) return true
     if (

@@ -11,33 +11,42 @@
 import { THRESHOLDS } from '../report/THRESHOLDS.ts'
 import type { Trace } from './Trace.ts'
 
+/** Which measure is the layer, which is the op, and the threshold the op is judged against. */
 export type SharesSpec = {
-    // The numerator, by the name the code under test measured it under.
+    /** The numerator, by the name the code under test measured it under. */
     layer: string
-    // The denominator. The WHOLE op somebody waits on, not the layer's parent.
+    /** The denominator. The WHOLE op somebody waits on, not the layer's parent. */
     of: string
     threshold: keyof typeof THRESHOLDS
 }
 
+/** The fraction of an op one layer took, and whether that can matter to a user. */
 export type Shares = {
     op: string
     layer: string
     layerNanoseconds: number
     opNanoseconds: number
-    // The share, which is also the CPU ceiling: an optimisation is capped by the
-    // fraction of the op it touches. One number, not two — the sketch returned the
-    // fraction twice, once as `layer` and once as `ceilingCpu`.
+    /**
+     * The share, which is also the CPU ceiling.
+     *
+     * An optimization is capped by the fraction of the op it touches. One number, not two — the
+     * sketch returned the fraction twice, once as `layer` and once as `ceilingCpu`.
+     */
     ceilingCpu: number
-    // What a user would experience. ZERO whenever the op is under one frame: click ->
-    // paint is frame quantised, so removing 4.3% of an op that gets rounded up to the
-    // next frame boundary changes observed latency by exactly nothing. CPU is for
-    // seeing which way the headroom runs and is never quoted as latency.
+    /**
+     * The ceiling a user would experience: zero whenever the op is under one frame.
+     *
+     * Click -> paint is frame quantised, so removing 4.3% of an op that gets rounded up to the
+     * next frame boundary changes observed latency by exactly nothing. CPU is for seeing which
+     * way the headroom runs and is never quoted as latency.
+     */
     ceilingObserved: number
     threshold: keyof typeof THRESHOLDS
     underOneFrame: boolean
     overTheThreshold: boolean
 }
 
+/** Every measure in the trace with this name, in trace order. */
 export function measuresNamed(
     trace: Trace,
     name: string,
@@ -48,7 +57,12 @@ export function measuresNamed(
     return found
 }
 
-// Summed over every measure of that name — an op measured once, or a layer that ran several times.
+/**
+ * Total nanoseconds of every measure with this name. Throws when there is none.
+ *
+ * Summed over every measure of that name — an op measured once, or a layer that ran several
+ * times.
+ */
 export function durationOf(trace: Trace, name: string): number {
     const found = measuresNamed(trace, name)
     if (found.length === 0)
@@ -61,6 +75,12 @@ export function durationOf(trace: Trace, name: string): number {
     return nanoseconds
 }
 
+/**
+ * The fraction of one op a named layer took, with the op as the stated denominator.
+ *
+ * Throws on a withdrawn `within`, a denominator that is not exactly one measure, a missing
+ * layer, a layer running outside the op, or an op of zero length.
+ */
 export function shares(trace: Trace, spec: SharesSpec): Shares {
     // `within` is WITHDRAWN, and it is refused rather than ignored. It was there to
     // compose — a fraction of click -> paint times a fraction of navigation -> paint

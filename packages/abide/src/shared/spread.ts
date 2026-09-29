@@ -12,6 +12,7 @@
 import { attributeText, writtenMarkup } from './attributeText.ts'
 import { isEventName } from './isEventName.ts'
 
+/** A `{...expr}` on a component, as one live prop accessor per key the value carries. */
 export function spreadProps(
     read: () => unknown,
 ): Record<string, () => unknown> {
@@ -26,12 +27,16 @@ export function spreadProps(
 // An attribute name the markup can carry: anything but space, quotes, `>`, `/` and `=`.
 const ATTRIBUTE_NAME = /^[^\s"'>/=]+$/
 
-// The attributes a spread value carries, as `[name, text]` — `''` for a bare one — with the explicit
-// names, the listeners and the unwritable left out. One answer for the markup and the binding.
-//
-// THE LISTENERS COME OUT OF THE SAME WALK, as `[event, listener]` pushed onto `listeners`: a
-// function under `on<event>` that the element does not name explicitly. The server has nowhere to
-// put one and hands no array.
+/**
+ * The attributes a spread value carries, as `[name, text]` — `''` for a bare one.
+ *
+ * The explicit names, the listeners and the unwritable are left out. One answer for the markup and
+ * the binding.
+ *
+ * THE LISTENERS COME OUT OF THE SAME WALK, as `[event, listener]` pushed onto `listeners`: a
+ * function under `on<event>` that the element does not name explicitly. The server has nowhere to
+ * put one and hands no array.
+ */
 export function spreadEntries(
     value: unknown,
     explicit: readonly string[],
@@ -58,7 +63,11 @@ export function spreadEntries(
     return entries
 }
 
-// 32.11 on the server: the spread's attributes as markup, each escaped.
+/**
+ * A spread's attributes as markup, each escaped.
+ *
+ * 32.11 on the server.
+ */
 export function spreadAttributes(
     value: unknown,
     explicit: readonly string[],

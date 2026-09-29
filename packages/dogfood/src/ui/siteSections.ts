@@ -4,6 +4,7 @@
 
 import { type NavGroup, NAV_ITEMS } from '#ui/NAV_ITEMS.ts'
 
+/** The site bar's tabs, in order: the docs, the reference, and the two instruments. */
 export const SITE_TABS = [
     { href: '/', label: 'Docs' },
     { href: '/reference', label: 'Reference' },
@@ -20,6 +21,7 @@ for (const group of NAV_ITEMS)
     (group.section === 'Reference' ? REFERENCE : GUIDES).push(group)
 const NONE: NavGroup[] = []
 
+/** The `href` of the site tab a pathname is in — `/` for any guide page. */
 export function tabOf(pathname: string): string {
     for (const tab of SITE_TABS)
         if (
@@ -30,6 +32,7 @@ export function tabOf(pathname: string): string {
     return '/'
 }
 
+/** The nav groups the sidebar lists at a pathname: guides, reference, or none on an instrument. */
 export function sidebarGroupsOf(pathname: string): NavGroup[] {
     const tab = tabOf(pathname)
     return tab === '/' ? GUIDES : tab === '/reference' ? REFERENCE : NONE

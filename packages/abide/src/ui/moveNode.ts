@@ -18,9 +18,13 @@
 const CAN_MOVE =
     typeof Element !== 'undefined' && 'moveBefore' in Element.prototype
 
-// `node` MUST already be in the document under a parent — this is the SURVIVOR path, where a row
-// the reconcile kept is being put back in a new order. A node with no parent is `moveBefore`'s
-// one throwing case and `makeRow` is where those go, through `insertBefore`.
+/**
+ * Moves an attached node to before `before`, keeping it in the document where the browser can.
+ *
+ * `node` MUST already be in the document under a parent — this is the SURVIVOR path, where a row
+ * the reconcile kept is being put back in a new order. A node with no parent is `moveBefore`'s
+ * one throwing case and `makeRow` is where those go, through `insertBefore`.
+ */
 export function moveNode(parent: Node, node: Node, before: Node | null): void {
     if (CAN_MOVE)
         (

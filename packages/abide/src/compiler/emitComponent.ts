@@ -53,9 +53,12 @@ const BACK = '__back'
 // what a component's descendants look a key up through, the other is what stops its bindings.
 const SHARED = '__shared'
 
-// 10.5 — THE INSTANCE'S OWN SHARE SCOPE, opened around everything the instance does on either side,
-// or nothing where it shares nothing. Closed in a `finally`, so an instance that threw leaves the
-// scope it entered.
+/**
+ * The emitted lines that open and close the instance's own share scope, or two empty strings.
+ *
+ * 10.5 — opened around everything the instance does on either side, or nothing where it shares
+ * nothing. Closed in a `finally`, so an instance that threw leaves the scope it entered.
+ */
 export function shareScope(
     lowering: Lowering,
     indent: string,
@@ -67,24 +70,28 @@ export function shareScope(
     }
 }
 
-// A parsed `.abide` file becomes one ESM module exporting a component. The `<script>` body is
-// copied VERBATIM into the component function, which is the whole of 19.12 at this stage: the
-// compiler does not read the expression grammar, so anything TypeScript accepts survives.
-//
-// The component returns its head and its body apart. 39.3 is why the split is HERE and not in
-// `render`: the hoist is a compile-time partition of the template, so the emitted function has
-// two returns rather than one string a renderer has to go looking through. 35.5 is answered by
-// `render`, which turns the two into the byte stream a document is served as.
-
-// `settles` IS A PAGE OR A LAYOUT, which `render` builds a level at a time (41.19): its setup runs at
-// the call and its markup is built on the first read of `head` or `body`, so the calls the setup
-// started are given the turn to answer that a component built inside its caller's markup is not.
-// Every other component builds where it is called, and pays nothing for the difference.
+/**
+ * The server module for a parsed `.abide` file: one ESM module exporting its component.
+ *
+ * The `<script>` body is copied VERBATIM into the component function, which is the whole of 19.12
+ * at this stage: the compiler does not read the expression grammar, so anything TypeScript accepts
+ * survives.
+ *
+ * The component returns its head and its body apart. 39.3 is why the split is HERE and not in
+ * `render`: the hoist is a compile-time partition of the template, so the emitted function has
+ * two returns rather than one string a renderer has to go looking through. 35.5 is answered by
+ * `render`, which turns the two into the byte stream a document is served as.
+ *
+ * `settles` IS A PAGE OR A LAYOUT, which `render` builds a level at a time (41.19): its setup runs
+ * at the call and its markup is built on the first read of `head` or `body`, so the calls the
+ * setup started are given the turn to answer that a component built inside its caller's markup is
+ * not. Every other component builds where it is called, and pays nothing for the difference.
+ */
 export function emitComponent(
     file: AbideFile,
     reads: readonly Read[] = [],
     settles = false,
-    // Where each `.abide` this file imports landed in the build (`componentGraph`).
+    /** Where each `.abide` this file imports landed in the build (`componentGraph`). */
     components: ReadonlyMap<string, string> = new Map(),
 ): string {
     // Only what the page actually uses. An emitted module carrying an import nothing calls is a
@@ -171,27 +178,31 @@ ${answer}${closed}
 `
 }
 
-// 32.24 and 41.4 — THE POSITION ABORTS, NOT THE DOCUMENT. `emitComponent` builds the markup as
-// ONE concatenation, so an unlanded read anywhere in it threw out of `Component()` and took the
-// static markup, every other position and the `<head>` with it. Passed as a THUNK because the
-// throw happens while the expression is being evaluated, so nothing a helper is HANDED can catch
-// it; `slotValue` says what that costs.
-//
-// EVERY MARKUP POSITION THAT EVALUATES AN AUTHOR EXPRESSION, rather than the two that were found
-// first. A GUARD HERE IS HALF A MECHANISM — it trades a throw for a HOLE, and something on the
-// client has to fill that hole once the value lands: a text slot has `runHere` and `textHere`, a
-// `{#for}` has `List.hydrate`'s count check, an attribute has its own binding re-running on the
-// value that landed (32.3), and the `{#if}` chain has `isEmptyRegion` — which is why that one is
-// guarded at the REGION rather than per subject, and says so at its own arm. The ESCAPER STAYS
-// OUTSIDE: absence is `undefined` here and what it means is already decided where it lands (see
-// `slotValue`).
-//
-// ONLY WHERE THE POSITION IS LIVE (`Lowering.isLive`), because a position the checker proved reads
-// nothing reactive cannot be unlanded — and one it could not prove can, through a function it
-// calls as much as through a name it reads. A row body reading its own item — `{row.title}`, which
-// is most slots on most pages — is proven, and wrapping it anyway put a closure in the hot loop:
-// the card bench went 0.9 µs -> 1.7 µs at 10 cards and 0.70x -> 1.20x against the hand-written
-// page, which is the headline ratio inverted for a guard that could never fire.
+/**
+ * A lowered markup position wrapped in `slotValue` where it is live, so an unlanded read aborts it.
+ *
+ * 32.24 and 41.4 — THE POSITION ABORTS, NOT THE DOCUMENT. `emitComponent` builds the markup as
+ * ONE concatenation, so an unlanded read anywhere in it threw out of `Component()` and took the
+ * static markup, every other position and the `<head>` with it. Passed as a THUNK because the
+ * throw happens while the expression is being evaluated, so nothing a helper is HANDED can catch
+ * it; `slotValue` says what that costs.
+ *
+ * EVERY MARKUP POSITION THAT EVALUATES AN AUTHOR EXPRESSION, rather than the two that were found
+ * first. A GUARD HERE IS HALF A MECHANISM — it trades a throw for a HOLE, and something on the
+ * client has to fill that hole once the value lands: a text slot has `runHere` and `textHere`, a
+ * `{#for}` has `List.hydrate`'s count check, an attribute has its own binding re-running on the
+ * value that landed (32.3), and the `{#if}` chain has `isEmptyRegion` — which is why that one is
+ * guarded at the REGION rather than per subject, and says so at its own arm. The ESCAPER STAYS
+ * OUTSIDE: absence is `undefined` here and what it means is already decided where it lands (see
+ * `slotValue`).
+ *
+ * ONLY WHERE THE POSITION IS LIVE (`Lowering.isLive`), because a position the checker proved reads
+ * nothing reactive cannot be unlanded — and one it could not prove can, through a function it
+ * calls as much as through a name it reads. A row body reading its own item — `{row.title}`, which
+ * is most slots on most pages — is proven, and wrapping it anyway put a closure in the hot loop:
+ * the card bench went 0.9 µs -> 1.7 µs at 10 cards and 0.70x -> 1.20x against the hand-written
+ * page, which is the headline ratio inverted for a guard that could never fire.
+ */
 export function unlandable(
     lowering: Lowering,
     holder: object,
@@ -201,19 +212,27 @@ export function unlandable(
     return slotValueOf(lowering, lowered)
 }
 
-// The wrap itself, apart from the `isLive` that decides it. The `{#if}` chain asks that question
-// of its BRANCHES rather than of one holder (see its arm), so it cannot call `unlandable` — but it
-// emits the same call, and one spelling is what keeps it the same call.
+/**
+ * A lowered expression wrapped in `slotValue`, whatever `isLive` says.
+ *
+ * The wrap itself, apart from the `isLive` that decides it. The `{#if}` chain asks that question
+ * of its BRANCHES rather than of one holder (see its arm), so it cannot call `unlandable` — but it
+ * emits the same call, and one spelling is what keeps it the same call.
+ */
 function slotValueOf(lowering: Lowering, lowered: string): string {
     return `${lowering.use('slotValue')}(() => ${lowered})`
 }
 
-// ONE POSITION'S MARKUP — the markup is RENDERED from what `placeTemplate` placed, the same
-// positions a build constructs from and a mount walks, rather than written by a walk of its own.
-//
-// `client` is the LANE this markup is for. The server writes a component by CALLING it; the
-// client builds a row's markup in the browser, where the child's server module is not reachable —
-// so there it asks the child's own client module for the same markup instead.
+/**
+ * One position's markup, as an emitted expression.
+ *
+ * The markup is RENDERED from what `placeTemplate` placed, the same positions a build constructs
+ * from and a mount walks, rather than written by a walk of its own.
+ *
+ * `client` is the LANE this markup is for. The server writes a component by CALLING it; the
+ * client builds a row's markup in the browser, where the child's server module is not reachable —
+ * so there it asks the child's own client module for the same markup instead.
+ */
 function renderPosition(
     at: Position,
     lowering: Lowering,
@@ -425,14 +444,17 @@ function renderPosition(
     return [...parts, ...children, JSON.stringify(`</${node.tag}>`)].join(' + ')
 }
 
-// 32.19 — WHERE THE CALLER'S CHILDREN GO, and the fallback where there are none. A REGION, for
-// the reason an invocation is one: what stands here is another file's markup, so the siblings
-// after it cannot be addressed by counting through it.
-//
-// THE TWO LANES CARRY DIFFERENT THINGS UNDER THE SAME KEY. On the server the caller passes a
-// thunk of its rendered markup, because a server writes markup and never addresses it; in the
-// browser it passes a build AND the mount for it, because the bindings between those tags are the
-// CALLER's and only the caller's module has them.
+/**
+ * A `<slot/>`'s markup: the caller's children, or the fallback where there are none, anchored.
+ *
+ * 32.19 — A REGION, for the reason an invocation is one: what stands here is another file's
+ * markup, so the siblings after it cannot be addressed by counting through it.
+ *
+ * THE TWO LANES CARRY DIFFERENT THINGS UNDER THE SAME KEY. On the server the caller passes a
+ * thunk of its rendered markup, because a server writes markup and never addresses it; in the
+ * browser it passes a build AND the mount for it, because the bindings between those tags are the
+ * CALLER's and only the caller's module has them.
+ */
 function emitSlot(at: Position, lowering: Lowering, client: boolean): string {
     const given = `${PROPS}[${JSON.stringify(CHILDREN)}]`
     // ON THE CLIENT LANE THE SLOT IS AN EMPTY PAIR, as an invocation is: what goes in it is either
@@ -448,14 +470,18 @@ function emitSlot(at: Position, lowering: Lowering, client: boolean): string {
     return `${OPEN_ANCHOR} + (${given} === undefined ? ${fallback} : ${given}()) + ${CLOSE_ANCHOR}`
 }
 
-// One invocation. The child is a function taking a record of ACCESSORS (33.4, 33.5): the prop is
-// the caller's expression, not a snapshot of it, so the child re-reads when the parent's value
-// moves and neither of them arranges that.
-//
-// A REGION, ANCHORED. The child's markup is written inline, and how many top-level nodes it has is
-// a fact about ANOTHER FILE — so the parent cannot address the siblings that follow it by
-// counting, the way it does for an element whose shape it can see. The anchors are what make the
-// child's nodes one addressable thing, and they are the same pair `{#if}` uses.
+/**
+ * One component invocation's markup: the child called on the server, an empty region on the client.
+ *
+ * The child is a function taking a record of ACCESSORS (33.4, 33.5): the prop is the caller's
+ * expression, not a snapshot of it, so the child re-reads when the parent's value moves and
+ * neither of them arranges that.
+ *
+ * A REGION, ANCHORED. The child's markup is written inline, and how many top-level nodes it has is
+ * a fact about ANOTHER FILE — so the parent cannot address the siblings that follow it by
+ * counting, the way it does for an element whose shape it can see. The anchors are what make the
+ * child's nodes one addressable thing, and they are the same pair `{#if}` uses.
+ */
 function emitInvocation(
     node: Extract<TemplateNode, { kind: 'element' }>,
     at: Position,
@@ -488,11 +514,14 @@ function emitInvocation(
         : `${lowering.use('renderComponent')}(${lowering.chosenTag(node) ?? node.tag}, { ${props.join(', ')} }, ${HEADS})`
 }
 
-// 39.6 — THE CONTRIBUTIONS A PAGE MAKES TO THE DOCUMENT HEAD, as an expression, for the lane that
-// has no document to have written them. A page the reader NAVIGATED to was never rendered by a
-// server, so its `<title>` and its `<meta>` exist nowhere unless its own client module carries
-// them — the same second copy the body already gets (32.18), through the same merge (39.12) so
-// the two lanes cannot disagree about which contribution won.
+/**
+ * The contributions a file makes to the document head, merged, as an emitted markup expression.
+ *
+ * 39.6 — for the lane that has no document to have written them. A page the reader NAVIGATED to
+ * was never rendered by a server, so its `<title>` and its `<meta>` exist nowhere unless its own
+ * client module carries them — the same second copy the body already gets (32.18), through the
+ * same merge (39.12) so the two lanes cannot disagree about which contribution won.
+ */
 export function emitHead(
     file: AbideFile,
     lowering: Lowering,
@@ -501,17 +530,24 @@ export function emitHead(
     return renderMarkup(headSink(file), lowering, client)
 }
 
-// A file's head, placed. Merged before it is placed (39.12), so the head is the one markup placed
-// here rather than rendered from positions the template walk already placed.
+/**
+ * A file's head contributions, merged and placed.
+ *
+ * Merged before it is placed (39.12), so the head is the one markup placed here rather than
+ * rendered from positions the template walk already placed.
+ */
 export function headSink(file: AbideFile): Cursor {
     const sink = new Cursor()
     placeTemplate(mergeHead(file.head), sink)
     return sink
 }
 
-// A region's markup, as an expression, rendered from its positions. Exported because a region made
-// once is filled from it on the CLIENT too — a branch swap on a page re-renders the arm — and a
-// second emitter for it would be a second escaping rule.
+/**
+ * A region's markup, as an emitted expression, rendered from its positions.
+ *
+ * Exported because a region made once is filled from it on the CLIENT too — a branch swap on a
+ * page re-renders the arm — and a second emitter for it would be a second escaping rule.
+ */
 export function renderMarkup(
     sink: Cursor,
     lowering: Lowering,
@@ -530,8 +566,12 @@ function renderLevel(
     return out
 }
 
-// One `{#for}` row's markup. A row with several top-level nodes has no node that IS the row, so it
-// carries one anchor; a single-element row carries nothing.
+/**
+ * One `{#for}` row's markup, led by a row anchor where `anchored`.
+ *
+ * A row with several top-level nodes has no node that IS the row, so it carries one anchor; a
+ * single-element row carries nothing.
+ */
 export function emitRow(
     row: Cursor,
     anchored: boolean,
@@ -544,36 +584,31 @@ export function emitRow(
         : markup
 }
 
-// Emitted parts as one concatenation, and the empty string for none.
+/** Emitted parts as one concatenation, and the empty string for none. */
 function concat(parts: string[]): string {
     return parts.length === 0 ? "''" : parts.join(' + ')
 }
 
-// One import specifier's clause. EVERY FRAMEWORK NAME IS BOUND UNDER `__`, the namespace an
-// author does not write in: the escaping helpers are public on `abide`, so an author may import the
-// same name into the same `<script>` — `import { safeUrl } from './mine.ts'` beside one
-// `<a href={u}>` was `Identifier 'safeUrl' has already been declared` — and a `<script module>`
-// declaring `setText` at module scope collides with a runtime import made as written just the same.
+/**
+ * The braces of a framework import: each name bound as `name as __name`.
+ *
+ * EVERY FRAMEWORK NAME IS BOUND UNDER `__`, the namespace an author does not write in: the escaping
+ * helpers are public on `abide`, so an author may import the same name into the same `<script>` —
+ * `import { safeUrl } from './mine.ts'` beside one `<a href={u}>` was
+ * `Identifier 'safeUrl' has already been declared` — and a `<script module>` declaring `setText` at
+ * module scope collides with a runtime import made as written just the same.
+ */
 export function importClause(names: string[]): string {
     const written: string[] = []
     for (const name of names) written.push(`${name} as __${name}`)
     return written.join(', ')
 }
 
-// WHAT AN ELEMENT'S TAG CARRIES, in the order it carries it — the one answer both ways of making
-// an element read. The markup writes each entry as bytes; a row the browser BUILDS writes each
-// through `setAttribute` (`emitClient`'s `emitBuild`). Two readings of the attributes were two
-// answers to "what does this tag say", and the build's copy had already drifted: it wrote a static
-// `AT&amp;T` as those seven characters where the parser reads the server's bytes as `AT&T`.
-//
-// WHAT IS NOT MARKUP IS NOT HERE. 32.4 — `on<event>` is a listener, and the server writes nothing,
-// so a handler cannot fire from a document that never hydrated. 32.9 — `bind:element` hands over
-// the NODE, which a server has none of; written out it was `bind:element=""`, inert and a tell. A
-// static URL 32.21 refuses is dropped here too, where the value is known — an empty `href` is its
-// own answer and is kept, which `=== ''` would have thrown away.
-//
-// A MERGE GROUP STANDS AT ITS FIRST MEMBER and the rest write nothing, which is what keeps the tag
-// in the author's attribute order (see `Merge`).
+/**
+ * One entry of what an element's tag carries, as both the markup and a built row write it.
+ *
+ * See `writtenAttributes` for what is and is not one.
+ */
 export type WrittenAttribute =
     // The author's own bytes, as written in the source.
     | { kind: 'static'; name: string; lowerName: string; value: string }
@@ -587,7 +622,7 @@ export type WrittenAttribute =
           name: 'value' | 'checked' | 'open'
           bind: ValueBind
           attribute: Attribute
-          // 32.8 — a group member's own `value`, which the group is compared against.
+          /** 32.8 — a group member's own `value`, which the group is compared against. */
           own: string
       }
     | {
@@ -597,6 +632,24 @@ export type WrittenAttribute =
           directives: Attribute[]
       }
 
+/**
+ * What an element's tag carries, in the order it carries it.
+ *
+ * The one answer both ways of making an element read. The markup writes each entry as bytes; a
+ * row the browser BUILDS writes each through `setAttribute` (`emitClient`'s `emitBuild`). Two
+ * readings of the attributes were two answers to "what does this tag say", and the build's copy
+ * had already drifted: it wrote a static `AT&amp;T` as those seven characters where the parser
+ * reads the server's bytes as `AT&T`.
+ *
+ * WHAT IS NOT MARKUP IS NOT HERE. 32.4 — `on<event>` is a listener, and the server writes nothing,
+ * so a handler cannot fire from a document that never hydrated. 32.9 — `bind:element` hands over
+ * the NODE, which a server has none of; written out it was `bind:element=""`, inert and a tell. A
+ * static URL 32.21 refuses is dropped here too, where the value is known — an empty `href` is its
+ * own answer and is kept, which `=== ''` would have thrown away.
+ *
+ * A MERGE GROUP STANDS AT ITS FIRST MEMBER and the rest write nothing, which is what keeps the tag
+ * in the author's attribute order (see `Merge`).
+ */
 export function writtenAttributes(
     node: TemplateNode & { kind: 'element' },
 ): WrittenAttribute[] {
@@ -678,24 +731,32 @@ export function writtenAttributes(
     return written
 }
 
-// 32.3 — an expression attribute is reactive. Its CURRENT value is written here, and `emitClient`'s
-// own attribute loop is what keeps writing it after hydration.
-//
-// 32.21 IS THE INTERPOLATION'S CLAUSE: `<a href={u}>` is where untrusted data actually arrives, not
-// the literal `href`. The value is not known here, so the guard is a call in the emitted markup —
-// `attributeMarkup`, which also decides 32.38's absence, and which the client's binding answers
-// through the same `attributeText`.
-//
-// 41.4 INSIDE BOTH GUARDS. The abort is nearest the read and the scheme check wraps it, so a `href`
-// still in flight is checked as the empty value it renders as rather than skipping 32.21 on its way
-// past.
+/**
+ * An expression attribute's markup at render, through `attributeMarkup`.
+ *
+ * 32.3 — an expression attribute is reactive. Its CURRENT value is written here, and
+ * `emitClient`'s own attribute loop is what keeps writing it after hydration.
+ *
+ * 32.21 IS THE INTERPOLATION'S CLAUSE: `<a href={u}>` is where untrusted data actually arrives, not
+ * the literal `href`. The value is not known here, so the guard is a call in the emitted markup —
+ * `attributeMarkup`, which also decides 32.38's absence, and which the client's binding answers
+ * through the same `attributeText`.
+ *
+ * 41.4 INSIDE BOTH GUARDS. The abort is nearest the read and the scheme check wraps it, so a `href`
+ * still in flight is checked as the empty value it renders as rather than skipping 32.21 on its way
+ * past.
+ */
 function dynamicMarkup(attribute: Attribute, lowering: Lowering): string {
     const value = unlandable(lowering, attribute, lowering.slot(attribute))
     return `${lowering.use('attributeMarkup')}(${JSON.stringify(attribute.name)}, ${value})`
 }
 
-// 32.5, 32.7, 32.8 — A BIND'S VALUE AT RENDER, under 41.4's guard: a value still in flight writes
-// nothing, which is what an empty input and an unchecked box already are.
+/**
+ * A bind's value at render, as the attribute its property reflects.
+ *
+ * 32.5, 32.7, 32.8 — under 41.4's guard: a value still in flight writes nothing, which is what an
+ * empty input and an unchecked box already are.
+ */
 function boundMarkup(
     written: WrittenAttribute & { kind: 'bound' },
     lowering: Lowering,
@@ -713,40 +774,49 @@ function boundMarkup(
     return `(${on} ? ' ${written.name}' : '')`
 }
 
-// The static `value` an element carries, which a `bind:group` member is compared by.
-// 32.28 — STATIC TEMPLATE TEXT IS MARKUP, in an attribute value as much as in body text. A static
-// value is the AUTHOR'S OWN SOURCE and never a place untrusted data arrives, so the rewrite is not a
-// trust boundary here — it was a second answer to "is this markup?", and `title="AT&amp;T"`
-// rendered `AT&amp;T` on the page while the same six characters between two tags rendered `AT&T`.
-// The `"` is still encoded: it would end the attribute.
-//
-// 32.29 — AN ATTRIBUTE 32.21 SCHEME-CHECKS KEEPS THE WHOLE REWRITE, and that one IS a boundary.
-// `safeUrl` reads the bytes, and `&#106;avascript:` is not `javascript:` until a browser decodes
-// the entity — so encoding the `&` is what stops the entity forming at all, and it is the only
-// thing that does.
+/**
+ * A static attribute's markup: the bare name, or the name and its value's bytes.
+ *
+ * 32.28 — STATIC TEMPLATE TEXT IS MARKUP, in an attribute value as much as in body text. A static
+ * value is the AUTHOR'S OWN SOURCE and never a place untrusted data arrives, so the rewrite is not a
+ * trust boundary here — it was a second answer to "is this markup?", and `title="AT&amp;T"`
+ * rendered `AT&amp;T` on the page while the same six characters between two tags rendered `AT&T`.
+ * The `"` is still encoded: it would end the attribute.
+ *
+ * 32.29 — AN ATTRIBUTE 32.21 SCHEME-CHECKS KEEPS THE WHOLE REWRITE, and that one IS a boundary.
+ * `safeUrl` reads the bytes, and `&#106;avascript:` is not `javascript:` until a browser decodes
+ * the entity — so encoding the `&` is what stops the entity forming at all, and it is the only
+ * thing that does.
+ */
 function staticMarkup(written: WrittenAttribute & { kind: 'static' }): string {
     if (written.value === '') return ` ${written.name}`
     return ` ${written.name}="${staticAttributeBytes(written.lowerName, written.value)}"`
 }
 
-// The bytes between the quotes a static value is served as — which is also what a BUILT row decodes
-// (`decodeCharacterReferences`), so the two cannot read one value two ways.
+/**
+ * The bytes between the quotes a static attribute value is served as.
+ *
+ * Which is also what a BUILT row decodes (`decodeCharacterReferences`), so the two cannot read one
+ * value two ways.
+ */
 export function staticAttributeBytes(lowerName: string, value: string): string {
     return URL_ATTRIBUTES.has(lowerName)
         ? escapeAttribute(value)
         : escapeQuote(value)
 }
 
-// 39.4, 39.11, 39.12 — the contributions a `<head>` makes, merged by key, the LAST one for a key
-// kept. 39.11 gives the key: the tag for the two elements a document holds one of, the `name` or
-// `property` for a `<meta>`, and `rel` with `href` for a `<link>`. Anything else has no key and
-// keeps its place, which is 39.5 and is what walking the list once and dropping only the shadowed
-// entries gives.
-//
-// WITHIN ONE FILE IS ALL OF IT. 39.4's deepest contributor needs a layout to be deeper than, and
-// there is no layout composition in this compiler — a page and its layout are not composed
-// anywhere, so there is no depth to order by. Depth arrives with that composition and this is
-// where it lands; nothing here stands in for one.
+/**
+ * A file's `<head>` contributions merged by key, the LAST one for a key kept.
+ *
+ * 39.4, 39.11, 39.12 — 39.11 gives the key: the tag for the two elements a document holds one of,
+ * the `name` or `property` for a `<meta>`, and `rel` with `href` for a `<link>`. Anything else has
+ * no key and keeps its place, which is 39.5 and is what walking the list once and dropping only
+ * the shadowed entries gives.
+ *
+ * WITHIN ONE FILE IS ALL OF IT HERE. 39.4's deepest contributor needs a layout to be deeper than,
+ * and a page and its layouts are composed at run time (`render`), not in this compiler — so there
+ * is no depth to order by here, and nothing here stands in for one.
+ */
 function mergeHead(children: TemplateNode[]): TemplateNode[] {
     const keys: (string | undefined)[] = []
     const winner = new Map<string, number>()
@@ -765,10 +835,14 @@ function mergeHead(children: TemplateNode[]): TemplateNode[] {
     return kept
 }
 
-// 39.11 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with what the COMPILER can read: an expression
-// is present but unknown, so `<meta name={x}>` appends under 39.5 rather than merging against a
-// string that is not its value. `<TITLE>` is the
-// same singleton as `<title>`, which `lowerTag` already gives.
+/**
+ * The key a head contribution merges by, or `undefined` for one that appends.
+ *
+ * 39.11 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with what the COMPILER can read: an expression
+ * is present but unknown, so `<meta name={x}>` appends under 39.5 rather than merging against a
+ * string that is not its value. `<TITLE>` is the same singleton as `<title>`, which `lowerTag`
+ * already gives.
+ */
 function headKey(node: TemplateNode): string | undefined {
     if (node.kind !== 'element') return undefined
     return headKeyOf(node.lowerTag, (name) => {
@@ -787,6 +861,7 @@ function attributeOf(
     return undefined
 }
 
+/** An attribute's static value, or `undefined` where it is absent or an expression. */
 function staticAttribute(
     node: TemplateNode & { kind: 'element' },
     name: string,
@@ -797,24 +872,28 @@ function staticAttribute(
         : attribute.value
 }
 
-// 32.10, 32.20 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE, and every
-// `class:name` is ONE `class`. Written apart they are two attributes of the same name on one tag,
-// and a browser keeps the first: the second is dropped in silence, by the markup rather than by
-// anything the compiler said.
-//
-// THE AUTHOR'S OWN PLAIN `style=` OR `class=` IS A MEMBER OF THE GROUP, not an attribute beside
-// it. `isStyleProperty` answers only for the prefix, so `<div style="color: red"
-// style:width={w}>` wrote TWO `style=` attributes and a browser kept the first — the reactive
-// declaration dropped in silence, which is the loss the merge exists to stop, arriving by the one
-// spelling it did not cover.
+/**
+ * One `class` or `style` merge group on an element: the plain attribute and its directives.
+ *
+ * 32.10, 32.20 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE, and every
+ * `class:name` is ONE `class`. Written apart they are two attributes of the same name on one tag,
+ * and a browser keeps the first: the second is dropped in silence, by the markup rather than by
+ * anything the compiler said.
+ *
+ * THE AUTHOR'S OWN PLAIN `style=` OR `class=` IS A MEMBER OF THE GROUP, not an attribute beside
+ * it. `isStyleProperty` answers only for the prefix, so `<div style="color: red"
+ * style:width={w}>` wrote TWO `style=` attributes and a browser kept the first — the reactive
+ * declaration dropped in silence, which is the loss the merge exists to stop, arriving by the one
+ * spelling it did not cover.
+ */
 type Merge = {
-    // The attribute the group is written under.
+    /** The attribute the group is written under. */
     name: 'class' | 'style'
-    // Every attribute the group swallows, the plain one included.
+    /** Every attribute the group swallows, the plain one included. */
     members: Set<Attribute>
     plain: Attribute | undefined
     directives: Attribute[]
-    // Whether the group still has to be written — see where it is read.
+    /** Whether the group still has to be written — see where it is read. */
     pending: boolean
 }
 
@@ -825,6 +904,7 @@ const MERGED = [
     { name: 'class', is: isClassToggle },
 ] as const
 
+/** The element's `style` and `class` merge groups, each only where it has a directive. */
 function mergesOf(node: TemplateNode & { kind: 'element' }): Merge[] {
     const merges: Merge[] = []
     for (const kind of MERGED) {
@@ -844,19 +924,24 @@ function mergesOf(node: TemplateNode & { kind: 'element' }): Merge[] {
     return merges
 }
 
-// HOW A MERGED VALUE'S PIECES ARE WRITTEN, which is all that differs between the two ways of making
-// an element. The markup ESCAPES — the bytes are parsed — and a built row writes what the parser
-// would have made of them. The STRUCTURE — the order, the separators, which names — is `styleValue`
-// and `classValue`'s alone, so a built `style` and a served one are the same string.
+/**
+ * How a merged value's pieces are written: escaped for markup, or as a built row writes them.
+ *
+ * Which is all that differs between the two ways of making an element. The markup ESCAPES — the
+ * bytes are parsed — and a built row writes what the parser would have made of them. The
+ * STRUCTURE — the order, the separators, which names — is `styleValue` and `classValue`'s alone,
+ * so a built `style` and a served one are the same string.
+ */
 export type ValueRender = {
-    // A whole attribute's value from an expression.
+    /** A whole attribute's value from an expression. */
     dynamic: (attribute: Attribute) => string
-    // One `style:prop`'s value from an expression — cut at its first `;` on both sides.
+    /** One `style:prop`'s value from an expression — cut at its first `;` on both sides. */
     declaration: (attribute: Attribute) => string
-    // The author's own bytes, as the server writes them (32.28).
+    /** The author's own bytes, as the server writes them (32.28). */
     bytes: (bytes: string) => string
 }
 
+/** The `ValueRender` for server markup: every interpolated piece escaped. */
 function markupRender(lowering: Lowering): ValueRender {
     return {
         dynamic: (attribute) =>
@@ -867,6 +952,7 @@ function markupRender(lowering: Lowering): ValueRender {
     }
 }
 
+/** A merged `style` or `class` group's value, as an emitted expression, rendered by `render`. */
 export function mergedValue(
     written: Extract<WrittenAttribute, { kind: 'merged' }>,
     lowering: Lowering,
@@ -877,10 +963,13 @@ export function mergedValue(
         : classValue(written.plain, written.directives, lowering, render)
 }
 
-// The declaration list a set of `style:prop` attributes renders as. Each value takes the same
-// rewrite the whole-value path takes, so one attribute has one answer however the author spelled
-// it: 32.28 for a STATIC declaration, which is the author's own markup, and the full escape for an
-// interpolated one, which is 32.1's.
+/**
+ * The declaration list a set of `style:prop` attributes renders as.
+ *
+ * Each value takes the same rewrite the whole-value path takes, so one attribute has one answer
+ * however the author spelled it: 32.28 for a STATIC declaration, which is the author's own markup,
+ * and the full escape for an interpolated one, which is 32.1's.
+ */
 function styleValue(
     plain: Attribute | undefined,
     styles: readonly Attribute[],
@@ -913,15 +1002,18 @@ function styleValue(
     return concat(parts)
 }
 
-// 32.10 — the class list a set of `class:name` attributes renders as. A NAME IS MARKUP AND A VALUE
-// IS A CONDITION, which is the whole of what makes this shorter than its `style` sibling: the name
-// is the author's own source and takes 32.28's rewrite where the module is emitted, and the
-// expression decides only whether it is written at all.
-//
-// EACH NAME CARRIES ITS OWN LEADING SPACE rather than a separator being computed between them,
-// because how many of them render is not known until the values are read. A run of spaces and a
-// leading one are both nothing in a class attribute — the value is split on whitespace — where
-// `style`'s `;` has to be counted.
+/**
+ * The class list a set of `class:name` attributes renders as.
+ *
+ * 32.10 — A NAME IS MARKUP AND A VALUE IS A CONDITION, which is the whole of what makes this
+ * shorter than its `style` sibling: the name is the author's own source and takes 32.28's rewrite
+ * where the module is emitted, and the expression decides only whether it is written at all.
+ *
+ * EACH NAME CARRIES ITS OWN LEADING SPACE rather than a separator being computed between them,
+ * because how many of them render is not known until the values are read. A run of spaces and a
+ * leading one are both nothing in a class attribute — the value is split on whitespace — where
+ * `style`'s `;` has to be counted.
+ */
 function classValue(
     plain: Attribute | undefined,
     classes: readonly Attribute[],

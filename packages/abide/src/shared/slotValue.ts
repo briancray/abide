@@ -21,6 +21,7 @@
 
 import { NotLanded } from './reactive/NotLanded.ts'
 
+/** The value `read` returns, or `undefined` where a `NotLanded` aborted it. */
 export function slotValue(read: () => unknown): unknown {
     try {
         return read()

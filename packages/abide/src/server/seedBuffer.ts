@@ -19,9 +19,12 @@ import type { PageRender } from './requestScope.ts'
 // 41.17.
 const SEED_LIFE_MS = 30_000
 
-// How a handler's call ended, and how long it took from the call to the end — what 21.15's
-// `server-timing` reports, whichever call it was that ran it. A stream has no end to time by
-// then, and its `undefined` is timed where its first chunk is answered.
+/**
+ * How a handler's call ended, and how long it took from the call to the end.
+ *
+ * What 21.15's `server-timing` reports, whichever call it was that ran it. A stream has no end to
+ * time by then, and its `undefined` is timed where its first chunk is answered.
+ */
 export type Outcome =
     | { settled: true; value: unknown; duration: number | undefined }
     | { settled: false; error: unknown; duration: number }
@@ -41,9 +44,13 @@ type Entry = {
 // made each of its calls pay for all of them. Several entries under one key are taken oldest first.
 const BUFFER = new Map<string, Map<object, Map<string, Entry[]>>>()
 
-// The sink a page's render scope reports each call into, for one caller — `true` where the call was
-// new to this render. A key already reported is reported once: two components reaching one invoice
-// are one call in the browser too, since the browser's `Rpc` joins a standing call (1.8).
+/**
+ * The sink a page's render scope reports each call into, for one caller.
+ *
+ * The sink answers `true` where the call was new to this render. A key already reported is
+ * reported once: two components reaching one invoice are one call in the browser too, since the
+ * browser's `Rpc` joins a standing call (1.8).
+ */
 export function seedFor(caller: string): PageRender['seed'] {
     const reported = new Map<object, Set<string>>()
     return (rpc, args, reached) => {
@@ -90,10 +97,13 @@ export function seedFor(caller: string): PageRender['seed'] {
     }
 }
 
-// The entry this caller's render left for this handler and these args, taken out of the buffer —
-// or `undefined`, where there is none, it has been taken, or its life is over. The args are keyed
-// only once the caller is known to have entries for this handler, which a call from a page that
-// was not rendered for it never does.
+/**
+ * Takes the outcome this caller's render left for this handler and these args, or `undefined`.
+ *
+ * `undefined` where there is none, it has been taken, or its life is over. The args are keyed
+ * only once the caller is known to have entries for this handler, which a call from a page that
+ * was not rendered for it never does.
+ */
 export function takeSeed(
     caller: string,
     rpc: object,
@@ -110,7 +120,7 @@ export function takeSeed(
     return entry.expires > Date.now() ? entry.outcome : undefined
 }
 
-// 11.24's key, or `undefined` where 11.65 refuses the args — which the call itself then says.
+/** 11.24's key, or `undefined` where 11.65 refuses the args — which the call itself then says. */
 function seedKey(args: unknown): string | undefined {
     try {
         return canonicalKey(args)
@@ -134,9 +144,13 @@ function drop(caller: string, entry: Entry): void {
     if (byRpc?.size === 0) BUFFER.delete(caller)
 }
 
-// 1.4 — a call's `Reactive` is thenable, and this is its settling, timed from here. 1.6 — A STREAMING
-// one is read by its brand first and answered as its chunks, which `answerValue` frames as they land:
-// settling it would be one snapshot, once the run had closed.
+/**
+ * How a call's reached value settles, timed from here.
+ *
+ * 1.4 — a call's `Reactive` is thenable, and this is its settling. 1.6 — A STREAMING one is read by
+ * its brand first and answered as its chunks, which `answerValue` frames as they land: settling it
+ * would be one snapshot, once the run had closed.
+ */
 export function outcomeOf(reached: unknown): Promise<Outcome> {
     const started = performance.now()
     if (isStreaming(reached))

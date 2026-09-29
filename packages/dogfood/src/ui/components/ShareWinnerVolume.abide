@@ -3,8 +3,7 @@ import { reactive } from 'abide'
 
 let volume = reactive.share('volume', () => reactive(4))
 
-// Built out here and handed IN. The call hands back the one that
-// won, and this name is not it.
+// Built out here and handed in: the call returns the winner, not this.
 const built = reactive(4)
 const shared = reactive.share('volume', () => built)
 </script>

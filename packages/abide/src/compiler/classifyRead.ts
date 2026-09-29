@@ -19,32 +19,41 @@ import {
 import type { Span } from './projectShadow.ts'
 import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
 
-// ONE OCCURRENCE OF A NAME BOUND TO A `Reactive`, and what it lowers as. The ROLE is read off the
-// checker's own syntax tree, so what a write's right-hand side is, where a statement ends and
-// whether `{ n }` is a literal are TypeScript's answers rather than a token walk's guess at them.
-// Every offset is into the file's projection (`projectShadow`).
-//
-// ONE SHAPE IS NOT A NAME: `static` is a zero-width mark at the start of a template position the
-// checker PROVED reads nothing reactive (`proveStatic`), and it lowers to nothing. It rides this
-// channel rather than a second one because it is the same kind of answer — the checker's, about
-// this projection, at an offset — and every emitter already takes exactly this list.
-//
-// AND `raw` IS NOT ONE EITHER: the callee of a slot's bare `raw(…)` (32.26), which a markup-writing
-// position lowers to the framework's own `raw` and every other position leaves as written.
-//
-// THE SHAPE IS FIXED: every field on every read, so `Lowering`'s splice sees one hidden class.
+/**
+ * One occurrence of a name bound to a `Reactive`, and what it lowers as.
+ *
+ * The ROLE is read off the checker's own syntax tree, so what a write's right-hand side is, where a
+ * statement ends and whether `{ n }` is a literal are TypeScript's answers rather than a token
+ * walk's guess at them. Every offset is into the file's projection (`projectShadow`).
+ *
+ * ONE SHAPE IS NOT A NAME: `static` is a zero-width mark at the start of a template position the
+ * checker PROVED reads nothing reactive (`proveStatic`), and it lowers to nothing. It rides this
+ * channel rather than a second one because it is the same kind of answer — the checker's, about
+ * this projection, at an offset — and every emitter already takes exactly this list.
+ *
+ * AND `raw` IS NOT ONE EITHER: the callee of a slot's bare `raw(…)` (32.26), which a markup-writing
+ * position lowers to the framework's own `raw` and every other position leaves as written.
+ *
+ * THE SHAPE IS FIXED: every field on every read, so `Lowering`'s splice sees one hidden class.
+ */
 export type Read = {
-    // The name's own span.
+    /** The name's own span. */
     start: number
     end: number
-    // `value` lowers to `n()`; `asWritten` stays as written (`n.set(v)`, 31.5); `member` is one of
-    // the `Reactive`'s own members referenced rather than called, named by `path`; `call` is the
-    // explicit `n()` (31.7), which `arguments` says was given any; `shorthand` is `{ n }`;
-    // `write` and `update` are 31.4, and 31.8 where `path` is not empty.
-    // 33's three: the `props<Props>()` call, which lowers to the record the caller passed, and the
-    // pair that brackets a binding element's initializer, which together make a default an
-    // accessor. The pair are INSERTIONS — zero-width, so what stands between them goes on being
-    // lowered by the same walk, and a default reading a `Reactive` still reads it.
+    /**
+     * What the occurrence lowers as.
+     *
+     * `value` lowers to `n()`; `asWritten` stays as written (`n.set(v)`, 31.5); `member` is one of
+     * the `Reactive`'s own members referenced rather than called, named by `path`; `call` is the
+     * explicit `n()` (31.7), which `arguments` says was given any; `shorthand` is `{ n }`;
+     * `write` and `update` are 31.4, and 31.8 where `path` is not empty.
+     *
+     * 33's four: the `props<Props>()` call, which lowers to the record the caller passed; the pair
+     * that brackets a binding element's initializer, which together make a default an accessor;
+     * and `absent`, which gives a binding with no default an accessor of `undefined` (33.4). The
+     * pair and `absent` are INSERTIONS — zero-width, so what stands between the pair goes on being
+     * lowered by the same walk, and a default reading a `Reactive` still reads it.
+     */
     shape:
         | 'value'
         | 'asWritten'
@@ -59,33 +68,43 @@ export type Read = {
         | 'absent'
         | 'static'
         | 'raw'
-    // What the rewrite replaces: the name, or a whole write or update from its first token.
+    /** What the rewrite replaces: the name, or a whole write or update from its first token. */
     from: number
     to: number
-    // A write's operator without its `=` (`''` for `=` itself); an update's `+` or `-`.
+    /** A write's operator without its `=` (`''` for `=` itself); an update's `+` or `-`. */
     operator: string
     prefix: boolean
-    // A write or an update whose value nothing reads (`isDiscarded`).
+    /** A write or an update whose value nothing reads (`isDiscarded`). */
     discarded: boolean
     arguments: number
-    // 31.8 — the member path between the name and the write: a property's name, or the span of a
-    // computed segment, which may itself hold reads. On the `props` call, the keys the child
-    // writes, by name (33.6).
+    /**
+     * 31.8 — the member path between the name and the write.
+     *
+     * A property's name, or the span of a computed segment, which may itself hold reads. On the
+     * `props` call, the keys the child writes, by name (33.6).
+     */
     path: { name: string | undefined; start: number; end: number }[]
     value: Span | undefined
-    // 33.6 — the name is a props accessor handing back the prop's cell, so the `Reactive` every
-    // rewrite reaches is `name()` rather than the name. On a default's pair, that the default is
-    // one too.
+    /**
+     * 33.6 — the name is a props accessor handing back the prop's cell.
+     *
+     * So the `Reactive` every rewrite reaches is `name()` rather than the name. On a default's
+     * pair, that the default is one too.
+     */
     through: boolean
-    // 32.33 — the name is bound to a `reactive(…)` whose options declare `by`.
+    /** 32.33 — the name is bound to a `reactive(…)` whose options declare `by`. */
     byValue: boolean
-    // 14.8 — the name is declared by a branch-local `<script>`, inside the body it scopes.
+    /** 14.8 — the name is declared by a branch-local `<script>`, inside the body it scopes. */
     local: boolean
 }
 
-// THE SHAPE, IN ONE PLACE. The header's invariant is that every read carries every field, and
-// a second hand-written literal is exactly how that stops being true — so every read is minted
-// here and then sets only what it parts company over. A span of zero width is an INSERTION.
+/**
+ * A `Read` with every field set, at its default where not given.
+ *
+ * THE SHAPE, IN ONE PLACE. `Read`'s invariant is that every read carries every field, and a second
+ * hand-written literal is exactly how that stops being true — so every read is minted here and
+ * then sets only what it parts company over. A span of zero width is an INSERTION.
+ */
 export function newRead(
     start: number,
     end: number,
@@ -118,10 +137,14 @@ function isAssigned(outer: Node, target: Node): outer is BinaryExpression {
     )
 }
 
-// WHETHER NOTHING READS AN EXPRESSION'S VALUE: a statement, a `for`'s own two, or either side
-// of a comma whose own value nothing reads — `a = 1, b = 2` as a statement is two discarded writes.
-// The comma is not optional: a write whose value IS read lowers to a form beginning with `(`, and
-// at the head of a line JavaScript inserts no semicolon in front of one.
+/**
+ * Whether nothing reads an expression's value.
+ *
+ * A statement, a `for`'s own two, or either side of a comma whose own value nothing reads —
+ * `a = 1, b = 2` as a statement is two discarded writes. The comma is not optional: a write whose
+ * value IS read lowers to a form beginning with `(`, and at the head of a line JavaScript inserts
+ * no semicolon in front of one.
+ */
 function isDiscarded(expression: Node): boolean {
     const holder = expression.parent
     if (isExpressionStatement(holder)) return true
@@ -148,8 +171,12 @@ function isIncrement(
     )
 }
 
-// Neither classifier treats any of these as a read: an import or export specifier names a
-// binding rather than reading one, and a `typeof n` is a type position.
+/**
+ * Whether a name under `parent` is no read at all, for either classifier.
+ *
+ * An import or export specifier names a binding rather than reading one, and a `typeof n` is a
+ * type position.
+ */
 function isNotARead(parent: Node): boolean {
     switch (parent.kind) {
         case SyntaxKind.ImportSpecifier:
@@ -163,11 +190,15 @@ function isNotARead(parent: Node): boolean {
     }
 }
 
-// ONE OCCURRENCE OF A NAME THE `props` PATTERN BOUND AND THE CHILD ONLY READS (33.4, 33.9). Every
-// one of them is a read of that key's accessor, which is where this parts company with
-// `classifyRead`: `onsave()` is the prop's own value being CALLED and lowers to `onsave()()`, where
-// the same spelling on a `Reactive` is 31.7's explicit read; and `amount.set` is the value's
-// member, a prop nothing writes having no cell. A prop the child writes is `classifyRead`'s.
+/**
+ * Classifies one occurrence of a prop the child only reads, or `undefined` where it is no read.
+ *
+ * A name the `props` pattern bound (33.4, 33.9). Every occurrence is a read of that key's
+ * accessor, which is where this parts company with `classifyRead`: `onsave()` is the prop's own
+ * value being CALLED and lowers to `onsave()()`, where the same spelling on a `Reactive` is 31.7's
+ * explicit read; and `amount.set` is the value's member, a prop nothing writes having no cell. A
+ * prop the child writes is `classifyRead`'s.
+ */
 export function classifyPropRead(node: Node): Read | undefined {
     const parent = node.parent
     if (isNotARead(parent)) return undefined
@@ -182,8 +213,12 @@ export function classifyPropRead(node: Node): Read | undefined {
     return read
 }
 
-// `undefined` for an occurrence that is not a read at all: the declaration itself, an import or
-// export specifier, and a `typeof n` in a type.
+/**
+ * Classifies one occurrence of a name bound to a `Reactive` as the `Read` it lowers as.
+ *
+ * `undefined` for an occurrence that is not a read at all: the declaration itself, an import or
+ * export specifier, and a `typeof n` in a type.
+ */
 export function classifyRead(node: Node): Read | undefined {
     const parent = node.parent
     if (isNotARead(parent)) return undefined
@@ -283,28 +318,32 @@ export function classifyRead(node: Node): Read | undefined {
     return read
 }
 
-// 14.2 — WHETHER EVALUATING A TEMPLATE EXPRESSION CAN RUN AUTHOR CODE, as far as SYNTAX can say.
-// Tracking happens where code runs (14.11), so an expression that runs none reads nothing reactive
-// however its names are bound — and anything that can run code is unproven and gets a binding,
-// runtime tracking deciding what it actually read.
-//
-// WHAT RUNS NO CODE: a literal, a name, the operators that only compare or branch (`!`, `===`,
-// `&&`, `??`, `?:`, `typeof`), and the type-only wrappers. WHAT RUNS CODE ONLY THROUGH ITS OPERAND'S
-// TYPE: arithmetic, ordering, loose equality and a template literal coerce an object through its
-// `valueOf`/`toString`, so each operand is handed back in `primitives` for the checker to confirm;
-// and a member read runs a getter, so each is handed back in `members` for the checker to confirm
-// is a plain property. EVERYTHING ELSE — a call, `new`, a tagged template, an element access, an
-// assignment, `in`, `instanceof`, a function, a literal object — is unproven here, with no question
-// asked of the checker at all.
-//
-// `false` is "unproven", never "reads a Reactive": this is a proof or nothing.
-//
-// A POSITION'S OWN VALUE IS DEMANDED PRIMITIVE, because every position this is asked of converts it
-// to a string or tests it, and an object's `toString` is code. THE ONE OBJECT EXEMPT is 32.26's
-// `raw(x)`: a slot's bare `raw(` is always the framework's (`slotFacts`), which converts its
-// argument and whose result the escaper reads a field of. It is also the one value a LIVE text
-// binding cannot write (`setText` writes text, never markup), so leaving it unproven is not only a
-// binding too many — it put `<b>hi</b>` on the screen where the server had painted an element.
+/**
+ * Whether syntax proves a template position runs no author code; the checker confirms the rest.
+ *
+ * 14.2 — WHETHER EVALUATING A TEMPLATE EXPRESSION CAN RUN AUTHOR CODE, as far as SYNTAX can say.
+ * Tracking happens where code runs (14.11), so an expression that runs none reads nothing reactive
+ * however its names are bound — and anything that can run code is unproven and gets a binding,
+ * runtime tracking deciding what it actually read.
+ *
+ * WHAT RUNS NO CODE: a literal, a name, the operators that only compare or branch (`!`, `===`,
+ * `&&`, `??`, `?:`, `typeof`), and the type-only wrappers. WHAT RUNS CODE ONLY THROUGH ITS OPERAND'S
+ * TYPE: arithmetic, ordering, loose equality and a template literal coerce an object through its
+ * `valueOf`/`toString`, so each operand is handed back in `primitives` for the checker to confirm;
+ * and a member read runs a getter, so each is handed back in `members` for the checker to confirm
+ * is a plain property. EVERYTHING ELSE — a call, `new`, a tagged template, an element access, an
+ * assignment, `in`, `instanceof`, a function, a literal object — is unproven here, with no question
+ * asked of the checker at all.
+ *
+ * `false` is "unproven", never "reads a Reactive": this is a proof or nothing.
+ *
+ * A POSITION'S OWN VALUE IS DEMANDED PRIMITIVE, because every position this is asked of converts it
+ * to a string or tests it, and an object's `toString` is code. THE ONE OBJECT EXEMPT is 32.26's
+ * `raw(x)`: a slot's bare `raw(` is always the framework's (`slotFacts`), which converts its
+ * argument and whose result the escaper reads a field of. It is also the one value a LIVE text
+ * binding cannot write (`setText` writes text, never markup), so leaving it unproven is not only a
+ * binding too many — it put `<b>hi</b>` on the screen where the server had painted an element.
+ */
 export function provePosition(
     node: Node,
     primitives: Node[],
@@ -316,6 +355,7 @@ export function provePosition(
     return proveStatic(value, primitives, members)
 }
 
+/** The argument of a bare `raw(x)` call, parentheses aside, or `undefined` where `node` is none. */
 function rawArgument(node: Node): Node | undefined {
     let inner = node
     while (inner.kind === SyntaxKind.ParenthesizedExpression)
@@ -329,15 +369,19 @@ function rawArgument(node: Node): Node | undefined {
     return only.kind === SyntaxKind.SpreadElement ? undefined : only
 }
 
-// WHAT A SLOT'S OWN TREE SAYS WITHOUT A TYPE: every bare `raw(…)` callee, lowered to the
-// framework's `raw` (32.26) — a member (`markdown.raw(x)`) is that object's method, and a `raw`
-// that is not called is whatever the file bound — and whether the slot AWAITS.
-//
-// A TEMPLATE POSITION CANNOT `await`: every slot, subject and attribute value is lowered into an
-// ordinary arrow inside the markup concatenation, so `{await rows}` emitted a module that does not
-// parse, reported by bun against the emitted file rather than the page. UNLESS THE SLOT MAKES ITS
-// OWN FUNCTION — `onclick={async () => await save()}` is an ordinary handler — so the walk stops
-// looking for an `await` at the first function it enters, and keeps looking for `raw` inside it.
+/**
+ * Collects a slot's bare `raw(…)` callees into `rawCallees`, and throws where the slot awaits.
+ *
+ * WHAT A SLOT'S OWN TREE SAYS WITHOUT A TYPE: every bare `raw(…)` callee, lowered to the
+ * framework's `raw` (32.26) — a member (`markdown.raw(x)`) is that object's method, and a `raw`
+ * that is not called is whatever the file bound — and whether the slot AWAITS.
+ *
+ * A TEMPLATE POSITION CANNOT `await`: every slot, subject and attribute value is lowered into an
+ * ordinary arrow inside the markup concatenation, so `{await rows}` emitted a module that does not
+ * parse, reported by bun against the emitted file rather than the page. UNLESS THE SLOT MAKES ITS
+ * OWN FUNCTION — `onclick={async () => await save()}` is an ordinary handler — so the walk stops
+ * looking for an `await` at the first function it enters, and keeps looking for `raw` inside it.
+ */
 export function slotFacts(
     node: Node,
     rawCallees: Node[],
@@ -359,7 +403,7 @@ export function slotFacts(
     })
 }
 
-// A node that opens a function scope of its own.
+/** The syntax kinds that open a function scope of their own. */
 export const FUNCTIONS: ReadonlySet<SyntaxKind> = new Set([
     SyntaxKind.ArrowFunction,
     SyntaxKind.FunctionExpression,
@@ -371,6 +415,7 @@ export const FUNCTIONS: ReadonlySet<SyntaxKind> = new Set([
     SyntaxKind.ClassStaticBlockDeclaration,
 ])
 
+/** Whether syntax proves `node` runs no author code, queuing what the checker must confirm. */
 function proveStatic(node: Node, primitives: Node[], members: Node[]): boolean {
     switch (node.kind) {
         case SyntaxKind.StringLiteral:

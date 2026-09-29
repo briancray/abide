@@ -10,6 +10,7 @@ export type SharedRow = {
     substrate: string
 }
 
+/** Batches every shared case and returns one row per case, each arm in nanoseconds per op. */
 export function runShared(budgetNanoseconds: number): SharedRow[] {
     const rows: SharedRow[] = []
     for (const kase of sharedCases()) {
@@ -35,7 +36,8 @@ export function runShared(budgetNanoseconds: number): SharedRow[] {
     return rows
 }
 
-export function printShared(rows: SharedRow[]): string {
+/** Formats shared rows as text: each arm's nanoseconds and its ratio to the first arm. */
+export function formatShared(rows: SharedRow[]): string {
     const lines: string[] = []
     for (const row of rows) {
         lines.push(

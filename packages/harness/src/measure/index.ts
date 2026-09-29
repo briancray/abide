@@ -21,15 +21,17 @@ export { profile, watchLongTasks } from './profile.ts'
 export type { ArmReading, Reading } from './Reading.ts'
 export type { Work } from './Work.ts'
 
-// THE INTERLOCK, and it replaces a measurement rather than deferring one. The
-// counter's own overhead was going to be the first number taken here; it is
-// irrelevant to a count and fatal to a duration, and taking it under happy-dom
-// guarantees the wrong answer — measured, interleaved, min-of-7, the PATCHED arm came
-// out FASTER at 0.89x, because `appendChild` there is ~130 ns of JavaScript and a JS
-// wrapper is a rounding error on it, where in Chromium the same member is native and
-// a patch both adds a frame and deoptimises the call site. So there is no threshold
-// to hold the lane to: there is no duration field, and this throws while the counters
-// are armed.
+/**
+ * `batch()` with the lane's `emulated` flag filled in. Throws while the counters are armed.
+ *
+ * THE INTERLOCK, and it replaces a measurement rather than deferring one. The counter's own
+ * overhead was going to be the first number taken here; it is irrelevant to a count and fatal to
+ * a duration, and taking it under happy-dom guarantees the wrong answer — measured, interleaved,
+ * min-of-7, the PATCHED arm came out FASTER at 0.89x, because `appendChild` there is ~130 ns of
+ * JavaScript and a JS wrapper is a rounding error on it, where in Chromium the same member is
+ * native and a patch both adds a frame and deoptimises the call site. So there is no threshold to
+ * hold the lane to: there is no duration field, and this throws while the counters are armed.
+ */
 export function time(spec: Omit<BatchSpec, 'emulated'>): Batched {
     if (isArmed())
         throw new Error(

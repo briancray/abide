@@ -6,8 +6,7 @@ const RANGES = ['7d', '30d']
 
 let range = reactive('7d')
 
-// Its own range, and no way to reach the tile above — the args are the
-// whole of what decides whether these two are one load.
+// Its own range, and no way to reach the tile above.
 const metrics = reactive(() => getMetrics({ range }))
 </script>
 

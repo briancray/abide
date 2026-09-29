@@ -15,22 +15,31 @@ import { note } from './note.ts'
 import { isThenable } from './reactive/isThenable.ts'
 import { untracked } from './reactive/tracking.ts'
 
-// The Standard Schema contract, declared here rather than depended on: it is an interface
-// a library implements, so an import would put a package in this seam's graph to gain a
-// shape that is fifteen lines. CLAUDE.md prices an import edge by the module it lands on,
-// and this one lands on every page.
-// NOT EXPORTED. `StandardSchemaV1` is the name a library implements and the one an app
-// annotates with; this is the shape of what its `validate` answers, and exporting it would
-// put a second name on the barrel that nothing resolves through — public surface by
-// accident rather than by decision.
+/**
+ * What a Standard Schema's `validate` answers: the value, or its issues.
+ *
+ * The Standard Schema contract, declared here rather than depended on: it is an interface
+ * a library implements, so an import would put a package in this seam's graph to gain a
+ * shape that is fifteen lines. CLAUDE.md prices an import edge by the module it lands on,
+ * and this one lands on every page.
+ *
+ * NOT EXPORTED. `StandardSchemaV1` is the name a library implements and the one an app
+ * annotates with; this is the shape of what its `validate` answers, and exporting it would
+ * put a second name on the barrel that nothing resolves through — public surface by
+ * accident rather than by decision.
+ */
 type StandardResult<Output> =
     | { readonly value: Output; readonly issues?: undefined }
     | {
           readonly issues: readonly {
               readonly message: string
-              // `| undefined` IS THE SPEC'S, and with `exactOptionalPropertyTypes` it is not
-              // implied by the `?`: without it no library that spells the spec's own type —
-              // zod among them — is a `Schema` at all.
+              /**
+               * Where the issue stands: property keys, or `{ key }` steps.
+               *
+               * `| undefined` IS THE SPEC'S, and with `exactOptionalPropertyTypes` it is not
+               * implied by the `?`: without it no library that spells the spec's own type —
+               * zod among them — is a `Schema` at all.
+               */
               readonly path?:
                   | readonly (PropertyKey | { readonly key: PropertyKey })[]
                   | undefined
@@ -47,32 +56,48 @@ export type StandardSchemaV1<Output = unknown> = {
     }
 }
 
-// A JSON Schema document is the Standard form once `jsonSchema` wraps it — see that module for
-// why the document does not stand here on its own.
+/**
+ * A shape a value is checked against: a function returning what it accepts, or a Standard Schema.
+ *
+ * A JSON Schema document is the Standard form once `jsonSchema` wraps it — see that module for
+ * why the document does not stand here on its own.
+ */
 export type Schema<T> = ((value: unknown) => T) | StandardSchemaV1<T>
 
-// ISSUES RATHER THAN A REFUSAL, and that is what keeps this module out of a cycle: a
-// `validationError` is built by `refuse`, `refuse` runs a schema (15.11), and the two
-// importing each other is an edge a bundler has to break. What a schema knows is WHAT WAS
-// WRONG AND WHERE; turning that into a named refusal at 422 (15.8) is the caller's, and
-// the caller is the one place that knows whether this was a write, a publish or a body.
+/**
+ * What running a schema found: the accepted value, or its issues by path.
+ *
+ * ISSUES RATHER THAN A REFUSAL, and that is what keeps this module out of a cycle: a
+ * `validationError` is built by `refuse`, `refuse` runs a schema (15.11), and the two
+ * importing each other is an edge a bundler has to break. What a schema knows is WHAT WAS
+ * WRONG AND WHERE; turning that into a named refusal at 422 (15.8) is the caller's, and
+ * the caller is the one place that knows whether this was a write, a publish or a body.
+ */
 export type Checked = { value: unknown; issues: Found | null }
 
 function accepted(value: unknown): Checked {
     return { value, issues: null }
 }
 
-// KEYED BY PATH, and the type is written out rather than reached for as `Issues<unknown>`:
-// `Issues<T>` answers `string[]` where `T` is not an object, and `unknown` is not, so that
-// spelling types the record as a list and every cast around it as a mistake.
+/**
+ * Issues keyed by path.
+ *
+ * KEYED BY PATH, and the type is written out rather than reached for as `Issues<unknown>`:
+ * `Issues<T>` answers `string[]` where `T` is not an object, and `unknown` is not, so that
+ * spelling types the record as a list and every cast around it as a mistake.
+ */
 export type Found = Record<string, string[]>
 
 function refusedAs(found: Found): Checked {
     return { value: undefined, issues: found }
 }
 
-// 19.5: the plain-function form throws what it refuses, and the throw becomes the `''`
-// entry — the key for "about the value itself", which is all a bare throw can say.
+/**
+ * A throw from a schema, as the `''` issue entry.
+ *
+ * 19.5: the plain-function form throws what it refuses, and the throw becomes the `''`
+ * entry — the key for "about the value itself", which is all a bare throw can say.
+ */
 function fromThrow(thrown: unknown): Checked {
     const said =
         thrown instanceof Error
@@ -88,7 +113,7 @@ function fromThrow(thrown: unknown): Checked {
     return refusedAs({ '': [said] })
 }
 
-// 19.6's `''` key, from a Standard Schema issue's path.
+/** A Standard Schema issue's path as a dotted key — 19.6's `''` where it has none. */
 function pathOf(
     path: readonly (PropertyKey | { readonly key: PropertyKey })[] | undefined,
 ): string {
@@ -104,10 +129,14 @@ function pathOf(
     return parts.join('.')
 }
 
-// 4.7 — A SCHEMA RUNS UNTRACKED, and the clearing is HERE because running one is what the clause
-// is about. Held in the two callers `Reactive.ts` owns, `refuse.named`'s gate and `Keyed`'s
-// argument gate ran tracked: a refusal built inside an effect subscribed that effect to whatever
-// its schema read, and the read was spliced into the body's cursor-ordered `sources` besides.
+/**
+ * Runs a schema of either form, untracked, and reports what it accepted or found.
+ *
+ * 4.7 — A SCHEMA RUNS UNTRACKED, and the clearing is HERE because running one is what the clause
+ * is about. Held in the two callers `Reactive.ts` owns, `refuse.named`'s gate and `Keyed`'s
+ * argument gate ran tracked: a refusal built inside an effect subscribed that effect to whatever
+ * its schema read, and the read was spliced into the body's cursor-ordered `sources` besides.
+ */
 export function runSchema(schema: unknown, value: unknown): Checked {
     return untracked(runSchemaTracked, schema, value)
 }

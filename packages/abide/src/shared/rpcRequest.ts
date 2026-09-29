@@ -12,18 +12,23 @@ import type { Method } from './rpc.ts'
 export type RpcRequest = {
     method: Method
     url: string
-    // The JSON body of a mutation, or `undefined` where the args ride in the URL.
+    /** The JSON body of a mutation, or `undefined` where the args ride in the URL. */
     body: string | undefined
-    // What `fetch` is handed: the method, the JSON content-type beside a body, and `no-cache`.
+    /** What `fetch` is handed: the method, the JSON content-type beside a body, and `no-cache`. */
     init: RequestInit
     key: string
 }
 
-// The half of 16.19 both ends read: which methods carry their args in the URL.
+/**
+ * Whether a method carries its args in the URL.
+ *
+ * The half of 16.19 both ends read.
+ */
 export function argsInURL(method: Method): boolean {
     return method === 'GET' || method === 'DELETE'
 }
 
+/** The request a call is: its URL, body, `fetch` init and the `key` both ends match it by. */
 export function rpcRequest(
     method: Method,
     address: string,
@@ -62,7 +67,7 @@ export function rpcRequest(
     return { method, url, body, init, key: `${method} ${url} ${body ?? ''}` }
 }
 
-// A query member's name in the encoding `URLSearchParams` gives it, without its `=`.
+/** A query member's name in the encoding `URLSearchParams` gives it, without its `=`. */
 export function bareName(name: string): string {
     return new URLSearchParams([[name, '']]).toString().slice(0, -1)
 }

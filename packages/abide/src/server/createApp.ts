@@ -25,7 +25,7 @@ import {
     connectionOf,
     socketHandlers,
 } from './answerSocket.ts'
-import { CONFIG_ROOT, config } from './config.ts'
+import { APP_PACKAGE, type AppPackage, config, packageUnder } from './config.ts'
 // 29 — `csp`'s server half, filled in before any app's rung or page can ask for it.
 import './csp.ts'
 import { HOOKS, reportUnexpected } from './hooks.ts'
@@ -42,6 +42,7 @@ import { traceResponse } from './trace.ts'
 // 28.8 — one line per request.
 const REQUEST_LOG = namedLogger('abide:request')
 
+/** The app object: what a host, a test or a script holds the app as. */
 export interface App {
     fetch(request: Request): Promise<Response>
     run<Result>(
@@ -66,8 +67,11 @@ type OwnRoute =
           ) => unknown
       }
 
-// 42.1 — `createApp()` for the app this process was started in: found where the CLI finds it
-// (38.26), and booted off what `abide build` left beside it (38.28).
+/**
+ * The app this process was started in, booted off what `abide build` left beside it.
+ *
+ * 42.1 — found where the CLI finds it (38.26), and booted off the build (38.28).
+ */
 export async function createApp(): Promise<App> {
     const root = appRoot(undefined)
     if (root === undefined)
@@ -76,15 +80,23 @@ export async function createApp(): Promise<App> {
         )
     const out = buildDirectory(root)
     const { loadBuild } = await import('./serveBuild.ts')
-    return bootApp(root, () => loadBuild({ root, out }))
+    return bootApp(originUnder(root), () => loadBuild({ root, out }))
 }
 
-// BESIDE THE APP RATHER THAN BESIDE THE SHELL: an app's build belongs to the app.
+/**
+ * Where an app's build goes: `.abide` in the directory above its source root.
+ *
+ * BESIDE THE APP RATHER THAN BESIDE THE SHELL: an app's build belongs to the app.
+ */
 export function buildDirectory(root: string): string {
     return `${dirname(root)}/.abide`
 }
 
-// THE DIRECTORY `ui/` SITS UNDER — 38.26 and 38.27. `undefined` is a refusal and not a guess.
+/**
+ * The directory `ui/` sits under, or `undefined` where none is found.
+ *
+ * 38.26 and 38.27 — `undefined` is a refusal and not a guess.
+ */
 export function appRoot(given: string | undefined): string | undefined {
     if (given !== undefined) return resolve(given)
     const here = process.cwd()
@@ -93,27 +105,56 @@ export function appRoot(given: string | undefined): string | undefined {
     return existsSync(`${under}/ui`) ? under : undefined
 }
 
+/**
+ * What an app is booted as besides its sources: its hooks module and its `package.json`.
+ *
+ * The two things `bootApp` reads before the boot and not through it. Found under the source root
+ * for an app on disk (`originUnder`), and handed over by a compiled app, which has no root to look
+ * under.
+ */
+export type AppOrigin = {
+    /** The import of `src/server/app.ts`, where the app has one. 37.1. */
+    hooks: (() => Promise<{ default?: OwnRoute }>) | undefined
+    /** 27.3's name and version. */
+    package: AppPackage
+}
+
+/** The path of the app's hooks module under its source root, where it has one. 37.1. */
+export function hooksModuleUnder(root: string): string | undefined {
+    const hooksModule = `${root}/server/app.ts`
+    return existsSync(hooksModule) ? hooksModule : undefined
+}
+
+/** The `AppOrigin` of an app on disk, found under its source root. */
+export function originUnder(root: string): AppOrigin {
+    const hooksModule = hooksModuleUnder(root)
+    return {
+        hooks:
+            hooksModule === undefined
+                ? undefined
+                : () => import(Bun.pathToFileURL(hooksModule).href),
+        package: packageUnder(root),
+    }
+}
+
+/** An `App` booted over the sources `load` supplies, inside the app's `onStart` hooks. */
 export async function bootApp(
-    root: string,
+    origin: AppOrigin,
     load: () => Promise<LoadedSources>,
 ): Promise<App> {
     // 37.1 — OPTIONAL, and imported for what it CALLS: every hook it runs is filed by the time the
     // import settles.
-    const hooksModule = `${root}/server/app.ts`
-    const own = existsSync(hooksModule)
-        ? ((
-              (await import(Bun.pathToFileURL(hooksModule).href)) as {
-                  default?: OwnRoute
-              }
-          ).default ?? undefined)
-        : undefined
+    const own =
+        origin.hooks === undefined
+            ? undefined
+            : ((await origin.hooks()).default ?? undefined)
 
     // 37.4 — THE BOOT, INSIDE `onStart`. 37.6 — a throw out of a hook or out of the boot rejects
     // `createApp`, and nothing is served.
     //
     // 42.2 — THE CONFIGURATION IS READ AS PART OF THE BOOT, so a configuration that does not resolve
     // is a boot that fails rather than a first request that does.
-    CONFIG_ROOT.current = root
+    APP_PACKAGE.current = origin.package
     let sources: LoadedSources | undefined
     await compose(HOOKS.starts, async () => {
         config.invalidate()
@@ -193,8 +234,16 @@ export async function bootApp(
     // 16.44 — a `raw` call made on this server is answered by this app, in process.
     RPC_SERVER.raw = fetch
 
+    // 42.15 — ONE STOP, however many ask for it: a signal landing while the shell's `exit` is already
+    // stopping the app is answered with that stop, and `onStop` runs once.
+    let stopped: Promise<void> | undefined
+    function stop(): Promise<void> {
+        stopped ??= stopOnce()
+        return stopped
+    }
+
     // 42.10 — stop accepting, drain, and only then the teardown `onStop` wraps (37.4).
-    async function stop(): Promise<void> {
+    async function stopOnce(): Promise<void> {
         stopping = true
         // 42.11 — every open socket is closed rather than left to the process's exit.
         for (const ws of open) ws.close(1001, 'the app is stopping')
@@ -215,7 +264,7 @@ export async function bootApp(
         // 42.9 — the socket, and what `server` hands back from then on.
         async listen(options) {
             const port = options?.port
-            // Built here, where it is bound: `abide dev` holds its sockets on another thread and
+            // Built here, where it is bound: `abide dev` holds its sockets in another process and
             // runs a mux of its own over the same tables.
             const sockets = socketHandlers(booted.sockets, booted.handlers)
             const server = Bun.serve<Connection>({
@@ -269,11 +318,15 @@ export async function bootApp(
     }
 }
 
-// 21.1, 21.2 — ON EVERY ANSWER, a refusal and a 404 included. A `Response` whose headers are
-// immutable — one a handler got from `fetch` and returned — is copied rather than written to.
-//
-// 22.9 — AND WHAT WAS WRITTEN THROUGH `response`, laid over every answer here and nowhere else: a
-// lane builds its answer at the written status and leaves the headers to this.
+/**
+ * The answer with the headers every answer carries, and what was written through `response`.
+ *
+ * 21.1, 21.2 — ON EVERY ANSWER, a refusal and a 404 included. A `Response` whose headers are
+ * immutable — one a handler got from `fetch` and returned — is copied rather than written to.
+ *
+ * 22.9 — AND WHAT WAS WRITTEN THROUGH `response`, laid over every answer here and nowhere else: a
+ * lane builds its answer at the written status and leaves the headers to this.
+ */
 function stamp(answered: Response): Response {
     let stamped = answered
     try {
@@ -307,8 +360,12 @@ function isMux(pathname: string): boolean {
     return (unmounted(pathname) ?? pathname) === SOCKET_ADDRESS
 }
 
-// 16.11 — A REQUEST UNDER THE MOUNT IS ANSWERED AS THE ADDRESS BELOW IT; one that is not — a proxy
-// that already took the prefix off — is answered as it came.
+/**
+ * The request with the mount taken off its address, where it is under the mount.
+ *
+ * 16.11 — A REQUEST UNDER THE MOUNT IS ANSWERED AS THE ADDRESS BELOW IT; one that is not — a proxy
+ * that already took the prefix off — is answered as it came.
+ */
 function belowMount(request: Request): Request {
     if (MOUNT.current() === '') return request
     const url = new URL(request.url)

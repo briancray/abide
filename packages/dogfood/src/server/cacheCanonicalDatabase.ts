@@ -13,7 +13,7 @@ const ORDERS: Record<string, number> = { north: 128, south: 94 }
 
 let computed = 0
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     metrics: {
         async find(query: Query): Promise<Metrics> {

@@ -27,6 +27,11 @@ const STATEFUL = new Set([
     'canvas',
 ])
 
+/**
+ * A template's warnings: each unkeyed `{#for}` over a changing subject whose body holds state.
+ *
+ * 32.14 — see `STATEFUL`.
+ */
 export function templateWarnings(
     path: string,
     text: string,
@@ -97,9 +102,12 @@ function canChange(
     return false
 }
 
-// 32.33 — A SUBJECT NAMED ALONE WHOSE `reactive` DECLARES `by` IS KEYED, by the value rather than
-// the block. The checker has already said which names that is (`Read.byValue`), through an import
-// as well as in the page's own setup.
+/**
+ * Whether a `{#for}` subject is a name alone whose `reactive` declares `by`, keying it by value.
+ *
+ * 32.33 — such a subject IS KEYED, by the value rather than the block. The checker has already said
+ * which names that is (`Read.byValue`), through an import as well as in the page's own setup.
+ */
 function keyedByValue(
     node: TemplateNode,
     subject: string,

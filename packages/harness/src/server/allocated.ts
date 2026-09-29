@@ -1,6 +1,6 @@
 // WHAT AN OP ALLOCATED, which `heapStats()` cannot see and this therefore does not
 // pretend to report exactly. A batch mean, tagged, and the tag is the point: an exact
-// integer is `retained()`'s to hand out, and `SERVER.md`'s fractional `Object:3.09`
+// integer is `retained()`'s to hand out, and a fractional reading like `Object:3.09`
 // is a reachability artefact rather than a genuinely fractional quantity.
 //
 // What a fractional per-rep count IS good for is the other question: a non-integer
@@ -13,6 +13,7 @@ import { fullGC, heapStats } from 'bun:jsc'
 
 const DEFAULT_REPS = 1000
 
+/** Live object counts by JSC type, after a full collection. */
 function counts(): Record<string, number> {
     fullGC()
     return heapStats().objectTypeCounts as Record<string, number>
@@ -34,17 +35,29 @@ function meanPerRep(
     return out
 }
 
+/**
+ * Mean objects per rep by JSC type over a batch, and how that mean grew between its halves.
+ *
+ * A batch mean, never exact — gate exact counts on `retained()`. Throws in a process with a DOM.
+ */
 export function allocated(
     body: () => unknown,
     reps = DEFAULT_REPS,
 ): {
-    // A literal, so this record can never be `toMatchObject`'d against an exact
-    // integer the way a `retained()` diff is.
+    /**
+     * Always `'batch mean'`.
+     *
+     * A literal, so this record can never be `toMatchObject`'d against an exact integer the way a
+     * `retained()` diff is.
+     */
     tagged: 'batch mean'
     reps: number
     perRep: Record<string, number>
-    // The last half's mean minus the first half's, per rep. A type that grows across
-    // the batch is retaining rather than allocating.
+    /**
+     * The last half's mean minus the first half's, per rep.
+     *
+     * A type that grows across the batch is retaining rather than allocating.
+     */
     growth: Record<string, number>
 } {
     if (typeof document !== 'undefined')

@@ -12,14 +12,19 @@
 
 type SegmentKind = 'static' | 'required' | 'optional' | 'rest'
 
+/** One `/`-separated piece of a route literal, classified by kind. */
 export type Segment = {
     kind: SegmentKind
-    // The literal text for a static segment, the param name for the other three.
+    /** The literal text for a static segment, the param name for the other three. */
     name: string
 }
 
-// `[...rest]`, `[[optional]]`, `[required]`, or a literal. Ordered longest-first: `[[a]]` is a
-// `[a]` with another bracket round it, so testing the short form first matches both.
+/**
+ * A route literal split into its segments, each classified by kind.
+ *
+ * `[...rest]`, `[[optional]]`, `[required]`, or a literal. Ordered longest-first: `[[a]]` is a
+ * `[a]` with another bracket round it, so testing the short form first matches both.
+ */
 export function parseRoutePattern(pattern: string): Segment[] {
     const out: Segment[] = []
     for (const raw of pattern.split('/')) {
@@ -37,12 +42,16 @@ export function parseRoutePattern(pattern: string): Segment[] {
 
 const ROUTES = 'ui/pages/'
 
-// THE PAGE'S ADDRESS FROM ITS PATH. `page.abide` is an address rather than a name (CLAUDE.md), so
-// the directories above it ARE the route and the file itself contributes nothing.
-//
-// 23.3 — BELOW THE FIRST `ui/pages/`, which is the routes directory, and not below the last `pages/`:
-// a section an app files as `ui/pages/pages/` is the address `/pages`, and cutting at the last one
-// served `ui/pages/pages/add-a-page` at `/add-a-page` and gave `/` two pages.
+/**
+ * The route literal a page file is filed under, read off its path below `ui/pages/`.
+ *
+ * `page.abide` is an address rather than a name (CLAUDE.md), so the directories above it ARE the
+ * route and the file itself contributes nothing.
+ *
+ * 23.3 — BELOW THE FIRST `ui/pages/`, which is the routes directory, and not below the last `pages/`:
+ * a section an app files as `ui/pages/pages/` is the address `/pages`, and cutting at the last one
+ * served `ui/pages/pages/add-a-page` at `/add-a-page` and gave `/` two pages.
+ */
 export function routeOf(pagePath: string): string {
     const at = pagePath.indexOf(ROUTES)
     const tail = at === -1 ? pagePath : pagePath.slice(at + ROUTES.length)
@@ -52,21 +61,25 @@ export function routeOf(pagePath: string): string {
     return `/${parts.join('/')}`
 }
 
-// 30.9 — HOW SPECIFIC A PATTERN IS, so `/invoices/new` is tried before `/invoices/[id]` however the
-// build happened to walk the tree. Negative where `a` is the more specific, which is `sort`'s own
-// order and so the one this is read in.
-//
-// SEGMENT BY SEGMENT, LEFT TO RIGHT, rather than by a score summed over the whole pattern. A sum
-// cannot carry an ORDERING over kinds: the first thing it loses is position, so `/[id]/edit` and
-// `/new/[tab]` come out equal and `/new/edit` resolves by whichever the build walked first — the
-// thing this function exists to stop. Weighting length on top of that then loses the kinds
-// themselves, and `/x` ranked BELOW `/[[a]]/[[b]]` for the path `/x`: a static segment beaten by
-// two optionals, which is 30.9 exactly inverted. Both were live on the scalar this replaced.
-//
-// THE SHORTER PATTERN WINS A TIE, and only an exhausted prefix can produce one: every segment the
-// two share is the same kind, so what is left is the extra segments of the longer, which can only
-// be optional or rest or the two would not match one path. `/a` admits one address and
-// `/a/[[b]]` admits two, so the shorter is the narrower claim.
+/**
+ * A `sort` comparator over two parsed patterns: negative where `a` is the more specific.
+ *
+ * 30.9 — HOW SPECIFIC A PATTERN IS, so `/invoices/new` is tried before `/invoices/[id]` however the
+ * build happened to walk the tree. Negative where `a` is the more specific, which is `sort`'s own
+ * order and so the one this is read in.
+ *
+ * SEGMENT BY SEGMENT, LEFT TO RIGHT, rather than by a score summed over the whole pattern. A sum
+ * cannot carry an ORDERING over kinds: the first thing it loses is position, so `/[id]/edit` and
+ * `/new/[tab]` come out equal and `/new/edit` resolves by whichever the build walked first — the
+ * thing this function exists to stop. Weighting length on top of that then loses the kinds
+ * themselves, and `/x` ranked BELOW `/[[a]]/[[b]]` for the path `/x`: a static segment beaten by
+ * two optionals, which is 30.9 exactly inverted. Both were live on the scalar this replaced.
+ *
+ * THE SHORTER PATTERN WINS A TIE, and only an exhausted prefix can produce one: every segment the
+ * two share is the same kind, so what is left is the extra segments of the longer, which can only
+ * be optional or rest or the two would not match one path. `/a` admits one address and
+ * `/a/[[b]]` admits two, so the shorter is the narrower claim.
+ */
 export function compareRoutes(a: Segment[], b: Segment[]): number {
     const shared = a.length < b.length ? a.length : b.length
     for (let at = 0; at < shared; at += 1) {
@@ -83,9 +96,13 @@ function specificity(segment: Segment): number {
     return segment.kind === 'optional' ? 1 : 0
 }
 
-// 30.9 — MOST SPECIFIC FIRST, for whichever seam is asking. The ranking POLICY is what decides
-// which page an address resolves to, so it is here with `compareRoutes` rather than written out
-// beside each table: the server's boot and the client router's start sort through one call.
+/**
+ * Sorts route rows in place, most specific first, and returns the same array.
+ *
+ * 30.9 — MOST SPECIFIC FIRST, for whichever seam is asking. The ranking POLICY is what decides
+ * which page an address resolves to, so it is here with `compareRoutes` rather than written out
+ * beside each table: the server's boot and the client router's start sort through one call.
+ */
 export function rankBySpecificity<T extends { segments: Segment[] }>(
     rows: T[],
 ): T[] {

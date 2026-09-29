@@ -5,6 +5,7 @@
 import { spreadEntries } from '#shared/spread.ts'
 import type { Scope } from './Scope.ts'
 
+/** Keeps an element's spread attributes and `on<event>` listeners written as the value changes. */
 export function bindSpread(
     element: Element,
     read: () => unknown,

@@ -1,5 +1,5 @@
-// THE DOCS, BUILT AND SERVED, for the two things that drive them from the outside: `bun run
-// status` puts its own page beside them, and the measure pass walks every card in them.
+// THE DOCS, BUILT AND SERVED, for what drives them from the outside: `bun run bench:share`
+// (`nameTheShare.ts`) navigates between real docs addresses and prices the layers of each op.
 //
 // A SUBPROCESS RUNNING THE REAL COMMAND. The docs are an abide app now, so what a script drives
 // has to be `abide start` over `abide build`'s output — a second server reading the same files
@@ -14,13 +14,17 @@ import { buildPages } from '../../dogfood/scripts/buildPages.ts'
 const DOGFOOD = new URL('../../dogfood/', import.meta.url).pathname
 
 export type DocsApp = {
-    // The origin `abide start` bound, with no trailing slash.
+    /** The origin `abide start` bound, with no trailing slash. */
     origin: string
     stop: () => void
 }
 
-// `--port 0` and the address read back off stdout: this runs beside whatever else a developer has
-// bound, and a fixed port is the one way a script that works alone fails on a busy machine.
+/**
+ * Builds the docs app, starts `abide start` on it, and returns its origin and a stop.
+ *
+ * `--port 0` and the address read back off stdout: this runs beside whatever else a developer has
+ * bound, and a fixed port is the one way a script that works alone fails on a busy machine.
+ */
 export async function serveDocsApp(): Promise<DocsApp> {
     await buildPages()
     const built = buildApp(`${DOGFOOD}src`, `${DOGFOOD}.abide`)

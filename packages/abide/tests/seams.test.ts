@@ -71,7 +71,7 @@ const count = reactive(0, { schema: jsonSchema({ type: 'number' }) })
 // what the bundler pulls through it. `emitClient.ts`'s head records this having been broken once
 // already by a subtler cause.
 //
-// THE MARKER IS A STRING ONLY THE RUNTIME SPELLS — 41.10's mismatch message, which `adoptNode.ts`
+// THE MARKER IS A STRING ONLY THE RUNTIME SPELLS — 41.10's mismatch message, which `adoptWalk.ts`
 // and `regions.ts` both carry and a minifier leaves alone. BOTH DIRECTIONS, for the reason the
 // test above gives: a gate that only checks an absence passes just as well on a build of nothing.
 //

@@ -56,8 +56,8 @@ function fill(target: Record<string, unknown>): Record<string, unknown> {
     return target
 }
 
-// TODAY: members assigned as own properties, state as own properties, closure.
-function today(): Any {
+/** OWN PROPERTIES: members and state both assigned onto the function, which reads its closure. */
+function ownProperties(): Any {
     const self = function read(): unknown {
         return (self as unknown as Any).value
     } as unknown as Any
@@ -70,7 +70,7 @@ function today(): Any {
 const PROTO = Object.assign(Object.create(Function.prototype), MEMBERS, {
     b: true,
 })
-// PROTOTYPE: members on one pointer, state still own, function names itself.
+/** PROTOTYPE: members on one pointer, state still own, function names itself. */
 function proto(): Any {
     const self = function read(): unknown {
         return (read as unknown as Any).value
@@ -89,7 +89,12 @@ const PROTO_RECORD = Object.assign(Object.create(Function.prototype), {
     },
     b: true,
 })
-// RECORD: ONE own property on the function, every field on a plain object.
+/**
+ * RECORD: ONE own property on the function, every field on a plain object.
+ *
+ * The shape `Reactive.ts` ships: a callable seated on a member prototype, holding its state on the
+ * record under `CELL`.
+ */
 function record(): Any {
     const self = function read(): unknown {
         return ((read as unknown as Any).c as Any).value
@@ -102,7 +107,7 @@ function record(): Any {
 function rows(): { shape: string; read: number; write: number }[] {
     const out: { shape: string; read: number; write: number }[] = []
     const shapes: [string, () => Any][] = [
-        ['today', today],
+        ['own props', ownProperties],
         ['prototype', proto],
         ['record', record],
     ]

@@ -567,7 +567,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Path | Meaning | Rules |
 | --- | --- | --- |
-| `<head>` | A page's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13 |
+| `<head>` | A page's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14 |
 | `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10 |
 | `[name]` | A required dynamic segment. | 23.5, 30.3 |
 | `[[name]]` | An optional segment. | 23.5, 30.4 |
@@ -628,7 +628,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `src/ui/**` | Browser-related source. | 36.10 |
 | `src/shared/**` | Source shared by both. | 36.10 |
 | `src/server/app.ts` | The lifecycle hooks. | 37.1 |
-| `src/ui/app.html` | The document its pages are served in. | 35.6 |
+| `src/ui/app.html` | The document its pages are served in. | 35.6, 39.4 |
 | `src/ui/public/**` | The files answered as authored, at their path below that directory. | 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.19, 38.20 |
 | `src/ui/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
 | `src/ui/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
@@ -661,7 +661,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `App.fetch` | `(request: Request) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6 |
 | `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 11.38 |
 | `App.listen` | `(options?: { port?: number; unix?: string }) => Promise<void>` | The socket, bound. | 42.9 |
-| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 37.4 |
+| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 37.4 |
 | `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
 
 # CLI
@@ -671,17 +671,17 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Command | Meaning | Rules |
 | --- | --- | --- |
 | `abide scaffold <name>` | Writes a starter project. | 38.1, 38.43 |
-| `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2 |
+| `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.58 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.32, 38.33, 38.34, 38.41 |
-| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27, 38.29, 38.31, 38.36, 38.37, 38.38, 38.39, 38.42, 38.44 |
+| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 37.8, 37.9, 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27, 38.29, 38.31, 38.36, 38.37, 38.38, 38.39, 38.42, 38.44 |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.44, 38.5, 38.19, 38.26, 38.27, 38.28, 38.31 |
-| `abide start [--port <n>]` | Boots the built app. | 37.8, 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28, 38.29, 38.30 |
+| `abide start [--port <n>]` | Boots the built app, and a shell on it. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28, 38.29, 38.30, 38.54, 38.55, 38.56 |
 | `abide connect [url]` | The interactive shell against a running app. | 38.7 |
 | `abide call <address> [args]` | One call to one handler. | 38.8 |
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. | 38.9 |
 | `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.14 |
 | `abide logs` | A live subscription to `log.records`. | 38.10 |
-| `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 38.11 |
+| `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.11, 38.26, 38.27, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.53, 38.57 |
 | `abide bundle` | A desktop launcher for the host platform. | 38.11 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.12, 38.35, 38.40 |
 | `abide` · `-h` · `--help` | Usage, generated from the command list. | 38.13 |

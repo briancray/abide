@@ -34,7 +34,7 @@ const SETTLE_MS = 150
 const HEADER_END = '\r\n\r\n'
 const ENCODER = new TextEncoder()
 
-// The protocol's `DiagnosticSeverity`.
+/** The protocol's `DiagnosticSeverity`. */
 const SEVERITY: Record<Diagnosis['category'], number> = {
     error: 1,
     warning: 2,
@@ -42,6 +42,7 @@ const SEVERITY: Record<Diagnosis['category'], number> = {
     suggestion: 4,
 }
 
+/** Answers the language server protocol read from `input` until the client exits. */
 export async function serveLanguage(
     root: string | undefined,
     input: ReadableStream<Uint8Array>,
@@ -346,9 +347,13 @@ async function closeAll(
     )
 }
 
-// The directory `ui/` sits under for the file at `path` — the OUTERMOST `ui` on the way up, so a
-// component folder that happens to be called `ui` inside an app is not taken for the app — or
-// `undefined` where the file is under no `ui/` at all.
+/**
+ * The app a file at `path` belongs to: the directory above its outermost `ui/`.
+ *
+ * The directory `ui/` sits under for the file at `path` — the OUTERMOST `ui` on the way up, so a
+ * component folder that happens to be called `ui` inside an app is not taken for the app — or
+ * `undefined` where the file is under no `ui/` at all.
+ */
 function appRootOf(path: string): string | undefined {
     let found: string | undefined
     let at = dirname(path)
@@ -360,15 +365,19 @@ function appRootOf(path: string): string | undefined {
     }
 }
 
-// How much of a line the finding at `character` underlines: the word that starts there, or one
-// character where none does.
+/**
+ * How much of a line the finding at `character` underlines: the word that starts there, or one
+ * character where none does.
+ */
 function wordLength(line: string, character: number): number {
     const word = /^[\w$]+/.exec(line.slice(character))?.[0]
     return word === undefined ? 1 : word.length
 }
 
-// The protocol's `{ line, character }`, from 0, as an offset into `text`. A character is a UTF-16
-// code unit in the protocol and in a JavaScript string alike.
+/**
+ * The protocol's `{ line, character }`, from 0, as an offset into `text`. A character is a UTF-16
+ * code unit in the protocol and in a JavaScript string alike.
+ */
 function offsetOf(
     text: string,
     position: { line: number; character: number },
@@ -382,7 +391,7 @@ function offsetOf(
     return at + position.character
 }
 
-// A `Place`, lines and columns from 1, as the protocol's `Location`, from 0.
+/** A `Place`, lines and columns from 1, as the protocol's `Location`, from 0. */
 function locationOf(place: Place): object {
     return {
         uri: Bun.pathToFileURL(place.path).href,

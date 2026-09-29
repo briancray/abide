@@ -24,26 +24,37 @@ import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 // source text and handed to the emitter verbatim, which is what keeps 19.12 a property of
 // the file rather than a promise this parser has to keep.
 
+/** A `.abide` file split into its script, module, style and head blocks and its parsed template. */
 export type AbideFile = {
-    // `<script>` bodies in source order — per-instance setup, 34.1.
+    /** `<script>` bodies in source order — per-instance setup, 34.1. */
     scripts: string[]
-    // `<script module>` bodies in source order — 34.2, request-local on a server and process-wide
-    // in a browser. Apart from `scripts` because the two run a different number of times, which is
-    // the whole of the clause.
+    /**
+     * `<script module>` bodies in source order — 34.2, request-local on a server and process-wide
+     * in a browser. Apart from `scripts` because the two run a different number of times, which is
+     * the whole of the clause.
+     */
     modules: string[]
-    // `<style>` bodies in source order, outside any block body — each scoped to the component (34.4). A
-    // body's own is on its block (34.13).
+    /**
+     * `<style>` bodies in source order, outside any block body — each scoped to the component (34.4). A
+     * body's own is on its block (34.13).
+     */
     styles: string[]
-    // 39.1, 39.3 — what every top-level `<head>` contributes to the document head, split off the
-    // template here so no walk over the body steps around it. In tree order, which is 39.5.
+    /**
+     * 39.1, 39.3 — what every top-level `<head>` contributes to the document head, split off the
+     * template here so no walk over the body steps around it. In tree order, which is 39.5.
+     */
     head: TemplateNode[]
     template: TemplateNode[]
-    // WHERE EACH PIECE THE PROJECTION COPIES STARTS IN THE SOURCE, so a checker's position in the
-    // projection is a line of the `.abide` (38.3). A script block by index; a template expression
-    // by the holder the projection keys its span by, a `{#for}` key by its block, an element's tag
-    // name by the element, and a literal attribute's name by the attribute. A value the
-    // parser rewrote — an interpolated attribute becomes a template literal — is placed where its
-    // text starts, which is its line if not its column.
+    /**
+     * Where each piece the projection copies starts in the source.
+     *
+     * WHERE EACH PIECE THE PROJECTION COPIES STARTS IN THE SOURCE, so a checker's position in the
+     * projection is a line of the `.abide` (38.3). A script block by index; a template expression
+     * by the holder the projection keys its span by, a `{#for}` key by its block, an element's tag
+     * name by the element, and a literal attribute's name by the attribute. A value the
+     * parser rewrote — an interpolated attribute becomes a template literal — is placed where its
+     * text starts, which is its line if not its column.
+     */
     origins: Origins
 }
 
@@ -54,18 +65,20 @@ type Origins = {
     keys: Map<object, number>
 }
 
-// What an open level is when it is a control block's ARM rather than an element. Not a string, so
-// no close tag — `<//>` and `</>` included — can name one.
+/**
+ * What an open level is when it is a control block's ARM rather than an element. Not a string, so
+ * no close tag — `<//>` and `</>` included — can name one.
+ */
 const ARM = null
 
-// The innermost open level that is a control block's arm, or 0 when none is open.
+/** The innermost open level that is a control block's arm, or 0 when none is open. */
 function armLevel(open: (string | null)[]): number {
     let level = open.length - 1
     while (level > 0 && open[level] !== ARM) level -= 1
     return level
 }
 
-// Pops `open` and `stack` together down to `level`, closing whatever the arm still holds open.
+/** Pops `open` and `stack` together down to `level`, closing whatever the arm still holds open. */
 function unwindTo(
     level: number,
     open: (string | null)[],
@@ -77,10 +90,14 @@ function unwindTo(
     }
 }
 
-// ONE LEXICAL PASS. A `<script>` or `<style>` is only a tag where the walk below reaches it: a scan
-// run ahead of the template has no idea what a position IS, and lifts the string literal out of
-// `{ok ? "<script>boom()</script>" : ''}` into component setup — the author's text moved from a
-// data position into an executable one.
+/**
+ * Splits a `.abide` source into its scripts, styles and head, and parses its template.
+ *
+ * ONE LEXICAL PASS. A `<script>` or `<style>` is only a tag where the walk below reaches it: a scan
+ * run ahead of the template has no idea what a position IS, and lifts the string literal out of
+ * `{ok ? "<script>boom()</script>" : ''}` into component setup — the author's text moved from a
+ * data position into an executable one.
+ */
 export function parseAbide(source: string): AbideFile {
     const scripts: string[] = []
     const modules: string[] = []
@@ -432,13 +449,17 @@ export function parseAbide(source: string): AbideFile {
     }
 }
 
-// 39.2 — a `<head>` MUST be top level, and MUST NOT appear inside a control block. Nested, it
-// would render inside the body, which is the silent wrong answer this refuses instead.
-//
-// BOTH HALVES OF THE CLAUSE. The walk returned on anything that was not an element, so a block
-// was a floor it never went through and `{#if a}<head>…{/if}` emitted `<head>` markup into the
-// body — the exact wrong answer, from the check written to stop it. A `<head>` inside a top-level
-// `<head>` was the other way past it, the hoist pushing its children without asking.
+/**
+ * Throws where a `<head>` stands anywhere but the top level of the file.
+ *
+ * 39.2 — a `<head>` MUST be top level, and MUST NOT appear inside a control block. Nested, it
+ * would render inside the body, which is the silent wrong answer this refuses instead.
+ *
+ * BOTH HALVES OF THE CLAUSE. The walk returned on anything that was not an element, so a block
+ * was a floor it never went through and `{#if a}<head>…{/if}` emitted `<head>` markup into the
+ * body — the exact wrong answer, from the check written to stop it. A `<head>` inside a top-level
+ * `<head>` was the other way past it, the hoist pushing its children without asking.
+ */
 function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
     for (const node of nodes) {
         if (node.kind === 'element' && node.lowerTag === 'head')
@@ -456,12 +477,16 @@ function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
     }
 }
 
-// The subject a `{:finally}` branch is parsed under, until `closeTry` folds it away.
+/** The subject a `{:finally}` branch is parsed under, until `closeTry` folds it away. */
 const FINALLY = '\u0000finally'
 
-// 32.16 — THE TWO ARMS A `{#try}` RENDERS ONE OF: the body, and the catch — an empty one where the
-// author wrote none. The `{:finally}` markup stands on both paths, so it stands AFTER the region
-// rather than in either arm, and is handed back for the caller to place there.
+/**
+ * Folds a `{#try}`'s arms into its body and catch, and returns its `{:finally}` markup.
+ *
+ * 32.16 — THE TWO ARMS A `{#try}` RENDERS ONE OF: the body, and the catch — an empty one where the
+ * author wrote none. The `{:finally}` markup stands on both paths, so it stands AFTER the region
+ * rather than in either arm, and is handed back for the caller to place there.
+ */
 function closeTry(
     block: TemplateNode & { kind: 'block'; block: 'try' },
 ): TemplateNode[] {
@@ -475,14 +500,18 @@ function closeTry(
     return after
 }
 
-// An arm under `subject`, with nothing in it yet.
+/** An arm under `subject`, with nothing in it yet. */
 function newBranch(subject: string): Branch {
     return { subject, children: [], setup: null, style: null }
 }
 
-// 14.8 — the body a branch-local `<script>` written inside `block` belongs to: a row's, or the arm
-// open where it stands. A `{#try}` body refuses one: what a boundary sets up when its body is replaced
-// by the catch (32.16) is not decided, and a guess here would be the decision.
+/**
+ * The body a `<script>` or `<style>` written inside `block` belongs to.
+ *
+ * 14.8 — the body a branch-local `<script>` written inside `block` belongs to: a row's, or the arm
+ * open where it stands. A `{#try}` body refuses one: what a boundary sets up when its body is replaced
+ * by the catch (32.16) is not decided, and a guess here would be the decision.
+ */
 function bodyOf(block: TemplateNode): {
     setup: Setup | null
     style: string | null
@@ -495,16 +524,24 @@ function bodyOf(block: TemplateNode): {
     )
 }
 
-// An HTML tag name is ASCII case-INSENSITIVE, so `</DIV>` closes a `<div>`. A component name is
-// TitleCase (32.18) and an exact match is a case of this one, so there is no second rule here.
+/**
+ * Whether two tag names match, ASCII case-insensitively.
+ *
+ * An HTML tag name is ASCII case-INSENSITIVE, so `</DIV>` closes a `<div>`. A component name is
+ * TitleCase (32.18) and an exact match is a case of this one, so there is no second rule here.
+ */
 function sameTag(left: string, right: string): boolean {
     return left.toLowerCase() === right.toLowerCase()
 }
 
-// WHICH BLOCK A `<script>` BELONGS TO, or `undefined` where it is markup. 34.1 is the bare tag and
-// 34.2 is the bare `module` attribute; anything else on the tag — `src`, `type`, `defer`, `nonce` —
-// is a `<script>` the author wrote for the DOCUMENT, and lifting it into component setup moves it
-// out of the markup and throws its attributes away.
+/**
+ * The list a `<script>`'s body belongs in, or `undefined` where it is markup.
+ *
+ * WHICH BLOCK A `<script>` BELONGS TO, or `undefined` where it is markup. 34.1 is the bare tag and
+ * 34.2 is the bare `module` attribute; anything else on the tag — `src`, `type`, `defer`, `nonce` —
+ * is a `<script>` the author wrote for the DOCUMENT, and lifting it into component setup moves it
+ * out of the markup and throws its attributes away.
+ */
 function scriptBlock(
     attributes: Attribute[],
     scripts: string[],
@@ -518,8 +555,10 @@ function scriptBlock(
     return modules
 }
 
-// A RAW-TEXT ELEMENT'S BODY AND WHERE THE TAG ENDS. One answer for all three destinations, so a
-// markup `<script>` and a `<script module>` cannot disagree about where the close tag was.
+/**
+ * A RAW-TEXT ELEMENT'S BODY AND WHERE THE TAG ENDS. One answer for all three destinations, so a
+ * markup `<script>` and a `<script module>` cannot disagree about where the close tag was.
+ */
 function rawBody(
     source: string,
     lowerTag: string,
@@ -534,14 +573,18 @@ function rawBody(
     return { body: source.slice(tag.end, close.start), end: close.end }
 }
 
-// Where a raw-text block's close tag begins and ends, matched the way `sameTag` matches —
-// `indexOf` over the literal spelling missed `</SCRIPT>` and ran the block to the end of the file.
-//
-// WHITESPACE IS LEGAL BEFORE THE `>`, and demanding it at a fixed offset was the same class of
-// miss one layer down: `</script >` and `</style\n>` matched nothing, so the rest of the document
-// became the script body and the template came back EMPTY. The ordinary close-tag path above
-// already `trim()`s for this, which is one question with two answers until now — so the end is
-// handed back rather than recomputed from the tag's length.
+/**
+ * Where a raw-text block's close tag begins and ends, or `null` where it has none.
+ *
+ * Where a raw-text block's close tag begins and ends, matched the way `sameTag` matches —
+ * `indexOf` over the literal spelling missed `</SCRIPT>` and ran the block to the end of the file.
+ *
+ * WHITESPACE IS LEGAL BEFORE THE `>`, and demanding it at a fixed offset was the same class of
+ * miss one layer down: `</script >` and `</style\n>` matched nothing, so the rest of the document
+ * became the script body and the template came back EMPTY. The ordinary close-tag path above
+ * already `trim()`s for this, which is one question with two answers until now — so the end is
+ * handed back rather than recomputed from the tag's length.
+ */
 function closeTagAt(
     source: string,
     tag: string,
@@ -558,8 +601,12 @@ function closeTagAt(
     return null
 }
 
-// A run of text from `at`, scanned from `from` — one node, so the `<` that opened no tag is
-// carried by the run that follows it rather than becoming a node of its own.
+/**
+ * Appends the text run from `at` to `children` and returns where the run ends.
+ *
+ * A run of text from `at`, scanned from `from` — one node, so the `<` that opened no tag is
+ * carried by the run that follows it rather than becoming a node of its own.
+ */
 function pushText(
     children: TemplateNode[],
     source: string,
@@ -579,12 +626,14 @@ function pushText(
     return next
 }
 
-// Where the condition on a `{:else …}` arm starts in `inner`, or its end for the bare `{:else}`
-// that always takes.
-//
-// A DIRECTIVE ENDS AT A WORD BOUNDARY. `startsWith` has none, so `{:elseif b}` was silently read
-// as `{:else if b}` and `{:else ifValid}` as `{:else if}` over the subject `Valid` — a condition
-// the author never wrote, deciding which arm renders.
+/**
+ * Where the condition on a `{:else …}` arm starts in `inner`, or its end for the bare `{:else}`
+ * that always takes.
+ *
+ * A DIRECTIVE ENDS AT A WORD BOUNDARY. `startsWith` has none, so `{:elseif b}` was silently read
+ * as `{:else if b}` and `{:else ifValid}` as `{:else if}` over the subject `Valid` — a condition
+ * the author never wrote, deciding which arm renders.
+ */
 function elseSubjectAt(inner: string): number {
     const rest = inner.slice(':else'.length)
     if (rest.trim() === '') return inner.length
@@ -596,8 +645,10 @@ function elseSubjectAt(inner: string): number {
     return ':else'.length + keyword[0].length
 }
 
-// `source` from `start` to `end`, trimmed, and where what is left starts — the position a
-// checker's answer about it is placed at (38.3).
+/**
+ * `source` from `start` to `end`, trimmed, and where what is left starts — the position a
+ * checker's answer about it is placed at (38.3).
+ */
 function trimmed(
     source: string,
     start: number,
@@ -608,15 +659,19 @@ function trimmed(
     return { text: text.trimEnd(), at: start + raw.length - text.length }
 }
 
-// `item, index of list by key` — `index` and `by` are optional, and everything after `of` up to
-// a top-level `by` is the subject. Split on the KEYWORDS rather than on commas, because the
-// subject may hold both.
-//
-// THE SEPARATOR IS THE ONE AT DEPTH ZERO AND OUTSIDE A STRING — all three of them, and each was
-// wrong its own way. `{#for { id, name } of rows}` split on the pattern's own comma and the item
-// became `{ id`, which the emitters write straight into a parameter list. `{#for x of
-// names.filter(n => n !== "run by me")}` split on the ` by ` inside the string literal and the
-// subject ended mid-quote. One scanner for all three rather than one fix for the comma.
+/**
+ * Parses a `{#for}` header into its item, index, subject and key.
+ *
+ * `item, index of list by key` — `index` and `by` are optional, and everything after `of` up to
+ * a top-level `by` is the subject. Split on the KEYWORDS rather than on commas, because the
+ * subject may hold both.
+ *
+ * THE SEPARATOR IS THE ONE AT DEPTH ZERO AND OUTSIDE A STRING — all three of them, and each was
+ * wrong its own way. `{#for { id, name } of rows}` split on the pattern's own comma and the item
+ * became `{ id`, which the emitters write straight into a parameter list. `{#for x of
+ * names.filter(n => n !== "run by me")}` split on the ` by ` inside the string literal and the
+ * subject ended mid-quote. One scanner for all three rather than one fix for the comma.
+ */
 function forBlock(
     file: string,
     header: { text: string; at: number },
@@ -812,28 +867,33 @@ function readTag(
     return { name, attributes, selfClosing: false, end: at }
 }
 
-// 32.3 — A QUOTED VALUE WITH A SLOT IN IT IS AN EXPRESSION. Captured as a literal,
-// `class="badge {tone}"` wrote the braces into the document verbatim, so the page carried the
-// author's source where a class was due.
-//
-// REWRITTEN AS A TEMPLATE LITERAL rather than given a parts array of its own, because that is one
-// expression and the whole `class={expr}` path already takes one: lowered by `Lowering`,
-// escaped by `escapeAttribute`, and scheme-checked by `safeUrl` where 32.21 asks for it. A second
-// shape here would be a second copy of all three.
-//
-// 32.28 — ITS STATIC TEXT IS DECODED HERE, so what is left is data whole and takes that one path on
-// both sides: `title="AT&amp;T {n}"` is the literal `AT&T ${n}`, escaped as one value by the server
-// and set as it stands by the browser. Each static piece is decoded ON ITS OWN, so a slot's text can
-// never finish a reference the author's began: `&amp{x}` is `&` and then the slot. 32.29 keeps a URL
-// attribute's static text as written, escaped with its slots the way `{expr}` is.
-//
-// 33.19 — A COMPONENT'S PROP IS DECODED WHEN IT IS STATIC TOO, because it is never markup: an element's
-// static value is served as the author's bytes (`staticAttributeBytes`), and a prop is handed over
-// as a string, so `<Card title="AT&amp;T">` hands the child `AT&T`.
-//
-// 32.20 — AN INTERPOLATED `style` TAKES THE OTHER ROAD and lowers to one `style:prop` per
-// declaration, which is why the split happens here, where the interpolated form is still told
-// apart from the whole `style={expr}` one.
+/**
+ * Pushes a quoted attribute: a literal, a template-literal expression, or one `style:prop` per
+ * declaration.
+ *
+ * 32.3 — A QUOTED VALUE WITH A SLOT IN IT IS AN EXPRESSION. Captured as a literal,
+ * `class="badge {tone}"` wrote the braces into the document verbatim, so the page carried the
+ * author's source where a class was due.
+ *
+ * REWRITTEN AS A TEMPLATE LITERAL rather than given a parts array of its own, because that is one
+ * expression and the whole `class={expr}` path already takes one: lowered by `Lowering`,
+ * escaped by `escapeAttribute`, and scheme-checked by `safeUrl` where 32.21 asks for it. A second
+ * shape here would be a second copy of all three.
+ *
+ * 32.28 — ITS STATIC TEXT IS DECODED HERE, so what is left is data whole and takes that one path on
+ * both sides: `title="AT&amp;T {n}"` is the literal `AT&T ${n}`, escaped as one value by the server
+ * and set as it stands by the browser. Each static piece is decoded ON ITS OWN, so a slot's text can
+ * never finish a reference the author's began: `&amp{x}` is `&` and then the slot. 32.29 keeps a URL
+ * attribute's static text as written, escaped with its slots the way `{expr}` is.
+ *
+ * 33.19 — A COMPONENT'S PROP IS DECODED WHEN IT IS STATIC TOO, because it is never markup: an element's
+ * static value is served as the author's bytes (`staticAttributeBytes`), and a prop is handed over
+ * as a string, so `<Card title="AT&amp;T">` hands the child `AT&T`.
+ *
+ * 32.20 — AN INTERPOLATED `style` TAKES THE OTHER ROAD and lowers to one `style:prop` per
+ * declaration, which is why the split happens here, where the interpolated form is still told
+ * apart from the whole `style={expr}` one.
+ */
 function pushQuoted(
     attributes: Attribute[],
     attrName: string,
@@ -893,9 +953,11 @@ function attribute(
     return { name, lowerName: name.toLowerCase(), value, expression }
 }
 
-// The value as a template-literal expression, or `undefined` where it holds no slot at all. An
-// UNCLOSED `{` is text: `slotEnd` runs to the end of the value and the brace was never a
-// slot, so the attribute stays exactly what the author wrote.
+/**
+ * The value as a template-literal expression, or `undefined` where it holds no slot at all. An
+ * UNCLOSED `{` is text: `slotEnd` runs to the end of the value and the brace was never a
+ * slot, so the attribute stays exactly what the author wrote.
+ */
 function interpolated(raw: string, decode: boolean): string | undefined {
     let out = ''
     let at = 0
@@ -919,8 +981,10 @@ function staticText(text: string, decode: boolean): string {
     )
 }
 
-// The static text of a template literal. A `\`, a backtick and a `${` are the three sequences the
-// grammar reads, and an attribute value carries all three as ordinary characters.
+/**
+ * The static text of a template literal. A `\`, a backtick and a `${` are the three sequences the
+ * grammar reads, and an attribute value carries all three as ordinary characters.
+ */
 function templateText(text: string): string {
     return text
         .replaceAll('\\', '\\\\')
@@ -928,8 +992,10 @@ function templateText(text: string): string {
         .replaceAll('${', '\\${')
 }
 
-// The pieces of `source` between each `separator` that stands OUTSIDE a slot — a `;` inside
-// `{a ? 'x;y' : 'z'}` is the expression's own.
+/**
+ * The pieces of `source` between each `separator` that stands OUTSIDE a slot — a `;` inside
+ * `{a ? 'x;y' : 'z'}` is the expression's own.
+ */
 function splitTopLevel(source: string, separator: string): string[] {
     const pieces: string[] = []
     let from = 0
@@ -945,13 +1011,15 @@ function splitTopLevel(source: string, separator: string): string[] {
     return pieces
 }
 
-// The `:` that separates a declaration's property from its value, outside any slot.
+/** The `:` that separates a declaration's property from its value, outside any slot. */
 function colonAt(declaration: string): number {
     return topLevelAt(declaration, ':', 0)
 }
 
-// The first `target` at or after `from` that stands outside a slot and outside a quoted CSS
-// string, or -1.
+/**
+ * The first `target` at or after `from` that stands outside a slot and outside a quoted CSS
+ * string, or -1.
+ */
 function topLevelAt(source: string, target: string, from: number): number {
     let at = from
     while (at < source.length) {
@@ -974,9 +1042,13 @@ function topLevelAt(source: string, target: string, from: number): number {
     return -1
 }
 
-// 33.17 and 33.18. A whitespace run with a newline and no space or tab is dropped wherever it
-// stands; one that also carries indentation is dropped only at the ends of a body, where it is
-// the author's layout rather than a space the document asked for.
+/**
+ * Drops the whitespace-only text runs that are the author's layout rather than content.
+ *
+ * 33.17 and 33.18. A whitespace run with a newline and no space or tab is dropped wherever it
+ * stands; one that also carries indentation is dropped only at the ends of a body, where it is
+ * the author's layout rather than a space the document asked for.
+ */
 function collapseWhitespace(children: TemplateNode[]): void {
     for (let i = children.length - 1; i >= 0; i -= 1) {
         const node = children[i] as TemplateNode

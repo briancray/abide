@@ -15,16 +15,20 @@ import { LAYERS_ARMED } from './LAYER_NAMES.ts'
 const ARMED =
     (globalThis as unknown as Record<string, unknown>)[LAYERS_ARMED] === true
 
-// The mark an `endLayer` measures back to. The concatenation is only paid when armed.
+/** The mark an `endLayer` measures back to. The concatenation is only paid when armed. */
 const OPENED = ':opened'
 
 export function beginLayer(name: string): void {
     if (ARMED) performance.mark(name + OPENED)
 }
 
-// `shares()` REFUSES A LAYER THAT RUNS OUTSIDE ITS OP, so an unbalanced pair is a throw in the
-// spec rather than a wrong fraction. Every `beginLayer` owes one of these on every path out,
-// including the ones that return early.
+/**
+ * Closes a layer opened by `beginLayer`, recording its `performance.measure`.
+ *
+ * `shares()` REFUSES A LAYER THAT RUNS OUTSIDE ITS OP, so an unbalanced pair is a throw in the
+ * spec rather than a wrong fraction. Every `beginLayer` owes one of these on every path out,
+ * including the ones that return early.
+ */
 export function endLayer(name: string): void {
     if (ARMED) performance.measure(name, name + OPENED)
 }

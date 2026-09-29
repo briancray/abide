@@ -11,7 +11,7 @@
 // productions between two `await`s are two turns of the loop.
 //
 // A NARROW FACE rather than the `Cell`, the same way `tracking.ts` takes a `Tracked`:
-// what a cursor reads is six fields, and naming them is what keeps the cell's internals
+// what a cursor reads is a handful of fields, and naming them is what keeps the cell's internals
 // out of a second file.
 
 import {
@@ -21,35 +21,54 @@ import {
     type Tracked,
 } from './tracking.ts'
 
-// RULEBOOK 6.3: the unit is `Produced`. Both faces, because a consumer that wants what
-// is already held should not have to `await` for it — the sync face is the retained
-// window and stops, the async face replays that window and then continues live.
+/**
+ * What `s.history(n)` answers: the retained window to iterate, or to `for await` and follow live.
+ *
+ * RULEBOOK 6.3: the unit is `Produced`. Both faces, because a consumer that wants what is already
+ * held should not have to `await` for it — the sync face is the retained window and stops, the
+ * async face replays that window and then continues live.
+ */
 export type History<Produced> = Iterable<Produced> & AsyncIterable<Produced>
 
-// What a cursor reads. `ringBase` is the count of productions that have fallen off the
-// front, so `ring[index]` carries ordinal `ringBase + index + 1` and a cursor holding an
-// ordinal can find its place without the ring having to hold one.
+/**
+ * What a cursor reads.
+ *
+ * `ringBase` is the count of productions that have fallen off the front, so `ring[index]` carries
+ * ordinal `ringBase + index + 1` and a cursor holding an ordinal can find its place without the
+ * ring having to hold one.
+ */
 export type Retained = {
     ordinal: number
-    // Unused by a cursor and declared so a `Cell` still satisfies `Tracked`, which a
-    // cursor's subscriber is registered through.
+    /**
+     * Unused by a cursor and declared so a `Cell` still satisfies `Tracked`, which a cursor's
+     * subscriber is registered through.
+     */
     probeReaders: Subscriber[]
     ring: unknown[]
     ringBase: number
-    // `history + 1` where a value declares `history`, and 0 where it declares none — the standing
-    // production is then the whole of what is retained, answered from `value` (6.16).
+    /**
+     * `history + 1` where a value declares `history`, and 0 where it declares none.
+     *
+     * With none, the standing production is the whole of what is retained, answered from `value`
+     * (6.16).
+     */
     ringDepth: number
     servable: boolean
-    // Non-null on a streaming producer, whose ring is the accumulation of the run being
-    // served (9.2) and is retained whole — the chunks ARE the value.
+    /**
+     * Non-null on a streaming producer, whose ring is the accumulation of the run being served
+     * (9.2) and is retained whole — the chunks ARE the value.
+     */
     stream: object | null
     value: unknown
     readers: Subscriber[]
 }
 
-// How far back this source can actually answer. 2.6 bounds a replay above by what is
-// retained, and the ring runs up to twice the depth between trims, so the window is its
-// window's end rather than its length.
+/**
+ * How many productions back this source can actually answer.
+ *
+ * 2.6 bounds a replay above by what is retained, and the ring runs up to twice the depth between
+ * trims, so the window is its window's end rather than its length.
+ */
 export function retained(source: Retained): number {
     if (source.stream !== null) return source.ring.length
     if (source.ringDepth === 0)
@@ -63,21 +82,28 @@ export function retained(source: Retained): number {
         : source.ringDepth
 }
 
-// A RECORD, NOT A SCOPE. The four closures this was — `take`, `notify`, `stop` and
-// `next` — shared one environment holding `at`, `waiting`, `source` and `reader`, and a
-// cursor OUTLIVES the call that made it: a `for await` holds one for the life of the
-// loop, so the environment and every function object hanging off it is live that whole
-// time. Fields on a prototype are the object alone, and `at` — read and written on every
-// turn — becomes a property load on a fixed structure rather than a scope load.
+/**
+ * A live reader of a source's productions, one turn per production, in order.
+ *
+ * A RECORD, NOT A SCOPE. The four closures this was — `take`, `notify`, `stop` and `next` — shared
+ * one environment holding `at`, `waiting`, `source` and `reader`, and a cursor OUTLIVES the call
+ * that made it: a `for await` holds one for the life of the loop, so the environment and every
+ * function object hanging off it is live that whole time. Fields on a prototype are the object
+ * alone, and `at` — read and written on every turn — becomes a property load on a fixed structure
+ * rather than a scope load.
+ */
 class Cursor implements AsyncIterator<unknown> {
     source: Retained
-    // The ordinal of the last production this cursor handed over.
+    /** The ordinal of the last production this cursor handed over. */
     at: number
-    // THE TURNS ASKED FOR AND NOT YET ANSWERED, and it is a QUEUE rather than one slot
-    // because a consumer may ask twice before either answer arrives — `Promise.all([
-    // it.next(), it.next() ])` is the shape, and with one slot the second `next` overwrote
-    // the first's resolver and that promise never settled at all. `for await` asks one at
-    // a time, which is why nothing here said so.
+    /**
+     * The turns asked for and not yet answered.
+     *
+     * A QUEUE rather than one slot because a consumer may ask twice before either answer arrives
+     * — `Promise.all([ it.next(), it.next() ])` is the shape, and with one slot the second `next`
+     * overwrote the first's resolver and that promise never settled at all. `for await` asks one
+     * at a time, which is why nothing here said so.
+     */
     waiting: ((result: IteratorResult<unknown>) => void)[]
     reader: Subscriber
 
@@ -107,9 +133,12 @@ class Cursor implements AsyncIterator<unknown> {
         source.readers.push(this.reader)
     }
 
-    // One production, or `null` where the cursor has caught up. Reading the ring by
-    // ordinal is what makes 2.5's "no gap and no repeat" hold across the join between
-    // the replay and the live tail: there is no join, only a position.
+    /**
+     * One production, or `null` where the cursor has caught up.
+     *
+     * Reading the ring by ordinal is what makes 2.5's "no gap and no repeat" hold across the join
+     * between the replay and the live tail: there is no join, only a position.
+     */
     take(): IteratorResult<unknown> | null {
         const source = this.source
         let at = this.at
@@ -152,8 +181,11 @@ class Cursor implements AsyncIterator<unknown> {
         })
     }
 
-    // `for await` calls this on `break`, on `return` and on a throw, and it is the
-    // only thing that drops the subscriber — a live cursor has no end of its own.
+    /**
+     * Ends the cursor: `for await` calls this on `break`, on `return` and on a throw.
+     *
+     * It is the only thing that drops the subscriber — a live cursor has no end of its own.
+     */
     return(): Promise<IteratorResult<unknown>> {
         return this.stop()
     }
@@ -176,14 +208,17 @@ class Cursor implements AsyncIterator<unknown> {
     }
 }
 
-// What `s.history(n)` hands back, and what `s[Symbol.asyncIterator]` is built from. `from`
-// is an ordinal: the cursor's first turn carries the production after it.
-//
-// A RECORD RATHER THAN AN OBJECT LITERAL CLOSING OVER THE TWO, and the difference is four
-// allocations against one: two methods capturing `source` and `from` allocate the scope,
-// a function object each and the object itself, where two fields on a prototype allocate
-// the object alone. `history()` is called once per read of a window — the walk case calls
-// it per row — and measured on its own the literal cost 71.4 ns against a 358 ns op.
+/**
+ * What `s.history(n)` hands back, and what `s[Symbol.asyncIterator]` is built from.
+ *
+ * `from` is an ordinal: the cursor's first turn carries the production after it.
+ *
+ * A RECORD RATHER THAN AN OBJECT LITERAL CLOSING OVER THE TWO, and the difference is four
+ * allocations against one: two methods capturing `source` and `from` allocate the scope, a
+ * function object each and the object itself, where two fields on a prototype allocate the object
+ * alone. `history()` is called once per read of a window — the walk case calls it per row — and
+ * measured on its own the literal cost 71.4 ns against a 358 ns op.
+ */
 class HistoryWindow<Produced> implements History<Produced> {
     source: Retained
     from: number
@@ -193,23 +228,25 @@ class HistoryWindow<Produced> implements History<Produced> {
         this.from = from
     }
 
-    // The sync face answers what is already held and stops. It cannot wait, so it is
-    // the window rather than the cursor.
-    //
-    // INDEXED FROM THE ORDINAL, like the cursor, and read at ITERATION rather than at
-    // `history()`. A depth captured when the `Tail` was made is the wrong window the
-    // moment anything publishes into it: `s.history(2)` over two productions and then a
-    // third handed back the LAST two — dropping one the position says to replay and
-    // including one that landed after the call — where the async face of the same
-    // object replayed all three. One position, two faces, or they are two answers.
-    //
-    // THE WINDOW IS COPIED AND JSC'S OWN ARRAY ITERATOR WALKS IT, which reads as the
-    // wasteful arm and is the measured one. An index walk over the ring in place skips
-    // the copy and costs 258 ns against this shape's 136 over a hundred entries: the
-    // builtin iterator's result record is sunk by the JIT and a hand-written `next`
-    // returning `{ value, done }` allocates one per entry. Reusing one mutable record
-    // across the turns does win — 108 ns — and is not available to a public iterator,
-    // where two `next()` results a caller holds at once must be two objects.
+    /**
+     * The sync face: what is already held, and then it stops.
+     *
+     * It cannot wait, so it is the window rather than the cursor.
+     *
+     * INDEXED FROM THE ORDINAL, like the cursor, and read at ITERATION rather than at
+     * `history()`. A depth captured when the window was made is the wrong window the moment
+     * anything publishes into it: `s.history(2)` over two productions and then a third handed
+     * back the LAST two — dropping one the position says to replay and including one that landed
+     * after the call — where the async face of the same object replayed all three. One position,
+     * two faces, or they are two answers.
+     *
+     * THE WINDOW IS COPIED AND JSC'S OWN ARRAY ITERATOR WALKS IT, which reads as the wasteful arm
+     * and is the measured one. An index walk over the ring in place skips the copy and costs 258
+     * ns against this shape's 136 over a hundred entries: the builtin iterator's result record is
+     * sunk by the JIT and a hand-written `next` returning `{ value, done }` allocates one per
+     * entry. Reusing one mutable record across the turns does win — 108 ns — and is not available
+     * to a public iterator, where two `next()` results a caller holds at once must be two objects.
+     */
     [Symbol.iterator](): Iterator<Produced> {
         const source = this.source
         const from = this.from
@@ -234,6 +271,7 @@ class HistoryWindow<Produced> implements History<Produced> {
     }
 }
 
+/** The `History` over `source`'s productions after ordinal `from`. */
 export function historyFrom<Produced>(
     source: Retained,
     from: number,

@@ -22,7 +22,11 @@ const TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 
 const TRACEPARENT = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/
 
-// A ZERO id is invalid in the format, so the vanishingly unlikely one is minted again.
+/**
+ * A random nonzero hex id of `bytes` bytes.
+ *
+ * A ZERO id is invalid in the format, so the vanishingly unlikely one is minted again.
+ */
 function hex(bytes: number): string {
     for (;;) {
         const minted = randomToken(bytes, 'hex')
@@ -30,8 +34,12 @@ function hex(bytes: number): string {
     }
 }
 
-// 24.1 — BUILT ON FIRST ASK, and held on the scope for the rest of the request. The caller's trace
-// id is adopted where a valid `traceparent` came in; this process's own span is minted either way.
+/**
+ * The request's trace: its id, this process's span and the flags.
+ *
+ * 24.1 — BUILT ON FIRST ASK, and held on the scope for the rest of the request. The caller's trace
+ * id is adopted where a valid `traceparent` came in; this process's own span is minted either way.
+ */
 function traceOf(scope: RequestScope): NonNullable<RequestScope['trace']> {
     if (scope.trace !== undefined) return scope.trace
     const given = TRACEPARENT.exec(
@@ -52,14 +60,22 @@ function currentSpan(scope: RequestScope): string {
     return SPAN.getStore() ?? traceOf(scope).span
 }
 
-// `''` OUTSIDE EVERY SCOPE: there is no operation for the work to belong to.
+/**
+ * The current request's trace id, with `sampled`, `span` and `headers` on it.
+ *
+ * `''` OUTSIDE EVERY SCOPE: there is no operation for the work to belong to.
+ */
 export const trace = Object.assign(
     (): string => {
         const scope = currentRequestScope()
         return scope === undefined ? '' : traceOf(scope).id
     },
     {
-        // 24.2 — the caller's flag, verbatim; a trace this process started samples nothing.
+        /**
+         * Whether the trace is sampled.
+         *
+         * 24.2 — the caller's flag, verbatim; a trace this process started samples nothing.
+         */
         sampled(): boolean {
             const scope = currentRequestScope()
             return (
@@ -67,10 +83,14 @@ export const trace = Object.assign(
                 (Number.parseInt(traceOf(scope).flags, 16) & 1) === 1
             )
         },
-        // 24.3, 24.4 — ONE LINE PER SPAN, written when the body settles: `time` is when it started,
-        // and the duration is `performance.now`'s, which a clock change cannot move. 24.6 — and
-        // one `server-timing` entry where asked for, which only a span closed before the head
-        // went out reaches.
+        /**
+         * Runs `body` as a span, logging it when it settles; returns what `body` returns.
+         *
+         * 24.3, 24.4 — ONE LINE PER SPAN, written when the body settles: `time` is when it started,
+         * and the duration is `performance.now`'s, which a clock change cannot move. 24.6 — and
+         * one `server-timing` entry where asked for, which only a span closed before the head
+         * went out reaches.
+         */
         span<T>(
             name: string,
             body: () => T,
@@ -102,7 +122,11 @@ export const trace = Object.assign(
             close()
             return result
         },
-        // 24.5.
+        /**
+         * The `traceparent` header naming the current span, for an outgoing call.
+         *
+         * 24.5.
+         */
         headers(): Record<string, string> {
             const scope = currentRequestScope()
             if (scope === undefined) return {}
@@ -114,7 +138,11 @@ export const trace = Object.assign(
     },
 )
 
-// 21.2 — what the answer carries, naming this process's own span for the request.
+/**
+ * The answer's `traceresponse` value, naming this process's own span for the request.
+ *
+ * 21.2.
+ */
 export function traceResponse(): string | undefined {
     const scope = currentRequestScope()
     if (scope === undefined) return undefined

@@ -4,7 +4,7 @@
 // not a table somebody typed (`harness/scripts/benchRows.ts` is what produces them).
 //
 // ONE VALUE HOLDS THE ROWS, and a run patches into it as each row lands, so running one bench
-// leaves the other hundred and seventy standing.
+// leaves every other row in the catalog standing.
 import { reactive } from 'abide'
 import { type BenchRow, matchesFilter, type RowItem } from 'harness/rows'
 import { benchCatalog, runBench } from '#server/rpc/bench'
@@ -23,7 +23,7 @@ let stopping: AbortController | undefined
 
 // THE CATALOG'S OWN ITEMS, grouped — and NOT the readings. A keyed list keeps a row whose item is
 // the same object and remakes one whose item is new, so a section rebuilt per landed row would
-// remake all hundred and seventy of them each time. The readings are looked up by each row's own
+// remake every row in the catalog each time. The readings are looked up by each row's own
 // slots, which is what lets one row change alone.
 const sections = reactive(() => {
     const grouped: Section[] = []
@@ -45,8 +45,12 @@ const shown = reactive(() => {
     return count
 })
 
-// A ROW'S CELLS, AS TEXT AND TONE, read from `landed` inside the row's own slots — so a reading
-// landing rewrites the slots of the row it belongs to and no other.
+/**
+ * A bench row's cells, as text and tone.
+ *
+ * Read from `landed` inside the row's own slots — so a reading landing rewrites the slots of the
+ * row it belongs to and no other.
+ */
 function cellsOf(item: RowItem) {
     const row = landed.get(item.id)
     if (row === undefined || row.state !== 'done') {
@@ -104,7 +108,11 @@ function figure(value: number | null, unit: string): string {
     return `${value < 10 ? value.toFixed(2) : value.toFixed(1)} ${unit}`
 }
 
-// Over 1.00x is abide slower, or larger. Under is the claim; twice is the one worth a look.
+/**
+ * The tone for an abide / vanilla claim: good at or under parity, bad at twice or more.
+ *
+ * Over 1.00x is abide slower, or larger. Under is the claim; twice is the one worth a look.
+ */
 function verdictOf(claim: string): string {
     const times = Number.parseFloat(claim)
     if (Number.isNaN(times)) return ''

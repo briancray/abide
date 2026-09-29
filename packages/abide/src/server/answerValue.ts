@@ -12,10 +12,14 @@ import { currentRequestScope, type Framing } from './requestScope.ts'
 
 const ENCODER = new TextEncoder()
 
-// THE CHUNKS OF A STREAMING VALUE, AS THEY LAND, ENDING WHEN ITS RUN CLOSES. The live cursor is the
-// wake and not the source: a cursor outlives the run (it waits on the next one), and a chunk landing
-// in the same turn as the close could be lost to whichever settled first — so each wake sends what
-// the accumulation holds past what has already gone, and the close sends the rest.
+/**
+ * The chunks of a streaming value, as they land, ending when its run closes.
+ *
+ * The live cursor is the wake and not the source: a cursor outlives the run (it waits on the next
+ * one), and a chunk landing in the same turn as the close could be lost to whichever settled first
+ * — so each wake sends what the accumulation holds past what has already gone, and the close sends
+ * the rest.
+ */
 export async function* chunksOfStream(value: unknown): AsyncGenerator<unknown> {
     const stream = value as PromiseLike<unknown> & AsyncIterable<unknown>
     let closed = false
@@ -69,6 +73,7 @@ function isValues(
     )
 }
 
+/** The `Response` a handler's value is answered as. */
 export async function answerValue(
     value: unknown,
     request: Request,
@@ -123,9 +128,13 @@ function isIterable(value: unknown): value is Iterable<unknown> {
     )
 }
 
-// AN ASYNC ITERABLE IS READ THROUGH ITS OWN ITERATOR — a `ReadableStream` is one in bun — rather than
-// through a generator delegating to it, which is one more resumption per chunk. A sync iterable is
-// lifted, which also awaits a promise it holds.
+/**
+ * An async iterator over a stream value's chunks.
+ *
+ * AN ASYNC ITERABLE IS READ THROUGH ITS OWN ITERATOR — a `ReadableStream` is one in bun — rather
+ * than through a generator delegating to it, which is one more resumption per chunk. A sync
+ * iterable is lifted, which also awaits a promise it holds.
+ */
 function chunksOf(value: unknown): AsyncIterator<unknown> {
     if (Symbol.asyncIterator in (value as object))
         return (value as AsyncIterable<unknown>)[Symbol.asyncIterator]()
@@ -136,8 +145,12 @@ async function* lifted(value: Iterable<unknown>): AsyncGenerator<unknown> {
     yield* value
 }
 
-// 16.33, 16.48, 16.49 — THE FRAMING a helper fixed, or the first the first chunk's type admits:
-// binary chunks admit bytes alone, and values admit jsonl and then sse, sse where `Accept` asks for it.
+/**
+ * A stream answered at the framing a helper fixed, or the first the first chunk's type admits.
+ *
+ * 16.33, 16.48, 16.49 — binary chunks admit bytes alone, and values admit jsonl and then sse, sse
+ * where `Accept` asks for it.
+ */
 async function answerStream(
     chunks: AsyncIterator<unknown>,
     fixed: Framing | undefined,
@@ -160,7 +173,7 @@ async function answerStream(
     )
 }
 
-// A stream answered at a framing already decided — a handler's, and `log.records` (36.7).
+/** A stream answered at a framing already decided — a handler's, and `log.records` (36.7). */
 export function framed(
     chunks: AsyncIterator<unknown>,
     framing: Framing,
@@ -184,15 +197,19 @@ export function framed(
     })
 }
 
-// 16.46, 16.47 — ONE FRAME PER PULL, so a reader sees each chunk as it is produced rather than once
-// the stream has finished. A reader who hangs up returns the generator, which stops what it
-// was reading in its scope.
-//
-// AN EVENT STREAM OPENS ON A COMMENT: a streamed answer's head goes out with its first byte, so a
-// stream with nothing yet to say — an empty `log.records` — held its reader's headers until it did.
-//
-// `first` is a result already pulled — the one a framing was decided from — and is sent ahead of the
-// rest.
+/**
+ * A response body writing each chunk as one frame of `framing`.
+ *
+ * 16.46, 16.47 — ONE FRAME PER PULL, so a reader sees each chunk as it is produced rather than
+ * once the stream has finished. A reader who hangs up returns the generator, which stops what it
+ * was reading in its scope.
+ *
+ * AN EVENT STREAM OPENS ON A COMMENT: a streamed answer's head goes out with its first byte, so a
+ * stream with nothing yet to say — an empty `log.records` — held its reader's headers until it did.
+ *
+ * `first` is a result already pulled — the one a framing was decided from — and is sent ahead of
+ * the rest.
+ */
 export function bodyOf(
     chunks: AsyncIterator<unknown>,
     framing: Framing,
@@ -239,10 +256,14 @@ export function bodyOf(
     })
 }
 
-// 16.35, 16.36 — A BLOB, AT ITS OWN TYPE AND RANGE-AWARE: `If-None-Match` answered 304, one `Range`
-// answered 206 — or 416 where it lies past the end — and `If-Range` naming another version answered in
-// full. The body is the blob itself, or a slice of it, so a file is sent from disk rather than
-// through a copy in memory. The etag is handed in, because a public file's was read at boot (21.13).
+/**
+ * A blob answered at its own type under the given etag, range-aware.
+ *
+ * 16.35, 16.36 — `If-None-Match` answered 304, one `Range` answered 206 — or 416 where it lies
+ * past the end — and `If-Range` naming another version answered in full. The body is the blob
+ * itself, or a slice of it, so a file is sent from disk rather than through a copy in memory. The
+ * etag is handed in, because a public file's was read at boot (21.13).
+ */
 export function answerBlobTagged(
     blob: Blob,
     etag: string,
@@ -295,9 +316,13 @@ export function answerBlobTagged(
     return new Response(body, { status, headers })
 }
 
-// 21.14 — WEAK COMPARISON, which is what `If-None-Match` is defined to use: a proxy compressing on
-// the way out weakens the etag, and the browser sends back the `W/` form. `If-Range` compares
-// strongly, and stays an equality.
+/**
+ * Whether an `If-None-Match` header names `etag`, compared weakly.
+ *
+ * 21.14 — WEAK COMPARISON, which is what `If-None-Match` is defined to use: a proxy compressing on
+ * the way out weakens the etag, and the browser sends back the `W/` form. `If-Range` compares
+ * strongly, and stays an equality.
+ */
 function namesEtag(header: string | null, etag: string): boolean {
     if (header === null) return false
     for (const listed of header.split(',')) {
@@ -307,12 +332,16 @@ function namesEtag(header: string | null, etag: string): boolean {
     return false
 }
 
-// THE ETAG 16.36 HONORS `If-Range` AGAINST. A whole file on disk is named by its path, size and write
-// time — a stat, so neither a 304 nor a Range reads the file to decide whether to. Anything else is
-// named by its bytes: a blob in memory has no other identity, and a slice of a file shares the file's
-// path and write time with every other slice of its size. A file that stats empty is read too, which
-// costs nothing where it is empty and throws where it is missing — inside the handler's answer, as
-// 16.43 answers it, rather than out of the server's send.
+/**
+ * The blob's etag: a file's by its path, size and write time, anything else's by its bytes.
+ *
+ * THE ETAG 16.36 HONORS `If-Range` AGAINST. A whole file on disk is named by its path, size and
+ * write time — a stat, so neither a 304 nor a Range reads the file to decide whether to. Anything
+ * else is named by its bytes: a blob in memory has no other identity, and a slice of a file shares
+ * the file's path and write time with every other slice of its size. A file that stats empty is
+ * read too, which costs nothing where it is empty and throws where it is missing — inside the
+ * handler's answer, as 16.43 answers it, rather than out of the server's send.
+ */
 async function etagOf(blob: Blob): Promise<string> {
     // A file `Bun.file` made carries its path as `name` and its write time as `lastModified`.
     const { name: path, lastModified } = blob as {
@@ -329,8 +358,12 @@ async function etagOf(blob: Blob): Promise<string> {
     return contentEtag(await blob.bytes())
 }
 
-// Non-cryptographic, and that is the right tool: an etag answers "are these the same bytes", not
-// "could somebody forge these bytes".
+/**
+ * An etag naming `bytes` by a hash of them.
+ *
+ * Non-cryptographic, and that is the right tool: an etag answers "are these the same bytes", not
+ * "could somebody forge these bytes".
+ */
 export function contentEtag(bytes: Uint8Array): string {
     return `"${Bun.hash(bytes).toString(16)}"`
 }

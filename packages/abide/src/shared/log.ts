@@ -32,8 +32,12 @@ export type Logger = ((...args: unknown[]) => void) & {
     readonly records: Reactive<LogRecord>
 }
 
-// Where a line's trace id comes from once section 24 fills it in — a slot rather than an import, so
-// the isomorphic logger does not drag the server's request scope into a browser bundle.
+/**
+ * The slot a line's trace id is read through, filled by the server.
+ *
+ * Where a line's trace id comes from once section 24 fills it in — a slot rather than an import, so
+ * the isomorphic logger does not drag the server's request scope into a browser bundle.
+ */
 export const TRACE: { current: () => string } = { current: () => '' }
 
 const DEFAULT_HISTORY = 1000
@@ -53,10 +57,14 @@ function recordsValue(): Reactive<LogRecord> {
     return records
 }
 
-// READ ONCE PER DOCUMENT, as `MOUNT` is: every gated line asks, and a document with no `DEBUG` has no
-// `<meta>` for the selector to find, so each ask walked the whole document and then storage. The
-// server writes the tag ahead of the script, and a stored setting changed after load answers on the
-// next load, as debug-npm's does.
+/**
+ * The document's `DEBUG`, read once per document.
+ *
+ * READ ONCE PER DOCUMENT, as `MOUNT` is: every gated line asks, and a document with no `DEBUG` has no
+ * `<meta>` for the selector to find, so each ask walked the whole document and then storage. The
+ * server writes the tag ahead of the script, and a stored setting changed after load answers on the
+ * next load, as debug-npm's does.
+ */
 let documentDebugRead: string | undefined
 
 function environment(name: string): string | undefined {
@@ -66,7 +74,7 @@ function environment(name: string): string | undefined {
     return documentDebugRead
 }
 
-// 28.10, 28.11 — the document's `DEBUG`, or the browser's own stored one where it carries none.
+/** The document's `DEBUG`, or the browser's own stored one where it carries none (28.10, 28.11). */
 export function documentDebug(): string | undefined {
     if (typeof document === 'undefined') return undefined
     const named = document
@@ -81,8 +89,12 @@ export function documentDebug(): string | undefined {
     }
 }
 
-// 28.9 — THE debug-npm GRAMMAR: a list split on commas or whitespace, `*` any run of characters,
-// and a leading `-` an exclusion that beats every inclusion. Compiled once per distinct `DEBUG`.
+/**
+ * The compiled `DEBUG` patterns: namespaces included, and namespaces excluded.
+ *
+ * 28.9 — THE debug-npm GRAMMAR: a list split on commas or whitespace, `*` any run of characters,
+ * and a leading `-` an exclusion that beats every inclusion. Compiled once per distinct `DEBUG`.
+ */
 type Gate = { include: RegExp[]; exclude: RegExp[] }
 let gateFor: string | undefined
 let gate: Gate = { include: [], exclude: [] }
@@ -105,7 +117,7 @@ function currentGate(): Gate {
     return gate
 }
 
-// 28.6.
+/** Whether `DEBUG` enables a namespace's gated lines (28.6). */
 function isEnabled(namespace: string): boolean {
     const { include, exclude } = currentGate()
     for (const pattern of exclude) if (pattern.test(namespace)) return false
@@ -113,8 +125,12 @@ function isEnabled(namespace: string): boolean {
     return false
 }
 
-// 36.8 and 36.9 — the format a line is written in, read per line rather than at load: a test or a
-// host setting the environment after import is still answered.
+/**
+ * The format a line is written in: `tsv`, `json` or `readable`.
+ *
+ * 36.8 and 36.9 — read per line rather than at load: a test or a host setting the environment
+ * after import is still answered.
+ */
 function formatOf(): 'tsv' | 'json' | 'readable' {
     const format = environment('ABIDE_LOG_FORMAT')
     if (format === 'tsv' || format === 'json') return format
@@ -122,7 +138,7 @@ function formatOf(): 'tsv' | 'json' | 'readable' {
     return process.stdout.isTTY === true ? 'readable' : 'tsv'
 }
 
-function color(): boolean {
+function useColor(): boolean {
     if (typeof process === 'undefined') return false
     if (environment('NO_COLOR') !== undefined) return false
     if (environment('FORCE_COLOR') !== undefined) return true
@@ -173,7 +189,7 @@ function write(
     if (format === 'json') line = JSON.stringify(record)
     else if (format === 'tsv')
         line = `${record.time}\t${level}\t${namespace}\t${record.trace}\t${record.message.replaceAll('\n', '\\n')}`
-    else if (color())
+    else if (useColor())
         line = `\x1b[90m${record.time}\x1b[0m ${LEVEL_COLOR[level]}${level}\x1b[0m \x1b[1m${namespace}\x1b[0m ${record.message}`
     else line = `${record.time} ${level} ${namespace} ${record.message}`
     if (level === 'error') console.error(line)
@@ -182,12 +198,16 @@ function write(
     recordsValue().publish(record)
 }
 
-// A logger under `namespace`, which 28.4 builds from the app's name and 28.8 from `abide:`.
+/** A logger under `namespace`, which 28.4 builds from the app's name and 28.8 from `abide:`. */
 export function namedLogger(namespace: string): Logger {
     return loggerOver(() => namespace)
 }
 
-// The namespace is ASKED per line rather than held, which is all `log` needs over a named logger.
+/**
+ * A logger whose namespace is asked per line.
+ *
+ * The namespace is ASKED per line rather than held, which is all `log` needs over a named logger.
+ */
 function loggerOver(namespaceOf: () => string): Logger {
     // 28.2 — the bare call always writes. 28.3 — so do warnings and errors.
     const logger = ((...args: unknown[]): void => {
@@ -210,8 +230,12 @@ function loggerOver(namespaceOf: () => string): Logger {
     return logger
 }
 
-// 28.4 — the app's name is the root every `log.named` hangs off: the environment's, or what 27.3
-// derived, which the server's `config` fills in here.
+/**
+ * The slot the derived app name is read through, filled by the server's `config`.
+ *
+ * 28.4 — the app's name is the root every `log.named` hangs off: the environment's, or what 27.3
+ * derived, which the server's `config` fills in here.
+ */
 export const APP_NAME: { derived: () => string | undefined } = {
     derived: () => undefined,
 }
@@ -220,12 +244,20 @@ function appName(): string {
     return environment('APP_NAME') ?? APP_NAME.derived() ?? 'app'
 }
 
-// 24.3, 24.4 — A SPAN IS A LINE under the app's own namespace, stamped with when it STARTED. Written
-// whatever `DEBUG` says: an app that opened one asked for it.
+/**
+ * Writes a span as an `info` line under the app's namespace, stamped with its start.
+ *
+ * 24.3, 24.4 — A SPAN IS A LINE under the app's own namespace, stamped with when it STARTED. Written
+ * whatever `DEBUG` says: an app that opened one asked for it.
+ */
 export function writeSpan(startedAt: string, message: string): void {
     write(appName(), 'info', [message], startedAt)
 }
 
-// THE DEFAULT NAMESPACE IS READ PER LINE, like the format: `APP_NAME` set by a host after this
-// module loaded still names the line.
+/**
+ * The app's logger, under the app's name.
+ *
+ * THE DEFAULT NAMESPACE IS READ PER LINE, like the format: `APP_NAME` set by a host after this
+ * module loaded still names the line.
+ */
 export const log: Logger = loggerOver(appName)

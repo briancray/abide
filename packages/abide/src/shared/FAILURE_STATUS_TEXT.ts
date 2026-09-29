@@ -1,6 +1,9 @@
-// 17.8 — the reason phrase a failure status carries when nothing named one: RFC 9110's, plus the
-// registered codes outside it. Bun answers `statusText` empty, so without this a refusal crosses the
-// wire with nothing to read but the number.
+/**
+ * The reason phrase a failure status carries when nothing named one.
+ *
+ * 17.8 — RFC 9110's, plus the registered codes outside it. Bun answers `statusText` empty, so
+ * without this a refusal crosses the wire with nothing to read but the number.
+ */
 export const FAILURE_STATUS_TEXT: Readonly<Record<number, string>> = {
     400: 'Bad Request',
     401: 'Unauthorized',

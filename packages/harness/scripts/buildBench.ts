@@ -3,7 +3,7 @@
 // lane's entry; what keeps abide out of that lane is its entry's graph, not this script.
 const OUT_DIR = new URL('../dist/', import.meta.url).pathname
 
-// One entry into `dist/<name>.js`, as an IIFE a page is injected with.
+/** Builds one entry into `dist/<name>.js`, an IIFE a page is injected with, and returns its path. */
 export async function bundle(entry: string, name: string): Promise<string> {
     const built = await Bun.build({
         entrypoints: [entry],
@@ -18,6 +18,7 @@ export async function bundle(entry: string, name: string): Promise<string> {
     return `${OUT_DIR}${name}.js`
 }
 
+/** Builds `scripts/<name>Injectable.ts` into `dist/<name>.js` and returns its path. */
 export function buildBench(name: string): Promise<string> {
     return bundle(
         new URL(`./${name}Injectable.ts`, import.meta.url).pathname,

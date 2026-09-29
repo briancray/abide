@@ -3,6 +3,7 @@
 
 import { countLines } from './countLines.ts'
 
+/** Code lines in the reactive core and in the hand-written signal it is budgeted against. */
 export async function reactiveCoreLines(): Promise<{
     abide: number
     vanilla: number

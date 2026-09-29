@@ -1,8 +1,12 @@
-// WHATWG's named character references, from https://html.spec.whatwg.org/entities.json: each name
-// as the spec writes it, less its `&`, and the text it stands for. The names without a `;` are the
-// legacy ones the spec still decodes bare. A constants leaf for `decodeCharacterReferences` alone,
-// which is BUILD-TIME: nothing a client bundle reaches may import this, because it is two thousand
-// entries no page needs — the build hands the browser text already decoded.
+/**
+ * WHATWG's named character references: each name, less its `&`, to the text it stands for.
+ *
+ * From https://html.spec.whatwg.org/entities.json, each name as the spec writes it. The names
+ * without a `;` are the legacy ones the spec still decodes bare. A constants leaf for
+ * `decodeCharacterReferences` alone, which is BUILD-TIME: nothing a client bundle reaches may
+ * import this, because it is two thousand entries no page needs — the build hands the browser
+ * text already decoded.
+ */
 export const CHARACTER_REFERENCES: Readonly<Record<string, string>> = {
     AElig: '\u00c6',
     'AElig;': '\u00c6',

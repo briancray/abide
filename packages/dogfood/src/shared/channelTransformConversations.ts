@@ -5,7 +5,7 @@ export type Turn = { speaker: string; text: string }
 
 const LIMIT = 120
 
-// Runs on every publish, the app's own included.
+/** Runs on every publish, the app's own included. */
 export const onboarding = reactive(undefined, {
     history: 50,
     transform: (turn: Turn) => {

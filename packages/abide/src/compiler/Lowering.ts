@@ -31,34 +31,51 @@ import { nesting, type Token, tokenise } from './tokenise.ts'
 // no parentheses to survive one.
 const SHORT_CIRCUIT: ReadonlySet<string> = new Set(['||', '&&', '??'])
 
-// ONE FILE'S LOWERING. Every piece the emitters ask for — a script, a slot, a subject, a key — is a
-// SPAN of the projection, and a nested value (the right of a write, a computed path segment) is a
-// span of the same text lowered by the same splice. `used` collects the framework names the
-// rewrite EMITTED, so the import goes with the call; left to the callers it is one `used.add` per
-// call site and a missed one emits a module calling a name it never imported.
+/**
+ * One file's lowering: each piece the emitters ask for, with its reactive reads rewritten.
+ *
+ * Every piece the emitters ask for — a script, a slot, a subject, a key — is a SPAN of the
+ * projection, and a nested value (the right of a write, a computed path segment) is a span of the
+ * same text lowered by the same splice. `used` collects the framework names the rewrite EMITTED,
+ * so the import goes with the call; left to the callers it is one `used.add` per call site and a
+ * missed one emits a module calling a name it never imported.
+ */
 export class Lowering {
     readonly projection: Projection
     readonly used = new Set<string>()
-    // Ascending by `start`, so a span with none in it is one binary search.
+    /** Ascending by `start`, so a span with none in it is one binary search. */
     readonly reads: readonly Read[]
-    // 32.19 — WHETHER THE TEMPLATE HOLDS A `<slot/>`, walked ONCE here. Both emitters ask
-    // `takesProps()` about the same file, and the walk was a recursion over the whole template per
-    // lane per file — twice the work for an answer fixed when the file was parsed.
+    /**
+     * 32.19 — whether the template holds a `<slot/>`, walked ONCE here.
+     *
+     * Both emitters ask `takesProps()` about the same file, and the walk was a recursion over the
+     * whole template per lane per file — twice the work for an answer fixed when the file was
+     * parsed.
+     */
     readonly holdsSlot: boolean
-    // 38.3 — LOWERING FOR THE CHECKER rather than for a module that runs (`checkedShadow`). Three
-    // spellings differ, each because the emitted one is right at run time and untyped: the props
-    // record, which the checker needs typed as the accessors it is; a member referenced rather
-    // than called, whose forwarding arrow takes an untyped rest; and a slot's `raw`, which is the
-    // framework's own in every position.
+    /**
+     * 38.3 — lowering for the checker rather than for a module that runs (`checkedShadow`).
+     *
+     * Three spellings differ, each because the emitted one is right at run time and untyped: the
+     * props record, which the checker needs typed as the accessors it is; a member referenced
+     * rather than called, whose forwarding arrow takes an untyped rest; and a slot's `raw`, which
+     * is the framework's own in every position.
+     */
     readonly checking: boolean
-    // THE NAMES A CHECKED LOWERING READ, each with whether it was read through a props accessor.
-    // A read is `__values.name` there rather than `name()`: two calls are two values to the
-    // checker, so `{thread ? thread.text : ''}` failed to narrow where the program it lowers to
-    // reads one value twice — and a property of one declared record narrows (`checkedShadow`).
+    /**
+     * The names a checked lowering read, each with whether it was read through a props accessor.
+     *
+     * A read is `__values.name` there rather than `name()`: two calls are two values to the
+     * checker, so `{thread ? thread.text : ''}` failed to narrow where the program it lowers to
+     * reads one value twice — and a property of one declared record narrows (`checkedShadow`).
+     */
     readonly values = new Map<string, boolean>()
-    // What a checked lowering found that a build refuses, at the projection offset of the read —
-    // collected rather than thrown, so one refusal is one finding and the rest of the file is still
-    // checked.
+    /**
+     * What a checked lowering found that a build refuses, at the projection offset of the read.
+     *
+     * Collected rather than thrown, so one refusal is one finding and the rest of the file is
+     * still checked.
+     */
     readonly refusals: { at: number; message: string }[] = []
 
     constructor(file: AbideFile, reads: readonly Read[], checking = false) {
@@ -68,29 +85,35 @@ export class Lowering {
         this.checking = checking
     }
 
-    // 33 — WHETHER THIS FILE IS A COMPONENT THAT TAKES PROPS, which is the one thing the emitters
-    // need from the props pass: the emitted function takes the record, and a file that never
-    // calls `props` takes none (33.2).
-    //
-    // A `<slot/>` IS THAT QUESTION WITH A SECOND ANSWER (32.19): the caller's children arrive on
-    // the props record, so a file holding one takes props whether or not it names them. Answered
-    // here rather than at each emitter, or a third reason to take the record has to be remembered
-    // in two files.
+    /**
+     * Whether this file is a component that takes a props record.
+     *
+     * 33 — the one thing the emitters need from the props pass: the emitted function takes the
+     * record, and a file that never calls `props` takes none (33.2).
+     *
+     * A `<slot/>` IS THAT QUESTION WITH A SECOND ANSWER (32.19): the caller's children arrive on
+     * the props record, so a file holding one takes props whether or not it names them. Answered
+     * here rather than at each emitter, or a third reason to take the record has to be remembered
+     * in two files.
+     */
     takesProps(): boolean {
         if (this.holdsSlot) return true
         for (const read of this.reads) if (read.shape === 'props') return true
         return false
     }
 
-    // 10.5 — WHETHER THIS FILE OPENS A SHARE SCOPE, which is the one thing the emitters need from
-    // 10: a component that calls `reactive.share` gets a scope of its own, and one that does not
-    // is a link a descendant's walk passes through. So two `<Shelf/>` each hold their own `queued`
-    // and a `<TrackRow/>` finds the page's `nowPlaying` — with no node, and nothing to pay, on
-    // every file that shares nothing.
-    //
-    // 10.2 IS CHECKED IN THE SAME SCAN: the key is a literal or it is a build error. Found by
-    // SPELLING, as `raw` is — a file that binds its own `reactive` is not something the token walk
-    // can see, and that is the same limit 32.26 already carries.
+    /**
+     * Whether this file calls `reactive.share`, and so opens a share scope of its own.
+     *
+     * 10.5 — the one thing the emitters need from 10: a component that calls `reactive.share` gets
+     * a scope of its own, and one that does not is a link a descendant's walk passes through. So
+     * two `<Shelf/>` each hold their own `queued` and a `<TrackRow/>` finds the page's `nowPlaying`
+     * — with no node, and nothing to pay, on every file that shares nothing.
+     *
+     * 10.2 IS CHECKED IN THE SAME SCAN: the key is a literal or it is a build error. Found by
+     * SPELLING, as `raw` is — a file that binds its own `reactive` is not something the token walk
+     * can see, and that is the same limit 32.26 already carries.
+     */
     opensShareScope(): boolean {
         const text = this.projection.text
         if (!text.includes('.share')) return false
@@ -112,53 +135,71 @@ export class Lowering {
         return found
     }
 
-    // A framework name as emitted code calls it, registered for the import in the same breath —
-    // which is the whole reason it is one call. See `importClause` for the alias.
+    /**
+     * A framework name as emitted code calls it (`__name`), registered for the import.
+     *
+     * Registered in the same breath — which is the whole reason it is one call. See `importClause`
+     * for the alias.
+     */
     use(name: string): string {
         this.used.add(name)
         return `__${name}`
     }
 
-    // The `<script module>` blocks and the `<script>` blocks, each joined as the file wrote them.
+    /** The `<script module>` blocks, joined as the file wrote them and lowered. */
     modules(): string {
         return this.lower(this.projection.modules, false)
     }
 
+    /** The `<script>` blocks, joined as the file wrote them and lowered. */
     scripts(): string {
         return this.lower(this.projection.scripts, false)
     }
 
-    // A template expression. 32.26 — a SLOT's `raw(x)` lowers to the framework's own `raw`, which
-    // is why the markup-writing holders (an expression, an attribute value) ask for it and a
-    // subject, a key and a listener do not.
+    /**
+     * A markup-writing template expression, lowered with its `raw(x)` as the framework's.
+     *
+     * 32.26 — a SLOT's `raw(x)` lowers to the framework's own `raw`, which is why the
+     * markup-writing holders (an expression, an attribute value) ask for it and a subject, a key
+     * and a listener do not.
+     */
     slot(holder: object): string {
         return grouped(this.lower(this.spanOf(holder), true))
     }
 
+    /** A template expression, lowered with `raw` left as the file bound it. */
     expression(holder: object): string {
         return grouped(this.lower(this.spanOf(holder), false))
     }
 
-    // 14.8 — a branch-local `<script>`: statements, spliced as a body rather than as one value.
+    /** 14.8 — a branch-local `<script>`: statements, spliced as a body rather than as one value. */
     setup(holder: Setup): string {
         return this.lower(this.spanOf(holder), false)
     }
 
-    // 31.3 — A `bind:` OPERAND HOLDS THE `Reactive`, which is the one template position where a
-    // bare name is not a read: `bind:element={field}` puts the node IN the value, so lowering it
-    // to `field()` hands the binding whatever the value happens to be instead.
-    //
-    // ONLY THE OPERAND ITSELF. A name nested anywhere inside — the write in
-    // `bind:element={(node) => { tag = node.tagName }}` — is an ordinary position and is lowered
-    // as one, which is why this is the same walk with one read left alone rather than the source
-    // passed through.
+    /**
+     * A `bind:` operand, lowered with the operand's own read left as the `Reactive`.
+     *
+     * 31.3 — A `bind:` OPERAND HOLDS THE `Reactive`, which is the one template position where a
+     * bare name is not a read: `bind:element={field}` puts the node IN the value, so lowering it
+     * to `field()` hands the binding whatever the value happens to be instead.
+     *
+     * ONLY THE OPERAND ITSELF. A name nested anywhere inside — the write in
+     * `bind:element={(node) => { tag = node.tagName }}` — is an ordinary position and is lowered
+     * as one, which is why this is the same walk with one read left alone rather than the source
+     * passed through.
+     */
     reference(holder: object): string {
         return grouped(this.lower(this.spanOf(holder), false, true))
     }
 
-    // 32.35 — THE COMPONENT A TAG CHOOSES BY A VALUE, lowered to the read of it; `undefined` where
-    // the tag names a component itself. The checker's answer and nothing else: a tag holding no
-    // read is a binding that never moves, and a file lowered with no checker invokes it as written.
+    /**
+     * The component a tag chooses by a value, lowered to the read of it, or `undefined`.
+     *
+     * 32.35 — `undefined` where the tag names a component itself. The checker's answer and nothing
+     * else: a tag holding no read is a binding that never moves, and a file lowered with no
+     * checker invokes it as written.
+     */
     chosenTag(node: object): string | undefined {
         const span = this.projection.tags.get(node)
         if (span === undefined) return undefined
@@ -171,6 +212,7 @@ export class Lowering {
         return this.lower(span, false)
     }
 
+    /** A `{#for}` block's key expression, lowered. */
     key(block: object): string {
         const span = this.projection.keys.get(block)
         if (span === undefined)
@@ -178,21 +220,27 @@ export class Lowering {
         return grouped(this.lower(span, false))
     }
 
-    // 14.2 — WHETHER A POSITION IS BOUND, and it is bound unless the checker PROVED it reads nothing
-    // reactive (`proveSlots`) — not whether it NAMES a `Reactive`, which writes `{big()}` once where
-    // `big` reads `n` in its body.
-    //
-    // ABSENCE IS LIVE: a file lowered with no checker answers binds every position, which is the
-    // safe side of a question nobody asked.
+    /**
+     * Whether a template position is bound: true unless the checker proved it static.
+     *
+     * 14.2 — bound unless the checker PROVED it reads nothing reactive (`proveSlots`) — not whether
+     * it NAMES a `Reactive`, which writes `{big()}` once where `big` reads `n` in its body.
+     *
+     * ABSENCE IS LIVE: a file lowered with no checker answers binds every position, which is the
+     * safe side of a question nobody asked.
+     */
     isLive(holder: object): boolean {
         return !this.holds(this.spanOf(holder), 'static')
     }
 
-    // 32.27 — WHETHER A TEXT RUN CAN HOLD MARKUP: a part that is live, or a part that calls `raw`.
-    // A part the checker PROVED is a primitive (`isLive` false) cannot be `Raw` — the proof is that
-    // its value's type is primitive — save 32.26's `raw(x)`, which `provePosition` exempts and which
-    // is `Raw` always. So a run of proven parts is text for good, and neither side pays for markup
-    // it cannot hold: a row reading its own item, most slots on most pages, is one.
+    /**
+     * Whether a text run can hold markup: a part that is live, or a part that calls `raw`.
+     *
+     * 32.27 — a part the checker PROVED is a primitive (`isLive` false) cannot be `Raw` — the proof
+     * is that its value's type is primitive — save 32.26's `raw(x)`, which `provePosition` exempts
+     * and which is `Raw` always. So a run of proven parts is text for good, and neither side pays
+     * for markup it cannot hold: a row reading its own item, most slots on most pages, is one.
+     */
     holdsMarkup(run: readonly TemplateNode[]): boolean {
         for (const piece of run) {
             if (piece.kind !== 'expression') continue
@@ -209,8 +257,11 @@ export class Lowering {
         return span
     }
 
-    // Whether a read of that shape starts inside the span. Positions do not nest, so a `static`
-    // mark in one is at its start.
+    /**
+     * Whether a read of that shape starts inside the span.
+     *
+     * Positions do not nest, so a `static` mark in one is at its start.
+     */
     private holds(span: Span, shape: Read['shape']): boolean {
         for (
             let at = this.firstRead(span.start);
@@ -224,7 +275,7 @@ export class Lowering {
         return false
     }
 
-    // The index of the first read starting at or after `offset`.
+    /** The index of the first read starting at or after `offset`. */
     private firstRead(offset: number): number {
         let low = 0
         let high = this.reads.length
@@ -236,11 +287,12 @@ export class Lowering {
         return low
     }
 
-    // The source from `from` to `to`, every read in it rewritten. A write's value and a computed
-    // segment are spans inside it, lowered by the same call, and the reads they hold are skipped
-    // by the outer walk because it resumes past them.
-    // 38.3 — `lowerMapped`: the same splice, each run it copies recorded against where the
-    // projection held it, so a checker's position in the output is a position in the file.
+    /**
+     * A span lowered as a slot is, with each run recorded in `origins` against where it came from.
+     *
+     * 38.3 — the same splice as `lower`, each run it copies recorded against where the projection
+     * held it, so a checker's position in the output is a position in the file.
+     */
     lowerMapped(
         span: Span,
         holds: boolean,
@@ -250,9 +302,16 @@ export class Lowering {
         return this.lower(span, true, holds, origins, base)
     }
 
-    // `origins`, where given, collects what `lowerMapped` says it does: a copied run at its own
-    // offset, and a rewritten one as a run of no length at the read it replaced, so anything inside
-    // the rewrite is placed at the read.
+    /**
+     * The source of `span`, every read in it rewritten.
+     *
+     * A write's value and a computed segment are spans inside it, lowered by the same call, and
+     * the reads they hold are skipped by the outer walk because it resumes past them.
+     *
+     * `origins`, where given, collects what `lowerMapped` says it does: a copied run at its own
+     * offset, and a rewritten one as a run of no length at the read it replaced, so anything inside
+     * the rewrite is placed at the read.
+     */
     private lower(
         span: Span,
         raw: boolean,
@@ -343,13 +402,17 @@ export class Lowering {
         return out
     }
 
-    // 33.6 — a written prop's cell is reached through its accessor.
+    /**
+     * The read's name as emitted: `name()` for a written prop, whose cell its accessor hands back.
+     *
+     * 33.6 — a written prop's cell is reached through its accessor.
+     */
     private nameOf(read: Read): string {
         const spelled = this.projection.text.slice(read.start, read.end)
         return read.through ? `${spelled}()` : spelled
     }
 
-    // What one read lowers to, or `undefined` where it stays exactly as written.
+    /** What one read lowers to, or `undefined` where it stays exactly as written. */
     private rewrite(read: Read, raw: boolean): string | undefined {
         const spelled = this.projection.text.slice(read.start, read.end)
         const name = this.nameOf(read)
@@ -431,10 +494,15 @@ export class Lowering {
         return `((${PREVIOUS}) => (${name}.set(${PREVIOUS} ${step} 1), ${PREVIOUS}))(${name}())`
     }
 
-    // 38.3 — A WRITE IS AN ASSIGNMENT TO WHAT A READ READS, where the checker is asked. Lowered to
-    // `set`, it is a call, and a call does not undo a narrowing: `if (x === null) { x = 3; x.toFixed() }`
-    // reads `x` as still `null`. Assigned, it narrows as JavaScript's own `x = 3` does — and the value
-    // still goes through `CHECKED_WRITE`, held to what `set` takes.
+    /**
+     * A whole-name write's two sides as the checker reads them, or `undefined` outside checking.
+     *
+     * 38.3 — A WRITE IS AN ASSIGNMENT TO WHAT A READ READS, where the checker is asked. Lowered to
+     * `set`, it is a call, and a call does not undo a narrowing:
+     * `if (x === null) { x = 3; x.toFixed() }` reads `x` as still `null`. Assigned, it narrows as
+     * JavaScript's own `x = 3` does — and the value still goes through `CHECKED_WRITE`, held to
+     * what `set` takes.
+     */
     private checkedWriteParts(read: Read): [string, string] | undefined {
         if (!this.checking || read.local) return undefined
         const spelled = this.projection.text.slice(read.start, read.end)
@@ -453,6 +521,7 @@ export class Lowering {
         return [`${open}${held} = ${written}${held} ${op} (`, ')))']
     }
 
+    /** A read of the value: `name()`, or `__values.name` where the checker is asked. */
     private valueOf(spelled: string, read: Read, name: string): string {
         // A branch-local name is out of scope where the record is declared, and two bodies may
         // each declare one of the same spelling — it is called, and narrows as a call does.
@@ -461,11 +530,15 @@ export class Lowering {
         return `${CHECKED_VALUES}.${spelled}`
     }
 
-    // 31.8 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES. Read as a plain
-    // member, `user.name = 'x'` emits `user().name = 'x'`: the held object mutated in place, so
-    // the value is right, no `set` is called, the identity never changes and not one reader
-    // wakes. A SEGMENT IS EMITTED SOURCE RATHER THAN A NAME, because a computed one is an
-    // expression and may itself be a read: `rows[i] = v` carries `i()`.
+    /**
+     * A write or update through a member path, lowered to a copy down the path and a `set`.
+     *
+     * 31.8 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES. Read as a plain
+     * member, `user.name = 'x'` emits `user().name = 'x'`: the held object mutated in place, so
+     * the value is right, no `set` is called, the identity never changes and not one reader
+     * wakes. A SEGMENT IS EMITTED SOURCE RATHER THAN A NAME, because a computed one is an
+     * expression and may itself be a read: `rows[i] = v` carries `i()`.
+     */
     private pathWrite(
         read: Read,
         name: string,
@@ -498,10 +571,14 @@ export class Lowering {
     }
 }
 
-// 19.12 — A TEMPLATE POSITION IS ONE EXPRESSION, and the emit splices it into an argument list, an
-// initializer or an arrow's body. So a top-level comma, a leading `{` (a block, as an arrow's
-// body) and a trailing line comment (which would comment out what the emit closes it with) are
-// parenthesized — and nothing else is, so the common slot is emitted as written.
+/**
+ * A template position's text, parenthesized only where splicing it as written would change it.
+ *
+ * 19.12 — A TEMPLATE POSITION IS ONE EXPRESSION, and the emit splices it into an argument list, an
+ * initializer or an arrow's body. So a top-level comma, a leading `{` (a block, as an arrow's
+ * body) and a trailing line comment (which would comment out what the emit closes it with) are
+ * parenthesized — and nothing else is, so the common slot is emitted as written.
+ */
 function grouped(text: string): string {
     if (!text.includes(',') && !text.includes('/') && text[0] !== '{')
         return text
@@ -519,25 +596,35 @@ function grouped(text: string): string {
     return text
 }
 
-// What the emitted component function calls its props record. Under `__` for the reason every
-// framework name in an emitted module is (`importClause`): an author's own `props` is a name they
-// may have bound themselves.
+/**
+ * What the emitted component function calls its props record.
+ *
+ * Under `__` for the reason every framework name in an emitted module is (`importClause`): an
+ * author's own `props` is a name they may have bound themselves.
+ */
 export const PROPS = '__props'
 
+/** The record a checked lowering reads each value through (`Lowering.values`). */
 export const CHECKED_VALUES = '__values'
 
-// Holds a checked write's value to what the `Reactive`'s `set` takes, and hands it back as its own
-// type — or the value's, where `set` takes what a read never hands back — for the assignment to
-// narrow by.
+/**
+ * The checked lowering's write guard: holds a written value to what `set` takes.
+ *
+ * Hands the value back as its own type — or the value's, where `set` takes what a read never hands
+ * back — for the assignment to narrow by.
+ */
 export const CHECKED_WRITE = '__written'
 
-// 31.4 — what stands either side of the value in the write a name and an assignment operator stand
-// for. THE SIXTEEN ARE ONE MECHANISM: the operator is the token's own text without its `=`, so
-// completeness is a property rather than a list.
-//
-// 31.4 — A WRITE IS WORTH WHAT IT STORED wherever its value is read, as JavaScript's `a = b = 0`
-// is: `set` hands back nothing, so the value is bound once and handed back beside the write. A
-// discarded write takes the short form, for the reason a discarded `n++` does.
+/**
+ * What stands either side of the value in the write a name and an assignment operator stand for.
+ *
+ * 31.4 — THE SIXTEEN ARE ONE MECHANISM: the operator is the token's own text without its `=`, so
+ * completeness is a property rather than a list.
+ *
+ * 31.4 — A WRITE IS WORTH WHAT IT STORED wherever its value is read, as JavaScript's `a = b = 0`
+ * is: `set` hands back nothing, so the value is bound once and handed back beside the write. A
+ * discarded write takes the short form, for the reason a discarded `n++` does.
+ */
 function writeParts(
     name: string,
     op: string,

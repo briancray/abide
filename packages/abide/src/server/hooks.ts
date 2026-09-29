@@ -19,6 +19,7 @@ export type ConfigOptions = { schema?: Schema<unknown> }
 
 type Wrapper = (inner: () => Promise<void>) => void | Promise<void>
 
+/** Everything the lifecycle hooks filed, for `createApp` to read once the app module has run. */
 export const HOOKS = {
     rungs: [] as AppRung[],
     starts: [] as Wrapper[],
@@ -48,7 +49,11 @@ function filed<T>(list: T[], item: T): () => void {
     }
 }
 
-// 37.3 — pre-routing, over the request and the response, in the order registered.
+/**
+ * Files middleware rungs the app runs before routing; returns what unfiles them.
+ *
+ * 37.3 — pre-routing, over the request and the response, in the order registered.
+ */
 export function middleware(...rungs: AppRung[]): () => void {
     const unfile: (() => void)[] = []
     for (const rung of rungs) unfile.push(filed(HOOKS.rungs, rung))
@@ -57,31 +62,51 @@ export function middleware(...rungs: AppRung[]): () => void {
     }
 }
 
-// 37.4 — wraps `createApp`. `start` is the boot; a hook that never calls it boots nothing.
+/**
+ * Files a hook wrapping the app's boot; returns what unfiles it.
+ *
+ * 37.4 — wraps `createApp`. `start` is the boot; a hook that never calls it boots nothing.
+ */
 export function onStart(
     fn: (start: () => Promise<void>) => void | Promise<void>,
 ): () => void {
     return filed(HOOKS.starts, fn)
 }
 
-// 37.4 — wraps `App.stop`'s teardown.
+/**
+ * Files a hook wrapping the app's teardown; returns what unfiles it.
+ *
+ * 37.4 — wraps `App.stop`'s teardown.
+ */
 export function onStop(
     fn: (stop: () => Promise<void>) => void | Promise<void>,
 ): () => void {
     return filed(HOOKS.stops, fn)
 }
 
-// 37.5.
+/**
+ * Files a hook handed every unexpected error; returns what unfiles it.
+ *
+ * 37.5.
+ */
 export function onError(fn: (error: unknown) => unknown): () => void {
     return filed(HOOKS.errors, fn)
 }
 
-// 25.2 — the app's reporter, merged over the baseline.
+/**
+ * Files a health reporter whose account is merged over the baseline; returns what unfiles it.
+ *
+ * 25.2.
+ */
 export function onHealth(report: () => unknown | Promise<unknown>): () => void {
     return filed(HOOKS.health, report)
 }
 
-// 27.6, 37.7 — a second replaces the first, schema and all, and says so.
+/**
+ * Sets the app's config defaults and schema; returns what unsets them.
+ *
+ * 27.6, 37.7 — a second replaces the first, schema and all, and says so.
+ */
 export function onConfig(
     fn: ConfigDefaults | null,
     options?: ConfigOptions,
@@ -97,7 +122,11 @@ export function onConfig(
     }
 }
 
-// 37.7.
+/**
+ * Sets the function resolving a principal from its claims; returns what unsets it.
+ *
+ * 37.7 — a second replaces the first, and says so.
+ */
 export function onPrincipal(
     resolve: (claims: unknown) => unknown | Promise<unknown>,
 ): () => void {
@@ -111,8 +140,12 @@ export function onPrincipal(
     }
 }
 
-// 37.5 — AN UNEXPECTED ERROR IS ALWAYS WRITTEN, and every `onError` is then handed it. A hook that
-// throws is itself written rather than let loose on the request that was already failing.
+/**
+ * Logs an unexpected error and hands it to every `onError` hook.
+ *
+ * 37.5 — AN UNEXPECTED ERROR IS ALWAYS WRITTEN, and every `onError` is then handed it. A hook that
+ * throws is itself written rather than let loose on the request that was already failing.
+ */
 export function reportUnexpected(error: unknown): void {
     LIFECYCLE_LOG.error(error)
     for (const hook of HOOKS.errors)
@@ -123,8 +156,12 @@ export function reportUnexpected(error: unknown): void {
         }
 }
 
-// 16.42 — a refusal at its own status. 16.43 — anything else is the server's fault, and says
-// nothing about itself to the caller: the log and `onError` get it (37.5).
+/**
+ * The `Failed` a thrown error answers with: a refusal as it is, anything else a reported 500.
+ *
+ * 16.42 — a refusal at its own status. 16.43 — anything else is the server's fault, and says
+ * nothing about itself to the caller: the log and `onError` get it (37.5).
+ */
 export function failureOf(error: unknown): Failed<string, unknown> {
     if (isFailed(error)) return error
     reportUnexpected(error)

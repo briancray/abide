@@ -55,8 +55,12 @@ const tally = reactive(() => {
     return { shown, failing }
 })
 
-// A ROW'S CELLS, AS TEXT AND TONE, read from `landed` inside the row's own slots — so a file
-// finishing rewrites the slots of its own row and no other.
+/**
+ * A test file's row cells, as text and tone.
+ *
+ * Read from `landed` inside the row's own slots — so a file finishing rewrites the slots of its
+ * own row and no other.
+ */
 function cellsOf(item: RowItem) {
     const row = landed.get(item.id)
     if (row === undefined || row.state !== 'done') {
@@ -96,7 +100,7 @@ function stop() {
     stopping?.abort()
 }
 
-// ONE TEST'S LINE: a mark, and its tone, for how it came out.
+/** One test's line: a mark, and its tone, for how it came out. */
 function markOf(one: TestCase): { mark: string; tone: string } {
     if (one.failure !== null) return { mark: '✗', tone: 'board-bad' }
     if (one.skipped) return { mark: '–', tone: 'board-waiting' }

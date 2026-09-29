@@ -8,7 +8,7 @@ export type Payment = { payments: number }
 
 let payments = 0
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     invoices: {
         async pay(_id: string): Promise<Payment> {

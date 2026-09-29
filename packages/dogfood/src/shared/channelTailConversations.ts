@@ -2,7 +2,7 @@ import { reactive } from 'abide'
 
 export type Turn = { speaker: string; text: string }
 
-// The latest turn and two before it, whatever a reader asks for.
+/** The latest turn and two before it, whatever a reader asks for. */
 export const onboarding = reactive<Turn>(undefined, { history: 2 })
 
 const OPENING: Turn[] = [

@@ -16,6 +16,7 @@ import { RAW_WRITES, Raw, textOf } from './Raw.ts'
 // build, and the whole build moves 1.7x.
 const SPECIAL = /[&<>]/
 
+/** A slot value as markup text: escaped, or a `Raw`'s html as it is. */
 export function escapeText(value: unknown): string {
     // 32.27 — a branded raw value renders unescaped, and the brand is read FIRST: `String(value)`
     // below turns a `Raw` into its html and the scan then escapes exactly the markup the brand
@@ -47,40 +48,55 @@ function escapeMarkup(text: string): string {
     return cut < text.length ? out + text.slice(cut) : out
 }
 
-// The same rewrite for an attribute value, plus the quote that would end it. A separate function
-// rather than a flag: the flag would be read on every slot to answer a question the call site
-// already knows.
-//
-// 32.27 IS A SLOT'S CLAUSE, NOT AN ATTRIBUTE'S. Delegating straight to `escapeText` handed the
-// brand this path too, so `<iframe srcdoc={raw(html)}>` copied markup into a value a browser
-// parses as a document, and `title={raw('AT&T')}` lost the `&` encoding — which is the only thing
-// standing behind `safeUrl`'s scheme check, per 32.29. A `Raw` here is escaped like the string it
-// holds, which is why this runs the rewrite rather than `escapeText`.
+/**
+ * A value escaped for a double-quoted attribute, a `Raw` included.
+ *
+ * The same rewrite as a slot's, plus the quote that would end it. A separate function rather than
+ * a flag: the flag would be read on every slot to answer a question the call site already knows.
+ *
+ * 32.27 IS A SLOT'S CLAUSE, NOT AN ATTRIBUTE'S. Delegating straight to `escapeText` handed the
+ * brand this path too, so `<iframe srcdoc={raw(html)}>` copied markup into a value a browser
+ * parses as a document, and `title={raw('AT&T')}` lost the `&` encoding — which is the only thing
+ * standing behind `safeUrl`'s scheme check, per 32.29. A `Raw` here is escaped like the string it
+ * holds, which is why this runs the rewrite rather than `escapeText`.
+ */
 export function escapeAttribute(value: unknown): string {
     return escapeQuote(escapeMarkup(textOf(value)))
 }
 
-// 32.28 — the one rewrite the AUTHOR'S OWN attribute text takes: it is markup, so its `&` stays a
-// reference, and only the `"` that would end the attribute is encoded.
+/**
+ * Text with only its `"` encoded: the one rewrite the author's own attribute text takes.
+ *
+ * 32.28 — it is markup, so its `&` stays a reference, and only the `"` that would end the
+ * attribute is encoded.
+ */
 export function escapeQuote(text: string): string {
     return text.includes('"') ? text.replaceAll('"', '&quot;') : text
 }
 
-// 32.10 — A `style:prop` SETS ONE PROPERTY, and `;` is the one character that lets a value say
-// otherwise. The attribute escaping cannot see it, because `;` is ordinary in every other
-// attribute: `style:color={v}` with `v` off the wire wrote `color: red; position: fixed; top: 0;
-// …` — seven declarations from the slot that declares one, and an overlay over the page. Cut at
-// the separator rather than encoded, because there is no encoding of `;` a CSS parser reads as a
-// literal semicolon inside a value.
+/**
+ * A `style:prop` value escaped for markup and cut at its first `;`.
+ *
+ * 32.10 — A `style:prop` SETS ONE PROPERTY, and `;` is the one character that lets a value say
+ * otherwise. The attribute escaping cannot see it, because `;` is ordinary in every other
+ * attribute: `style:color={v}` with `v` off the wire wrote `color: red; position: fixed; top: 0;
+ * …` — seven declarations from the slot that declares one, and an overlay over the page. Cut at
+ * the separator rather than encoded, because there is no encoding of `;` a CSS parser reads as a
+ * literal semicolon inside a value.
+ */
 export function escapeStyleValue(value: unknown): string {
     return oneStyleValue(escapeAttribute(value))
 }
 
-// The cut ALONE, with no escaping in front of it, because the client writes a `style:prop` through
-// the CSSOM and that is not a parse (`setStyleProperty`). Lifted out rather than copied: the guard
-// above and the client's write have to drop at the same character, and a CSSOM that refuses the
-// whole value where the server kept its first declaration is the two disagreeing about what one
-// `style:prop` rendered.
+/**
+ * Text up to its first `;`: one style declaration's value, with no escaping.
+ *
+ * The cut ALONE, with no escaping in front of it, because the client writes a `style:prop` through
+ * the CSSOM and that is not a parse (`setStyleProperty`). Lifted out rather than copied: the guard
+ * in `escapeStyleValue` and the client's write have to drop at the same character, and a CSSOM
+ * that refuses the whole value where the server kept its first declaration is the two disagreeing
+ * about what one `style:prop` rendered.
+ */
 export function oneStyleValue(text: string): string {
     const end = text.indexOf(';')
     return end === -1 ? text : text.slice(0, end)

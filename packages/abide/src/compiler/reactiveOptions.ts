@@ -6,9 +6,12 @@ import {
     isPropertyAssignment,
 } from 'typescript/unstable/ast/is'
 
-// The options object WRITTEN at a `reactive(…)` call — `reactive(x, { … })` — which is what the build
-// can read without running it (20.4). `undefined` where `call` is not one, or where its options are
-// built elsewhere.
+/**
+ * The options object literal written at a `reactive(x, { … })` call, or `undefined`.
+ *
+ * The WRITTEN object is what the build can read without running it (20.4). `undefined` where
+ * `call` is not one, or where its options are built elsewhere.
+ */
 export function reactiveOptions(
     call: Node | undefined,
 ): ObjectLiteralExpression | undefined {
@@ -20,12 +23,12 @@ export function reactiveOptions(
         : undefined
 }
 
-// `reactive(…)` — by the callee's spelling.
+/** Whether a call is `reactive(…)`, by the callee's spelling. */
 export function isReactiveCall(call: Node & { expression: Node }): boolean {
     return isIdentifier(call.expression) && call.expression.text === 'reactive'
 }
 
-// What `options` writes for `name`, or `undefined` where it writes none.
+/** The initializer `options` writes for `name`, or `undefined` where it writes none. */
 export function optionNamed(
     options: ObjectLiteralExpression,
     name: string,

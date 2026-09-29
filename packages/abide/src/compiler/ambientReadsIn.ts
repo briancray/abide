@@ -49,12 +49,17 @@ const AMBIENTS: { path: string; name: string; nonce: boolean }[] = [
     { path: besideThis('../shared/route.ts'), name: 'route', nonce: false },
 ]
 
+/** The modules that declare abide's per-request ambients, each once. */
 export const AMBIENT_SOURCES: string[] = [
     ...new Set(AMBIENTS.map((ambient) => ambient.path)),
 ]
 
-// `paths` maps each of `AMBIENT_SOURCES` to the path the checker names it by (`handlersIn` has
-// the reason: the checker folds case on a case-insensitive disk).
+/**
+ * Where a `global` reactive's body reads a per-request ambient, in source order.
+ *
+ * `paths` maps each of `AMBIENT_SOURCES` to the path the checker names it by (`handlersIn` has
+ * the reason: the checker folds case on a case-insensitive disk).
+ */
 export async function ambientReadsIn(
     checker: Checker,
     sourceFile: Node,
@@ -109,7 +114,7 @@ export async function ambientReadsIn(
     return found
 }
 
-// `reactive(() => …, { global: true })`, the body a function and the option a literal `true`.
+/** Whether a call is `reactive(() => …, { global: true })`, the option a literal `true`. */
 function isGlobalReactive(call: CallExpression): boolean {
     const options = reactiveOptions(call)
     const body = call.arguments[0]
@@ -121,14 +126,18 @@ function isGlobalReactive(call: CallExpression): boolean {
     )
 }
 
-// A name standing for a value, rather than a property or a key that spells one.
+/** Whether a name stands for a value, rather than a property or a key that spells one. */
 function isUse(node: Node): boolean {
     const parent = node.parent
     if (isPropertyAccessExpression(parent) && parent.name === node) return false
     return !(isPropertyAssignment(parent) && parent.name === node)
 }
 
-// `csp` is one per request only in its `nonce`.
+/**
+ * Whether the name is read as `name.nonce`.
+ *
+ * `csp` is one per request only in its `nonce`.
+ */
 function readsNonce(node: Node): boolean {
     const parent = node.parent
     return (

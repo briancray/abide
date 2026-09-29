@@ -1,11 +1,11 @@
-// A markdown subset, rendered to HTML with no dependency. SCAFFOLDING: this exists
-// only so the documentation's WORDS can be read and revised before abide can compile
-// a `.abide` file. It goes when `abide build` can serve `content/` as pages.
+// A markdown subset, rendered to HTML with no dependency. SCAFFOLDING: abide has no markdown of
+// its own, so `buildPages.ts` compiles `content/` into pages through this. It goes when
+// `abide build` can serve `content/` as pages.
 //
 // The subset is what the docs actually use: ATX headings, paragraphs, fenced code, pipe
 // tables, bullet and ordered lists, blockquotes, and inline code, links, bold and italic.
 // Anything outside it renders as literal text rather than silently disappearing, which is
-// the behaviour that keeps a prose mistake visible.
+// the behavior that keeps a prose mistake visible.
 //
 // There is no `---` branch, and that is the DESIGN rule rather than an omission: the site
 // carries no horizontal rules at all, so one cannot come back by accident.
@@ -13,12 +13,21 @@
 import { escapeAttribute } from 'abide'
 
 const HEADING = /^(#{1,4})\s+(.*)$/
-// The directive spellings. Anchored and line-at-a-time here; a caller sweeping a whole
-// body takes `new RegExp(EXAMPLE.source, 'gm')` rather than writing the pattern again.
+/**
+ * `{% example <name> %}`, one of the directive spellings.
+ *
+ * Anchored and line-at-a-time here; a caller sweeping a whole body takes
+ * `new RegExp(EXAMPLE.source, 'gm')` rather than writing the pattern again.
+ */
 export const EXAMPLE = /^\{%\s*example\s+([\w-]+)\s*%\}$/
+/** `{% lead <slug> %}`, anchored like `EXAMPLE`. */
 export const LEAD = /^\{%\s*lead\s+([\w/-]+)\s*%\}$/
-// `{% snippet <example> <file> [anchor] %}`. The anchor runs to the closing `%}` because
-// it is a line of CODE and code has spaces in it; no anchor means the whole file.
+/**
+ * `{% snippet <example> <file> [anchor] %}`, anchored like `EXAMPLE`.
+ *
+ * The anchor runs to the closing `%}` because it is a line of CODE and code has spaces in it; no
+ * anchor means the whole file.
+ */
 export const SNIPPET = /^\{%\s*snippet\s+([\w-]+)\s+(\S+)(?:\s+(.*?))?\s*%\}$/
 const FENCE = /^```(\S*)[ \t]*(.*)$/
 const BULLET = /^\s*[*-]\s+(.*)$/
@@ -27,22 +36,22 @@ const QUOTE = /^>\s?(.*)$/
 const TIP = /^\[!TIP\]\s*/
 const TABLE_DIVIDER = /^\|(\s*:?-+:?\s*\|)+$/
 
-// A fence's label is a file path or one of four words — `server`, `browser`, `shared`,
-// `abide`. Which SIDE it names is derived from it rather than written twice. Four words
-// and three colours: `shared` and `abide` are both sides at once, which is the
-// distinction the spine exists to show, and the seam is what decides it rather than the
-// extension — a `#shared/*.ts` is as much both sides as a `.abide` file is.
+/** The suffix an anchored snippet's caption carries, and never part of its address. */
 export const EXCERPT = / — excerpt$/
 
-// A SIDE IS NOT A SYNTAX, and the caption used to show only the side: a block labelled
-// `browser` told a reader where the code runs and left them to guess whether they were looking
-// at the sugar or at what it is spelled over. Those are the two forms this design is ABOUT — a
-// name read by name in a `.abide` file, and `s()` in a `.ts` one — so the one thing a caption
-// has to say is which of them is on screen.
-//
-// DERIVED from the fence's own language rather than written into the label, because the label
-// already carries it: seventy-one fences say `browser` or `shared`, and every one of them is
-// already tagged `ts` or `abide` a token earlier. A path says both by itself and is left alone.
+/**
+ * A fence's caption: its path as an author imports it, or its side word with its language.
+ *
+ * A SIDE IS NOT A SYNTAX, and the caption used to show only the side: a block labeled
+ * `browser` told a reader where the code runs and left them to guess whether they were looking
+ * at the sugar or at what it is spelled over. Those are the two forms this design is ABOUT — a
+ * name read by name in a `.abide` file, and `s()` in a `.ts` one — so the one thing a caption
+ * has to say is which of them is on screen.
+ *
+ * DERIVED from the fence's own language rather than written into the label, because the label
+ * already carries it: seventy-one fences say `browser` or `shared`, and every one of them is
+ * already tagged `ts` or `abide` a token earlier. A path says both by itself and is left alone.
+ */
 export function captionOf(language: string, label: string): string {
     if (label.includes('/') || label.startsWith('#')) return displayPath(label)
     if (!language || language === label) return `.${label}`
@@ -56,6 +65,7 @@ const TOKEN =
 
 const TOKEN_CLASS = ['comment', 'string', 'block', 'tag', 'key', 'num']
 
+/** The code as escaped HTML, each token wrapped in a `t-<class>` span. */
 export function highlight(code: string): string {
     let html = ''
     let last = 0
@@ -75,11 +85,13 @@ export function highlight(code: string): string {
     return html + escapeAttribute(code.slice(last))
 }
 
-// A file is shown by the SPECIFIER an author types, not by where it sits on disk:
-// `#server/rpc/invoices.ts`, never `src/server/rpc/invoices.ts`. The two are the same
-// file — the seam aliases in package.json's `imports` map `#server/*` onto `src/server/*`
-// — and showing the disk form teaches a path nobody writes. Build output is untouched,
-// having no seam to name.
+/**
+ * A file's path as the SPECIFIER an author types, not where it sits on disk.
+ *
+ * `#server/rpc/invoices.ts`, never `src/server/rpc/invoices.ts`. The two are the same file — the
+ * seam aliases in package.json's `imports` map `#server/*` onto `src/server/*` — and showing the
+ * disk form teaches a path nobody writes. Build output is untouched, having no seam to name.
+ */
 export function displayPath(path: string): string {
     const suffix = EXCERPT.test(path) ? ' — excerpt' : ''
     const address = path.replace(EXCERPT, '')
@@ -90,10 +102,17 @@ export function displayPath(path: string): string {
     return path
 }
 
-// The spine has three values and the seams have three names, and they do not line up
-// one to one: `#shared` and a `.abide` file are BOTH SIDES, so they take the same colour.
-// `— excerpt` is a suffix on the caption, never part of the address, so it is stripped
-// before the seam is read.
+/**
+ * Which side a fence label or file path names, as the spine colors it.
+ *
+ * A label is a file path or one of four words — `server`, `browser`, `shared`, `abide` — and its
+ * SIDE is derived from it rather than written twice. The spine has three values and the seams
+ * have three names, and they do not line up one to one: `#shared` and a `.abide` file are BOTH
+ * SIDES, so they take the same color — the distinction the spine exists to show — and the seam
+ * decides it rather than the extension, so a `#shared/*.ts` is as much both sides as a `.abide`
+ * file is. `— excerpt` is a suffix on the caption, never part of the address, so it is stripped
+ * before the seam is read.
+ */
 export function sideOf(label: string): 'server' | 'abide' | 'browser' {
     const address = label.replace(EXCERPT, '')
     if (address.endsWith('.abide') || address === 'abide') return 'abide'
@@ -120,16 +139,19 @@ export function slugify(text: string): string {
         .replace(/^-|-$/g, '')
 }
 
-// A code span is LIFTED OUT before emphasis runs and put back after, which is what makes
-// `**\`initial\`**` one span rather than three. Emphasis used to run per backtick SEGMENT, so
-// a `**` on one side of a code span and its partner on the other were never in the same
-// string: neither matched, the single-`*` rule then ate one of them, and the page shipped
-// its asterisks. Nothing reported it — the markdown download was right the whole time.
-//
 // A slot is NUL-delimited because the text it sits in is already HTML-escaped, so the one
 // thing that cannot appear around it is a control character.
 const CODE_SLOT = /\0(\d+)\0/g
 
+/**
+ * One line of markdown as inline HTML: code spans, links, bold and italic.
+ *
+ * A code span is LIFTED OUT before emphasis runs and put back after, which is what makes
+ * `**\`initial\`**` one span rather than three. Emphasis used to run per backtick SEGMENT, so a
+ * `**` on one side of a code span and its partner on the other were never in the same string:
+ * neither matched, the single-`*` rule then ate one of them, and the page shipped its asterisks.
+ * Nothing reported it — the markdown download was right the whole time.
+ */
 export function renderInline(text: string): string {
     const parts = text.split('`')
     const codes: string[] = []
@@ -167,10 +189,14 @@ function renderCell(value: string, cell: 'td' | 'th'): string {
     return `<${cell}><b class="verdict-${verdict[1]}">${verdict[1]}</b>${reason}</${cell}>`
 }
 
-// A `\|` is a pipe INSIDE a cell and never a cell boundary, which is the only way to write a
-// union type in a table — and splitting on every pipe broke the row into extra cells and left the
-// backslash sitting in the output. Silent in the usual way: the table still rendered, with
-// `() => void \` in one cell and `Disposer` in the next, and the row after it shunted right.
+/**
+ * One pipe-table row as a `<tr>` of `cell` elements.
+ *
+ * A `\|` is a pipe INSIDE a cell and never a cell boundary, which is the only way to write a
+ * union type in a table — and splitting on every pipe broke the row into extra cells and left the
+ * backslash sitting in the output. Silent in the usual way: the table still rendered, with
+ * `() => void \` in one cell and `Disposer` in the next, and the row after it shunted right.
+ */
 function renderTableRow(line: string, cell: 'td' | 'th'): string {
     const trimmed = line.replace(/^\|/, '').replace(/(?<!\\)\|$/, '')
     let html = '<tr>'
@@ -179,11 +205,6 @@ function renderTableRow(line: string, cell: 'td' | 'th'): string {
     return `${html}</tr>`
 }
 
-// THE BOXES THE GAPS HANG ON. A markdown body is a FLAT stream of blocks and the page's
-// spacing is three nested flex columns — region, section, prose — so the boxes have to be
-// folded back in somewhere. Here, off the headings, which are the only structure the source
-// states. Run this AFTER the directives expand: a lead brings its own headings with it.
-//
 // A heading always begins a line of the rendered stream, which is what makes this a scan
 // rather than a parse — a `<h2` inside a code block is `&lt;h2` by the time it lands.
 const SECTION_HEADING = /^<h([23]) id="/gm
@@ -192,6 +213,14 @@ function flow(blocks: string): string {
     return blocks.trim() ? `<div class="flow">${blocks}</div>` : ''
 }
 
+/**
+ * The rendered body folded into nested `<section>`s at its h2 and h3 headings.
+ *
+ * THE BOXES THE GAPS HANG ON. A markdown body is a FLAT stream of blocks and the page's spacing
+ * is three nested flex columns — region, section, prose — so the boxes have to be folded back in
+ * somewhere. Here, off the headings, which are the only structure the source states. Run this
+ * AFTER the directives expand: a lead brings its own headings with it.
+ */
 export function groupSections(html: string): string {
     const headings: { depth: number; at: number }[] = []
     SECTION_HEADING.lastIndex = 0
@@ -222,6 +251,7 @@ export function groupSections(html: string): string {
     return grouped + '</section>'.repeat(open)
 }
 
+/** A markdown body as HTML, its directives left as comment markers for the caller to expand. */
 export function renderMarkdown(source: string): string {
     const lines = source.split('\n')
     let html = ''
@@ -376,7 +406,13 @@ export function renderMarkdown(source: string): string {
             if (next.trim() === '') break
             if (HEADING.test(next) || FENCE.test(next) || BULLET.test(next))
                 break
-            if (EXAMPLE.test(next.trim()) || LEAD.test(next.trim())) break
+            const directive = next.trim()
+            if (
+                EXAMPLE.test(directive) ||
+                SNIPPET.test(directive) ||
+                LEAD.test(directive)
+            )
+                break
             if (ORDERED.test(next) || QUOTE.test(next) || next.startsWith('|'))
                 break
             paragraph.push(next)

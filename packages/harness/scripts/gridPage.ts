@@ -8,18 +8,25 @@
 // app really renders — and where "the slot is an element's only child" is true of every cell,
 // which is the case a marker might be elidable in.
 
+/** The marker scheme a grid page is built in: two comments per slot, one, or none. */
 export type Variant = 'two-markers' | 'one-marker' | 'no-markers'
 
+/** A built grid page: its markup, the hand-written script that mounts it, and its slot count. */
 export type Grid = { markup: string; script: string; cells: number }
 
-// `<td>{value}</td>` — the slot is the element's ONLY child, so nothing can merge with it.
-// A cell shape. `simple` is one slot in an otherwise empty `<td>` — the friendliest case a marker
-// scheme can be given, and the one that flatters it. `dense` is what a table an app writes looks
-// like: several slots in one cell with static text between them, an attribute driven by a value,
-// and a nested element. The static text BETWEEN slots is the part that matters — it is what makes
-// a closing marker load-bearing, because adjacent text nodes merge.
+/**
+ * A grid cell's shape: one slot alone, or three with static text between them.
+ *
+ * `simple` is one slot in an otherwise empty `<td>` — `<td>{value}</td>`, the slot the element's
+ * ONLY child, so nothing can merge with it. It is the friendliest case a marker scheme can be
+ * given, and the one that flatters it. `dense` is what a table an app writes looks like: several
+ * slots in one cell with static text between them, an attribute driven by a value, and a nested
+ * element. The static text BETWEEN slots is the part that matters — it is what makes a closing
+ * marker load-bearing, because adjacent text nodes merge.
+ */
 export type Shape = 'simple' | 'dense'
 
+/** Builds a `rows` by `columns` grid page in one marker scheme, with the script that mounts it. */
 export function grid(
     rows: number,
     columns: number,
@@ -69,8 +76,12 @@ function close(variant: Variant): string {
     return variant === 'two-markers' ? '<!--/a-->' : ''
 }
 
-// The client half of each variant, hand-written. These are ARMS, not emitted code: the point is
-// to price the scheme before building it, which is the whole of "write the vanilla form first".
+/**
+ * The script that finds every slot of a variant's page and stores them on `__SLOTS__`.
+ *
+ * The client half of each variant, hand-written. These are ARMS, not emitted code: the point is to
+ * price the scheme before building it, which is the whole of "write the vanilla form first".
+ */
 function mount(variant: Variant, shape: Shape): string {
     if (variant === 'no-markers') {
         // NO MARKERS AT ALL. The slots are at positions a compiled template knows, so the client

@@ -30,8 +30,9 @@ import type { Ask, FromWorker, ToWorker } from './devWorker.ts'
 import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
 import { SETTLE_MILLISECONDS } from './SETTLE_MILLISECONDS.ts'
 
+/** What `abide dev` serves, and where. */
 export type DevOptions = {
-    // The app's source root — the directory `ui/` sits under, and the tree that is watched.
+    /** The app's source root — the directory `ui/` sits under, and the tree that is watched. */
     root: string
     port?: number | undefined
 }
@@ -64,6 +65,11 @@ type Carried =
     | { conn: number; url: string; headers: [string, string][] }
     | undefined
 
+/**
+ * `abide dev`'s listener, compiling the app here and serving it from a child process.
+ *
+ * The child is replaced on every save; the listener's bound socket outlives it.
+ */
 export async function serveDev(
     options: DevOptions,
 ): Promise<Bun.Server<undefined>> {

@@ -31,7 +31,7 @@ function applyNextFrame() {
     byId.patch((held) => applyOrderCount(held, frame))
 }
 
-// The same map and the same fold, reached without `patch`.
+/** The same map and the same fold, reached without `patch`. */
 function applyNextFrameWithoutPatch() {
     const frame = FEED.shift()
     if (!frame) return

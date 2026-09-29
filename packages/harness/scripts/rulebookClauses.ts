@@ -1,6 +1,10 @@
-// THE ONE READING OF RULEBOOK.md, for the two gates that hold citations to it and the report of the
-// clauses nothing cites: two readers splitting paragraphs differently are reading two rulebooks.
-// A clause opens its own paragraph, its number first.
+/**
+ * Splits RULEBOOK.md into its numbered clauses, each an id and its text on one line.
+ *
+ * THE ONE READING OF RULEBOOK.md, for the two gates that hold citations to it and the report of the
+ * clauses nothing cites: two readers splitting paragraphs differently are reading two rulebooks.
+ * A clause opens its own paragraph, its number first.
+ */
 export function rulebookClauses(
     rulebook: string,
 ): { id: string; text: string }[] {
@@ -16,6 +20,10 @@ export function rulebookClauses(
     return clauses
 }
 
-// A clause number where prose cites one. A measurement carries the same digits, so a reader that
-// cares tells the two apart by what follows.
+/**
+ * Matches a clause number where prose cites one.
+ *
+ * A measurement carries the same digits, so a reader that cares tells the two apart by what
+ * follows.
+ */
 export const CITATION = /\b(\d{1,2}\.\d{1,2})\b/g

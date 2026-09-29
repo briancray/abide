@@ -7,7 +7,11 @@
 
 export type RowItem = { id: string; section: string; name: string }
 
-// `broken` is the RUNNER failing — no report, a thrown bench — and is not a red result.
+/**
+ * Where a row is in its run.
+ *
+ * `broken` is the RUNNER failing — no report, a thrown bench — and is not a red result.
+ */
 export type RowState = 'queued' | 'running' | 'done' | 'broken'
 
 export type BenchRow = {
@@ -16,11 +20,11 @@ export type BenchRow = {
     unit: string
     abide: number | null
     vanilla: number | null
-    // abide / vanilla as the lane is allowed to say it: a number, or why there is none.
+    /** abide / vanilla as the lane is allowed to say it: a number, or why there is none. */
     claim: string
-    // The operations batched into one sample, and the A/A floor as a fraction — `null` for a row
-    // that counts rather than times.
+    /** The operations batched into one sample — `null` for a row that counts rather than times. */
     n: number | null
+    /** The A/A floor as a fraction — `null` for a row that counts rather than times. */
     floor: number | null
     note: string
 }
@@ -32,12 +36,16 @@ export type TestRow = {
     failures: number
     skipped: number
     milliseconds: number
-    // Every test the file ran, in the order its report lists them.
+    /** Every test the file ran, in the order its report lists them. */
     cases: TestCase[]
     note: string
 }
 
-// ONE TEST IN A FILE, as its report gave it: a failure carries the message the runner wrote.
+/**
+ * One test in a file, as its report gave it.
+ *
+ * A failure carries the message the runner wrote.
+ */
 export type TestCase = {
     name: string
     milliseconds: number
@@ -45,17 +53,23 @@ export type TestCase = {
     failure: string | null
 }
 
-// A RUNNER THAT DIED PART WAY, as the line the docs app writes after the rows it did send: a stream
-// whose head has gone out cannot fail with a status, and cut off it reads as a network error that
-// says nothing of the runner's own.
+/**
+ * The line the docs app writes after the rows it did send when a runner died part way.
+ *
+ * A stream whose head has gone out cannot fail with a status, and cut off it reads as a network
+ * error that says nothing of the runner's own.
+ */
 export type RunnerFailure = { failure: string }
 
 export function isRunnerFailure(line: object): line is RunnerFailure {
     return typeof (line as { failure?: unknown }).failure === 'string'
 }
 
-// `all`, `section:<name>`, `item:<id>`, or nothing at all — the page's first render asks for
-// nothing, so a reader who opened the page has not started a run.
+/**
+ * Whether `item` falls in `scope`: `all`, `section:<name>`, `item:<id>`, or nothing at all.
+ *
+ * The page's first render asks for nothing, so a reader who opened the page has not started a run.
+ */
 export function inScope(item: RowItem, scope: string): boolean {
     if (scope === 'all') return true
     if (scope.startsWith('section:'))
@@ -65,6 +79,7 @@ export function inScope(item: RowItem, scope: string): boolean {
     return false
 }
 
+/** Whether the typed filter is a case-insensitive substring of the item's section and name. */
 export function matchesFilter(item: RowItem, filter: string): boolean {
     const wanted = filter.trim().toLowerCase()
     return (

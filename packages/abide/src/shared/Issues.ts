@@ -11,20 +11,24 @@
 // nowhere to key by, and `{ '': string[] }` for that case is a wrapper every reader would
 // have to unwrap.
 
-// 19.6: DOT-JOINED, DEPTH-LIMITED, AND WIDENED TO `string` PAST THE LIMIT. The limit is
-// not a style choice — a recursive path type over a self-referential shape (a tree node
-// whose children are tree nodes) expands forever, and TypeScript answers that with
-// "excessively deep" on the whole file rather than on the type that caused it. Five levels
-// is past anything a form posts and short enough that the expansion stays cheap.
-//
-// WIDENING RATHER THAN STOPPING is what keeps the deep case usable: past the limit any
-// string is accepted as a path, so a deeply nested refusal can still be keyed — it just
-// stops being checked. Stopping at `never` would make those keys unspellable.
-//
-// AN ARRAY INDEXES BY NUMBER rather than by its `length` and its methods, which is what
-// `keyof` over an array would otherwise hand back.
 type Down = [0, 0, 1, 2, 3, 4]
 
+/**
+ * Every dot-joined path into `T`, widened to `string` past five levels.
+ *
+ * 19.6: DOT-JOINED, DEPTH-LIMITED, AND WIDENED TO `string` PAST THE LIMIT. The limit is
+ * not a style choice — a recursive path type over a self-referential shape (a tree node
+ * whose children are tree nodes) expands forever, and TypeScript answers that with
+ * "excessively deep" on the whole file rather than on the type that caused it. Five levels
+ * is past anything a form posts and short enough that the expansion stays cheap.
+ *
+ * WIDENING RATHER THAN STOPPING is what keeps the deep case usable: past the limit any
+ * string is accepted as a path, so a deeply nested refusal can still be keyed — it just
+ * stops being checked. Stopping at `never` would make those keys unspellable.
+ *
+ * AN ARRAY INDEXES BY NUMBER rather than by its `length` and its methods, which is what
+ * `keyof` over an array would otherwise hand back.
+ */
 export type Paths<T, Limit extends number = 5> = Limit extends 0
     ? string
     : T extends readonly (infer Item)[]
@@ -37,6 +41,9 @@ export type Paths<T, Limit extends number = 5> = Limit extends 0
           }[keyof T & string]
         : never
 
+/**
+ * A refusal's messages keyed by path, `''` for the whole value, or a bare list over a scalar.
+ */
 export type Issues<T> = T extends object
     ? Partial<Record<Paths<T> | '', string[]>>
     : string[]

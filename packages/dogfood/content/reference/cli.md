@@ -49,7 +49,7 @@ abide --help
 | `abide check [dir…]` | Type-checks `.abide`, on the `.abide` line. |
 | `abide dev [--port <n>]` | Watches the project and keeps the app up. |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. |
-| `abide start [--port <n>]` | Boots the built app. |
+| `abide start [--port <n>]` | Boots the built app, and a shell on it. |
 | `abide connect [url]` | The interactive shell against a running app. |
 | `abide call <address> [args]` | One call to one handler. |
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. |

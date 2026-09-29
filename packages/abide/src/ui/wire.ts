@@ -27,27 +27,39 @@ import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
 import { followRpc } from './socketWire.ts'
 
-// What a call answered: the status and the text — which stays unset where the request itself did
-// not complete.
+/**
+ * What a call answered: the status and the text — which stays unset where the request itself did
+ * not complete.
+ */
 type Answer = {
     status: number | undefined
     statusText: string | undefined
     type: string | null | undefined
-    // 18.20 — `null` where the answer named none, which is a value built per request.
+    /**
+     * The answer's version, or `null` where it named none (18.20).
+     *
+     * A `null` is a value built per request.
+     */
     version: string | null | undefined
-    // 21.8 — the answer's `cache-control`, whose `max-age` is how long the copy may serve it.
+    /** The answer's `cache-control`, whose `max-age` is how long the copy may serve it (21.8). */
     life: string | null | undefined
     text: string | undefined
-    // 16.33 — a streamed answer's body, left unread so its chunks are taken as they land. Set in
-    // place of `text` for a handler the build marked as streaming, and by the early-call script for
-    // any framed answer.
+    /**
+     * A streamed answer's body, left unread so its chunks are taken as they land (16.33).
+     *
+     * Set in place of `text` for a handler the build marked as streaming, and by the early-call
+     * script for any framed answer.
+     */
     body: ReadableStream<Uint8Array> | null | undefined
 }
 
-// What the early-call script leaves per call: the request in flight, and once it has answered, what
-// it answered.
+/**
+ * What the early-call script leaves per call: the request in flight, and once it has answered, what
+ * it answered.
+ */
 type Early = Answer & { promise: Promise<void> }
 
+/** The browser's `Rpc` for a handler: the server's declaration over a body that fetches. */
 export function wire(
     method: Method,
     address: string,
@@ -80,7 +92,7 @@ export function wire(
         ;(started as Record<string, Early | undefined>)[request.key] = undefined
         if (early.text !== undefined) return settle(early)
         return early.promise.then(() =>
-            textOf(early, request, signal).then(settle),
+            answerWithText(early, request, signal).then(settle),
         )
     }
     // 16.33 — A STREAMING HANDLER'S COPY IS A STREAM OF ITS OWN, whose chunks land as the answer's
@@ -143,7 +155,11 @@ export function wire(
     return rpc
 }
 
-// Checked against the value's own types where they were written, on the server; here they are data.
+/**
+ * The build's copy options as a value takes them, `structural` resolved to its function.
+ *
+ * Checked against the value's own types where they were written, on the server; here they are data.
+ */
 function copyOptions(options: CopyOptions): never {
     // `stream` is the wire's to read, and not an option a value takes.
     const { identity, stream: _, ...rest } = options
@@ -152,7 +168,11 @@ function copyOptions(options: CopyOptions): never {
     ) as never
 }
 
-// A framed answer to a streaming handler's copy keeps its body unread (16.33); anything else is text.
+/**
+ * Fetches a call's answer; a framed answer to a streaming copy keeps its body unread (16.33).
+ *
+ * Anything else is read as text.
+ */
 async function fetched(
     request: RpcRequest,
     streams: boolean,
@@ -175,9 +195,13 @@ async function fetched(
     }
 }
 
-// An early call's answer as text, for a copy that is one value: the early-call script leaves a framed
-// answer's body unread, which a streaming copy reads as it lands and this one reads to the end.
-async function textOf(
+/**
+ * An early call's answer with its body read as text, for a copy that is one value.
+ *
+ * The early-call script leaves a framed answer's body unread, which a streaming copy reads as it
+ * lands and this one reads to the end.
+ */
+async function answerWithText(
     early: Early,
     request: RpcRequest,
     signal: AbortSignal | undefined,
@@ -192,16 +216,22 @@ async function textOf(
     }
 }
 
-// What precedes a chunk's JSON on its line: nothing for jsonl, `data: ` for sse, and `null` where
-// the answer is not framed at all.
+/**
+ * What precedes a chunk's JSON on its line: nothing for jsonl, `data: ` for sse, and `null` where
+ * the answer is not framed at all.
+ */
 function framingPrefix(type: string | null | undefined): string | null {
     if (type?.startsWith('application/jsonl')) return ''
     if (type?.startsWith('text/event-stream')) return 'data: '
     return null
 }
 
-// A framed body's chunks as each line completes. Cancelled when the copy stops reading — a refresh
-// starts a new run and the old one's reader has nothing left to hand anything.
+/**
+ * A framed body's chunks, yielded as each line completes.
+ *
+ * Cancelled when the copy stops reading — a refresh starts a new run and the old one's reader has
+ * nothing left to hand anything.
+ */
 async function* framedStream(
     body: ReadableStream<Uint8Array>,
     prefix: string | null,
@@ -231,13 +261,16 @@ async function* framedStream(
     }
 }
 
-// What the body hands back: the value, nothing (16.32), or the refusal it was answered with (15.1),
-// rebuilt as the `Failed` the server returned. RETURNED, so the value refuses (15.5) rather than
-// failing the way a network error does.
-//
-// 16.33 — A FRAMED STREAM IS COLLECTED INTO THE CHUNKS IT CARRIED, which is the value a streaming
-// handler holds once its run has closed — for a copy the build did not mark as streaming, whose
-// value is one production. A marked one reads its body as it lands (`framedStream`).
+/**
+ * What a call's body hands back: the value, nothing (16.32), or the refusal it was answered with.
+ *
+ * The refusal (15.1) is rebuilt as the `Failed` the server returned. RETURNED, so the value refuses
+ * (15.5) rather than failing the way a network error does.
+ *
+ * 16.33 — A FRAMED STREAM IS COLLECTED INTO THE CHUNKS IT CARRIED, which is the value a streaming
+ * handler holds once its run has closed — for a copy the build did not mark as streaming, whose
+ * value is one production. A marked one reads its body as it lands (`framedStream`).
+ */
 function answered(answer: Answer): unknown {
     const status = answer.status ?? 0
     if (status === 204) return undefined
@@ -260,7 +293,7 @@ function answered(answer: Answer): unknown {
     return refuse(status, answer.statusText || undefined)
 }
 
-// One JSON value per line — the whole line for jsonl, the `data:` line of each event for sse.
+/** One JSON value per line — the whole line for jsonl, the `data:` line of each event for sse. */
 function framedChunks(text: string, prefix: string): unknown[] {
     const chunks: unknown[] = []
     for (const line of text.split('\n')) {

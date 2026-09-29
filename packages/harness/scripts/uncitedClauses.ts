@@ -26,9 +26,13 @@ const SCANNED = [
     'packages/dogfood/tests',
 ]
 
-// Every `\d.\d` in the file, comment or not. A citation in a string or an identifier is a false
-// POSITIVE here — it marks a clause as cited when nothing meant to cite it — and that only ever
-// shortens this list. Over-reporting would be the costly direction.
+/**
+ * The clause numbers any scanned `.ts` file mentions.
+ *
+ * Every `\d.\d` in the file, comment or not. A citation in a string or an identifier is a false
+ * POSITIVE here — it marks a clause as cited when nothing meant to cite it — and that only ever
+ * shortens this list. Over-reporting would be the costly direction.
+ */
 async function citedInSources(): Promise<Set<string>> {
     const cited = new Set<string>()
     const files = new Bun.Glob('**/*.ts')

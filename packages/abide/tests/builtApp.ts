@@ -48,7 +48,12 @@ export async function startApp(
         // the one this process started with, so a test that set a variable would not reach it.
         { stdout: 'pipe', stderr: 'pipe', env },
     )
-    return { base: await addressOf(server), stop: () => server.kill() }
+    // `SIGKILL`, which no handler takes: `start` catches `SIGTERM` to stop the app (37.11), and a
+    // test that failed with the app mid-stop would leave the process serving.
+    return {
+        base: await addressOf(server),
+        stop: () => server.kill('SIGKILL'),
+    }
 }
 
 // The origin `abide start` or `abide dev` printed. Read rather than assumed — and a boot that fails

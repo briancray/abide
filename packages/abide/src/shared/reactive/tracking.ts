@@ -21,81 +21,109 @@
 // again. The flag that used to carry this was a second field load and a second branch on
 // the read path, which is the hottest path in the design.
 
-// THE THREE STATES A READER CAN BE IN, and the whole of push-pull is that there are
-// three rather than two. `DIRTY` says a source of mine PRODUCED and I must run.
-// `CHECK` says a source of mine may have — something further up produced, and whether
-// it reached me is not known until the sources between us have been asked.
-//
-// Two states cannot carry that distinction, and the distinction is the design: a write
-// marks its direct readers `DIRTY` and everything beyond them `CHECK`, so the mark walk
-// is O(V) flag writes and runs no body at all. A `CHECK` node asked for its value
-// resolves its sources first and runs only where one of them produced — which is what
-// keeps 5.2 true through a chain that eager kept by running every body and comparing.
-//
-// The ORDER matters: a mark never weakens, so `state >= wanted` is the skip test.
-// Annotated `number` rather than left as literals on purpose: the field is mutated by a
-// resolution the compiler cannot see through, so a literal type would narrow
-// `state === CHECK` to `1` and then call the `state === DIRTY` beneath it unreachable.
+/**
+ * The first of the three states a reader can be in: nothing it read has moved.
+ *
+ * THE THREE STATES A READER CAN BE IN, and the whole of push-pull is that there are three rather
+ * than two. `DIRTY` says a source of mine PRODUCED and I must run. `CHECK` says a source of mine
+ * may have — something further up produced, and whether it reached me is not known until the
+ * sources between us have been asked.
+ *
+ * Two states cannot carry that distinction, and the distinction is the design: a write marks its
+ * direct readers `DIRTY` and everything beyond them `CHECK`, so the mark walk is O(V) flag writes
+ * and runs no body at all. A `CHECK` node asked for its value resolves its sources first and runs
+ * only where one of them produced — which is what keeps 5.2 true through a chain that eager kept
+ * by running every body and comparing.
+ *
+ * The ORDER matters: a mark never weakens, so `state >= wanted` is the skip test. Annotated
+ * `number` rather than left as literals on purpose: the field is mutated by a resolution the
+ * compiler cannot see through, so a literal type would narrow `state === CHECK` to `1` and then
+ * call the `state === DIRTY` beneath it unreachable.
+ */
 export const CLEAN: number = 0
+/** A source of mine may have produced; ask the sources between us before running. See `CLEAN`. */
 export const CHECK: number = 1
+/** A source of mine produced, and I must run. See `CLEAN`. */
 export const DIRTY: number = 2
 
 export type Subscriber = {
     notify(): void
-    // `CLEAN`, `CHECK` or `DIRTY`. Set on every transitive reader before anything runs,
-    // so a body that reads a source the resolution has not reached yet pulls it forward
-    // rather than reading a value the write has passed by. `running` is the re-entrancy
-    // guard for a body already on the stack.
+    /**
+     * `CLEAN`, `CHECK` or `DIRTY`.
+     *
+     * Set on every transitive reader before anything runs, so a body that reads a source the
+     * resolution has not reached yet pulls it forward rather than reading a value the write has
+     * passed by.
+     */
     state: number
+    /** The re-entrancy guard for a body already on the stack. */
     running: boolean
     isEffect: boolean
-    // A MIRROR RUNS IN THE MARK WALK, NOT THE DRAIN, and must not be batched with an effect. An
-    // adoption's mirror moves a VALUE — it is the outer value's production, arriving from the
-    // inner one — so deferring it to the end of the turn would leave a read between the two
-    // answering with what the outer held before, and reads pulling correctly is the whole reason
-    // the drain can be deferred at all. A keyed entry's lifetime is the one mirror with no
-    // adopter: it runs in the walk so its clock read is the production's own moment.
+    /**
+     * Whether this reader runs in the mark walk rather than the drain.
+     *
+     * A MIRROR RUNS IN THE MARK WALK, NOT THE DRAIN, and must not be batched with an effect. An
+     * adoption's mirror moves a VALUE — it is the outer value's production, arriving from the inner
+     * one — so deferring it to the end of the turn would leave a read between the two answering
+     * with what the outer held before, and reads pulling correctly is the whole reason the drain
+     * can be deferred at all. A keyed entry's lifetime is the one mirror with no adopter: it runs
+     * in the walk so its clock read is the production's own moment.
+     */
     isMirror: boolean
-    // THE VALUE AN ADOPTION'S MIRROR MIRRORS INTO, and `null` on every other reader. A probe
-    // move on the adopted value mints nothing, so it never reaches the mirror as a value —
-    // this is the edge `markProbes` follows to reach the adopter's guards instead (11.51).
+    /**
+     * The value an adoption's mirror mirrors into, and `null` on every other reader.
+     *
+     * A probe move on the adopted value mints nothing, so it never reaches the mirror as a value —
+     * this is the edge `markProbes` follows to reach the adopter's guards instead (11.51).
+     */
     adopter: Tracked | null
-    // Read on the last run, in order. Rebuilt only from the point a run diverges.
+    /** Read on the last run, in order. Rebuilt only from the point a run diverges. */
     sources: Tracked[]
-    // The values whose PROBES this run asked about, which is a different edge from the
-    // ones whose values it read (3.3). Kept apart so a flip reaches the readers that
-    // asked and nobody else: waking a value reader because a load STARTED is 50 data
-    // writes on a 50-row list, every one of them redundant, and the identity gate that
-    // exists to stop exactly that cannot see a production nobody minted.
+    /**
+     * The values whose PROBES this run asked about — another edge than the values it read (3.3).
+     *
+     * Kept apart so a flip reaches the readers that asked and nobody else: waking a value reader
+     * because a load STARTED is 50 data writes on a 50-row list, every one of them redundant, and
+     * the identity gate that exists to stop exactly that cannot see a production nobody minted.
+     */
     probeSources: Tracked[]
-    // How far into `sources` this run has matched, and once it reaches `sources.length`
-    // the run has DIVERGED and every read left goes through `track`. Reset before each run.
+    /**
+     * How far into `sources` this run has matched.
+     *
+     * Once it reaches `sources.length` the run has DIVERGED and every read left goes through
+     * `track`. Reset before each run.
+     */
     cursor: number
     alive: boolean
 }
 
 export type Tracked = {
     readers: Subscriber[]
-    // Who asked about this value's probes. Apart from `readers` — see `probeSources`.
+    /** Who asked about this value's probes. Apart from `readers` — see `probeSources`. */
     probeReaders: Subscriber[]
 }
 
+/** The reader whose run is on the stack, or `null` where reads subscribe to nothing. */
 export const TRACKING: { reader: Subscriber | null } = { reader: null }
 
-// ONE PLACE THE SHAPE IS WRITTEN for every reader in this graph that is not a `Cell`: the tracked
-// effect and the narrowed one in `watch.ts`, a history cursor, the waiter a `then` parks on a probe
-// edge, and a keyed entry's lifetime mirror.
-//
-// THE FIELD ORDER IS THE PART NO TEST CATCHES. TypeScript refuses a literal that MISSES a field,
-// so copies could not diverge in content — but it says nothing about the order they are written
-// in, and each order is its own hidden class for one type. Every `reader.state` and `reader.alive`
-// on the mark walk is then a polymorphic load, and nothing about the output moves.
-//
-// `notify` IS ASSIGNED BY THE CALLER, which is a write to a field that is already there and so
-// leaves the shape alone — each reader's closes over the reader itself, which a factory parameter
-// cannot do without a second frame on every wake.
 function unwired(): void {}
 
+/**
+ * A fresh reader over `sources`, its `notify` left for the caller to assign.
+ *
+ * ONE PLACE THE SHAPE IS WRITTEN for every reader in this graph that is not a `Cell`: the tracked
+ * effect and the narrowed one in `watch.ts`, a history cursor, the waiter a `then` parks on a
+ * probe edge, and a keyed entry's lifetime mirror.
+ *
+ * THE FIELD ORDER IS THE PART NO TEST CATCHES. TypeScript refuses a literal that MISSES a field, so
+ * copies could not diverge in content — but it says nothing about the order they are written in,
+ * and each order is its own hidden class for one type. Every `reader.state` and `reader.alive` on
+ * the mark walk is then a polymorphic load, and nothing about the output moves.
+ *
+ * `notify` IS ASSIGNED BY THE CALLER, which is a write to a field that is already there and so
+ * leaves the shape alone — each reader's closes over the reader itself, which a factory parameter
+ * cannot do without a second frame on every wake.
+ */
 export function newSubscriber(
     sources: Tracked[],
     adopter: Tracked | null,
@@ -115,16 +143,24 @@ export function newSubscriber(
     }
 }
 
-// Removal by swap-with-last: order in a reader list is not observable, and a splice is
-// O(n) copying where this is one write. Exported because readers are registered OUTSIDE the
-// tracking protocol too — a cursor in `History.ts`, an entry's lifetime in `Keyed.ts` — and a
-// second copy of the loop beside this one is what CLAUDE.md's sibling-seam rule refuses.
+/**
+ * Removes `reader` from `source`'s readers.
+ *
+ * Removal by swap-with-last: order in a reader list is not observable, and a splice is O(n)
+ * copying where this is one write. Exported because readers are registered OUTSIDE the tracking
+ * protocol too — a cursor in `History.ts`, an entry's lifetime in `Keyed.ts` — and a second copy
+ * of the loop beside this one is what CLAUDE.md's sibling-seam rule refuses.
+ */
 export function dropReader(source: Tracked, reader: Subscriber): void {
     removeFrom(source.readers, reader)
 }
 
-// 4.7's frame: `run` with no reader on the stack, restored however it exits. Arguments rather than
-// a closure, so a caller on a per-write path allocates nothing to use it.
+/**
+ * Calls `run` with no reader on the stack, restoring the reader however it exits.
+ *
+ * 4.7's frame. Arguments rather than a closure, so a caller on a per-write path allocates nothing
+ * to use it.
+ */
 export function untracked<First, Second, Result>(
     run: (first: First, second: Second) => Result,
     first: First,
@@ -139,8 +175,12 @@ export function untracked<First, Second, Result>(
     }
 }
 
-// The probe edge's half of the same thing, for a reader registered on it outside a run —
-// a `then` waiter, which settles on a probe moving rather than on a value.
+/**
+ * Removes `reader` from `source`'s probe readers — `dropReader` for the probe edge.
+ *
+ * For a reader registered on it outside a run — a `then` waiter, which settles on a probe moving
+ * rather than on a value.
+ */
 export function dropProbeReader(source: Tracked, reader: Subscriber): void {
     removeFrom(source.probeReaders, reader)
 }
@@ -154,9 +194,13 @@ function removeFrom(readers: Subscriber[], reader: Subscriber): void {
     }
 }
 
-// A PROBE EDGE IS REBUILT PER RUN rather than cursored. A body reads few probes where it
-// reads many values, and a guard that stops being taken must stop waking — so the list is
-// dropped at the start of a run and re-made by the reads that happen.
+/**
+ * Subscribes `reader` to `source`'s probes, once per run.
+ *
+ * A PROBE EDGE IS REBUILT PER RUN rather than cursored. A body reads few probes where it reads
+ * many values, and a guard that stops being taken must stop waking — so the list is dropped at
+ * the start of a run and re-made by the reads that happen.
+ */
 export function trackProbe(source: Tracked, reader: Subscriber): void {
     const asked = reader.probeSources
     for (let index = 0; index < asked.length; index += 1)
@@ -165,6 +209,7 @@ export function trackProbe(source: Tracked, reader: Subscriber): void {
     source.probeReaders.push(reader)
 }
 
+/** Drops every probe subscription `reader` holds. */
 export function detachProbes(reader: Subscriber): void {
     const asked = reader.probeSources
     for (let index = 0; index < asked.length; index += 1)
@@ -172,30 +217,36 @@ export function detachProbes(reader: Subscriber): void {
     asked.length = 0
 }
 
-// Everything from `cursor` on is a value the previous run read and this one has not.
-//
-// A SLOT IS NOT A SUBSCRIPTION. `sources` is POSITIONAL — one slot per read, so a body
-// that reads one value twice holds two slots for it — where `source.readers` is a SET,
-// deduped by `track` below. Dropping per slot therefore unsubscribed a value a SURVIVING
-// slot still lists, and the shorter run is what did it:
-// `reactive(() => name() ? name().toUpperCase() : 'anon')` reads `name` twice on the
-// truthy run and once on the falsy one, so the falsy run's truncation took the whole
-// subscription with it and the value never recomputed again — right at the moment it
-// looked right. The kept prefix is what says whether this slot was the last of its value.
-//
-// THE SCAN RUNS PER DROPPED SLOT, so what it costs is kept x dropped: a body reading 1000
-// values on its wide branch and 500 on its narrow one paid 250,000 pointer compares on
-// every flip — 9.3x the pre-change truncate, +105 us a flip, which crosses a frame at six.
-// A `Set` over the kept prefix is the O(kept + dropped) form and is taken WHERE IT WINS
-// rather than always: at 1000/999 the scan is one probe per dropped slot and building the
-// Set doubled the flip, so the two are priced against each other instead.
-//
-// A duplicate inside the DROPPED tail needs no test — `removeFrom` takes one occurrence
-// and the second call finds none.
+// How far `kept * dropped` must outgrow `kept + dropped` before `truncate` builds a `Set` over the
+// kept prefix rather than scanning it once per dropped slot.
 const SET_OVER_SCAN = 20
 
-// Exported because a tracked run's end is exactly this and nothing more: the TEST that there is
-// a tail is the caller's — two field loads, on the rare arm.
+/**
+ * Drops `reader`'s sources from its cursor on, unsubscribing each the kept prefix no longer lists.
+ *
+ * Everything from `cursor` on is a value the previous run read and this one has not.
+ *
+ * A SLOT IS NOT A SUBSCRIPTION. `sources` is POSITIONAL — one slot per read, so a body that reads
+ * one value twice holds two slots for it — where `source.readers` is a SET, deduped by `track`.
+ * Dropping per slot therefore unsubscribed a value a SURVIVING slot still lists, and the shorter
+ * run is what did it: `reactive(() => name() ? name().toUpperCase() : 'anon')` reads `name` twice
+ * on the truthy run and once on the falsy one, so the falsy run's truncation took the whole
+ * subscription with it and the value never recomputed again — right at the moment it looked
+ * right. The kept prefix is what says whether this slot was the last of its value.
+ *
+ * THE SCAN RUNS PER DROPPED SLOT, so what it costs is kept x dropped: a body reading 1000 values
+ * on its wide branch and 500 on its narrow one paid 250,000 pointer compares on every flip — 9.3x
+ * the pre-change truncate, +105 us a flip, which crosses a frame at six. A `Set` over the kept
+ * prefix is the O(kept + dropped) form and is taken WHERE IT WINS rather than always (past
+ * `SET_OVER_SCAN`): at 1000/999 the scan is one probe per dropped slot and building the Set
+ * doubled the flip, so the two are priced against each other instead.
+ *
+ * A duplicate inside the DROPPED tail needs no test — `removeFrom` takes one occurrence and the
+ * second call finds none.
+ *
+ * Exported because a tracked run's end is exactly this and nothing more: the TEST that there is a
+ * tail is the caller's — two field loads, on the rare arm.
+ */
 export function truncate(reader: Subscriber): void {
     const sources = reader.sources
     const kept = reader.cursor
@@ -227,13 +278,17 @@ function stillRead(sources: Tracked[], source: Tracked, kept: number): boolean {
     return false
 }
 
-// THE READER IS PASSED IN, not re-read. Every call site has already tested
-// `TRACKING.reader` for null to decide whether to call at all, and re-loading it here
-// made the null check happen twice on the hottest path in the design.
-//
-// The STABLE arm — the source at the cursor is the one the last run had — is inlined at
-// the call site in `Reactive`, so what is left here is the divergence: this is the
-// fallback, reached on the first read a run makes that the previous run did not.
+/**
+ * Records a read of `source` by `reader` where its run has diverged from the last one.
+ *
+ * THE READER IS PASSED IN, not re-read. Every call site has already tested `TRACKING.reader` for
+ * null to decide whether to call at all, and re-loading it here made the null check happen twice
+ * on the hottest path in the design.
+ *
+ * The STABLE arm — the source at the cursor is the one the last run had — is inlined at the call
+ * site in `Reactive`, so what is left here is the divergence: this is the fallback, reached on the
+ * first read a run makes that the previous run did not.
+ */
 export function track(source: Tracked, reader: Subscriber): void {
     const sources = reader.sources
     const at = reader.cursor
@@ -262,10 +317,11 @@ export function track(source: Tracked, reader: Subscriber): void {
     // SLOPE (16 readers against 112, calibrated bar), `mount 50 readers on one value` holds the
     // constant, and the subscription count in `reactive.test.ts` holds the dedup this replaced.
     //
-    // THE THREE READERS REGISTERED OUTSIDE THE PROTOCOL are unaffected, and this asks nothing
-    // of them they were not already under: `History`'s cursor, `Keyed`'s lifetime mirror and
-    // the narrowed `watch(sources, effect)` each DECLARE their sources and push themselves
-    // onto those sources' readers, so the two agree by construction — and none of them
+    // THE THREE READERS REGISTERED ON A VALUE EDGE OUTSIDE THE PROTOCOL are unaffected, and this
+    // asks nothing of them they were not already under: `History`'s cursor, `Keyed`'s lifetime
+    // mirror and the narrowed `watch(sources, effect)` each DECLARE their sources and push
+    // themselves onto those sources' readers, so the two agree by construction — `settled`'s
+    // waiter is the fourth, and it is on the probe edge, which this never scans — and none of them
     // tracks, which `truncate` already depends on. A cursor of 0 against a declared `sources`
     // would have it drop the declared subscription on the first `track`, so a reader that
     // both declares and tracks is already broken above this line.
@@ -274,6 +330,7 @@ export function track(source: Tracked, reader: Subscriber): void {
     source.readers.push(reader)
 }
 
+/** Drops every subscription `reader` holds, value and probe alike. */
 export function detach(reader: Subscriber): void {
     reader.cursor = 0
     truncate(reader)

@@ -27,7 +27,7 @@ type ExampleFile = { path: string; source: string }
 // the handler is what they reach back for — so the order is DERIVED from each file's
 // seam rather than from how the manifest happens to list them. `about: 'server'` is
 // the one exception, for an example whose problem IS a server problem (validating a
-// body, authorising a call), where the handler is the thing being read.
+// body, authorizing a call), where the handler is the thing being read.
 const SEAM_ORDER = {
     ui: ['abide', 'browser', 'server'],
     server: ['server', 'abide', 'browser'],
@@ -41,21 +41,27 @@ function orderedFiles(paths: string[], about: 'ui' | 'server'): string[] {
     )
 }
 
-// Only `about` is optional.
+/** An `examples/<name>.json`. Only `about` is optional. */
 export type Manifest = {
     title: string
     summary: string
-    // Paths from the docs app's root. Every file the example is made of, and nothing else (40.4).
+    /** Paths from the app's root: every file the example is made of, and nothing else (40.4). */
     files: string[]
-    // THE COMPONENT THE CARD RENDERS, one of `files`. The page invokes it where the card sits.
+    /** THE COMPONENT THE CARD RENDERS, one of `files`. The page invokes it where the card sits. */
     render: string
-    // WHICH OF THE FOUR APPS the pattern is drawn from, per docs/BRAND.md, "The four apps an
-    // example is drawn from". Declared rather than inferred from the words, because what the
-    // clause governs is a page's examples AGREEING, and prose cannot be compared.
+    /**
+     * WHICH OF THE FOUR APPS the pattern is drawn from.
+     *
+     * Per docs/BRAND.md, "The four apps an example is drawn from". Declared rather than inferred
+     * from the words, because what the clause governs is a page's examples AGREEING, and prose
+     * cannot be compared.
+     */
     app: string
+    /** Which seam the problem is about, and so which file opens first; `ui` when absent. */
     about?: 'ui' | 'server'
 }
 
+/** An example's manifest, refused when missing or when it renders a file it does not list. */
 export async function readManifest(name: string): Promise<Manifest> {
     const manifest = await ifPresent<Manifest>(
         Bun.file(new URL(`${name}.json`, EXAMPLES_DIR)).json(),
@@ -69,12 +75,16 @@ export async function readManifest(name: string): Promise<Manifest> {
     return manifest
 }
 
-// The name the page imports the rendered component as. A component file is named after what it
-// exports (CLAUDE.md), so the file's own name is the tag.
+/**
+ * The name the page imports the rendered component as.
+ *
+ * A component file is named after what it exports (CLAUDE.md), so the file's own name is the tag.
+ */
 export function componentOf(render: string): string {
     return render.slice(render.lastIndexOf('/') + 1, -'.abide'.length)
 }
 
+/** A file's text by its path from the docs app's root, or `undefined` where it is absent. */
 export async function readSource(path: string): Promise<string | undefined> {
     return ifPresent(Bun.file(new URL(path, APP_ROOT)).text())
 }
@@ -106,9 +116,13 @@ function renderFileGroup(files: ExampleFile[]): string {
     return `<div class="ex-files" role="tablist">${tabs}</div>${bodies}`
 }
 
-// WHERE THE PAGE PUTS THE COMPONENT. A comment rather than markup, because the card is HTML the
-// page writes into its template and the component is a TAG there — `pageSource` swaps this for
-// `<Name/>`, and a marker that survived into the output would be a card with nothing in it.
+/**
+ * The marker for where the page puts the example's component.
+ *
+ * A comment rather than markup, because the card is HTML the page writes into its template and
+ * the component is a TAG there — `pageSource` swaps this for `<Name/>`, and a marker that
+ * survived into the output would be a card with nothing in it.
+ */
 export function renderSlot(name: string): string {
     return `<!--render:${name}-->`
 }
@@ -116,11 +130,13 @@ export function renderSlot(name: string): string {
 export type Example = {
     name: string
     html: string
-    // What the page imports and invokes: the component's path and the tag it is invoked as.
+    /** The component's path, which the page imports. */
     render: string
+    /** The tag the page invokes the component as. */
     component: string
 }
 
+/** An example's card HTML, and the component the page imports and invokes inside it. */
 export async function readExample(name: string): Promise<Example> {
     const manifest = await readManifest(name)
     const files = await readFiles(
@@ -144,8 +160,7 @@ ${renderFileGroup(files)}
     }
 }
 
-// The same files the tabs are built from, flattened for a reader who gets TEXT instead of
-// tabs.
+/** The same files the tabs are built from, flattened for a reader who gets TEXT, not tabs. */
 export async function exampleMarkdown(name: string): Promise<string> {
     const manifest = await readManifest(name)
     const files = await readFiles(

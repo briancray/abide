@@ -15,13 +15,17 @@ import type { JsonValue } from './JsonValue.ts'
 import { namedLogger } from './log.ts'
 import { type Found, runSchema, type Schema } from './Schema.ts'
 
-// 28.8 — 15.13 and 15.15's namespace.
+/** The `abide:refuse` logger (28.8) — 15.13 and 15.15's namespace. */
 const REFUSE_LOG = namedLogger('abide:refuse')
 
-// 17.4, 17.5: a status and nothing else. No data and no options bag for any — an
-// undeclared refusal has no name to narrow on, so data on it could only be read by
-// something that already knew what it was, and something that knew would have declared it.
-// 17.8 — no message is the status's reason phrase.
+/**
+ * An undeclared refusal: a status, and a message that defaults to its reason phrase.
+ *
+ * 17.4, 17.5: a status and nothing else. No data and no options bag for any — an
+ * undeclared refusal has no name to narrow on, so data on it could only be read by
+ * something that already knew what it was, and something that knew would have declared it.
+ * 17.8 — no message is the status's reason phrase.
+ */
 export function refuse(
     status: number,
     message?: string,
@@ -34,24 +38,32 @@ export function refuse(
     )
 }
 
-// 15.3: STATUS 400 BY DEFAULT, which is the answer to "the caller sent something this
-// cannot work with" — the case an app declares a refusal for most often. 15.8 is the one
-// exception the framework itself makes, and it says 422 out loud below.
-//
-// THE FACTORY IS THE VALUE, and `.is` hangs off it: the declaration site is the only place
-// that knows the name, so it is the only place that can hand back a narrowing that cannot
-// be spelled wrong. An app comparing `error.name === 'NotFound'` by hand is a string
-// literal nothing checks.
+/**
+ * A declared refusal's factory, with its `.is` narrowing.
+ *
+ * 15.3: STATUS 400 BY DEFAULT, which is the answer to "the caller sent something this
+ * cannot work with" — the case an app declares a refusal for most often. 15.8 is the one
+ * exception the framework itself makes, and it says 422 out loud below.
+ *
+ * THE FACTORY IS THE VALUE, and `.is` hangs off it: the declaration site is the only place
+ * that knows the name, so it is the only place that can hand back a narrowing that cannot
+ * be spelled wrong. An app comparing `error.name === 'NotFound'` by hand is a string
+ * literal nothing checks.
+ */
 type Declared<Name extends string, Data> = ((
     data?: Data,
 ) => Failed<Name, Data>) & {
     is: (error: unknown) => error is Failed<Name, Data>
 }
 
-// 15.18 — DATA IS DECLARED BY ITS `schema` AND BY NOTHING ELSE, so the name is never written
-// twice. TypeScript has no partial inference: an app that could hand `Data` over as a type
-// argument had to hand `Name` over beside it, spelling `<'TooBig', …>('TooBig')`. Taken off the
-// schema, both are inferred — and a message function is typed by the data it is given.
+/**
+ * The two overloads of `refuse.named`: bare, or with a data `schema`.
+ *
+ * 15.18 — DATA IS DECLARED BY ITS `schema` AND BY NOTHING ELSE, so the name is never written
+ * twice. TypeScript has no partial inference: an app that could hand `Data` over as a type
+ * argument had to hand `Name` over beside it, spelling `<'TooBig', …>('TooBig')`. Taken off the
+ * schema, both are inferred — and a message function is typed by the data it is given.
+ */
 type Named = {
     <Name extends string>(
         name: Name,
@@ -68,8 +80,12 @@ type Named = {
 
 refuse.named = named as Named
 
-// The one body both overloads share, and what the framework's own declarations call with their
-// `Data` spelled out — they are trusted, and a schema run on every 404 would buy nothing.
+/**
+ * Mints the factory for a named refusal: `refuse.named`'s body.
+ *
+ * The one body both overloads share, and what the framework's own declarations call with their
+ * `Data` spelled out — they are trusted, and a schema run on every 404 would buy nothing.
+ */
 function named<Name extends string, Data>(
     name: Name,
     status = 400,
@@ -121,15 +137,19 @@ function named<Name extends string, Data>(
     return make
 }
 
-// 15.12: A FUNCTION `message` RUNS AT CONSTRUCTION, on the data — not at read, so the
-// string is fixed by the time anything can see it and cannot answer differently twice.
-//
-// 15.13: NO MESSAGE IS THE STATUS'S REASON PHRASE (17.8), or the NAME for a status with none —
-// and so is a message function that threw. A formatter that failed is a bug in the app, and
-// taking the construction down with it would turn a cosmetic fault into a refusal the caller
-// never receives — 15.4 has constructing a `Failed` inert, and a formatter is not an exception.
-//
-// AND WARNED on `abide:refuse`, which is the rest of 15.13.
+/**
+ * A refusal's message: the given one, what a message function makes of the data, or the fallback.
+ *
+ * 15.12: A FUNCTION `message` RUNS AT CONSTRUCTION, on the data — not at read, so the
+ * string is fixed by the time anything can see it and cannot answer differently twice.
+ *
+ * 15.13: NO MESSAGE IS THE STATUS'S REASON PHRASE (17.8), or the NAME for a status with none —
+ * and so is a message function that threw. A formatter that failed is a bug in the app, and
+ * taking the construction down with it would turn a cosmetic fault into a refusal the caller
+ * never receives — 15.4 has constructing a `Failed` inert, and a formatter is not an exception.
+ *
+ * AND WARNED on `abide:refuse`, which is the rest of 15.13.
+ */
 function messageFor<Data>(
     name: string,
     message: string | ((data: Data) => string) | undefined,
@@ -146,28 +166,41 @@ function messageFor<Data>(
     }
 }
 
-// 15.7: the address nothing answers. Both halves — no route matched, and no handler
-// mounted at that address and method — are one refusal, because a caller cannot tell them
-// apart and telling them apart is what an enumeration attack is.
+/**
+ * The `NotFound` refusal, at 404.
+ *
+ * 15.7: the address nothing answers. Both halves — no route matched, and no handler
+ * mounted at that address and method — are one refusal, because a caller cannot tell them
+ * apart and telling them apart is what an enumeration attack is.
+ */
 export const notFound = named<'NotFound', { path: string; method: string }>(
     'NotFound',
     404,
 )
 
-// 16.54: a load every caller of which aborted. 499 is the status a server logs for a request its
-// client closed, and the one thing true of this refusal is that nobody is waiting for the answer.
+/**
+ * The `Aborted` refusal, at 499.
+ *
+ * 16.54: a load every caller of which aborted. 499 is the status a server logs for a request its
+ * client closed, and the one thing true of this refusal is that nobody is waiting for the answer.
+ */
 export const aborted = named<'Aborted', undefined>('Aborted', 499)
 
-// 15.8: 422 rather than `refuse.named`'s 400, and the difference is not decoration. A 400
-// is "this request is malformed"; a 422 is "it parsed and the contents are wrong", which
-// is exactly what a schema that ran and refused has found out.
-//
-// THE FACTORY IS BUILT ONCE and the export is a thin generic over it. `Issues<T>` varies
-// per call site and a `Failed`'s `data` does not care which shape it holds, so minting a
-// factory per call would allocate one to throw away and hand back a `.is` that compares
-// the same string the shared one does.
+/**
+ * The shared `ValidationError` factory, at 422.
+ *
+ * 15.8: 422 rather than `refuse.named`'s 400, and the difference is not decoration. A 400
+ * is "this request is malformed"; a 422 is "it parsed and the contents are wrong", which
+ * is exactly what a schema that ran and refused has found out.
+ *
+ * THE FACTORY IS BUILT ONCE and the export is a thin generic over it. `Issues<T>` varies
+ * per call site and a `Failed`'s `data` does not care which shape it holds, so minting a
+ * factory per call would allocate one to throw away and hand back a `.is` that compares
+ * the same string the shared one does.
+ */
 const validation = named<'ValidationError', JsonValue>('ValidationError', 422)
 
+/** A `ValidationError` refusal at 422, carrying the issues it found. */
 export function validationError<T>(
     data?: Issues<T>,
 ): Failed<'ValidationError', Issues<T>> {
@@ -177,9 +210,13 @@ export function validationError<T>(
     >
 }
 
-// 11.27, 16.18 — THE `args` GATE, for both places it stands: a keyed entry's run and a rung's
-// `ctx.args()`. Here rather than in `Schema.ts` for that module's own reason — it cannot build the
-// refusal it throws.
+/**
+ * Args run through their gate: the accepted value, or a thrown `ValidationError`.
+ *
+ * 11.27, 16.18 — THE `args` GATE, for both places it stands: a keyed entry's run and a rung's
+ * `ctx.args()`. Here rather than in `Schema.ts` for that module's own reason — it cannot build the
+ * refusal it throws.
+ */
 export function checkArgs<Args>(gate: Schema<Args>, args: unknown): Args {
     const answer = runSchema(gate, args)
     if (answer.issues !== null) throw validationError<Found>(answer.issues)

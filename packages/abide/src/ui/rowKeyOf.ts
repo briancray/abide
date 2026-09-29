@@ -8,6 +8,7 @@
 import { CELL } from '#shared/reactive/CELL.ts'
 import { isReactive } from '#shared/reactive/isReactive.ts'
 
+/** The row-key function for an unkeyed `{#for}`: the `Reactive`'s `by`, else `positional`. */
 export function rowKeyOf(
     subject: unknown,
     positional: (item: unknown, at: number) => unknown,

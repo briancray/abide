@@ -7,42 +7,62 @@ import { tokenise } from './tokenise.ts'
 
 export type Span = { start: number; end: number }
 
-// A `.abide` FILE AS ONE TYPESCRIPT PROGRAM: its `<script module>`, its `<script>`, and every
-// expression its template holds, each where the scopes it stands in are. The checker reads this
-// text and answers, per occurrence, which binding a name reaches (31.3) — and the emitters lower
-// the same text, span by span, so an offset means one thing on both sides.
-//
-// 31.10 FALLS OUT OF THE SHAPE. A `{#for}` is a `for … of` binding its item and its index, so the
-// body's slots reach the row's binding and never the page's name of the same spelling. The SUBJECT
-// stands before the loop, because 31.10's shadow does not reach it.
-//
-// EVERY EXPRESSION IS ITS OWN STATEMENT, `;(…)`, so an author's script that ends without a
-// semicolon cannot run into the first slot, and a slot's own right-hand side ends at its `)`.
+/**
+ * A `.abide` file as one TypeScript program, with where each piece of it came from.
+ *
+ * A `.abide` FILE AS ONE TYPESCRIPT PROGRAM: its `<script module>`, its `<script>`, and every
+ * expression its template holds, each where the scopes it stands in are. The checker reads this
+ * text and answers, per occurrence, which binding a name reaches (31.3) — and the emitters lower
+ * the same text, span by span, so an offset means one thing on both sides.
+ *
+ * 31.10 FALLS OUT OF THE SHAPE. A `{#for}` is a `for … of` binding its item and its index, so the
+ * body's slots reach the row's binding and never the page's name of the same spelling. The SUBJECT
+ * stands before the loop, because 31.10's shadow does not reach it.
+ *
+ * EVERY EXPRESSION IS ITS OWN STATEMENT, `;(…)`, so an author's script that ends without a
+ * semicolon cannot run into the first slot, and a slot's own right-hand side ends at its `)`.
+ */
 export type Projection = {
     text: string
     modules: Span
     scripts: Span
-    // Per holder — an expression node, an attribute, an `{#if}` arm, a `{#for}` block — the span of
-    // the expression it holds.
+    /**
+     * Per holder — an expression node, an attribute, an `{#if}` arm, a `{#for}` block — the span of
+     * the expression it holds.
+     */
     slots: Map<object, Span>
-    // Per `{#for}` block, the span of its `by` key, which stands inside the loop and sees the row.
+    /**
+     * Per `{#for}` block, the span of its `by` key, which stands inside the loop and sees the row.
+     */
     keys: Map<object, Span>
-    // 32.35 — per invocation, the span of its tag: a read there is a component chosen by a value.
+    /**
+     * 32.35 — per invocation, the span of its tag: a read there is a component chosen by a value.
+     */
     tags: Map<object, Span>
-    // 14.8 — every branch-local `<script>`, whose declarations are names as the page's are (31.1).
+    /**
+     * 14.8 — every branch-local `<script>`, whose declarations are names as the page's are (31.1).
+     */
     setups: Span[]
-    // 38.3 — every run of the text copied out of the source, ascending, with where it came from.
-    // What lies between two is scaffolding the source never held.
+    /**
+     * 38.3 — every run of the text copied out of the source, ascending, with where it came from.
+     * What lies between two is scaffolding the source never held.
+     */
     origins: Origin[]
 }
 
+/** A run of projected text copied from the source: where it lands, where from, and how long. */
 export type Origin = { at: number; source: number; length: number }
 
-// ONE PROJECTION PER PARSED FILE. The checker asks of it and both emitters lower it, and a build
-// hands all three the same `AbideFile` — projected per caller it was three walks and three copies
-// of the file's text for one answer.
+/**
+ * Each parsed file's projection, made once.
+ *
+ * ONE PROJECTION PER PARSED FILE. The checker asks of it and both emitters lower it, and a build
+ * hands all three the same `AbideFile` — projected per caller it was three walks and three copies
+ * of the file's text for one answer.
+ */
 const PROJECTED = new WeakMap<AbideFile, Projection>()
 
+/** The file's projection, made once per parsed `AbideFile`. */
 export function projectShadow(file: AbideFile): Projection {
     let projection = PROJECTED.get(file)
     if (projection === undefined) {
@@ -292,12 +312,16 @@ function project(file: AbideFile): Projection {
     }
 }
 
-// WHAT AN ATTRIBUTE'S POSITION TYPES ITS VALUE AS. A listener on an element is handed that
-// element's event, so a handler's parameter has the type the browser gives it rather than an
-// implicit `any`; a `bind:` operand, and an attribute on a component whose tag is no name a call
-// can spell (`invocation` has the rest), are typed by nothing the shadow can see, and say so with
-// `any` rather than with an error the author did not make. A `bind:` operand has a name of its own
-// so `propsReads` can tell a prop handed on as one.
+/**
+ * What an attribute's value is opened with, which types it by the position it stands in.
+ *
+ * WHAT AN ATTRIBUTE'S POSITION TYPES ITS VALUE AS. A listener on an element is handed that
+ * element's event, so a handler's parameter has the type the browser gives it rather than an
+ * implicit `any`; a `bind:` operand, and an attribute on a component whose tag is no name a call
+ * can spell (`invocation` has the rest), are typed by nothing the shadow can see, and say so with
+ * `any` rather than with an error the author did not make. A `bind:` operand has a name of its own
+ * so `propsReads` can tell a prop handed on as one.
+ */
 function openerOf(tag: string, lowerName: string): string {
     if (lowerName.startsWith('bind:')) return `${BIND}(`
     if (isComponentTag(tag)) return `${ANY}(`
@@ -312,15 +336,19 @@ const ANY = '__any'
 const BIND = '__bind'
 const BOUND = '__bound'
 
-// 33.6 — the type a written prop's cell is checked as, which is the framework's own.
+/** 33.6 — the type a written prop's cell is checked as, which is the framework's own. */
 const REACTIVE = `import(${JSON.stringify(
     new URL('../shared/reactive/Reactive.ts', import.meta.url).pathname,
 )}).Reactive`
 
-// The names the shadow and the checked program (`checkedShadow`) spell and no author does, declared
-// after everything so no offset above moves, and ambient so nothing is emitted. `export {}` makes
-// every shadow a module: a shadow read as a script puts its names in the global scope, where every
-// other file in the project would find them.
+/**
+ * Ambient declarations of the helpers the shadow and the checked program call.
+ *
+ * The names the shadow and the checked program (`checkedShadow`) spell and no author does, declared
+ * after everything so no offset above moves, and ambient so nothing is emitted. `export {}` makes
+ * every shadow a module: a shadow read as a script puts its names in the global scope, where every
+ * other file in the project would find them.
+ */
 const POSITION_DECLARATIONS = `
 declare function ${ON}<Name extends string>(name: Name, handler: ((event: Name extends keyof HTMLElementEventMap ? HTMLElementEventMap[Name] : Event) => unknown) | null | undefined | false): void
 declare function ${ANY}(value: any): void
@@ -337,27 +365,36 @@ export {}
 
 const AWAIT = 'await'
 
-// What a row's item is, read off the subject as `listOf` iterates it: what a `Reactive` read by
-// name hands back (31.1 lowers `rows` to `rows()`), or the subject itself. THE CALL IS THE FIRST
-// OVERLOAD because a `Reactive` is ALSO an `AsyncIterable` of its productions (2.7), and inferred
-// over one union the item came out as the row OR the whole list. Declared AFTER everything, so no
-// offset above it moves, and ambient, so there is nothing to emit. Where inference fails the item
-// is `unknown`, and a member of that is unprovable — the safe side.
+/** The prefix of the `const` a `{#for}`'s subject is held in, numbered per block. */
 export const SUBJECT = '__subject'
 const ROWS_OF = '__rowsOf'
+/**
+ * Ambient declaration of the helper that types a row's item from its subject.
+ *
+ * What a row's item is, read off the subject as `listOf` iterates it: what a `Reactive` read by
+ * name hands back (31.1 lowers `rows` to `rows()`), or the subject itself. THE CALL IS THE FIRST
+ * OVERLOAD because a `Reactive` is ALSO an `AsyncIterable` of its productions (2.7), and inferred
+ * over one union the item came out as the row OR the whole list. Declared AFTER everything, so no
+ * offset above it moves, and ambient, so there is nothing to emit. Where inference fails the item
+ * is `unknown`, and a member of that is unprovable — the safe side.
+ */
 const ROWS_OF_DECLARATION = `
 declare function ${ROWS_OF}<T>(subject: () => Iterable<T> | null | undefined): T[]
 declare function ${ROWS_OF}<T>(subject: Iterable<T> | AsyncIterable<T> | null | undefined): T[]
 `
 
-// 34.3 — A SCRIPT BLOCK MAY NOT AWAIT AT ITS TOP LEVEL. Component setup is a function body on both
-// sides, so nothing in the render is held and every value a page reads is a hole the document is
-// written around (41.4, 32.24). Refused rather than emitted: the module bun then fails to build
-// names neither the page nor the line.
-//
-// DEPTH IS WHAT "TOP LEVEL" MEANS, and it is the whole of what this rule costs. An `await` inside a
-// handler, a `reactive` body or any other function in the block is that function's own and is
-// untouched — which is where 31.3's `await` operand still does its work.
+/**
+ * Throws where `source` awaits at its top level.
+ *
+ * 34.3 — A SCRIPT BLOCK MAY NOT AWAIT AT ITS TOP LEVEL. Component setup is a function body on both
+ * sides, so nothing in the render is held and every value a page reads is a hole the document is
+ * written around (41.4, 32.24). Refused rather than emitted: the module bun then fails to build
+ * names neither the page nor the line.
+ *
+ * DEPTH IS WHAT "TOP LEVEL" MEANS, and it is the whole of what this rule costs. An `await` inside a
+ * handler, a `reactive` body or any other function in the block is that function's own and is
+ * untouched — which is where 31.3's `await` operand still does its work.
+ */
 function refuseTopLevelAwait(source: string, block: string): void {
     if (!source.includes(AWAIT)) return
     let depth = 0

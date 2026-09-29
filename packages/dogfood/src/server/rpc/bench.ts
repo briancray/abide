@@ -3,7 +3,7 @@ import type { BenchRow } from 'harness/rows'
 import { harnessCatalog, harnessRows } from '#server/harnessRows'
 import { onlyLoopback } from '#server/onlyLoopback'
 
-// The browser alone: a model or a terminal has `bun run bench:*` already.
+/** The browser alone: a model or a terminal has `bun run bench:*` already. */
 const LOCAL = {
     middleware: [onlyLoopback],
     clients: { ui: true, mcp: false, cli: false, openapi: false },
@@ -11,7 +11,7 @@ const LOCAL = {
 
 export const benchCatalog = GET(() => harnessCatalog('benchRows.ts'), LOCAL)
 
-// Read by the page through `raw`, row by row — see `#ui/readRows`.
+/** Read by the page through `raw`, row by row — see `#ui/readRows`. */
 export const runBench = GET(
     async function* ({ scope, filter }: { scope: string; filter: string }) {
         if (scope === '') return

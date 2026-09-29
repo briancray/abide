@@ -6,11 +6,16 @@
 
 import { request } from 'abide/server'
 import type { RowItem, RunnerFailure } from 'harness/rows'
+import { linesOf } from '#shared/linesOf.ts'
 
 let repo: Promise<string> | undefined
 
-// WALKED UP TO, not computed from this file's depth: where the server's modules sit is the
-// build's business, and the harness is wherever the workspace put it.
+/**
+ * The repo root: the nearest directory above this module holding `packages/harness`.
+ *
+ * WALKED UP TO, not computed from this file's depth: where the server's modules sit is the
+ * build's business, and the harness is wherever the workspace put it.
+ */
 function repoRoot(): Promise<string> {
     repo ??= (async () => {
         let directory = import.meta.dir
@@ -29,6 +34,7 @@ function repoRoot(): Promise<string> {
     return repo
 }
 
+/** A harness runner's stdout, line by line, in a subprocess killed when the request hangs up. */
 async function* runnerLines(
     script: string,
     args: string[],
@@ -44,17 +50,7 @@ async function* runnerLines(
     })
     const stderr = new Response(child.stderr).text()
     try {
-        const decoder = new TextDecoder()
-        let buffered = ''
-        for await (const chunk of child.stdout) {
-            buffered += decoder.decode(chunk, { stream: true })
-            let newline = buffered.indexOf('\n')
-            while (newline !== -1) {
-                yield buffered.slice(0, newline)
-                buffered = buffered.slice(newline + 1)
-                newline = buffered.indexOf('\n')
-            }
-        }
+        yield* linesOf(child.stdout)
         // A RUNNER THAT DIED reports nothing more, and an empty stream reads as "nothing selected".
         if ((await child.exited) !== 0)
             throw new Error(
@@ -65,12 +61,14 @@ async function* runnerLines(
     }
 }
 
+/** What a runner offers to run: the one JSON line it prints for `--list`. */
 export async function harnessCatalog(script: string): Promise<RowItem[]> {
     for await (const line of runnerLines(script, ['--list']))
         return JSON.parse(line) as RowItem[]
     return []
 }
 
+/** A runner's JSON rows as it prints them, ending on one `failure` row if it dies. */
 export async function* harnessRows<Row>(
     script: string,
     args: string[],

@@ -61,8 +61,12 @@ async function main(): Promise<void> {
     }
 }
 
-// The component produces its markup; `render` is what turns it into bytes. Timed together,
-// because together is what a request pays.
+/**
+ * Renders a compiled component and returns its head and body as one string.
+ *
+ * The component produces its markup; `render` is what turns it into bytes. Timed together, because
+ * together is what a request pays.
+ */
 function drain(component: Render): string {
     const rendered = component()
     return rendered.head + rendered.body

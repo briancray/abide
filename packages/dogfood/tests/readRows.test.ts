@@ -20,3 +20,26 @@ test("a runner's failure after its rows rejects the read with its own message", 
     expect(seen).toEqual(['a'])
     expect(failure).toBe('testRows.ts exited 1\nboom')
 })
+
+// A LAST ROW WITH NO NEWLINE AFTER IT IS STILL A ROW. THE REVERT: return on `done` without parsing
+// what is buffered; `b` never reaches `each`, and nothing says it was dropped.
+test('a final row with no trailing newline is handed over', async () => {
+    const lines = `${JSON.stringify({ id: 'a' })}\n${JSON.stringify({ id: 'b' })}`
+    const seen: string[] = []
+    await readRows<{ id: string }>(new Response(lines), (row) =>
+        seen.push(row.id),
+    )
+    expect(seen).toEqual(['a', 'b'])
+})
+
+// A BLANK LINE IS SKIPPED, NOT CONSUMED. THE REVERT: `continue` past a blank line without finding
+// the next newline; each pass eats one character as another blank line, and once the buffer is
+// empty the loop spins synchronously — the file HANGS rather than failing.
+test('a blank line between rows is skipped', async () => {
+    const lines = `${JSON.stringify({ id: 'a' })}\n\n${JSON.stringify({ id: 'b' })}\n`
+    const seen: string[] = []
+    await readRows<{ id: string }>(new Response(lines), (row) =>
+        seen.push(row.id),
+    )
+    expect(seen).toEqual(['a', 'b'])
+})

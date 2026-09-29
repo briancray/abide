@@ -1,6 +1,6 @@
 // A SURVIVOR IS MOVED, NOT REBUILT — and the part of that no count can see.
 //
-// `41.8` says a row the reconcile kept is moved. `list.test.ts` already holds the COUNT side of
+// `32.30` says a row the reconcile kept is moved. `list.test.ts` already holds the COUNT side of
 // it: nodes moved, against the fewest the edit needs. What no count reaches is that
 // `insertBefore` on a node already in the document is a REMOVE and then an INSERT, so the row
 // leaves the tree and comes back — and `harness/measure`'s `elementsMoved` reads ONE move either

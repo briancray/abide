@@ -3,8 +3,7 @@ import { database } from '#server/cacheTagsDatabase'
 
 type Region = { region: string }
 
-// The function form receives the entry's args, so a tag can name
-// the ROW rather than the query.
+/** A tag function gets the entry's args, so a tag can name the row. */
 const totalsFor = reactive((args: Region) => database.metrics.totals(args), {
     tags: ({ region }) => ['metrics', `region:${region}`],
 })

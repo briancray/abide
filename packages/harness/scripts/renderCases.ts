@@ -4,6 +4,7 @@
 
 export type Card = { id: number; title: string; body: string; count: number }
 
+/** `n` cards with ids `0` to `n - 1`. */
 export function cards(n: number): Card[] {
     const out: Card[] = []
     for (let at = 0; at < n; at += 1)
@@ -16,13 +17,14 @@ export function cards(n: number): Card[] {
     return out
 }
 
-// The `.abide` source for a page holding `n` cards, written out rather than looped: `{#for}` is
-// not built, so the loop is unrolled at generation time. What is being timed is the emitted
-// code's shape, and an unrolled page has exactly the shape a `{#for}` will emit per row.
-// The hand-written arm's CLIENT half: find the nodes a later update will write, and wire the
-// button. That is what a person does by hand, and it is what `mount` does — abide additionally
-// opens a reactive subscription per run, which is capability rather than waste and is named in
-// the bench output rather than hidden in the ratio.
+/**
+ * The hand-written arm's client script: finds the nodes an update will write, into `__WIRED__`.
+ *
+ * The hand-written arm's CLIENT half: find the nodes a later update will write. That is what a
+ * person does by hand, and it is what `mount` does — abide additionally opens a reactive
+ * subscription per run, which is capability rather than waste and is named in the bench output
+ * rather than hidden in the ratio.
+ */
 export function vanillaWire(): string {
     return `
 const nodes = []
@@ -35,21 +37,29 @@ globalThis.__WIRED__ = nodes
 `
 }
 
-// THE CARD ROW, ONCE. Three `.abide` arms write this row — a `{#for}`, the unrolled page and the
-// component — and the whole premise of the render and component benches is that they differ in
-// nothing but how the three values reach the slots. Interpolating one template is what makes that
-// true by construction; four hand-kept literals is what made it a comment.
-//
-// `vanillaMarkup` DOES NOT CALL THIS, and the reason is the clock: it builds a row per card INSIDE
-// a `batch()` arm, so a call frame per row would be a change to the baseline every ratio in both
-// benches is against. Its literal is kept beside this one deliberately.
+/**
+ * One card's `<article>` markup, with the three values spliced in as given.
+ *
+ * THE CARD ROW, ONCE. Three `.abide` arms write this row — a `{#for}`, the unrolled page and the
+ * component — and the whole premise of the render and component benches is that they differ in
+ * nothing but how the three values reach the slots. Interpolating one template is what makes that
+ * true by construction; four hand-kept literals is what made it a comment.
+ *
+ * `vanillaMarkup` DOES NOT CALL THIS, and the reason is the clock: it builds a row per card INSIDE
+ * a `batch()` arm, so a call frame per row would be a change to the baseline every ratio in both
+ * benches is against. Its literal is kept beside this one deliberately.
+ */
 function cardRow(title: string, body: string, count: string): string {
     return `<article class="card"><h2>${title}</h2><p>${body}</p><span class="n">${count}</span></article>`
 }
 
-// The same page written with `{#for}`, which is how anybody would write it. The unrolled one
-// below is kept beside it because the difference between them is a finding: straight-line emitted
-// code never gets warm, and a loop is what fixes it.
+/**
+ * The card-list page's `.abide` source written with `{#for}`, its data left as `CARDS`.
+ *
+ * How anybody would write it. The unrolled one below is kept beside it because the difference
+ * between them is a finding: straight-line emitted code never gets warm, and a loop is what fixes
+ * it.
+ */
 export function abideLoopSource(): string {
     return `<script>
 import { reactive } from 'abide'
@@ -59,6 +69,12 @@ let rows = reactive(CARDS)
 <main id="list">{#for row of rows by row.id}${cardRow('{row.title}', '{row.body}', '{row.count}')}{/for}</main>`
 }
 
+/**
+ * The card-list page's `.abide` source for `n` cards, unrolled, its data left as `CARDS`.
+ *
+ * Written out rather than looped: the loop is unrolled at generation time, one straight-line row
+ * per card, which is the shape `abideLoopSource` is measured against.
+ */
 export function abideSource(n: number): string {
     let template = ''
     for (let at = 0; at < n; at += 1)
@@ -75,13 +91,17 @@ let rows = reactive(CARDS)
 <main id="list">${template}</main>`
 }
 
-// The hand-written arm: the page somebody writes when nothing compiles for them.
-//
-// IT ESCAPES, and it has to. The first version of this interpolated the values raw and was 3.2x
-// faster than the compiled page — because it was not doing the same work. A hand-written page
-// that puts data it did not author into markup has an injection or it has an escape; the compiled
-// page has 32.1 and cannot choose. SHARED SOURCE IS NOT SHARED WORK, and an arm that skips the
-// safety is the same mistake as an arm that renders nothing.
+/**
+ * The hand-written arm's card-list markup, escaped the way a person escapes by hand.
+ *
+ * The page somebody writes when nothing compiles for them.
+ *
+ * IT ESCAPES, and it has to. The first version of this interpolated the values raw and was 3.2x
+ * faster than the compiled page — because it was not doing the same work. A hand-written page
+ * that puts data it did not author into markup has an injection or it has an escape; the compiled
+ * page has 32.1 and cannot choose. SHARED SOURCE IS NOT SHARED WORK, and an arm that skips the
+ * safety is the same mistake as an arm that renders nothing.
+ */
 export function vanillaMarkup(list: Card[]): string {
     let out = '<main id="list">'
     for (const card of list)
@@ -89,7 +109,7 @@ export function vanillaMarkup(list: Card[]): string {
     return `${out}</main>`
 }
 
-// What a person writes when they escape by hand, which is a `replace` chain rather than a scan.
+/** What a person writes when they escape by hand, which is a `replace` chain rather than a scan. */
 function escapeByHand(value: string): string {
     return value
         .replaceAll('&', '&amp;')
@@ -97,9 +117,13 @@ function escapeByHand(value: string): string {
         .replaceAll('>', '&gt;')
 }
 
-// THE SAME CARD, AS A COMPONENT — the same `cardRow`, so the only difference between this arm and
-// `abideLoopSource` is the invocation: a call, an anchor pair, and one accessor per prop. What
-// that costs a row is the whole question 32.18 and 33 owe an answer to.
+/**
+ * The card row as a `Card` component's `.abide` source, its three values taken as props.
+ *
+ * THE SAME CARD, AS A COMPONENT — the same `cardRow`, so the only difference between this arm and
+ * `abideLoopSource` is the invocation: a call, an anchor pair, and one accessor per prop. What
+ * that costs a row is the whole question 32.18 and 33 owe an answer to.
+ */
 export function abideCardSource(): string {
     return `<script>
 import { props } from 'abide'
@@ -109,6 +133,7 @@ const { title, body, count } = props<{ title: string; body: string; count: numbe
 ${cardRow('{title}', '{body}', '{count}')}`
 }
 
+/** The card-list page with each row a `<Card>` invocation, its data left as `CARDS`. */
 export function abideComponentSource(): string {
     return `<script>
 import { reactive } from 'abide'

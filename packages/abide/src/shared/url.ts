@@ -47,12 +47,17 @@ export type HasSegments<P extends string> = [
 
 export type Query = Record<string, unknown> | URLSearchParams
 
+/** The params a route literal takes, by segment kind. */
 export type ParamsOf<P extends string> = {
     [K in RequiredNames<P>]: string | number
 } & { [K in OptionalNames<P>]?: string | number } & {
     [K in RestNames<P>]?: string | number | (string | number)[]
 }
 
+/**
+ * An address from a route literal and its params, resolved against the mount, with an optional
+ * query.
+ */
 export function url<P extends string>(
     pattern?: P,
     ...rest: HasParams<P> extends true
@@ -94,9 +99,13 @@ export function url<P extends string>(
     return search === '' ? address : `${address}?${search}`
 }
 
-// 30.19 — A VALUE OF `.` OR `..` HAS NO SPELLING AS A SEGMENT: the URL parser collapses it as a
-// dot-segment, and `%2E` / `%2E%2E` with it, so the address would land on another route. Refused
-// rather than written, as a missing required segment is (30.3).
+/**
+ * A param value encoded as one path segment; `.` and `..` are refused.
+ *
+ * 30.19 — A VALUE OF `.` OR `..` HAS NO SPELLING AS A SEGMENT: the URL parser collapses it as a
+ * dot-segment, and `%2E` / `%2E%2E` with it, so the address would land on another route. Refused
+ * rather than written, as a missing required segment is (30.3).
+ */
 function encodedSegment(
     pattern: string | undefined,
     name: string,

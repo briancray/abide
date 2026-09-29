@@ -10,6 +10,7 @@ import type { Store } from 'abide'
 
 const AT_ADDRESS = new Map<string, unknown>()
 
+/** A `Store` at `address`, held in this process's memory in place of a redis client. */
 export function redisStore<T>(address: string): Store<T> {
     return {
         get: async () => AT_ADDRESS.get(address) as T | undefined,

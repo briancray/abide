@@ -157,7 +157,7 @@ test('a stylesheet names a view transition by a rule, not by the words — 39.7'
 })
 
 // 39.8 — DECIDED BY THE BUILD, written into the route table the client boots from. THE REVERT:
-// leave `transitions` false in `compileApp`; the styled app's table reads `startRouter(routes, host)`.
+// leave `transitions` false in `compileApp`; the styled app's table reads `startRouter(routes, host, false, …)`.
 test('the build turns view transitions on from the compiled styles — 39.8', async () => {
     const app = (style: string) => ({
         'package.json': JSON.stringify({
@@ -173,7 +173,9 @@ test('the build turns view transitions on from the compiled styles — 39.8', as
     )
     const off = await compileApp(temporaryModule(app('.total { color: red }')))
     expect(on.modules.get('routes.ts')).toContain(
-        'startRouter(routes, host, true)',
+        'startRouter(routes, host, true,',
     )
-    expect(off.modules.get('routes.ts')).toContain('startRouter(routes, host)')
+    expect(off.modules.get('routes.ts')).toContain(
+        'startRouter(routes, host, false,',
+    )
 })

@@ -21,7 +21,7 @@ import { appIdentity, config } from './config.ts'
 const OPENAPI_LOG = namedLogger('abide:openapi')
 const MCP_LOG = namedLogger('abide:mcp')
 
-// 36.7.
+/** Whether the `ABIDE_*` setting `name` opens its surface. 36.7. */
 function opened(name: string): boolean {
     return (config.peek()?.[name] as unknown) === true
 }
@@ -35,7 +35,7 @@ type Listed = {
     schema: unknown
 }
 
-// 20.2, 20.3 — every handler, withheld only where its own `clients` says so.
+/** Every handler a surface lists, withheld only where its own `clients` says so. 20.2, 20.3. */
 function listed(
     handlers: Map<string, Mounted>,
     surface: 'openapi' | 'mcp',
@@ -64,7 +64,7 @@ function listed(
     return found
 }
 
-// 20.6 — OpenAPI 3.1, the handler's `JsonSchema` published as it stands.
+/** The OpenAPI 3.1 document, each handler's `JsonSchema` published as it stands. 20.6. */
 function openApiOf(handlers: Map<string, Mounted>): unknown {
     const paths: Record<string, Record<string, unknown>> = {}
     for (const each of listed(handlers, 'openapi')) {
@@ -126,9 +126,13 @@ function openApiOf(handlers: Map<string, Mounted>): unknown {
     }
 }
 
-// 20.5 — FROM A `reactive` OVER THE ROUTE TABLE, with no `ttl`: the table is fixed for the life of
-// the app, so each surface is built once and served thereafter. A surface's own cache, so an app that
-// opens one does not build the other.
+/**
+ * A surface built by `build` over the route table, as a `reactive` cached in `built`.
+ *
+ * 20.5 — FROM A `reactive` OVER THE ROUTE TABLE, with no `ttl`: the table is fixed for the life of
+ * the app, so each surface is built once and served thereafter. A surface's own cache, so an app
+ * that opens one does not build the other.
+ */
 function overTable<Built>(
     built: WeakMap<Map<string, Mounted>, Reactive<Built>>,
     handlers: Map<string, Mounted>,
@@ -146,6 +150,7 @@ function overTable<Built>(
 
 const documents = new WeakMap<Map<string, Mounted>, Reactive<unknown>>()
 
+/** The OpenAPI document over the route table, or `undefined` where `ABIDE_OPENAPI` is closed. */
 export function openApi(
     handlers: Map<string, Mounted>,
 ): Reactive<unknown> | undefined {
@@ -173,10 +178,14 @@ type JsonRpc = {
     params?: Record<string, unknown>
 }
 
-// 20.9 — THE STREAMABLE-HTTP MCP ENDPOINT, answering JSON-RPC over `POST`. A handler that takes no
-// args is a resource, read at its address; one that takes args, and every mutation, is a tool.
-// A call is made as a request through the app (`fetch`), so its rungs run and refuse as they would
-// for anyone (20.10).
+/**
+ * Answers one MCP JSON-RPC request, or `undefined` where `ABIDE_MCP` is closed.
+ *
+ * 20.9 — THE STREAMABLE-HTTP MCP ENDPOINT, answering JSON-RPC over `POST`. A handler that takes no
+ * args is a resource, read at its address; one that takes args, and every mutation, is a tool.
+ * A call is made as a request through the app (`fetch`), so its rungs run and refuse as they would
+ * for anyone (20.10).
+ */
 export async function answerMcp(
     handlers: Map<string, Mounted>,
     request: Request,
@@ -284,8 +293,11 @@ function failure(id: JsonRpc['id'], code: number, text: string): unknown {
     return { jsonrpc: '2.0', id, error: { code, message: text } }
 }
 
-// The call a tool is, as the request a browser would make — the caller's own headers carried, so a
-// rung reading them decides as it would for that caller.
+/**
+ * The call a tool is, as the request a browser would make.
+ *
+ * The caller's own headers are carried, so a rung reading them decides as it would for that caller.
+ */
 function callOf(
     asked: Request,
     handler: Listed,
@@ -307,8 +319,12 @@ function callOf(
     })
 }
 
-// 36.7, 28.1 — THE `GET` OVER `log.records`: the ring, and then every line as it is written, framed as
-// server-sent events — which is what `abide logs` subscribes to.
+/**
+ * The `log.records` event stream, or `undefined` where `ABIDE_LOGS` is closed.
+ *
+ * 36.7, 28.1 — THE `GET` OVER `log.records`: the ring, and then every line as it is written,
+ * framed as server-sent events — which is what `abide logs` subscribes to.
+ */
 export function answerLogs(request: Request): Response | undefined {
     if (!opened('ABIDE_LOGS')) return undefined
     const cursor = log.records

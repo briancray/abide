@@ -1,19 +1,23 @@
 import { putOwn } from './putOwn.ts'
 
-// 31.8 — a write through a member path COPIES DOWN THE PATH AND THEN WRITES, and the copy is not
-// optimised away. The copy is the whole point: a `Reactive` wakes its readers on IDENTITY, so
-// `user.name = 'x'` done as a mutation of the held object writes the right value and wakes nobody
-// — the page renders correctly on load and then never moves again, with nothing about it saying
-// so.
-//
-// A HELPER RATHER THAN A SPREAD PER LEVEL IN THE EMITTED CODE, because the compiler cannot tell an
-// array index from an object key: `rows[0] = v` emitted as `{ ...rows(), 0: v }` hands back an
-// object where an array was, and `length`, `map` and every later `{#for}` over it go with it. The
-// shape is decided here, where the value is.
-//
-// A `Map`, a `Set` or a class instance is copied as its OWN ENUMERABLE PROPERTIES and nothing
-// else, which is a real limit rather than a decision: there is no clause for a write through a
-// path into one, and inventing a per-container copy rule here would be deciding it.
+/**
+ * A copy of `value` with `next` written at `path`, each level down the path copied.
+ *
+ * 31.8 — a write through a member path COPIES DOWN THE PATH AND THEN WRITES, and the copy is not
+ * optimised away. The copy is the whole point: a `Reactive` wakes its readers on IDENTITY, so
+ * `user.name = 'x'` done as a mutation of the held object writes the right value and wakes nobody
+ * — the page renders correctly on load and then never moves again, with nothing about it saying
+ * so.
+ *
+ * A HELPER RATHER THAN A SPREAD PER LEVEL IN THE EMITTED CODE, because the compiler cannot tell an
+ * array index from an object key: `rows[0] = v` emitted as `{ ...rows(), 0: v }` hands back an
+ * object where an array was, and `length`, `map` and every later `{#for}` over it go with it. The
+ * shape is decided here, where the value is.
+ *
+ * A `Map`, a `Set` or a class instance is copied as its OWN ENUMERABLE PROPERTIES and nothing
+ * else, which is a real limit rather than a decision: there is no clause for a write through a
+ * path into one, and inventing a per-container copy rule here would be deciding it.
+ */
 export function writePath(
     value: unknown,
     path: readonly (string | number)[],
@@ -43,8 +47,8 @@ type Level = Record<string | number, unknown>
 // AN ABSENT LEVEL IS BUILT FROM THE STEP THAT WILL INDEX IT, because nothing else knows: `{}` for
 // every miss made `data.rows[0] = v` over a `{rows: undefined}` state answer `{rows: {0: v}}` —
 // an object where an array was, with `length`, `map` and every later `{#for}` over it gone, which
-// is verbatim the failure the header above says this helper exists to prevent. The step already
-// says which shape was meant.
+// is verbatim the failure `writePath`'s docstring says this helper exists to prevent. The step
+// already says which shape was meant.
 function copyOf(value: unknown, step: string | number): Level {
     if (Array.isArray(value)) return value.slice() as unknown as Level
     if (value === null || value === undefined)

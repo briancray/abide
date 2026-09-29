@@ -15,6 +15,7 @@
 // and counts exactly what it counted before.
 const TURNS_PER_YIELD = 256
 
+/** How many microtask turns `body`'s result took to settle. */
 export async function ticks(body: () => unknown): Promise<number> {
     let turns = 0
     let settled = false

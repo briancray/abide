@@ -7,7 +7,7 @@ const BY_PROFILE: Record<string, Settings> = {
     grace: { theme: 'light' },
 }
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     settings: {
         async forProfile(profile: string): Promise<Settings> {

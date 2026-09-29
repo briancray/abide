@@ -1,0 +1,222 @@
+// 38.11 — `abide compile`: the app as ONE executable, named after it, in the directory the command
+// ran from — and holding everything it serves. The app's source and its build are deleted before
+// the executable starts, so every answer below came out of the executable itself.
+//
+// THE REVERT: hand `runCompiled` the build's paths on disk rather than the entry's imports; every
+// answer after the delete is then a 404 or a failed boot. And the identity — boot a compiled app with
+// `APP_PACKAGE` left as the empty default and `name` answers `app`.
+//
+// THE SERVED EXECUTABLE IS STARTED WITH NO INPUT, so every answer below is also 38.56's half of the
+// shell: input that ends leaves the app serving.
+
+import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { readdirSync, rmSync } from 'node:fs' // bun has no sync listing or recursive removal of its own
+import { addressOf, appFixture, BIN } from './builtApp.ts'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+
+const HANDLERS = `import { config, GET } from 'abide/server'
+
+export const name = GET(() => config().APP_NAME)
+`
+
+// A handler module no script below imports: its top level speaks on stderr if it ever runs.
+const UNTOUCHED = `import { GET } from 'abide/server'
+
+console.error('untouched handler module ran')
+export const untouched = GET(() => 'untouched')
+`
+
+const HOOKS = `import { onStart } from 'abide/server'
+
+let started = false
+onStart(async (start) => {
+    await start()
+    started = true
+})
+
+export default (asked: Request) =>
+    new URL(asked.url).pathname === '/own' ? new Response(\`own route, started \${started}\`) : undefined
+`
+
+let base = ''
+let stop = (): void => {}
+let listed: string[] = []
+let where = ''
+
+beforeAll(async () => {
+    // UNDER `src/`, so the build lands beside it in `app/.abide` and is deleted with the source.
+    const app = temporaryModule({
+        'package.json': JSON.stringify({
+            name: '@acme/ledger',
+            type: 'module',
+            imports: { '#ui/*': './src/ui/*', '#server/*': './src/server/*' },
+        }),
+        'src/ui/app.html':
+            '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>',
+        'src/ui/pages/page.abide': '<main><h1>compiled</h1></main>',
+        'src/ui/public/robots.txt': 'User-agent: *\n',
+        'src/server/rpc/identity.ts': HANDLERS,
+        'src/server/rpc/untouched.ts': UNTOUCHED,
+        'src/server/app.ts': HOOKS,
+    })
+    where = temporaryModule({})
+    const compiled = Bun.spawnSync(
+        ['bun', BIN, 'compile', '--root', `${app}/src`],
+        {
+            cwd: where,
+            env: process.env,
+        },
+    )
+    if (compiled.exitCode !== 0)
+        throw new Error(`abide compile failed: ${compiled.stderr}`)
+    listed = readdirSync(where)
+    rmSync(app, { recursive: true, force: true })
+
+    const served = Bun.spawn([`${where}/ledger`, 'start', '--port', '0'], {
+        cwd: where,
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: process.env,
+    })
+    stop = () => served.kill('SIGKILL')
+    base = await addressOf(served)
+}, 60_000)
+
+afterAll(() => {
+    stop()
+    removeTemporaryModules()
+})
+
+test('one file, named after the app without its scope, where the command ran — 38.11', () => {
+    expect(listed).toEqual(['ledger'])
+})
+
+test('the executable serves its pages, bundle and public files with no build on disk — 38.11', async () => {
+    const page = await Bun.fetch(`${base}/`)
+    expect(page.status).toBe(200)
+    const document = await page.text()
+    expect(document).toContain('<h1>compiled</h1>')
+
+    const entry = /src="(\/__abide\/client\/entry-[^"]+\.js)"/.exec(document)
+    expect(entry).not.toBeNull()
+    const script = await Bun.fetch(`${base}${entry?.[1]}`, {
+        headers: { 'accept-encoding': 'br' },
+    })
+    expect(script.status).toBe(200)
+    expect(script.headers.get('content-encoding')).toBe('br')
+    expect(script.headers.get('content-type')).toStartWith('text/javascript')
+
+    const robots = await Bun.fetch(`${base}/robots.txt`)
+    expect(robots.headers.get('content-type')).toStartWith('text/plain')
+    expect(await robots.text()).toBe('User-agent: *\n')
+})
+
+test('the executable runs the app hooks and handlers it was compiled with — 38.11, 37.1, 27.3', async () => {
+    expect(await (await Bun.fetch(`${base}/own`)).text()).toBe(
+        'own route, started true',
+    )
+    const name = await Bun.fetch(`${base}/__abide/rpc/identity/name`)
+    expect(await name.json()).toBe('@acme/ledger')
+})
+
+test('--target and --platforms together are refused — 38.11', () => {
+    const refused = Bun.spawnSync([
+        'bun',
+        BIN,
+        'compile',
+        '--root',
+        appFixture({}),
+        '--target',
+        'linux-x64',
+        '--platforms',
+        'linux-x64,darwin-arm64',
+    ])
+    expect(refused.exitCode).toBe(1)
+    expect(refused.stderr.toString()).toContain('give one of them')
+})
+
+// 38.51 — THE EXECUTABLE'S COMMAND LINE IS `abide`'s, spoken under its own name.
+test('the executable prints usage of what it runs, and refuses a command it does not know — 38.51, 38.53, 38.13', () => {
+    const bare = Bun.spawnSync([`${where}/ledger`], { cwd: where })
+    expect(bare.exitCode).toBe(0)
+    const usage = bare.stdout.toString()
+    expect(usage).toStartWith('ledger <command>')
+    for (const command of ['start', 'run <file>', 'call <address>', 'connect'])
+        expect(usage).toContain(`  ${command}`)
+    // 38.53 — nothing listed that the executable only refuses.
+    for (const command of [
+        'dev',
+        'build',
+        'check',
+        'compile',
+        'lsp',
+        'scaffold',
+        'bundle',
+    ])
+        expect(usage).not.toContain(`  ${command}`)
+    for (const flag of ['--root', '--target', '--platforms'])
+        expect(usage).not.toContain(flag)
+
+    const unknown = Bun.spawnSync([`${where}/ledger`, 'frobnicate'], {
+        cwd: where,
+    })
+    expect(unknown.exitCode).toBe(1)
+    expect(unknown.stderr.toString()).toContain(
+        "ledger: unknown command 'frobnicate'",
+    )
+})
+
+test('a command that needs the source is refused, naming abide — 38.52', () => {
+    const build = Bun.spawnSync([`${where}/ledger`, 'build'], { cwd: where })
+    expect(build.exitCode).toBe(1)
+    expect(build.stderr.toString()).toContain('Run `abide build`')
+})
+
+// 38.54, 38.55 — `start` OPENS THE SHELL ON THE APP IT SERVES, and `exit` in it stops the app and
+// ends the process with 0. THE REVERT: return from `start` without the shell; nothing reads the
+// input and the process is `still serving` when the bound runs out.
+test('start opens a shell on the app it serves, and exit stops it — 38.54, 38.55', async () => {
+    const started = Bun.spawn([`${where}/ledger`, 'start', '--port', '0'], {
+        cwd: where,
+        stdin: 'pipe',
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: process.env,
+    })
+    started.stdin.write('call identity/name\nexit\n')
+    started.stdin.end()
+    // BOUNDED, so a shell that never opens fails here rather than hanging the suite.
+    const exited = await Promise.race([
+        started.exited,
+        Bun.sleep(10_000).then(() => 'still serving'),
+    ])
+    started.kill('SIGKILL')
+    expect(exited).toBe(0)
+    expect(await Bun.readableStreamToText(started.stdout)).toContain(
+        '"@acme/ledger"',
+    )
+}, 30_000)
+
+// 38.57, 38.58 — A SCRIPT RUN BY THE EXECUTABLE imports abide and the app's handlers out of it, and
+// reads the configuration as the app it holds. THE REVERT: drop `config.invalidate()` from `run`;
+// the name the script reads is `app`. And a handler module the script does not import never runs:
+// load every specifier as the plugin is registered, and stderr reads `untouched handler module ran`.
+test('run takes abide and the handlers from the executable, under its identity — 38.57, 38.58', () => {
+    Bun.write(
+        `${where}/script.ts`,
+        `import { config } from 'abide/server'
+import { name } from '#server/rpc/identity'
+console.log(JSON.stringify({ configured: config().APP_NAME, handler: await name(), args: process.argv.slice(2) }))
+`,
+    )
+    const ran = Bun.spawnSync([`${where}/ledger`, 'run', 'script.ts', 'one'], {
+        cwd: where,
+    })
+    expect(ran.stderr.toString()).toBe('')
+    expect(JSON.parse(ran.stdout.toString().trim())).toEqual({
+        configured: '@acme/ledger',
+        handler: '@acme/ledger',
+        args: ['one'],
+    })
+})

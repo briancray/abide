@@ -9,7 +9,7 @@ export type Level = { onHand: number; counted: number }
 
 let counted = 0
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     stock: {
         async find(_warehouse: string, _sku: string): Promise<Level> {

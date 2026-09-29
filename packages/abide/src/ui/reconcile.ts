@@ -19,32 +19,50 @@ import { EMPTY_SCOPE, type Scope } from './Scope.ts'
 
 export type Row = {
     key: unknown
-    // The value the row was built from. A row that survives a reorder keeps its NODES, which is
-    // the whole point — but if the value behind that key is a different object, its content is
-    // stale and the row is remade. Identity is the signal here, the inverse of the case where a
-    // freshly built wrapper defeats one.
+    /**
+     * The value the row was built from.
+     *
+     * A row that survives a reorder keeps its NODES, which is the whole point — but if the value
+     * behind that key is a different object, its content is stale and the row is remade. Identity
+     * is the signal here, the inverse of the case where a freshly built wrapper defeats one.
+     */
     data: unknown
-    // THE ROW'S FIRST NODE: its element where the body has one, its `ROW_OPEN` anchor where it has
-    // several. An anchored row is every sibling from here to the next row's anchor or the region's
-    // close (`closeOf`) — a RANGE, as a region is its pair, and not the nodes `make` handed back: a
-    // region at the row's top level fills AFTER the row is made, and a row held as that array
-    // moved without the arm's content and left it standing after whichever row came next.
+    /**
+     * The row's first node: its element, or its `ROW_OPEN` anchor where the body has several.
+     *
+     * An anchored row is every sibling from here to the next row's anchor or the region's close
+     * (`closeOf`) — a RANGE, as a region is its pair, and not the nodes `make` handed back: a
+     * region at the row's top level fills AFTER the row is made, and a row held as that array moved
+     * without the arm's content and left it standing after whichever row came next.
+     */
     node: ChildNode
-    // The row's bindings, stopped when it leaves.
+    /** The row's bindings, stopped when it leaves. */
     scope: Scope
-    // Where this row stood in the list the document currently shows. The placement walk needs
-    // "already in order" to be a question about POSITIONS rather than about nodes, and asking the
-    // document — `compareDocumentPosition`, or counting siblings — is the walk this exists to
-    // avoid. Written by every reconcile, so it is a fact about the last one rather than about the
-    // caller, and a hydration seed sets it because that IS the order the server painted.
+    /**
+     * Where this row stood in the list the document currently shows.
+     *
+     * The placement walk needs "already in order" to be a question about POSITIONS rather than
+     * about nodes, and asking the document — `compareDocumentPosition`, or counting siblings — is
+     * the walk this exists to avoid. Written by every reconcile, so it is a fact about the last one
+     * rather than about the caller, and a hydration seed sets it because that IS the order the
+     * server painted.
+     */
     at: number
-    // 32.34 — the patch epoch the row was made at. Its item written past this is content the row
-    // never saw, under the same object a kept row is matched by.
+    /**
+     * The patch epoch the row was made at (32.34).
+     *
+     * Its item written past this is content the row never saw, under the same object a kept row is
+     * matched by.
+     */
     seen: number
 }
 
-// 41.10 — a row that cannot be hydrated is REBUILT, in place: the fresh nodes go where the row
-// stood and the row's record takes the new first node, so the reconcile still reaches all of it.
+/**
+ * Rebuilds a row in place from `next`, keeping its record.
+ *
+ * 41.10 — a row that cannot be hydrated is rebuilt: the fresh nodes go where the row stood and the
+ * row's record takes the new first node, so the reconcile still reaches all of it.
+ */
 export function replaceRow(row: Row, next: Node[]): void {
     const first = row.node
     const parent = first.parentNode
@@ -54,8 +72,12 @@ export function replaceRow(row: Row, next: Node[]): void {
     row.node = next[0] as ChildNode
 }
 
-// AN ANCHOR IS A COMMENT AND A SINGLE ROOT IS AN ELEMENT, so the row's first node says which kind
-// of row it is and no flag is carried beside it.
+/**
+ * Removes a row's nodes, from its first node to its end.
+ *
+ * AN ANCHOR IS A COMMENT AND A SINGLE ROOT IS AN ELEMENT, so the row's first node says which kind
+ * of row it is and no flag is carried beside it.
+ */
 function removeRow(first: ChildNode): void {
     if (first.nodeType !== 8) {
         first.remove()
@@ -64,9 +86,13 @@ function removeRow(first: ChildNode): void {
     removeUntil(first, closeOf(first, true))
 }
 
-// TO THE LAST NODE RATHER THAN TO THE ROW'S END: a row moved before its own end puts each node it
-// moves between its tail and the end, so the sibling after the tail is the row's own anchor again
-// by the time the walk reaches it.
+/**
+ * Moves a row's nodes, first to last, to before `before` through `moveNode`.
+ *
+ * TO THE LAST NODE RATHER THAN TO THE ROW'S END: a row moved before its own end puts each node it
+ * moves between its tail and the end, so the sibling after the tail is the row's own anchor again
+ * by the time the walk reaches it.
+ */
 function moveRow(parent: Node, first: ChildNode, before: Node | null): void {
     if (first.nodeType !== 8) {
         moveNode(parent, first, before)
@@ -83,9 +109,12 @@ function moveRow(parent: Node, first: ChildNode, before: Node | null): void {
     }
 }
 
-// THE ROWS THE SERVER PAINTED, by their first nodes: each element between the region's anchors,
-// or each `ROW_OPEN` standing at the region's own depth — a `{#for}` nested in a row's arm carries
-// anchors of its own, one depth down.
+/**
+ * The first node of each row the server painted in `region`.
+ *
+ * Each element between the region's anchors, or each `ROW_OPEN` standing at the region's own depth
+ * — a `{#for}` nested in a row's arm carries anchors of its own, one depth down.
+ */
 export function rowsIn(region: Region, anchored: boolean): ChildNode[] {
     const found: ChildNode[] = []
     if (anchored) {
@@ -106,8 +135,12 @@ export function rowsIn(region: Region, anchored: boolean): ChildNode[] {
     return found
 }
 
-// The list, after. `make` builds a row's nodes for a key it has not seen; `mount` wires one and
-// hands back its disposer. Rows that survive are MOVED, never remade.
+/**
+ * Reconciles a keyed list's rows to `data`, moving survivors rather than remaking them.
+ *
+ * `make` builds a row's nodes for a key it has not seen; `mount` wires one and hands back its
+ * scope. Rows that survive are MOVED, never remade.
+ */
 export function reconcile(list: List, data: unknown[]): void {
     const region = list.region
     const current = list.rows
@@ -246,7 +279,7 @@ export function reconcile(list: List, data: unknown[]): void {
     endLayer(LAYER_RECONCILE)
 }
 
-// A new row, built and inserted before `before`.
+/** A new row, built and inserted before `before`. */
 export function makeRow(
     list: List,
     parent: Node,
@@ -262,9 +295,13 @@ export function makeRow(
     return rowOf(builders, key, item, nodes[0] as ChildNode, at)
 }
 
-// A row over nodes already in the document, mounted. The one place a row's record is written, so
-// its shape is fixed once for every path that makes one — a made row and a hydrated one alike. The
-// mount is handed the RECORD, because a row it rebuilds (41.10) has a new first node to write back.
+/**
+ * A row record over nodes already in the document, mounted.
+ *
+ * The one place a row's record is written, so its shape is fixed once for every path that makes one
+ * — a made row and a hydrated one alike. The mount is handed the RECORD, because a row it rebuilds
+ * (41.10) has a new first node to write back.
+ */
 export function rowOf(
     builders: RowBuilders,
     key: unknown,
@@ -286,8 +323,12 @@ export function rowOf(
     return row
 }
 
-// 32.34 — THE EPOCH IS COMPARED FIRST, so a reconcile with no patch since its rows were made pays one
-// integer compare a row and never reaches the map.
+/**
+ * Whether a patch wrote to the row's item since the row was made.
+ *
+ * 32.34 — the epoch is compared first, so a reconcile with no patch since its rows were made pays
+ * one integer compare a row and never reaches the map.
+ */
 function patchedSince(row: Row): boolean {
     if (row.seen === PATCHES.epoch) return false
     const item = row.data
@@ -295,21 +336,29 @@ function patchedSince(row: Row): boolean {
     return (PATCHES.written.get(item) ?? 0) > row.seen
 }
 
-// Stopped before removal, so a binding cannot wake over a node that is already gone.
+/**
+ * Stops a row's bindings, then removes its nodes.
+ *
+ * Stopped first, so a binding cannot wake over a node that is already gone.
+ */
 export function dropRow(row: Row): void {
     row.scope.stop()
     removeRow(row.node)
 }
 
-// 41.15 — ONCE FOR THE BLOCK, not once a reconcile. A repeated key is a property of the `by`
-// expression rather than of one write, so it holds for every reconcile the region ever runs and a
-// warning per write is a console nobody reads.
-//
-// `abide:hydrate` RATHER THAN A CHANNEL OF ITS OWN. A repeated key is not a hydration mismatch —
-// it survives a reconcile that no hydration was anywhere near — but the registry's meaning for
-// that namespace is THE BROWSER LANE, not a mismatch, and it is the only namespace 28.8 gives the
-// client runtime. A second one buys an app a second name to learn and silence for one warning,
-// where widening the lane's one meaning costs nothing that has to be taught.
+/**
+ * Warns about a repeated `{#for}` key, once per block.
+ *
+ * 41.15 — ONCE FOR THE BLOCK, not once a reconcile. A repeated key is a property of the `by`
+ * expression rather than of one write, so it holds for every reconcile the region ever runs and a
+ * warning per write is a console nobody reads.
+ *
+ * `abide:hydrate` RATHER THAN A CHANNEL OF ITS OWN. A repeated key is not a hydration mismatch —
+ * it survives a reconcile that no hydration was anywhere near — but the registry's meaning for
+ * that namespace is THE BROWSER LANE, not a mismatch, and it is the only namespace 28.8 gives the
+ * client runtime. A second one buys an app a second name to learn and silence for one warning,
+ * where widening the lane's one meaning costs nothing that has to be taught.
+ */
 function warnRepeatedKey(list: List): void {
     if (list.warned) return
     list.warned = true
@@ -318,18 +367,21 @@ function warnRepeatedKey(list: List): void {
     )
 }
 
-// THE LONGEST SUBSEQUENCE ALREADY IN INCREASING ORDER, as a flag per wanted index. Patience
-// sorting: `tails[length - 1]` is the wanted-index of the smallest tail any increasing run of that
-// length ends on, so the binary search finds the run each row extends, and `came` walks the answer
-// back out.
-//
-// WHY A SUBSEQUENCE AND NOT A RUN OF NEIGHBOURS. The rows that can stay put are the ones already
-// in the right order RELATIVE TO EACH OTHER — they need not be adjacent, and demanding they be
-// would move rows that a gap of new or removed rows had merely spread apart.
-//
-// -1 IS A ROW THIS DOCUMENT DOES NOT HAVE, and it is skipped rather than ordered: a made row is
-// inserted wherever the walk puts it, so it never counts as already in place and must never
-// anchor a run that would hold a survivor still.
+/**
+ * Flags, per wanted index, the rows in the longest subsequence already in order.
+ *
+ * Patience sorting: `tails[length - 1]` is the wanted-index of the smallest tail any increasing run
+ * of that length ends on, so the binary search finds the run each row extends, and `came` walks the
+ * answer back out.
+ *
+ * WHY A SUBSEQUENCE AND NOT A RUN OF NEIGHBOURS. The rows that can stay put are the ones already
+ * in the right order RELATIVE TO EACH OTHER — they need not be adjacent, and demanding they be
+ * would move rows that a gap of new or removed rows had merely spread apart.
+ *
+ * -1 IS A ROW THIS DOCUMENT DOES NOT HAVE, and it is skipped rather than ordered: a made row is
+ * inserted wherever the walk puts it, so it never counts as already in place and must never
+ * anchor a run that would hold a survivor still.
+ */
 function longestRun(from: number[]): Uint8Array {
     const keep = new Uint8Array(from.length)
     // The wanted-index each run of a given length currently ends on.

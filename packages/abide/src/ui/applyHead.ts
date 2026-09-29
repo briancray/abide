@@ -16,21 +16,7 @@ export function applyHead(markup: string): void {
     const head = document.head
     if (markup === '') return
     const incoming = markupNodes(head, markup)
-    // KEYED ONCE, NOT ONCE PER CONTRIBUTION. Walking the head per incoming node asked `headKey` —
-    // a `toLowerCase` and a fresh closure per call — for every standing element times every
-    // arriving one. One pass builds the index and each contribution is then a lookup.
-    const standingByKey = new Map<string, Element>()
-    for (
-        let node = head.firstElementChild;
-        node !== null;
-        node = node.nextElementSibling
-    ) {
-        const key = headKey(node)
-        // 39.12 WITHIN THE STANDING HEAD: the FIRST element holding a key is the one a
-        // contribution replaces, which is the node the per-contribution walk returned.
-        if (key !== undefined && !standingByKey.has(key))
-            standingByKey.set(key, node)
-    }
+    const standingByKey = standingKeys(head)
     for (const node of incoming) {
         if (node.nodeType !== 1) {
             head.appendChild(node)
@@ -59,25 +45,99 @@ export function applyHead(markup: string): void {
     }
 }
 
-// 39.11 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with a RESOLVED attribute. The compiler
-// answers the same question for a STATIC one and appends where it cannot (`<meta name={x}>` has a
-// name only the run time knows) — here every attribute is resolved, so a contribution the compiler
-// had to append arrives with a key. That is the same rule reaching further, not a different one.
+/**
+ * Puts back, or removes, what the leaving levels keyed and the arriving ones do not.
+ *
+ * 39.14 — THE NEXT-OUTER CONTRIBUTOR'S VALUE, OR NONE. `leaving` and `arriving` are the heads of
+ * the levels a navigation stopped and mounted; `outer` is every contributor standing above them,
+ * outermost first — the shell's keyed entries, then each kept layout's — so the LAST entry for a
+ * key in it is the one the server would paint there (39.4). What the arriving levels key they have
+ * already written (39.6), so only the keys they are silent on are touched.
+ *
+ * THE COMMON NAVIGATION ENDS AT THE FIRST RETURN: two pages that both key a `<title>` withdraw
+ * nothing, and `outer` is neither built nor parsed.
+ */
+export function withdrawHead(
+    leaving: string,
+    arriving: string,
+    outer: () => string,
+): void {
+    if (leaving === '') return
+    const head = document.head
+    const withdrawn = keyedIn(head, leaving)
+    for (const key of keyedIn(head, arriving).keys()) withdrawn.delete(key)
+    if (withdrawn.size === 0) return
+    const restored = keyedIn(head, outer())
+    const standingByKey = standingKeys(head)
+    for (const key of withdrawn.keys()) {
+        const standing = standingByKey.get(key)
+        const next = restored.get(key)
+        if (next === undefined) standing?.remove()
+        else if (standing === undefined) head.appendChild(next)
+        // The same node as `applyHead`'s: a stylesheet put back as itself is not refetched.
+        else if (standing.outerHTML !== next.outerHTML)
+            head.replaceChild(next, standing)
+    }
+}
+
+/** The keyed elements `markup` parses to, by key, the last holding each (39.4). */
+function keyedIn(head: HTMLHeadElement, markup: string): Map<string, Element> {
+    const keyed = new Map<string, Element>()
+    if (markup === '') return keyed
+    for (const node of markupNodes(head, markup))
+        if (node.nodeType === 1) {
+            const key = headKey(node as Element)
+            if (key !== undefined) keyed.set(key, node as Element)
+        }
+    return keyed
+}
+
+/**
+ * The head's keyed elements by key, the first holding each.
+ *
+ * KEYED ONCE, NOT ONCE PER CONTRIBUTION. Walking the head per incoming node asked `headKey` — a
+ * `toLowerCase` and a fresh closure per call — for every standing element times every arriving
+ * one. One pass builds the index and each contribution is then a lookup.
+ */
+function standingKeys(head: HTMLHeadElement): Map<string, Element> {
+    const standingByKey = new Map<string, Element>()
+    for (
+        let node = head.firstElementChild;
+        node !== null;
+        node = node.nextElementSibling
+    ) {
+        const key = headKey(node)
+        // 39.12 WITHIN THE STANDING HEAD: the FIRST element holding a key is the one a
+        // contribution replaces, which is the node the per-contribution walk returned.
+        if (key !== undefined && !standingByKey.has(key))
+            standingByKey.set(key, node)
+    }
+    return standingByKey
+}
+
+/**
+ * The key a head element replaces by, or `undefined` for one that appends.
+ *
+ * 39.11 THROUGH THE ONE GRAMMAR (`headKeyOf`), asked with a RESOLVED attribute. The compiler
+ * answers the same question for a STATIC one and appends where it cannot (`<meta name={x}>` has a
+ * name only the run time knows) — here every attribute is resolved, so a contribution the compiler
+ * had to append arrives with a key. That is the same rule reaching further, not a different one.
+ */
 function headKey(element: Element): string | undefined {
     return headKeyOf(element.tagName.toLowerCase(), (name) =>
         element.getAttribute(name),
     )
 }
 
-// 39.13 — A HEAD THAT READS A VALUE FOLLOWS IT for as long as its level is mounted, which is the
-// scope's life. Where the server painted the level, the first run only subscribes: the head it
-// would write is the one the server already wrote.
-export function liveHead(
-    scope: Scope,
-    painted: boolean,
-    markup: () => string,
-): void {
-    let subscribing = painted
+/**
+ * Keeps a level's head written from `markup` for as long as `scope` lives.
+ *
+ * 39.13 — A HEAD THAT READS A VALUE FOLLOWS IT for as long as its level is mounted, which is the
+ * scope's life. The first run only subscribes: the head it would write is already there, written
+ * by the server or applied by the level's mount ahead of its fill (39.6).
+ */
+export function liveHead(scope: Scope, markup: () => string): void {
+    let subscribing = true
     scope.watch(() => {
         const text = markup()
         if (subscribing) subscribing = false

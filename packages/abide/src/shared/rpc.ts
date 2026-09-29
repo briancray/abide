@@ -46,9 +46,15 @@ import type { Schema } from './Schema.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
-// 16.53 — what a call is handed beside its args.
+/** What a call is handed beside its args (16.53). */
 export type CallOptions = { signal?: AbortSignal }
 
+/**
+ * A declared handler: callable for its `Reactive`, with the handler's own members and its mount.
+ *
+ * 16.3 — the call hands back the handler's own `Reactive`; the members below are the handler's,
+ * passed through.
+ */
 export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     ...args: undefined extends Args
         ? [args?: Args, options?: CallOptions]
@@ -56,8 +62,11 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
 ) => Reactive<Value, Value, Failures, Produced>) & {
     method: Method
     description: string | undefined
-    // 13.4, 13.12 — the handler's own face, narrowed by a pattern where the handler is keyed. An
-    // `Rpc` is a `Selection` by having it (13.1).
+    /**
+     * The handler's own probe, narrowed by a pattern where the handler is keyed.
+     *
+     * 13.4, 13.12 — the handler's own face. An `Rpc` is a `Selection` by having it (13.1).
+     */
     busy(pattern?: Partial<Args>): boolean
     ready(pattern?: Partial<Args>): boolean
     refresh(pattern?: Partial<Args>): void
@@ -66,22 +75,30 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
         error: unknown,
         name: Name,
     ): error is Extract<Failures, { name: Name }>
-    // 16.10, 16.11 — the address, resolved against the mount; a mutation's takes no args.
+    /**
+     * The call's address, resolved against the mount.
+     *
+     * 16.10, 16.11 — a mutation's takes no args.
+     */
     url(...args: undefined extends Args ? [args?: Args] : [args: Args]): string
-    // 16.44 — the same call, handed back as the response.
+    /** The same call, handed back as the `Response` (16.44). */
     raw(args?: Args, init?: RequestInit): Promise<Response>
-    // Where the handler is mounted, stamped by whoever mounted it — `undefined` until then.
+    /** Where the handler is mounted, stamped by whoever mounted it — `undefined` until then. */
     address: string | undefined
     keyed: boolean
     timeout: number | undefined
     crossOrigin: boolean | string[]
     maxBodySize: number | undefined
     clients: Clients
-    // 18.23 — whether the handler declared rungs, which a value pushed over the mux would not pass.
+    /**
+     * Whether the handler declared rungs.
+     *
+     * 18.23 — rungs a value pushed over the mux would not pass.
+     */
     guarded: boolean
 }
 
-// 20.1 — which generated surfaces carry a handler.
+/** Which generated surfaces carry a handler (20.1). */
 export type Clients = {
     ui?: boolean
     mcp?: boolean
@@ -91,8 +108,12 @@ export type Clients = {
 
 export type RpcContext<Args = unknown> = { request: Request; args: () => Args }
 
-// 11.26 — THE ARGS AS SENT, carried on the context under a key no rung spells, so the reach at the
-// onion's centre keys the value by them rather than by what the gate made of them.
+/**
+ * The context key holding the args as sent.
+ *
+ * 11.26 — THE ARGS AS SENT, carried on the context under a key no rung spells, so the reach at the
+ * onion's centre keys the value by them rather than by what the gate made of them.
+ */
 const SENT: unique symbol = Symbol('abide.sent')
 
 export type RpcOptions<Args = unknown> = {
@@ -104,10 +125,14 @@ export type RpcOptions<Args = unknown> = {
     maxBodySize?: number
 }
 
-// ONE CALL SIGNATURE PER HANDLER ARM, shared by all five names. The two `reactive` arms come first:
-// a `Reactive` is itself a `() => Stored`, so the plain-function arm would otherwise swallow it
-// and type the `Rpc` as holding the value's own getter. The four plain arms are `reactive`'s own
-// overloads, in its order and for its reason (16.6).
+/**
+ * The signature `GET` and the four mutations share: a handler in, its `Rpc` out.
+ *
+ * ONE CALL SIGNATURE PER HANDLER ARM, shared by all five names. The two `reactive` arms come first:
+ * a `Reactive` is itself a `() => Stored`, so the plain-function arm would otherwise swallow it
+ * and type the `Rpc` as holding the value's own getter. The four plain arms are `reactive`'s own
+ * overloads, in its order and for its reason (16.6).
+ */
 type Declare = {
     <Stored, Args, Accepted, Failures, Produced>(
         handler: Keyed<Stored, Args, Accepted, Failures, Produced>,
@@ -145,6 +170,7 @@ type Declare = {
     >
 }
 
+/** Builds the handler declarer for one method — what `GET`, `POST` and the rest are. */
 export function declare(method: Method): Declare {
     return ((handler: unknown, options?: RpcOptions): unknown => {
         // 16.6, and 16.7's `ttl` of 0 on a mutation: each call is a write, so nothing a previous
@@ -330,6 +356,7 @@ export const PUT: Declare = declare('PUT')
 export const PATCH: Declare = declare('PATCH')
 export const DELETE: Declare = declare('DELETE')
 
+/** The handler's mount address, or a throw naming where one comes from. */
 function addressOf(rpc: { address: string | undefined }): string {
     if (rpc.address === undefined)
         throw new Error(
@@ -338,13 +365,14 @@ function addressOf(rpc: { address: string | undefined }): string {
     return rpc.address
 }
 
-// 16.18, 16.19, 16.20 — `ctx.args()`: validated against the `args` the value declared on the first
-// ask, and the answer kept for every rung after it. A refusal is thrown, so it leaves the whole
-// onion (16.22) and is answered at its own status.
-// 16.53 — WHO IS WAITING ON A LOAD. Calls with the same args join one load (1.8), so one caller's
-// signal is not the load's to end: a call with no signal pins it, and a load no call pinned ends
-// once every signal handed to it has aborted. Per value and replaced per load, so a refresh starts
-// the count again.
+/**
+ * Who is waiting on one load: pinned by a call with no signal, else ended when every signal aborts.
+ *
+ * 16.53 — WHO IS WAITING ON A LOAD. Calls with the same args join one load (1.8), so one caller's
+ * signal is not the load's to end: a call with no signal pins it, and a load no call pinned ends
+ * once every signal handed to it has aborted. Per value and replaced per load, so a refresh starts
+ * the count again.
+ */
 type Hold = {
     load: number
     pinned: boolean
@@ -355,9 +383,10 @@ type Hold = {
 
 const HOLDS = new WeakMap<object, Hold>()
 
-// The values whose last load 16.53 ended, until a call reaches one again.
+/** The values whose last load 16.53 ended, until a call reaches one again. */
 const ABANDONED = new WeakSet<object>()
 
+/** Files a call's signal, or its pin, against the load it reached (16.53). */
 function holdLoad(
     reached: unknown,
     signal: AbortSignal | undefined,
@@ -413,12 +442,17 @@ function forget(hold: Hold): void {
         signal.removeEventListener('abort', hold.release)
 }
 
-// 16.13, 16.63, 16.64 — `timeout` ON EVERY CALL: a load that goes that long without progress — its
-// answer, or a stream's next chunk — is ended where it stands, as 16.54 ends one, and refuses 504.
-// ONE CLOCK PER LOAD: a call joining a load (1.8) is not a reason to give it longer, and the first
-// clock would end the load at its own time whatever a second one did — so a join starts none.
+/** The load each value's timeout clock was started for, so a join starts none. */
 const TIMED = new WeakMap<object, number>()
 
+/**
+ * Ends a load that goes `milliseconds` without progress, refusing it 504.
+ *
+ * 16.13, 16.63, 16.64 — `timeout` ON EVERY CALL: a load that goes that long without progress — its
+ * answer, or a stream's next chunk — is ended where it stands, as 16.54 ends one, and refuses 504.
+ * ONE CLOCK PER LOAD: a call joining a load (1.8) is not a reason to give it longer, and the first
+ * clock would end the load at its own time whatever a second one did — so a join starts none.
+ */
 function timeLoad(reached: unknown, milliseconds: number | undefined): void {
     if (
         milliseconds === undefined ||
@@ -468,6 +502,13 @@ function timeLoad(reached: unknown, milliseconds: number | undefined): void {
     })()
 }
 
+/**
+ * A rung's `ctx.args()`: the args validated on the first ask, and that answer kept after it.
+ *
+ * 16.18, 16.19, 16.20 — validated against the `args` the value declared on the first ask, and the
+ * answer kept for every rung after it. A refusal is thrown, so it leaves the whole onion (16.22)
+ * and is answered at its own status.
+ */
 function argsOnce(
     gate: Schema<unknown> | undefined,
     args: unknown,

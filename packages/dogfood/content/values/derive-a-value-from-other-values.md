@@ -78,7 +78,9 @@ mean to patch reads the load rather than adopting it — see
 
 Adoption is an identity cutoff too: an args key that hits a live entry adopts synchronously.
 Reopening a tab already held is the body running again over a request that never happens, and the
-record's own count says so.
+record's own count says so. `opened` is kept by the handler, which runs once per request that
+reaches it, so it counts loads. A count taken in the browser would count runs of the body, and
+those do go up.
 
 Read on: [Reading data](../server/read-data-without-writing-an-api.md) ·
 [Caching](load-once-per-set-of-arguments.md)

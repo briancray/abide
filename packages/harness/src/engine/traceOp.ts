@@ -25,6 +25,7 @@ type TraceEvent = {
 
 type Metrics = Record<string, number>
 
+/** Chromium's `Performance.getMetrics` counters, keyed by name. */
 async function metrics(session: CDPSession): Promise<Metrics> {
     const answer = (await session.send('Performance.getMetrics')) as {
         metrics: { name: string; value: number }[]
@@ -34,6 +35,11 @@ async function metrics(session: CDPSession): Promise<Metrics> {
     return out
 }
 
+/**
+ * Runs `body` under a CDP trace and returns what Blink did plus the page's user timing.
+ *
+ * Chromium only, driven from the playwright side.
+ */
 export async function traceOp(
     page: Page,
     op: string,

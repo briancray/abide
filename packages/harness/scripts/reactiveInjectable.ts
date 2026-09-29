@@ -9,21 +9,10 @@
 // than assuming it, and a browser's is ~100 µs against bun's 41 ns.
 
 import { batch, claimOf, ratio, type Sample } from 'harness/report'
-import { reactiveCases } from './reactiveCases.ts'
+import { type ReactiveBenchRow, reactiveCases } from './reactiveCases.ts'
 
-type Row = {
-    case: string
-    abide: number
-    vanilla: number
-    claim: string
-    n: number
-    floor: number
-    substrate: string
-    workDisagreement: string[]
-}
-
-function run(): Row[] {
-    const rows: Row[] = []
+function run(): ReactiveBenchRow[] {
+    const rows: ReactiveBenchRow[] = []
     for (const kase of reactiveCases()) {
         const measured = batch({
             case: kase.name,
@@ -60,5 +49,5 @@ function run(): Row[] {
 }
 
 ;(
-    globalThis as unknown as { __REACTIVE_BENCH__: () => Row[] }
+    globalThis as unknown as { __REACTIVE_BENCH__: () => ReactiveBenchRow[] }
 ).__REACTIVE_BENCH__ = run

@@ -34,13 +34,20 @@ import { patchesOf, versionOf } from './versionOf.ts'
 export type Connection = {
     request: Request
     subscriptions: Map<number, () => void>
-    // 18.5 — the origin a connection from another origin came from, and `null` for the app's own:
-    // read once at the upgrade, since every frame on the connection shares it.
+    /**
+     * The origin a connection from another origin came from, and `null` for the app's own.
+     *
+     * 18.5 — read once at the upgrade, since every frame on the connection shares it.
+     */
     crossing: string | null
 }
 
-// WHAT THE MUX WRITES TO: bun's socket under `abide start`, and under `abide dev` a stand-in that
-// posts each frame to the listener holding the real one (38.15).
+/**
+ * What the mux writes to.
+ *
+ * Bun's socket under `abide start`, and under `abide dev` a stand-in that posts each frame to the
+ * listener holding the real one (38.15).
+ */
 export type MuxSocket = { data: Connection; send(text: string): unknown }
 
 export function connectionOf(request: Request): Connection {
@@ -107,8 +114,11 @@ RPC_SERVER.served = (rpc, serving) => {
         attach(rpc as Mounted['handler'], follower)
 }
 
-// Feeds the follower from the entry standing for its args, where that is not the one it is fed
-// from already, and hands back what it is fed from now.
+/**
+ * Feeds the follower from the entry standing for its args; returns what it is fed from now.
+ *
+ * Only where that entry is not the one it is fed from already.
+ */
 function attach(rpc: Mounted['handler'], follower: Follower): unknown {
     const serving = rpc.guarded
         ? undefined
@@ -131,6 +141,7 @@ function failure(error: unknown): Failed<string, unknown> {
     return wireFailure(failureOf(error))
 }
 
+/** The mux's websocket handlers, over the app's sockets and the handlers a browser may follow. */
 export function socketHandlers(
     sockets: Map<string, Socket<unknown, unknown>>,
     handlers: Map<string, Mounted>,
@@ -245,9 +256,13 @@ export function socketHandlers(
     }
 }
 
-// 18.13, 18.14 — A SUBSCRIPTION: what the ring holds past where the subscriber stood — all of it for
-// a fresh one, and all of it marked a reset where the epoch it carried is not this value's — then
-// every production after it, live.
+/**
+ * Subscribes `id` to a socket's value: the ring's replay, then every production live.
+ *
+ * 18.13, 18.14 — what the ring holds past where the subscriber stood — all of it for a fresh one,
+ * and all of it marked a reset where the epoch it carried is not this value's — then every
+ * production after it, live.
+ */
 function subscribe(
     ws: MuxSocket,
     id: number,
@@ -306,10 +321,13 @@ function subscribe(
     })()
 }
 
-// 18.17 — A HANDLER FOLLOWED: its triggers always, and where the value is `global` and unguarded
-// (18.23), its value. STATE, NOT A LOG: nothing is replayed. 18.21 — the value is sent where the
-// version the subscription named is not the one standing, and after that once per change, a burst in
-// one turn going out as the value it left.
+/**
+ * Follows a handler for `id`: its triggers always, its value where `global` and unguarded.
+ *
+ * 18.17, 18.23. STATE, NOT A LOG: nothing is replayed. 18.21 — the value is sent where the version
+ * the subscription named is not the one standing, and after that once per change, a burst in one
+ * turn going out as the value it left.
+ */
 function follow(
     ws: MuxSocket,
     id: number,
@@ -425,8 +443,12 @@ function addressIn(named: string): string {
     return at === -1 ? named : named.slice(at)
 }
 
-// 18.26 — A VALUE FED TO A FOLLOWER KEEPS ITS PATCHES AS DATA while anyone is fed it, and stops when
-// the last one goes: a sink nobody drains grows with every patch.
+/**
+ * Holds a patch sink on `cell`; returns what releases it.
+ *
+ * 18.26 — A VALUE FED TO A FOLLOWER KEEPS ITS PATCHES AS DATA while anyone is fed it, and stops
+ * when the last one goes: a sink nobody drains grows with every patch.
+ */
 function sinkFor(cell: object): () => void {
     const sink = PATCH_SINKS.get(cell) ?? { ops: [], lost: false, fed: 0 }
     PATCH_SINKS.set(cell, sink)

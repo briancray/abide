@@ -36,56 +36,69 @@ import {
 import { type Outcome, outcomeOf, takeSeed } from './seedBuffer.ts'
 import { versionOf } from './versionOf.ts'
 
-// One row of the table the build writes to `<out>/rpc.ts`: where a handler answers, and where its
-// module is — relative to the app's root, which both commands that serve already know. 18.2 — a
-// socket is a row too, whose method is `SOCKET`.
+/**
+ * One row of the table the build writes to `<out>/rpc.ts`: where a handler answers, and its module.
+ *
+ * The module is relative to the app's root, which both commands that serve already know. 18.2 — a
+ * socket is a row too, whose method is `SOCKET`.
+ */
 export type Mount = {
     address: string
     method: Method | 'SOCKET'
     source: string
     name: string
-    // 20.4 — whether a browser is handed a wrapper for it.
+    /** Whether a browser is handed a wrapper for it. 20.4. */
     ui: boolean
-    // 18.19 — what a `GET`'s value declares that the browser's copy behaves by, where its declaration
-    // names any of it. `undefined` otherwise.
+    /**
+     * What a `GET`'s value declares that the browser's copy behaves by, or `undefined`.
+     *
+     * 18.19 — set where its declaration names any of it.
+     */
     copy: CopyOptions | undefined
-    // 19.10 — the JSON Schema the handler's args annotation derives, where it takes a record.
+    /** The JSON Schema the handler's args annotation derives, where it takes a record. 19.10. */
     args: JsonValue | undefined
 }
 
+/** A handler's row, mounted: the handler imported and its args schema probed. */
 export type Mounted = Mount & {
     method: Method
     handler: Rpc<unknown, unknown>
-    // 19.8, 20.11 — the args' JSON Schema, probed once at mount: a third-party schema converts
-    // itself on every probe.
+    /**
+     * The args' JSON Schema, probed once at mount.
+     *
+     * 19.8, 20.11 — a third-party schema converts itself on every probe.
+     */
     argsDocument: Document | undefined
-    // 19.10 — what the wire holds args to where the handler declares no `args` gate of its own: the
-    // annotation's schema. An in-process call already holds the type, so the handler never runs it.
+    /**
+     * What the wire holds args to where the handler declares no `args` gate of its own.
+     *
+     * 19.10 — the annotation's schema. An in-process call already holds the type, so the handler
+     * never runs it.
+     */
     wireArgs: JsonValue | undefined
 }
 
 // 16.63 — the environment's `timeout`, for every call a handler that names none makes.
 RPC_SERVER.timeout = () => positiveSetting('ABIDE_RPC_TIMEOUT', undefined)
 
-// The table, as addresses to what answers them — imported from the SOURCE tree, so a page rendering
-// on the server and a call over the wire reach one module and so one handler. AT BOOT rather than
-// on the first call, because a page's render reaches a handler through the page's own import and
-// has to know its address before anything has called it over the wire. One pass over both kinds of
-// row, split by method into what `answerRpc` and the socket mux each answer from.
+/**
+ * The table's handlers and sockets, imported and keyed by address.
+ *
+ * Imported from the SOURCE tree, so a page rendering on the server and a call over the wire reach
+ * one module and so one handler. AT BOOT rather than on the first call, because a page's render
+ * reaches a handler through the page's own import and has to know its address before anything has
+ * called it over the wire. One pass over both kinds of row, split by method into what `answerRpc`
+ * and the socket mux each answer from.
+ */
 export async function mountHandlers(
     table: Mount[],
-    root: string,
+    moduleOf: (source: string) => Promise<Record<string, unknown>>,
 ): Promise<{
     handlers: Map<string, Mounted>
     sockets: Map<string, Socket<unknown, unknown>>
 }> {
     const modules = await Promise.all(
-        table.map(
-            (mount) =>
-                import(
-                    Bun.pathToFileURL(`${root}/${mount.source}`).href
-                ) as Promise<Record<string, unknown>>,
-        ),
+        table.map((mount) => moduleOf(mount.source)),
     )
     const handlers = new Map<string, Mounted>()
     const sockets = new Map<string, Socket<unknown, unknown>>()
@@ -114,6 +127,7 @@ export async function mountHandlers(
     return { handlers, sockets }
 }
 
+/** The `Response` to a handler call made over http. */
 export async function answerRpc(
     handlers: Map<string, Mounted>,
     url: URL,
@@ -235,7 +249,7 @@ export async function answerRpc(
     return admitting(answer, admitted)
 }
 
-// 21.19 — the origin a crossing call came from, where the handler admits it.
+/** The answer with the crossing origin allowed, where the handler admits it. 21.19. */
 function admitting(answer: Response, admitted: string | null): Response {
     if (admitted !== null)
         answer.headers.set('access-control-allow-origin', admitted)
@@ -286,8 +300,12 @@ async function answerOutcome(
     }
 }
 
-// 21.7 — whether it is another origin's to read, and whether a mutation from one is refused, both
-// depend on `Origin`, however this one came.
+/**
+ * The headers a handler's answer starts from: JSON, never stored, varying on `Origin`.
+ *
+ * 21.7 — whether it is another origin's to read, and whether a mutation from one is refused, both
+ * depend on `Origin`, however this one came.
+ */
 function defaultHeaders(): Headers {
     return new Headers({
         'content-type': 'application/json',
@@ -296,7 +314,11 @@ function defaultHeaders(): Headers {
     })
 }
 
-// 15.1 — a refusal crosses the wire as the four fields it is, at its own status.
+/**
+ * The `Response` a refusal is answered with.
+ *
+ * 15.1 — a refusal crosses the wire as the four fields it is, at its own status.
+ */
 export function answered(failure: Failed<string, unknown>): Response {
     return new Response(JSON.stringify(wireFailure(failure)), {
         status: failure.status,
@@ -304,8 +326,12 @@ export function answered(failure: Failed<string, unknown>): Response {
     })
 }
 
-// 16.19's first half: a `GET` or `DELETE` carries its args in the URL and a mutation in the body.
-// A query member given more than once is a list; one given once is its text (19.8 is the coercion).
+/**
+ * A query's or a form's entries as args: a member given more than once is a list.
+ *
+ * 16.19's first half: a `GET` or `DELETE` carries its args in the URL and a mutation in the body.
+ * A query member given more than once is a list; one given once is its text (19.8 is the coercion).
+ */
 function collapsed(
     entries: URLSearchParams | FormData,
 ): Record<string, unknown> {
@@ -351,10 +377,14 @@ async function argsOf(
     return parsed
 }
 
-// 16.60 — A BODY WITH NO DECLARED LENGTH, BOUNDED AS IT STREAMS: counted chunk by chunk and cut off at
-// the chunk that passes the ceiling, so a caller that never said how much it would send is never
-// held past it. What it read is handed back as a `Response` for the parse to read as it would the
-// request.
+/**
+ * The request's body read up to `ceiling`, as a `Response`, or a 413 refusal past it.
+ *
+ * 16.60 — A BODY WITH NO DECLARED LENGTH, BOUNDED AS IT STREAMS: counted chunk by chunk and cut
+ * off at the chunk that passes the ceiling, so a caller that never said how much it would send is
+ * never held past it. What it read is handed back as a `Response` for the parse to read as it
+ * would the request.
+ */
 async function bodyUnder(
     request: Request,
     ceiling: number,
@@ -377,8 +407,11 @@ function overCeiling(ceiling: number): Failed<'HttpError', undefined> {
     return refuse(413, `The request body is over ${ceiling} bytes.`)
 }
 
-// 36.2 — the `Origin` a request came from when it is not the app's own, and `null` when it is: the
-// app's own is `APP_URL`'s where the app declares one, and the request's where not.
+/**
+ * The `Origin` a request came from when it is not the app's own, and `null` when it is.
+ *
+ * 36.2 — the app's own is `APP_URL`'s where the app declares one, and the request's where not.
+ */
 export function crossingOrigin(
     origin: string | null,
     url: URL | string,
@@ -389,6 +422,7 @@ export function crossingOrigin(
     return origin === own ? null : origin
 }
 
+/** Whether a handler's or a socket's `crossOrigin` admits `origin`. */
 export function allows(
     crossOrigin: boolean | string[],
     origin: string,
@@ -411,15 +445,19 @@ function preflight(found: Mounted, origin: string, request: Request): Response {
     return new Response(null, { status: 204, headers })
 }
 
-// 16.23, 16.24 — THE REQUEST'S IDLE TIMEOUT, RAISED AND NEVER LOWERED: the floor is the longest any
-// handler in the request asked for. Where no socket is bound there is no idle timeout to raise.
-//
-// 16.62 — `Infinity` is never reaped, which bun spells 0; any finite bound is capped at the 255
-// seconds bun's idle timeout can hold.
-//
-// ON THE REQUEST THE LISTENER RECEIVED, never the one being answered: under a mount, or past a rung
-// that handed `next` its own, that is a copy, and bun's `timeout` does nothing for a request it was
-// not handed itself.
+/**
+ * Raises the request's idle timeout to cover `milliseconds`, never lowering it.
+ *
+ * 16.23, 16.24 — the floor is the longest any handler in the request asked for. Where no socket is
+ * bound there is no idle timeout to raise.
+ *
+ * 16.62 — `Infinity` is never reaped, which bun spells 0; any finite bound is capped at the 255
+ * seconds bun's idle timeout can hold.
+ *
+ * ON THE REQUEST THE LISTENER RECEIVED, never the one being answered: under a mount, or past a
+ * rung that handed `next` its own, that is a copy, and bun's `timeout` does nothing for a request
+ * it was not handed itself.
+ */
 function raiseTimeout(milliseconds: number): void {
     const scope = currentRequestScope()
     const received = scope?.received
@@ -440,9 +478,12 @@ function isForm(request: Request): boolean {
     )
 }
 
-// 16.40 — THE ANSWER A FORM GETS: a `redirect` the handler wrote passes through; a value is a 303
-// back where the form was; a refusal renders the nearest error page at its own status, and a fault
-// renders it at 500.
+/**
+ * The answer a form posted with no script gets.
+ *
+ * 16.40 — a `redirect` the handler wrote passes through; a value is a 303 back where the form was;
+ * a refusal renders the nearest error page at its own status, and a fault renders it at 500.
+ */
 async function navigated(
     outcome: Outcome,
     request: Request,

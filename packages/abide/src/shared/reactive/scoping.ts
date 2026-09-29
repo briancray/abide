@@ -8,17 +8,23 @@
 // where nothing fills it, pays one load of a `null` wherever the core asks.
 
 export type Scope = {
-    // One instance per value filed OUTSIDE any scope and reached inside this one — see `scoped.ts`.
-    // A `Map` rather than a `WeakMap` because the scope is the shorter life: it is dropped with its
-    // request, and everything it holds goes with it.
+    /**
+     * One instance per value filed OUTSIDE any scope and reached inside this one — see `scoped.ts`.
+     *
+     * A `Map` rather than a `WeakMap` because the scope is the shorter life: it is dropped with its
+     * request, and everything it holds goes with it.
+     */
     instances: Map<object, unknown>
 }
 
 export type Scoping = {
     current(): Scope | undefined
-    // Runs `body` with `scope` as the current one, and `undefined` as no scope at all. A body is run
-    // under the scope its value was built in rather than the ambient one, because the ambient one
-    // is whichever request scheduled the drain the body is running in.
+    /**
+     * Runs `body` with `scope` as the current one, and `undefined` as no scope at all.
+     *
+     * A body is run under the scope its value was built in rather than the ambient one, because
+     * the ambient one is whichever request scheduled the drain the body is running in.
+     */
     run<Given, Result>(
         scope: Scope | undefined,
         body: (given: Given) => Result,
@@ -33,8 +39,12 @@ export function currentScope(): Scope | undefined {
     return provider === null ? undefined : provider.current()
 }
 
-// `body` under `scope` — called straight through where there is no provider, or where `scope` is
-// already the current one, which inside a render it almost always is.
+/**
+ * Runs `body` under `scope` and returns what it returns.
+ *
+ * Called straight through where there is no provider, or where `scope` is already the current one,
+ * which inside a render it almost always is.
+ */
 export function runInScope<Given, Result>(
     scope: Scope | undefined,
     body: (given: Given) => Result,

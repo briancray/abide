@@ -3,7 +3,7 @@ import { reactive } from 'abide'
 
 let rate = reactive('1.09')
 
-// Called from the markup, so a throw here fails the render.
+/** Called from the markup, so a throw here fails the render. */
 function convert(typed: string) {
     const value = Number(typed)
     if (!(value > 0)) throw new Error('Rate must be a positive number.')

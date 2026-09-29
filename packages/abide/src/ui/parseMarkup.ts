@@ -6,6 +6,7 @@
 // every caller moves those nodes out before it parses again.
 const TEMPLATES = new WeakMap<Document, HTMLTemplateElement>()
 
+/** Parses markup in `near`'s document; the fragment is reused by the next parse. */
 export function parseMarkup(near: Node, markup: string): DocumentFragment {
     const document = near.ownerDocument ?? (near as Document)
     let template = TEMPLATES.get(document)
@@ -17,8 +18,11 @@ export function parseMarkup(near: Node, markup: string): DocumentFragment {
     return template.content
 }
 
-// The parsed nodes as an array, which is what a row holds. Indexed rather than spread, so no
-// iterator runs per row.
+/**
+ * The parsed nodes as an array, which is what a row holds.
+ *
+ * Indexed rather than spread, so no iterator runs per row.
+ */
 export function markupNodes(near: Node, markup: string): Node[] {
     const nodes: Node[] = []
     for (

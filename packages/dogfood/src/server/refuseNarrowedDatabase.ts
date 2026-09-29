@@ -17,7 +17,7 @@ const INVOICES: Record<string, Invoice> = {
     '4312': { total: '$512.00', mine: true, owner: 'ada', replacedBy: '4313' },
 }
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     invoices: {
         async find(id: string): Promise<Invoice> {

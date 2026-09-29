@@ -10,8 +10,12 @@
 import { realpathSync } from 'node:fs' // bun exposes no realpath of its own
 import { WIRE_DIRECTORY } from './CLIENT_BUILD.ts'
 
-// `modules` is the compiled app, keyed by path below the output directory as `compileApp` hands it
-// back — where the wrappers are.
+/**
+ * The bundler plugin handing the browser each handler's wrapper and refusing the rest of `server/`.
+ *
+ * `modules` is the compiled app, keyed by path below the output directory as `compileApp` hands it
+ * back — where the wrappers are.
+ */
 export function fenceServer(
     root: string,
     modules: Map<string, string>,

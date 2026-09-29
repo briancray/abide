@@ -3,8 +3,7 @@ import { database } from '#server/cacheSharedDatabase'
 
 type Range = { range: string }
 
-// TAKES ARGS, so it is keyed: one entry per args key, computed on
-// the first read of that key and held.
+/** Takes args, so it is keyed: one entry per args key, held. */
 const metricsFor = reactive(({ range }: Range) =>
     database.metrics.forRange(range),
 )

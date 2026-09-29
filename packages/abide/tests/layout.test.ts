@@ -10,16 +10,20 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { addressOf, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const SHELL = `<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>`
+// THE SHELL KEYS A HEAD TOO, and is the outermost contributor (39.4): every level below replaces
+// what it keys, and what no level keys stands.
+const SHELL = `<!doctype html><html><head><meta charset="utf-8"><title>Shell</title><meta name="description" content="shell"><meta name="theme-color" content="shell"></head><body></body></html>`
 
 // The app's own chrome, and the one thing every page under it renders inside.
-const ROOT_LAYOUT = `<head><meta name="chrome" content="root"></head>
+const ROOT_LAYOUT = `<head><meta name="chrome" content="root"><meta name="description" content="root"></head>
 
 <div id="chrome"><nav id="rail">rail</nav><main id="main"><slot/></main></div>`
 
 // A section's chrome, which is the case a layout exists for: an invoices sidebar that does not
 // mention the app's header.
-const SECTION_LAYOUT = `<section id="invoices"><h1>Invoices</h1><slot/></section>`
+const SECTION_LAYOUT = `<head><title>Section</title></head>
+
+<section id="invoices"><h1>Invoices</h1><slot/></section>`
 
 let server: Bun.Subprocess | undefined
 let base = ''
@@ -28,9 +32,11 @@ beforeAll(async () => {
     const app = temporaryModule({
         'ui/app.html': SHELL,
         'ui/pages/layout.abide': ROOT_LAYOUT,
-        'ui/pages/page.abide': `<head><title>Home</title></head>
+        'ui/pages/page.abide': `<head><title>Home</title><meta name="description" content="home"></head>
 
 <p id="home">home</p>`,
+        // No level above or at it keys a `<title>`, so the shell's is the one it reads.
+        'ui/pages/about/page.abide': `<p id="about">about</p>`,
         'ui/pages/invoices/layout.abide': SECTION_LAYOUT,
         'ui/pages/invoices/page.abide': `<head><title>Invoices</title></head>
 
@@ -125,4 +131,51 @@ test('a layout and its page both contribute to the head — 39.1', async () => {
     expect(html.indexOf('<title>Home</title>')).toBeLessThan(
         html.indexOf('<body>'),
     )
+})
+
+// 39.4, 39.11 ON THE SERVER: the layout and the page both key a `<title>` and a
+// `<meta name="description">`, and a browser reads the FIRST `<title>` — so a head written as the
+// two contributions end to end is the outermost layout's, against the deepest winning.
+// THE REVERT: write the head unmerged in `render` (no `mergeHead`) and the page reads `Shell`
+// ahead of `Home`, and three descriptions, the shell's first.
+test("a page's keyed head contributions replace its layout's — 39.4", async () => {
+    const html = await (await Bun.fetch(`${base}/`)).text()
+    const head = html.slice(0, html.indexOf('<body>'))
+    expect(head.match(/<title>[^<]*<\/title>/g)).toEqual([
+        '<title>Home</title>',
+    ])
+    expect(head.match(/<meta name="description"[^>]*>/g)).toEqual([
+        '<meta name="description" content="home">',
+    ])
+    // Unkeyed by anything deeper, the layout's stands.
+    expect(head).toContain('<meta name="chrome" content="root">')
+    const nested = await (await Bun.fetch(`${base}/invoices/42`)).text()
+    expect(
+        nested
+            .slice(0, nested.indexOf('<body>'))
+            .match(/<title>[^<]*<\/title>/g),
+    ).toEqual(['<title>Section</title>'])
+})
+
+// 39.4 — THE SHELL IS THE OUTERMOST CONTRIBUTOR. `app.html` is written into the document apart
+// from the levels' heads, and a browser reads the first `<title>`: so a shell title ahead of the
+// page's beat it on every server-painted page.
+// THE REVERT: key only the levels' heads (the shell's head left out of `mergeHead`) and `/` reads
+// `['Shell', 'Home']` and two descriptions, the shell's first.
+test("a level's keyed head contributions replace the shell's — 39.4", async () => {
+    const titles = (html: string): string[] | null =>
+        html.slice(0, html.indexOf('<body>')).match(/<title>[^<]*<\/title>/g)
+    const home = await (await Bun.fetch(`${base}/`)).text()
+    const head = home.slice(0, home.indexOf('<body>'))
+    expect(titles(home)).toEqual(['<title>Home</title>'])
+    expect(head.match(/<meta name="description"[^>]*>/g)).toEqual([
+        '<meta name="description" content="home">',
+    ])
+    // Keyed by no level, the shell's stands — once.
+    expect(head.match(/<meta name="theme-color"[^>]*>/g)).toEqual([
+        '<meta name="theme-color" content="shell">',
+    ])
+    expect(head).toContain('<meta charset="utf-8">')
+    const about = await (await Bun.fetch(`${base}/about`)).text()
+    expect(titles(about)).toEqual(['<title>Shell</title>'])
 })

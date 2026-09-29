@@ -15,35 +15,42 @@ import { carelessSignal, signal } from 'harness/measure/vanilla'
 // Defeats dead-code elimination without allocating: every read writes here.
 let sink: unknown
 
+/** One reactive bench case: a hand-written arm, an abide arm, and the work each does. */
 type Case = {
     name: string
-    // What the case is FOR. A benchmark case earns its place by DISTINGUISHING
-    // implementations, not by being representative.
+    /**
+     * What the case is FOR. A benchmark case earns its place by DISTINGUISHING
+     * implementations, not by being representative.
+     */
     distinguishes: string
     vanilla: () => void
     abide: () => void
-    // Wake counts, taken in a separate pass — counting and timing cannot share one.
+    /** Work counts, taken in a separate pass — counting and timing cannot share one. */
     work: () => {
         vanilla: Record<string, number>
         abide: Record<string, number>
     }
 }
 
-// CONSTRUCTION, WHICH NOTHING HERE PRICED. Every other case builds its values in setup
-// and times what happens to them afterwards, so the cost of MAKING one was invisible —
-// and it was 547 ns against the hand-written arm's 15, a 36x ratio and two orders of
-// magnitude over the read it precedes. A table builds one of these per cell per row, so
-// it is walked more often than most of what follows.
-//
-// The two forms are separate rows because they allocate differently: the value form is
-// a callable and its fields, the body form is that plus a first run under tracking.
-//
-// BOTH ROWS RUN A NOISY A/A FLOOR — 1% to 13% across runs, where the ops that only read
-// and write settle under 1%. Construction is the one thing here that allocates per
-// operation, so the sample carries whatever collection it triggered, and `ratio()`
-// classifies against the floor it measured rather than against a fixed bar. The ratios
-// are several times the worst floor seen; a change worth believing here moves them by
-// more than that, and is confirmed by a second run.
+/**
+ * Case: making a reactive value against making a hand-written signal.
+ *
+ * CONSTRUCTION, WHICH NOTHING HERE PRICED. Every other case builds its values in setup
+ * and times what happens to them afterwards, so the cost of MAKING one was invisible —
+ * and it was 547 ns against the hand-written arm's 15, a 36x ratio and two orders of
+ * magnitude over the read it precedes. A table builds one of these per cell per row, so
+ * it is walked more often than most of what follows.
+ *
+ * The two forms are separate rows because they allocate differently: the value form is
+ * a callable and its fields, the body form is that plus a first run under tracking.
+ *
+ * BOTH ROWS RUN A NOISY A/A FLOOR — 1% to 13% across runs, where the ops that only read
+ * and write settle under 1%. Construction is the one thing here that allocates per
+ * operation, so the sample carries whatever collection it triggered, and `ratio()`
+ * classifies against the floor it measured rather than against a fixed bar. The ratios
+ * are several times the worst floor seen; a change worth believing here moves them by
+ * more than that, and is confirmed by a second run.
+ */
 function constructValue(): Case {
     return {
         name: 'construct a value',
@@ -68,20 +75,41 @@ function constructDerived(): Case {
         // shared source would grow a reader per operation and the case would price an
         // array climbing into the millions rather than a construction. Both arms build
         // the same two nodes and the same one edge.
+        //
+        // BOTH ARMS COMPUTE ONCE, and the hand-written one has to be TOLD to: its `dirty: true`
+        // computes on the first `read`, where abide's first run is at construction (3.16).
+        // Without the read the ratio is a construction against a construction plus a run, and
+        // `work` counts 0 body runs against 1.
         vanilla: (): void => {
             const held = signal(1)
-            sink = handDerived([held], () => held.read() * 2)
+            const node = handDerived([held], () => held.read() * 2)
+            node.read()
+            sink = node
         },
         abide: (): void => {
             const source = reactive(1)
             sink = reactive(() => source() * 2)
         },
-        // Both arms build one node and compute it once — the hand-written node's first
-        // `read` is what its `dirty: true` makes happen, and abide's is 3.16.
-        work: () => ({
-            vanilla: { values: 2, bodyRuns: 1 },
-            abide: { values: 2, bodyRuns: 1 },
-        }),
+        work: () => {
+            let handRuns = 0
+            const held = signal(1)
+            const node = handDerived([held], () => {
+                handRuns += 1
+                return held.read() * 2
+            })
+            node.read()
+            sink = node
+            let abideRuns = 0
+            const source = reactive(1)
+            sink = reactive(() => {
+                abideRuns += 1
+                return source() * 2
+            })
+            return {
+                vanilla: { bodyRuns: handRuns },
+                abide: { bodyRuns: abideRuns },
+            }
+        },
     }
 }
 
@@ -147,17 +175,21 @@ function writeChanged(): Case {
     }
 }
 
-// WHAT THE BATCH BUYS, and the case the one above cannot show. A handler that writes the
-// same value ten times is a loop, a reducer applying ten actions, a drag moving a
-// coordinate — and only the last of the ten is ever seen. The hand-written arm runs its
-// subscriber ten times because it has nowhere to put the other nine; abide runs it once at
-// the end of the turn.
-//
-// THE WORK DISAGREES ON PURPOSE AND THE TIMING IS NOT THE CLAIM. Ten wakes against one is
-// the claim; the ratio beside it reads the wrong way round because the hand-written arm's
-// subscriber is `() => {}` and saving nine calls to nothing saves nothing. What a saved
-// wake is actually worth is counted where it lands — `packages/abide/tests/dom.test.ts`
-// puts the same ten writes through a binding and reports 10 `.data` writes against 1.
+/**
+ * Case: ten writes in one handler, which abide batches into one wake.
+ *
+ * WHAT THE BATCH BUYS, and the case the one above cannot show. A handler that writes the
+ * same value ten times is a loop, a reducer applying ten actions, a drag moving a
+ * coordinate — and only the last of the ten is ever seen. The hand-written arm runs its
+ * subscriber ten times because it has nowhere to put the other nine; abide runs it once at
+ * the end of the turn.
+ *
+ * THE WORK DISAGREES ON PURPOSE AND THE TIMING IS NOT THE CLAIM. Ten wakes against one is
+ * the claim; the ratio beside it reads the wrong way round because the hand-written arm's
+ * subscriber is `() => {}` and saving nine calls to nothing saves nothing. What a saved
+ * wake is actually worth is counted where it lands — `packages/abide/tests/dom.test.ts`
+ * puts the same ten writes through a binding and reports 10 `.data` writes against 1.
+ */
 function writeTenTimes(): Case {
     const held = signal(0)
     held.subscribe(() => {})
@@ -202,10 +234,14 @@ function writeTenTimes(): Case {
     }
 }
 
-// THE DEFAULT, PRICED HONESTLY. Both arms compare by reference, so a fresh object with
-// the same contents wakes on both — the work AGREES, and what is left is the cost of
-// abide's write path against a bare assignment. This is the case that used to disagree,
-// and it stopped disagreeing when the default changed.
+/**
+ * Case: writing a fresh equal object under the default reference compare.
+ *
+ * THE DEFAULT, PRICED HONESTLY. Both arms compare by reference, so a fresh object with
+ * the same contents wakes on both — the work AGREES, and what is left is the cost of
+ * abide's write path against a bare assignment. This is the case that used to disagree,
+ * and it stopped disagreeing when the default changed.
+ */
 function writeEqualObject(): Case {
     const held = signal({ id: 1, total: 100 })
     const value = reactive({ id: 1, total: 100 })
@@ -242,11 +278,15 @@ function writeEqualObject(): Case {
     }
 }
 
-// WHAT DECLARING `structural` COSTS AND BUYS, which is now the app's decision rather
-// than the framework's. The walk is paid on EVERY write; the wake it saves is only
-// collected when the payload really is equal. An app names it on the values where
-// re-materialisation is the common case, and this is the number that decision is made
-// against.
+/**
+ * Case: writing a fresh equal object with `structural` declared.
+ *
+ * WHAT DECLARING `structural` COSTS AND BUYS, which is now the app's decision rather
+ * than the framework's. The walk is paid on EVERY write; the wake it saves is only
+ * collected when the payload really is equal. An app names it on the values where
+ * re-materialisation is the common case, and this is the number that decision is made
+ * against.
+ */
 function writeEqualObjectStructural(): Case {
     const held = signal({ id: 1, total: 100 })
     const value = reactive({ id: 1, total: 100 }, { identity: structural })
@@ -286,9 +326,13 @@ function writeEqualObjectStructural(): Case {
     }
 }
 
-// The hand-written arm has no derived value, so one is written here rather than
-// borrowed: dirty-flag plus recompute-on-read, which is what an author writes when
-// they do not have a framework. Anything less is not a comparison.
+/**
+ * Case: write a source, then read a value derived from it.
+ *
+ * The hand-written arm has no derived value, so one is written here rather than
+ * borrowed: dirty-flag plus recompute-on-read, which is what an author writes when
+ * they do not have a framework. Anything less is not a comparison.
+ */
 function derived(): Case {
     const held = signal(1)
     let cached = held.read() * 2
@@ -356,11 +400,15 @@ function derived(): Case {
     }
 }
 
-// WHAT THE RECOMPUTE PATH BUYS, and the case the previous one cannot answer. A source
-// that changes without changing what derives from it: the vanilla arm's dirty flag
-// cannot tell, so everything downstream re-runs; the abide arm compares the recomputed
-// value and stops there. This is the ratio's other half — the previous case prices the
-// cost, this one prices what it is for, and neither is the claim alone.
+/**
+ * Case: a source change that leaves the derived value unchanged.
+ *
+ * WHAT THE RECOMPUTE PATH BUYS, and the case the previous one cannot answer. A source
+ * that changes without changing what derives from it: the vanilla arm's dirty flag
+ * cannot tell, so everything downstream re-runs; the abide arm compares the recomputed
+ * value and stops there. This is the ratio's other half — the previous case prices the
+ * cost, this one prices what it is for, and neither is the claim alone.
+ */
 function derivedUnchanged(): Case {
     const held = signal(1)
     let dirty = false
@@ -426,17 +474,21 @@ function derivedUnchanged(): Case {
     }
 }
 
-// WALKING THE RETAINED WINDOW, which is what `s.history()`'s sync face is FOR — 2.5 calls it
-// the snapshot, now, and a template spells it `{#for m of s.history(n)}`. `s()` answers the
-// latest production whatever is retained (9.1), so this is the only shape that reads
-// history at all.
-//
-// IT ITERATES RATHER THAN SPREADING, and the difference is the whole reason the case was
-// rewritten. `[...s.history()]` against `rows.slice()` measured 10.75x and priced almost none
-// of it on abide: JSC spreads an ARRAY in 44 ns and an explicit iterator in 387, so the
-// ratio was a fast path the hand-written arm happens to sit on and the lazy face cannot.
-// A raw array iterator costs 387 where this `Tail` costs 352 — there is nothing of abide's
-// in the number. What both arms do here is walk what is held.
+/**
+ * Case: append to a capped log and walk its retained window.
+ *
+ * WALKING THE RETAINED WINDOW, which is what `s.history()`'s sync face is FOR — 2.5 calls it
+ * the snapshot, now, and a template spells it `{#for m of s.history(n)}`. `s()` answers the
+ * latest production whatever is retained (9.1), so this is the only shape that reads
+ * history at all.
+ *
+ * IT ITERATES RATHER THAN SPREADING, and the difference is the whole reason the case was
+ * rewritten. `[...s.history()]` against `rows.slice()` measured 10.75x and priced almost none
+ * of it on abide: JSC spreads an ARRAY in 44 ns and an explicit iterator in 387, so the
+ * ratio was a fast path the hand-written arm happens to sit on and the lazy face cannot.
+ * A raw array iterator costs 387 where this `Tail` costs 352 — there is nothing of abide's
+ * in the number. What both arms do here is walk what is held.
+ */
 function logAppendAndRead(): Case {
     const DEPTH = 100
     const rows: number[] = []
@@ -478,12 +530,16 @@ function logAppendAndRead(): Case {
     }
 }
 
-// THE WRITE HALF OF RETENTION, ON ITS OWN. `append to a capped log and read it` bundles
-// the read with it, and the read is the larger number — so the one place abide BEATS the
-// hand-written arm was invisible. `shift()` moves every remaining element, so a
-// hand-written cap is linear in the depth on every write; growing to twice the depth and
-// trimming in one bulk move is the same memmove once per `history` writes. 6.2 is the clause
-// and this is the ratio it makes against code somebody actually writes.
+/**
+ * Case: the write half of retention — publishing into a capped ring.
+ *
+ * THE WRITE HALF OF RETENTION, ON ITS OWN. `append to a capped log and walk it` bundles
+ * the read with it, and the read is the larger number — so the one place abide BEATS the
+ * hand-written arm was invisible. `shift()` moves every remaining element, so a
+ * hand-written cap is linear in the depth on every write; growing to twice the depth and
+ * trimming in one bulk move is the same memmove once per `history` writes. 6.2 is the clause
+ * and this is the ratio it makes against code somebody actually writes.
+ */
 function publishIntoCappedRing(): Case {
     const DEPTH = 100
     const rows: number[] = []
@@ -519,14 +575,18 @@ function publishIntoCappedRing(): Case {
     }
 }
 
-// THE CURSOR, PRICED PER TURN. RULEBOOK 5.11 has a cursor deliver every production
-// retention still holds, so the arms are BALANCED — k productions in, k turns out — and
-// what is left is the cost of finding a production by ordinal against finding it by index
-// in an array somebody trimmed themselves.
-//
-// A BURST rather than one at a time, and that is the whole point of the case: one at a
-// time cannot tell a cursor that indexes retention from one that answers with the head,
-// because with one outstanding production those are the same answer. Eight can.
+/**
+ * Case: a burst of productions taken from a cursor, one turn each.
+ *
+ * THE CURSOR, PRICED PER TURN. RULEBOOK 5.11 has a cursor deliver every production
+ * retention still holds, so the arms are BALANCED — k productions in, k turns out — and
+ * what is left is the cost of finding a production by ordinal against finding it by index
+ * in an array somebody trimmed themselves.
+ *
+ * A BURST rather than one at a time, and that is the whole point of the case: one at a
+ * time cannot tell a cursor that indexes retention from one that answers with the head,
+ * because with one outstanding production those are the same answer. Eight can.
+ */
 function cursorBurst(): Case {
     const BURST = 8
     const DEPTH = 100
@@ -578,9 +638,13 @@ function cursorBurst(): Case {
     }
 }
 
-// `sink` exists to defeat dead-code elimination — every arm writes it, and an unread
-// write is exactly what an optimiser removes. Read once, so the linter does not read it
-// as dead, which it is not.
+/**
+ * Returns the dead-code-elimination sink every arm writes.
+ *
+ * `sink` exists to defeat dead-code elimination — every arm writes it, and an unread
+ * write is exactly what an optimiser removes. Read once, so the linter does not read it
+ * as dead, which it is not.
+ */
 export function sinkValue(): unknown {
     return sink
 }
@@ -603,11 +667,15 @@ type Subscribable = { subscribe(reader: () => void): () => void }
 
 type HandWritten = Subscribable & { read(): number }
 
-// The hand-written derived node, and it has to be SUBSCRIBABLE or a chain cannot be
-// built out of it: a dirty flag that nothing propagates makes every node above the
-// first stale forever. Dirtiness pushes eagerly and the recompute is pulled on the
-// read, which is what an author writes and is the pattern the whole comparison is
-// against.
+/**
+ * A hand-written derived node: eager dirty push, recompute pulled on read.
+ *
+ * The hand-written derived node, and it has to be SUBSCRIBABLE or a chain cannot be
+ * built out of it: a dirty flag that nothing propagates makes every node above the
+ * first stale forever. Dirtiness pushes eagerly and the recompute is pulled on the
+ * read, which is what an author writes and is the pattern the whole comparison is
+ * against.
+ */
 function handDerived(
     sources: Subscribable[],
     compute: () => number,
@@ -641,8 +709,12 @@ function handDerived(
     }
 }
 
-// ONE SOURCE, MANY READERS. A write has to reach all of them; a read of one must not
-// pay for the other nine. This is a row's worth of cells over one record.
+/**
+ * Case: one source, `width` readers, one read after the write.
+ *
+ * ONE SOURCE, MANY READERS. A write has to reach all of them; a read of one must not
+ * pay for the other nine. This is a row's worth of cells over one record.
+ */
 function fanOut(width: number): Case {
     const held = signal(0)
     const hand: HandWritten[] = []
@@ -709,8 +781,12 @@ function fanOut(width: number): Case {
     }
 }
 
-// MANY SOURCES, ONE READER. The cursor protocol's steady state: a body reading N values
-// in the same order every run should compare N pointers and mutate nothing.
+/**
+ * Case: `width` sources read by one body, one of them changes.
+ *
+ * MANY SOURCES, ONE READER. The cursor protocol's steady state: a body reading N values
+ * in the same order every run should compare N pointers and mutate nothing.
+ */
 function fanIn(width: number): Case {
     const held: ReturnType<typeof signal<number>>[] = []
     for (let index = 0; index < width; index += 1) held.push(signal(index))
@@ -746,13 +822,55 @@ function fanIn(width: number): Case {
             ;(sources[0] as { set(value: number): void }).set(flop)
             sink = summed()
         },
-        work: () => ({ vanilla: { bodyRuns: 1 }, abide: { bodyRuns: 1 } }),
+        // COUNTED ON A FRESH GRAPH, as `fanOut` is: the timed arms carry no counter, and a
+        // record written as a literal agrees with itself whatever either arm did.
+        work: () => {
+            let handRuns = 0
+            const handSources: ReturnType<typeof signal<number>>[] = []
+            for (let index = 0; index < width; index += 1)
+                handSources.push(signal(index))
+            const handTop = handDerived(handSources, () => {
+                handRuns += 1
+                let total = 0
+                for (let index = 0; index < width; index += 1)
+                    total += (handSources[index] as { read(): number }).read()
+                return total
+            })
+            handTop.read()
+            handRuns = 0
+            ;(handSources[0] as { write(value: number): void }).write(-1)
+            handTop.read()
+
+            let abideRuns = 0
+            const abideSources: ReturnType<typeof reactive<number>>[] = []
+            for (let index = 0; index < width; index += 1)
+                abideSources.push(reactive(index))
+            const abideTop = reactive(() => {
+                abideRuns += 1
+                let total = 0
+                for (let index = 0; index < width; index += 1)
+                    total += (abideSources[index] as () => number)()
+                return total
+            }) as unknown as () => number
+            abideTop()
+            abideRuns = 0
+            ;(abideSources[0] as { set(value: number): void }).set(-1)
+            abideTop()
+            return {
+                vanilla: { bodyRuns: handRuns },
+                abide: { bodyRuns: abideRuns },
+            }
+        },
     }
 }
 
-// FAN-IN AND FAN-OUT AT EVERY LEVEL — the shape where sharing makes a walk re-walk.
-// Each layer reads every node of the one below it, so the edge count is width squared
-// per level and every path from the top to the bottom is distinct.
+/**
+ * Case: a layered DAG, every node reading every node of the layer below.
+ *
+ * FAN-IN AND FAN-OUT AT EVERY LEVEL — the shape where sharing makes a walk re-walk.
+ * Each layer reads every node of the one below it, so the edge count is width squared
+ * per level and every path from the top to the bottom is distinct.
+ */
 function layeredDag(width: number, depth: number): Case {
     function build<Node>(
         source: (index: number) => Node,
@@ -772,6 +890,7 @@ function layeredDag(width: number, depth: number): Case {
     }
 
     const handBase: ReturnType<typeof signal<number>>[] = []
+    let handRuns = 0
     const handTop = build<HandWritten>(
         (index) => {
             const made = signal(index)
@@ -780,6 +899,7 @@ function layeredDag(width: number, depth: number): Case {
         },
         (below, index) =>
             handDerived(below, () => {
+                handRuns += 1
                 let total = index
                 for (let at = 0; at < below.length; at += 1)
                     total += (below[at] as HandWritten).read()
@@ -823,20 +943,37 @@ function layeredDag(width: number, depth: number): Case {
             ;(abideBase[0] as unknown as { set(value: number): void }).set(flop)
             sink = abideTop()
         },
+        // BOTH ARMS CARRY THEIR COUNTER IN THE TIMED GRAPH, so the increment is priced on each
+        // side alike. The write is one past what the base holds, so it is a change whatever
+        // state the timed loop left it in.
         work: () => {
-            const before = abideRuns
-            ;(abideBase[0] as unknown as { set(value: number): void }).set(99)
+            const handBefore = handRuns
+            const handSource = handBase[0] as {
+                read(): number
+                write(value: number): void
+            }
+            handSource.write(handSource.read() + 1)
+            handTop.read()
+            const abideBefore = abideRuns
+            const abideSource = abideBase[0] as unknown as (() => number) & {
+                set(value: number): void
+            }
+            abideSource.set(abideSource() + 1)
             abideTop()
             return {
-                vanilla: { bodyRuns: width * (depth - 1) + 1 },
-                abide: { bodyRuns: abideRuns - before },
+                vanilla: { bodyRuns: handRuns - handBefore },
+                abide: { bodyRuns: abideRuns - abideBefore },
             }
         },
     }
 }
 
-// A DEEP CHAIN. No sharing at all, so it prices depth alone — the control that says
-// which of the DAG's cost is depth and which is sharing.
+/**
+ * Case: a chain `depth` deep — depth with no sharing.
+ *
+ * A DEEP CHAIN. No sharing at all, so it prices depth alone — the control that says
+ * which of the DAG's cost is depth and which is sharing.
+ */
 function chain(depth: number): Case {
     const held = signal(0)
     let handNode = handDerived([held], () => held.read() + 1)
@@ -868,16 +1005,57 @@ function chain(depth: number): Case {
             source.set(flop)
             sink = node()
         },
-        work: () => ({
-            vanilla: { bodyRuns: depth },
-            abide: { bodyRuns: depth },
-        }),
+        work: () => {
+            let handRuns = 0
+            const handSource = signal(0)
+            let handLink = handDerived([handSource], () => {
+                handRuns += 1
+                return handSource.read() + 1
+            })
+            for (let level = 1; level < depth; level += 1) {
+                const below = handLink
+                handLink = handDerived([below], () => {
+                    handRuns += 1
+                    return below.read() + 1
+                })
+            }
+            handLink.read()
+            handRuns = 0
+            handSource.write(1)
+            handLink.read()
+
+            let abideRuns = 0
+            const abideSource = reactive(0)
+            let abideLink = reactive(() => {
+                abideRuns += 1
+                return abideSource() + 1
+            }) as unknown as () => number
+            for (let level = 1; level < depth; level += 1) {
+                const below = abideLink
+                abideLink = reactive(() => {
+                    abideRuns += 1
+                    return below() + 1
+                }) as unknown as () => number
+            }
+            abideLink()
+            abideRuns = 0
+            abideSource.set(1)
+            abideLink()
+            return {
+                vanilla: { bodyRuns: handRuns },
+                abide: { bodyRuns: abideRuns },
+            }
+        },
     }
 }
 
-// THE CURSOR PROTOCOL'S WORST CASE. A body whose source order ALTERNATES diverges on
-// every run: the cursor misses, the tail is detached and rebuilt, and every source is
-// re-subscribed. 14.15 warns on exactly this shape, and this is what the warning costs.
+/**
+ * Case: a body whose source order alternates every run.
+ *
+ * THE CURSOR PROTOCOL'S WORST CASE. A body whose source order ALTERNATES diverges on
+ * every run: the cursor misses, the tail is detached and rebuilt, and every source is
+ * re-subscribed. 14.15 warns on exactly this shape, and this is what the warning costs.
+ */
 function alternatingSources(): Case {
     const flagHeld = signal(true)
     const left = signal(1)
@@ -909,13 +1087,96 @@ function alternatingSources(): Case {
             flag.set(abideFlag)
             sink = picked()
         },
-        work: () => ({ vanilla: { bodyRuns: 1 }, abide: { bodyRuns: 1 } }),
+        // BODY RUNS AND THE EDGES THE OP MOVED, counted on a fresh graph per arm. Neither arm
+        // exposes its subscription list, so an edge is counted by what it DOES: a source
+        // REACHES the body when writing it makes the next read re-run the body. The source
+        // the body stops reading is asked after the op (`edgesDropped` is 1 if it no longer
+        // reaches), and the one it starts reading is asked before and after (`edgesAdded` is 1
+        // if it reaches only once the op has run). The hand-written node subscribes to all
+        // three once and re-subscribes nothing, so these two DISAGREE, 0 against 1 — the
+        // hand-written arm is the superset subscription somebody writes, and this is the
+        // re-subscription it never pays.
+        work: () => {
+            type Graph = {
+                read(): void
+                flip(): void
+                writeOld(): void
+                writeNew(): void
+            }
+            function counted(
+                build: (ran: () => void) => Graph,
+            ): Record<string, number> {
+                let runs = 0
+                const graph = build(() => {
+                    runs += 1
+                })
+                const reaches = (write: () => void): number => {
+                    const before = runs
+                    write()
+                    graph.read()
+                    return runs > before ? 1 : 0
+                }
+                graph.read()
+                const newBefore = reaches(graph.writeNew)
+                runs = 0
+                graph.flip()
+                graph.read()
+                const bodyRuns = runs
+                const oldAfter = reaches(graph.writeOld)
+                return {
+                    bodyRuns,
+                    edgesDropped: 1 - oldAfter,
+                    edgesAdded: reaches(graph.writeNew) - newBefore,
+                }
+            }
+            return {
+                vanilla: counted((ran) => {
+                    const flagSource = signal(true)
+                    const oldSource = signal(1)
+                    const newSource = signal(2)
+                    const node = handDerived(
+                        [flagSource, oldSource, newSource],
+                        () => {
+                            ran()
+                            return flagSource.read()
+                                ? oldSource.read()
+                                : newSource.read()
+                        },
+                    )
+                    return {
+                        read: () => void node.read(),
+                        flip: () => flagSource.write(false),
+                        writeOld: () => oldSource.write(oldSource.read() + 1),
+                        writeNew: () => newSource.write(newSource.read() + 1),
+                    }
+                }),
+                abide: counted((ran) => {
+                    const flagSource = reactive(true)
+                    const oldSource = reactive(1)
+                    const newSource = reactive(2)
+                    const node = reactive(() => {
+                        ran()
+                        return flagSource() ? oldSource() : newSource()
+                    }) as unknown as () => number
+                    return {
+                        read: () => void node(),
+                        flip: () => flagSource.set(false),
+                        writeOld: () => oldSource.set(oldSource() + 1),
+                        writeNew: () => newSource.set(newSource() + 1),
+                    }
+                }),
+            }
+        },
     }
 }
 
-// ONE VALUE READ MANY TIMES IN ONE BODY — a template with several slots over one record.
-// The cursor matches each read in order, so the list holds the same value repeatedly and
-// the dedupe in `track` is what keeps the wake count at one.
+/**
+ * Case: one source read `times` times in one body.
+ *
+ * ONE VALUE READ MANY TIMES IN ONE BODY — a template with several slots over one record.
+ * The cursor matches each read in order, so the list holds the same value repeatedly and
+ * the dedupe in `track` is what keeps the wake count at one.
+ */
 function repeatedReads(times: number): Case {
     const held = signal(1)
     const hand = handDerived([held], () => {
@@ -947,14 +1208,50 @@ function repeatedReads(times: number): Case {
             source.set(flop)
             sink = summed()
         },
-        work: () => ({ vanilla: { bodyRuns: 1 }, abide: { bodyRuns: 1 } }),
+        work: () => {
+            let handRuns = 0
+            const handSource = signal(1)
+            const handTop = handDerived([handSource], () => {
+                handRuns += 1
+                let total = 0
+                for (let index = 0; index < times; index += 1)
+                    total += handSource.read()
+                return total
+            })
+            handTop.read()
+            handRuns = 0
+            handSource.write(2)
+            handTop.read()
+
+            let abideRuns = 0
+            const abideSource = reactive(1)
+            const abideTop = reactive(() => {
+                abideRuns += 1
+                let total = 0
+                for (let index = 0; index < times; index += 1)
+                    total += abideSource()
+                return total
+            }) as unknown as () => number
+            abideTop()
+            abideRuns = 0
+            abideSource.set(2)
+            abideTop()
+            return {
+                vanilla: { bodyRuns: handRuns },
+                abide: { bodyRuns: abideRuns },
+            }
+        },
     }
 }
 
-// THE PROBE OVER A SETTLED, SHARED GRAPH — the case a stack guard cannot survive and a
-// visited stamp makes linear. It is the ALL-IDLE graph on purpose: the walk
-// short-circuits on a busy node, so the exhaustive traversal is the spinner read that
-// renders no spinner, which is the one a frame takes over and over.
+/**
+ * Case: a `busy` probe over a settled, shared DAG.
+ *
+ * THE PROBE OVER A SETTLED, SHARED GRAPH — the case a stack guard cannot survive and a
+ * visited stamp makes linear. It is the ALL-IDLE graph on purpose: the walk
+ * short-circuits on a busy node, so the exhaustive traversal is the spinner read that
+ * renders no spinner, which is the one a frame takes over and over.
+ */
 function probeSettledDag(width: number, depth: number): Case {
     type HandNode = { busy: boolean; sources: HandNode[] }
     function handLayer(): HandNode {
@@ -1019,19 +1316,33 @@ function probeSettledDag(width: number, depth: number): Case {
         abide: (): void => {
             sink = top.busy()
         },
-        work: () => ({ vanilla: { busy: 0 }, abide: { busy: 0 } }),
+        // THE ANSWER EACH ARM GAVE, taken from the arm rather than written down: an all-idle
+        // graph probes not-busy in both. How many nodes abide's walk VISITED has no public
+        // counter — `WORK.descents` counts the mark walk, not this one — so the visit count
+        // that tells a stack guard from a visited stamp is not on this record.
+        work: () => {
+            seen.clear()
+            return {
+                vanilla: { busy: anyBusy(handTop) ? 1 : 0 },
+                abide: { busy: top.busy() ? 1 : 0 },
+            }
+        },
     }
 }
 
-// WHAT THE MACHINERY BUYS, which is the other half of every ratio above. The CAREFUL
-// hand-written arm already carries an identity check, so those rows price abide
-// against a guard somebody had to know to write. These two price it against the
-// version most people write first — an unconditional notify — and the answer goes the
-// other way.
-//
-// READERS ARE THE POINT. With nobody subscribed a careless write is a store and the
-// two arms are level; the cost only exists where somebody is listening, so the width
-// is the case. 100 is a table with a bound cell per row, not a stress test.
+/**
+ * Case: an equal write against a hand-written arm that notifies unconditionally.
+ *
+ * WHAT THE MACHINERY BUYS, which is the other half of every ratio above. The CAREFUL
+ * hand-written arm already carries an identity check, so those rows price abide
+ * against a guard somebody had to know to write. These two price it against the
+ * version most people write first — an unconditional notify — and the answer goes the
+ * other way.
+ *
+ * READERS ARE THE POINT. With nobody subscribed a careless write is a store and the
+ * two arms are level; the cost only exists where somebody is listening, so the width
+ * is the case. 100 is a table with a bound cell per row, not a stress test.
+ */
 function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
     const name = fresh
         ? `a re-materialised equal value, ${width} readers, structural vs CARELESS`
@@ -1090,38 +1401,42 @@ function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
     }
 }
 
-// THE SUBSCRIBE PATH, WHICH NOTHING HERE PRICED. Every fan-out case builds its readers in
-// SETUP and times the write afterwards, so the cost of a reader ARRIVING on a value was
-// invisible to the whole bench — and it was quadratic: `track` deduped by scanning
-// `source.readers`, whose length is the number of readers already on the value, so mounting
-// n of them was n²/2 pointer compares. Per reader under JSC: 446 ns at n=500 rising to
-// 3,872 ns at n=8000, which put a 30.98 ms mount on the click that opens a long list.
-// Deduping from the reader's own `sources` prefix instead — as long as what this BODY reads
-// rather than how many readers the VALUE has — is 0.45 ms at the same width.
-//
-// THE OP IS A MOUNT AND A TEARDOWN, both arms, so neither is left holding what the other
-// dropped. FIFTY readers, and the width is chosen by the batcher rather than by the claim: at
-// 200 the op is 26.7 µs, which clears the clock bar at n=1, and a sample of one op under a
-// frame is what `ratio()` refuses — so the row came out `underOneFrame` and was a figure
-// rather than a claim. At 50 the batcher takes n=4 and the ratio resolves.
-//
-// WHAT THE ROW IS WORTH, run both ways: 1.67x with the reader-side dedup and 2.21x with it
-// out, against an A/A floor of 3-7%. What it distinguishes is a CONSTANT the subscribe path
-// grows, because it is abide against the hand-written arm at ONE width — a constant is exactly
-// what a same-structure ratio divides out, so this row and `mountingIsLinear` in
-// `benchReactive.ts` cover different regressions and neither subsumes the other.
-//
-// THE SLOPE IS `mountingIsLinear`'S, at 16 against 112 with a calibrated bar. It is worth
-// reading that function's header before touching either: a first attempt at it compared against
-// what a COMPLEXITY CLASS predicts (4x linear, 16x quadratic) and reported the mechanism out as
-// holding, because at any priceable width `watch` construction dominates and the n² term is a
-// minority of the op. The bar has to be set by what the fixed mechanism measures, which is what
-// 6.2 does.
-//
-// THE PER-READER FIGURES in `track`'s own comment are the third record and the widest — 446 ns
-// rising to 3,872 ns against ~60 ns flat, measured directly at n=500 through n=8000, where
-// neither of the two rows reaches past 112. Those are a measurement to re-run rather than a
-// gate; the gate that runs in `bun test` is the dedup's subscription count in `reactive.test.ts`.
+/**
+ * Case: mount and tear down `width` readers on one value.
+ *
+ * THE SUBSCRIBE PATH, WHICH NOTHING HERE PRICED. Every fan-out case builds its readers in
+ * SETUP and times the write afterwards, so the cost of a reader ARRIVING on a value was
+ * invisible to the whole bench — and it was quadratic: `track` deduped by scanning
+ * `source.readers`, whose length is the number of readers already on the value, so mounting
+ * n of them was n²/2 pointer compares. Per reader under JSC: 446 ns at n=500 rising to
+ * 3,872 ns at n=8000, which put a 30.98 ms mount on the click that opens a long list.
+ * Deduping from the reader's own `sources` prefix instead — as long as what this BODY reads
+ * rather than how many readers the VALUE has — is 0.45 ms at the same width.
+ *
+ * THE OP IS A MOUNT AND A TEARDOWN, both arms, so neither is left holding what the other
+ * dropped. FIFTY readers, and the width is chosen by the batcher rather than by the claim: at
+ * 200 the op is 26.7 µs, which clears the clock bar at n=1, and a sample of one op under a
+ * frame is what `ratio()` refuses — so the row came out `underOneFrame` and was a figure
+ * rather than a claim. At 50 the batcher takes n=4 and the ratio resolves.
+ *
+ * WHAT THE ROW IS WORTH, run both ways: 1.67x with the reader-side dedup and 2.21x with it
+ * out, against an A/A floor of 3-7%. What it distinguishes is a CONSTANT the subscribe path
+ * grows, because it is abide against the hand-written arm at ONE width — a constant is exactly
+ * what a same-structure ratio divides out, so this row and `mountingIsLinear` in
+ * `benchReactive.ts` cover different regressions and neither subsumes the other.
+ *
+ * THE SLOPE IS `mountingIsLinear`'S, at 16 against 112 with a calibrated bar. It is worth
+ * reading that function's header before touching either: a first attempt at it compared against
+ * what a COMPLEXITY CLASS predicts (4x linear, 16x quadratic) and reported the mechanism out as
+ * holding, because at any priceable width `watch` construction dominates and the n² term is a
+ * minority of the op. The bar has to be set by what the fixed mechanism measures, which is what
+ * 6.2 does.
+ *
+ * THE PER-READER FIGURES in `track`'s own comment are the third record and the widest — 446 ns
+ * rising to 3,872 ns against ~60 ns flat, measured directly at n=500 through n=8000, where
+ * neither of the two rows reaches past 112. Those are a measurement to re-run rather than a
+ * gate; the gate that runs in `bun test` is the dedup's subscription count in `reactive.test.ts`.
+ */
 
 function mountReaders(width: number): Case {
     return {
@@ -1202,7 +1517,21 @@ function constructKeyed(): Case {
         abide: (): void => {
             sink = reactive((args: { id: number }) => args.id)
         },
-        work: () => ({ vanilla: { values: 1 }, abide: { values: 1 } }),
+        // NO ENTRY IS BUILT BY MAKING ONE: an entry is the factory run once for its key, so the
+        // abide arm counts factory runs and the hand-written arm counts map entries.
+        work: () => {
+            const entries = new Map<string, { ready: boolean }>()
+            sink = (args: { id: number }) => entries.get(JSON.stringify(args))
+            let built = 0
+            sink = reactive((args: { id: number }) => {
+                built += 1
+                return args.id
+            })
+            return {
+                vanilla: { built: entries.size },
+                abide: { built },
+            }
+        },
     }
 }
 
@@ -1211,7 +1540,11 @@ function reachKeyed(): Case {
         string,
         { args: { id: number }; value: number }
     >()
-    const keyed = reactive((args: { id: number }) => args.id)
+    let abideBuilt = 0
+    const keyed = reactive((args: { id: number }) => {
+        abideBuilt += 1
+        return args.id
+    })
     for (let index = 0; index < KEYED_WIDTH; index += 1) {
         handEntries.set(JSON.stringify({ id: index }), {
             args: { id: index },
@@ -1232,7 +1565,20 @@ function reachKeyed(): Case {
             at = (at + 1) % KEYED_WIDTH
             sink = keyed({ id: at })
         },
-        work: () => ({ vanilla: { built: 0 }, abide: { built: 0 } }),
+        // A FULL LAP OF REACHES over the timed structures, counting entries built during it:
+        // the factory's runs for abide, the map's growth for the hand-written arm.
+        work: () => {
+            const handBefore = handEntries.size
+            const abideBefore = abideBuilt
+            for (let index = 0; index < KEYED_WIDTH; index += 1) {
+                sink = handEntries.get(JSON.stringify({ id: index }))
+                sink = keyed({ id: index })
+            }
+            return {
+                vanilla: { built: handEntries.size - handBefore },
+                abide: { built: abideBuilt - abideBefore },
+            }
+        },
     }
 }
 
@@ -1241,7 +1587,11 @@ function probeKeyed(): Case {
         string,
         { args: { id: number }; ready: boolean; busy: boolean }
     >()
-    const keyed = reactive((args: { id: number }) => args.id)
+    let abideBuilt = 0
+    const keyed = reactive((args: { id: number }) => {
+        abideBuilt += 1
+        return args.id
+    })
     for (let index = 0; index < KEYED_WIDTH; index += 1) {
         handEntries.set(JSON.stringify({ id: index }), {
             args: { id: index },
@@ -1251,29 +1601,49 @@ function probeKeyed(): Case {
         sink = keyed({ id: index })()
     }
     const pattern = { id: KEYED_WIDTH - 1 }
+    function handProbe(): boolean {
+        let ready = true
+        for (const entry of handEntries.values())
+            if (!entry.ready) {
+                ready = false
+                break
+            }
+        let busy = false
+        for (const entry of handEntries.values())
+            if (entry.args.id === pattern.id && entry.busy) {
+                busy = true
+                break
+            }
+        return ready && !busy
+    }
     return {
         name: `probe a keyed value of ${KEYED_WIDTH} entries, whole and by pattern`,
         distinguishes:
             'a keyed STATIC walking its entries — where the statics live is what this reaches first',
         vanilla: (): void => {
-            let ready = true
-            for (const entry of handEntries.values())
-                if (!entry.ready) {
-                    ready = false
-                    break
-                }
-            let busy = false
-            for (const entry of handEntries.values())
-                if (entry.args.id === pattern.id && entry.busy) {
-                    busy = true
-                    break
-                }
-            sink = ready && !busy
+            sink = handProbe()
         },
         abide: (): void => {
             sink = keyed.ready() && !keyed.busy(pattern)
         },
-        work: () => ({ vanilla: { walked: 2 }, abide: { walked: 2 } }),
+        // WHAT THE PROBE ANSWERED, and what it BUILT doing so — a static walks the entries that
+        // stand and builds none. How many entries abide's static walked has no public counter.
+        work: () => {
+            const handBefore = handEntries.size
+            const abideBefore = abideBuilt
+            const handAnswer = handProbe()
+            const abideAnswer = keyed.ready() && !keyed.busy(pattern)
+            return {
+                vanilla: {
+                    settled: handAnswer ? 1 : 0,
+                    built: handEntries.size - handBefore,
+                },
+                abide: {
+                    settled: abideAnswer ? 1 : 0,
+                    built: abideBuilt - abideBefore,
+                },
+            }
+        },
     }
 }
 
@@ -1314,5 +1684,17 @@ export const reactiveCases = (): Case[] => [
     equalWriteAgainstCareless(100, false),
     equalWriteAgainstCareless(100, true),
 ]
+
+/** One case's reading in the page's engine, as `__REACTIVE_BENCH__` hands it back to the spec. */
+export type ReactiveBenchRow = {
+    case: string
+    abide: number
+    vanilla: number
+    claim: string
+    n: number
+    floor: number
+    substrate: string
+    workDisagreement: string[]
+}
 
 export type { Case }

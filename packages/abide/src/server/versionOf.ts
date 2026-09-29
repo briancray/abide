@@ -28,6 +28,7 @@ type Stamp = {
 
 const STAMPS = new WeakMap<object, Stamp>()
 
+/** The version a value's standing production is named by over the wire. 18.22. */
 export function versionOf(value: unknown): number {
     const cell = pastOf(value)
     const held = (value as { peek(): unknown }).peek()
@@ -69,8 +70,12 @@ export function versionOf(value: unknown): number {
     return next
 }
 
-// What the patches written over `from` wrote, where they are all that moved the value since — and
-// `undefined` where a follower standing anywhere has to be sent the value.
+/**
+ * The patches written over version `from`, or `undefined` where a follower must be sent the value.
+ *
+ * What the patches written over `from` wrote, where they are all that moved the value since — and
+ * `undefined` where a follower standing anywhere has to be sent the value.
+ */
 export function patchesOf(
     value: unknown,
 ): { from: number | undefined; ops: PatchOp[] } | undefined {

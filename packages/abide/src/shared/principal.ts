@@ -12,6 +12,7 @@ import { mounted } from './mount.ts'
 import { ambient } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 
+/** The principal document: whether the caller is authenticated, and its claims. */
 export type Principal = {
     authenticated: boolean
     expiresAt?: string | undefined
@@ -19,6 +20,10 @@ export type Principal = {
     [claim: string]: unknown
 }
 
+/**
+ * The slots `principal` reads through: a browser's defaults, which the server replaces
+ * (`#server/principal.ts`).
+ */
 export const PRINCIPAL: {
     document: () => Principal | Promise<Principal>
     caller: () => string
@@ -57,6 +62,7 @@ type Members = {
 
 let members: Members | undefined
 
+/** The principal's members, each its own `Reactive`, built on first access. */
 export function principalMembers(): Members {
     if (members !== undefined) return members
     const document = ambient(() =>
@@ -82,6 +88,7 @@ export function principalMembers(): Members {
     return members
 }
 
+/** Who is calling (26.1): each member a `Reactive`, and `set` / `clear` for the sealed cookie. */
 export const principal = {
     get authenticated(): Reactive<boolean> {
         return principalMembers().authenticated

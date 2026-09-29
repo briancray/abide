@@ -143,6 +143,7 @@ function validateCase(
     }
 }
 
+/** Every shared case: two canonicalKey shapes and three validateJson schemas. */
 export function sharedCases(): SharedCase[] {
     return [
         keyCase('canonicalKey — one flat level', { id: 42 }),
@@ -190,7 +191,11 @@ export function sharedCases(): SharedCase[] {
     ]
 }
 
-// Read so the sink is live: an arm whose result nothing can observe is one an engine may drop.
+/**
+ * The last value any arm wrote.
+ *
+ * Read so the sink is live: an arm whose result nothing can observe is one an engine may drop.
+ */
 export function sinkValue(): unknown {
     return sink
 }

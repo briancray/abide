@@ -14,6 +14,7 @@ import { CASES } from './CASES.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 
+/** The patch set and per-case counts under bun, read off `bunSideCounts.ts`. */
 function bunSide(): {
     patchSet: string[]
     cases: Record<string, Record<string, number | null>>
@@ -26,6 +27,7 @@ function bunSide(): {
     )
 }
 
+/** Builds the measure lane's injectable and returns its path. */
 function injectable(): string {
     return execFileSync(
         'bun',

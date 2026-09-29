@@ -5,10 +5,13 @@
 import { expect, test } from 'bun:test'
 import { gate } from 'harness/gate'
 import {
+    armCase,
+    disarmCase,
     measure,
     PUBLISHED_WORK_KEY,
     type PublishedWork,
     patchSet,
+    profile,
     time,
 } from 'harness/measure'
 
@@ -295,6 +298,30 @@ test('time() under bun refuses on the emulated DOM', () => {
     expect(() => time({ case: 'emulated', arms: { one: () => {} } })).toThrow(
         /happy-dom can produce a count|parallel worker/,
     )
+})
+
+// Reverted — no check on `baseline` — the case closes, the arms are timed, and `ratio()`
+// fails on an undefined denominator (serial) or the batch refuses the worker (parallel):
+// no message names the arm. Before the ratio loop lost its guard it was `ratios: {}`.
+test('profile() refuses a baseline that is not one of its runs', () => {
+    armCase()
+    try {
+        expect(() =>
+            profile({
+                op: 'missing baseline',
+                runs: { vanilla: () => {} },
+                baseline: 'handwritten',
+                loadedArm: 'vanilla',
+                scriptBytes: 0,
+            }),
+        ).toThrow(/baseline "handwritten", which is not one of its runs/)
+    } finally {
+        try {
+            disarmCase()
+        } catch {
+            // Already closed: the reverted arm reached `disarmCase()` itself.
+        }
+    }
 })
 
 // THE BOTH-SUBSTRATES GATE'S BUN HALF. Asserted on the LIST rather than on a count,

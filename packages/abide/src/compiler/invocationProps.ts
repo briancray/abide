@@ -13,6 +13,7 @@ import { propKeyOf } from './classifyTemplate.ts'
 import type { Lowering } from './Lowering.ts'
 import type { TemplateNode } from './TemplateNode.ts'
 
+/** The props-record entries a component tag hands its child: spreads first, then each prop. */
 export function invocationProps(
     node: TemplateNode & { kind: 'element' },
     lowering: Lowering,

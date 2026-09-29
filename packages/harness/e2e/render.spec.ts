@@ -3,9 +3,9 @@
 //
 // THE ARM HAS TO DO THE SAME WORK, which is the lesson the server bench learned the hard way: its
 // first hand-written arm skipped escaping, was 3x faster for it, and was measuring a page with an
-// injection in it. Here the arm finds the same nodes a later update would write and wires the
-// same listener. What abide does ON TOP is open a reactive subscription per run — real work, and
-// named in the output rather than buried in the ratio.
+// injection in it. Here the arm finds the same nodes a later update would write. What abide does
+// ON TOP is open a reactive subscription per run — real work, and named in the output rather than
+// buried in the ratio.
 
 import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'

@@ -7,11 +7,14 @@
 // rather than being watched for. It was a `MutationObserver` over the body until the compiler
 // emitted the binding, which is the same thing guessed at.
 
-// Scroll-spy. Offsets are MEASURED ONCE — on load, on resize, and after the webfonts
-// swap, which is itself a reflow — so the scroll handler is arithmetic with no layout
-// read in it. An IntersectionObserver band was tried first and got two cases wrong:
-// nothing was active at the top, and the last sections never activated because at max
-// scroll they never enter the band.
+/**
+ * Marks the rail link of the heading the reader has scrolled to, until `signal` aborts.
+ *
+ * Offsets are MEASURED ONCE — on load, on resize, and after the webfonts swap, which is itself a
+ * reflow — so the scroll handler is arithmetic with no layout read in it. An IntersectionObserver
+ * band was tried first and got two cases wrong: nothing was active at the top, and the last
+ * sections never activated because at max scroll they never enter the band.
+ */
 function installScrollSpy(signal: AbortSignal) {
     const headings = [...document.querySelectorAll('main h2[id], main h3[id]')]
     const links = headings.map((h) =>
@@ -94,7 +97,11 @@ function installScrollSpy(signal: AbortSignal) {
     })
 }
 
-// One delegated listener per example rather than a listener per file tab.
+/**
+ * Wires every example card's file tabs to show the file they name.
+ *
+ * One delegated listener per example rather than a listener per file tab.
+ */
 function installExamples(main: Element, signal: AbortSignal) {
     for (const example of main.querySelectorAll('.example')) {
         example.addEventListener(
@@ -120,9 +127,13 @@ function installExamples(main: Element, signal: AbortSignal) {
     }
 }
 
-// 32.9's callback: the node, and the teardown for it. One `AbortController` per install, so the
-// listeners a page's own cards and rail hang leave with that page — which
-// is what a `Disposer` is for and what a navigation runs.
+/**
+ * Installs the scroll spy and example tabs on a page's `main`, returning their teardown.
+ *
+ * 32.9's callback: the node, and the teardown for it. One `AbortController` per install, so the
+ * listeners a page's own cards and rail hang leave with that page — which is what a `Disposer` is
+ * for and what a navigation runs.
+ */
 export function installDocs(main: Element): () => void {
     const installing = new AbortController()
     installScrollSpy(installing.signal)

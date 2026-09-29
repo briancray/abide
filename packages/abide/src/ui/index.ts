@@ -2,7 +2,7 @@
 // Every module reached from here is in the client's static closure, so an export added here is
 // paid for on every page (CLAUDE.md, "seams and imports"). The list IS the budget.
 //
-// The steps a mount's walk takes and the checks a binding makes on what it found (`adoptNode.ts`),
+// The steps a mount's walk takes and the checks a binding makes on what it found (`adoptWalk.ts`),
 // the write, the stringify a run's parts go through — and
 // what a DYNAMIC region needs: what WRITES into one (`fillRegion` for an arm,
 // `listAt` and `updateList` for a `{#for}` — which reconciles an array and appends an async
@@ -27,14 +27,14 @@ export { oneStyleValue } from '#shared/escapeText.ts'
 export { isRaw } from '#shared/Raw.ts'
 // 14.8 — an `{#if}` arm's branch-local `<script>`, set up outside the watch that swaps it in.
 export { untracked } from '#shared/reactive/tracking.ts'
-// 41.10's adopt half of a walk the compiler emits twice from one traversal — see `adoptNode.ts`.
+// 41.10's adopt half of a walk the compiler emits twice from one traversal — see `adoptWalk.ts`.
 export {
     elementHere,
     regionFound,
     regionHere,
     runHere,
     textHere,
-} from './adoptNode.ts'
+} from './adoptWalk.ts'
 // 39.6 — a module mounted into an empty region applies its own head, from inside its instance
 // (`emitClient`); only a module that carries its own markup and a `<head>` imports it.
 export { applyHead, liveHead } from './applyHead.ts'

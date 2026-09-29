@@ -1,4 +1,4 @@
-// 38.6 — `abide start`, end to end and in one process: the CLI builds an app, `serveBuild` answers
+// 38.6 — `abide start`, end to end and in one process: the CLI builds an app, `abide start` answers
 // it, and what comes back over http is the document a browser would get.
 //
 // THE PARAM PAGE IS THE POINT OF THE FIXTURE. A page with no props renders the same whether its
@@ -7,7 +7,7 @@
 
 // THE SERVER IS A SUBPROCESS, AND IT HAS TO BE. `bunfig.toml` preloads happy-dom for every test
 // file, which replaces the global `Response` — and `Bun.serve` refuses one it did not define, so
-// `serveBuild` called in here cannot answer a single request. Spawning `abide start` is both the
+// `serveApp` called in here cannot answer a single request. Spawning `abide start` is both the
 // way around that and the more honest arm: what is gated is the command a host runs.
 //
 // `Bun.fetch` for the other half of the same clobbering: the global `fetch` in a test file is the
@@ -160,7 +160,7 @@ test('an address a page matches is painted into the shell — 38.6', async () =>
 })
 
 // THE REVERT: hand the page `{ params: found.params }` rather than `{ params: () => … }` in
-// `serveBuild` and this reports `params is not a function` instead of the id — which is the same
+// `answerRequest` and this reports `params is not a function` instead of the id — which is the same
 // break `Router.ts`'s `routeProps` carries on the client side of the same contract.
 // THE REVERT: hand the emitters no `componentGraph` imports in `compileApp` and the build this
 // file serves fails before any address answers — `Could not resolve: "#ui/components/Badge.client.ts"`,
@@ -228,7 +228,7 @@ test('the script tag lands in the head, ahead of the body — 38.23', async () =
 // 38.29. Nothing a reader sees moves without it — the client asks for the same chunks itself, a
 // round trip later — so the work is what is asserted: which addresses the document names.
 // THE REVERTS: drop the loop over `chunks` from `clientTags` and this reports 0 preloads; follow
-// `dynamic-import` edges in `chunksByModule` too and every address preloads every page, 0 its own.
+// `dynamic-import` edges in `manifestOf` too and every address preloads every page, 0 its own.
 test('the document preloads the static closure of its own route, and nothing else — 38.29', async () => {
     const preloadsAt = async (address: string): Promise<string[]> => {
         const html = await (await Bun.fetch(`${base}${address}`)).text()

@@ -1,8 +1,7 @@
 <script>
 import { reactive } from 'abide'
 
-// What you type is `Accepted`; what the field shows back is
-// `Stored`, and the transform is where the two come apart.
+// Typed is `Accepted`, shown back is `Stored`; the transform splits them.
 let handle = reactive('', {
     transform: (typed) => typed.trim().toLowerCase().replaceAll(' ', '_'),
 })

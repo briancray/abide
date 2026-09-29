@@ -12,13 +12,14 @@
 // THE BODY IS NOT HERE. It is markup in the page's own template, because an example on it is a
 // component and a component is a tag — `buildPages.ts`'s `pageSource` says why.
 
+/** One docs page's static HTML, as `scripts/buildPages.ts` writes it into `CONTENT.ts`. */
 export type DocsContent = {
-    // The content path, which is also the page's address: `values/index` answers at `/values`.
+    /** The content path, which is also the page's address: `values/index` is `/values`. */
     slug: string
-    // The page's opening — the stub notice where there is one, the title, the intent.
+    /** The page's opening — the stub notice where there is one, the title, the intent. */
     header: string
-    // The previous and next links, in reading order.
+    /** The previous and next links, in reading order. */
     footer: string
-    // The heading list and the two downloads, as the rail renders them.
+    /** The heading list and the two downloads, as the rail renders them. */
     rail: string
 }

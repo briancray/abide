@@ -17,6 +17,7 @@ type Row = {
     variant: string
     cells: number
     nanoseconds: number
+    bindNanoseconds: number
     found: number
 }
 

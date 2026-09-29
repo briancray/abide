@@ -1,6 +1,7 @@
-// WHERE THE SERVER RENDER'S TIME GOES. 28x the hand-written arm at 1000 cards, and superlinear —
-// 59 ns a card at 10 and 437 at 1000 — so something is worse than per-slot work. NAME THE SHARE
-// BEFORE CHANGING THE LAYER: this splits the emitted shape into its parts and prices each.
+// WHERE THE SERVER RENDER'S TIME GOES, at 1000 cards. NAME THE SHARE BEFORE CHANGING THE LAYER:
+// this splits the emitted shape into its parts and prices each against `vanillaMarkup`, which
+// escapes by hand as the compiled page must (32.1). The `no escaping` row is the arm that does
+// not, and it is not the same work — `benchRender.ts` says what an arm like it once claimed.
 
 import { escapeText, reactive } from 'abide'
 import { batch, type Sample } from 'harness/report'
@@ -46,9 +47,12 @@ function withoutEscaping(): string {
     return `${out}</main>`
 }
 
-// THE SHAPE THE COMPILER ACTUALLY EMITS: one expression with ~7000 operands, not a loop. The
-// real module measured 437 µs where the loop above measures 43, so the shape itself is the
-// suspect rather than anything it does per slot.
+/**
+ * Compiles the whole page as one expression, one array join, or a run of appends.
+ *
+ * THE SHAPE A PAGE WRITTEN WITHOUT `{#for}` COMPILES TO: one expression with ~7000 operands, not
+ * a loop. `{#for}` emits the loop, and `benchRender.ts` prices the two against each other.
+ */
 function build(kind: 'expression' | 'join' | 'append'): () => string {
     const pieces: string[] = []
     for (let at = 0; at < N; at += 1)
@@ -99,7 +103,7 @@ const measured = batch({
         'as emitted': (): void => {
             void abideShape()
         },
-        'one expression (what we emit)': (): void => {
+        'one expression (unrolled)': (): void => {
             void asExpression()
         },
         'array join': (): void => {

@@ -7,7 +7,8 @@ covers:
 ---
 
 ```
-abide compile --out dist/ledger
+abide compile                                     # ./ledger
+abide compile --platforms linux-x64,darwin-arm64  # ./ledger-linux-x64 …
 ```
 
 One standalone executable with the app inside it. No runtime to install on the target, no
@@ -17,12 +18,13 @@ One standalone executable with the app inside it. No runtime to install on the t
 
 | | |
 | --- | --- |
-| `--target` | which platform and architecture to build for |
-| `--out` | where the executable goes |
-| `--platforms` | several targets in one run |
+| `--target` | which platform and architecture to build for — `linux-x64`, `darwin-arm64`, `windows-x64` |
+| `--out` | where the executable goes — by default the app's `package.json` name, in the directory you ran the command from |
+| `--platforms` | several targets in one run, comma-separated, each executable suffixed with its target |
 
 `--platforms` exists because the common case is not one binary. A release is a matrix, and a
-matrix built by one command is a matrix that cannot get one target's flags wrong.
+matrix built by one command is a matrix that cannot get one target's flags wrong. Give it or
+`--target`, not both.
 
 ## What the executable holds
 
@@ -32,10 +34,33 @@ the build rather than of what the target machine happens to have.
 
 Configuration is still the environment. A compiled app reads `config()` the same way, validated
 at start, so the same binary runs in staging and in production and the difference is the
-variables it was started with.
+variables it was started with. It reads no `bunfig.toml` from where it is started.
+
+What it does not hold is a file your own code opens while it runs. A handler that reads a path
+off disk reads it on the target machine, where that path is whatever the machine has.
 
 Read on: [Config](../app/configure-the-app.md) ·
 [Build & start](build-and-serve-the-app.md)
+
+## The executable is `abide`, for one app
+
+```
+./ledger                                  # usage
+./ledger start --port 8080                # serve, with a shell on it
+./ledger run scripts/backfill.ts          # a script, under the app it holds
+./ledger call invoices/getInvoice '{"id": "42"}'
+```
+
+Run with no command, it prints its usage under its own name. `start` serves the app and opens
+the same shell `abide connect` opens: `call`, `logs`, `exit`. `exit` stops the app. Where
+nothing is typing — no terminal, a container started without one — the app keeps serving.
+
+`run`, `call`, `connect`, `openapi`, `mcp` and `logs` are `abide`'s. A script `run` imports
+`abide/server` and the app's handlers from the executable, so it needs no `node_modules`
+beside it. What needs the source — `dev`, `build`, `check` — is not listed, and answers with
+the `abide` command to run where the source is.
+
+Read on: [Call a handler](call-a-handler-from-the-terminal.md)
 
 ## When a binary is the right shape
 

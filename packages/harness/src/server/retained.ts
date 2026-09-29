@@ -18,11 +18,17 @@ import { fullGC, heapStats } from 'bun:jsc'
 // so the diff is what the op RETAINS rather than what the optimiser let survive.
 const ROOTS: unknown[] = []
 
-// JSC BUCKETS A PLAIN CLASS INSTANCE AS `Object`. A gate written against
-// `objectTypeCounts.Scope` reads 0 forever and is green forever, and so does a gate
-// reading a FILTERED diff — the seven-type filter this started as had no `Object` in
-// it, and `Object` is exactly where `Scope` and `Call` land. So the whole diff comes
-// back and the finding is a note rather than a filter.
+/**
+ * The change in reachable objects by JSC type across one call of `body`, with its result held.
+ *
+ * Throws in a process with a DOM (44.16).
+ *
+ * JSC BUCKETS A PLAIN CLASS INSTANCE AS `Object`. A gate written against
+ * `objectTypeCounts.Scope` reads 0 forever and is green forever, and so does a gate reading a
+ * FILTERED diff — the seven-type filter this started as had no `Object` in it, and `Object` is
+ * exactly where `Scope` and `Call` land. So the whole diff comes back and the finding is a note
+ * rather than a filter.
+ */
 export function retained(body: () => unknown): Record<string, number> {
     // happy-dom's own implementation objects land in the same untyped `Object` bucket
     // as the framework's, so a total taken in a preloaded process is worthless for

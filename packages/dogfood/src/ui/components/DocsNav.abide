@@ -1,6 +1,6 @@
 <script>
 // THE NAV, ONE MODULE FOR THE WHOLE SITE rather than markup generated into every page: it is the
-// same list on all eighty-five of them, and a copy per page is that list in every route chunk a
+// same list on every one of them, and a copy per page is that list in every route chunk a
 // reader loads. `NAV_ITEMS.ts` is generated from the same front matter the pages are, so a
 // page's label has one home (`scripts/buildPages.ts`).
 //

@@ -940,12 +940,15 @@ test('a head contribution merges by key, and the last one for a key wins', async
     expect(head).toContain('href="/a.css"')
     expect(head).toContain('href="/b.css"')
 
-    // 39.5 — no key, so it appends: a `name` only the run time knows, and a `<meta charset>`
-    // carrying neither `name` nor `property`.
-    expect(head).toContain('name="robots" content="dynamic"')
+    // 39.5 — no key, so it appends: a `<meta charset>` carrying neither `name` nor `property`.
     expect(head).toContain('charset="utf-8"')
-    // A `name` only the run time knows outranks a static `property`, so the pair is no key here
-    // either — the client keys it by the name it resolves to, never by `og:image`.
+    // A `name` only the run time knows is no key to the compiler, which appends both — and keyed
+    // by the name it resolves to once rendered (39.11), so `render`'s merge keeps the last `robots`.
+    expect([...head.matchAll(/name="robots"/g)]).toHaveLength(1)
+    expect(head).toContain(
+        '<meta name="robots" property="og:image" content="second">',
+    )
+    // That name outranks a static `property`, so the pair is never keyed by `og:image`.
     expect(head).toContain('property="og:image" content="first"')
 })
 

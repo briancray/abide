@@ -1,13 +1,15 @@
 // THE BATCHER, and four of the five refusals.
 //
-// It never takes ONE arm. Interleaving A/B/A/B is not an option a caller remembers —
+// It never runs an arm ALONE. Interleaving A/B/A/B is not an option a caller remembers —
 // JSC tiers LLInt -> Baseline -> DFG -> FTL, so whichever arm ran second inherits
 // warmed code, which is a systematic bias and not noise — so the arms are supplied
 // together and the interleave is the only thing this can do. The first arm is run a
-// SECOND time, labelled as its own control, and whatever ratio that produces IS the
-// floor for this case on this machine today. `underTheFloor` then means a number with
-// a provenance rather than a word: "two runs, and if the arms swap places it is noise"
-// is a sign test at n=2 and misses half of it by construction.
+// SECOND time, labelled as its own control — so even a single arm, a docs frame's
+// hand-written one through `profile()`, is interleaved against that control — and
+// whatever ratio that produces IS the floor for this case on this machine today.
+// `underTheFloor` then means a number with a provenance rather than a word: "two runs,
+// and if the arms swap places it is noise" is a sign test at n=2 and misses half of it
+// by construction.
 
 import { clockResolution, nanoseconds } from './clock.ts'
 import type { Sample } from './Sample.ts'
@@ -66,36 +68,55 @@ const WORKER_ID = (
     globalThis as { process?: { env: Record<string, string | undefined> } }
 ).process?.env?.BUN_TEST_WORKER_ID
 
+/** What `batch()` returns: one `Sample` per arm, and the A/A floor they were measured against. */
 export type Batched = {
     case: string
     n: number
     reps: number
     warmup: number
     substrate: ReturnType<typeof substrate>
-    // |control ratio − 1|. The A/A spread, measured, and what `underTheFloor` is
-    // compared against.
+    /**
+     * |control ratio − 1|.
+     *
+     * The A/A spread, measured, and what `underTheFloor` is compared against.
+     */
     floor: number
     samples: Record<string, Sample>
 }
 
+/** The arms `batch()` interleaves, and the options that pin or bound the run. */
 export type BatchSpec = {
     case: string
-    // Arm name -> the op, run once per call. Two or more, and the first is also the
-    // A/A control.
+    /**
+     * Arm name -> the op, run once per call.
+     *
+     * One or more, and the first is also the A/A control — so one arm is still interleaved,
+     * against itself, and yields a floor but no ratio.
+     */
     arms: Record<string, () => void>
-    // Set by the LANE. A duration whose op touched an emulated DOM is refused here
-    // rather than at reporting time, so the number never exists to be quoted.
+    /**
+     * Whether the op touches an emulated DOM. Set by the LANE.
+     *
+     * A duration whose op touched an emulated DOM is refused here rather than at reporting time,
+     * so the number never exists to be quoted.
+     */
     emulated: 'dom' | null
-    // What each arm DID, counted in a separate pass. Counting and timing are mutually
-    // exclusive passes over the same body — the counter runs inside the path it counts
-    // — so the work cannot come off this run and is handed in.
+    /**
+     * What each arm DID, counted in a separate pass.
+     *
+     * Counting and timing are mutually exclusive passes over the same body — the counter runs
+     * inside the path it counts — so the work cannot come off this run and is handed in.
+     */
     work?: Readonly<Record<string, Readonly<Record<string, number>>>>
-    // Fixed batch size, when a second `batch()` call has to match a first. Left out,
-    // it grows until the sample clears the bar.
+    /**
+     * Fixed batch size, when a second `batch()` call has to match a first.
+     *
+     * Left out, it grows until the sample clears the bar.
+     */
     n?: number
     reps?: number
     warmup?: number
-    // Wall clock for the whole call. A page has a reader waiting on it.
+    /** Wall clock for the whole call. A page has a reader waiting on it. */
     budgetNanoseconds?: number
 }
 
@@ -103,8 +124,11 @@ function collectGarbage(): void {
     if (typeof BUN_GC === 'function') BUN_GC(true)
 }
 
-// One timed batch of `n` operations, in nanoseconds. Not per-op: the caller divides,
-// after taking the minimum.
+/**
+ * One timed batch of `n` operations, in nanoseconds.
+ *
+ * Not per-op: the caller divides, after taking the minimum.
+ */
 function timeBatch(body: () => void, n: number): number {
     const before = nanoseconds()
     for (let index = 0; index < n; index += 1) body()
@@ -116,13 +140,15 @@ function percentile95(sorted: number[]): number {
     return sorted[Math.min(Math.max(index, 0), sorted.length - 1)] as number
 }
 
-// Runs an arm until it is warm, or until the wall clock says it is dear enough not to
-// need it. Batched rather than checked per call — the check is a clock read — but the
-// batch is what decides whether the BOUND means anything: at 1,024 calls, and with the
-// first check only after the 1,024th, a millisecond-scale op ran for a second before
-// anything looked, which is 40x the bound and can spend the whole batch budget before a
-// sample is taken. `& 63` checks after the FIRST call and then every 64, so the overrun
-// is bounded by what the bound is for.
+/**
+ * Runs an arm until it is warm, or until the wall clock says it is dear enough not to need it.
+ *
+ * Batched rather than checked per call — the check is a clock read — but the batch is what
+ * decides whether the BOUND means anything: at 1,024 calls, and with the first check only after
+ * the 1,024th, a millisecond-scale op ran for a second before anything looked, which is 40x the
+ * bound and can spend the whole batch budget before a sample is taken. `& 63` checks after the
+ * FIRST call and then every 64, so the overrun is bounded by what the bound is for.
+ */
 function warm(body: () => void): void {
     const startedAt = nanoseconds()
     for (let call = 0; call < WARM_CALLS; call += 1) {
@@ -132,6 +158,12 @@ function warm(body: () => void): void {
     }
 }
 
+/**
+ * Times every arm interleaved, plus an A/A control of the first, and returns per-op samples.
+ *
+ * Grows `n` until a sample clears 100x the clock's measured resolution. Throws in a parallel
+ * test worker, on an emulated DOM, on an unmeasurable clock, and when the budget runs out.
+ */
 export function batch(spec: BatchSpec): Batched {
     // Refusal 5. Eight workers competing for cores measures the scheduler, and with a
     // MEASURED floor the floor goes so wide under contention that every real
@@ -140,7 +172,7 @@ export function batch(spec: BatchSpec): Batched {
         throw new Error(
             `batch("${spec.case}") ran in parallel worker ${WORKER_ID}. Counts belong in \`bun test\`; anything with a clock runs under \`bun run test:serial\` or \`bun run bench\`.`,
         )
-    // Refusal 4. Not "a bun sample with unit ms" — that refuses a build-time µs and a
+    // Refusal 4 (44.23). Not "a bun sample with unit ms" — that refuses a build-time µs and a
     // TTFB, both DOM-free, and lets a `ns` through on a spelling.
     if (spec.emulated === 'dom')
         throw new Error(
@@ -166,7 +198,7 @@ export function batch(spec: BatchSpec): Batched {
     // growth loop into `MAX_N` operations of real work. Refused before it starts.
     if (!Number.isFinite(resolution))
         throw new Error(
-            `batch("${spec.case}") could not measure this clock: no non-zero step in ${MIN_CLOCK_MULTIPLE * 200} probes. There is no sample size that makes a reading of it a reading of the code.`,
+            `batch("${spec.case}") could not measure this clock: it never stepped inside \`clockResolution()\`'s probe deadline. There is no sample size that makes a reading of it a reading of the code.`,
         )
     const bar = MIN_CLOCK_MULTIPLE * resolution
     const budget = spec.budgetNanoseconds ?? DEFAULT_BUDGET_NANOSECONDS

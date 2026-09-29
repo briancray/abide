@@ -11,6 +11,7 @@
 import { batch } from '../report/batch.ts'
 import { clockResolution } from '../report/clock.ts'
 import { type Ratio, ratio } from '../report/ratio.ts'
+import type { Sample } from '../report/Sample.ts'
 import { substrate } from '../report/substrate.ts'
 import { disarmCase, measure } from './case.ts'
 import type { ArmReading, Reading } from './Reading.ts'
@@ -18,8 +19,12 @@ import type { Work } from './Work.ts'
 
 let longTasks = 0
 
-// Counted from document-start, because a long task during load is over before
-// anything could ask about it.
+/**
+ * Starts counting long tasks for the `Reading`. No-op where there is no observer.
+ *
+ * Counted from document-start, because a long task during load is over before anything could
+ * ask about it.
+ */
 export function watchLongTasks(): void {
     if (typeof PerformanceObserver === 'undefined') return
     try {
@@ -32,6 +37,7 @@ export function watchLongTasks(): void {
     }
 }
 
+/** The start time of the named paint entry, or null when the browser recorded none. */
 function paintAt(name: string): number | null {
     if (typeof performance.getEntriesByType !== 'function') return null
     for (const entry of performance.getEntriesByType('paint'))
@@ -48,28 +54,46 @@ const PANEL_REPS = 5
 const PANEL_WARMUP = 2
 const PANEL_BUDGET_NANOSECONDS = 5_000_000_000
 
+/**
+ * Closes the load case, counts and times each arm, and assembles the page's `Reading`.
+ *
+ * Runs once per frame lifetime: reading the load case closes it, so a second call throws.
+ */
 export function profile(spec: {
     op: string
-    // ARM NAME -> THE OP, and every arm that exists goes in ONE call. Growing `n`
-    // per arm separately makes the two incomparable and `ratio()` refuses them on
-    // exactly that, so two arms cannot be measured by two invocations of this.
-    //
-    // Today a docs frame can supply one: the hand-written arm is what the frame
-    // runs, and no abide arm exists to load beside it until the compiler does. The
-    // shape is the two-arm one regardless, so adding the second is a key here.
+    /**
+     * ARM NAME -> THE OP, and every arm that exists goes in ONE call.
+     *
+     * Growing `n` per arm separately makes the two incomparable and `ratio()` refuses them on
+     * exactly that, so two arms cannot be measured by two invocations of this.
+     *
+     * Today a docs frame can supply one: the hand-written arm is what the frame runs, and no
+     * abide arm exists to load beside it until the compiler does. The shape is the two-arm one
+     * regardless, so adding the second is a key here.
+     */
     runs?: Record<string, () => void>
-    // Which arm the others are a ratio AGAINST. The hand-written one, always — a
-    // performance claim is a ratio against hand-written code in the same substrate.
+    /**
+     * Which arm the others are a ratio AGAINST.
+     *
+     * The hand-written one, always — a performance claim is a ratio against hand-written code in
+     * the same substrate.
+     */
     baseline?: string
     loadedArm: string
     scriptBytes: number
 }): Reading {
-    // The load case has been armed since document-start. Reading it is what closes
-    // it, so this runs once per frame lifetime and a second call would throw.
-    const load = disarmCase()
-
     const runs = spec.runs ?? {}
     const names = Object.keys(runs)
+    // Refused before the load case closes, because a baseline no arm answers to is a
+    // Reading with every ratio silently missing.
+    if (spec.baseline !== undefined && !Object.hasOwn(runs, spec.baseline))
+        throw new Error(
+            `profile("${spec.op}") names baseline "${spec.baseline}", which is not one of its runs (${names.join(', ') || 'none'}).`,
+        )
+    // The load case was armed at document-start by the caller — the lane leaves that to it,
+    // see `injectable.ts`. Reading it is what closes it, so this runs once per frame lifetime
+    // and a second call would throw.
+    const load = disarmCase()
     const arms: Record<string, ArmReading> = {}
     const ratios: Record<string, Ratio> = {}
     let timing: Reading['timing'] = null
@@ -94,8 +118,7 @@ export function profile(spec: {
         })
         timing = { n: run.n, reps: run.reps, floor: run.floor }
         for (const name of names) {
-            const sample = run.samples[name]
-            if (!sample) continue
+            const sample = run.samples[name] as Sample
             arms[name] = {
                 work: work[name] as Work,
                 nanosecondsPerOp: sample.nanoseconds,
@@ -104,14 +127,15 @@ export function profile(spec: {
         }
 
         const baseline = spec.baseline ?? (names[0] as string)
-        const against = run.samples[baseline]
+        const against = run.samples[baseline] as Sample
         for (const name of names) {
-            const sample = run.samples[name]
-            if (!sample || !against || name === baseline) continue
+            if (name === baseline) continue
             // Through `ratio()` rather than a division: it is what refuses two
             // substrates, two batch sizes, an arm against itself, and a value inside
             // the floor this machine just measured.
-            ratios[name] = ratio(sample, against, { floor: run.floor })
+            ratios[name] = ratio(run.samples[name] as Sample, against, {
+                floor: run.floor,
+            })
         }
     }
 

@@ -5,8 +5,7 @@ import { getMetrics } from '#server/rpc/cacheCanonicalMetrics'
 const REGIONS = ['north', 'south']
 const SPELLINGS = ['range first', 'region first', 'with compare']
 
-// Three spellings of one query: reordered, then with an option that is
-// absent written out.
+/** One query, three spellings: reordered, then an absent option written. */
 function spelled(name, region) {
     if (name === 'range first') return { range: '7d', region }
     if (name === 'region first') return { region, range: '7d' }

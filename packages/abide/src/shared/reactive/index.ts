@@ -1,8 +1,8 @@
 // THE ONE FACTORY, and the barrel it is the address of. `state`, `memo` and `channel`
-// collapsed into overloads on one name — a channel being a value declaring `history` —, and the refusal behind that split
-// survives rather than being reversed: what it refused was ONE SIGNATURE WITH AN
-// OPTIONAL PARAMETER, not one name, and three overloads handing back two result types
-// is the shape its reason forces.
+// collapsed into overloads on one name — a channel being a value declaring `history` — and the
+// refusal behind that split survives rather than being reversed: what it refused was ONE
+// SIGNATURE WITH AN OPTIONAL PARAMETER, not one name, and overloads handing back two result
+// types is the shape its reason forces.
 //
 // THE ORDER IS FORCED, and getting it wrong breaks the design silently: `() => C` is
 // assignable to `(args: A) => C` but not the reverse, so keyed-first swallows the
@@ -61,12 +61,15 @@ export {
 export { structural } from './structural.ts'
 export { type Disposer, type Effect, watch } from './watch.ts'
 
-// WHAT A STATIC PROBE MAY BE ASKED ABOUT. Both result types already carry the four
-// members, and a `Keyed` already applies the right quantifier over its entries — ANY
-// for `busy`, ALL for `ready` — so the selection is the shape rather than a union, and
-// the statics have no arm to pick.
-//
-// 13.1'S LAST ARM IS `{ tags }`: every value carrying any of those tags, across values.
+/**
+ * What a static probe or trigger may be asked about: a value, a keyed face, or `{ tags }`.
+ *
+ * Both result types already carry the four members, and a `Keyed` already applies the right
+ * quantifier over its entries — ANY for `busy`, ALL for `ready` — so the selection is the shape
+ * rather than a union, and the statics have no arm to pick.
+ *
+ * 13.1'S LAST ARM IS `{ tags }`: every value carrying any of those tags, across values.
+ */
 export type Selection =
     | {
           busy(): boolean
@@ -76,14 +79,18 @@ export type Selection =
       }
     | { tags: string[] }
 
-// A `Reactive` and a `Keyed` are both functions, so an object is the tag arm.
+/** The tags a selection names, or `null` where it names a value — an object is the tag arm. */
 function tagsOf(selection: Selection): string[] | null {
     return typeof selection === 'object'
         ? (selection as { tags: string[] }).tags
         : null
 }
 
-function named(name: string, selection: Selection | undefined): Selection {
+/** The selection a free probe was handed, refused where it was handed none. */
+function requireSelection(
+    name: string,
+    selection: Selection | undefined,
+): Selection {
     if (selection === undefined)
         throw new Error(
             `${name}() was called with no selection. The bare form sweeps every entry in scope and is not built yet; name the value or the keyed face.`,
@@ -91,13 +98,18 @@ function named(name: string, selection: Selection | undefined): Selection {
     return selection
 }
 
-// WHAT A `transform` HANDS BACK, SPLIT BY WHAT IT IS. A refusal is told apart structurally at run
-// time (15.6), and the types split the return the same way: one parameter, `Shaped`, is inferred
-// from the whole return and the stored value and the failures are read off it. Two parameters —
-// `Stored | Failures` — cannot be inferred from one union: the checker put all of it in `Stored`,
-// so a refusing transform stored its own refusal and `s.error()` lost the name it refused with.
 type Refusal = Failed<string, unknown>
+/**
+ * What a `transform` hands back that is kept: its return minus any refusal.
+ *
+ * WHAT A `transform` HANDS BACK, SPLIT BY WHAT IT IS. A refusal is told apart structurally at run
+ * time (15.6), and the types split the return the same way: one parameter, `Shaped`, is inferred
+ * from the whole return and the stored value and the failures are read off it. Two parameters —
+ * `Stored | Failures` — cannot be inferred from one union: the checker put all of it in `Stored`,
+ * so a refusing transform stored its own refusal and `s.error()` lost the name it refused with.
+ */
 export type Kept<Shaped> = Exclude<Shaped, Refusal>
+/** What a `transform` hands back that is a refusal — the counterpart of `Kept`. */
 export type Refused<Shaped> = Extract<Shaped, Refusal>
 // `transform` ALONE IS WHERE `Shaped` IS READ FROM. The rest of the options mention the stored value
 // too — a `store`, an `identity` — and inferring from those as well made a `store` whose `get` is
@@ -108,29 +120,36 @@ type Shaping<Accepted, Shaped, Args = never> = Omit<
 > & {
     transform?: (value: Accepted) => Shaped
 }
-// What a body handing back a `Reactive` adopts (11.12): its failures, and its chunks where it streams.
+/** The failures a body handing back a `Reactive` adopts from it (11.12). */
 export type AdoptedFailures<Computed> =
     Computed extends Reactive<unknown, never, infer Failures, unknown>
         ? Failures
         : never
+/** The chunks a body adopts from a streaming `Reactive` it hands back, else `Otherwise` (11.12). */
 export type AdoptedProduced<Computed, Otherwise> =
     Computed extends Reactive<unknown, never, unknown, infer Produced>
         ? Produced
         : Otherwise
 
-// THE STREAMING OVERLOADS COME FIRST, and for the reason the keyed one comes after the
-// unkeyed: `() => AsyncGenerator<Chunk>` is a `() => Computed`, so the general form would
-// type a stream as holding its generator. The TYPE reads the return; what 9.20 reads at run
-// time is the function's kind, and an arrow handing back a generator types as a stream and
-// runs as a value — the one place the two readings part, closed by writing `async function*`.
+/**
+ * A streaming value: an `async function*` body whose chunks accumulate as it runs.
+ *
+ * THE STREAMING OVERLOADS COME FIRST, and for the reason the keyed one comes after the unkeyed:
+ * `() => AsyncGenerator<Chunk>` is a `() => Computed`, so the general form would type a stream as
+ * holding its generator. The TYPE reads the return; what 9.20 reads at run time is the function's
+ * kind, and an arrow handing back a generator types as a stream and runs as a value — the one
+ * place the two readings part, closed by writing `async function*`.
+ */
 export function reactive<Chunk, Shaped = Chunk[]>(
     body: () => AsyncGenerator<Chunk>,
     options?: Shaping<Chunk[], Shaped>,
 ): Reactive<Kept<Shaped>, Chunk[], Refused<Shaped>, Chunk>
+/** A keyed stream: one streaming entry per `Args` key. */
 export function reactive<Chunk, Args, Shaped = Chunk[]>(
     body: (args: Args) => AsyncGenerator<Chunk>,
     options?: Shaping<Chunk[], Shaped, Args>,
 ): Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped>, Chunk>
+/** A computed value: `body` produces it, and runs again when a value it read changes. */
 export function reactive<Computed, Shaped = Awaited<Computed>>(
     body: () => Computed,
     options?: Shaping<Awaited<Computed>, Shaped>,
@@ -140,6 +159,7 @@ export function reactive<Computed, Shaped = Awaited<Computed>>(
     AdoptedFailures<Computed> | Refused<Shaped>,
     AdoptedProduced<Computed, Kept<Shaped>>
 >
+/** A keyed value: `body` declares a parameter, and each `Args` key reached is its own entry. */
 export function reactive<Computed, Args, Shaped = Awaited<Computed>>(
     body: (args: Args) => Computed,
     options?: Shaping<Awaited<Computed>, Shaped, Args>,
@@ -150,6 +170,7 @@ export function reactive<Computed, Args, Shaped = Awaited<Computed>>(
     AdoptedFailures<Computed> | Refused<Shaped>,
     AdoptedProduced<Computed, Kept<Shaped>>
 >
+/** A value the scope owns outright: `initial`, or nothing until the first `set` if none is given. */
 export function reactive<Accepted, Shaped = Accepted>(
     // Optional: `reactive<User>()` is a value nothing has written yet, not ready until the first
     // `set` (2.10). A function to STORE rather than run is wrapped — `reactive({ handler })` —
@@ -163,9 +184,9 @@ export function reactive(
     //
     // `unknown` RATHER THAN A `ReactiveOptions`, and it is the overloads that force it: a
     // spelling concrete enough to pass straight through — any of `<unknown, unknown>`,
-    // `<never, unknown, never>`, `<never, never, never>` — is one the three overloads are
+    // `<never, unknown, never>`, `<never, never, never>` — is one the overloads are
     // not all assignable to, once `Failures` carries a bound. The implementation signature
-    // is the bridge nothing calls directly, so the casts below are where the three
+    // is the bridge nothing calls directly, so the casts below are where the
     // overloads' promises are made good.
     ...given: [first?: unknown, options?: unknown]
 ): unknown {
@@ -181,11 +202,14 @@ export function reactive(
     return build(given)
 }
 
-// A FRAMEWORK AMBIENT — `route`, `online` — FILED PER SCOPE WHATEVER ORDER THE MODULES LOADED IN.
-// `reactive` decides at construction, and a value abide itself builds at import can be built before
-// the server has installed its provider, which made it one value for every request in the process.
-// A forwarder resolves to its home wherever no scope is current, so in a browser this is the one
-// value it always was, behind one more call.
+/**
+ * `reactive` for a framework ambient — `route`, `online` — filed per scope whatever the load order.
+ *
+ * `reactive` decides at construction, and a value abide itself builds at import can be built before
+ * the server has installed its provider, which made it one value for every request in the process.
+ * A forwarder resolves to its home wherever no scope is current, so in a browser this is the one
+ * value it always was, behind one more call.
+ */
 export const ambient = ((...given: [first?: unknown, options?: unknown]) =>
     scoped(() => build(given))) as unknown as typeof reactive
 
@@ -233,46 +257,55 @@ type PatternOf<
         ? Pattern
         : never
 
-// THE FREE PROBES AND TRIGGERS. 3.2 keeps a probe from starting work and 1.7 has reaching an
-// instance start it, so the allocate/do-not-allocate split is visible in the spelling rather than
-// remembered as a rule. A pattern is handed to the selection's own face, which is what narrows a
-// `Keyed` and an `Rpc` over one — so `refresh(s, pattern)` and `s.refresh(pattern)` are one call
-// (13.4, 13.12).
+/**
+ * Whether any entry in the selection has work in flight — ANY, against `ready`'s ALL.
+ *
+ * THE FREE PROBES AND TRIGGERS. 3.2 keeps a probe from starting work and 1.7 has reaching an
+ * instance start it, so the allocate/do-not-allocate split is visible in the spelling rather than
+ * remembered as a rule. A pattern is handed to the selection's own face, which is what narrows a
+ * `Keyed` and an `Rpc` over one — so `refresh(s, pattern)` and `s.refresh(pattern)` are one call
+ * (13.4, 13.12).
+ */
 export function busy<Chosen extends Selection>(
     selection?: Chosen,
     pattern?: PatternOf<Chosen, 'busy'>,
 ): boolean {
-    const chosen = named('busy', selection)
+    const chosen = requireSelection('busy', selection)
     const tags = tagsOf(chosen)
     if (tags !== null) return busyOverTags(tags)
     return (chosen as { busy(pattern: unknown): boolean }).busy(pattern)
 }
-// ALL, against `busy`'s ANY. The ambiguity stood declared rather than resolved for a
-// long time; these are the quantifiers under which `busy && !ready` reads as one
-// sentence.
+/**
+ * Whether every entry in the selection has a value to serve — ALL, against `busy`'s ANY.
+ *
+ * The ambiguity stood declared rather than resolved for a long time; these are the quantifiers
+ * under which `busy && !ready` reads as one sentence.
+ */
 export function ready<Chosen extends Selection>(
     selection?: Chosen,
     pattern?: PatternOf<Chosen, 'ready'>,
 ): boolean {
-    const chosen = named('ready', selection)
+    const chosen = requireSelection('ready', selection)
     const tags = tagsOf(chosen)
     if (tags !== null) return readyOverTags(tags)
     return (chosen as { ready(pattern: unknown): boolean }).ready(pattern)
 }
+/** Stale-while-revalidate over the selection: reloads it while serving what it holds. */
 export function refresh<Chosen extends Selection>(
     selection?: Chosen,
     pattern?: PatternOf<Chosen, 'refresh'>,
 ): void {
-    const chosen = named('refresh', selection)
+    const chosen = requireSelection('refresh', selection)
     const tags = tagsOf(chosen)
     if (tags !== null) refreshOverTags(tags)
     else (chosen as { refresh(pattern: unknown): void }).refresh(pattern)
 }
+/** Marks the selection stale: drops the cache behind it, never the value. */
 export function invalidate<Chosen extends Selection>(
     selection?: Chosen,
     pattern?: PatternOf<Chosen, 'invalidate'>,
 ): void {
-    const chosen = named('invalidate', selection)
+    const chosen = requireSelection('invalidate', selection)
     const tags = tagsOf(chosen)
     if (tags !== null) invalidateOverTags(tags)
     else (chosen as { invalidate(pattern: unknown): void }).invalidate(pattern)

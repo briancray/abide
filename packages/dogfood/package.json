@@ -24,6 +24,7 @@
     "scripts": {
         "pages": "bun run scripts/buildPages.ts",
         "build": "bun run pages && abide build",
+        "compile": "bun run pages && abide compile",
         "start": "abide start --port 3131",
         "dev": "bun run scripts/dev.ts",
         "typecheck": "tsc -p tsconfig.json"

@@ -61,6 +61,9 @@ The incoming page's keyed contributions replace the outgoing page's **by key**. 
 contributions do not move at all, the layout not having been rebuilt — so the app's icon and
 its font preloads are declared once and never touched again.
 
+A key only the outgoing page set goes back to the layout's value, else to the shell's, and is
+removed where neither has one. The tab ends on the title a fresh load of that address shows.
+
 Read on: [Links & navigation](link-to-another-page.md)
 
 ## Next

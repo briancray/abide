@@ -1,4 +1,4 @@
-// An undo is itself a write, so the position lives out here, over a snapshot.
+/** An undo is itself a write, so the position lives over a snapshot. */
 export function undoStack<T>(limit: number) {
     const held: T[] = []
     let run: T[] = []

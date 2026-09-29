@@ -10,7 +10,7 @@ const INVOICES: Record<string, Invoice> = {
     },
 }
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     invoices: {
         async find(id: string): Promise<Invoice> {

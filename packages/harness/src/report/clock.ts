@@ -28,6 +28,7 @@ const PROBES_AFTER_FIRST_STEP = 2_000
 const BUN = (globalThis as { Bun?: { nanoseconds?(): number } }).Bun
 const BUN_CLOCK = typeof BUN?.nanoseconds === 'function' ? BUN : null
 
+/** The current time in nanoseconds, from `Bun.nanoseconds()` or `performance.now()`. */
 export function nanoseconds(): number {
     return BUN_CLOCK
         ? (BUN_CLOCK.nanoseconds as () => number)()
@@ -36,8 +37,11 @@ export function nanoseconds(): number {
 
 let measured = 0
 
-// The smallest non-zero step the clock can report, in nanoseconds. Cached: it is a
-// property of the substrate, and the process does not change substrate.
+/**
+ * The smallest non-zero step the clock can report, in nanoseconds.
+ *
+ * Cached: it is a property of the substrate, and the process does not change substrate.
+ */
 export function clockResolution(): number {
     if (measured > 0) return measured
     const deadline = Date.now() + PROBE_DEADLINE_MILLISECONDS

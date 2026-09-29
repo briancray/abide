@@ -8,17 +8,22 @@
 // it (CLAUDE.md, "seams and imports"). It is also injected into the browser page as
 // part of the measure bundle, so anything it reached for would be paid for there.
 
+/** The global abide publishes its work record under. */
 export const PUBLISHED_WORK_KEY = '__ABIDE_WORK__'
 
-// Every field `measure()` reads off the published record. A record missing one of them
-// is a throw naming it, per 44.21 — the same reason an unpatched DOM mutator throws
-// rather than reporting 0.
+/**
+ * Every field `measure()` reads off the published record.
+ *
+ * A record missing one of them is a throw naming it, per 44.21 — the same reason an unpatched DOM
+ * mutator throws rather than reporting 0.
+ */
 export const PUBLISHED_WORK_FIELDS = [
     'wakes',
     'bindingRuns',
     'descents',
 ] as const
 
+/** The record abide publishes: one number per field in `PUBLISHED_WORK_FIELDS`. */
 export type PublishedWork = Record<
     (typeof PUBLISHED_WORK_FIELDS)[number],
     number

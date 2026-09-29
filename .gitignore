@@ -23,3 +23,6 @@ blob-report
 packages/dogfood/src/ui/pages/
 packages/dogfood/src/ui/public/
 packages/dogfood/src/ui/NAV_ITEMS.ts
+
+# `bun run compile` in the docs app: the executable, named after the app (RULEBOOK 38.47).
+packages/dogfood/dogfood

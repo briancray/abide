@@ -8,7 +8,7 @@ const INVOICES: Invoice[] = [
     { id: '4023', total: '$76.50', paid: false },
 ]
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     invoices: {
         async all(): Promise<Invoice[]> {

@@ -9,6 +9,7 @@ function flag(name: string): string {
     return at === -1 ? '' : (process.argv[at + 1] ?? '')
 }
 
+/** Prints `items` as a catalog under `--list`, or runs the selected ones and streams their rows. */
 export async function rowsCommand<Item extends RowItem, Row>(
     items: Item[],
     run: (selected: Item[], emit: (row: Row) => void) => Promise<void>,

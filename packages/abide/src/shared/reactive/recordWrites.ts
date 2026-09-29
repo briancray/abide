@@ -38,6 +38,12 @@ const RESHAPING = new Set([
 // value is stored as that object (`stored`) — a read any other object answers with `undefined`.
 const TARGET = Symbol('target')
 
+/**
+ * Runs `mutate` over a proxy of `root`, marking every object it writes to in `PATCHES`.
+ *
+ * Where a `sink` is handed in, each write is also kept there as a `PatchOp`, or the sink is marked
+ * `lost` where it cannot be. A `root` that is not an array or a plain object is handed over as is.
+ */
 export function recordWrites<Value>(
     root: Value,
     mutate: (value: Value) => void,
@@ -291,12 +297,17 @@ export function recordWrites<Value>(
 const snapshot = (raw: unknown): unknown =>
     raw !== null && typeof raw === 'object' ? structuredClone(raw) : raw
 
-// An object the patch reached: the proxy it is handed out as — `null` for one no proxy can stand in
-// for — and what it was reached from, `null` for the root.
+/**
+ * An object the patch reached: the proxy it is handed out as, and what it was reached from.
+ *
+ * `proxy` is `null` for one no proxy can stand in for, and `parent` is `null` for the root.
+ */
 class Reached {
     proxy: object | null
     parent: object | Parents | null
-    // Written in this patch, directly or below — `PATCHES.written` holds this patch's epoch for it.
+    /**
+     * Written in this patch, directly or below — `PATCHES.written` holds this patch's epoch for it.
+     */
     marked: boolean
     constructor(proxy: object | null, parent: object | Parents | null) {
         this.proxy = proxy
@@ -305,8 +316,11 @@ class Reached {
     }
 }
 
-// 18.26 — the key an object was reached by, the object it was read off — `null` for the root — and
-// that object's own step, and whether the callback placed it.
+/**
+ * One step of an object's path from the root: its key, what it was read off, and that one's step.
+ *
+ * 18.26 — `parent` is `null` for the root, and `placed` says whether the callback placed it.
+ */
 class Step {
     key: string | number
     parent: object | null
@@ -325,8 +339,11 @@ class Step {
     }
 }
 
-// Every parent of an object the patch reached more than once, and a class so that a parent which is
-// itself an array is never read as a list of them.
+/**
+ * Every parent of an object the patch reached more than once.
+ *
+ * A class so that a parent which is itself an array is never read as a list of them.
+ */
 class Parents {
     all: object[]
     constructor(all: object[]) {
@@ -334,6 +351,7 @@ class Parents {
     }
 }
 
+/** Whether a proxy can stand in for `value`: an array or a plain object. */
 function isWrappable(value: unknown): value is object {
     if (value === null || typeof value !== 'object') return false
     if (Array.isArray(value)) return true

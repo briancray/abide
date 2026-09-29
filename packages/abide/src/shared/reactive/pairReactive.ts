@@ -23,9 +23,13 @@ const PAIR_PROTOTYPE = brandedPrototype({
     },
 })
 
-// ON THE CELL'S OWN CALLABLE, which is what an adoption writes through and what a scoped forwarder
-// (`scoped.ts`) forwards to — re-seating the forwarder instead would drop the `[CELL]` getter its
-// prototype carries.
+/**
+ * A `Reactive` whose value is what `pair.get` answers and whose `set` writes through `pair.set`.
+ *
+ * The prototype is set ON THE CELL'S OWN CALLABLE, which is what an adoption writes through and
+ * what a scoped forwarder (`scoped.ts`) forwards to — re-seating the forwarder instead would drop
+ * the `[CELL]` getter its prototype carries.
+ */
 export function pairReactive(pair: Pair): Reactive<unknown> {
     const over = reactive(() => pair.get())
     const callable = (over as unknown as { [CELL]: { callable: unknown } })[

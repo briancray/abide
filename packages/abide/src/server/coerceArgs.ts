@@ -17,7 +17,7 @@ export type Document = {
     items?: Document
 }
 
-// The document a handler's `args` schema declares, or `undefined`.
+/** The document a handler's `args` schema declares, or `undefined`. */
 export function argsDocumentOf(handler: Gated<unknown>): Document | undefined {
     const gate = handler[ARGS_GATE] as
         | { '~standard'?: { jsonSchema?: { input?: () => unknown } } }
@@ -28,9 +28,13 @@ export function argsDocumentOf(handler: Gated<unknown>): Document | undefined {
         : undefined
 }
 
-// `query` is the raw `?…` the args were read from: `URLSearchParams` reads `rpcRequest`'s empty list,
-// a bare name, as `''` — the same as `tags=`, the list `['']` — so a declared array tells the two
-// apart there. A text member keeps the `''`.
+/**
+ * The text args, each member coerced to the type `document` declares.
+ *
+ * `query` is the raw `?…` the args were read from: `URLSearchParams` reads `rpcRequest`'s empty
+ * list, a bare name, as `''` — the same as `tags=`, the list `['']` — so a declared array tells the
+ * two apart there. A text member keeps the `''`.
+ */
 export function coerceArgs(
     args: Record<string, string | string[]> | undefined,
     document: Document | undefined,
@@ -71,8 +75,11 @@ function coerceMember(text: string | string[], member: Document): unknown {
     return coerceScalar(text, member)
 }
 
-// The first declared type the text reads as, in the order the schema lists them — text that reads as
-// none stays text, for the schema to refuse.
+/**
+ * The text as the first declared type it reads as, in the order the schema lists them.
+ *
+ * Text that reads as none stays text, for the schema to refuse.
+ */
 function coerceScalar(text: string, member: Document): unknown {
     for (const type of typesOf(member)) {
         if (type === 'string') return text

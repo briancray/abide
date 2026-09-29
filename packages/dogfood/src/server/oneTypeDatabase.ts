@@ -6,7 +6,7 @@ const CONTACTS: Record<string, Contact> = {
     '1': { id: '1', name: 'Ada Lovelace', email: 'ada@example.com' },
 }
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     contacts: {
         async find(id: string): Promise<Contact> {

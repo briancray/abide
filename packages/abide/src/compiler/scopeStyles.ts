@@ -24,17 +24,23 @@ const UNSCOPED = new Set([
     'base',
 ])
 
+/** The scope token for the component at `relative`: `a-` and six base-36 characters of its hash. */
 export function scopeToken(relative: string): string {
     return `a-${Bun.hash(relative).toString(36).slice(0, 6)}`
 }
 
-// Every element the component authors, the token added as a static bare attribute — so the server's
-// markup, a row the browser builds and hydration all carry it with nothing added to any of them.
-//
-// 34.13 — AND A BODY WITH A `<style>` OF ITS OWN adds a token of its own to every element it holds,
-// beside the component's and any enclosing body's, so its rules reach that body and nothing else
-// the component wrote. Numbered in the order the walk meets them, which is the file's, so a body's
-// token is stable across builds. What it hands back is each such body's styles and its token.
+/**
+ * Adds the scope token to every element the component authors; returns each styled body's CSS and
+ * token.
+ *
+ * The token is added as a static bare attribute — so the server's markup, a row the browser builds
+ * and hydration all carry it with nothing added to any of them.
+ *
+ * 34.13 — AND A BODY WITH A `<style>` OF ITS OWN adds a token of its own to every element it holds,
+ * beside the component's and any enclosing body's, so its rules reach that body and nothing else
+ * the component wrote. Numbered in the order the walk meets them, which is the file's, so a body's
+ * token is stable across builds.
+ */
 export function markScoped(
     nodes: TemplateNode[],
     token: string,
@@ -76,14 +82,18 @@ export function markScoped(
     return bodies
 }
 
-// The styles, every selector made to require the token.
+/** The styles, every selector made to require the token. */
 export function scopeCss(css: string, token: string): string {
     return scopeRules(css, `[${token}]`)
 }
 
-// 39.7 — WHETHER A STYLESHEET NAMES A VIEW TRANSITION: a `view-transition-*` property, a
-// `::view-transition*` pseudo-element or an `@view-transition` rule. Comments and strings are
-// skipped, so a rule that was commented out, or a `content:` that spells the words, turns nothing on.
+/**
+ * Whether a stylesheet names a view transition.
+ *
+ * 39.7 — a `view-transition-*` property, a `::view-transition*` pseudo-element or an
+ * `@view-transition` rule. Comments and strings are skipped, so a rule that was commented out, or a
+ * `content:` that spells the words, turns nothing on.
+ */
 export function namesViewTransition(css: string): boolean {
     for (let at = 0; at < css.length; at += 1) {
         const past = skipOpaque(css, at)
@@ -100,17 +110,22 @@ export function namesViewTransition(css: string): boolean {
     return false
 }
 
-// Statements at one level: declarations, at-rules, and qualified rules whose preludes are selector
-// lists. Block at-rules holding rules — `@media`, `@supports`, `@container`, `@layer`,
-// `@starting-style`, `@scope` — are walked into; every other at-rule is copied as written, a
-// `@keyframes`' selectors being percentages rather than elements.
-//
-// A QUALIFIED RULE'S BODY IS WALKED TOO, because CSS nests: `.card { .title {…} }` is `.card .title`,
-// and a nested selector left as written reaches a child component's `.title` inside the card. A
-// declaration is a statement ending at its `;` or at the body's end, so it is copied as it stands.
+// The block at-rules that hold rules, which `scopeRules` walks into.
 const NESTING =
     /^@(media|supports|container|layer|document|starting-style|scope)\b/i
 
+/**
+ * `css` with every selector at every level made to require `attribute`.
+ *
+ * Statements at one level: declarations, at-rules, and qualified rules whose preludes are selector
+ * lists. Block at-rules holding rules — `@media`, `@supports`, `@container`, `@layer`,
+ * `@document`, `@starting-style`, `@scope` — are walked into; every other at-rule is copied as
+ * written, a `@keyframes`' selectors being percentages rather than elements.
+ *
+ * A QUALIFIED RULE'S BODY IS WALKED TOO, because CSS nests: `.card { .title {…} }` is `.card .title`,
+ * and a nested selector left as written reaches a child component's `.title` inside the card. A
+ * declaration is a statement ending at its `;` or at the body's end, so it is copied as it stands.
+ */
 function scopeRules(css: string, attribute: string): string {
     let out = ''
     let at = 0
@@ -140,7 +155,7 @@ function scopeRules(css: string, attribute: string): string {
     return out
 }
 
-// The next of `stops` at depth zero, outside strings and comments, or -1.
+/** The index of the next of `stops` at depth zero, outside strings and comments, or -1. */
 function nextOf(css: string, from: number, stops: string): number {
     let depth = 0
     for (let at = from; at < css.length; at += 1) {
@@ -157,7 +172,7 @@ function nextOf(css: string, from: number, stops: string): number {
     return -1
 }
 
-// Past the comment or string starting at `at`, or `at` when neither does.
+/** The offset past the comment or string starting at `at`, or `at` when neither does. */
 function skipOpaque(css: string, at: number): number {
     const char = css[at]
     if (char === '/' && css[at + 1] === '*') {
@@ -168,7 +183,7 @@ function skipOpaque(css: string, at: number): number {
     return at
 }
 
-// The `}` closing the block `{` at `open` opens.
+/** The index of the `}` closing the block the `{` at `open` opens. */
 function matching(css: string, open: number): number {
     let depth = 0
     for (let at = open; at < css.length; at += 1) {
@@ -200,8 +215,12 @@ function scopeSelectorList(list: string, attribute: string): string {
     return selectors.join(',')
 }
 
-// 34.4 — THE RIGHTMOST COMPOUND carries the token, ahead of any pseudo-element; 34.5 — one inside
-// `:global(…)` does not, and every `:global(…)` is unwrapped to what it holds.
+/**
+ * One selector with the token on its rightmost compound and every `:global(…)` unwrapped.
+ *
+ * 34.4 — THE RIGHTMOST COMPOUND carries the token, ahead of any pseudo-element; 34.5 — one inside
+ * `:global(…)` does not, and every `:global(…)` is unwrapped to what it holds.
+ */
 function scopeSelector(selector: string, attribute: string): string {
     const lead = selector.match(/^\s*/)?.[0] ?? ''
     const trail = selector.match(/\s*$/)?.[0] ?? ''
@@ -216,8 +235,11 @@ function scopeSelector(selector: string, attribute: string): string {
     return `${lead}${unwrapGlobal(before)}${scoped}${trail}`
 }
 
-// Where the rightmost compound starts: just past the last combinator at depth zero. A comment ends
-// a compound and is never inside one, so its own spaces are not combinators.
+/**
+ * Where the rightmost compound starts: just past the last combinator at depth zero.
+ *
+ * A comment ends a compound and is never inside one, so its own spaces are not combinators.
+ */
 function lastCombinator(selector: string): number {
     let depth = 0
     let start = 0

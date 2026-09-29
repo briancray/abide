@@ -75,15 +75,19 @@ for (const kase of CASES) {
     console.log('')
 }
 
-// RULEBOOK 6.2 — "Raising `history` MUST NOT make a write dearer" — checked as a RATIO
-// BETWEEN TWO SIZES OF THE SAME STRUCTURE, which CLAUDE.md calls the one timing claim
-// that stays honest across substrates. There is no vanilla arm and there should not be:
-// the earlier log case could not see this at all, because its hand-written arm called
-// `shift()` too and both arms were linear in the depth together.
-//
-// No read in either arm, so nothing is allocated per operation and the GC noise that
-// gave that case a 17% floor is gone.
-function sixTwo(): void {
+/**
+ * Times a write at history 16 against history 4096 and says whether 6.2 holds.
+ *
+ * RULEBOOK 6.2 — "Raising `history` MUST NOT make a write dearer" — checked as a RATIO BETWEEN
+ * TWO SIZES OF THE SAME STRUCTURE, which CLAUDE.md calls the one timing claim that stays honest
+ * across substrates. There is no vanilla arm and there should not be: the earlier log case could
+ * not see this at all, because its hand-written arm called `shift()` too and both arms were
+ * linear in the depth together.
+ *
+ * No read in either arm, so nothing is allocated per operation and the GC noise that gave that
+ * case a 17% floor is gone.
+ */
+function writeIsConstantInHistory(): void {
     const shallow = reactive<number>(undefined, { history: 16 })
     const deep = reactive<number>(undefined, { history: 4096 })
     let at = 0
@@ -127,62 +131,67 @@ function sixTwo(): void {
     )
 }
 
-// MOUNTING READERS IS LINEAR IN THE READER COUNT — the SLOPE half of the `track` dedup, which
-// `mount 50 readers on one value` cannot see: that case is abide against the hand-written arm
-// at one width, so it catches a CONSTANT the subscribe path grows and divides no slope out.
-// This is abide against ITSELF at two widths, which cancels the constant and leaves the slope.
-//
-// THE BAR IS CALIBRATED, NOT PREDICTED, which is the whole of 6.2's shape above and the thing
-// a first attempt here got wrong. Asking "is this 4x (linear) or 16x (quadratic)" answers
-// "linear" for BOTH arms, because at any width this can price, `watch` construction dominates
-// and the n² term is a minority of the op — so a bar between the two complexity classes never
-// sees the difference. 6.2 does not do that either: it measures depth 16 against depth 4096
-// and asserts the result is ~1x against "256x if it scaled", a bar set by what the FIXED
-// mechanism measures.
-// THE BAR, AND WHAT IT IS A FACT ABOUT. Three runs each way on this machine under JSC at these
-// two widths: 5.88x / 6.49x / 7.00x with the reader-side dedup, against 8.72x / 8.73x / 9.40x
-// with the readers-side scan. 7.8 sits ~11% clear of both ends. Linear predicts 112/16 = 7x and
-// the fixed arm measures there, which is the check on the check.
-//
-// THE WIDTH IS WHAT MAKES THE BAR HOLDABLE, and 64 was not enough. At 64 the same pair came out
-// 3.36-3.61x fixed against 3.85-4.67x broken — separated in expectation, but the tails touch: a
-// bar at 3.8 sat 1.3% under the lowest broken run, inside the 0.4-8% A/A floor, so it would
-// have called a clean tree VIOLATED on an unlucky afternoon. The n² term grows as the square
-// while the op grows linearly, so the gap opens with width: 6.6% of the op at 64, 24.6% at 112.
-//
-// AND 112 STILL PRICES, which is the constraint that bounds the other end — `batch` takes n=7
-// there. Push the width until the op clears the clock bar in ONE rep (200 readers is 26.7 µs)
-// and `ratio()` refuses the sample as `underOneFrame` and the row becomes a figure. So the
-// window is "wide enough that n² clears the floor, narrow enough that n stays above 1", and
-// 112 is inside it. Believing a width where n² DOMINATES was needed is what closed this search
-// the first time, and it was never the requirement.
-//
-// IT IS BRITTLE IN A WAY 6.2 IS NOT, and that is the price of calibrating a bar instead of
-// deriving one: 1x against 256x is a chasm no machine changes, where 7.0 against 8.7 is a gap.
-// When it drifts, re-SLACKEN it against a fresh pair of three-run spreads — do not re-derive it
-// from a complexity class, which is the mistake that made the first version of this useless.
-//
-// WHAT ACTUALLY MAKES 7.8 SAFE IS THE DIRECTION OF THE NOISE, not the 11%. Almost all of the
-// variance is in the NARROW arm, which is the divisor: across seventeen clean runs `mount 16`
-// spread 1.61x where `mount 112` spread 1.26x, because the narrow arm is the one nearer the
-// clock floor. So a loaded process inflates the divisor more than the dividend and COMPRESSES
-// the ratio — the two slowest narrow samples were exactly the two lowest ratios. Confirmed on a
-// quieter machine, where the same pairing holds with a tighter spread: narrow 1398.7 ns gave the
-// highest ratio of six runs (6.97x) and narrow 1589.3 ns one of the lowest (6.53x). This bar
-// fails HIGH, so contention moves the number AWAY from it and a false VIOLATED is the direction
-// that cannot happen. Seventeen clean runs put the upper tail at 7.02x.
-//
-// WHICH MAKES A `HOLDS` THE WEAKER VERDICT, and it is the reverse of the habit: CLAUDE.md says
-// re-run a timing FAILURE before believing it, and here it is a timing PASS that a loaded run
-// should not be believed on. A false HOLDS needs the broken arm to dip 12% under its observed
-// 8.72x minimum — unlikely, since broken's spread is only 1.11x (at 112 the n² term swamps the
-// noise) — but it is the reachable error of the two. Read a HOLDS on a busy machine as "not
-// shown to be violated" rather than as "shown to be linear".
-//
-// THE LEVER IF IT DRIFTS, before re-slackening: widen the NARROW arm to 24, since that is where
-// the variance actually lives. It costs separation — linear then predicts 112/24 = 4.67x rather
-// than 7x, so the fixed and broken bands sit closer together — so it is a trade rather than a
-// free fix, but it attacks the variance source instead of the symptom.
+/**
+ * Ceiling on the mount-112 / mount-16 ratio; above it the subscribe path is not linear.
+ *
+ * MOUNTING READERS IS LINEAR IN THE READER COUNT — the SLOPE half of the `track` dedup, which
+ * `mount 50 readers on one value` cannot see: that case is abide against the hand-written arm
+ * at one width, so it catches a CONSTANT the subscribe path grows and divides no slope out.
+ * This is abide against ITSELF at two widths, which cancels the constant and leaves the slope.
+ *
+ * THE BAR IS CALIBRATED, NOT PREDICTED, which is the whole of 6.2's shape above and the thing
+ * a first attempt here got wrong. Asking "is this 4x (linear) or 16x (quadratic)" answers
+ * "linear" for BOTH arms, because at any width this can price, `watch` construction dominates
+ * and the n² term is a minority of the op — so a bar between the two complexity classes never
+ * sees the difference. 6.2 does not do that either: it measures depth 16 against depth 4096
+ * and asserts the result is ~1x against "256x if it scaled", a bar set by what the FIXED
+ * mechanism measures.
+ *
+ * THE BAR, AND WHAT IT IS A FACT ABOUT. Three runs each way on this machine under JSC at these
+ * two widths: 5.88x / 6.49x / 7.00x with the reader-side dedup, against 8.72x / 8.73x / 9.40x
+ * with the readers-side scan. 7.8 sits ~11% clear of both ends. Linear predicts 112/16 = 7x and
+ * the fixed arm measures there, which is the check on the check.
+ *
+ * THE WIDTH IS WHAT MAKES THE BAR HOLDABLE, and 64 was not enough. At 64 the same pair came out
+ * 3.36-3.61x fixed against 3.85-4.67x broken — separated in expectation, but the tails touch: a
+ * bar at 3.8 sat 1.3% under the lowest broken run, inside the 0.4-8% A/A floor, so it would
+ * have called a clean tree VIOLATED on an unlucky afternoon. The n² term grows as the square
+ * while the op grows linearly, so the gap opens with width: 6.6% of the op at 64, 24.6% at 112.
+ *
+ * AND 112 STILL PRICES, which is the constraint that bounds the other end — `batch` takes n=7
+ * there. Push the width until the op clears the clock bar in ONE rep (200 readers is 26.7 µs)
+ * and `ratio()` refuses the sample as `underOneFrame` and the row becomes a figure. So the
+ * window is "wide enough that n² clears the floor, narrow enough that n stays above 1", and
+ * 112 is inside it. Believing a width where n² DOMINATES was needed is what closed this search
+ * the first time, and it was never the requirement.
+ *
+ * IT IS BRITTLE IN A WAY 6.2 IS NOT, and that is the price of calibrating a bar instead of
+ * deriving one: 1x against 256x is a chasm no machine changes, where 7.0 against 8.7 is a gap.
+ * When it drifts, re-SLACKEN it against a fresh pair of three-run spreads — do not re-derive it
+ * from a complexity class, which is the mistake that made the first version of this useless.
+ *
+ * WHAT ACTUALLY MAKES 7.8 SAFE IS THE DIRECTION OF THE NOISE, not the 11%. Almost all of the
+ * variance is in the NARROW arm, which is the divisor: across seventeen clean runs `mount 16`
+ * spread 1.61x where `mount 112` spread 1.26x, because the narrow arm is the one nearer the
+ * clock floor. So a loaded process inflates the divisor more than the dividend and COMPRESSES
+ * the ratio — the two slowest narrow samples were exactly the two lowest ratios. Confirmed on a
+ * quieter machine, where the same pairing holds with a tighter spread: narrow 1398.7 ns gave the
+ * highest ratio of six runs (6.97x) and narrow 1589.3 ns one of the lowest (6.53x). This bar
+ * fails HIGH, so contention moves the number AWAY from it and a false VIOLATED is the direction
+ * that cannot happen. Seventeen clean runs put the upper tail at 7.02x.
+ *
+ * WHICH MAKES A `HOLDS` THE WEAKER VERDICT, and it is the reverse of the habit: CLAUDE.md says
+ * re-run a timing FAILURE before believing it, and here it is a timing PASS that a loaded run
+ * should not be believed on. A false HOLDS needs the broken arm to dip 12% under its observed
+ * 8.72x minimum — unlikely, since broken's spread is only 1.11x (at 112 the n² term swamps the
+ * noise) — but it is the reachable error of the two. Read a HOLDS on a busy machine as "not
+ * shown to be violated" rather than as "shown to be linear".
+ *
+ * THE LEVER IF IT DRIFTS, before re-slackening: widen the NARROW arm to 24, since that is where
+ * the variance actually lives. It costs separation — linear then predicts 112/24 = 4.67x rather
+ * than 7x, so the fixed and broken bands sit closer together — so it is a trade rather than a
+ * free fix, but it attacks the variance source instead of the symptom.
+ */
 const LINEAR_AT_112 = 7.8
 
 function mountingIsLinear(): void {
@@ -227,7 +236,7 @@ function mountingIsLinear(): void {
     )
 }
 
-sixTwo()
+writeIsConstantInHistory()
 mountingIsLinear()
 
 await machinery()

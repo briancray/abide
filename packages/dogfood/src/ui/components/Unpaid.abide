@@ -4,8 +4,7 @@ import { listInvoices } from '#server/rpc/probeDerivedInvoices'
 
 const rows = reactive(() => listInvoices())
 
-// Reads a value still in flight, so it is pending too rather than
-// confidently answering over the nothing it got.
+// Reads a value still in flight, so it is pending too.
 const unpaid = reactive(() => rows.filter((row) => !row.paid))
 </script>
 

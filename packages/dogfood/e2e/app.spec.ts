@@ -93,7 +93,7 @@ test('a link to another page navigates without reloading — 30.7', async ({
     ).toBe('yes')
 })
 
-// `#ui/docs.ts` is a module and is evaluated ONCE, but the INSTALL is the page's own: the
+// `#ui/installDocs.ts` is a module and is evaluated ONCE, but the INSTALL is the page's own: the
 // arriving page hands `installDocs` its `<main>` and the page a reader left ran the `Disposer`
 // that took its listeners (32.9). So the rail here is wired to this page's headings rather than
 // to the ones they arrived on.

@@ -1,8 +1,8 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner, type Scanner } from 'typescript/unstable/ast/scanner'
 
-// ONE TOKENISER, read by `splitImports`, `forBlock` and `projectShadow`, and by `slotEnd` through
-// the same scan. Two of them was two answers to the same question and they
+// ONE TOKENISER, read by `splitImports`, `forBlock`, `projectShadow` and `Lowering`, and by
+// `slotEnd` through the same scan. Two of them was two answers to the same question and they
 // drifted: a template re-scan written for one reader and never for the split left every import
 // after a template literal inside the component body, and the emitted module did not parse.
 //
@@ -20,6 +20,7 @@ export type Token = {
     end: number
 }
 
+/** The tokens of `source`, scanned the way `slotEnd` scans a slot. */
 export function tokenise(source: string): Token[] {
     const tokens: Token[] = []
     scan(source, 0, (kind, scanner) => {
@@ -34,8 +35,10 @@ export function tokenise(source: string): Token[] {
     return tokens
 }
 
-// How far `kind` moves the bracket depth a top-level separator is found at: a template's
-// substitutions nest as a call's arguments do, so `${a, b}` holds its comma.
+/**
+ * How far `kind` moves the bracket depth a top-level separator is found at: a template's
+ * substitutions nest as a call's arguments do, so `${a, b}` holds its comma.
+ */
 export function nesting(kind: SyntaxKind): number {
     switch (kind) {
         case SyntaxKind.OpenParenToken:
@@ -53,18 +56,22 @@ export function nesting(kind: SyntaxKind): number {
     }
 }
 
-// 32.1 — WHERE A TEMPLATE SLOT OPENED AT `open` ENDS: the index of its closing `}`, or the length
-// of the source where it never closes. The same scan `tokenise` makes, so the regex-or-division
-// question, a template literal's substitutions, strings and comments are answered once for both
-// — `{f('}')}`, `{ /* } */ x }` and `{xs.filter(s => /}/.test(s))}` end where they read as ending.
-//
-// A CLOSE DIRECTIVE IS THE ONE PLACE THE TEMPLATE'S GRAMMAR OVERRIDES JAVASCRIPT'S. `{/if}`,
-// `{/for}`, `{/try}` — any `/name`, with any whitespace around it — read as a regular expression
-// would run on to the next `/` and take the markup after the block with them. No expression is a
-// bare `/name` either, so the whole shape is the directive rather than a list of block names.
-//
-// AN OPEN DIRECTIVE'S NAME IS SKIPPED, and the scan starts past it expecting an operand:
-// `{#if /'/.test(s)}` opens a literal, where `#if` read as a private name would divide.
+/**
+ * The index of the `}` closing the template slot opened at `open`, or the source's length.
+ *
+ * 32.1 — WHERE A TEMPLATE SLOT OPENED AT `open` ENDS: the index of its closing `}`, or the length
+ * of the source where it never closes. The same scan `tokenise` makes, so the regex-or-division
+ * question, a template literal's substitutions, strings and comments are answered once for both
+ * — `{f('}')}`, `{ /* } *\/ x }` and `{xs.filter(s => /}/.test(s))}` end where they read as ending.
+ *
+ * A CLOSE DIRECTIVE IS THE ONE PLACE THE TEMPLATE'S GRAMMAR OVERRIDES JAVASCRIPT'S. `{/if}`,
+ * `{/for}`, `{/try}` — any `/name`, with any whitespace around it — read as a regular expression
+ * would run on to the next `/` and take the markup after the block with them. No expression is a
+ * bare `/name` either, so the whole shape is the directive rather than a list of block names.
+ *
+ * AN OPEN DIRECTIVE'S NAME IS SKIPPED, and the scan starts past it expecting an operand:
+ * `{#if /'/.test(s)}` opens a literal, where `#if` read as a private name would divide.
+ */
 export function slotEnd(source: string, open: number): number {
     let first = open + 1
     while (first < source.length && isSpace(source[first] as string)) first += 1
@@ -113,11 +120,15 @@ const OPERAND = 0 // `)` `]` and an object literal's `}` end a value
 const STATEMENT = 1 // `)` of `if`/`while`/`for`/`with` and a block's `}` are followed by a statement
 const SUBSTITUTION = 2 // `${`, whose `}` continues the template literal
 
-// A `{` AFTER ONE OF THESE OPENS A BODY even though an operand could stand there — an object
-// literal only follows a token that takes a value. `>` and `void` end a TypeScript return type:
-// `f(): Promise<T> {` and `f(): void {`. What this misses is a `case x: {` block, read as a
-// literal because `:` also precedes an object's value, so a regex opening the statement after
-// that block scans as a division.
+/**
+ * The tokens after which a `{` opens a body rather than an object literal.
+ *
+ * A `{` AFTER ONE OF THESE OPENS A BODY even though an operand could stand there — an object
+ * literal only follows a token that takes a value. `>` and `void` end a TypeScript return type:
+ * `f(): Promise<T> {` and `f(): void {`. What this misses is a `case x: {` block, read as a
+ * literal because `:` also precedes an object's value, so a regex opening the statement after
+ * that block scans as a division.
+ */
 const BODY_AFTER = new Set<SyntaxKind | undefined>([
     undefined,
     SyntaxKind.SemicolonToken,
@@ -134,11 +145,17 @@ const BODY_AFTER = new Set<SyntaxKind | undefined>([
     SyntaxKind.FinallyKeyword,
 ])
 
-// THE SCAN BOTH READERS SHARE, from `from`, handing each token to `visit` until it answers false.
-// ONE SCANNER, reset per call: a scanner is an object of ~50 closures, and `slotEnd` asks once per
-// `{` in a template. Safe because no `visit` scans again before its own scan returns.
+/**
+ * The one scanner `scan` resets per call.
+ *
+ * ONE SCANNER, reset per call: a scanner is an object of ~50 closures, and `slotEnd` asks once per
+ * `{` in a template. Safe because no `visit` scans again before its own scan returns.
+ */
 const SCANNER = createScanner(true)
 
+/**
+ * THE SCAN BOTH READERS SHARE, from `from`, handing each token to `visit` until it answers false.
+ */
 function scan(
     source: string,
     from: number,
@@ -227,8 +244,11 @@ function scan(
     }
 }
 
-// Every contextual keyword is a legal binding name, and the scanner answers `GetKeyword` for `get`
-// and `TypeKeyword` for `type` wherever they stand.
+/**
+ * Whether `kind` is a contextual keyword, which is a legal binding name.
+ *
+ * The scanner answers `GetKeyword` for `get` and `TypeKeyword` for `type` wherever they stand.
+ */
 export function isContextualKeyword(kind: SyntaxKind): boolean {
     return (
         kind >= SyntaxKind.FirstContextualKeyword &&
@@ -236,9 +256,11 @@ export function isContextualKeyword(kind: SyntaxKind): boolean {
     )
 }
 
-// A NAME, A LITERAL OR A VALUE KEYWORD ENDS AN OPERAND, so a `/` after it divides. A contextual
-// keyword is a name — `type / 2`, `get / 2` — except the two that take an operand after them,
-// `await` and `of`, after which a `/` opens a literal.
+/**
+ * A NAME, A LITERAL OR A VALUE KEYWORD ENDS AN OPERAND, so a `/` after it divides. A contextual
+ * keyword is a name — `type / 2`, `get / 2` — except the two that take an operand after them,
+ * `await` and `of`, after which a `/` opens a literal.
+ */
 function endsOperand(kind: SyntaxKind): boolean {
     if (
         kind >= SyntaxKind.FirstLiteralToken &&
@@ -258,8 +280,12 @@ function endsOperand(kind: SyntaxKind): boolean {
     )
 }
 
-// HTML's ASCII WHITESPACE — every position this is asked about is template grammar, not
-// JavaScript's, and `\s` answers yes to a no-break space the HTML tokenizer keeps as text.
+/**
+ * Whether `char` is HTML's ASCII whitespace.
+ *
+ * HTML's ASCII WHITESPACE — every position this is asked about is template grammar, not
+ * JavaScript's, and `\s` answers yes to a no-break space the HTML tokenizer keeps as text.
+ */
 export function isSpace(char: string): boolean {
     return (
         char === ' ' ||
@@ -270,7 +296,11 @@ export function isSpace(char: string): boolean {
     )
 }
 
-// Past the CSS string opening at `open`. A `;` or a `:` inside one is the value's own.
+/**
+ * The index just past the CSS string opening at `open`.
+ *
+ * A `;` or a `:` inside one is the value's own.
+ */
 export function skipQuoted(source: string, open: number): number {
     const quote = source[open]
     let at = open + 1
@@ -286,7 +316,7 @@ export function skipQuoted(source: string, open: number): number {
     return at
 }
 
-// A block name is lower-case ASCII.
+/** A block name is lower-case ASCII. */
 function isLetter(char: string): boolean {
     return char >= 'a' && char <= 'z'
 }

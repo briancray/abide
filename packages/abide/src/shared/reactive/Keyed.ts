@@ -36,8 +36,12 @@ import {
     type Tracked,
 } from './tracking.ts'
 
-// The argument is optional where `Args` admits `undefined`, so a keyed value whose args may be absent
-// is reached as `presence()`.
+/**
+ * The keyed face: one `Reactive` per `Args` key, plus the probes and triggers over its entries.
+ *
+ * The argument is optional where `Args` admits `undefined`, so a keyed value whose args may be
+ * absent is reached as `presence()`.
+ */
 export type Keyed<
     Stored,
     Args,
@@ -51,16 +55,20 @@ export type Keyed<
     ready(pattern?: Partial<Args>): boolean
     refresh(pattern?: Partial<Args>): void
     invalidate(pattern?: Partial<Args>): void
-    // The entries reached so far. Not app surface — the statics and the tests read it.
+    /** The entries reached so far. Not app surface — the statics and the tests read it. */
     entries: Map<string, Reactive<Stored, Accepted, Failures>>
 }
 
-// 19.8 — WHAT A KEYED VALUE CARRIES PAST THE FACE AN APP IS HANDED: the `args` it was declared with,
-// for a transport to coerce by and a rung to check against. Declared on what the framework builds
-// rather than on `Keyed`, so no app type names it — and declared rather than stamped, so a face built
-// over one (a server's forwarder, an `Rpc`) that forgets to carry it does not compile.
+/**
+ * What a keyed value carries past the face an app is handed: the `args` schema it declared.
+ *
+ * 19.8 — for a transport to coerce by and a rung to check against. Declared on what the framework
+ * builds rather than on `Keyed`, so no app type names it — and declared rather than stamped, so a
+ * face built over one (a server's forwarder, an `Rpc`) that forgets to carry it does not compile.
+ */
 export type Gated<Args> = { [ARGS_GATE]: Schema<Args> | undefined }
 
+/** Whether `value` is a `Keyed`, read off its brand rather than its shape (16.5). */
 export function isKeyed(
     value: unknown,
 ): value is Keyed<unknown, unknown, unknown, never, unknown> & Gated<unknown> {
@@ -70,29 +78,17 @@ export function isKeyed(
     )
 }
 
-// WHAT AN ENTRY WAS KEYED ON, read off its own record rather than a second map beside `entries`:
-// the args are the entry's body argument and its cell already holds them for every run.
+/**
+ * What an entry was keyed on, read off its own record rather than a second map beside `entries`.
+ *
+ * The args are the entry's body argument and its cell already holds them for every run.
+ */
 function argsOf(entry: unknown): unknown {
     return (entry as { [CELL]: { args: unknown } })[CELL].args
 }
 
-// THE LIFE OF EVERY ENTRY OF ONE `Keyed` (11.46, 11.49, 11.50), allocated only where a
-// `ttl` was declared.
-//
-// RECENCY IS THE ORDER OF A MAP. A production moves its key to the end by deleting and
-// re-setting it, so the oldest entry is always the first one and 11.49's "armed at the
-// oldest" is one iterator step rather than a scan — and the sweep stops at the first entry
-// still inside its life, the way `dropExpired` stops at the first live production.
-//
-// THE PRODUCTION IS HEARD BY A MIRROR ON EACH ENTRY, which is what the refusal that stood
-// here said could not be had without a hook on every cell in the design. A mirror is a
-// reader, so only an entry of a keyed value declaring `ttl` pays for one, and it runs in the
-// mark walk rather than at the end of the turn — so the clock read is the production's own
-// moment. It is also woken by a cascade that is not a production (an `invalidate`, an
-// abort), and `servable` is what tells those apart: every one of them leaves nothing to
-// serve, where a production always leaves something.
-//
-// ONE MAP, IN RECENCY ORDER, holding what an eviction needs beside when the entry last produced.
+// One entry of `Lifetime.followed`, which is in recency order: what an eviction needs beside when
+// the entry last produced.
 type Follower = {
     at: number
     ms: number
@@ -101,6 +97,24 @@ type Follower = {
     evict: () => void
 }
 
+/**
+ * The life of every entry of one `Keyed`, evicting each once `ttl` passes without a production.
+ *
+ * 11.46, 11.49, 11.50 — allocated only where a `ttl` was declared.
+ *
+ * RECENCY IS THE ORDER OF A MAP. A production moves its key to the end by deleting and re-setting
+ * it, so the oldest entry is always the first one and 11.49's "armed at the oldest" is one
+ * iterator step rather than a scan — and the sweep stops at the first entry still inside its
+ * life, the way `dropExpired` stops at the first live production.
+ *
+ * THE PRODUCTION IS HEARD BY A MIRROR ON EACH ENTRY, which is what the refusal that stood here
+ * said could not be had without a hook on every cell in the design. A mirror is a reader, so only
+ * an entry of a keyed value declaring `ttl` pays for one, and it runs in the mark walk rather than
+ * at the end of the turn — so the clock read is the production's own moment. It is also woken by
+ * a cascade that is not a production (an `invalidate`, an abort), and `servable` is what tells
+ * those apart: every one of them leaves nothing to serve, where a production always leaves
+ * something.
+ */
 class Lifetime {
     ms: number
     followed: Map<string, Follower>
@@ -163,11 +177,14 @@ class Lifetime {
     }
 }
 
-// ONE WINDOW FOR THE WHOLE KEYED FACE (5.20, 5.21, 5.22), holding back starting the entries it reaches.
-// A throttle starts the first key at once and the latest reached inside its window when it ends; a
-// debounce starts the latest once the reaches stop. Either way only the LATEST held key starts — one
-// reached and then superseded inside a window is work the window would discard (5.12), so it is
-// abandoned and dropped instead.
+/**
+ * One throttle or debounce window for a whole keyed face, holding back starting what it reaches.
+ *
+ * 5.20, 5.21, 5.22. A throttle starts the first key at once and the latest reached inside its
+ * window when it ends; a debounce starts the latest once the reaches stop. Either way only the
+ * LATEST held key starts — one reached and then superseded inside a window is work the window
+ * would discard (5.12), so it is abandoned and dropped instead.
+ */
 class StartWindow {
     leading: boolean
     ms: number
@@ -210,13 +227,17 @@ class StartWindow {
     }
 }
 
-// 11.27's LAST TWO STEPS, validate then the body, as one body. The gate runs on every run of
-// the entry — a refresh re-validates — and throws the refusal, which is what a body failing
-// already does: the entry's `error` holds it and its read throws it (2.2), and the body the
-// gate stands in front of is never called. What it accepts is what the body is handed (11.69).
-//
-// A STREAM STAYS A STREAM. 9.20 reads the body's KIND, so the wrapper around an async generator
-// is an async generator, or gating a keyed stream would silently make it a value holding one.
+/**
+ * `body` behind the `args` gate: validate, then run the body with what the gate accepted.
+ *
+ * 11.27's LAST TWO STEPS as one body. The gate runs on every run of the entry — a refresh
+ * re-validates — and throws the refusal, which is what a body failing already does: the entry's
+ * `error` holds it and its read throws it (2.2), and the body the gate stands in front of is never
+ * called. What it accepts is what the body is handed (11.69).
+ *
+ * A STREAM STAYS A STREAM. 9.20 reads the body's KIND, so the wrapper around an async generator
+ * is an async generator, or gating a keyed stream would silently make it a value holding one.
+ */
 function gated<Args>(
     body: (args: Args) => unknown,
     gate: Schema<Args>,
@@ -229,17 +250,21 @@ function gated<Args>(
     return (args: Args): unknown => body(check(args))
 }
 
-// 14.4, 11.6 AND 11.23: AN ENTRY KEEPS NOTHING IT READ past a run that completed, so a value
-// its body read changing neither recomputes it nor makes it busy — `ttl`, a trigger and
-// eviction are its only ways back. The run still TRACKS, and has to: a body aborted on a value
-// that has not landed is brought back by the subscription its read made (2.14), so an abort is
-// the one exit that keeps what it read.
-//
-// HERE RATHER THAN IN `run`. A test in `run` is paid by every recompute of every unkeyed value
-// in the graph, and measured at 6-9% on a chain of twenty under V8 for a case no unkeyed value
-// reaches; wrapping the entry's body is paid by an entry's run alone. The run has set the
-// entry as the reader by the time this is called, so dropping its sources here leaves `run`
-// finding nothing past its cursor to trim.
+/**
+ * `body` wrapped so the entry drops what it read once a run completes, keeping it only on an abort.
+ *
+ * 14.4, 11.6 AND 11.23: AN ENTRY KEEPS NOTHING IT READ past a run that completed, so a value its
+ * body read changing neither recomputes it nor makes it busy — `ttl`, a trigger and eviction are
+ * its only ways back. The run still TRACKS, and has to: a body aborted on a value that has not
+ * landed is brought back by the subscription its read made (2.14), so an abort is the one exit
+ * that keeps what it read.
+ *
+ * HERE RATHER THAN IN `run`. A test in `run` is paid by every recompute of every unkeyed value in
+ * the graph, and measured at 6-9% on a chain of twenty under V8 for a case no unkeyed value
+ * reaches; wrapping the entry's body is paid by an entry's run alone. The run has set the entry as
+ * the reader by the time this is called, so dropping its sources here leaves `run` finding nothing
+ * past its cursor to trim.
+ */
 function heldOnce<Args>(
     body: (args: Args) => unknown,
 ): (args: Args) => unknown {
@@ -259,6 +284,7 @@ function heldOnce<Args>(
     }
 }
 
+/** Builds the keyed face over `body`: a reach per `Args` key, carrying brand, gate and statics. */
 export function createKeyed<
     Stored,
     Args,

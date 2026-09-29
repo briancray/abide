@@ -32,7 +32,11 @@ function ttl(): number {
     return positiveSetting('ABIDE_PRINCIPAL_TTL', DEFAULT_TTL_MS)
 }
 
-// 36.5 — A LIST: the first secret signs, and every one verifies, so a secret can be rotated in.
+/**
+ * The secrets in `ABIDE_PRINCIPAL_SECRET`, signing one first.
+ *
+ * 36.5 — A LIST: the first secret signs, and every one verifies, so a secret can be rotated in.
+ */
 function secrets(): string[] {
     const declared = config.peek()?.ABIDE_PRINCIPAL_SECRET
     if (typeof declared !== 'string') return []
@@ -55,7 +59,11 @@ function seal(claims: unknown, expires: number, secret: string): string {
     return `${payload}.${signature(secret, payload)}`
 }
 
-// 26.13 — A BAD SIGNATURE, A LAPSED SEAL AND A MALFORMED COOKIE ARE ONE ANSWER: nothing.
+/**
+ * The claims and expiry a sealed cookie holds, or `undefined`.
+ *
+ * 26.13 — A BAD SIGNATURE, A LAPSED SEAL AND A MALFORMED COOKIE ARE ONE ANSWER: nothing.
+ */
 function unseal(
     sealed: string | null,
 ): { claims: unknown; expires: number } | undefined {
@@ -138,7 +146,11 @@ async function documentOf(
     }
 }
 
-// 26.14 — ONCE PER REQUEST, and 26.15 — a seal half spent is sealed again for another full life.
+/**
+ * This request's principal, resolved from its cookie at most once.
+ *
+ * 26.14 — ONCE PER REQUEST, and 26.15 — a seal half spent is sealed again for another full life.
+ */
 export function resolvePrincipal(): Promise<Principal> {
     const scope = within('principal')
     scope.principal ??= (async () => {
@@ -155,13 +167,22 @@ export function resolvePrincipal(): Promise<Principal> {
     return scope.principal
 }
 
-// 26.5, 26.6 — READ OFF ITS OWN COOKIE OR MINTED, and untouched by a sign-in.
-export function callerFor(): string {
+/**
+ * This request's caller, minting one where the request has none.
+ *
+ * 26.5, 26.6 — READ OFF ITS OWN COOKIE OR MINTED, and untouched by a sign-in.
+ */
+export function callerOrMint(): string {
     const scope = within('principal.caller')
     return callerOf() ?? mintCaller(scope)
 }
 
-// 26.8, 26.21 — AUTHENTICATES THIS CALLER, before the headers are out, leaving `caller` where it was.
+/**
+ * Signs this caller in with `claims`, sealing them into the cookie.
+ *
+ * 26.8, 26.21 — AUTHENTICATES THIS CALLER, before the headers are out, leaving `caller` where it
+ * was.
+ */
 async function set(claims: unknown): Promise<void> {
     const scope = within('principal.set')
     if (scope.applied)
@@ -176,8 +197,12 @@ async function set(claims: unknown): Promise<void> {
     PRINCIPAL_LOG.debug('set')
 }
 
-// 26.7, 26.9 — SIGNS OUT NOW AND NEXT TIME, and rotates `caller` so the next visitor at this browser is
-// not the last one.
+/**
+ * Signs this caller out and rotates `caller`.
+ *
+ * 26.7, 26.9 — SIGNS OUT NOW AND NEXT TIME, and rotates `caller` so the next visitor at this
+ * browser is not the last one.
+ */
 function clear(): void {
     const scope = within('principal.clear')
     cookies().delete(PRINCIPAL_COOKIE)
@@ -190,6 +215,6 @@ function clear(): void {
 
 // 21.4 — the answer is about this caller alone, and is never cached.
 PRINCIPAL.document = resolvePrincipal
-PRINCIPAL.caller = callerFor
+PRINCIPAL.caller = callerOrMint
 PRINCIPAL.set = set
 PRINCIPAL.clear = clear

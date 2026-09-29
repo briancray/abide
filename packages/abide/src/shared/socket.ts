@@ -13,6 +13,7 @@ import type { PatchOp } from './reactive/PATCH_SINKS.ts'
 import { isForwarder } from './reactive/scoped.ts'
 import type { Clients } from './rpc.ts'
 
+/** What a socket's rungs are handed: a subscribe or a publish, its args, and the request. */
 export type SocketEvent<Produced = unknown, Args = unknown> = {
     kind: 'subscribe' | 'publish'
     args: Args
@@ -20,7 +21,11 @@ export type SocketEvent<Produced = unknown, Args = unknown> = {
     request: Request
 }
 
-// 18.9 — no schema: shape is the value's own (16.27).
+/**
+ * What `socket` is handed beside its value.
+ *
+ * 18.9 — no schema: shape is the value's own (16.27).
+ */
 export type SocketOptions<Produced = unknown, Args = unknown> = {
     middleware?: Middleware<SocketEvent<Produced, Args>, void>[]
     crossOrigin?: boolean | string[]
@@ -28,8 +33,12 @@ export type SocketOptions<Produced = unknown, Args = unknown> = {
     clients?: Clients
 }
 
-// 18.2 — WHAT A BROWSER SENDS OVER THE MUX: a subscription — a socket's, resumed where `seq` is
-// given (18.13), or a handler's naming the version it holds (18.17) — its end, or a publish (18.6).
+/**
+ * What a browser sends over the mux: a subscription, its end, or a publish.
+ *
+ * 18.2 — WHAT A BROWSER SENDS OVER THE MUX: a subscription — a socket's, resumed where `seq` is
+ * given (18.13), or a handler's naming the version it holds (18.17) — its end, or a publish (18.6).
+ */
 export type BrowserFrame = {
     op: 'sub' | 'unsub' | 'pub'
     id: number
@@ -41,9 +50,13 @@ export type BrowserFrame = {
     message?: unknown
 }
 
-// AND WHAT IT IS SENT: a production (9.14), the owner's ring (18.14), a refusal as the four fields it
-// is, a handler's value where it moved (18.21), what patches wrote over `base` (18.26), and a
-// handler's trigger per match (7.10, 7.18).
+/**
+ * What a browser is sent over the mux.
+ *
+ * A production (9.14), the owner's ring (18.14), a refusal as the four fields it
+ * is, a handler's value where it moved (18.21), what patches wrote over `base` (18.26), and a
+ * handler's trigger per match (7.10, 7.18).
+ */
 export type ServerFrame = {
     op:
         | 'prod'
@@ -64,23 +77,33 @@ export type ServerFrame = {
     error?: Failed<string, unknown>
 }
 
+/**
+ * A declared socket: callable for its value's `Reactive`, with what the mux reaches it by.
+ */
 export type Socket<Produced, Args, Failures = never> = ((
     ...args: undefined extends Args ? [args?: Args] : [args: Args]
 ) => Reactive<Produced, Produced, Failures, Produced>) & {
-    // What the server feeds subscribers from, and what the mux reaches for a subscription.
+    /** What the server feeds subscribers from, and what the mux reaches for a subscription. */
     values:
         | Reactive<Produced, Produced, Failures, Produced>
         | Keyed<Produced, Args, Produced, Failures, Produced>
-    // 18.3, 18.4 — the rungs, composed once at the declaration (16.15), and `null` where there are
-    // none, so a frame through a socket with no rungs awaits nothing.
+    /**
+     * The rungs composed around a frame, or `null` where there are none.
+     *
+     * 18.3, 18.4 — the rungs, composed once at the declaration (16.15), and `null` where there are
+     * none, so a frame through a socket with no rungs awaits nothing.
+     */
     onion: ((event: SocketEvent<Produced, Args>) => Promise<void>) | null
     crossOrigin: boolean | string[]
-    // 18.6.
+    /** Whether a browser may publish into the value (18.6). */
     clientPublish: boolean
     clients: Clients
     address: string | undefined
 }
 
+/**
+ * Carries a `global` `reactive` or `Keyed` over a web socket; the call hands back its `Reactive`.
+ */
 export function socket<Produced, Args = undefined, Failures = never>(
     values?:
         | Reactive<Produced, Produced, Failures, Produced>

@@ -1,8 +1,7 @@
 import { GET } from 'abide/server'
 import { database } from '#server/rpcReactiveDatabase'
 
-// The address comes off the file path and the export name, and the
-// schemas off the annotations already here.
+/** Address from the file path and export; schemas from the annotation. */
 export const getInvoice = GET(({ id }: { id: string }) => {
     return database.invoices.find(id)
 })

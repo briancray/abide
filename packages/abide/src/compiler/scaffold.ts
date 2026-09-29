@@ -4,7 +4,7 @@
 // half-made project finishes it rather than overwriting it.
 
 import abidePackage from '../../package.json' with { type: 'json' }
-import { COMPILER_OPTIONS } from './defaultProject.ts'
+import { COMPILER_OPTIONS } from './writeDefaultProject.ts'
 
 // THE STARTER'S OWN FILES, as files: a real document, a real page and a real module, copied as they
 // stand. What depends on the name — the manifests — is written here.
@@ -73,6 +73,7 @@ function filesFor(name: string): Record<string, string> {
     }
 }
 
+/** Writes the starter app into `into`, reporting which files it wrote and which it skipped. */
 export async function scaffold(
     name: string,
     into: string,

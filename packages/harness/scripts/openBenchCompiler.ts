@@ -9,6 +9,10 @@ const REPO = new URL('../../../', import.meta.url).pathname
 
 export type Render = () => { head: string; body: string }
 
+/**
+ * Opens one checker session and returns `compile`, which turns a source into an imported server
+ * component, and `close`, which ends the session and removes every emitted module.
+ */
 export async function openBenchCompiler(): Promise<{
     compile: (
         name: string,
@@ -22,10 +26,14 @@ export async function openBenchCompiler(): Promise<{
     )
     const made: string[] = []
     return {
-        // The emitted module, written where the tests write theirs — outside `packages/abide`, so
-        // `conventions.test.ts`'s glob does not scan it. ITS OWN DIR PER CALL, because an import
-        // path is cached: a second `Page.ts` at a path already imported hands back the first
-        // size's module.
+        /**
+         * Compiles `source` as `name` and returns the emitted module and its imported render.
+         *
+         * The emitted module, written where the tests write theirs — outside `packages/abide`, so
+         * `conventions.test.ts`'s glob does not scan it. ITS OWN DIR PER CALL, because an import
+         * path is cached: a second `Page.ts` at a path already imported hands back the first
+         * size's module.
+         */
         async compile(name, source, beside = {}) {
             const file = parseAbide(source)
             const reads = await session.reads(

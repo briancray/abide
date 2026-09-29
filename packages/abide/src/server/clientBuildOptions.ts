@@ -1,8 +1,12 @@
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 
-// THE CLIENT BUNDLE BOTH LANES BUILD — `abide build` to disk and `abide dev` in memory. 30.8 says
-// dev resolves an address the way the built app does, so what decides resolution is written once
-// here and each lane adds only where the output goes and how it is named.
+/**
+ * The `Bun.build` options for the client bundle both lanes build.
+ *
+ * `abide build` builds it to disk and `abide dev` in memory. 30.8 says dev resolves an address the
+ * way the built app does, so what decides resolution is written once here and each lane adds only
+ * where the output goes and how it is named.
+ */
 export function clientBuildOptions(
     entryDirectory: string,
     plugins: Bun.BunPlugin[],

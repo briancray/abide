@@ -3,6 +3,7 @@
 import { putOwn } from '#shared/putOwn.ts'
 import type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
 
+/** Replays a server patch's ops onto `root`, each walked to its path. */
 export function applyPatch(root: unknown, ops: PatchOp[]): void {
     for (const op of ops) {
         const path = op.path

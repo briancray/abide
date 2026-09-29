@@ -7,16 +7,21 @@
 import type { Params } from './matchRoute.ts'
 import { ambient } from './reactive/index.ts'
 
+/** The current address: its `url`, `params`, pattern `name`, and whether it is `navigating`. */
 export const route = {
     url: ambient<URL>(),
     params: ambient<Params>(),
-    // 23.6 — the resolution path: the literal the address resolved to, `/invoices/[id]`.
+    /** 23.6 — the resolution path: the literal the address resolved to, `/invoices/[id]`. */
     name: ambient<string>(),
     navigating: ambient(false),
 }
 
-// 23.2 — ONE `URL` PER NAVIGATION, built here as the route resolves, so a reader holding the last
-// one is not handed a value that moved under it.
+/**
+ * Sets `route`'s url, params and name to an address just resolved.
+ *
+ * 23.2 — ONE `URL` PER NAVIGATION, built here as the route resolves, so a reader holding the last
+ * one is not handed a value that moved under it.
+ */
 export function arrive(at: string, pattern: string, params: Params): void {
     route.url.set(new URL(at))
     route.params.set(params)

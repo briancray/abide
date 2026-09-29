@@ -1,3 +1,4 @@
+/** `bytes` random bytes, encoded as `encoding`. */
 export function randomToken(
     bytes: number,
     encoding: 'base64' | 'base64url' | 'hex',

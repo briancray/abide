@@ -22,7 +22,7 @@ const SOCKET_DIRECTORY = 'server/sockets'
 // which tree that was.
 type HandlerModule = { source: string; path: string; isSocket: boolean }
 
-// Every module under both trees, handlers first.
+/** Every module under both trees, handlers first. */
 function modulesUnder(root: string): HandlerModule[] {
     const modules: HandlerModule[] = []
     for (const directory of [HANDLER_DIRECTORY, SOCKET_DIRECTORY])
@@ -35,15 +35,23 @@ function modulesUnder(root: string): HandlerModule[] {
     return modules
 }
 
-// Whether there is anything under either tree, asked before a checker is opened to read it: an
-// app of handlers alone has no `.abide` to say it is an app.
+/**
+ * Whether the app has any module under `server/rpc` or `server/sockets`.
+ *
+ * Asked before a checker is opened to read it: an app of handlers alone has no `.abide` to say it
+ * is an app.
+ */
 export function declaresHandlers(root: string): boolean {
     return modulesUnder(root).length > 0
 }
 
-// Both trees, off one read of the checker, into one table — a socket is a row whose method is
-// `SOCKET`. 19.2 — one owner per address, and the error names both files. 18.30 — with what the
-// build could not read of a copy's options.
+/**
+ * The app's handler and socket mounts, with the warnings the build raised reading them.
+ *
+ * Both trees, off one read of the checker, into one table — a socket is a row whose method is
+ * `SOCKET`. 19.2 — one owner per address, and the error names both files. 18.30 — with what the
+ * build could not read of a copy's options.
+ */
 export async function handlersUnder(
     root: string,
     session: TypeSession,

@@ -1,5 +1,6 @@
 // THE REVERT ARM for `sharedCases`: `validateJson` as it was before the mismatch flag, with a
 // scratch record allocated per combinator branch per value. Kept in step by hand.
+//
 // THE NATIVE VALIDATOR. A `JsonSchema` is the form abide can generate, publish and read
 // back (19.8, 20.6), so it is the one form that cannot be delegated to a library an app
 // happens to have — the OpenAPI document and the MCP tool description are the same
@@ -21,8 +22,12 @@ import { note } from '../../abide/src/shared/note.ts'
 
 type Node = { [key: string]: JsonValue }
 
-// THE SHAPE IS A FACT ABOUT THE SCHEMA, NOT ABOUT THE VALUE, and `check` below is re-entered per
-// element and per combinator branch — so the sweep re-proved the same `items` node once a row.
+/**
+ * Schema nodes whose keyword shapes have already been verified.
+ *
+ * THE SHAPE IS A FACT ABOUT THE SCHEMA, NOT ABOUT THE VALUE, and `check` below is re-entered per
+ * element and per combinator branch — so the sweep re-proved the same `items` node once a row.
+ */
 const VERIFIED = new WeakSet<object>()
 
 type Report = Record<string, string[]>
@@ -32,11 +37,15 @@ function isEmpty(record: Report): boolean {
     return true
 }
 
-// THE HEADER'S RULE, APPLIED ONE LEVEL DOWN. An unknown KEYWORD throws, and so does a known one
-// holding a value this cannot read: skipped, it is a declared constraint silently not applied.
-// `{minimum: 5, exclusiveMinimum: true}` is the case that matters — draft-04's spelling of a strict
-// bound, where 20.6 publishes the one holding a NUMBER — and `{required: "a"}` or `{anyOf: {}}`
-// otherwise validate nothing.
+/**
+ * Throws on an unknown keyword, or a known one holding a value of the wrong shape.
+ *
+ * THE HEADER'S RULE, APPLIED ONE LEVEL DOWN. An unknown KEYWORD throws, and so does a known one
+ * holding a value this cannot read: skipped, it is a declared constraint silently not applied.
+ * `{minimum: 5, exclusiveMinimum: true}` is the case that matters — draft-04's spelling of a strict
+ * bound, where 20.6 publishes the one holding a NUMBER — and `{required: "a"}` or `{anyOf: {}}`
+ * otherwise validate nothing.
+ */
 function verifyShape(node: Node, path: string): void {
     for (const keyword in node) {
         if (!Object.hasOwn(node, keyword)) continue
@@ -60,8 +69,12 @@ function verifyShape(node: Node, path: string): void {
     }
 }
 
-// Read but not checked — see the header. `$schema` and `$id` identify the document,
-// the rest are for a human or a generated page.
+/**
+ * Keywords that annotate a schema and constrain nothing.
+ *
+ * Read but not checked — see the header. `$schema` and `$id` identify the document,
+ * the rest are for a human or a generated page.
+ */
 const ANNOTATIONS = new Set([
     '$schema',
     '$id',
@@ -75,19 +88,23 @@ const ANNOTATIONS = new Set([
     'writeOnly',
 ])
 
-// EVERY CONSTRAINT KEYWORD AND THE SHAPE ITS VALUE MUST HAVE. One table rather than an allow-list
-// beside a ladder of guards: a keyword admitted here without a shape is the "declared but not
-// applied" failure the header exists to stop, and the two lists had nothing holding them together.
-//
-// THE SHAPE IS CHECKED WHERE THE KEYWORD STANDS, not where its check happens to run. Read inside
-// `checkNumber` / `checkObject`, the refusal was DATA-dependent: `{minimum: 5, exclusiveMinimum:
-// true}` — the draft-04 spelling 20.6 replaced — validated a string or a null with no complaint
-// and threw only the first time an actual number arrived, so a malformed schema passed every test
-// that did not happen to feed it one. `{required: "a"}`, `{enum: "a"}`, `{type: 42}`, `{anyOf: {}}`
-// and `{properties: []}` each walked past an `Array.isArray` and validated NOTHING at all.
-//
-// SO EVERY READ BELOW IS A CAST AND AN `undefined` TEST. A second shape test where a keyword is
-// applied is a branch nothing reaches and a second owner of the question this table answers.
+/**
+ * The shape a constraint keyword's value must have, as the refusal names it.
+ *
+ * EVERY CONSTRAINT KEYWORD AND THE SHAPE ITS VALUE MUST HAVE. One table rather than an allow-list
+ * beside a ladder of guards: a keyword admitted here without a shape is the "declared but not
+ * applied" failure the header exists to stop, and the two lists had nothing holding them together.
+ *
+ * THE SHAPE IS CHECKED WHERE THE KEYWORD STANDS, not where its check happens to run. Read inside
+ * `checkNumber` / `checkObject`, the refusal was DATA-dependent: `{minimum: 5, exclusiveMinimum:
+ * true}` — the draft-04 spelling 20.6 replaced — validated a string or a null with no complaint
+ * and threw only the first time an actual number arrived, so a malformed schema passed every test
+ * that did not happen to feed it one. `{required: "a"}`, `{enum: "a"}`, `{type: 42}`, `{anyOf: {}}`
+ * and `{properties: []}` each walked past an `Array.isArray` and validated NOTHING at all.
+ *
+ * SO EVERY READ BELOW IS A CAST AND AN `undefined` TEST. A second shape test where a keyword is
+ * applied is a branch nothing reaches and a second owner of the question this table answers.
+ */
 type Shape =
     | 'a number'
     | 'a string'
@@ -124,8 +141,12 @@ const CONSTRAINTS = new Map<string, Shape>([
     ['nullable', 'a boolean'],
 ])
 
-// Whether a value has the shape its keyword declares. A `schema` is `true`, `false` or an object —
-// `check` refuses anything else where it walks into one, so it is not re-stated here.
+/**
+ * Whether a value has the shape its keyword declares.
+ *
+ * A `schema` is `true`, `false` or an object — `check` refuses anything else where it walks into
+ * one, so it is not re-stated here.
+ */
 function hasShape(shape: Shape, held: unknown): boolean {
     switch (shape) {
         case 'a number':
@@ -161,6 +182,7 @@ function isMembers(held: unknown): boolean {
     return held !== null && typeof held === 'object' && !Array.isArray(held)
 }
 
+/** The issues `value` has against `schema`, keyed by path, or `null` when it validates. */
 export function validateJsonScratch<T>(
     schema: JsonValue,
     value: unknown,
@@ -196,15 +218,19 @@ function matchesType(wanted: string, value: unknown): boolean {
     return typeName(value) === wanted
 }
 
-// `const` and `enum` compare by VALUE, so a nested object has to be walked. The canonical form is
-// not reachable from here (it is a `#shared` sibling that would drag its own graph in for one
-// comparison), and a schema's `const` is small by nature — which also bounds this walk, because
-// it stops the moment the two shapes part.
-//
-// WALKED RATHER THAN STRINGIFIED. `JSON.stringify(a) === JSON.stringify(b)` read as a value
-// comparison and was three: it is KEY-ORDER sensitive, so `const: {a:1,b:2}` refused the same
-// object sent as `{"b":2,"a":1}`; it DROPS an `undefined` member, so `{a:1,b:undefined}` compared
-// equal to `{a:1}`; and it THROWS on a cyclic value, out of the validator, from input.
+/**
+ * Whether two JSON values are equal by value, walked member by member.
+ *
+ * `const` and `enum` compare by VALUE, so a nested object has to be walked. The canonical form is
+ * not reachable from here (it is a `#shared` sibling that would drag its own graph in for one
+ * comparison), and a schema's `const` is small by nature — which also bounds this walk, because
+ * it stops the moment the two shapes part.
+ *
+ * WALKED RATHER THAN STRINGIFIED. `JSON.stringify(a) === JSON.stringify(b)` read as a value
+ * comparison and was three: it is KEY-ORDER sensitive, so `const: {a:1,b:2}` refused the same
+ * object sent as `{"b":2,"a":1}`; it DROPS an `undefined` member, so `{a:1,b:undefined}` compared
+ * equal to `{a:1}`; and it THROWS on a cyclic value, out of the validator, from input.
+ */
 function sameJson(a: unknown, b: unknown): boolean {
     if (a === b) return true
     if (a === null || b === null) return false
@@ -329,12 +355,16 @@ function check(
     checkCombinators(node, value, path, found)
 }
 
-// Where in the document a refusal of the validator's own input stands, for its message.
+/** Where in the document a refusal of the validator's own input stands, for its message. */
 function placeOf(path: string): string {
     return path === '' ? 'the root' : path
 }
 
-// ONE SENTENCE FOR ONE FAILURE, and every keyword reads through it.
+/**
+ * The error for a keyword holding a value of the wrong shape.
+ *
+ * ONE SENTENCE FOR ONE FAILURE, and every keyword reads through it.
+ */
 function wrongShape(
     keyword: string,
     held: unknown,
@@ -384,9 +414,13 @@ function checkString(
         note(found, path, `must match ${pattern}`)
 }
 
-// COMPILED ONCE PER SOURCE, not once per value: `items: {pattern}` put a `new RegExp` on every
-// element of the array, the same source string recompiled down its whole length. The key space is
-// the set of `pattern` strings the app's own schemas carry, so it is bounded by the source.
+/**
+ * Compiled `pattern` regexes, keyed by source.
+ *
+ * COMPILED ONCE PER SOURCE, not once per value: `items: {pattern}` put a `new RegExp` on every
+ * element of the array, the same source string recompiled down its whole length. The key space is
+ * the set of `pattern` strings the app's own schemas carry, so it is bounded by the source.
+ */
 const MATCHERS = new Map<string, RegExp>()
 
 function matcherFor(pattern: string, path: string): RegExp {

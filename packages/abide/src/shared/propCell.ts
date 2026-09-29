@@ -14,13 +14,18 @@ import type { Reactive } from './reactive/Reactive.ts'
 // every other accessor takes no argument and hands back its value either way.
 type Accessor = (hold?: true) => unknown
 
+/** A prop the child writes, as a getter for one `reactive` cell over the caller's accessor. */
 export function propCell(read: Accessor): () => Reactive<unknown> {
     const cell = reactive(() => read(true))
     return () => cell
 }
 
-// The record the caller passed, with each written key the child's cell rather than the caller's
-// accessor. A key the caller did not pass stays absent, so the pattern's default still applies.
+/**
+ * The record the caller passed, with each written key the child's cell rather than the caller's
+ * accessor.
+ *
+ * A key the caller did not pass stays absent, so the pattern's default still applies.
+ */
 export function propCells(
     record: Record<string, Accessor>,
     written: readonly string[],

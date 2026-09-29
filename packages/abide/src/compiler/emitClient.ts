@@ -55,37 +55,45 @@ import type { Attribute, Setup, TemplateNode } from './TemplateNode.ts'
 // What the emitters thread through every region: the next region's number.
 type Counter = { next: number }
 
-// The next region's name under `prefix`.
+/** The next region's name under `prefix`. */
 function claim(counter: Counter, prefix: string): string {
     const name = `${prefix}${counter.next}`
     counter.next += 1
     return name
 }
 
-// `selfFill` is how this module can be mounted against an EMPTY region: a file a ROUTE reaches
-// (30.11) is mounted against a page no server painted, once a navigation; a file another INVOKES
-// as a component (32.18) can stand in a row a list grew by, once A ROW. Both need a second copy of
-// the template, and one that needs neither is 34% more client than it needs: measured at 1797 ->
-// 2405 shipped lines over the corpus with every file carrying one. INVOKED decides whether that
-// copy is markup or a build (`Cursor.repeated`) — a page's fill is one parse, and a component's is
-// a parse per row — and ROUTED decides whether it carries a head (39.6). A file can be both, and
-// then each fact decides its own half.
-//
-// WHICH FILES THOSE ARE IS THE BUILD'S KNOWLEDGE, being a fact about the import graph and the file
-// tree rather than about this file, so it arrives rather than being guessed here — and it DEFAULTS
-// TO NEITHER, because the wrong answer costs a static page the "ships no runtime" fact above.
+/**
+ * Which empty regions a client module fills itself: a routed page's, an invoked row's, or both.
+ *
+ * How this module can be mounted against an EMPTY region: a file a ROUTE reaches
+ * (30.11) is mounted against a page no server painted, once a navigation; a file another INVOKES
+ * as a component (32.18) can stand in a row a list grew by, once A ROW. Both need a second copy of
+ * the template, and one that needs neither is 34% more client than it needs: measured at 1797 ->
+ * 2405 shipped lines over the corpus with every file carrying one. INVOKED decides whether that
+ * copy is markup or a build (`Cursor.repeated`) — a page's fill is one parse, and a component's is
+ * a parse per row — and ROUTED decides whether it carries a head (39.6). A file can be both, and
+ * then each fact decides its own half.
+ *
+ * WHICH FILES THOSE ARE IS THE BUILD'S KNOWLEDGE, being a fact about the import graph and the file
+ * tree rather than about this file, so it arrives rather than being guessed here — and it DEFAULTS
+ * TO NEITHER, because the wrong answer costs a static page the "ships no runtime" fact
+ * (`compileApp`).
+ */
 export type SelfFill = 'none' | 'routed' | 'invoked' | 'both'
 
 // The mount's third argument, which only the router passes (`Router.mountFrom`).
 const ROUTED = '__routed'
-// Whether the server painted this level, read before the fill that would make it so (39.13).
-const PAINTED = '__painted'
 
+/**
+ * The client module for one `.abide`: its mount, and its own fill where `selfFill` asks.
+ *
+ * `''` where there is nothing to hydrate and nothing imports it by name.
+ */
 export function emitClient(
     file: AbideFile,
     reads: readonly Read[] = [],
     selfFill: SelfFill = 'none',
-    // Where each `.abide` this file imports landed in the build (`componentGraph`).
+    /** Where each `.abide` this file imports landed in the build (`componentGraph`). */
     components: ReadonlyMap<string, string> = new Map(),
 ): string {
     const carriesOwnMarkup = selfFill !== 'none'
@@ -138,27 +146,31 @@ export function emitClient(
     // 39.13 — A HEAD THAT READS SOMETHING LIVE FOLLOWS IT, from a watch the page's scope owns — live
     // by the rule `emitRegion` binds by. One that reads nothing that moves is applied once.
     const liveHeads = head !== undefined && heads && readsLive(head, lowering)
-    const applied =
-        heads && !liveHeads
-            ? `if (${ROUTED}) ${lowering.use('applyHead')}(${headMarkup}); `
-            : ''
+    // 39.14 — THE HEAD IS LEFT ON THE LEVEL the router handed in, painted or not, for the router
+    // to read when this level leaves or a level under it does. One thunk, which the apply below
+    // reads too, so the markup expression is emitted once.
+    const registered = heads
+        ? `if (${ROUTED}) ${ROUTED}.head = () => ${headMarkup}\n`
+        : ''
+    const applied = heads
+        ? `if (${ROUTED}) ${lowering.use('applyHead')}(${ROUTED}.head()); `
+        : ''
+    // Applied with the fill either way, so the watch's first run only subscribes: what it would
+    // write is already there, from the server or from the line above.
     if (liveHeads)
         lines.push(
-            `if (${ROUTED}) ${lowering.use('liveHead')}(${SCOPE}, ${PAINTED}, () => ${headMarkup})`,
+            `if (${ROUTED}) ${lowering.use('liveHead')}(${SCOPE}, ${ROUTED}.head)`,
         )
     const builds = carriesOwnMarkup && page.positions.length > 0
     let fills = ''
-    if (applied !== '' || builds || liveHeads) {
+    if (applied !== '' || builds) {
         const build = builds
             ? `function __build(__document) {\n    ${emitMaker(page, lowering)}\n}\n`
             : ''
-        const isEmpty = lowering.use('isEmptyRegion')
         const fill = builds
             ? `${lowering.use('fillRegion')}(${REGION_ROOT}, __build)`
             : ''
-        fills = liveHeads
-            ? `${build}const ${PAINTED} = !${isEmpty}(${REGION_ROOT})\nif (!${PAINTED}) { ${fill} }\n`
-            : `${build}if (${isEmpty}(${REGION_ROOT})) { ${applied}${fill} }\n`
+        fills = `${registered}${build}if (${lowering.use('isEmptyRegion')}(${REGION_ROOT})) { ${applied}${fill} }\n`
     }
 
     // NOTHING LIVE IS NO MODULE: every unit the page's region pushes is a binding, a listener or a
@@ -243,8 +255,12 @@ ${fills}${captured}${bindings}${closed}
 `
 }
 
-// 39.13 — WHETHER A PLACED REGION READS ANYTHING THAT MOVES, by `emitRegion`'s own rule: a nested
-// region, a live text run, or an attribute `lowering.isLive` says is.
+/**
+ * Whether a placed region reads anything that moves.
+ *
+ * 39.13 — by `emitRegion`'s own rule: a nested region, a live text run, or an attribute
+ * `lowering.isLive` says is.
+ */
 function readsLive(sink: Cursor, lowering: Lowering): boolean {
     for (const at of sink.positions) {
         if (at.kind === 'region') return true
@@ -258,21 +274,25 @@ function readsLive(sink: Cursor, lowering: Lowering): boolean {
     return false
 }
 
-// One region's bindings, emitted against its own root: the page, a `{#if}` arm, a `{#for}` row, a
-// `<slot/>` fallback or a caller's children. Each is a sink of its own (`Cursor`), so `__c1` in one
-// and `__c1` in another are different nodes and neither region can reach the other's.
-//
-// TWO KINDS OF LINE, and the split is 41.10's. The WALK — one `const` per position it needs, each
-// found from the one before it — goes into `chain` and NEVER THROWS: an absent node is carried
-// forward as `undefined`. The UNITS go into `lines`, and each CHECKS the node it was handed
-// (`elementHere`, `textHere`, `regionFound`). On a page, where every unit is guarded apart, a node
-// that disagrees then loses the unit that needed it and nothing after it — the locality a path
-// re-walked from the root used to buy, without re-walking.
-//
-// THE WALK IS PRUNED. A position is walked when something at or after it in its parent needs it —
-// a binding, or a later position found through it — so a static subtree and a static tail are
-// never visited. A blank run standing before something walked is put back as the walk passes
-// (`runHere`), because what follows it is found from it.
+/**
+ * One region's bindings, as its walk, its helpers and its guarded units.
+ *
+ * One region's bindings, emitted against its own root: the page, a `{#if}` arm, a `{#for}` row, a
+ * `<slot/>` fallback or a caller's children. Each is a sink of its own (`Cursor`), so `__c1` in one
+ * and `__c1` in another are different nodes and neither region can reach the other's.
+ *
+ * TWO KINDS OF LINE, and the split is 41.10's. The WALK — one `const` per position it needs, each
+ * found from the one before it — goes into `chain` and NEVER THROWS: an absent node is carried
+ * forward as `undefined`. The UNITS go into `lines`, and each CHECKS the node it was handed
+ * (`elementHere`, `textHere`, `regionFound`). On a page, where every unit is guarded apart, a node
+ * that disagrees then loses the unit that needed it and nothing after it — the locality a path
+ * re-walked from the root used to buy, without re-walking.
+ *
+ * THE WALK IS PRUNED. A position is walked when something at or after it in its parent needs it —
+ * a binding, or a later position found through it — so a static subtree and a static tail are
+ * never visited. A blank run standing before something walked is put back as the walk passes
+ * (`runHere`), because what follows it is found from it.
+ */
 function emitRegion(
     sink: Cursor,
     lowering: Lowering,
@@ -497,20 +517,23 @@ const DOCUMENT = '__document'
 const RAW_OPEN_MARKUP = JSON.stringify(`<!--${RAW_OPEN}-->`)
 const RAW_CLOSE_MARKUP = JSON.stringify(`<!--${RAW_CLOSE}-->`)
 
-// A NESTED REGION'S BODY, in the order the emitted function needs it: its walk first, then its
-// helpers, then its units.
+/** A nested region's body, in the order the emitted function needs it: walk, helpers, units. */
 function regionBody(region: RegionEmitted): string[] {
     return [...region.chain, ...region.helpers, ...region.lines]
 }
 
-// WHAT MAKES A REGION'S NODES, as the body of a function taking the region's `__document`: the
-// row, the arm, the slot's fallback, the caller's children and the page that fills itself are all
-// made the same way. BUILT from the positions the markup walk placed (`emitBuild`) — or, where the
-// region holds content only the parser makes right (`isParserOwned`), PARSED from the very markup
-// the server writes, which is the one representation that cannot disagree with it.
-//
-// THE MARKUP IS ASKED FOR ONLY WHERE IT IS USED, as a thunk: writing it binds the markup writer's
-// names (`escapeText`, `slotValue`), and a module that builds would import them for nothing.
+/**
+ * The body of the function that makes a region's nodes from a `__document`.
+ *
+ * WHAT MAKES A REGION'S NODES, as the body of a function taking the region's `__document`: the
+ * row, the arm, the slot's fallback, the caller's children and the page that fills itself are all
+ * made the same way. BUILT from the positions the markup walk placed (`emitBuild`) — or, where the
+ * region holds content only the parser makes right (`isParserOwned`), PARSED from the very markup
+ * the server writes, which is the one representation that cannot disagree with it.
+ *
+ * THE MARKUP IS ASKED FOR ONLY WHERE IT IS USED, as a thunk: writing it binds the markup writer's
+ * names (`escapeText`, `slotValue`), and a module that builds would import them for nothing.
+ */
 function emitMaker(
     sink: Cursor,
     lowering: Lowering,
@@ -527,32 +550,36 @@ function emitMaker(
     return emitBuild(sink, anchored, lowering)
 }
 
-// A ROW THE BROWSER BUILDS, from the positions the markup walk placed for it — the same positions
-// the row's mount walks (`emitRegion`), under the same slot names. So a row has one description:
-// the server writes it as bytes, `make` builds it, `mount` finds it, and none of the three can
-// disagree about where a node stands.
-//
-// BUILT RATHER THAN PARSED, and the whole of why: `markupNodes` sets `template.innerHTML` once a
-// row, measured (`bun run bench:reorder`) at ~19 µs a row and ~90% of building a list, and ~88% of
-// it FIXED — what costs is invoking the parser, not parsing. A row that reads PAGE state priced at
-// n=1000 (`selectedRowShare.ts`): 21.6-22.2 ms parsed, 3.5-3.6 ms built, the parsed layer alone
-// longer than a frame. The server is untouched; only a row the browser grows goes through `make`.
-//
-// THE BUILD WRITES WHAT THE MARKUP WRITES, MINUS WHAT THE MOUNT WILL WRITE. `makeRow` calls `make`
-// and then `mount`, so a value the mount binds — a run or an attribute reading a `Reactive` — is
-// written by the binding's first run and the build leaves it: a live run is an empty text node, a
-// live attribute is not set. Everything else takes the value the parser would have made of the
-// server's bytes — `escapeless` for an expression, and the build's own decode for a static one
-// (`decodeCharacterReferences`). A merged `class` or `style` is
-// written whole, through the same structure the markup takes (`mergedValue`), so the two are one
-// string.
-//
-// A BLANK RUN IS BUILT ONLY WHEN IT HAS SOMETHING IN IT, because that is what the server does: a
-// run of expressions that stringify to '' writes no node, and the mount's walk puts one back
-// (`runHere`) exactly where it would for a row the server painted.
-//
-// A NESTED REGION IS AN EMPTY ANCHOR PAIR, filled by its own machinery on the mount's first run
-// (`isEmptyRegion`), and a component or a slot is the same pair filled by the child.
+/**
+ * The body that builds a row's nodes with DOM calls, from the positions the markup walk placed.
+ *
+ * A ROW THE BROWSER BUILDS, from the positions the markup walk placed for it — the same positions
+ * the row's mount walks (`emitRegion`), under the same slot names. So a row has one description:
+ * the server writes it as bytes, `make` builds it, `mount` finds it, and none of the three can
+ * disagree about where a node stands.
+ *
+ * BUILT RATHER THAN PARSED, and the whole of why: `markupNodes` sets `template.innerHTML` once a
+ * row, measured (`bun run bench:reorder`) at ~19 µs a row and ~90% of building a list, and ~88% of
+ * it FIXED — what costs is invoking the parser, not parsing. A row that reads PAGE state priced at
+ * n=1000 (`selectedRowShare.ts`): 21.6-22.2 ms parsed, 3.5-3.6 ms built, the parsed layer alone
+ * longer than a frame. The server is untouched; only a row the browser grows goes through `make`.
+ *
+ * THE BUILD WRITES WHAT THE MARKUP WRITES, MINUS WHAT THE MOUNT WILL WRITE. `makeRow` calls `make`
+ * and then `mount`, so a value the mount binds — a run or an attribute reading a `Reactive` — is
+ * written by the binding's first run and the build leaves it: a live run is an empty text node, a
+ * live attribute is not set. Everything else takes the value the parser would have made of the
+ * server's bytes — `escapeless` for an expression, and the build's own decode for a static one
+ * (`decodeCharacterReferences`). A merged `class` or `style` is
+ * written whole, through the same structure the markup takes (`mergedValue`), so the two are one
+ * string.
+ *
+ * A BLANK RUN IS BUILT ONLY WHEN IT HAS SOMETHING IN IT, because that is what the server does: a
+ * run of expressions that stringify to '' writes no node, and the mount's walk puts one back
+ * (`runHere`) exactly where it would for a row the server painted.
+ *
+ * A NESTED REGION IS AN EMPTY ANCHOR PAIR, filled by its own machinery on the mount's first run
+ * (`isEmptyRegion`), and a component or a slot is the same pair filled by the child.
+ */
 function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
     const lines: string[] = ['const __built = []']
     if (anchored)
@@ -602,15 +629,19 @@ function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
     return lines.join('\n    ')
 }
 
-// A RUN, BUILT. What the server writes for a run is its static bytes and each expression escaped —
-// except a `Raw` value (32.27), whose html goes in unescaped, is PARSED into elements, and is
-// anchored (`markupRun`). A text node cannot hold that, so a run whose expression answers a `Raw`
-// is parsed from the very markup the server writes for it, anchors and all — the parser for the one
-// thing only it makes — and every other run is one text node. The check is an `instanceof` a piece,
-// which is what `escapeText` pays already.
-//
-// A run reading a `Reactive` is the mount's to write: an empty node where the run always renders
-// one, and none where it can render none (a blank run), which is what the server leaves too.
+/**
+ * The lines that build one text run of a built row.
+ *
+ * A RUN, BUILT. What the server writes for a run is its static bytes and each expression escaped —
+ * except a `Raw` value (32.27), whose html goes in unescaped, is PARSED into elements, and is
+ * anchored (`markupRun`). A text node cannot hold that, so a run whose expression answers a `Raw`
+ * is parsed from the very markup the server writes for it, anchors and all — the parser for the one
+ * thing only it makes — and every other run is one text node. The check is an `instanceof` a piece,
+ * which is what `escapeText` pays already.
+ *
+ * A run reading a `Reactive` is the mount's to write: an empty node where the run always renders
+ * one, and none where it can render none (a blank run), which is what the server leaves too.
+ */
 function builtRun(
     at: Position,
     lowering: Lowering,
@@ -655,7 +686,7 @@ function builtRun(
     return lines
 }
 
-// One attribute's value as `setAttribute` takes it, or null for one the build leaves alone.
+/** One attribute's value as `setAttribute` takes it, or null for one the build leaves alone. */
 function builtAttribute(
     written: WrittenAttribute,
     lowering: Lowering,
@@ -673,9 +704,12 @@ function builtAttribute(
     return render.bytes(staticAttributeBytes(written.lowerName, written.value))
 }
 
-// The build's half of `ValueRender`: what the parser makes of each piece the markup escapes. A
-// merge member reading a `Reactive` is still evaluated here, under 41.4's guard, because a merged
-// attribute is written whole or not at all.
+/**
+ * The build's half of `ValueRender`: what the parser makes of each piece the markup escapes.
+ *
+ * A merge member reading a `Reactive` is still evaluated here, under 41.4's guard, because a merged
+ * attribute is written whole or not at all.
+ */
 function buildRender(lowering: Lowering): ValueRender {
     const guarded = (attribute: Attribute): string =>
         `${lowering.use('escapeless')}(${unlandable(lowering, attribute, lowering.slot(attribute))})`
@@ -688,10 +722,14 @@ function buildRender(lowering: Lowering): ValueRender {
     }
 }
 
-// A REGION NOBODY PAINTED, as the pair that fills it: `_build` for the nodes and `_mount` for the
-// bindings. 32.18 and 32.19 are the same mechanism from two sides — a caller's children handed to a
-// child, and the child's own fallback for a slot nothing was passed — so they are one emitter
-// rather than two that have to be kept byte-compatible by hand.
+/**
+ * Emits a region's `_build` and `_mount` pair into `helpers`, for a region nobody painted.
+ *
+ * A REGION NOBODY PAINTED, as the pair that fills it: `_build` for the nodes and `_mount` for the
+ * bindings. 32.18 and 32.19 are the same mechanism from two sides — a caller's children handed to a
+ * child, and the child's own fallback for a slot nothing was passed — so they are one emitter
+ * rather than two that have to be kept byte-compatible by hand.
+ */
 function emitFillable(
     name: string,
     sink: Cursor,
@@ -715,10 +753,14 @@ function emitFillable(
     )
 }
 
-// 41.10 — A MISMATCH REBUILDS THIS BLOCK OR ROW AND NOTHING WIDER. What the server wrote is what
-// hydration walks; where it disagrees, it is re-rendered from the same markup a swap or a new row
-// uses (`rebuild`) and wired again. `__rebuilt` is what stops a document that disagrees for some
-// other reason from rebuilding forever — the second failure is the author's to see.
+/**
+ * The source of a region's `_mount` function, which rebuilds the region on a mismatch.
+ *
+ * 41.10 — A MISMATCH REBUILDS THIS BLOCK OR ROW AND NOTHING WIDER. What the server wrote is what
+ * hydration walks; where it disagrees, it is re-rendered from the same markup a swap or a new row
+ * uses (`rebuild`) and wired again. `__rebuilt` is what stops a document that disagrees for some
+ * other reason from rebuilding forever — the second failure is the author's to see.
+ */
 function mountFunction(
     name: string,
     parameters: string,
@@ -760,14 +802,18 @@ function mountFunction(
     ].join('\n')
 }
 
-// 32.18 ON THE CLIENT — the child mounts ITSELF, against the region its markup was written into.
-// The parent hands over the same accessors it handed the server emitter (33.5), so the prop is the
-// caller's expression on both sides and the child re-reads it when the parent's value moves.
-//
-// THE CHILD'S MOUNT IS ITS OWN MODULE'S. `import Total from './Total.abide'` is the default export
-// of the client module that file compiled to (`componentImports`), so the binding the author wrote
-// is the function called here — the parent emits no copy of the child's bindings, and a child
-// changed in place is re-emitted alone.
+/**
+ * Emits a component invocation's client mount: the child mounting itself against its region.
+ *
+ * 32.18 ON THE CLIENT — the child mounts ITSELF, against the region its markup was written into.
+ * The parent hands over the same accessors it handed the server emitter (33.5), so the prop is the
+ * caller's expression on both sides and the child re-reads it when the parent's value moves.
+ *
+ * THE CHILD'S MOUNT IS ITS OWN MODULE'S. `import Total from './Total.abide'` is the default export
+ * of the client module that file compiled to (`componentImports`), so the binding the author wrote
+ * is the function called here — the parent emits no copy of the child's bindings, and a child
+ * changed in place is re-emitted alone.
+ */
 function emitInvocation(
     at: Position,
     node: ElementNode,
@@ -835,12 +881,16 @@ ${SCOPE}.watch(() => {
 })`)
 }
 
-// 32.19 ON THE CHILD'S SIDE — the position the caller's children render into. Not a watch and not
-// a swap: whether children were given is fixed at the call site, so this is read once and the
-// region holds whichever of the two was decided there for the rest of its life.
-//
-// THE FALLBACK IS THE CHILD'S OWN, so it is emitted here as an arm is — its markup for a region
-// nobody painted, its bindings for one somebody did.
+/**
+ * Emits a `<slot/>`'s client unit: the caller's children, or the child's own fallback.
+ *
+ * 32.19 ON THE CHILD'S SIDE — the position the caller's children render into. Not a watch and not
+ * a swap: whether children were given is fixed at the call site, so this is read once and the
+ * region holds whichever of the two was decided there for the rest of its life.
+ *
+ * THE FALLBACK IS THE CHILD'S OWN, so it is emitted here as an arm is — its markup for a region
+ * nobody painted, its bindings for one somebody did.
+ */
 function emitSlot(
     at: Position,
     lowering: Lowering,
@@ -861,10 +911,14 @@ if (${lowering.use('isEmptyRegion')}(${name})) ${lowering.use('fillRegion')}(${n
 ${SCOPE}.own(${name}_kids === undefined ? ${name}_mount(${name}) : ${name}_kids.mount(${name}))`)
 }
 
-// 32.12 — one arm renders. The SERVER already rendered one, so the first run HYDRATES it rather
-// than replacing it: a page that re-renders every region on load creates every node twice and
-// throws away the document it was sent. The condition is evaluated once a run, the first run
-// included — the arm hydrated is the arm the watch then compares against.
+/**
+ * Emits an `{#if}` chain's client unit, which hydrates the arm the server rendered.
+ *
+ * 32.12 — one arm renders. The SERVER already rendered one, so the first run HYDRATES it rather
+ * than replacing it: a page that re-renders every region on load creates every node twice and
+ * throws away the document it was sent. The condition is evaluated once a run, the first run
+ * included — the arm hydrated is the arm the watch then compares against.
+ */
 function emitBlock(
     at: Position,
     block: Extract<TemplateNode, { kind: 'block'; block: 'if' }>,
@@ -953,9 +1007,13 @@ ${decided ? '{' : `${SCOPE}.watch(() => {`}
 ${decided ? '}' : '})'}`)
 }
 
-// 32.16 — A `{#try}` TAKES ITS BODY UNTIL SOMETHING IN IT FAILS, and its catch from then until the
-// failure clears. The boundary is the region's, and the catch reads the failure by the name the
-// author bound. Two arms, so the arm taken is `0` or `1` and never the `{#if}` floor.
+/**
+ * Emits a `{#try}` block's client unit: the body until something in it fails, then the catch.
+ *
+ * 32.16 — A `{#try}` TAKES ITS BODY UNTIL SOMETHING IN IT FAILS, and its catch from then until the
+ * failure clears. The boundary is the region's, and the catch reads the failure by the name the
+ * author bound. Two arms, so the arm taken is `0` or `1` and never the `{#if}` floor.
+ */
 function emitTry(
     at: Position,
     block: Extract<TemplateNode, { kind: 'block'; block: 'try' }>,
@@ -1022,21 +1080,25 @@ ${SCOPE}.watch(() => {
 })`)
 }
 
-// A BLOCK'S ARMS, each set up the way `List.setUp` sets up a row: `${name}_arms[arm]` is called once
-// each time that arm is swapped in, and answers the arm's `{ build, mount }`. An arm with a setup of
-// its own — a branch-local `<script>` (14.8), or the `{#try}` catch's binding of the failure it is
-// handed — declares its builder and mount after it, so both close over its names; every other arm
-// answers the one record built with the region. With `floor`, one more arm past the last builds
-// nothing and binds nothing: the `{#if}` with no `{:else}` and no subject true.
+/**
+ * Emits a block's arm builders into `helpers`; returns whether any arm has a mount.
+ *
+ * A BLOCK'S ARMS, each set up the way `List.setUp` sets up a row: `${name}_arms[arm]` is called once
+ * each time that arm is swapped in, and answers the arm's `{ build, mount }`. An arm with a setup of
+ * its own — a branch-local `<script>` (14.8), or the `{#try}` catch's binding of the failure it is
+ * handed — declares its builder and mount after it, so both close over its names; every other arm
+ * answers the one record built with the region. With `floor`, one more arm past the last builds
+ * nothing and binds nothing: the `{#if}` with no `{:else}` and no subject true.
+ */
 function emitArms(
     name: string,
     at: Position,
     lowering: Lowering,
     helpers: string[],
     counter: Counter,
-    // The `{#try}` catch's binding, `''` where it binds no name; `undefined` for an `{#if}`.
+    /** The `{#try}` catch's binding, `''` where it binds no name; `undefined` for an `{#if}`. */
     caught: string | undefined,
-    // 14.8 — each `{#if}` arm's branch-local `<script>`, or `null`.
+    /** 14.8 — each `{#if}` arm's branch-local `<script>`, or `null`. */
     setups: readonly (Setup | null)[] | undefined,
     floor: boolean,
 ): boolean {
@@ -1082,11 +1144,15 @@ function emitArms(
     return mounted
 }
 
-// 32.13 — the list. The server already rendered the rows, so the first update HYDRATES them:
-// every row's element is already in the document and only its bindings are missing. Only a change
-// to the list reconciles, and only the rows that moved move.
-//
-// 32.22 — the subject is read ONCE for the block. 32.23 — an absent subject iterates zero times.
+/**
+ * Emits a `{#for}` list's client unit, which hydrates the rows the server rendered.
+ *
+ * 32.13 — the list. The server already rendered the rows, so the first update HYDRATES them:
+ * every row's element is already in the document and only its bindings are missing. Only a change
+ * to the list reconciles, and only the rows that moved move.
+ *
+ * 32.22 — the subject is read ONCE for the block. 32.23 — an absent subject iterates zero times.
+ */
 function emitList(
     position: Position,
     block: Extract<TemplateNode, { kind: 'block'; block: 'for' }>,
@@ -1167,9 +1233,12 @@ ${SCOPE}.watch(() => ${lowering.use('updateList')}(${name}_list, ${name}_subject
     )
 }
 
-// Whether any expression in the run is live (`Lowering.isLive`). A run of static parts and
-// expressions the checker proved static is written once by the server and never again; opening a
-// binding for it is one waking reader per run on a page for nothing.
+/**
+ * Whether any expression in the run is live (`Lowering.isLive`).
+ *
+ * A run of static parts and expressions the checker proved static is written once by the server
+ * and never again; opening a binding for it is one waking reader per run on a page for nothing.
+ */
 function isLiveRun(run: TemplateNode[], lowering: Lowering): boolean {
     for (const piece of run)
         if (piece.kind === 'expression' && lowering.isLive(piece)) return true

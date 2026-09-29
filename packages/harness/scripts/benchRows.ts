@@ -56,8 +56,12 @@ function compilerOf(context: Context): ReturnType<typeof openBenchCompiler> {
     return context.compiler
 }
 
-// NOT `ratio()` for the render lanes, for `benchComponent`'s reason: it refuses a sample under a
-// frame, and a string render on a bun clock has no frame waiting on it.
+/**
+ * `abide / vanilla` as a two-decimal `x` string, with no floor and no refusal.
+ *
+ * NOT `ratio()` for the render lanes, for `benchComponent`'s reason: it refuses a sample under a
+ * frame, and a string render on a bun clock has no frame waiting on it.
+ */
 function divided(abide: number, vanilla: number): string {
     return `${(abide / vanilla).toFixed(2)}x`
 }
@@ -192,8 +196,12 @@ function renderItems(): BenchItem[] {
     return items
 }
 
-// The paired docs examples, in the two budgets `bench:compiler` reports: what an author writes and
-// what a browser downloads, each in code lines against the hand-written arm.
+/**
+ * The paired docs examples as rows, authored and shipped lines against the hand-written arm.
+ *
+ * The two budgets `bench:compiler` reports: what an author writes and what a browser downloads,
+ * each in code lines against the hand-written arm.
+ */
 function compilerItems(): BenchItem[] {
     const items: BenchItem[] = []
     const armOfName = (context: Context, name: string) => {

@@ -2,8 +2,8 @@
 //
 // The arms are not invented here. Every docs example is a `.abide` component, and
 // `packages/harness/arms/<example>` is a hand-written page doing the same job, written as a pair —
-// and those are the only honest arms available: an arm written beside the implementation it flatters gets MORE scrutiny,
-// not less, and these predate the compiler entirely.
+// and those are the only honest arms available: an arm written beside the implementation it
+// flatters gets MORE scrutiny, not less, and these predate the compiler entirely.
 //
 // TWO BUDGETS, because they run in opposite directions and reporting one alone is how a trade
 // gets hidden:
@@ -11,7 +11,7 @@
 //   SHIPPED   — what the browser downloads: emitted client module plus the runtime in its static
 //               closure. Higher is the price, and the runtime is charged to EVERY page.
 //
-// COMPILE TIME HAS NO RATIO AND IS NOT GIVEN ONE (44.19). There is no hand-written arm for "run
+// COMPILE TIME HAS NO RATIO AND IS NOT GIVEN ONE. There is no hand-written arm for "run
 // the compiler", so it is reported as an absolute ceiling with the machine and the date on it —
 // a budget, never a claim.
 
@@ -42,7 +42,7 @@ export type Arm = {
     typeable: boolean
 }
 
-// The paired examples: every `arms/<name>` with a hand-written page beside the `.abide` one.
+/** The paired examples: every `arms/<name>` with a hand-written page beside the `.abide` one. */
 export function armNames(): string[] {
     const names: string[] = []
     for (const entry of new Bun.Glob('*/index.html').scanSync({
@@ -52,7 +52,7 @@ export function armNames(): string[] {
     return names
 }
 
-// One example's two budgets, or `null` where the arm has no script to count.
+/** One example's two budgets, or `null` where the arm has no script to count. */
 export async function armOf(
     session: TypeSession,
     name: string,
@@ -100,7 +100,7 @@ export async function armOf(
         const client = emitClient(
             file,
             names,
-            invoked.has(path) ? 'repeated' : 'none',
+            invoked.has(path) ? 'invoked' : 'none',
         )
         if (client !== '') shippedAbide += codeLinesOf(client)
         // The server module is not charged here: it never reaches a browser.
@@ -148,8 +148,7 @@ async function compileCeiling(
     // A file the project has never seen costs several times what re-checking a known one does —
     // the root set changed, so the project is resolved again — and a FRESH BUILD is all new
     // files while a watch rebuild is all known ones. Timed on the compiler's own fixture,
-    // because a file outside every tsconfig throws rather than measuring (31.3).
-    // Inside the project the session opened, or the query throws rather than measuring.
+    // because a file outside the session's project throws rather than measuring.
     const fixture = new URL('src/ui/components/', DOGFOOD).pathname
     const sample = parseAbide(sources[0]?.text ?? '')
     await session.reads(`${fixture}warm.abide`, sample)
@@ -174,7 +173,7 @@ async function compileCeiling(
     await session.readsFor(batched)
     const batchNanoseconds = (Bun.nanoseconds() - batchStart) / ROUNDS
 
-    console.log('\nCOMPILE TIME — a ceiling, not a ratio (44.19)')
+    console.log('\nCOMPILE TIME — a ceiling, not a ratio')
     console.log(`  ${sources.length} sources, ${arms.length} paired examples`)
     console.log(
         `  parse + emit   ${(emitNanoseconds / 1000).toFixed(1)} µs per file`,

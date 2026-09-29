@@ -435,7 +435,8 @@ materialises, at most once per chunk the accumulation holds.
 
 9.24 `flushSync` MUST deliver the wakes a streaming producer is holding.
 
-9.25 A write to a streaming producer MUST stand until its accumulation next changes.
+9.25 A write to a streaming producer MUST stand until its accumulation next changes, and an adoption
+made by one (11.62) MUST end with it.
 
 9.26 A write to a streaming producer MUST NOT move a cursor over it.
 
@@ -604,7 +605,8 @@ reach the adopted `Reactive`.
 11.61 `args` spelled on a `reactive` whose body declares no parameter MUST refuse at construction,
 naming the value.
 
-11.62 `s.set` given a `Reactive` MUST adopt it per 11.12, and MUST NOT store it as a value.
+11.62 `s.set` given a `Reactive` MUST adopt it per 11.12, and MUST NOT store it as a value — on a
+streaming producer, as a write that 9.15 and 11.60 do not reach through.
 
 11.63 A body answering `undefined` MUST land `undefined`.
 
@@ -1755,7 +1757,18 @@ start.
 37.7 `onConfig` and `onPrincipal` MUST replace rather than compose, and a second MUST warn.
 
 37.8 Under `abide start` and `abide dev`, a rejection nothing handled and a throw nothing caught MUST
-reach `onError` as 37.5's error does, and MUST NOT end the process.
+reach `onError` as 37.5's error does.
+
+37.9 Under `abide dev`, a rejection nothing handled and a throw nothing caught MUST NOT end the
+process.
+
+37.10 Under `abide start` and the executable's `start`, a rejection nothing handled and a throw
+nothing caught MUST stop the app through `App.stop`, and the process MUST then exit with 1.
+
+37.11 Under `abide start` and the executable's `start`, `SIGTERM` and `SIGINT` MUST stop the app
+through `App.stop`, and the process MUST then exit with 0.
+
+37.12 A second `SIGTERM` or `SIGINT` while the app is stopping MUST end the process at once.
 
 # 38. Commands
 
@@ -1870,6 +1883,40 @@ installs, and MUST type the runtime its server modules run on.
 38.44 `abide build` and `abide dev` MUST build the client with the plugins the app's `bunfig.toml`
 names under `[serve.static] plugins`, after abide's own.
 
+38.45 The executable `abide compile` writes MUST read nothing from the app's source tree or its build
+when it runs.
+
+38.46 The executable `abide compile` writes MUST NOT read a `bunfig.toml` where it is started.
+
+38.47 `abide compile` given no `--out` MUST write the executable into the directory it was run from,
+named after the app's `package.json` name without its scope.
+
+38.48 `abide compile --platforms` MUST write one executable per platform, each named with its
+platform as a suffix.
+
+38.49 `abide compile` MUST refuse `--target` and `--platforms` given together.
+
+38.50 The executable `abide compile` writes MUST take `--port` on `start` as `abide start` does.
+
+38.51 The executable `abide compile` writes MUST answer every command `abide` answers.
+
+38.52 The executable `abide compile` writes MUST refuse a command that needs the app's source, naming
+the `abide` command that runs it.
+
+38.53 The usage the executable `abide compile` writes prints MUST NOT list a command it refuses, nor a
+flag only such a command reads.
+
+38.54 `abide start` and the executable's `start` MUST open 38.7's shell on the app they serve.
+
+38.55 Leaving the shell 38.54 opens with `exit` MUST stop the app.
+
+38.56 Input to the shell `start` opens that ends MUST NOT stop the app.
+
+38.57 A script the executable's `run` imports MUST resolve `abide`'s entries and the app's handler
+modules to the ones the executable holds.
+
+38.58 `abide run` and the executable's `run` MUST resolve the configuration under the app's identity.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -1878,7 +1925,8 @@ names under `[serve.static] plugins`, after abide's own.
 
 39.3 The build MUST hoist `<head>` contributions at compile time.
 
-39.4 `<head>` contributions MUST be merged by key, and the deepest contributor MUST win.
+39.4 `<head>` contributions MUST be merged by key, and the deepest contributor MUST win. The shell's
+`<head>` MUST be the outermost contributor.
 
 39.5 A `<head>` contribution with no merge key MUST append in tree order.
 
@@ -1904,6 +1952,10 @@ app MUST NOT be required to feature-detect.
 
 39.13 In a browser, a `<head>` contribution that reads a value MUST follow it for as long as its page
 or layout is mounted.
+
+39.14 On a client navigation, a keyed `<head>` contribution that a leaving page or layout made and
+no arriving one makes MUST return to the next-outer contributor's value for its key — the nearest
+kept layout's, else the shell's — and MUST be removed where no outer contributor has that key.
 
 # 40. Documentation
 
@@ -1987,6 +2039,8 @@ MUST NOT carry a relative link.
 
 40.31 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
 forms, the options they share, and a link to its reference page.
+
+40.32 A page reporting the build's own results MUST NOT be listed in `NAV`.
 
 # 41. Rendering and hydration
 
@@ -2083,6 +2137,9 @@ client of its own for one.
 42.14 `App[Symbol.asyncDispose]` MUST be `App.stop`, so an `App` held by `await using` MUST stop as
 42.10 and 42.11 do when its scope exits.
 
+42.15 `App.stop` asked again while the app is stopping MUST answer with the stop under way, and
+`onStop` MUST run once.
+
 # 44. The measurement harness
 
 *Free-standing: these clauses govern the measurement harness, which REGISTRY does not name — a
@@ -2147,4 +2204,4 @@ MUST throw naming each field that is absent.
 44.22 A counter `measure` reads rather than counts MUST be published as a fixed-shape record
 reached through `globalThis.__ABIDE_WORK__`.
 
-40.32 A page reporting the build's own results MUST NOT be listed in `NAV`.
+44.23 `batch` MUST throw on a duration whose op touched an emulated DOM.

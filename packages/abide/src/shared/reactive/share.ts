@@ -23,11 +23,16 @@ export type ShareScope = {
 // cannot be handed a parameter.
 let CURRENT: ShareScope | null = null
 
-// The app's registry of shared keys, declaration-merged (10.3). Empty here: an app widens it, and
-// a key it declares is checked against it where a key it does not is inferred from the thunk.
+/**
+ * The app's registry of shared keys, declaration-merged (10.3).
+ *
+ * Empty here: an app widens it, and a key it declares is checked against it where a key it does
+ * not is inferred from the thunk.
+ */
 // biome-ignore lint/suspicious/noEmptyInterface: 10.3 — an app merges its own keys into this.
 export interface Shared {}
 
+/** The value held under `key` by this component or its nearest ancestor, or one created here. */
 export function share<Key extends string, Value>(
     key: Key,
     create: () => Reactive<Value>,
@@ -49,9 +54,12 @@ export function share<Key extends string, Value>(
     return made as never
 }
 
-// What an emitted component opens around its own body, and closes after it. The PREVIOUS scope
-// comes back rather than the new one: restoring is the whole of the close, and a component that
-// threw still has to restore it.
+/**
+ * Opens a share scope around an emitted component's body, and returns the previous one.
+ *
+ * The PREVIOUS scope comes back rather than the new one: restoring is the whole of the close
+ * (`leaveShare`), and a component that threw still has to restore it.
+ */
 export function enterShare(): ShareScope | null {
     const previous = CURRENT
     CURRENT = { parent: previous, values: new Map() }
@@ -62,15 +70,20 @@ export function leaveShare(previous: ShareScope | null): void {
     CURRENT = previous
 }
 
-// 10.5 THROUGH A MOUNT THAT HAPPENS LATER. A row the list grows by is mounted from a `watch`
-// effect, not from inside its caller's mount — so nothing is on the stack and `CURRENT` is null,
-// and a child that shares would open a chain of its own and miss the key its page holds. The
-// instance captures its own scope at mount and the deferred mount resumes it, which is what makes
-// a row added after the click a descendant of the same page as the rows the server wrote.
+/**
+ * The share scope current now, for an instance to capture at mount and a deferred mount to resume.
+ *
+ * 10.5 THROUGH A MOUNT THAT HAPPENS LATER. A row the list grows by is mounted from a `watch`
+ * effect, not from inside its caller's mount — so nothing is on the stack and `CURRENT` is null,
+ * and a child that shares would open a chain of its own and miss the key its page holds. The
+ * instance captures its own scope at mount and the deferred mount resumes it, which is what makes
+ * a row added after the click a descendant of the same page as the rows the server wrote.
+ */
 export function currentShare(): ShareScope | null {
     return CURRENT
 }
 
+/** Makes a captured share scope current again, and returns the previous one to restore. */
 export function resumeShare(scope: ShareScope | null): ShareScope | null {
     const previous = CURRENT
     CURRENT = scope

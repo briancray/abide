@@ -2,7 +2,7 @@ import { reactive } from 'abide'
 
 export type Token = { at: number; text: string }
 
-// A number on the value, not an array beside it.
+/** A number on the value, not an array beside it. */
 export const token = reactive<Token>(undefined, { history: 200 })
 
 // Three tokens before anyone reads, so there is a past to replay.

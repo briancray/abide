@@ -104,7 +104,7 @@ async function runOne(item: TestItem, gates: boolean): Promise<TestRow> {
     return row
 }
 
-// A fixed number of workers pulling from one queue, so a row lands when its own file finishes.
+/** A fixed number of workers pulling from one queue, so a row lands when its own file finishes. */
 async function pool<Item>(
     queue: Item[],
     width: number,

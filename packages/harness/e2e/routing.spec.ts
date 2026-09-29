@@ -34,13 +34,19 @@ test.describe.configure({ mode: 'default' })
 let APP = ''
 
 const HOME = `<head><title>Home</title><meta name="description" content="the home page"></head>
-<main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="go" href="/about">about</a></main>`
+<main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="go" href="/about">about</a><a id="plain" href="/plain">plain</a></main>`
+// THE APP'S SHELL, which keys a `<title>` the home page overrides and `/plain` does not (39.14).
+const SHELL =
+    '<!doctype html><html><head><title>Shell</title></head><body></body></html>'
 // WHAT THE SERVER ACTUALLY RENDERS, taken from the page's own server module rather than written
 // out here. A hand-copied shell is a hydration mismatch waiting to happen, and 41.10 answers one
 // by warning and stopping — so the page comes up looking right and dead, which is the failure
 // this arm exists to catch and would instead have been written into it.
 let PAINTED = ''
 let PAINTED_HEAD = ''
+// `/plain` as the server paints it on a direct load: the shell's title, no page one over it.
+let PLAIN = ''
+let PLAIN_HEAD = ''
 
 let server: Server | null = null
 let port = 0
@@ -56,6 +62,12 @@ test.beforeAll(async ({}, testInfo) => {
     // three layers of quoting to get right every time the page changes.
     rmSync(APP, { recursive: true, force: true })
     mkdirSync(`${APP}/ui/pages/about`, { recursive: true })
+    mkdirSync(`${APP}/ui/pages/plain`, { recursive: true })
+    writeFileSync(`${APP}/ui/app.html`, SHELL)
+    writeFileSync(
+        `${APP}/ui/pages/plain/page.abide`,
+        '<main id="plain"><h1>Plain</h1></main>',
+    )
     writeFileSync(
         `${APP}/ui/pages/page.abide`,
         `<script>\nimport { reactive } from 'abide'\n\nlet count = reactive(0)\n</script>\n${HOME}`,
@@ -118,22 +130,27 @@ test.beforeAll(async ({}, testInfo) => {
             [
                 '-e',
                 `import { render } from 'abide/server'
-const { default: C } = await import(${JSON.stringify(`${APP}/.abide/ui/pages/page.ts`)})
-let html = ''
-for await (const c of render(C, '<!doctype html><html><head></head><body></body></html>')) html += new TextDecoder().decode(c)
-console.log(JSON.stringify({
-    body: html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>')),
-    head: html.slice(html.indexOf('<head>') + 6, html.indexOf('</head>')),
-}))`,
+const painted = {}
+for (const page of ['page', 'plain/page']) {
+    const { default: C } = await import(${JSON.stringify(`${APP}/.abide/ui/pages/`)} + page + '.ts')
+    const html = new TextDecoder().decode(await render(C, ${JSON.stringify(SHELL)}))
+    painted[page] = {
+        body: html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>')),
+        head: html.slice(html.indexOf('<head>') + 6, html.indexOf('</head>')),
+    }
+}
+console.log(JSON.stringify(painted))`,
             ],
             { cwd: REPO, encoding: 'utf8' },
         )
             .trim()
             .split('\n')
             .pop() as string,
-    ) as { body: string; head: string }
-    PAINTED = painted.body
-    PAINTED_HEAD = painted.head
+    ) as Record<string, { body: string; head: string }>
+    PAINTED = painted.page?.body ?? ''
+    PAINTED_HEAD = painted.page?.head ?? ''
+    PLAIN = painted['plain/page']?.body ?? ''
+    PLAIN_HEAD = painted['plain/page']?.head ?? ''
     if (PAINTED_HEAD === '')
         throw new Error(
             'the server rendered no head, so this arm tests nothing',
@@ -170,10 +187,17 @@ console.log(JSON.stringify({
         }
         // AN ADDRESS THIS SERVER PAINTS NOTHING FOR still gets the page's pair, empty — the
         // shape `render` writes for a page with no markup (41.9), and the one the router finds.
-        const body = asked === '/' ? PAINTED : '<!--[--><!--]-->'
+        const body =
+            asked === '/'
+                ? PAINTED
+                : asked === '/plain'
+                  ? PLAIN
+                  : '<!--[--><!--]-->'
+        const head =
+            asked === '/' ? PAINTED_HEAD : asked === '/plain' ? PLAIN_HEAD : ''
         response.writeHead(200, { 'content-type': 'text/html' })
         response.end(
-            `<!doctype html><html><head>${asked === '/' ? PAINTED_HEAD : ''}<script type="module" src="/entry.js"></script></head><body>${body}</body></html>`,
+            `<!doctype html><html><head>${head}<script type="module" src="/entry.js"></script></head><body>${body}</body></html>`,
         )
     })
     const listening = server
@@ -273,4 +297,42 @@ test('a page the server painted nothing for builds itself on a direct hit — 30
     // and it is a working page, not just markup: its link routes back.
     await page.click('#back')
     await expect(page.locator('#home h1')).toHaveText('Home')
+})
+
+// 39.14 — A TITLE THE READER LEFT DOES NOT OUTLIVE THE PAGE THAT SET IT. The home page overrides
+// the shell's `<title>` and `/plain` sets none, so the server paints `/plain` with the shell's —
+// and a navigation there has to end on the same title a direct load does, which the document no
+// longer holds once the server merged the shell's out under `Home`.
+//
+// THE REVERT: return from `withdrawHead` at its top; the tab reads `Home` on `/plain`.
+test('a navigation to a page with no title ends on the title a direct load paints — 39.14', async ({
+    page,
+}) => {
+    const base = `http://localhost:${port}`
+    await page.goto(`${base}/plain`)
+    await page.waitForFunction(
+        () => (window as { __ALIVE__?: boolean }).__ALIVE__ === true,
+    )
+    const direct = await page.title()
+    expect(direct).toBe('Shell')
+
+    await page.goto(`${base}/`)
+    await page.waitForFunction(
+        () => (window as { __ALIVE__?: boolean }).__ALIVE__ === true,
+    )
+    await expect(page).toHaveTitle('Home')
+    await page.evaluate(() => {
+        ;(window as { __KEPT__?: string }).__KEPT__ = 'yes'
+    })
+    await page.click('#plain')
+    await expect(page.locator('#plain h1')).toHaveText('Plain')
+    expect(
+        await page.evaluate(() => (window as { __KEPT__?: string }).__KEPT__),
+    ).toBe('yes')
+    expect(await page.title()).toBe(direct)
+    expect(
+        await page.evaluate(
+            () => document.head.querySelectorAll('title').length,
+        ),
+    ).toBe(1)
 })

@@ -12,6 +12,7 @@ import { refuse } from 'abide'
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]'])
 
+/** Middleware refusing 403 unless a loopback host was named and no other site sent the request. */
 export async function onlyLoopback<Ctx extends { request: Request }, Result>(
     next: (ctx?: Ctx) => Promise<Result>,
     ctx: Ctx,

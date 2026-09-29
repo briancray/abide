@@ -1,9 +1,12 @@
 import { appDirectories } from './appDirectories.ts'
 
-// 38.44 — THE APP'S OWN BUNDLER PLUGINS, declared where bun already has an app declare them:
-// `bunfig.toml`'s `[serve.static] plugins`, the key `bun-plugin-tailwind` documents. `Bun.build`
-// reads no bunfig, so both client builds read this one — in `appDirectories`, as `config` finds the
-// app's `package.json`.
+/**
+ * The app's own bundler plugins, loaded from `bunfig.toml`'s `[serve.static] plugins`.
+ *
+ * 38.44 — declared where bun already has an app declare them, the key `bun-plugin-tailwind`
+ * documents. `Bun.build` reads no bunfig, so both client builds read this one — in
+ * `appDirectories`, as `config` finds the app's `package.json`.
+ */
 export async function appPlugins(root: string): Promise<Bun.BunPlugin[]> {
     for (const directory of appDirectories(root)) {
         const file = Bun.file(`${directory}/bunfig.toml`)

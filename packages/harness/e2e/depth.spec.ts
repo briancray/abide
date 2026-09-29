@@ -40,6 +40,7 @@ console.log(JSON.stringify(out))
         .pop() as string,
 ) as {
     scheme: string
+    shape: 'deep' | 'wide'
     markup: string
     script: string
     bindings: number
@@ -52,6 +53,7 @@ test('the walk against tree depth, in this engine', async ({
     test.setTimeout(5 * 60 * 1000)
     const rows: {
         scheme: string
+        shape: 'deep' | 'wide'
         depth: number
         bindings: number
         ns: number

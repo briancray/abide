@@ -69,7 +69,7 @@ beforeAll(async () => {
         // 38.20 — IN THE SOURCE TREE AND NOWHERE ELSE. Nothing copies this anywhere, because
         // nothing builds: an address answering it is the clause and a stale copy cannot pass it.
         'ui/public/robots.txt': 'User-agent: *\nAllow: /\n',
-        // A COUNT A RESTART WOULD RESET, so surviving is told apart from being replaced (37.8, 38.42).
+        // A COUNT A RESTART WOULD RESET, so surviving is told apart from being replaced (37.9, 38.42).
         'shared/served.ts':
             'let served = 0\nexport function serve(): number {\n    served += 1\n    return served\n}\n',
         'ui/pages/served/page.abide': `<script>
@@ -234,7 +234,7 @@ test('the client is built into memory and answered under the bundle address — 
 
 // 38.29 IN DEV TOO, where the manifest is keyed off the plugin's namespace rather than a path on
 // disk — a key that misses reads as a route with nothing to preload, and the page still hydrates.
-// THE REVERT: drop the namespace strip from `chunksByModule` and no chunk carries the page.
+// THE REVERT: drop the namespace strip from `manifestOf` and no chunk carries the page.
 test('the document preloads the chunk its own page is in — 38.29', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     const head = html.slice(0, html.indexOf('<body>'))
@@ -432,7 +432,7 @@ afterAll(() => {
 // — and the command dies at boot, so this test has no server to ask.
 // THE REVERT: drop `keepServing()` from the worker; the rejection ends it, 38.42 replaces it, and the
 // count starts again from 1.
-test('a rejection nobody awaited neither ends the app nor loses its state — 37.8', async () => {
+test('a rejection nobody awaited neither ends the app nor loses its state — 37.8, 37.9', async () => {
     const before = await received(await Bun.fetch(`${base}/served`))
     const count = Number(/<main id="served">(\d+)/.exec(before)?.[1])
     expect(await received(await Bun.fetch(`${base}/orphan`))).toContain(

@@ -10,7 +10,7 @@ const USERS: Record<string, User> = {
     'ada@example.com': { id: 'ada', name: 'Ada Lovelace' },
 }
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     users: {
         async byEmail(email: string): Promise<User | null> {

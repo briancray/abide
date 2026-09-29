@@ -8,6 +8,7 @@
 
 import { afterAll, afterEach, expect, test } from 'bun:test'
 import { emitClient, emitComponent, parseAbide } from '#compiler'
+import { compileApp } from '#compiler/compileApp.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { composePage } from '#server/render.ts'
@@ -626,6 +627,50 @@ const number = reactive(new Promise<string>((resolve) => {
     await Promise.resolve()
     flushSync()
     expect(document.title).toBe('Invoice 42')
+})
+
+// 39.6, 39.13 — A LIVE HEAD LANDS BEFORE THE FILL, as a static one does: the title the reader sees
+// while the page builds is the page they are arriving at. The body reads `document.title` as it
+// builds, which is the moment the head has to be there by.
+//
+// THE REVERT: apply a live head from its watch's first run, after the fill, rather than beside the
+// static apply; the body reads `Home`.
+test("a navigated page's live head is applied before its body builds — 39.6, 39.13", async () => {
+    history.replaceState(null, '', '/')
+    document.head.innerHTML = '<title>Home</title>'
+    const mounts = await pages()
+    const source = `<head><title>Early {number}</title></head>
+<script>
+import { reactive } from 'abide'
+
+const number = reactive(1)
+</script>
+<main id="early">{document.title}</main>`
+    const file = parseAbide(source)
+    const reads = await session.reads(`${ROOT}src/Early.abide`, file)
+    const dir = temporaryModule({
+        'Early.client.ts': emitClient(file, reads, 'routed'),
+    })
+    const r = startRouter(
+        [
+            {
+                pattern: '/early',
+                load: () => import(`${dir}/Early.client.ts`),
+                layouts: [],
+            },
+            {
+                pattern: '/',
+                load: async () => ({ default: mounts.home as PageMount }),
+                layouts: [],
+            },
+        ],
+        document.body,
+    )
+    await r.hydrate()
+    await r.go('/early')
+    flushSync()
+    expect(document.getElementById('early')?.textContent).toBe('Early 1')
+    expect(document.title).toBe('Early 1')
 })
 
 // 39.6 — A FILE BOTH ROUTED AND INVOKED titles the document when the router mounts it, and
@@ -1262,4 +1307,179 @@ test("a kept layout's slot mounts the current page whenever it opens — 35.1, 1
     expect(document.querySelector('#profile')?.textContent).toBe('profile 2')
     expect(document.querySelector('#edit')).toBeNull()
     expect(r.levels).toHaveLength(2)
+})
+
+// 39.14 — WHAT A LEAVING LEVEL KEYED AND NO ARRIVING ONE DOES GOES BACK TO THE NEXT-OUTER
+// CONTRIBUTOR, or leaves. The server paints each address with one entry per key, the deepest's
+// (39.4), so the client has to end where that paint would: a title the reader left standing is
+// a tab naming a page they are no longer on.
+//
+// THE SHELL'S ENTRIES ARE GONE FROM THE DOCUMENT once a level overrode them — the server merged
+// them out — which is why the router is handed them rather than reading them off `document.head`.
+const SHELL_HEAD =
+    '<title>Shell</title><meta name="description" content="shell">'
+
+async function withdrawing() {
+    const sources: Record<string, string> = {
+        Section: `<head><title>Section</title><meta name="description" content="section"></head>
+<section id="section"><slot/></section>`,
+        Titled: `<head><title>Home</title><meta name="description" content="home"></head>
+<main id="titled">titled</main>`,
+        Plain: '<main id="plain">plain</main>',
+        Described: `<head><meta name="description" content="described"></head>
+<main id="described">described</main>`,
+        Bare: '<main id="bare">bare</main>',
+        Robots: `<head><meta name="robots" content="noindex"></head>
+<main id="robots">robots</main>`,
+    }
+    const modules: Record<string, string> = {}
+    for (const [name, source] of Object.entries(sources)) {
+        const file = parseAbide(source)
+        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
+        modules[`${name}.ts`] = emitComponent(file, reads, true)
+        modules[`${name}.client.ts`] = emitClient(file, reads, 'routed')
+    }
+    const dir = temporaryModule(modules)
+    const loaded = async (name: string): Promise<{ default: PageMount }> =>
+        await import(`${dir}/${name}.client.ts`)
+    const section = () => loaded('Section')
+    // THE SERVER'S PAINT OF `/`: the shell's title and description merged out under the page's.
+    const Titled = (await import(`${dir}/Titled.ts`)).default
+    const html = new TextDecoder().decode(
+        await render(
+            Titled,
+            `<!doctype html><html><head>${SHELL_HEAD}</head><body></body></html>`,
+        ),
+    )
+    document.head.innerHTML = html.slice(
+        html.indexOf('<head>') + '<head>'.length,
+        html.indexOf('</head>'),
+    )
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    history.replaceState(null, '', '/')
+    const r = startRouter(
+        [
+            { pattern: '/', load: () => loaded('Titled'), layouts: [] },
+            { pattern: '/plain', load: () => loaded('Plain'), layouts: [] },
+            { pattern: '/robots', load: () => loaded('Robots'), layouts: [] },
+            {
+                pattern: '/section/described',
+                load: () => loaded('Described'),
+                layouts: [section],
+            },
+            {
+                pattern: '/section/bare',
+                load: () => loaded('Bare'),
+                layouts: [section],
+            },
+        ],
+        document.body,
+        false,
+        SHELL_HEAD,
+    )
+    await r.hydrate()
+    return r
+}
+
+const description = (): string | null | undefined =>
+    document.head
+        .querySelector('meta[name="description"]')
+        ?.getAttribute('content')
+
+// THE REVERT, TWICE. Return from `withdrawHead` at its top, and `/plain` keeps the title `Home`
+// the page it left painted. Leave the head on the level only where the region is empty (inside
+// `emitClient`'s `isEmptyRegion` branch), and it still does: the painted page never said what it
+// keyed, so there is nothing to withdraw.
+test("a page leaving a title the next page has none of puts back the shell's — 39.14", async () => {
+    const r = await withdrawing()
+    expect(document.title).toBe('Home')
+    // THE SERVER'S PAINT: one title, the page's — the shell's is not in the document.
+    expect(document.head.querySelectorAll('title')).toHaveLength(1)
+    await r.go('/plain')
+    flushSync()
+    expect(document.querySelector('#plain')?.textContent).toBe('plain')
+    expect(document.title).toBe('Shell')
+    expect(description()).toBe('shell')
+    expect(document.head.querySelectorAll('title')).toHaveLength(1)
+    expect(
+        document.head.querySelectorAll('meta[name="description"]'),
+    ).toHaveLength(1)
+})
+
+// THE REVERT: hand the kept levels' heads to `withdrawHead` without the shell's in front of them
+// (`outer` = kept levels alone); leaving the section removes the title rather than putting back
+// `Shell`, and `document.title` reads ''.
+test("leaving a layout's section puts back the shell's title — 39.14", async () => {
+    const r = await withdrawing()
+    await r.go('/section/bare')
+    flushSync()
+    expect(document.title).toBe('Section')
+    expect(description()).toBe('section')
+    await r.go('/plain')
+    flushSync()
+    expect(document.querySelector('#section')).toBeNull()
+    expect(document.title).toBe('Shell')
+    expect(description()).toBe('shell')
+})
+
+// A KEPT LAYOUT IS AN OUTER CONTRIBUTOR, and the nearer one: the page that overrode its
+// description leaves, the layout stays, and the layout's is what the server would paint.
+// THE REVERT: pass the shell's head alone as `outer` in `Router.commit`; this reads `shell` where
+// `section` is due.
+test("a page overriding its layout's description hands it back to a sibling with none — 39.14", async () => {
+    const r = await withdrawing()
+    await r.go('/section/described')
+    flushSync()
+    expect(description()).toBe('described')
+    const kept = document.querySelector('#section')
+    await r.go('/section/bare')
+    flushSync()
+    expect(document.querySelector('#section')).toBe(kept)
+    expect(description()).toBe('section')
+    expect(document.title).toBe('Section')
+    expect(
+        document.head.querySelectorAll('meta[name="description"]'),
+    ).toHaveLength(1)
+})
+
+// NO OUTER CONTRIBUTOR HAS THE KEY, so the entry leaves with the page that keyed it.
+// THE REVERT: skip the `remove()` for a key nothing outer holds in `withdrawHead`; the next page
+// is served `noindex`, which is 1 where 0 is due.
+test('a key no outer contributor has is removed with the page that keyed it — 39.14', async () => {
+    const r = await withdrawing()
+    await r.go('/robots')
+    flushSync()
+    expect(document.head.querySelectorAll('meta[name="robots"]')).toHaveLength(
+        1,
+    )
+    await r.go('/plain')
+    flushSync()
+    expect(document.head.querySelectorAll('meta[name="robots"]')).toHaveLength(
+        0,
+    )
+    expect(document.title).toBe('Shell')
+})
+
+// THE BUILD HANDS THE ROUTER THE SHELL'S KEYED ENTRIES, off the same `app.html` the server paints
+// with — and only the keyed ones, since an entry with no key is never withdrawn (39.5).
+// THE REVERT: write `clientTable` without the shell's head; the table reads `startRouter(routes,
+// host)` and every assertion on the shell above has nothing to restore from in a built app.
+test("the route table carries the shell's keyed head entries — 39.14", async () => {
+    const built = await compileApp(
+        temporaryModule({
+            'package.json': JSON.stringify({
+                name: 'shell-head-fixture',
+                type: 'module',
+                imports: { '#ui/*': './ui/*' },
+            }),
+            'ui/app.html': `<!doctype html><html><head><meta charset="utf-8"><!-- note --><title>Shell</title><style>p{color:red}</style><meta name="description" content="shell"></head><body></body></html>`,
+            'ui/pages/page.abide': '<main>home</main>',
+        }),
+    )
+    expect(built.modules.get('routes.ts')).toContain(
+        `startRouter(routes, host, false, ${JSON.stringify(SHELL_HEAD)})`,
+    )
 })

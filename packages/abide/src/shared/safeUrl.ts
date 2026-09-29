@@ -9,6 +9,7 @@ import { textOf } from './Raw.ts'
 
 const SAFE_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:'])
 
+/** A URL attribute's text, or `''` where its scheme is outside the safe set. */
 export function safeUrl(value: unknown): string {
     // A `Raw` reaches here from `<a href={raw(u)}>`, and the brand says "already markup", which is
     // no claim at all about the scheme. The html is the text to check.

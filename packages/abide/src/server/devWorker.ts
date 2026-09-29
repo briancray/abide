@@ -22,20 +22,19 @@
 
 import { CLIENT_ADDRESS, DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import { escapeText } from '#shared/escapeText.ts'
-import { appSources, publicFilesUnder } from './answerRequest.ts'
+import { appSources, publicFilesAt } from './answerRequest.ts'
 import { connectionOf, type MuxSocket, socketHandlers } from './answerSocket.ts'
 import { appPlugins } from './appPlugins.ts'
 import { CLIENT_ENTRY, PUBLIC_DIRECTORY } from './CLIENT_BUILD.ts'
-import { chunksByModule, type Manifest, NO_MANIFEST } from './chunksByModule.ts'
 import { clientBuildOptions } from './clientBuildOptions.ts'
-import { type App, bootApp } from './createApp.ts'
+import { type App, bootApp, originUnder } from './createApp.ts'
 import { fenceServer } from './fenceServer.ts'
 import { keepServing } from './keepServing.ts'
-import { namesUnder } from './namesUnder.ts'
+import { type Manifest, manifestOf, NO_MANIFEST } from './manifestOf.ts'
 import { refuseAddressCollision } from './refuseAddressCollision.ts'
 import { shellUnder } from './render.ts'
 import { LISTENING } from './requestScope.ts'
-import { loadTables } from './serveBuild.ts'
+import { loadTables, pathsUnder } from './serveBuild.ts'
 
 // Where the compiled modules pretend to live. Under the app's own root so that `#ui/…` and a bare
 // package name resolve from here exactly as they resolve from the build tree — both sit inside
@@ -53,9 +52,13 @@ type Bundle = {
     manifest: Manifest
 }
 
-// 38.15 — WHAT CROSSES BETWEEN THE LISTENER AND THIS WORKER, one union per direction. In: the app
-// compiled (and what stopped it compiling, where something did), a request, a pull or cancel of its
-// body, and each browser web socket's frames for the mux.
+/**
+ * A message from the listener to this worker.
+ *
+ * 38.15 — WHAT CROSSES BETWEEN THE LISTENER AND THIS WORKER, one union per direction. In: the app
+ * compiled (and what stopped it compiling, where something did), a request, a pull or cancel of
+ * its body, and each browser web socket's frames for the mux.
+ */
 export type ToWorker =
     | {
           kind: 'start'
@@ -75,8 +78,12 @@ export type ToWorker =
     | { kind: 'socket-message'; conn: number; text: string }
     | { kind: 'socket-close'; conn: number }
 
-// Out: ready, a frame the mux sends a browser, a request's idle timeout raised, and its head, each
-// chunk, and its end.
+/**
+ * A message from this worker to the listener.
+ *
+ * Out: ready, a frame the mux sends a browser, a request's idle timeout raised, and its head, each
+ * chunk, and its end.
+ */
 export type FromWorker =
     | { kind: 'ready' }
     | { kind: 'socket-send'; conn: number; text: string }
@@ -88,13 +95,14 @@ export type FromWorker =
           statusText: string
           headers: [string, string][]
           empty: boolean
-          // A body whose length the answer declared, sent with its head rather than pulled.
+          /** A body whose length the answer declared, sent with its head rather than pulled. */
           whole: ArrayBuffer | undefined
       }
     | { kind: 'chunk'; id: number; bytes: ArrayBuffer }
     | { kind: 'end'; id: number }
     | { kind: 'fail'; id: number; message: string }
 
+/** A request as it crosses to the worker: its id, and what the worker rebuilds it from. */
 export type Ask = {
     id: number
     method: string
@@ -103,7 +111,11 @@ export type Ask = {
     body: ArrayBuffer | null
 }
 
-// 38.15 — TO THE LISTENER, over bun's IPC: this is its child process (`serveDev` says why a process).
+/**
+ * Sends a message to the listener.
+ *
+ * 38.15 — over bun's IPC: this is its child process (`serveDev` says why a process).
+ */
 function toListener(message: FromWorker): void {
     process.send?.(message)
 }
@@ -184,9 +196,13 @@ LISTENING.timeout = (received, seconds) => {
 // A status whose response has no body to send, which `Response` refuses to be built with one.
 const BODILESS = new Set([101, 204, 205, 304])
 
-// A THROW BEFORE THE HEAD IS AN ANSWER, not a dropped message. The listener is waiting on a head for
-// this id and nothing else will send one, so an escape left the reader's tab hanging until they gave
-// up.
+/**
+ * Answers one request the listener sent, sending back its head and holding its body for pulls.
+ *
+ * A THROW BEFORE THE HEAD IS AN ANSWER, not a dropped message. The listener is waiting on a head
+ * for this id and nothing else will send one, so an escape left the reader's tab hanging until
+ * they gave up.
+ */
 async function answerAsk(ask: Ask): Promise<void> {
     const request = new Request(ask.url, {
         method: ask.method,
@@ -229,9 +245,13 @@ async function answerAsk(ask: Ask): Promise<void> {
     })
 }
 
-// ONE CHUNK PER ASK. A throw in the middle ends the stream in an error, as `abide start` does — and
-// where the answer is html a handler streams, what broke goes out as markup first, a reader
-// shown a blank tab otherwise being told nothing. A page is never here: it is built whole (41.1).
+/**
+ * Sends the listener the next chunk of an answer's body, or its end.
+ *
+ * ONE CHUNK PER ASK. A throw in the middle ends the stream in an error, as `abide start` does —
+ * and where the answer is html a handler streams, what broke goes out as markup first, a reader
+ * shown a blank tab otherwise being told nothing. A page is never here: it is built whole (41.1).
+ */
 async function pull(id: number): Promise<void> {
     const reading = bodies.get(id)
     if (reading === undefined) return
@@ -265,9 +285,12 @@ function describe(thrown: unknown): string {
         : String(thrown)
 }
 
-// The app, compiled and wired. A throw anywhere in here leaves `app` undefined and the message in
-// `failure`, which is what 38.4 asks for: the command keeps answering, and what it answers says
-// what is wrong.
+/**
+ * Boots the app over the modules the listener sent, or records why it could not.
+ *
+ * A throw anywhere in here leaves `app` undefined and the message in `failure`, which is what 38.4
+ * asks for: the command keeps answering, and what it answers says what is wrong.
+ */
 async function open(
     start: Extract<ToWorker, { kind: 'start' }>,
 ): Promise<void> {
@@ -298,7 +321,7 @@ async function open(
         //
         // ONE LISTING of the public directory, for the bundle's externals and for what is served.
         const publicDirectory = `${root}/ui/${PUBLIC_DIRECTORY}`
-        const publicNames = namesUnder(publicDirectory)
+        const publicPaths = pathsUnder(publicDirectory)
         const [bundle, shell, published, [table, mounted]] = await Promise.all([
             // 38.44 — the app's own plugins, imported beside the reads below rather than ahead of them.
             appPlugins(root).then((own) =>
@@ -308,13 +331,13 @@ async function open(
                     // 16.29, 16.30 — the browser's view of `server/`, as `abide build` gives it.
                     [plugin, fenceServer(root, start.modules), ...own],
                     paged,
-                    publicNames.map((name) => `/${name}`),
+                    Array.from(publicPaths.keys(), (name) => `/${name}`),
                 ),
             ),
             shellUnder(root),
             // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev
             // has no output, so the address answers where the author's file actually is.
-            publicFilesUnder(publicDirectory, publicNames),
+            publicFilesAt(publicPaths),
             loadTables(base, root),
         ])
 
@@ -336,7 +359,7 @@ async function open(
         })
         mux = socketHandlers(mounted.sockets, mounted.handlers)
         // THE SAME `App` `abide start` boots, so an app's hooks and middleware run in dev too.
-        app = await bootApp(root, async () => sources)
+        app = await bootApp(originUnder(root), async () => sources)
     } catch (thrown) {
         failure = thrown instanceof Error ? thrown.message : String(thrown)
     }
@@ -360,14 +383,17 @@ function served(bundle: Bundle, pathname: string): Response | undefined {
     })
 }
 
-// 38.17 — THE CLIENT, BUILT INTO MEMORY. Unminified, and the entry named by its source rather
-// than content-hashed, so what a browser loads and what a stack trace names are the module the
-// author wrote. 38.5's hashes and manifest are the BUILD's, and the difference is deliberate: a
-// dev chunk that changed has to be fetched again, and a name that changes with it is a cache the
-// reload cannot clear.
-//
-// A FAILURE IS AN EMPTY BUNDLE AND NOT A THROW (38.18). The pages still render, the document
-// still loads the reload client, and the next save is what fixes it.
+/**
+ * The client bundle, built into memory.
+ *
+ * 38.17 — Unminified, and the entry named by its source rather than content-hashed, so what a
+ * browser loads and what a stack trace names are the module the author wrote. 38.5's hashes and
+ * manifest are the BUILD's, and the difference is deliberate: a dev chunk that changed has to be
+ * fetched again, and a name that changes with it is a cache the reload cannot clear.
+ *
+ * A FAILURE IS AN EMPTY BUNDLE AND NOT A THROW (38.18). The pages still render, the document
+ * still loads the reload client, and the next save is what fixes it.
+ */
 async function bundleInMemory(
     root: string,
     base: string,
@@ -414,13 +440,17 @@ async function bundleInMemory(
     }
     // `base` AS GIVEN, with no real path taken: every route module is one the plugin served, and
     // the metafile names those under the plugin's namespace exactly as the plugin spelled them.
-    bundle.manifest = chunksByModule(built.metafile as Bun.BuildMetafile, base)
+    bundle.manifest = manifestOf(built.metafile as Bun.BuildMetafile, base)
     return bundle
 }
 
-// A module in the map wins; everything else is resolved from where that module PRETENDS to be,
-// which is inside the app's package — so `abide`, `#ui/…` and a stylesheet all answer exactly as
-// they do for a build on disk.
+/**
+ * The plugin serving the compiled modules out of `modules`, for the runtime and the bundler alike.
+ *
+ * A module in the map wins; everything else is resolved from where that module PRETENDS to be,
+ * which is inside the app's package — so `abide`, `#ui/…` and a stylesheet all answer exactly as
+ * they do for a build on disk.
+ */
 function virtualModules(modules: Map<string, string>): Bun.BunPlugin {
     return {
         name: 'abide-dev',
@@ -499,9 +529,13 @@ function withSeamsResolved(source: string, path: string): string {
     return resolved
 }
 
-// What a reader gets while the project does not compile: the message, and the reload client that
-// brings them the fix. A document rather than a bare 500 body — the browser is where the author
-// is looking, and an error only the terminal carries is one they read on the next save.
+/**
+ * What a reader gets while the project does not compile: the message, and the reload client.
+ *
+ * The reload client brings them the fix. A document rather than a bare 500 body — the browser is
+ * where the author is looking, and an error only the terminal carries is one they read on the next
+ * save.
+ */
 function failedDocument(why: string): Response {
     return new Response(
         `<!doctype html><html><head><meta charset="utf-8"><title>abide dev</title>

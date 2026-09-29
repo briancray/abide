@@ -6,12 +6,16 @@ export type Middleware<Ctx, Result> = (
     ctx: Ctx,
 ) => Result | Promise<Result>
 
-// 16.15 — COMPOSED ONCE, where the table is built, rather than folded per call. 16.16 — each link
-// holds its rung and the link inside it, and nothing about the request it will be handed. 16.17 — a
-// rung that never calls `next` answers in the handler's place. 16.22 — a throw is not caught here, so
-// it leaves the whole onion rather than unwinding through the rungs outside it.
-//
-// `next()` with no argument hands the inner link the ctx this rung was given.
+/**
+ * Composes rungs around a terminal handler into one function, outermost rung first.
+ *
+ * 16.15 — COMPOSED ONCE, where the table is built, rather than folded per call. 16.16 — each link
+ * holds its rung and the link inside it, and nothing about the request it will be handed. 16.17 —
+ * a rung that never calls `next` answers in the handler's place. 16.22 — a throw is not caught
+ * here, so it leaves the whole onion rather than unwinding through the rungs outside it.
+ *
+ * `next()` with no argument hands the inner link the ctx this rung was given.
+ */
 export function compose<Ctx, Result>(
     rungs: readonly Middleware<Ctx, Result>[],
     terminal: (ctx: Ctx) => Promise<Result>,

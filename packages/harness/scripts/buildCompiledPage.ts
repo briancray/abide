@@ -1,6 +1,6 @@
 // Builds ONE compiled `.abide` page into what a browser needs: the server's markup, and the
-// client module bundled as an IIFE that mounts into it. This is the piece `abide build` does not
-// do yet — there is no bundling step — so the browser arm makes it here rather than waiting.
+// client module bundled as an IIFE that mounts into it. `abide build` bundles a whole app from its
+// root, not one page handed over as source, so the browser arm makes that piece here.
 //
 // Its OTHER job is to be the hand-written arm's twin: both pages are built by this file, from the
 // same shell, so a difference between them is the implementation and not the harness. CLAUDE.md:
@@ -23,12 +23,17 @@ import { armLayers } from './armLayers.ts'
 const REPO = new URL('../../../', import.meta.url).pathname
 const SHELL = '<!doctype html><html><head></head><body></body></html>'
 
+/** A compiled page as a browser takes it: the server's body markup and the client IIFE. */
 export type CompiledPage = { markup: string; script: string }
 
-// `components` are the `.abide` files the page INVOKES (32.18), keyed by the name it imports them
-// as. Each compiles to the pair a caller reaches — `Name.ts` for the server render and
-// `Name.client.ts` for the mount — and the page goes through that same loop, so a page with a
-// component in it is built the way the build builds one rather than by a second scheme.
+/**
+ * Compiles one `.abide` page source, with any components it invokes, into markup and a script.
+ *
+ * `components` are the `.abide` files the page INVOKES (32.18), keyed by the name it imports them
+ * as. Each compiles to the pair a caller reaches — `Name.ts` for the server render and
+ * `Name.client.ts` for the mount — and the page goes through that same loop, so a page with a
+ * component in it is built the way the build builds one rather than by a second scheme.
+ */
 export async function buildCompiledPage(
     source: string,
     components: Record<string, string> = {},
@@ -71,7 +76,7 @@ export async function buildCompiledPage(
             const client = emitClient(
                 entry.file,
                 names,
-                invoked.has(entry.path) ? 'repeated' : 'none',
+                invoked.has(entry.path) ? 'invoked' : 'none',
             )
             writeFileSync(
                 `${scratch}/${entry.name}.client.ts`,
@@ -152,9 +157,13 @@ export async function buildCompiledPage(
     }
 }
 
-// A FRESH CONTEXT PER PAGE, closed through `page.context()`. `setContent` keeps the JavaScript
-// context, so two pages sharing one would leave the first one's `__MOUNT__` on the global. A page
-// with no `__MOUNT__` — a hand-written arm — is opened the same way and the mount is inert.
+/**
+ * Opens a built page in a fresh, layer-armed browser context and mounts it.
+ *
+ * A FRESH CONTEXT PER PAGE, closed through `page.context()`. `setContent` keeps the JavaScript
+ * context, so two pages sharing one would leave the first one's `__MOUNT__` on the global. A page
+ * with no `__MOUNT__` — a hand-written arm — is opened the same way and the mount is inert.
+ */
 export async function openCompiledPage(
     browser: Browser,
     built: CompiledPage,

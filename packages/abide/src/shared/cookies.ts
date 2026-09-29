@@ -12,12 +12,15 @@ import { type Reactive, reactive } from './reactive/index.ts'
 type CookieInit = Bun.CookieInit
 type CookieStoreDeleteOptions = Bun.CookieStoreDeleteOptions
 
+/**
+ * A cookie jar shaped as bun's `CookieMap`, whose reads track the name they read (22.4, 22.5).
+ */
 export class Cookies implements Iterable<[string, string]> {
     held: Map<string, string>
     versions: Map<string, Reactive<number>>
-    // Any change at all, for a reader of the whole jar — `size`, the iterators, `toJSON`.
+    /** Any change at all, for a reader of the whole jar — `size`, the iterators, `toJSON`. */
     every: Reactive<number>
-    // Where a write goes: onto the response on a server, into `document.cookie` in a browser.
+    /** Where a write goes: onto the response on a server, into `document.cookie` in a browser. */
     sink: (serialized: string) => void
     writes: string[]
     inBrowser: boolean
@@ -35,7 +38,7 @@ export class Cookies implements Iterable<[string, string]> {
         this.inBrowser = inBrowser
     }
 
-    // 22.4.
+    /** The named cookie's value, or `null` — a read that tracks that name (22.4). */
     get(name: string): string | null {
         this.versionOf(name)()
         return this.held.get(name) ?? null
@@ -97,9 +100,12 @@ export class Cookies implements Iterable<[string, string]> {
         return Object.fromEntries(this.held)
     }
 
-    // The `set-cookie` lines this jar has written, in order — a server's alone. A browser's jar lives
-    // as long as the page and its writes went into the document, so it keeps none: held, they grew
-    // one line per write with nothing to read them.
+    /**
+     * The `set-cookie` lines this jar has written, in order — a server's alone.
+     *
+     * A browser's jar lives as long as the page and its writes went into the document, so it keeps
+     * none: held, they grew one line per write with nothing to read them.
+     */
     toSetCookieHeaders(): string[] {
         return [...this.writes]
     }
@@ -139,7 +145,7 @@ export class Cookies implements Iterable<[string, string]> {
         return version
     }
 
-    // 22.5 — that name's readers, and the whole jar's.
+    /** Wakes that name's readers, and the whole jar's (22.5). */
     changed(name: string): void {
         const version = this.versions.get(name)
         if (version !== undefined) version.set((version.peek() ?? 0) + 1)
@@ -154,8 +160,12 @@ export class Cookies implements Iterable<[string, string]> {
     }
 }
 
-// 22.3 — `secure` DEFAULTS FROM `NODE_ENV` on a server; a browser has no environment, and the page's
-// own protocol is the same question asked of the one thing it does have.
+/**
+ * Whether a cookie is `Secure` when its options do not say.
+ *
+ * 22.3 — `secure` DEFAULTS FROM `NODE_ENV` on a server; a browser has no environment, and the page's
+ * own protocol is the same question asked of the one thing it does have.
+ */
 function secureByDefault(inBrowser: boolean): boolean {
     if (inBrowser) return location.protocol === 'https:'
     return (
@@ -163,6 +173,7 @@ function secureByDefault(inBrowser: boolean): boolean {
     )
 }
 
+/** One `set-cookie` line for a write, with 22.3's defaults filled in. */
 export function serializeCookie(init: CookieInit, inBrowser: boolean): string {
     let line = `${init.name}=${encodeURIComponent(init.value ?? '')}`
     line += `; Path=${init.path ?? '/'}`
@@ -183,8 +194,12 @@ function capitalised(sameSite: string): string {
     return sameSite.charAt(0).toUpperCase() + sameSite.slice(1)
 }
 
-// THE JAR HOLDS VALUES DECODED, whichever path fills it: `serializeCookie` encodes, and the header,
-// `document.cookie` and a `cookieStore` change all carry the encoded text.
+/**
+ * A `Cookie` header, or `document.cookie`, as a map of decoded values.
+ *
+ * THE JAR HOLDS VALUES DECODED, whichever path fills it: `serializeCookie` encodes, and the header,
+ * `document.cookie` and a `cookieStore` change all carry the encoded text.
+ */
 function parseCookies(header: string): Map<string, string> {
     const parsed = new Map<string, string>()
     for (const pair of header.split(';')) {
@@ -197,15 +212,23 @@ function parseCookies(header: string): Map<string, string> {
     return parsed
 }
 
+/**
+ * The slot `cookies()` reads its jar through: the document's by default, the request's once the
+ * server fills it (`#server/requestScope.ts`).
+ */
 export const COOKIES: { current: () => Cookies } = {
     current: browserCookies,
 }
 
 let documentJar: Cookies | undefined
 
-// THE DOCUMENT'S JAR, one per page. 22.6 — where the browser reports a change made outside this jar
-// (another tab, a server's `set-cookie`), that name's readers wake; 22.7 — where it does not, nothing
-// does, and the jar is what it last read.
+/**
+ * The document's jar, one per page, built on first ask.
+ *
+ * 22.6 — where the browser reports a change made outside this jar
+ * (another tab, a server's `set-cookie`), that name's readers wake; 22.7 — where it does not, nothing
+ * does, and the jar is what it last read.
+ */
 function browserCookies(): Cookies {
     if (documentJar !== undefined) return documentJar
     if (typeof document === 'undefined')
@@ -242,7 +265,7 @@ function browserCookies(): Cookies {
     return jar
 }
 
-// 22.2 — THE COOKIES OF THE REQUEST BEING SERVED, or of the document.
+/** The cookies of the request being served, or of the document (22.2). */
 export function cookies(): Cookies {
     return COOKIES.current()
 }

@@ -8,6 +8,11 @@
 
 import type { Sample } from './Sample.ts'
 
+/**
+ * A verdict on two samples: a ratio, or the reason there is none.
+ *
+ * `underOneFrame` and `underTheFloor` carry no value, so noise cannot be printed as a claim.
+ */
 export type Ratio =
     | {
           kind: 'ratio'
@@ -33,19 +38,27 @@ export type Ratio =
           workDisagreement: string[]
       }
 
+/** The floor and work tolerance a `ratio()` is judged against. */
 export type RatioSpec = {
-    // The A/A spread `batch()` measured for this case, on this machine, today.
+    /** The A/A spread `batch()` measured for this case, on this machine, today. */
     floor: number
-    // How far two arms' work counters may diverge before the comparison is flagged.
-    // Byte-identical page source ran 4.5x apart because one arm shipped a stylesheet
-    // and the other was therefore not doing the work at all.
+    /**
+     * How far two arms' work counters may diverge before the comparison is flagged.
+     *
+     * Byte-identical page source ran 4.5x apart because one arm shipped a stylesheet and the
+     * other was therefore not doing the work at all.
+     */
     workFactor?: number
 }
 
 const DEFAULT_WORK_FACTOR = 1.05
 
-// An existence proof is believed AFTER the counters agree, not before. This was prose
-// with nothing wired to it, and an arm you wrote yourself gets more of this, not less.
+/**
+ * The work counters on which two samples disagree by more than `factor`, one line each.
+ *
+ * An existence proof is believed AFTER the counters agree, not before. This was prose with
+ * nothing wired to it, and an arm you wrote yourself gets more of this, not less.
+ */
 function disagreeingWork(
     numerator: Sample,
     denominator: Sample,
@@ -70,6 +83,11 @@ function disagreeingWork(
     return flagged
 }
 
+/**
+ * Divides two arms' timings into a `Ratio`, refusing comparisons that should not be made.
+ *
+ * Throws on the same arm twice, two cases, two substrates, or two batch sizes.
+ */
 export function ratio(
     numerator: Sample,
     denominator: Sample,
@@ -113,8 +131,11 @@ export function ratio(
     return { kind: 'ratio', ...shared, value }
 }
 
-// A verdict as the text a bench row prints. Only a `ratio` is a number; the other two say why
-// there is none.
+/**
+ * A verdict as the text a bench row prints.
+ *
+ * Only a `ratio` is a number; the other two say why there is none.
+ */
 export function claimOf(result: Ratio): string {
     if (result.kind === 'ratio') return `${result.value.toFixed(2)}x`
     if (result.kind === 'underTheFloor')

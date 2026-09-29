@@ -19,7 +19,7 @@ const FEED: OrderCount[] = [
     { id: 'east', orders: 71 },
 ]
 
-// A frame names an id, so the write is a `get` rather than a scan.
+/** A frame names an id, so the write is a `get` rather than a scan. */
 function applyNextFrame() {
     const frame = FEED.shift()
     if (!frame) return

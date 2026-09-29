@@ -75,8 +75,12 @@ async function main(): Promise<void> {
     }
 }
 
-// 32.18's anchors, in the bytes they actually add to a document — which is the form the claim
-// has to take, a marker being free to argue about and not free to send.
+/**
+ * Prints the bytes a row's component anchors add, raw and gzipped.
+ *
+ * 32.18's anchors, in the bytes they actually add to a document — which is the form the claim has
+ * to take, a marker being free to argue about and not free to send.
+ */
 function bytes(flat: string, nested: string, size: number): void {
     const plain = (text: string): number => Buffer.byteLength(text)
     const zipped = (text: string): number =>
@@ -88,9 +92,13 @@ function bytes(flat: string, nested: string, size: number): void {
     )
 }
 
-// 33.4's accessor per key, in allocations. A prop is a closure the CALLER builds per row, and a
-// record to hold them — so this is the number that says whether one shape per prop (33.10) is
-// paid for by the list or by the author.
+/**
+ * Prints the closures and objects a component row allocates over the same row inline.
+ *
+ * 33.4's accessor per key, in allocations. A prop is a closure the CALLER builds per row, and a
+ * record to hold them — so this is the number that says whether one shape per prop (33.10) is paid
+ * for by the list or by the author.
+ */
 function allocations(flat: Render, nested: Render, size: number): void {
     // `closures` and `allocated` both take a `() => unknown`, which a `Render` already is — a
     // wrapper here would only put another frame inside the body being measured.
@@ -112,10 +120,14 @@ function allocations(flat: Render, nested: Render, size: number): void {
 
 const µs = (sample: Sample): string =>
     `${(sample.nanoseconds / 1000).toFixed(1)} µs`
-// NOT `harness/report`'s `ratio`, deliberately, and the name says so. That one refuses any sample
-// `batch()` took unbatched and under a frame — which is click -> paint being frame quantised, and
-// is every size above 10 cards here. This lane is a bun clock over a string render with nothing
-// waiting on a frame, so the refusal does not apply and the division is the honest report.
+/**
+ * One sample's time over another's, as `1.23x`.
+ *
+ * NOT `harness/report`'s `ratio`, deliberately, and the name says so. That one refuses any sample
+ * `batch()` took unbatched and under a frame — which is click -> paint being frame quantised, and
+ * is every size above 10 cards here. This lane is a bun clock over a string render with nothing
+ * waiting on a frame, so the refusal does not apply and the division is the honest report.
+ */
 const times = (sample: Sample, against: Sample): string =>
     `${(sample.nanoseconds / against.nanoseconds).toFixed(2)}x`
 const perRow = (sample: Sample, size: number): string =>

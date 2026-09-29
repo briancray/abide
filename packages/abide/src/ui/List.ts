@@ -12,27 +12,46 @@ import {
 import { isEmptyRegion, type Region, removeUntil } from './regions.ts'
 import type { Scope } from './Scope.ts'
 
-// ONE RECORD PER `{#for}`, owned by the emitted block, holding everything the two arms — the
-// reconcile of a list and the append of an async subject — have to tell each other: which source
-// is pumping, and whether the repeated-key warning has fired. Each edge between the two modes is a
-// field here rather than a patch to a module-level map keyed on the region.
+/**
+ * The state of one `{#for}` block, shared by its reconcile and its async append.
+ *
+ * Owned by the emitted block, it holds everything the two arms — the reconcile of a list and the
+ * append of an async subject — have to tell each other: which source is pumping, and whether the
+ * repeated-key warning has fired. Each edge between the two modes is a field here rather than a
+ * patch to a module-level map keyed on the region.
+ */
 export class List {
     region: Region
     rows: Row[]
-    // THE ASYNC ITERABLE BEING PUMPED, or null. The newest source wins and the pump it replaced
-    // stops at its next item, and a list arriving in its place stops it the same way.
+    /**
+     * The async iterable being pumped, or null.
+     *
+     * The newest source wins and the pump it replaced stops at its next item, and a list arriving
+     * in its place stops it the same way.
+     */
     pumping: unknown
-    // 41.15 — once for the block, not once a reconcile.
+    /**
+     * Whether the repeated-key warning has fired.
+     *
+     * 41.15 — once for the block, not once a reconcile.
+     */
     warned: boolean
-    // WHETHER THE ROWS ARE STILL THE SERVER'S. The first update HYDRATES them rather than
-    // reconciling, and clears this.
+    /**
+     * Whether the rows are still the server's.
+     *
+     * The first update HYDRATES them rather than reconciling, and clears this.
+     */
     hydrating: boolean
-    // Whether each row carries its own anchor — a body with several top-level nodes.
+    /** Whether each row carries its own anchor — a body with several top-level nodes. */
     anchored: boolean
     key: (item: unknown, at: number) => unknown
-    // ONCE PER ROW, the `make` and `mount` that row is built and mounted by. 14.8 — a row with a
-    // branch-local `<script>` runs it here and gets builders closing over its names; every other
-    // list hands back the one record it was built with, so a row allocates nothing more.
+    /**
+     * Answers the `make` and `mount` a row is built and mounted by; called once per row.
+     *
+     * 14.8 — a row with a branch-local `<script>` runs it here and gets builders closing over its
+     * names; every other list hands back the one record it was built with, so a row allocates
+     * nothing more.
+     */
     setUp: (item: unknown, at: number) => RowBuilders
 
     constructor(
@@ -51,10 +70,14 @@ export class List {
         this.setUp = setUp
     }
 
-    // 12.13 — WHAT THE BLOCK'S OWN SCOPE STOPS WHEN THE REGION HOLDING IT LEAVES. A row's bindings
-    // are stopped by `dropRow` as the list churns, but a `{#for}` removed whole — a row above it
-    // dropping, an arm swapping out — drops no rows at all, and every row it still holds would go
-    // on waking. The nodes go with the region, so only the scopes are stopped here.
+    /**
+     * Stops every row's scope; called when the region holding the block leaves.
+     *
+     * 12.13 — a row's bindings are stopped by `dropRow` as the list churns, but a `{#for}` removed
+     * whole — a row above it dropping, an arm swapping out — drops no rows at all, and every row it
+     * still holds would go on waking. The nodes go with the region, so only the scopes are stopped
+     * here.
+     */
     stop(): void {
         const rows = this.rows
         for (const row of rows) row.scope.stop()
@@ -63,11 +86,15 @@ export class List {
     }
 }
 
-// A `{#for}` whose rows the SERVER wrote. Nothing is wired until the first update, which is the
-// block's watch running once: the subject is read there and only there, so the rows are hydrated
-// against the same items the watch then compares against. Read twice — once to hydrate and again
-// on the watch's first run — a subject that builds fresh items (`rows.map(…)`) matched no row by
-// identity, and every row the server sent was dropped and remade on load.
+/**
+ * A `List` over rows the server wrote, hydrated on its first update.
+ *
+ * Nothing is wired until the first update, which is the block's watch running once: the subject is
+ * read there and only there, so the rows are hydrated against the same items the watch then
+ * compares against. Read twice — once to hydrate and again on the watch's first run — a subject
+ * that builds fresh items (`rows.map(…)`) matched no row by identity, and every row the server sent
+ * was dropped and remade on load.
+ */
 export function listAt(
     region: Region,
     anchored: boolean,
@@ -80,29 +107,33 @@ export function listAt(
     return list
 }
 
-// HYDRATION, NOT RENDERING. The rows are already there; wiring them is all that is left. 41.3 — an
-// async subject rendered no rows, so it finds none here.
-//
-// FALSE WHERE THERE IS NOTHING TO RETURN ON, and the caller reconciles what was hydrated instead.
-// TWO DIFFERENT QUESTIONS REACH THIS, and answering both with one length compare hid the second:
-//
-// NOBODY PAINTED THIS REGION is 41.4 — a render continues past a subject still in flight, which
-// writes the anchors and no rows. That is not a disagreement, because there is nothing to disagree
-// with, so it builds in silence. `isEmptyRegion` is the signal the rest of the block machinery
-// already reads for exactly this (32.18), rather than a zero this function infers on its own.
-//
-// THE SERVER'S ROWS ARE NOT THE CLIENT'S ITEMS is 41.10, and it MUST warn. Hydration wires row
-// `at` to item `at` BY POSITION, so a run where the two lengths disagree has items with no node,
-// nodes with no item, or both — every one of them a `{#for}` that looks right and is dead, because
-// `updateList` returned before `reconcile` could fix it. Repairing that silently is the clause
-// half-applied: the divergence is a document and a client that disagree, which is the one thing
-// the channel exists to report.
-//
-// THE LENGTHS ARE COMPARED BEFORE A ROW IS WIRED, and only the rows both sides hold are. A row the
-// document holds past the last item has no item to key or set up — handed `undefined`, a keyed
-// list threw a TypeError out of `item[by]`, which is not a `Mismatch` and so took the page down on
-// exactly the disagreement this reports. Those rows are removed here, and the reconcile after
-// builds whatever the document was short.
+/**
+ * Wires the server's rows to `items`; false where the caller should reconcile instead.
+ *
+ * HYDRATION, NOT RENDERING. The rows are already there; wiring them is all that is left. 41.3 — an
+ * async subject rendered no rows, so it finds none here.
+ *
+ * FALSE WHERE THERE IS NOTHING TO RETURN ON, and the caller reconciles what was hydrated instead.
+ * TWO DIFFERENT QUESTIONS REACH THIS, and answering both with one length compare hid the second:
+ *
+ * NOBODY PAINTED THIS REGION is 41.4 — a render continues past a subject still in flight, which
+ * writes the anchors and no rows. That is not a disagreement, because there is nothing to disagree
+ * with, so it builds in silence. `isEmptyRegion` is the signal the rest of the block machinery
+ * already reads for exactly this (32.18), rather than a zero this function infers on its own.
+ *
+ * THE SERVER'S ROWS ARE NOT THE CLIENT'S ITEMS is 41.10, and it MUST warn. Hydration wires row
+ * `at` to item `at` BY POSITION, so a run where the two lengths disagree has items with no node,
+ * nodes with no item, or both — every one of them a `{#for}` that looks right and is dead, because
+ * `updateList` returned before `reconcile` could fix it. Repairing that silently is the clause
+ * half-applied: the divergence is a document and a client that disagree, which is the one thing
+ * the channel exists to report.
+ *
+ * THE LENGTHS ARE COMPARED BEFORE A ROW IS WIRED, and only the rows both sides hold are. A row the
+ * document holds past the last item has no item to key or set up — handed `undefined`, a keyed
+ * list threw a TypeError out of `item[by]`, which is not a `Mismatch` and so took the page down on
+ * exactly the disagreement this reports. Those rows are removed here, and the reconcile after
+ * builds whatever the document was short.
+ */
 function hydrate(list: List, items: unknown[]): boolean {
     const found = rowsIn(list.region, list.anchored)
     if (found.length === 0 && isEmptyRegion(list.region)) return false
@@ -132,14 +163,18 @@ function hydrate(list: List, items: unknown[]): boolean {
     return agreed
 }
 
-// 32.15 — AN ARRAY RECONCILES AND AN ASYNC SUBJECT APPENDS AS ITEMS ARRIVE. There is no list to
-// diff an async subject against: the items are not all there, and the arrival of one says nothing
-// about the ones behind it.
-//
-// THE SUBJECT IS READ TRACKED AND THE ROWS ARE BUILT UNTRACKED. `make` evaluates a row's attributes
-// as it builds them, so under the list's watch a row reading `selected` subscribed the WHOLE list to
-// it — one full reconcile per write after any row was built here. A row's own reads are its mount's
-// watches. `listOf` stays outside: spreading an iterable is a read of it.
+/**
+ * Brings a `{#for}`'s rows up to date with its subject: reconciles an array, appends an async one.
+ *
+ * 32.15 — AN ARRAY RECONCILES AND AN ASYNC SUBJECT APPENDS AS ITEMS ARRIVE. There is no list to
+ * diff an async subject against: the items are not all there, and the arrival of one says nothing
+ * about the ones behind it.
+ *
+ * THE SUBJECT IS READ TRACKED AND THE ROWS ARE BUILT UNTRACKED. `make` evaluates a row's attributes
+ * as it builds them, so under the list's watch a row reading `selected` subscribed the WHOLE list to
+ * it — one full reconcile per write after any row was built here. A row's own reads are its mount's
+ * watches. `listOf` stays outside: spreading an iterable is a read of it.
+ */
 export function updateList(list: List, subject: unknown): void {
     untracked(settleList, list, listOf(subject))
 }
@@ -159,8 +194,12 @@ function settleList(
     reconcile(list, items)
 }
 
-// 41.3 IS THE SERVER'S HALF OF 32.15 — the render is not held for an unfinished stream, so an
-// async subject writes no rows inline and the region arrives empty. The pump fills it.
+/**
+ * Starts pumping an async subject into the list, replacing what an earlier source appended.
+ *
+ * 41.3 IS THE SERVER'S HALF OF 32.15 — the render is not held for an unfinished stream, so an
+ * async subject writes no rows inline and the region arrives empty. The pump fills it.
+ */
 function appendRows(list: List, source: AsyncIterable<unknown>): void {
     // A RE-RUN IS NOT A NEW SOURCE. The subject is read inside a watch, so any other reactive
     // the expression touches re-runs it with the SAME iterable — and emptying the list to pump an
@@ -201,10 +240,14 @@ async function pump(list: List, source: AsyncIterable<unknown>): Promise<void> {
 }
 
 export type RowBuilders = {
-    // A row's nodes, BUILT in the document the list stands in — handed over by the reconcile
-    // rather than found by the row, which is the one place a row's document is decided.
+    /**
+     * A row's nodes, BUILT in the document the list stands in — handed over by the reconcile
+     * rather than found by the row, which is the one place a row's document is decided.
+     */
     make: (document: Document, item: unknown, at: number) => Node[]
-    // Handed the row's RECORD rather than its nodes: a row it rebuilds (41.10) writes its new
-    // first node back there.
+    /**
+     * Handed the row's RECORD rather than its nodes: a row it rebuilds (41.10) writes its new
+     * first node back there.
+     */
     mount: (row: Row, item: unknown, at: number) => Scope
 }

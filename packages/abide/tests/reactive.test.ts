@@ -4436,6 +4436,173 @@ test('a set on a stream moves no cursor over it', async () => {
     expect(`cursor: ${taken.join('|')}`).toBe('cursor: 1|2|3')
 })
 
+// 11.62 ON A STREAM IS 9.25's WRITE, FOLLOWING. A `Reactive` written over a stream is adopted, not
+// stored — the read is the adopted value's, and a write to the adopted value wakes this one's readers
+// — and it stands as any write over a stream does: the next chunk puts the accumulation back and lets
+// go of what was adopted. Letting go is the WORK half and nothing in a value shows it, so the adopted
+// value's reader list and the wakes after the chunk are what is asserted. No ordinal is minted for it
+// (9.26), so a cursor walks straight from the chunk before to the chunk after.
+//
+// THE REVERT is `STREAM_PROTOTYPE.set` handing a `Reactive` to `writeStream` as a value: `stored: true`
+// — the callable itself is served; `unfollow` in `wakeStreams` and `materialise` doing nothing:
+// `adopted readers after: 1`; and `adoptedCellOf` walking on into what the stream follows:
+// `history: [[7,8],[9]]` — the replay was the adopted value's.
+test('a Reactive set on a stream is followed until the next chunk', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    run.push(2)
+    await turns()
+    const cursor = rows[Symbol.asyncIterator]()
+    const taken: unknown[] = [
+        (await cursor.next()).value,
+        (await cursor.next()).value,
+    ]
+    const ordinal = cellOf<{ ordinal: number }>(rows).ordinal
+    const past = JSON.stringify([...rows.history()])
+    const other = reactive([7, 8], { history: 4 })
+    const readersBefore = cellOf<{ readers: unknown[] }>(other).readers.length
+    const woken = wakes(rows)
+
+    rows.set(other as never)
+    expect(`stored: ${isReactive(rows())}`).toBe('stored: false')
+    expect(`followed: ${rows().join(',')}`).toBe('followed: 7,8')
+    expect(`woken by the set: ${woken.count()}`).toBe('woken by the set: 1')
+
+    other.set([9])
+    expect(`after the adopted write: ${rows().join(',')}`).toBe(
+        'after the adopted write: 9',
+    )
+    expect(`woken by the adopted write: ${woken.count() - 1}`).toBe(
+        'woken by the adopted write: 1',
+    )
+    expect(
+        `ordinal: ${cellOf<{ ordinal: number }>(rows).ordinal - ordinal}`,
+    ).toBe('ordinal: 0')
+    expect(`history: ${JSON.stringify([...rows.history()])}`).toBe(
+        `history: ${past}`,
+    )
+
+    const pending = cursor.next()
+    run.push(3)
+    await turns()
+    taken.push((await pending).value)
+    expect(`after the chunk: ${rows().join(',')}`).toBe(
+        'after the chunk: 1,2,3',
+    )
+    expect(`woken by the chunk: ${woken.count() - 2}`).toBe(
+        'woken by the chunk: 1',
+    )
+
+    other.set([10])
+    expect(`woken after the chunk: ${woken.count() - 3}`).toBe(
+        'woken after the chunk: 0',
+    )
+    expect(`still: ${rows().join(',')}`).toBe('still: 1,2,3')
+    expect(
+        `adopted readers after: ${cellOf<{ readers: unknown[] }>(other).readers.length - readersBefore}`,
+    ).toBe('adopted readers after: 0')
+    expect(`cursor: ${taken.join('|')}`).toBe('cursor: 1|2|3')
+    await cursor.return?.()
+    woken.stop()
+})
+
+// A WRITE REPLACES A WRITE, and a followed `Reactive` is a write (9.25): a later `set` over the stream
+// lands on the stream rather than reaching through to what it was following — the reach-through of
+// 11.60 is an adopting value's, and a stream is not one — and lets go of it.
+//
+// THE REVERT is `writeStream` not calling `unfollow`: `woken by the adopted write: 1` — the stale
+// follow overwrites the plain write the moment the adopted value moves.
+test('a set over a followed Reactive on a stream replaces it', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    const other = reactive([7])
+    const readersBefore = cellOf<{ readers: unknown[] }>(other).readers.length
+    rows.set(other as never)
+    expect(`followed: ${rows().join(',')}`).toBe('followed: 7')
+
+    const woken = wakes(rows)
+    rows.set([5])
+    expect(`replaced: ${rows().join(',')}`).toBe('replaced: 5')
+    expect(`adopted untouched: ${other().join(',')}`).toBe(
+        'adopted untouched: 7',
+    )
+    expect(`woken by the write: ${woken.count()}`).toBe('woken by the write: 1')
+    other.set([8])
+    expect(`woken by the adopted write: ${woken.count() - 1}`).toBe(
+        'woken by the adopted write: 0',
+    )
+    expect(`still: ${rows().join(',')}`).toBe('still: 5')
+    expect(
+        `adopted readers after: ${cellOf<{ readers: unknown[] }>(other).readers.length - readersBefore}`,
+    ).toBe('adopted readers after: 0')
+
+    // And a second `Reactive` replaces the first the same way.
+    const third = reactive([3])
+    rows.set(other as never)
+    rows.set(third as never)
+    other.set([0])
+    expect(`re-pointed: ${rows().join(',')}`).toBe('re-pointed: 3')
+    expect(
+        `first let go: ${cellOf<{ readers: unknown[] }>(other).readers.length - readersBefore}`,
+    ).toBe('first let go: 0')
+    woken.stop()
+})
+
+// 11.19 AND 11.51 THROUGH A FOLLOW: while it stands, `busy`, `ready` and `error` answer as they would on
+// a value adopting the same `Reactive` — the stream's own open run still counts for `busy` (3.7) — and a
+// guard hears the adopted value's probes move. Once the stream closed, what `busy` reports is the
+// adopted value's load alone.
+//
+// THE REVERT is the follow not setting `adoption`: `busy while the adopted loads: false`.
+test('a followed Reactive on a closed stream reports its probes', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    run.close()
+    await turns()
+    expect(`closed busy: ${rows.busy()}`).toBe('closed busy: false')
+
+    let settle: (value: number[]) => void = () => undefined
+    const other = reactive(
+        new Promise<number[]>((resolve) => {
+            settle = resolve
+        }),
+    )
+    let guardRuns = 0
+    const stop = watch(() => {
+        rows.busy()
+        guardRuns += 1
+    })
+    guardRuns = 0
+    rows.set(other as never)
+    flushSync()
+    expect(`busy while the adopted loads: ${rows.busy()}`).toBe(
+        'busy while the adopted loads: true',
+    )
+    expect(`ready while the adopted loads: ${rows.ready()}`).toBe(
+        'ready while the adopted loads: false',
+    )
+    settle([4])
+    await turns()
+    flushSync()
+    expect(`busy after: ${rows.busy()}`).toBe('busy after: false')
+    expect(`value after: ${rows().join(',')}`).toBe('value after: 4')
+    expect(`guard heard it: ${guardRuns >= 2}`).toBe('guard heard it: true')
+
+    const failing = reactive<number[]>(() => {
+        throw new Error('nope')
+    })
+    rows.set(failing as never)
+    expect(`error: ${String(rows.error())}`).toBe('error: Error: nope')
+    stop()
+})
+
 // 9.27: `patch` MUTATES THE ACCUMULATION, not the copy a read was handed — so the change is there
 // when the next chunk arrives, where a patched snapshot would be rebuilt from the untouched chunks.
 //

@@ -138,6 +138,7 @@ const DECLARED: [interfaceName: string, member: string, role: Role][] = [
     ['Document', 'createElementNS', 'refused'],
 ]
 
+/** A fresh `Work` with every counted row at 0 and the three published rows at `null`. */
 export function blankWork(): Work {
     // Fixed shape at construction — every field initialized, `undefined` included —
     // because this object is read on every counted call.
@@ -166,6 +167,7 @@ let depth = 0
 let armed = false
 let installed: string[] = []
 
+/** Routes every counted call into `record` until `disarm()`. Throws when already armed. */
 export function arm(record: Work): void {
     if (armed)
         throw new Error(
@@ -175,6 +177,7 @@ export function arm(record: Work): void {
     live = record
 }
 
+/** Stops counting: calls go back to a discarded record. */
 export function disarm(): void {
     armed = false
     live = DISCARD
@@ -185,8 +188,12 @@ export function isArmed(): boolean {
     return armed
 }
 
-// The installed list, by interface and member. The both-substrates gate is asserted
-// on THIS rather than on a count, because a count is what goes quietly to zero.
+/**
+ * The installed patch list, as `Interface.member` strings.
+ *
+ * The both-substrates gate is asserted on THIS rather than on a count, because a count is what
+ * goes quietly to zero.
+ */
 export function patchSet(): string[] {
     return installed.slice()
 }
@@ -218,9 +225,11 @@ function tallyChildren(parent: unknown): void {
     for (const child of children) tallyNode(child)
 }
 
-// A subtree the call brought into existence, counted whole and INCLUDING its root:
-// `innerHTML` creates every node under it, where an insert only MOVES the one node it
-// was handed.
+/**
+ * Counts a subtree the call brought into existence, whole and INCLUDING its root.
+ *
+ * `innerHTML` creates every node under it, where an insert only MOVES the one node it was handed.
+ */
 function tallyCreatedSubtree(node: unknown): void {
     live.nodesCreated += 1
     const children = (node as Node | null)?.childNodes
@@ -466,6 +475,11 @@ function descriptorFrom(
     return undefined
 }
 
+/**
+ * Patches every declared DOM member to count into the armed record. Idempotent.
+ *
+ * Throws when there is no DOM, or when a declared member is missing in this substrate.
+ */
 export function install(): void {
     if (installed.length > 0) return
     if (typeof document === 'undefined')

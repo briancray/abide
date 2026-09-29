@@ -9,7 +9,7 @@ export type Invoice = { total: string }
 
 const INVOICES: Record<string, Invoice> = { '4020': { total: '$980.00' } }
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     invoices: {
         async find(id: string): Promise<Invoice | null> {

@@ -45,6 +45,7 @@ function unescapeXml(value: string): string {
         .replaceAll('&amp;', '&')
 }
 
+/** One `Suite` per `<testsuite>` in a JUnit report, bun's or playwright's. */
 export function parseJUnit(xml: string): Suite[] {
     const suites: Suite[] = []
     for (const block of xml.split('<testsuite ').slice(1)) {
@@ -73,10 +74,13 @@ export function parseJUnit(xml: string): Suite[] {
     return suites
 }
 
-// HOW A RUNNER IS POINTED AT ITS REPORT, supplied by the caller rather than branched
-// on here: `bun test` takes `--reporter-outfile` and playwright takes
-// `PLAYWRIGHT_JUNIT_OUTPUT_NAME`, and a runner that took a third spelling would be a
-// third caller rather than a third branch.
+/**
+ * How a runner is pointed at its JUnit report: the args and environment for a given path.
+ *
+ * Supplied by the caller rather than branched on here: `bun test` takes `--reporter-outfile` and
+ * playwright takes `PLAYWRIGHT_JUNIT_OUTPUT_NAME`, and a runner that took a third spelling would be
+ * a third caller rather than a third branch.
+ */
 export type ReportTo = (path: string) => {
     args: string[]
     environment: Record<string, string>
@@ -92,6 +96,11 @@ export const PLAYWRIGHT_REPORT: ReportTo = (path) => ({
     environment: { PLAYWRIGHT_JUNIT_OUTPUT_NAME: path },
 })
 
+/**
+ * Runs one test command with a JUnit reporter and returns its parsed suites and wall time.
+ *
+ * A red run resolves; only a missing report throws — see the file header.
+ */
 export async function runSuite(spec: {
     command: string[]
     reportTo: ReportTo

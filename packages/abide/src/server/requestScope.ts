@@ -16,52 +16,72 @@ import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { SCOPING, type Scope } from '#shared/reactive/scoping.ts'
 import type { RpcRequest } from '#shared/rpcRequest.ts'
 
-// 17.6 — the three framings a stream is answered in.
+/** The three framings a stream is answered in. 17.6. */
 export type Framing = 'jsonl' | 'sse' | 'bytes'
 
+/** What one request, or one `App.run`, carries across every `await` its work makes. */
 export type RequestScope = Scope & {
-    // 17.6 — the framing a helper fixed for a streaming answer, or `undefined` to negotiate it.
+    /** The framing a helper fixed for a streaming answer, or `undefined` to negotiate it. 17.6. */
     framing: Framing | 'html' | undefined
-    // 26.5 — which browser is calling, once read or minted in this request.
+    /** Which browser is calling, once read or minted in this request. 26.5. */
     caller: string | undefined
-    // 26.14 — this request's one resolve of the principal.
+    /** This request's one resolve of the principal. 26.14. */
     principal: Promise<Principal> | undefined
-    // 16.24 — the longest `timeout` any handler that ran in this request asked for, in seconds, and
-    // `Infinity` for one that is never reaped (16.62).
+    /**
+     * The longest `timeout` any handler that ran in this request asked for, in seconds.
+     *
+     * 16.24 — and `Infinity` for one that is never reaped (16.62).
+     */
     timeout: number
-    // 29.3 — this response's nonce, minted by the `csp` rung or on the first ask.
+    /** This response's nonce, minted by the `csp` rung or on the first ask. 29.3. */
     nonce: string | undefined
-    // 22.2 — this request's cookie jar, built on the first ask.
+    /** This request's cookie jar, built on the first ask. 22.2. */
     cookies: Cookies | undefined
-    // Whether an answer has taken what was written through `response` (`applyWritten`).
+    /** Whether an answer has taken what was written through `response` (`applyWritten`). */
     applied: boolean
-    // 24.1 — this scope's trace, built on the first ask (`trace.ts`).
+    /** This scope's trace, built on the first ask (`trace.ts`). 24.1. */
     trace: { id: string; span: string; flags: string } | undefined
-    // `undefined` where the scope was opened without one — 42.8's scope, which 22.1 throws in.
+    /** `undefined` where the scope was opened without one — 42.8's scope, which 22.1 throws in. */
     request: Request | undefined
-    // 16.23 — THE REQUEST THE LISTENER WAS HANDED, before a mount or a rung made another: bun raises
-    // the idle timeout only on the one it received itself.
+    /**
+     * The request the listener was handed, before a mount or a rung made another.
+     *
+     * 16.23 — bun raises the idle timeout only on the one it received itself.
+     */
     received: Request | undefined
-    // 22.9 — what a write through `response` is collected onto, for whoever answers to apply.
+    /** What a write through `response` is collected onto, for whoever answers to apply. 22.9. */
     response: { status: number; headers: Headers }
-    // 41.13, 41.20 — the page this scope is rendering, which its calls report into; `undefined` in
-    // every scope but a page's.
+    /**
+     * The page this scope is rendering, which its calls report into.
+     *
+     * 41.13, 41.20 — `undefined` in every scope but a page's.
+     */
     page: PageRender | undefined
-    // 21.15, 21.20, 24.6 — WHAT THE ANSWER'S `server-timing` CARRIES, gathered until the head goes out.
+    /**
+     * What the answer's `server-timing` carries, gathered until the head goes out.
+     *
+     * 21.15, 21.20, 24.6.
+     */
     timing: {
         entries: string[]
-        // 21.20 — the time rungs took, apart from what they wrapped; `undefined` where none ran.
+        /** The time rungs took, apart from what they wrapped; `undefined` where none ran. 21.20. */
         middleware: number | undefined
-        // The handler this request is answering, and its own body's time inside its rungs.
+        /**
+         * The handler this request is answering; `handled` is its own body's time inside its rungs.
+         */
         answering: object | undefined
         handled: number | undefined
     }
 }
 
-// A PAGE'S RENDER, as its calls see it: the seed buffer's sink for this caller (41.13), and the
-// requests the browser will make for them, for the early-call script (41.20). ON THE SCOPE because
-// that is the only thing a call made deep in a page's setup can find it through when requests
-// interleave — `RPC_SERVER.reached` is one slot for every request in flight.
+/**
+ * A page's render, as its calls see it: the seed sink and the requests the browser will make.
+ *
+ * The seed buffer's sink for this caller (41.13), and the requests the browser will make for the
+ * calls, for the early-call script (41.20). ON THE SCOPE because that is the only thing a call made
+ * deep in a page's setup can find it through when requests interleave — `RPC_SERVER.reached` is
+ * one slot for every request in flight.
+ */
 export type PageRender = {
     seed: (rpc: object, args: unknown, reached: unknown) => boolean
     calls: RpcRequest[]
@@ -104,7 +124,7 @@ function scopeFor(
     }
 }
 
-// One scope around `body`, and what `body` returned (42.7).
+/** Runs `body` in a fresh request scope and returns what it returned. 42.7. */
 export function inScope<Result>(
     given: Request | undefined,
     body: () => Result,
@@ -113,15 +133,22 @@ export function inScope<Result>(
     return STORAGE.run(scopeFor(given, received), body)
 }
 
-// 37.3 — A RUNG MAY HAND `next` A REQUEST OF ITS OWN, and it is served in the scope `App.fetch`
-// opened rather than a second one (42.6), so `request` reads it from here on.
+/**
+ * Makes `given` the current scope's request, for a rung that handed `next` one of its own.
+ *
+ * 37.3 — A RUNG MAY HAND `next` A REQUEST OF ITS OWN, and it is served in the scope `App.fetch`
+ * opened rather than a second one (42.6), so `request` reads it from here on.
+ */
 export function adoptRequest(given: Request): void {
     ;(STORAGE.getStore() as RequestScope).request = given
 }
 
-// 42.9 — what `App.listen` bound, for `server` to hand back. 16.23 — and how a call raises the idle
-// timeout on the request the listener received: on the server bound here, or where the listener is
-// on another thread (`abide dev`), a message to it.
+/**
+ * What `App.listen` bound, and how a call raises the idle timeout on the received request.
+ *
+ * 42.9 — the server is for `server` to hand back. 16.23 — the timeout is raised on the server
+ * bound here, or where the listener is in another process (`abide dev`), by a message to it.
+ */
 export const LISTENING: {
     server: Bun.Server<unknown> | undefined
     timeout: (received: Request, seconds: number) => void
@@ -131,18 +158,22 @@ export const LISTENING: {
         LISTENING.server?.timeout(received, seconds),
 }
 
-// WHAT THE CALLS A RENDER MAKES REPORT INTO (41.13), set on the request's own scope before the render
-// runs: a page's render passes one, and an error page's none. The render is awaited where the request
-// is answered, so it runs in that scope throughout (42.6).
+/**
+ * Sets what the calls a render makes report into, on the request's own scope.
+ *
+ * 41.13 — set before the render runs: a page's render passes one, and an error page's none. The
+ * render is awaited where the request is answered, so it runs in that scope throughout (42.6).
+ */
 export function beginRender(page: PageRender | undefined): void {
     ;(STORAGE.getStore() as RequestScope).page = page
 }
 
-// The scope a request or `App.run` opened, or `undefined` outside every one.
+/** The scope a request or `App.run` opened, or `undefined` outside every one. */
 export function currentRequestScope(): RequestScope | undefined {
     return STORAGE.getStore()
 }
 
+/** The current request's scope; throws, naming `name()`, outside a request. 22.1. */
 export function within(name: string): RequestScope {
     const scope = STORAGE.getStore()
     if (scope?.request === undefined)
@@ -163,9 +194,13 @@ COOKIES.current = (): Cookies => {
     return scope.cookies
 }
 
-// 21.10, 22.9 — WHAT WAS WRITTEN THROUGH `response`, onto the headers of an answer: over whatever
-// the answer carried, and a `set-cookie` appended rather than replacing the one before it. ONCE, at
-// `App.fetch`'s exit — the moment the head goes out, which is what `applied` tells 26.21.
+/**
+ * Lays what was written through `response` onto `headers`, once; returns the written status.
+ *
+ * 21.10, 22.9 — over whatever the answer carried, and a `set-cookie` appended rather than
+ * replacing the one before it. ONCE, at `App.fetch`'s exit — the moment the head goes out, which
+ * is what `applied` tells 26.21.
+ */
 export function applyWritten(headers: Headers): number {
     const scope = STORAGE.getStore()
     if (scope === undefined || scope.applied) return 200
@@ -176,13 +211,17 @@ export function applyWritten(headers: Headers): number {
     return scope.response.status
 }
 
-// 22.9 — the status written through `response`, for a lane that builds its answer at it: 200 where
-// nothing wrote one. The headers are laid over the answer once, at `App.fetch`'s exit (`applyWritten`).
+/**
+ * The status written through `response`, or 200 where nothing wrote one.
+ *
+ * 22.9 — for a lane that builds its answer at it. The headers are laid over the answer once, at
+ * `App.fetch`'s exit (`applyWritten`).
+ */
 export function writtenStatus(): number {
     return STORAGE.getStore()?.response.status ?? 200
 }
 
-// 22.1 — the request being served.
+/** The request being served. 22.1. */
 export function request(): Request {
     return within('request').request as Request
 }
@@ -197,14 +236,18 @@ RPC_SERVER.handled = (rpc, duration) => {
         timing.handled = duration
 }
 
-// 21.20 — time spent in rungs, or taken back out where it was the centre's.
+/**
+ * Adds `duration` to the time spent in rungs.
+ *
+ * 21.20 — or takes it back out where it was the centre's.
+ */
 export function rungsTook(duration: number): void {
     const timing = STORAGE.getStore()?.timing
     if (timing !== undefined)
         timing.middleware = (timing.middleware ?? 0) + duration
 }
 
-// 21.15, 24.6 — one `server-timing` metric, onto the answer `timing` belongs to.
+/** Adds one `server-timing` metric to the answer `timing` belongs to. 21.15, 24.6. */
 export function timed(
     timing: RequestScope['timing'] | undefined,
     name: string,
@@ -217,7 +260,11 @@ function metric(name: string, duration: number): string {
     return `${name};dur=${duration.toFixed(1)}`
 }
 
-// 21.15, 21.20, 24.6 — WHAT THE ANSWER CARRIES, in the order it was gathered; `undefined` for none.
+/**
+ * The answer's `server-timing` header, in the order it was gathered; `undefined` for none.
+ *
+ * 21.15, 21.20, 24.6.
+ */
 export function serverTiming(): string | undefined {
     const timing = STORAGE.getStore()?.timing
     if (timing === undefined) return undefined
@@ -228,13 +275,17 @@ export function serverTiming(): string | undefined {
     return entries.length === 0 ? undefined : entries.join(', ')
 }
 
-// 22.1, 22.9 — the response being built for it.
+/** The response being built for the request being served. 22.1, 22.9. */
 export function response(): { status: number; headers: Headers } {
     return within('response').response
 }
 
-// 22.1, 42.9 — the listening server. Inside a request and with nothing bound — `App.fetch` on an
-// app nobody called `listen` on — there is no server to hand back, and that is a throw too.
+/**
+ * The listening server.
+ *
+ * 22.1, 42.9 — inside a request and with nothing bound — `App.fetch` on an app nobody called
+ * `listen` on — there is no server to hand back, and that is a throw too.
+ */
 export function server<WebSocketData = unknown>(): Bun.Server<WebSocketData> {
     within('server')
     if (LISTENING.server === undefined)

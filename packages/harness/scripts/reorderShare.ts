@@ -1,7 +1,7 @@
 // THE REORDER SHARE — the op `bench:share` explicitly does not bound, and the one both compiler
 // proposals pre-registered on.
 //
-// `explorations/NAME-THE-SHARE.md` measured a page navigation and a first load and said in terms
+// `bench:share` (`nameTheShare.ts`) measured a page navigation and a first load and said in terms
 // that its ~8% does not bound a REORDER: a list reorder is more script-heavy than a navigation, so
 // neither `no-build` (which registered on a 500-row reorder, "<8% and it's decided, >20% and I'm
 // wrong") nor `compiler-maximalist` had been answered. This is that measurement.
@@ -496,9 +496,9 @@ console.log(
         `    abide row machinery, no binding  ${milliseconds(staticBuild)} ms  (${(staticBuild / handBuild).toFixed(1)}x the DOM alone)\n` +
         `    one binding a row, on top        ${milliseconds(abideBuild - staticBuild)} ms  (${(((abideBuild - staticBuild) / abideBuild) * 100).toFixed(0)}% of abide's build)`,
 )
-// WHERE THE ROW BUILD GOES, attributed by three hand-written arms rather than by reading the
-// emitter and guessing. `ls0_make` is `markupNodes(root, "<li>…")` and `parseMarkup` sets
-// `template.innerHTML` — one HTML parse a row. The middle arm is that, alone.
+// WHERE THE ROW BUILD GOES, attributed by hand-written arms rather than by reading the emitter and
+// guessing. `ls0_make` WAS `markupNodes(root, "<li>…")` and `parseMarkup` sets
+// `template.innerHTML` — one HTML parse a row — and the innerHTML arm is that, alone.
 const painterOne = layerMedian(byCase['replace (painter, one shape)'])
 const painterTwo = layerMedian(byCase['replace (painter, two shapes)'])
 console.log(

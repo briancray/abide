@@ -30,6 +30,7 @@ import { SUBJECT } from './projectShadow.ts'
 // one (14.9), and the projection hands it to `__on` rather than wrapping it, which is what tells
 // the two apart here.
 
+/** A warning at a projection offset. */
 export type Warning = { at: number; message: string }
 
 // A callback these hand a function to runs it before they return, so a read inside it is the
@@ -57,13 +58,14 @@ const SYNCHRONOUS = new Set([
 
 type Body = { node: Node; kind: 'reactive' | 'watch' | 'template' }
 
-// Past any parentheses around `node`, to what holds it.
+/** `node` past any parentheses around it, and what holds it. */
 function holderOf(node: Node): { child: Node; parent: Node } {
     let child = node
     while (isParenthesizedExpression(child.parent)) child = child.parent
     return { child, parent: child.parent }
 }
 
+/** The name a call's callee spells — `f` in `f()` and in `x.f()` — or `undefined`. */
 function calleeName(call: Node): string | undefined {
     if (!isCallExpression(call)) return undefined
     const callee = call.expression
@@ -73,7 +75,7 @@ function calleeName(call: Node): string | undefined {
     return undefined
 }
 
-// Whether a function is a body that tracks, and which kind.
+/** Which kind of tracked body a function is, or `undefined` where it is none. */
 function trackedKind(fn: Node): Body['kind'] | undefined {
     if (!isArrowFunction(fn) && !isFunctionExpression(fn)) return undefined
     const { child, parent } = holderOf(fn)
@@ -86,7 +88,7 @@ function trackedKind(fn: Node): Body['kind'] | undefined {
     return undefined
 }
 
-// Whether a function a tracked body creates runs before the body returns.
+/** Whether a function a tracked body creates runs before the body returns. */
 function runsSynchronously(fn: Node): boolean {
     const { child, parent } = holderOf(fn)
     // 14.18 — A COMPONENT'S `bind:` PAIR (32.6) is not kept for later: the child calls `get` inside a body
@@ -105,7 +107,7 @@ function runsSynchronously(fn: Node): boolean {
     return name !== undefined && SYNCHRONOUS.has(name)
 }
 
-// Whether `child` is the condition of `parent`, which decides what else runs.
+/** Whether `child` is the condition of `parent`, which decides what else runs. */
 function isCondition(child: Node, parent: Node): boolean {
     if (
         isIfStatement(parent) ||
@@ -127,9 +129,13 @@ function isCondition(child: Node, parent: Node): boolean {
     return false
 }
 
-// The template's positions start at `templateStart`; a statement there wrapped in parentheses is a
-// slot, a subject or a key, and one that is a call is a listener or a prop handed to a component.
-// An `{#if}`'s subject is the parenthesised condition of the `if` it is projected as.
+/**
+ * The template position `child` is, as held by `parent`, or `undefined` where it is none.
+ *
+ * The template's positions start at `templateStart`; a statement there wrapped in parentheses is a
+ * slot, a subject or a key, and one that is a call is a listener or a prop handed to a component.
+ * An `{#if}`'s subject is the parenthesised condition of the `if` it is projected as.
+ */
 function templateBody(
     child: Node,
     parent: Node,
@@ -156,6 +162,7 @@ function templateBody(
 // Every `await` a body runs itself, a nested function's aside. Asked once per body.
 const AWAITS = new WeakMap<Node, number[]>()
 
+/** Where each `await` a body runs itself starts, memoized in `AWAITS`. */
 function awaitsIn(body: Node): number[] {
     let found = AWAITS.get(body)
     if (found !== undefined) return found
@@ -176,7 +183,11 @@ function awaitsIn(body: Node): number[] {
     return found
 }
 
-// `reads` is every reactive read in the file: where it starts, and the name it reads.
+/**
+ * Why a read in a tracked body may not track: the 14.14, 14.15 and 14.16 warnings for one read.
+ *
+ * `reads` is every reactive read in the file: where it starts, and the name it reads.
+ */
 export function trackingWarnings(
     read: Node,
     name: string,
@@ -249,9 +260,13 @@ export function trackingWarnings(
     return warnings
 }
 
-// Whether a read of ANOTHER value stands in what the condition decides — the rest of the statement
-// or expression it conditions — which is the only case where the body's sources can change. The
-// condition's own value read again in a branch is read on every run either way.
+/**
+ * Whether a read of ANOTHER value stands in what the condition decides.
+ *
+ * What it decides is the rest of the statement or expression it conditions — which is the only
+ * case where the body's sources can change. The condition's own value read again in a branch is
+ * read on every run either way.
+ */
 function decidesARead(
     condition: Node,
     within: Node,

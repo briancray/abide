@@ -5,8 +5,7 @@
     color: rgb(163, 58, 58);
 }
 
-/* The scope token is not required on this compound, so the rule
-   reaches markup this component did not render. */
+/* No scope token on this compound, so it reaches markup rendered elsewhere. */
 :global(.invoice-legend) {
     color: rgb(93, 108, 102);
 }

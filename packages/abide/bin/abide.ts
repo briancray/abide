@@ -1,15 +1,15 @@
 #!/usr/bin/env bun
-// The `abide` CLI. Commands are addresses, not names, so they live in one dispatch
-// rather than a file each until one of them grows a reason to move.
+// The `abide` CLI: `commands.ts`'s list over the app on disk, and the commands that need the source
+// and the compiler, which a compiled app's executable does not hold.
 
 import { existsSync, realpathSync } from 'node:fs' // bun exposes no sync existence check or realpath of its own
 import { rm } from 'node:fs/promises' // bun exposes no recursive directory removal of its own
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
-import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 import { brotliCompress, constants } from 'node:zlib' // bun has gzip and zstd of its own, and no brotli
 
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
+import { compiledEntry } from '#compiler/compiledEntry.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { scaffold } from '#compiler/scaffold.ts'
 import { serveLanguage } from '#compiler/serveLanguage.ts'
@@ -20,85 +20,67 @@ import {
     MANIFEST,
     PUBLIC_DIRECTORY,
 } from '#server/CLIENT_BUILD.ts'
-import { chunksByModule, NO_MANIFEST } from '#server/chunksByModule.ts'
 import { clientBuildOptions } from '#server/clientBuildOptions.ts'
-import { appRoot, buildDirectory } from '#server/createApp.ts'
+import { type Given, type Host, runCommands } from '#server/commands.ts'
+import { packageUnder } from '#server/config.ts'
+import {
+    appRoot,
+    buildDirectory,
+    createApp,
+    hooksModuleUnder,
+    originUnder,
+} from '#server/createApp.ts'
 import { fenceServer } from '#server/fenceServer.ts'
+import { manifestOf, NO_MANIFEST } from '#server/manifestOf.ts'
 import { namesUnder } from '#server/namesUnder.ts'
 import { refuseAddressCollision } from '#server/refuseAddressCollision.ts'
+import { methodOnDisk } from '#server/remote.ts'
+import { shellUnder } from '#server/render.ts'
 import {
-    appUrl,
-    callHandler,
-    remoteHeaders,
-    remoteUrl,
-} from '#server/remote.ts'
-import { serveBuild } from '#server/serveBuild.ts'
+    handlersIn,
+    loadBuild,
+    pathsUnder,
+    serveApp,
+} from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
-import {
-    LOGS_ADDRESS,
-    MCP_ADDRESS,
-    OPENAPI_ADDRESS,
-} from '#shared/ADDRESSES.ts'
 
-// What `main` hands a command: the words after the flags, the command's own first, and the flags.
-type Given = ReturnType<typeof parsed>
-
-// Where the app a command builds or serves is, and where its build goes — both absolute.
+/** Where the app a command builds or serves is, and where its build goes — both absolute. */
 type AppDirectories = { root: string; out: string }
 
-// 38.13 — THE COMMAND LIST, and the help and the dispatch both read off it: a command that exists
-// is a command the help names and the dispatch reaches, and there is no second place for one to go
-// missing.
-const COMMANDS: [
-    usage: string,
-    meaning: string,
-    run: (given: Given) => Promise<number | undefined>,
-][] = [
-    ['scaffold <name>', 'write a starter project', scaffoldCommand],
-    ['run <file> [args…]', 'run a script under the abide runtime', run],
-    ['dev', 'serve with the compiler in the loop', inApp(dev)],
-    ['build', 'compile every .abide under the app into .abide/', inApp(build)],
-    ['start', 'serve a built app', inApp(start)],
-    ['connect [url]', 'an interactive shell against a running app', connect],
-    ['call <address> [args]', 'one call to one handler', call],
-    ['openapi', 'the OpenAPI document, written rather than served', openapi],
-    ['mcp', "the app's MCP server over stdio", mcp],
-    [
-        'logs',
-        'a live subscription to log.records',
-        ({ values }) => logs(values.url),
-    ],
-    [
-        'check [dir…]',
-        'type-check the templates and the TypeScript, on the line you wrote',
-        inApp(check),
-    ],
-    ['compile', 'not built yet', notBuilt],
-    ['bundle', 'not built yet', notBuilt],
-    ['lsp', 'the .abide language server, over stdio', lsp],
-]
-
-async function notBuilt({ positionals }: Given): Promise<number> {
-    console.error(`abide ${positionals[0]}: not built yet.`)
-    return 1
+/**
+ * `abide`'s host: the app on disk, found by `--root` (38.26), and every command that needs the
+ * source and the compiler.
+ */
+const DISK: Host = {
+    name: 'abide',
+    methodOf: methodOnDisk,
+    appPackage: () => packageUnder(appRoot(undefined) ?? process.cwd()),
+    boot: createApp,
+    serve: inApp(({ root, out }, { values: { port } }) =>
+        serveApp(
+            originUnder(root),
+            () => loadBuild({ root, out }),
+            port === undefined ? undefined : Number(port),
+        ),
+    ),
+    source: {
+        scaffold: scaffoldCommand,
+        dev: inApp(dev),
+        build: inApp(build),
+        check: inApp(check),
+        compile: inApp(compile),
+        lsp,
+    },
 }
 
-function usage(): string {
-    const width = Math.max(...COMMANDS.map(([name]) => name.length))
-    let text = 'abide <command>\n\n'
-    for (const [name, meaning] of COMMANDS)
-        text += `  ${name.padEnd(width)}  ${meaning}\n`
-    text += `
-  --root   the app's source directory, the one ui/ sits under —
-           src/ where you stand, or where you stand, whichever has one
-  --out    where the build goes, beside the app by default; the file openapi writes
-  --port   the listen port for dev and start
-  --url    the running app connect, call, logs, openapi and mcp talk to
-`
-    return text
+/** `abide build`: compiles the app, bundles its client and copies its public files into `out`. */
+async function build(directories: AppDirectories): Promise<number> {
+    await writeBuild(directories)
+    return 0
 }
 
-async function build({ root, out }: AppDirectories): Promise<number> {
+/** `build`'s work; answers whether there was anything under `root` to build. */
+async function writeBuild({ root, out }: AppDirectories): Promise<boolean> {
     process.env.NODE_ENV ??= 'production'
     // `--out` is a real flag rather than a constant because two test files each building into
     // one `.abide/` is the contention CLAUDE.md's "checks" section already records once.
@@ -107,10 +89,10 @@ async function build({ root, out }: AppDirectories): Promise<number> {
         console.warn(formatDiagnosis(warning, process.cwd()))
     if (app.modules.size === 0) {
         console.log(`abide build: no .abide sources or handlers under ${root}`)
-        return 0
+        return false
     }
     // WRITTEN TOGETHER. 175 modules for the docs app, each independent of the others, and one
-    // `await` a time made the emit a queue — the same reason `publicFilesUnder` and the dev
+    // `await` a time made the emit a queue — the same reason `publicFilesAt` and the dev
     // worker's own reads are one `Promise.all` each.
     const writes: Promise<number>[] = []
     for (const [name, text] of app.modules)
@@ -147,12 +129,122 @@ async function build({ root, out }: AppDirectories): Promise<number> {
     console.log(
         `abide build: ${app.sources} source(s), ${published} public file(s) -> ${out}`,
     )
+    return true
+}
+
+/**
+ * A plugin that loads every stylesheet a server module imports as nothing.
+ *
+ * A STYLESHEET A SERVER MODULE IMPORTS IS THE CLIENT BUNDLE'S. The page's markup runs on both sides
+ * and imports its stylesheet for the side that paints; the server's half has nothing to apply it to,
+ * and bundling it anyway resolves every `url()` in it against a filesystem the executable will not
+ * have.
+ */
+const SERVER_STYLESHEETS: Bun.BunPlugin = {
+    name: 'abide:server-stylesheets',
+    setup(build) {
+        build.onLoad({ filter: /\.css$/ }, () => ({
+            contents: '',
+            loader: 'js',
+        }))
+    },
+}
+
+/**
+ * `abide compile`: builds the app, then one executable per target platform.
+ *
+ * 38.11 — THE BUILD, AND THEN ONE EXECUTABLE PER TARGET with all of it inside (`compiledEntry`).
+ * `--out` is the executable rather than the build, which goes where `abide build` puts it; with no
+ * `--out` the executable is the app's own name, in the directory the command was run from (38.47).
+ */
+async function compile(
+    { root }: AppDirectories,
+    { values }: Given,
+): Promise<number> {
+    // 38.49.
+    if (values.target !== undefined && values.platforms !== undefined) {
+        console.error(
+            'abide compile: --target is one platform and --platforms is several; give one of them.',
+        )
+        return 1
+    }
+    const out = buildDirectory(root)
+    if (!(await writeBuild({ root, out }))) {
+        console.error(`abide compile: nothing under ${root} to compile.`)
+        return 1
+    }
+    const identity = packageUnder(root)
+    const handlerModules = new Map<string, string>()
+    for (const { source } of await handlersIn(out))
+        handlerModules.set(source, `${root}/${source}`)
+    const entry = `${out}/compiled.ts`
+    await Bun.write(
+        entry,
+        compiledEntry({
+            out,
+            hooks: hooksModuleUnder(root),
+            package: identity,
+            shell: await shellUnder(root),
+            manifest: await Bun.file(`${out}/${MANIFEST}`).json(),
+            handlerModules,
+            client: pathsUnder(`${out}/${CLIENT_DIRECTORY}`),
+            published: pathsUnder(`${out}/${PUBLIC_DIRECTORY}`),
+        }),
+    )
+
+    // 38.47 — A SCOPED NAME IS NAMED BY ITS LAST PART: `@acme/ledger` is `ledger`, as `bunx`
+    // calls it.
+    const named = resolve(
+        values.out ?? (identity.name ?? 'app').replace(/^@[^/]+\//, ''),
+    )
+    const platforms =
+        values.platforms?.split(',') ??
+        (values.target === undefined ? [undefined] : [values.target])
+    for (const platform of platforms) {
+        // 38.48.
+        const outfile =
+            values.platforms === undefined ? named : `${named}-${platform}`
+        const compiled = await Bun.build({
+            entrypoints: [entry],
+            target: 'bun',
+            plugins: [SERVER_STYLESHEETS],
+            // UNMINIFIED, AND MAPPED: the executable is a server, and an error it logs is read by
+            // whoever operates it — a minified line prints as the whole page module it sits in. The
+            // map is embedded in the executable, which reads it from there.
+            sourcemap: 'inline',
+            compile: {
+                ...(platform === undefined
+                    ? {}
+                    : { target: `bun-${platform}` as Bun.Build.CompileTarget }),
+                outfile,
+                // 38.46 — THE EXECUTABLE IS THE BUILD'S, not the machine's: a `bunfig.toml`
+                // wherever it is started must not change what it runs. `.env` is still read, as
+                // `abide start` reads it — configuration is the environment's (27.8).
+                autoloadBunfig: false,
+            },
+        })
+        if (!compiled.success)
+            throw new AggregateError(
+                compiled.logs,
+                `abide compile: ${platform ?? 'this platform'} failed`,
+            )
+        // ONE FILE: bun writes the embedded map out beside the executable as well, whatever the
+        // `sourcemap` mode, and nothing reads that copy.
+        for (const output of compiled.outputs)
+            if (output.kind === 'sourcemap')
+                await rm(output.path, { force: true })
+        console.log(`abide compile: ${outfile}`)
+    }
     return 0
 }
 
-// 38.19 — `src/ui/public`, copied into the built output. Copied rather than left where it is, so
-// `abide start` answers out of what the build produced and an app moving a file after a build
-// cannot change what is served.
+/**
+ * Copies the app's public files into the build output, and returns how many.
+ *
+ * 38.19 — `src/ui/public`, copied into the built output. Copied rather than left where it is, so
+ * `abide start` answers out of what the build produced and an app moving a file after a build
+ * cannot change what is served.
+ */
 async function copyPublic(
     root: string,
     out: string,
@@ -173,15 +265,19 @@ async function copyPublic(
     return names.length
 }
 
-// THE BUNDLE. Which module boots the client is the compiler's knowledge — it writes the entry
-// into the output tree beside the route table — and this is where that entry becomes a browser
-// bundle.
-//
-// `--splitting`, so a destination's markup and bindings stay in the chunk its own route loads
-// (30.11) rather than landing in the entry every page pays for. 38.5 IS THIS FUNCTION: hashed and
-// minified by the bundler, the manifest off its metafile (the entry's name, and the chunks each
-// route module needs for 38.29), and the precompressed copies (`precompressOne`). What the manifest
-// does NOT carry yet is 38.19's list of public files.
+/**
+ * Bundles the client into `out`, with its manifest and precompressed copies.
+ *
+ * THE BUNDLE. Which module boots the client is the compiler's knowledge — it writes the entry
+ * into the output tree beside the route table — and this is where that entry becomes a browser
+ * bundle.
+ *
+ * `--splitting`, so a destination's markup and bindings stay in the chunk its own route loads
+ * (30.11) rather than landing in the entry every page pays for. 38.5 IS THIS FUNCTION: hashed and
+ * minified by the bundler, the manifest off its metafile (the entry's name, and the chunks each
+ * route module needs for 38.29), and the precompressed copies (`precompressOne`). What the manifest
+ * does NOT carry yet is 38.19's list of public files.
+ */
 async function bundleClient(
     out: string,
     plugins: Bun.BunPlugin[],
@@ -232,21 +328,22 @@ async function bundleClient(
     await Bun.write(
         `${out}/${MANIFEST}`,
         JSON.stringify(
-            chunksByModule(
-                built.metafile as Bun.BuildMetafile,
-                realpathSync(out),
-            ),
+            manifestOf(built.metafile as Bun.BuildMetafile, realpathSync(out)),
         ),
     )
     await Promise.all(built.outputs.map(precompressOne))
 }
 
-// 38.5 — EVERY FILE THE BUNDLE WROTE, BESIDE ITSELF IN EACH OF `ENCODING_SUFFIX`'s ENCODINGS, at
-// the highest level each has. The price is paid here once, where a server compressing per request
-// would pay it on every response or settle for a worse level to keep the response fast.
-//
-// ALL AT ONCE. The async brotli runs off the main thread, so the files compress side by side
-// rather than one after another — brotli at 11 is most of what this step costs.
+/**
+ * Writes brotli and gzip copies of one bundle output beside it.
+ *
+ * 38.5 — EVERY FILE THE BUNDLE WROTE, BESIDE ITSELF IN EACH OF `ENCODING_SUFFIX`'s ENCODINGS, at
+ * the highest level each has. The price is paid here once, where a server compressing per request
+ * would pay it on every response or settle for a worse level to keep the response fast.
+ *
+ * ALL AT ONCE. The async brotli runs off the main thread, so the files compress side by side
+ * rather than one after another — brotli at 11 is most of what this step costs.
+ */
 async function precompressOne(output: Bun.BuildArtifact): Promise<void> {
     // `arrayBuffer` AND NOT `bytes`: the artifact's type declares both and it answers only the one.
     const bytes = new Uint8Array(await output.arrayBuffer())
@@ -273,50 +370,17 @@ async function precompressOne(output: Bun.BuildArtifact): Promise<void> {
     ])
 }
 
-async function main(argv: string[]): Promise<number | undefined> {
-    // 38.2 — EVERYTHING AFTER THE FILE IS THE SCRIPT'S, flags included, so `run` is taken before the
-    // parser sees an argument it does not know.
-    const given: Given =
-        argv[0] === 'run' ? { positionals: argv, values: {} } : parsed(argv)
-    const command = given.positionals[0]
-    if (command === undefined || command === 'help' || given.values.help) {
-        console.log(usage())
-        return 0
-    }
-    for (const [name, , body] of COMMANDS)
-        if (name.split(' ')[0] === command) return await body(given)
-    console.error(`abide: unknown command '${command}'\n\n${usage()}`)
-    return 1
-}
-
-function parsed(argv: string[]) {
-    return parseArgs({
-        args: argv,
-        options: {
-            // NO DEFAULT HERE EITHER. `cd ledger && abide dev` is what the docs tell an author to
-            // type and `--root ./src` is what an app's own scripts write, so which directory is
-            // meant is a question `appRoot` answers rather than one the parser assumes.
-            root: { type: 'string' },
-            out: { type: 'string' },
-            // NO DEFAULT, which is not an omission: `Bun.serve` given no port already reads
-            // `PORT` and then falls back to 3000, and a default written here would take that
-            // away from every host that sets it.
-            port: { type: 'string' },
-            url: { type: 'string' },
-            method: { type: 'string' },
-            help: { type: 'boolean', short: 'h' },
-        },
-        allowPositionals: true,
-    })
-}
-
-// The app a command builds or serves, found once and handed over ABSOLUTE. Every consumer below
-// needs the resolved form for a different reason: the checker panics on a relative tsconfig,
-// `import()` of the emitted route table has no base to resolve against, and the walk slices a
-// source path against the root's length.
-function inApp(
-    body: (app: AppDirectories, given: Given) => Promise<number | undefined>,
-): (given: Given) => Promise<number | undefined> {
+/**
+ * Wraps a command body with the app's absolute root and build directory, or fails with no app.
+ *
+ * The app a command builds or serves, found once and handed over ABSOLUTE. Every consumer below
+ * needs the resolved form for a different reason: the checker panics on a relative tsconfig,
+ * `import()` of the emitted route table has no base to resolve against, and the walk slices a
+ * source path against the root's length.
+ */
+function inApp<Answer>(
+    body: (app: AppDirectories, given: Given) => Promise<Answer>,
+): (given: Given) => Promise<Answer | number> {
     return async (given) => {
         const { positionals, values } = given
         const root = appRoot(values.root)
@@ -337,7 +401,11 @@ function inApp(
     }
 }
 
-// 38.1.
+/**
+ * `abide scaffold <name>`: writes a new project.
+ *
+ * 38.1.
+ */
 async function scaffoldCommand({
     positionals: [, name],
 }: Given): Promise<number> {
@@ -357,170 +425,12 @@ async function scaffoldCommand({
     return 0
 }
 
-// 38.2 — A SCRIPT UNDER THE ABIDE RUNTIME: the request scope installed, the configuration resolved
-// against the app it stands in, and the script run in a scope of its own — so it imports `#server`
-// and `#shared` and reads `config` without a build.
-//
-// HANDS BACK NO CODE ONCE THE SCRIPT IS RUNNING, as `start` does: the script's top level settling is
-// not the script ending. A timer, a server or a socket it left open keeps the process alive, and a
-// `process.exitCode` it set is what the process exits with.
-async function run({
-    positionals: [, file, ...rest],
-}: Given): Promise<number | undefined> {
-    if (file === undefined) {
-        console.error('abide run: name the file — abide run <file> [args…]')
-        return 1
-    }
-    const path = resolve(file)
-    process.argv = [process.argv[0] as string, path, ...rest]
-    const { inScope } = await import('#server/requestScope.ts')
-    const { CONFIG_ROOT } = await import('#server/config.ts')
-    CONFIG_ROOT.current = appRoot(undefined) ?? process.cwd()
-    await inScope(undefined, () => import(Bun.pathToFileURL(path).href))
-    return undefined
-}
-
-// 38.8.
-async function call({
-    positionals: [, address, args],
-    values: { url, method },
-}: Given): Promise<number> {
-    if (address === undefined) {
-        console.error(
-            'abide call: name the handler — abide call invoices/getInvoice \'{"id": "4310"}\'',
-        )
-        return 1
-    }
-    const answered = await callHandler(appUrl(url), address, args, method)
-    if (answered.text !== '')
-        (answered.code === 0 ? console.log : console.error)(answered.text)
-    return answered.code
-}
-
-// 38.7 — THE SHELL AGAINST A RUNNING APP, booting nothing: a line is a command, and `call` is the
-// same spelling it is in argv (38.8).
-async function connect({ positionals, values }: Given): Promise<number> {
-    const url = appUrl(positionals[1] ?? values.url)
-    console.log(`abide connect: ${url}\n  call <address> [args]   logs   exit`)
-    process.stdout.write('> ')
-    for await (const line of console) {
-        const [word, address, ...rest] = line.trim().split(/\s+/)
-        if (word === 'exit' || word === 'quit') break
-        if (word === 'call' && address !== undefined) {
-            const answered = await callHandler(
-                url,
-                address,
-                rest.join(' ') || undefined,
-                undefined,
-            )
-            console.log(
-                answered.text === ''
-                    ? `(${answered.code === 0 ? 'no content' : `exit ${answered.code}`})`
-                    : answered.text,
-            )
-        } else if (word === 'logs') await logs(url)
-        else if (word !== undefined && word !== '')
-            console.log(`unknown: ${word}`)
-        process.stdout.write('> ')
-    }
-    return 0
-}
-
-// 38.10 — every line `log.records` publishes, as it is written.
-async function logs(url: string | undefined): Promise<number> {
-    const answer = await fetch(`${appUrl(url)}${LOGS_ADDRESS}`, {
-        headers: remoteHeaders(),
-    })
-    if (!answer.ok || answer.body === null) {
-        console.error(
-            `abide logs: the app answered ${answer.status}. ABIDE_LOGS opens the subscription.`,
-        )
-        return 1
-    }
-    let buffered = ''
-    const decoder = new TextDecoder()
-    for await (const chunk of answer.body) {
-        buffered += decoder.decode(chunk, { stream: true })
-        let at = buffered.indexOf('\n\n')
-        while (at !== -1) {
-            const event = buffered.slice(0, at)
-            buffered = buffered.slice(at + 2)
-            if (event.startsWith('data: ')) {
-                const record = JSON.parse(event.slice(6)) as Record<
-                    string,
-                    string
-                >
-                console.log(
-                    `${record.time} ${record.level} ${record.namespace} ${record.message}`,
-                )
-            }
-            at = buffered.indexOf('\n\n')
-        }
-    }
-    return 0
-}
-
-// 38.9 — A GENERATED SURFACE, asked of the app `--url` names, or of the local build booted in this
-// process with that surface opened — which derives from the same route table the served one does.
-async function surfaceAt(
-    url: string | undefined,
-    surface: string,
-    address: string,
-): Promise<
-    (
-        init?: RequestInit & { headers?: Record<string, string> },
-    ) => Promise<Response>
-> {
-    const remote = remoteUrl(url)
-    if (remote !== undefined)
-        return (init) =>
-            fetch(`${appUrl(remote)}${address}`, {
-                ...init,
-                headers: { ...init?.headers, ...remoteHeaders() },
-            })
-    process.env[surface] = '1'
-    const { createApp } = await import('#server/createApp.ts')
-    const app = await createApp()
-    return (init) =>
-        app.fetch(new Request(`http://abide.local${address}`, init))
-}
-
-// 38.9 — the document, from `--url` where one is given and from the local build where not.
-async function openapi({ values: { url, out } }: Given): Promise<number> {
-    const answer = await (
-        await surfaceAt(url, 'ABIDE_OPENAPI', OPENAPI_ADDRESS)
-    )()
-    if (!answer.ok) {
-        console.error(
-            `abide openapi: the app answered ${answer.status}. ABIDE_OPENAPI opens the document.`,
-        )
-        return 1
-    }
-    const text = JSON.stringify(await answer.json(), null, 4)
-    if (out === undefined) console.log(text)
-    else await Bun.write(resolve(out), `${text}\n`)
-    return 0
-}
-
-// 38.9, 38.14 — THE MCP SERVER OVER STDIO, a bridge a model client spawns and kills: each line in is a
-// JSON-RPC message for `/__abide/mcp`, and each answer is a line out.
-async function mcp({ values: { url } }: Given): Promise<number> {
-    const ask = await surfaceAt(url, 'ABIDE_MCP', MCP_ADDRESS)
-    for await (const line of console) {
-        if (line.trim() === '') continue
-        const answer = await ask({
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: line,
-        })
-        const text = await answer.text()
-        if (text !== '') process.stdout.write(`${text}\n`)
-    }
-    return 0
-}
-
-// 38.3 — every finding under the app, or under the directories named; a failure where any is an
-// error, and a success where the findings are warnings alone.
+/**
+ * `abide check`: prints every finding, and fails on any error.
+ *
+ * 38.3 — every finding under the app, or under the directories named; a failure where any is an
+ * error, and a success where the findings are warnings alone.
+ */
 async function check(
     { root }: AppDirectories,
     { positionals }: Given,
@@ -556,9 +466,14 @@ async function check(
     return errors > 0 ? 1 : 0
 }
 
-// 38.12 — the language server, for as long as the editor holds stdin open. Nothing is printed: stdout
-// is the protocol.
-// Not `inApp`: an editor starts it wherever its workspace is, and each document finds its own app.
+/**
+ * `abide lsp`: the language server over stdio.
+ *
+ * 38.12 — the language server, for as long as the editor holds stdin open. Nothing is printed: stdout
+ * is the protocol.
+ *
+ * Not `inApp`: an editor starts it wherever its workspace is, and each document finds its own app.
+ */
 async function lsp({ values }: Given): Promise<number> {
     const root = values.root === undefined ? undefined : resolve(values.root)
     await serveLanguage(root, Bun.stdin.stream(), (bytes) => {
@@ -567,10 +482,15 @@ async function lsp({ values }: Given): Promise<number> {
     return 0
 }
 
-// 38.4 — the project, watched, with the app kept up. Hands back no exit code for `start`'s
-// reason: the process IS the server.
-// 36.3 — `dev`, `build` and `start` each name the environment where the process was started with
-// none, and leave one it was started with exactly as given.
+/**
+ * `abide dev`: serves the app and rebuilds it as it changes.
+ *
+ * 38.4 — the project, watched, with the app kept up. Hands back no exit code for `start`'s
+ * reason: the process IS the server.
+ *
+ * 36.3 — `dev`, `build` and `start` each name the environment where the process was started with
+ * none, and leave one it was started with exactly as given.
+ */
 async function dev(
     { root }: AppDirectories,
     { values: { port } }: Given,
@@ -584,23 +504,5 @@ async function dev(
     return undefined
 }
 
-// 38.6 — what `abide build` produced, served. Hands back no exit code and that is the signal:
-// the process IS the server now, and the only ways out are a signal and a throw.
-async function start(
-    { root, out }: AppDirectories,
-    { values: { port } }: Given,
-): Promise<undefined> {
-    process.env.NODE_ENV ??= 'production'
-    const server = await serveBuild({
-        root,
-        out,
-        port: port === undefined ? undefined : Number(port),
-    })
-    console.log(`abide start: ${server.url.href}`)
-    return undefined
-}
-
-const code = await main(Bun.argv.slice(2))
-// A COMMAND THAT ANSWERED WITH NO CODE HAS TAKEN THE PROCESS OVER. Exiting on `0` here would
-// close the socket `abide start` just bound, in the same tick it bound it.
+const code = await runCommands(DISK, Bun.argv.slice(2))
 if (code !== undefined) process.exit(code)

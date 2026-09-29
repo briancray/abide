@@ -424,7 +424,7 @@ test('a call raises the idle timeout only as far as its timeout says — 16.61, 
     const server = new URL('../src/server/', import.meta.url).pathname
     await Bun.write(
         `${app}/timeouts.ts`,
-        `import { bootApp } from '${server}createApp.ts'
+        `import { bootApp, originUnder } from '${server}createApp.ts'
 import { LISTENING } from '${server}requestScope.ts'
 import { loadBuild } from '${server}serveBuild.ts'
 
@@ -433,7 +433,7 @@ const answered: Record<string, number> = {}
 let calling = ''
 LISTENING.server = { timeout: (_request: Request, seconds: number) => raised[calling]?.push(seconds) } as never
 // \`createApp\`'s boot, over the build this fixture made beside itself.
-const app = await bootApp('${app}', () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
+const app = await bootApp(originUnder('${app}'), () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
 for (const name of ['untimed', 'slow', 'endless']) {
     calling = name
     raised[name] = []
@@ -460,14 +460,14 @@ test('a call under a mount raises the idle timeout on the request the listener r
     const server = new URL('../src/server/', import.meta.url).pathname
     await Bun.write(
         `${app}/mountedTimeout.ts`,
-        `import { bootApp } from '${server}createApp.ts'
+        `import { bootApp, originUnder } from '${server}createApp.ts'
 import { LISTENING } from '${server}requestScope.ts'
 import { loadBuild } from '${server}serveBuild.ts'
 
 const received = new Request('http://app.test/app${RPC}/slow')
 const raised: [boolean, number][] = []
 LISTENING.server = { timeout: (request: Request, seconds: number) => raised.push([request === received, seconds]) } as never
-const app = await bootApp('${app}', () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
+const app = await bootApp(originUnder('${app}'), () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
 const status = (await app.fetch(received)).status
 await app.stop()
 console.log(JSON.stringify({ raised, status }))

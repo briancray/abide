@@ -40,15 +40,14 @@ import type { Socket } from '#shared/socket.ts'
 import { answerRpc, type Mounted } from './answerRpc.ts'
 import { answerBlobTagged, answerValue, contentEtag } from './answerValue.ts'
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
-import { chunksOf, type Manifest } from './chunksByModule.ts'
 import { compressDocument } from './compressDocument.ts'
 import { answerLogs, answerMcp, openApi } from './generatedSurfaces.ts'
 import { reportHealth } from './health.ts'
 import { failureOf } from './hooks.ts'
 import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
-import { namesUnder } from './namesUnder.ts'
+import { chunksOf, type Manifest } from './manifestOf.ts'
 import { ENCODINGS, negotiateEncoding } from './negotiateEncoding.ts'
-import { callerFor, resolvePrincipal } from './principal.ts'
+import { callerOrMint, resolvePrincipal } from './principal.ts'
 import { type Component, composePage, headAnchor, render } from './render.ts'
 import {
     adoptRequest,
@@ -67,7 +66,7 @@ type ServerRoute = {
     // 35.1 — the layouts this page renders inside, outermost first, as the compiler found them.
     layouts: (() => Promise<{ default: Component }>)[]
     // 38.29 — the modules a browser loads at this address, the page's then its layouts', as keys
-    // into the manifest `chunksByModule` reads.
+    // into the manifest `manifestOf` reads.
     clientModules: string[]
 }
 
@@ -83,41 +82,65 @@ type Ranked = RankedError & {
     document: string
 }
 
-// A public file, read once at boot: where the bytes are, the etag off them, and its type.
+/** A public file, read once at boot: where the bytes are, the etag off them, and its type. */
 export type PublicFile = { path: string; etag: string; type: string }
 
+/** Everything `answerRequest` answers from: the ranked routes, the lanes and the handlers. */
 export type AppSources = {
-    // 30.9's order, which `appSources` is the only way to get.
+    /** The routes in 30.9's order, which `appSources` is the only way to get. */
     routes: Ranked[]
-    // Everything under `/__abide` — the bundle both commands answer there (38.21), and the
-    // reload client `abide dev` adds beside it (38.18). One lane rather than an asset table plus
-    // an exception, so what a command answers there is a fact about the command.
+    /**
+     * Everything under `/__abide`: the bundle, and `abide dev`'s reload client beside it.
+     *
+     * The bundle is 38.21's and the reload client 38.18's. One lane rather than an asset table
+     * plus an exception, so what a command answers there is a fact about the command.
+     */
     framework: (pathname: string, request: Request) => Response | undefined
-    // 38.19 and 38.20 — a file's address below `public`, to the file itself. From the built
-    // output for `abide start` and from the source tree for `abide dev`.
+    /**
+     * A file's address below `public`, to the file itself.
+     *
+     * 38.19 and 38.20 — from the built output for `abide start` and from the source tree for
+     * `abide dev`.
+     */
     published: Map<string, PublicFile>
-    // 35.2 — the error pages, deepest directory first, and the document they are painted into.
+    /** The error pages, deepest directory first. 35.2. */
     errors: RankedError[]
+    /** The document the error pages are painted into. */
     errorDocument: string
-    // 16.2 — every handler's address, to what answers it (`mountHandlers`).
+    /** Every handler's address, to what answers it (`mountHandlers`). 16.2. */
     handlers: Map<string, Mounted>
-    // 18.2 — every socket the app mounts, by address, carried over the one mux `App.listen` binds.
+    /**
+     * Every socket the app mounts, by address, carried over the one mux `App.listen` binds.
+     *
+     * 18.2.
+     */
     sockets: Map<string, Socket<unknown, unknown>>
-    // 37.2 — the app's own route, asked where nothing of abide's answers. `bootApp` fills it
-    // from `src/server/app.ts`'s `default`.
+    /**
+     * The app's own route, asked where nothing of abide's answers.
+     *
+     * 37.2 — `bootApp` fills it from `src/server/app.ts`'s `default`.
+     */
     own: ((request: Request) => Promise<Response | undefined>) | undefined
-    // 20.10 — the `App.fetch` an MCP call is answered through: this app's, which `RPC_SERVER.raw`
-    // is not — that slot holds whichever `App` the process booted last.
+    /**
+     * The `App.fetch` an MCP call is answered through.
+     *
+     * 20.10 — this app's, which `RPC_SERVER.raw` is not — that slot holds whichever `App` the
+     * process booted last.
+     */
     fetch: (request: Request) => Promise<Response>
-    // 38.4 — WHAT A PAGE THAT THREW, UNREFUSED, IS ANSWERED WITH in place of 16.43's bare 500: `abide
-    // dev`'s document naming what broke, for the author looking at the browser. `abide start` has
-    // none, and says nothing about itself to the caller.
+    /**
+     * What a page that threw, unrefused, is answered with in place of 16.43's bare 500.
+     *
+     * 38.4 — `abide dev`'s document naming what broke, for the author looking at the browser.
+     * `abide start` has none, and says nothing about itself to the caller.
+     */
     explained: ((thrown: unknown) => Response) | undefined
 }
 
-// What a command reads or compiles, before `bootApp` adds what the `App` itself supplies.
+/** What a command reads or compiles, before `bootApp` adds what the `App` itself supplies. */
 export type LoadedSources = Omit<AppSources, 'own' | 'fetch'>
 
+/** The `Response` to one request: a handler, a surface of abide's own, a file, or a page. */
 export async function answerRequest(
     app: AppSources,
     request: Request,
@@ -225,7 +248,7 @@ export async function answerRequest(
         return new Response(null, { status: writtenStatus(), headers })
     // 26.5 — the caller the seed buffer is keyed by, minted where the browser carries none: the same
     // one `principal.caller` reads for the rest of the request.
-    const caller = callerFor()
+    const caller = callerOrMint()
     // 23.1 — WHERE THIS PAGE IS, for its setup to read, in the request's own instances (11.32).
     arrive(request.url, found.route.pattern, found.params)
     beginRender({ seed: seedFor(caller), calls: [] })
@@ -259,19 +282,25 @@ export async function answerRequest(
     return new Response(answered, { status, headers })
 }
 
-// THE IMPORTS ARE THE COMPONENT'S, so a page nobody asks for is never loaded, and the first request
-// for one after boot pays its import before the document goes out (41.1).
-//
-// THE PAGE AND ITS CHAIN, IN ONE ROUND OF WAITING. A nested `Promise.all` rather than one
-// flat array with the page spliced onto the head: the two settle together either way, and the
-// flat form's element type is the union of the two, so reading a head and a tail back off it
-// took an `as` per read. This is the same concurrency with the types carrying it.
-//
-// STARTED WHEN `render` ASKS, not here. Started here, a reader who hung up before the stream
-// was pulled left a rejection nothing would ever await.
-//
-// 35.3 — BOUND HERE, because `render` takes a component that already has its props. An error page
-// is bound the same way, with the failure where a page has its params.
+/**
+ * A page or error page bound to its props: imports it and its layouts, then composes them.
+ *
+ * THE IMPORTS ARE THE COMPONENT'S, so a page nobody asks for is never loaded, and the first
+ * request for one after boot pays its import before the document goes out (41.1).
+ *
+ * THE PAGE AND ITS CHAIN, IN ONE ROUND OF WAITING. A nested `Promise.all` rather than one
+ * flat array with the page spliced onto the head: the two settle together either way, and the
+ * flat form's element type is the union of the two, so reading a head and a tail back off it
+ * took an `as` per read. This is the same concurrency with the types carrying it.
+ *
+ * STARTED WHEN `render` ASKS, not here. The page is bound before the `HEAD` answer returns, and
+ * started here that answer would import the page for a body nobody is sent — and a failed import
+ * would reject with nothing awaiting it, where `render`'s is awaited inside the `try` that turns
+ * it into a status.
+ *
+ * 35.3 — BOUND HERE, because `render` takes a component that already has its props. An error page
+ * is bound the same way, with the failure where a page has its params.
+ */
 function boundPage(
     page: Pick<Ranked, 'load' | 'layouts'>,
     props: Record<string, () => unknown>,
@@ -331,18 +360,24 @@ const DOCUMENT_HEADERS = {
     vary: 'accept-encoding',
 }
 
-// What the compiler writes to `<out>/server.ts` — read off disk by `abide start` and out of memory
-// by `abide dev`.
+/**
+ * What the compiler writes to `<out>/server.ts`: the routes and the error pages.
+ *
+ * Read off disk by `abide start` and out of memory by `abide dev`.
+ */
 export type ServerTable = { routes: ServerRoute[]; errors: ServerError[] }
 
-// THE PARTS BOTH COMMANDS BUILD ALIKE, off the table, the shell and the bundle's manifest. What
-// differs between them is passed in: the `framework` lane, and `head` — `abide dev`'s reload client
-// (38.18), after the app's own tags.
-//
-// 30.9 — MOST SPECIFIC FIRST, ranked off the table rather than in it. The ordering IS the client
-// router's own: both seams sort through `rankBySpecificity` and resolve through `firstMatch`, so
-// "the two cannot resolve one address differently" is a grep rather than a promise. 35.2 — the
-// error pages deepest directory first, so the nearest answers.
+/**
+ * The sources both commands build alike, off the table, the shell and the bundle's manifest.
+ *
+ * What differs between them is passed in: the `framework` lane, and `head` — `abide dev`'s reload
+ * client (38.18), after the app's own tags.
+ *
+ * 30.9 — MOST SPECIFIC FIRST, ranked off the table rather than in it. The ordering IS the client
+ * router's own: both seams sort through `rankBySpecificity` and resolve through `firstMatch`, so
+ * "the two cannot resolve one address differently" is a grep rather than a promise. 35.2 — the
+ * error pages deepest directory first, so the nearest answers.
+ */
 export function appSources(
     table: ServerTable,
     shell: string,
@@ -376,26 +411,30 @@ export function appSources(
     }
 }
 
-// THE TAGS THAT LOAD THE APP — 38.23, and 38.24 for the stylesheet beside it. An app does not
-// write either: the bundle's address is the build's, and a hand-written one is a path that goes
-// stale the first time the output layout moves.
-//
-// THE STYLESHEET GOES FIRST, and ahead of the page's own head contributions for the same reason:
-// a document that parses its script before its styles paints once unstyled. It is a plain `<link>`
-// rather than anything the client does, so a page the server painted is styled with no JS at all.
-//
-// ONE STYLESHEET FOR THE APP, which is NOT 34.5's per-component dependency: the bundler collects
-// every stylesheet reachable from the entry into one file, so a page that imports none is served
-// this too. 34.3's scope token is what makes that distinction matter and it is not built.
-//
-// 38.29 — THE ROUTE'S CHUNKS ARE PRELOADED BESIDE THE ENTRY. Left to the client, the page's chunk
-// and the shared runtime it imports are only asked for once the entry has arrived and run the
-// router — a whole round trip after the document, for the largest file in the bundle. Named here,
-// they are requested while the document is still being parsed.
-//
-// EVERY NAME IS THE MANIFEST'S, the entry's included: a build hashes it (38.5). A manifest with no
-// entry is a bundle that failed under `abide dev` (38.18), and gets no tags rather than a
-// `<script>` at a 404.
+/**
+ * The head tags that load the app: its metas, stylesheet, entry script and the route's preloads.
+ *
+ * 38.23, and 38.24 for the stylesheet beside it. An app does not write either: the bundle's
+ * address is the build's, and a hand-written one is a path that goes stale the first time the
+ * output layout moves.
+ *
+ * THE STYLESHEET GOES FIRST, and ahead of the page's own head contributions for the same reason:
+ * a document that parses its script before its styles paints once unstyled. It is a plain `<link>`
+ * rather than anything the client does, so a page the server painted is styled with no JS at all.
+ *
+ * ONE STYLESHEET FOR THE APP, which is NOT 34.5's per-component dependency: the bundler collects
+ * every stylesheet reachable from the entry into one file, so a page that imports none is served
+ * this too. 34.3's scope token is what makes that distinction matter and it is not built.
+ *
+ * 38.29 — THE ROUTE'S CHUNKS ARE PRELOADED BESIDE THE ENTRY. Left to the client, the page's chunk
+ * and the shared runtime it imports are only asked for once the entry has arrived and run the
+ * router — a whole round trip after the document, for the largest file in the bundle. Named here,
+ * they are requested while the document is still being parsed.
+ *
+ * EVERY NAME IS THE MANIFEST'S, the entry's included: a build hashes it (38.5). A manifest with no
+ * entry is a bundle that failed under `abide dev` (38.18), and gets no tags rather than a
+ * `<script>` at a 404.
+ */
 export function clientTags(manifest: Manifest, modules: string[]): string {
     if (manifest.entry === undefined) return ''
     // 28.10 — `DEBUG`, through the document rather than the bundle, where the server has one.
@@ -418,55 +457,68 @@ export function clientTags(manifest: Manifest, modules: string[]): string {
     return tags
 }
 
-// The tags, at the head anchor `render` uses — so a shell with no `</head>` puts them where its
-// head content goes rather than inside the body.
+/**
+ * The shell with `tags` at the head anchor `render` uses.
+ *
+ * So a shell with no `</head>` puts them where its head content goes rather than inside the body.
+ */
 function intoHead(shell: string, tags: string): string {
     const at = headAnchor(shell)
     return shell.slice(0, at) + tags + shell.slice(at)
 }
 
-// 38.19 and 38.20's directory, as an address per file. Read at boot rather than per request, and
-// the ETAG IS READ WITH IT: 21.13 derives it from the bytes, so there is no cheaper moment than
-// the one read that is happening anyway. The bytes are hashed and dropped — `Bun.file` streams
-// the body when somebody asks, so a large file is not held in memory for the life of the process.
-//
-// `names` is the listing, for a caller that already has one.
-export async function publicFilesUnder(
-    root: string,
-    names: string[] = namesUnder(root),
+/**
+ * The public files by address, off each file's name and where its bytes are.
+ *
+ * 38.19 and 38.20's directory, as an address per file — or a compiled app's, whose bytes are
+ * inside itself. Read at boot rather than per request, and the ETAG IS READ WITH IT: 21.13
+ * derives it from the bytes, so there is no cheaper moment than the one read that is happening
+ * anyway. The bytes are hashed and dropped — `Bun.file` streams the body when somebody asks, so a
+ * large file is not held in memory for the life of the process.
+ */
+export async function publicFilesAt(
+    paths: Map<string, string>,
 ): Promise<Map<string, PublicFile>> {
     const files = new Map<string, PublicFile>()
     // THE READS OVERLAP. They are independent, and `abide dev` runs this again on every
     // reload rather than once at boot — so it is reload latency an author waits on, not just
     // a boot cost. Each is hashed as it lands, so no more than the reads in flight are held.
+    const names = [...paths.keys()]
     const etags = await Promise.all(
         names.map(async (name) =>
-            contentEtag(await Bun.file(`${root}/${name}`).bytes()),
+            contentEtag(await Bun.file(paths.get(name) as string).bytes()),
         ),
     )
     for (let index = 0; index < names.length; index += 1) {
         const name = names[index] as string
-        const path = `${root}/${name}`
         files.set(`/${name}`, {
-            path,
+            path: paths.get(name) as string,
             etag: etags[index] as string,
-            type: publicType(path),
+            type: publicType(name),
         })
     }
     return files
 }
 
-// 36.14, 36.17 — the type off the extension, and a text type without a charset given UTF-8's
-// rather than whatever a browser guesses.
-function publicType(path: string): string {
-    const type = Bun.file(path).type
+/**
+ * A public file's content type, off its name's extension.
+ *
+ * 36.14, 36.17 — a text type without a charset is given UTF-8's rather than whatever a browser
+ * guesses.
+ */
+function publicType(name: string): string {
+    const type = Bun.file(name).type
     return type.startsWith('text/') && !type.includes('charset')
         ? `${type}; charset=utf-8`
         : type
 }
 
-// 21.3 — A REFUSAL ABIDE ANSWERS AS TEXT, typed. `stamp` rebuilds an answer to give it a reason
-// phrase (17.8), and a string body rebuilt goes out as `application/octet-stream`.
+/**
+ * A plain-text answer at `status`, never stored.
+ *
+ * 21.3 — A REFUSAL ABIDE ANSWERS AS TEXT, typed. `stamp` rebuilds an answer to give it a reason
+ * phrase (17.8), and a string body rebuilt goes out as `application/octet-stream`.
+ */
 export function plainAnswer(message: string, status: number): Response {
     return new Response(message, {
         status,
@@ -481,7 +533,7 @@ function notFound(): Response {
     return plainAnswer('not found', 404)
 }
 
-// 15.17.
+/** Whether the request only reads: a `GET` or a `HEAD`. 15.17. */
 function readsOnly(request: Request): boolean {
     return request.method === 'GET' || request.method === 'HEAD'
 }
@@ -495,9 +547,13 @@ async function methodRefused(
     return answer
 }
 
-// 21.14 and 16.36's range, answered off the etag read at boot, before a byte is read. 36.12 and
-// 36.14 — the bytes as authored, and the content-type off the extension, which is what `Bun.file`
-// already derives rather than a table kept here.
+/**
+ * A public file's answer, conditional and range-aware off the etag read at boot.
+ *
+ * 21.14 and 16.36's range, answered before a byte is read. 36.12 and 36.14 — the bytes as
+ * authored, and the content-type off the extension, which is what `Bun.file` already derives
+ * rather than a table kept here.
+ */
 function publicResponse(request: Request, file: PublicFile): Response {
     return answerBlobTagged(
         Bun.file(file.path, { type: file.type }),
@@ -510,8 +566,12 @@ function publicResponse(request: Request, file: PublicFile): Response {
     )
 }
 
-// 35.2 — THE ERROR PAGES FOR `pathname`, nearest first: every one whose directory is a prefix of the
-// address, each segment meaning what it means in a route.
+/**
+ * The error pages for `pathname`, nearest first.
+ *
+ * 35.2 — every one whose directory is a prefix of the address, each segment meaning what it means
+ * in a route.
+ */
 function errorsFor(errors: RankedError[], pathname: string): RankedError[] {
     // 15.16's address has no parts to be nearest to, so the root's page paints it.
     const parts = partsOf(pathname) ?? []
@@ -523,9 +583,13 @@ function errorsFor(errors: RankedError[], pathname: string): RankedError[] {
 
 const RENDER_LOG = namedLogger('abide:render')
 
-// 35.2, 35.3 — A REFUSAL, PAINTED BY THE NEAREST ERROR PAGE at the refusal's own status. The page is
-// rendered whole before a byte is answered, so one that fails is not half-sent: it escalates to the
-// next ancestor, and says so on `abide:render`. With none left, the refusal is answered as text.
+/**
+ * A refusal, painted by the nearest error page at the refusal's own status.
+ *
+ * 35.2, 35.3 — the page is rendered whole before a byte is answered, so one that fails is not
+ * half-sent: it escalates to the next ancestor, and says so on `abide:render`. With none left,
+ * the refusal is answered as text.
+ */
 async function answerFailure(
     app: AppSources,
     pathname: string,

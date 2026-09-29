@@ -5,13 +5,10 @@ const PEOPLE: Record<string, { name: string; role: string }> = {
     '2': { name: 'Grace Hopper', role: 'Admiral' },
 }
 
-// A CRM's own audit column, kept here so the example is one file.
+/** A CRM's own audit column, kept here so the example is one file. */
 const OPENED = new Map<string, number>()
 
-// ONE PARAMETER, so this is a keyed value: an entry per args key,
-// and the entry is what a caller adopts. It runs once per request
-// that reaches it, which is what makes `opened` say something a
-// count taken on the client could not.
+/** Runs once per request that reaches it, so `opened` counts loads. */
 export const getProfile = GET(async (args: { id: string }) => {
     // A slow service, so the wait is on screen.
     await Bun.sleep(450)

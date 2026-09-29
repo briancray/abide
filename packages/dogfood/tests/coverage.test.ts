@@ -751,6 +751,38 @@ test('no code sample is wider than the column it renders in', async () => {
     expect(wide).toEqual([])
 })
 
+// 40.29: a comment in an example's own source fits on one line, and a longer reason goes in the
+// copy after the card, where it is prose rather than a thing to scroll past in the Files tab. A
+// run of `//` lines, or a `/*` that does not close on its own line, is a comment of two lines or
+// more. With every source comment the 40.29 pass shortened put back: 15 files.
+function multilineComments(source: string): number[] {
+    const opened: number[] = []
+    const lines = source.split('\n')
+    let previousWasLineComment = false
+    for (let at = 0; at < lines.length; at += 1) {
+        const line = (lines[at] ?? '').trim()
+        const lineComment = line.startsWith('//')
+        if (lineComment && previousWasLineComment) opened.push(at)
+        else if (line.startsWith('/*') && !line.includes('*/'))
+            opened.push(at + 1)
+        previousWasLineComment = lineComment
+    }
+    return opened
+}
+
+test("no comment in an example's own source runs past one line", async () => {
+    const long: string[] = []
+    const shown = new Set<string>()
+    for (const manifest of (await examples()).values())
+        for (const path of manifest.files) shown.add(path)
+    for (const path of shown) {
+        const source = await Bun.file(new URL(path, APP)).text()
+        for (const line of multilineComments(source))
+            long.push(`${path}:${line}`)
+    }
+    expect(long).toEqual([])
+})
+
 // docs/BRAND.md, Visual identity: the code-block spine is the one device to keep, and an
 // uncaptioned fence renders without it — 46 of 87 did. The caption is a file path or one
 // of the four side words; a fence with NO LANGUAGE is exempt, being a shell transcript or

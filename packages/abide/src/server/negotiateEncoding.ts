@@ -11,9 +11,14 @@ import { qualitiesOf } from './qualitiesOf.ts'
 
 export type Encoding = keyof typeof ENCODING_SUFFIX
 
-// Every encoding, in `ENCODING_SUFFIX`'s order — what a document rendered per request can offer.
+/**
+ * Every encoding, in `ENCODING_SUFFIX`'s order.
+ *
+ * What a document rendered per request can offer.
+ */
 export const ENCODINGS = Object.keys(ENCODING_SUFFIX) as Encoding[]
 
+/** The encoding on offer the request takes, or `undefined` for the bytes as they are. */
 export function negotiateEncoding(
     accepted: string | null,
     offered: readonly Encoding[],

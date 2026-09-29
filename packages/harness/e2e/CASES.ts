@@ -1,10 +1,13 @@
-// THE CASE BODIES BOTH SUBSTRATES RUN, and they live apart from either arm so that
-// "the same case" is a fact rather than two transcriptions. Each is self-contained —
-// no closure, no import — because the browser arm receives it as source text and
-// rebuilds it inside the page.
-//
-// A leaf: it has no imports of its own, so nothing about how a lane is wired can
-// reach the thing the two lanes are supposed to agree about.
+/**
+ * The DOM case bodies the measure lane must count identically under bun and in a browser.
+ *
+ * THE CASE BODIES BOTH SUBSTRATES RUN, and they live apart from either arm so that "the same case"
+ * is a fact rather than two transcriptions. Each is self-contained — no closure, no import —
+ * because the browser arm receives it as source text and rebuilds it inside the page.
+ *
+ * A leaf: it has no imports of its own, so nothing about how a lane is wired can reach the thing
+ * the two lanes are supposed to agree about.
+ */
 export const CASES: Record<string, () => void> = {
     // The one that decides whether the both-substrates claim survives. happy-dom
     // implements this in JavaScript over `removeChild` — 2 nested calls — and

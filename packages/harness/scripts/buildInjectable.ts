@@ -6,6 +6,7 @@ import { bundle } from './buildBench.ts'
 
 const ENTRY = new URL('../src/measure/injectable.ts', import.meta.url).pathname
 
+/** Builds the measure lane's injectable into `dist/measure.js` and returns its path. */
 export function buildInjectable(): Promise<string> {
     return bundle(ENTRY, 'measure')
 }

@@ -5,6 +5,7 @@
 
 import { retained } from './retained.ts'
 
+/** The `Function` / `JSLexicalEnvironment` pair a body left reachable, from `retained()`. */
 export function closures(body: () => unknown): {
     Function: number
     JSLexicalEnvironment: number

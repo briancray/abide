@@ -13,15 +13,19 @@ import { type AbideFile, parseAbide } from './parseAbide.ts'
 import { abideSpecifiers } from './splitImports.ts'
 import type { Diagnosis } from './TypeSession.ts'
 
-// 38.3 — `abide check`: every `.abide` under the app checked as the program it runs as, and every
-// `.ts` beside them as it stands, each diagnosis on the line the author wrote — with the
-// compiler's own warnings, and what the build would refuse.
-//
-// A REFUSAL IS A FINDING, NOT THE END OF THE RUN. The build stops at the first thing it refuses,
-// which is right for a build and wrong for a check: a file the parser or the read classifier
-// refuses is reported at its first line, and the rest of the app is checked around it. A refusal
-// only the whole app can see — two handlers at one address — comes from emitting it over the reads
-// already taken, which is asked only once every file has got that far on its own.
+/**
+ * Every finding `abide check` reports for the app at `appRoot`.
+ *
+ * 38.3 — `abide check`: every `.abide` under the app checked as the program it runs as, and every
+ * `.ts` beside them as it stands, each diagnosis on the line the author wrote — with the
+ * compiler's own warnings, and what the build would refuse.
+ *
+ * A REFUSAL IS A FINDING, NOT THE END OF THE RUN. The build stops at the first thing it refuses,
+ * which is right for a build and wrong for a check: a file the parser or the read classifier
+ * refuses is reported at its first line, and the rest of the app is checked around it. A refusal
+ * only the whole app can see — two handlers at one address — comes from emitting it over the reads
+ * already taken, which is asked only once every file has got that far on its own.
+ */
 export async function checkApp(
     appRoot: string,
     kept?: AppChecker,
@@ -96,13 +100,17 @@ function refusal(path: string, thrown: unknown): Diagnosis {
     )
 }
 
-// 38.12 — ONE FILE AS AN EDITOR HOLDS IT, saved or not: the same findings `checkApp` has for it, for
-// `abide lsp` to publish. The rest of the app is read from disk, as it stands — save a file `held`
-// has, which is one the editor holds too.
-//
-// 33.4 — THE COMPONENTS IT IMPORTS ARE LOWERED BESIDE IT, quietly, so a tag is held to the props its
-// component declares rather than to a stand-in that takes anything. One level: what a component
-// takes is its own declaration, and what its own imports take is its business.
+/**
+ * The findings for one file as an editor holds it, saved or not.
+ *
+ * 38.12 — ONE FILE AS AN EDITOR HOLDS IT, saved or not: the same findings `checkApp` has for it, for
+ * `abide lsp` to publish. The rest of the app is read from disk, as it stands — save a file `held`
+ * has, which is one the editor holds too.
+ *
+ * 33.4 — THE COMPONENTS IT IMPORTS ARE LOWERED BESIDE IT, quietly, so a tag is held to the props its
+ * component declares rather than to a stand-in that takes anything. One level: what a component
+ * takes is its own declaration, and what its own imports take is its business.
+ */
 export async function checkSource(
     checker: AppChecker,
     root: string,

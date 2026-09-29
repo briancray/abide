@@ -17,7 +17,7 @@ const COUNT: Record<string, number> = { north: 128, south: 94 }
 const computed: Record<string, number> = { north: 0, south: 0 }
 const loaded: Record<string, number> = { north: 0, south: 0 }
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     metrics: {
         async totals({ region }: { region: string }): Promise<Totals> {

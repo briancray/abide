@@ -10,8 +10,12 @@ import { textOf } from './Raw.ts'
 import { safeUrl } from './safeUrl.ts'
 import { URL_ATTRIBUTES } from './URL_ATTRIBUTES.ts'
 
-// The name as the element carries it; both leaves hold the folded form, and an SVG attribute keeps
-// its case on the element (`viewBox`), so the fold is for the lookup alone.
+/**
+ * The text a value writes into an attribute, or `null` for the attribute absent.
+ *
+ * The name as the element carries it; both leaves hold the folded form, and an SVG attribute keeps
+ * its case on the element (`viewBox`), so the fold is for the lookup alone.
+ */
 export function attributeText(name: string, value: unknown): string | null {
     if (value === null || value === undefined) return null
     const folded = name.toLowerCase()
@@ -22,12 +26,12 @@ export function attributeText(name: string, value: unknown): string | null {
     return URL_ATTRIBUTES.has(folded) ? safeUrl(value) : textOf(value)
 }
 
-// The same answer as the bytes the server's tag carries, leading space included, or nothing.
+/** The same answer as the bytes the server's tag carries, leading space included, or nothing. */
 export function attributeMarkup(name: string, value: unknown): string {
     return writtenMarkup(name, attributeText(name, value))
 }
 
-// Text `attributeText` already answered, as those bytes — which a spread holds once per entry.
+/** Text `attributeText` already answered, as those bytes — which a spread holds once per entry. */
 export function writtenMarkup(name: string, text: string | null): string {
     if (text === null) return ''
     if (text === '' && BOOLEAN_ATTRIBUTES.has(name.toLowerCase()))

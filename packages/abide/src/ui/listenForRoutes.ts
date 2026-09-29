@@ -1,12 +1,16 @@
 import type { Router } from './Router.ts'
 
-// 30.7 IN THE TWO PLACES A READER ACTUALLY NAVIGATES FROM: a link, and the back button. Neither is
-// a call to `navigate`, so a router that only answered the function would reload the document on
-// every click — which is the clause's own "MUST NOT reload" failing exactly where it shows.
-//
-// ONE LISTENER ON THE DOCUMENT, not one per link: a page rebuilt between the listener and the
-// click has different anchors, and per-link wiring is a subscription per row that the region the
-// router just emptied cannot take back off.
+/**
+ * Routes link clicks and back/forward through the router; returns a function that stops listening.
+ *
+ * 30.7 IN THE TWO PLACES A READER ACTUALLY NAVIGATES FROM: a link, and the back button. Neither is
+ * a call to `navigate`, so a router that only answered the function would reload the document on
+ * every click — which is the clause's own "MUST NOT reload" failing exactly where it shows.
+ *
+ * ONE LISTENER ON THE DOCUMENT, not one per link: a page rebuilt between the listener and the
+ * click has different anchors, and per-link wiring is a subscription per row that the region the
+ * router just emptied cannot take back off.
+ */
 export function listenForRoutes(router: Router): () => void {
     const onClick = (event: MouseEvent): void => {
         if (!isPlainClick(event)) return
@@ -47,8 +51,10 @@ export function listenForRoutes(router: Router): () => void {
     return () => listening.abort()
 }
 
-// The address a same-origin link leads to, or `undefined` for one the browser keeps whatever the
-// routes say.
+/**
+ * The address a same-origin link leads to, or `undefined` for one the browser keeps whatever the
+ * routes say.
+ */
 function sameOriginLink(event: Event): URL | undefined {
     // The nearest `<a href>` at or above the event, because the target is whatever text or icon
     // the author put inside the link. `closest` also reaches an SVG `<a>`, whose `href` is an
@@ -67,9 +73,13 @@ function sameOriginLink(event: Event): URL | undefined {
     return url
 }
 
-// A MODIFIED CLICK IS THE READER ASKING THE BROWSER, not the app: ctrl/cmd opens a tab, shift a
-// window, alt downloads. Taking those is the single most complained-about thing a client router
-// does, and it is four fields.
+/**
+ * Whether a click is an unmodified primary click the app may take.
+ *
+ * A MODIFIED CLICK IS THE READER ASKING THE BROWSER, not the app: ctrl/cmd opens a tab, shift a
+ * window, alt downloads. Taking those is the single most complained-about thing a client router
+ * does, and it is four fields.
+ */
 function isPlainClick(event: MouseEvent): boolean {
     return (
         event.button === 0 &&

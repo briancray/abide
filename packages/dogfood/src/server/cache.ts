@@ -4,7 +4,7 @@ import { database, type Settings } from '#server/storeKeyedDatabase'
 
 type Profile = { profile: string }
 
-// A store per args key, derived FROM the key rather than closed over.
+/** A store per args key, derived FROM the key rather than closed over. */
 export const settings = reactive(
     ({ profile }: Profile) => database.settings.forProfile(profile),
     { store: ({ profile }) => redisStore<Settings>(`settings:${profile}`) },

@@ -9,32 +9,41 @@ import {
     rankBySpecificity,
     type Segment,
 } from '#shared/routePattern.ts'
+import { withdrawHead } from './applyHead.ts'
 import { LAYER_MOUNT, LAYER_NAVIGATE } from './LAYER_NAMES.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
 import { fillRegion, pageRegion, type Region } from './regions.ts'
 import type { Scope, Stoppable } from './Scope.ts'
 
-// A PAGE'S CLIENT MODULE, mounted against the region the router owns. The same default export a
-// page already has — the router is a CALLER of a page exactly as a page is a caller of a
-// component, which is why nothing about the emitted module changes to be routable.
+/**
+ * A page's client mount, called against the region the router owns.
+ *
+ * The same default export a page already has — the router is a CALLER of a page exactly as a page
+ * is a caller of a component, which is why nothing about the emitted module changes to be routable.
+ */
 export type PageMount = (
     root: Region,
     props?: Record<string, unknown>,
-    routed?: boolean,
+    // 39.6 — A LEVEL'S HEAD IS ITS OWN MOUNT'S TO APPLY, from inside the instance its slots read
+    // (`emitClient`), so the router hands the module a region and says it is the router by handing
+    // it the level it stands at — a file invoked as a component too is mounted without it, and
+    // applies no head a row. 39.14 — the level is where the mount leaves its head for the router
+    // to read when it withdraws.
+    routed?: Level,
 ) => Scope
 
-// 39.6 — A LEVEL'S HEAD IS ITS OWN MOUNT'S TO APPLY, from inside the instance its slots read
-// (`emitClient`), so the router hands the module a region and says it is the router — a file
-// invoked as a component too is mounted without it, and applies no head a row.
 type PageModule = { default: PageMount }
 
 export type Route = {
-    // The route literal, in the bracket spelling the page's directory is already written in.
+    /** The route literal, in the bracket spelling the page's directory is already written in. */
     pattern: string
     load: () => Promise<PageModule>
-    // 35.1 — the layouts this page renders inside, outermost first, as the build found them.
-    // REQUIRED, as it is on the server's own row (`ServerRoute`): `tableOf` writes the key into
-    // both tables unconditionally, so every row has one shape.
+    /**
+     * The layouts this page renders inside, outermost first, as the build found them (35.1).
+     *
+     * REQUIRED, as it is on the server's own row (`ServerRoute`): `tableOf` writes the key into
+     * both tables unconditionally, so every row has one shape.
+     */
     layouts: (() => Promise<PageModule>)[]
 }
 
@@ -49,47 +58,95 @@ type Found = { route: Compiled; params: Params }
 // survives a navigation must not take the page it was holding a moment ago.
 type Level = {
     scope: Scope | undefined
-    // Where this level's `<slot/>` is, learned when the level below it mounted there, and
-    // `undefined` again once that region leaves — a `<slot/>` inside a closed `{#if}` is nowhere.
+    /**
+     * Where this level's `<slot/>` is, learned when the level below it mounted there, and
+     * `undefined` again once that region leaves — a `<slot/>` inside a closed `{#if}` is nowhere.
+     */
     slot: Region | undefined
+    /**
+     * This level's head markup as it reads now, left by its mount (`emitClient`); `undefined` for
+     * a level with no `<head>`.
+     *
+     * 39.14 — READ WHEN THE LEVEL LEAVES OR STAYS ABOVE ONE THAT DOES, which is why it is the
+     * markup's thunk and not the markup: a layout's `<title>{name}</title>` puts back the name it
+     * reads at that moment. Left painted or not, since a painted level's head is the one the server
+     * wrote and the first navigation away from it withdraws that head like any other.
+     */
+    head: (() => string) | undefined
 }
 
-// WHAT THE ROUTER PUT ON THE PAGE, so a navigation can take it back off. A page mounted into the
-// region owns a `Scope` (12.13) and the router is the only thing that can remove its nodes, so the
-// router is where that scope is stopped.
+/**
+ * The client router: matches addresses, and mounts and replaces the page chain.
+ *
+ * It holds what it put on the page, so a navigation can take it back off. A page mounted into the
+ * region owns a `Scope` (12.13) and the router is the only thing that can remove its nodes, so the
+ * router is where that scope is stopped.
+ */
 export class Router {
     region: Region
     routes: Compiled[]
-    // The chain standing in the document, outermost layout first and the page last.
+    /** The chain standing in the document, outermost layout first and the page last. */
     levels: Level[]
-    // THE CHAIN THE ADDRESS RESOLVED TO, which a kept layout's `<slot/>` mounts from whenever its
-    // region opens — read at that moment rather than captured when the layout mounted, or a slot
-    // reopened after a navigation put back the page the reader had left.
+    /**
+     * The chain the address resolved to.
+     *
+     * A kept layout's `<slot/>` mounts from it whenever its region opens — read at that moment
+     * rather than captured when the layout mounted, or a slot reopened after a navigation put back
+     * the page the reader had left.
+     */
     chain: PageModule[]
-    // The path the standing chain was mounted for: a step to it that moves only the query or the
-    // fragment keeps the page (30.23, 30.24).
+    /**
+     * The path the standing chain was mounted for: a step to it that moves only the query or the
+     * fragment keeps the page (30.23, 30.24).
+     */
     mounted: string | undefined
-    // 30.23 — THE ROUTE THE STANDING PAGE WAS MATCHED BY, which an address it matches again keeps.
+    /**
+     * The route the standing page was matched by.
+     *
+     * 30.23 — an address it matches again keeps it.
+     */
     standing: Compiled | undefined
-    // WHICH NAVIGATION IS THE LIVE ONE. Both ways in await the destination's module before they
-    // touch anything, and a dynamic import resolves in whatever order the chunks arrive — so two
-    // clicks, or a click landing while `hydrate` is still loading, each mounted a page: the second
-    // one to finish overwrote `this.scope` and the first page's bindings were left awake, writing
-    // into nodes the other page had replaced. Nothing about the screen showed it — the newest
-    // markup was on top — which is why it is a counter rather than a flag.
-    //
-    // TAKEN BEFORE THE AWAIT AND CHECKED AFTER IT, so a superseded navigation stops before it
-    // stops a scope, empties the region or pushes a history entry for a page nobody will see.
+    /**
+     * The ticket of the live navigation; a superseded one stops when it sees a newer ticket.
+     *
+     * Both ways in await the destination's module before they touch anything, and a dynamic import
+     * resolves in whatever order the chunks arrive — so two clicks, or a click landing while
+     * `hydrate` is still loading, each mounted a page: the second one to finish overwrote the
+     * standing scope and the first page's bindings were left awake, writing into nodes the other
+     * page had replaced. Nothing about the screen showed it — the newest markup was on top — which
+     * is why it is a counter rather than a flag.
+     *
+     * TAKEN BEFORE THE AWAIT AND CHECKED AFTER IT, so a superseded navigation stops before it
+     * stops a scope, empties the region or pushes a history entry for a page nobody will see.
+     */
     navigation: number
-    // The routes whose chunks `prefetch` has already asked for. `pointerover` bubbles, so a
-    // pointer crossing a link's children asks again at every edge, and after the first time the
-    // answer is the module cache's anyway.
+    /**
+     * The routes whose chunks `prefetch` has already asked for.
+     *
+     * `pointerover` bubbles, so a pointer crossing a link's children asks again at every edge, and
+     * after the first time the answer is the module cache's anyway.
+     */
     prefetched: Set<Compiled>
-    // 39.7, 39.8 — WHETHER A NAVIGATION'S WRITE IS A VIEW TRANSITION, as the build read it off the
-    // compiled `<style>` blocks. Nothing here looks at the document's stylesheets.
+    /**
+     * Whether a navigation's write is a view transition, as the build read it (39.7, 39.8).
+     *
+     * Read off the compiled `<style>` blocks. Nothing here looks at the document's stylesheets.
+     */
     transitions: boolean
+    /**
+     * The shell's keyed head entries, as the build read them off the shell (`keyedHead`).
+     *
+     * 39.4, 39.14 — THE OUTERMOST CONTRIBUTOR, and the one the document cannot say: the server
+     * merged out every entry of it a level overrode.
+     */
+    shellHead: string
 
-    constructor(region: Region, routes: Compiled[], transitions: boolean) {
+    constructor(
+        region: Region,
+        routes: Compiled[],
+        transitions: boolean,
+        shellHead: string,
+    ) {
         this.region = region
         this.routes = routes
         this.levels = []
@@ -99,22 +156,31 @@ export class Router {
         this.navigation = 0
         this.prefetched = new Set()
         this.transitions = transitions
+        this.shellHead = shellHead
     }
 
-    // 16.11 — AN ADDRESS OUTSIDE THE MOUNT IS NO ROUTE OF THIS APP'S, and one inside it is matched
-    // as the address below the app's root. Every way in — a click, an intent, back and forward, a
-    // hydration — is matched here.
+    /**
+     * The route and params an address matches, or `undefined` for one this app has no route for.
+     *
+     * 16.11 — AN ADDRESS OUTSIDE THE MOUNT IS NO ROUTE OF THIS APP'S, and one inside it is matched
+     * as the address below the app's root. Every way in — a click, an intent, back and forward, a
+     * hydration — is matched here.
+     */
     match(pathname: string): Found | undefined {
         const below = unmounted(pathname)
         const parts = below === undefined ? undefined : partsOf(below)
         return parts === undefined ? undefined : firstMatch(this.routes, parts)
     }
 
-    // 30.14 — A NAVIGATION THE READER HAS SIGNALLED, LOADED BEFORE IT HAPPENS: the route's chunks
-    // are asked for on intent, so the click finds them in the module cache and setup — and with it
-    // every call the page makes — starts at once. Only the CODE: a call run on a hover would be a
-    // call nobody asked for, and for anything but a `GET` one with an effect. A failed load is left
-    // for the click, which reports it, and the next intent asks again.
+    /**
+     * Loads a route's chunks ahead of a navigation the reader has signaled.
+     *
+     * 30.14 — A NAVIGATION THE READER HAS SIGNALLED, LOADED BEFORE IT HAPPENS: the route's chunks
+     * are asked for on intent, so the click finds them in the module cache and setup — and with it
+     * every call the page makes — starts at once. Only the CODE: a call run on a hover would be a
+     * call nobody asked for, and for anything but a `GET` one with an effect. A failed load is left
+     * for the click, which reports it, and the next intent asks again.
+     */
     prefetch(pathname: string): void {
         const route = this.match(pathname)?.route
         if (route === undefined || this.prefetched.has(route)) return
@@ -122,13 +188,17 @@ export class Router {
         load(route).catch(() => this.prefetched.delete(route))
     }
 
-    // 30.7 — NAVIGATES, AND DOES NOT RELOAD. Everything between the anchors is replaced and the
-    // document, its history entry and every module already loaded stay exactly where they are.
-    //
-    // THE MARKUP COMES FROM THE PAGE'S OWN MODULE. A page the server painted arrives with its
-    // markup between the anchors and hydrates; a page navigated TO arrives as the empty pair and
-    // fills itself from the template it carries. One module, both ways in — the `isEmptyRegion`
-    // guard the emitter already writes is the whole of the difference.
+    /**
+     * Navigates to `url` without reloading the document.
+     *
+     * 30.7 — NAVIGATES, AND DOES NOT RELOAD. Everything between the anchors is replaced and the
+     * document, its history entry and every module already loaded stay exactly where they are.
+     *
+     * THE MARKUP COMES FROM THE PAGE'S OWN MODULE. A page the server painted arrives with its
+     * markup between the anchors and hydrates; a page navigated TO arrives as the empty pair and
+     * fills itself from the template it carries. One module, both ways in — the `isEmptyRegion`
+     * guard the emitter already writes is the whole of the difference.
+     */
     async go(url: URL | string, options: NavigateOptions = {}): Promise<void> {
         const target =
             typeof url === 'string' ? new URL(url, location.href) : url
@@ -205,13 +275,17 @@ export class Router {
         }
     }
 
-    // A STEP WITHIN THE STANDING PAGE: the address written and `route` moved, and the page, its
-    // scope and every call it made left where they are. It supersedes a navigation in flight the
-    // way a click on another link would. Back and forward arrive here with the bar already moved
-    // and `keepScroll`, which leaves the scroll to the browser's own restoration.
-    //
-    // 30.25 — THE SCROLL STAYS where no page was replaced, except to a fragment the address names:
-    // a reader choosing a season is not sent back to the top of the series.
+    /**
+     * Moves the address within the standing page, leaving the page mounted.
+     *
+     * A STEP WITHIN THE STANDING PAGE: the address written and `route` moved, and the page, its
+     * scope and every call it made left where they are. It supersedes a navigation in flight the
+     * way a click on another link would. Back and forward arrive here with the bar already moved
+     * and `keepScroll`, which leaves the scroll to the browser's own restoration.
+     *
+     * 30.25 — THE SCROLL STAYS where no page was replaced, except to a fragment the address names:
+     * a reader choosing a season is not sent back to the top of the series.
+     */
     follow(target: URL, options: NavigateOptions, found: Found): void {
         this.navigation += 1
         route.navigating.set(false)
@@ -227,13 +301,17 @@ export class Router {
             scrollToFragment(target.hash)
     }
 
-    // 39.9 — AWAITED TO THE WRITE, NOT TO THE ANIMATION: `updateCallbackDone` settles once the
-    // arriving page is in the document, and `finished` would hold the navigation for however long
-    // the app's transition plays. 39.10 — a browser with no `startViewTransition` writes directly.
-    //
-    // THE TICKET IS CHECKED AGAIN INSIDE THE CALLBACK, because the browser runs it a frame later,
-    // after capturing the outgoing page — and a transition another navigation skipped still runs
-    // its callback, which would mount the page the reader clicked away from.
+    /**
+     * Runs a navigation's commit, inside a view transition where one is wanted.
+     *
+     * 39.9 — AWAITED TO THE WRITE, NOT TO THE ANIMATION: `updateCallbackDone` settles once the
+     * arriving page is in the document, and `finished` would hold the navigation for however long
+     * the app's transition plays. 39.10 — a browser with no `startViewTransition` writes directly.
+     *
+     * THE TICKET IS CHECKED AGAIN INSIDE THE CALLBACK, because the browser runs it a frame later,
+     * after capturing the outgoing page — and a transition another navigation skipped still runs
+     * its callback, which would mount the page the reader clicked away from.
+     */
     private async write(ticket: number, commit: () => void): Promise<void> {
         if (
             !this.transitions ||
@@ -245,8 +323,12 @@ export class Router {
         }).updateCallbackDone
     }
 
-    // WHAT A NAVIGATION DOES ONCE IT IS NO LONGER SUPERSEDABLE: the old part stopped and emptied,
-    // the address written, the arriving part's head applied and its levels mounted.
+    /**
+     * Commits a navigation: empties the old part, writes the address and mounts the new part.
+     *
+     * What a navigation does once it is no longer supersedable: the old part stopped and emptied,
+     * the address written, the arriving part's head applied and its levels mounted.
+     */
     private commit(
         target: URL,
         found: Found,
@@ -264,7 +346,9 @@ export class Router {
             // two routes under one layout name the same file through two different functions, and a
             // table written by hand may answer with a fresh record each call. The function a module
             // exports is the same function either way.
-            const shared = this.shares(arriving)
+            const shared = this.sharedLevels(arriving)
+            // READ BEFORE THE STOP, while the leaving levels' heads read what they read on screen.
+            const leaving = this.heads(shared, this.levels.length)
             this.stopFrom(shared)
             // The region the arriving part goes into: the page region where nothing is kept, and
             // the deepest kept layout's own slot where something is.
@@ -283,6 +367,13 @@ export class Router {
             // 39.6 — each arriving level applies its own head as it mounts into its emptied region,
             // outermost first; a kept layout is not mounted again, so neither is its head.
             this.mountChain(target, found, arriving, shared, into)
+            // 39.14 — what the leaving levels keyed and the arriving ones did not goes back to the
+            // nearest kept layout's, else the shell's, else leaves.
+            withdrawHead(
+                leaving,
+                this.heads(shared, this.levels.length),
+                () => this.shellHead + this.heads(0, shared),
+            )
             // The top of the page, or — as the browser does on a load — the fragment's element.
             if (options.keepScroll !== true) scrollToFragment(target.hash)
         } finally {
@@ -290,12 +381,16 @@ export class Router {
         }
     }
 
-    // How much of the arriving chain is already standing. Layouts only: a page reached here is
-    // another route's, the same route's being followed instead (30.23).
-    //
-    // EVERY STANDING LEVEL IS COMPARED, the page included: a page is never a layout, so it cannot
-    // match one, and a layout whose slot is closed stands with nothing below it.
-    private shares(arriving: PageModule[]): number {
+    /**
+     * How many levels of the arriving chain are already standing.
+     *
+     * Layouts only: a page reached here is another route's, the same route's being followed instead
+     * (30.23).
+     *
+     * EVERY STANDING LEVEL IS COMPARED, the page included: a page is never a layout, so it cannot
+     * match one, and a layout whose slot is closed stands with nothing below it.
+     */
+    private sharedLevels(arriving: PageModule[]): number {
         const layouts = arriving.length - 1
         let shared = 0
         while (
@@ -308,28 +403,48 @@ export class Router {
         return shared
     }
 
-    // Stopped from the INSIDE OUT, so a layout's disposers run after the page's — the order a
-    // scope's own teardown already has, and the one an author reading two `watch` cleanups in
-    // two files would expect.
+    /** The heads of the standing levels from `from` to `to`, outermost first. */
+    private heads(from: number, to: number): string {
+        let markup = ''
+        for (let level = from; level < to; level += 1)
+            markup += (this.levels[level] as Level).head?.() ?? ''
+        return markup
+    }
+
+    /**
+     * Stops every level from `at` down, inside out, and drops them.
+     *
+     * Stopped from the INSIDE OUT, so a layout's disposers run after the page's — the order a
+     * scope's own teardown already has, and the one an author reading two `watch` cleanups in
+     * two files would expect.
+     */
     private stopFrom(at: number): void {
         for (let level = this.levels.length - 1; level >= at; level -= 1)
             (this.levels[level] as Level).scope?.stop()
         this.levels.length = at
     }
 
-    // 35.1 — THE CHAIN, MOUNTED. Each level is handed the one below it as `children` (32.19), so
-    // a layout puts the page in its `<slot/>` with the same mechanism a caller writing markup
-    // between two tags uses — and the router learns where that slot is on the way past, which is
-    // what lets it swap the page there later without the layout knowing.
-    //
-    // THE CHILD'S SCOPE IS THE ROUTER'S, not the layout's, so a kept layout cannot stop the page
-    // arriving under it. What `mount` hands the layout is a stop for WHATEVER STANDS IN THE SLOT
-    // when the slot's region leaves — a `<slot/>` inside a closed `{#if}` — rather than for the
-    // page that happened to be mounted first. And the slot mounts from `chain`, so a slot that
-    // opens again mounts the page the address resolves to now.
+    /**
+     * Mounts the chain from level `at` into `region`, each level handed the next as `children`.
+     *
+     * 35.1 — each level is handed the one below it as `children` (32.19), so a layout puts the page
+     * in its `<slot/>` with the same mechanism a caller writing markup between two tags uses — and
+     * the router learns where that slot is on the way past, which is what lets it swap the page
+     * there later without the layout knowing.
+     *
+     * THE CHILD'S SCOPE IS THE ROUTER'S, not the layout's, so a kept layout cannot stop the page
+     * arriving under it. What `mount` hands the layout is a stop for WHATEVER STANDS IN THE SLOT
+     * when the slot's region leaves — a `<slot/>` inside a closed `{#if}` — rather than for the
+     * page that happened to be mounted first. And the slot mounts from `chain`, so a slot that
+     * opens again mounts the page the address resolves to now.
+     */
     private mountFrom(at: number, region: Region): void {
         const module = this.chain[at] as PageModule
-        const level: Level = { scope: undefined, slot: undefined }
+        const level: Level = {
+            scope: undefined,
+            slot: undefined,
+            head: undefined,
+        }
         this.levels[at] = level
         const props = routeProps()
         if (at < this.chain.length - 1)
@@ -345,19 +460,27 @@ export class Router {
                     return { stop: () => this.release(level, at) }
                 },
             })
-        level.scope = module.default(region, props, true)
+        level.scope = module.default(region, props, level)
     }
 
-    // What stands below `level`, stopped, and its slot forgotten. A no-op once the level itself has
-    // been replaced, which is how a stop handed to a layout that has since left does nothing.
+    /**
+     * Stops what stands below `level` and forgets its slot.
+     *
+     * A no-op once the level itself has been replaced, which is how a stop handed to a layout that
+     * has since left does nothing.
+     */
     private release(level: Level, at: number): void {
         if (this.levels[at] !== level) return
         level.slot = undefined
         this.stopFrom(at + 1)
     }
 
-    // The page the SERVER painted, wired where it stands. No fill happens — the region is not
-    // empty — so this is the first render's hydration and not a second rendering of it.
+    /**
+     * Hydrates the page the server painted, wiring it where it stands.
+     *
+     * No fill happens — the region is not empty — so this is the first render's hydration and not a
+     * second rendering of it.
+     */
     async hydrate(): Promise<void> {
         const found = this.match(location.pathname)
         if (found === undefined) return
@@ -378,10 +501,14 @@ export class Router {
         this.mountChain(new URL(location.href), found, standing, 0, this.region)
     }
 
-    // AT THE TOP OF THE CHAIN, NOT INSIDE `mountFrom`: it recurses one level per layout, and
-    // `shares()` SUMS every measure of a name inside the op — so a pair inside the recursion would
-    // count the innermost level once per level above it. 23.1 — WRITTEN BEFORE THE ARRIVING PAGE'S
-    // SETUP, which reads it.
+    /**
+     * Records the arriving chain as standing and mounts it from level `from` into `into`.
+     *
+     * AT THE TOP OF THE CHAIN, NOT INSIDE `mountFrom`: it recurses one level per layout, and
+     * `shares()` SUMS every measure of a name inside the op — so a pair inside the recursion would
+     * count the innermost level once per level above it. 23.1 — WRITTEN BEFORE THE ARRIVING PAGE'S
+     * SETUP, which reads it.
+     */
     private mountChain(
         target: URL,
         found: Found,
@@ -403,9 +530,12 @@ export class Router {
     }
 }
 
-// A route's chain, loaded: the layouts it renders inside, outermost first, and the page last.
-// One `Promise.all`, because a waterfall down a three-deep chain is three round trips for a
-// navigation the reader is watching.
+/**
+ * Loads a route's chain: its layouts, outermost first, and the page last.
+ *
+ * One `Promise.all`, because a waterfall down a three-deep chain is three round trips for a
+ * navigation the reader is watching.
+ */
 async function load(route: Compiled): Promise<PageModule[]> {
     return await Promise.all([
         ...route.layouts.map((layout) => layout()),
@@ -413,9 +543,13 @@ async function load(route: Compiled): Promise<PageModule[]> {
     ])
 }
 
-// 30.15 — THE ADDRESS, THROUGH THE SERVER'S `middleware` AND NOT ITS RENDER (30.16). A redirect
-// is followed here, carrying the header, so the answer at the end of it is the server's go-ahead
-// for the address it landed on.
+/**
+ * Asks the server's `middleware` about an address; `undefined` where the fetch failed.
+ *
+ * 30.15 — THE ADDRESS, THROUGH THE SERVER'S `middleware` AND NOT ITS RENDER (30.16). A redirect
+ * is followed here, carrying the header, so the answer at the end of it is the server's go-ahead
+ * for the address it landed on.
+ */
 async function ask(target: URL): Promise<Response | undefined> {
     try {
         return await fetch(target, {
@@ -427,20 +561,24 @@ async function ask(target: URL): Promise<Response | undefined> {
     }
 }
 
-// 33.4 — A PROP IS AN ACCESSOR. A page is mounted as any other component is, so its one prop is
-// passed the way `renderComponent` passes a child's and the way `answerRequest` paints one: a
-// function per key. Passed as the plain record it lowered to `params()` on a value that was not
-// one, so every page with a `[param]` in its address hydrated dead — with its server markup
-// already on screen, which is what kept it quiet.
-//
-// 33.5 — AND A LIVE ONE: `params` reads `route.params`, which every navigation writes. A layout
-// kept across `/users/1` -> `/users/2` is not mounted again, so an accessor over the params it was
-// mounted with went on answering user 1.
-//
-// THE SHAPE IS FIXED HERE, `children` included: every compiled page and layout loads its props
-// off this record, and a field added on a later path is a second hidden class for all of them.
-// A level with nothing below it leaves the key present and undefined, which is what both
-// emitted readers already test for.
+/**
+ * A fresh props record for a routed page or layout: `params` as a live accessor, `children` unset.
+ *
+ * 33.4 — A PROP IS AN ACCESSOR. A page is mounted as any other component is, so its one prop is
+ * passed the way `renderComponent` passes a child's and the way `answerRequest` paints one: a
+ * function per key. Passed as the plain record it lowered to `params()` on a value that was not
+ * one, so every page with a `[param]` in its address hydrated dead — with its server markup
+ * already on screen, which is what kept it quiet.
+ *
+ * 33.5 — AND A LIVE ONE: `params` reads `route.params`, which every navigation writes. A layout
+ * kept across `/users/1` -> `/users/2` is not mounted again, so an accessor over the params it was
+ * mounted with went on answering user 1.
+ *
+ * THE SHAPE IS FIXED HERE, `children` included: every compiled page and layout loads its props
+ * off this record, and a field added on a later path is a second hidden class for all of them.
+ * A level with nothing below it leaves the key present and undefined, which is what both
+ * emitted readers already test for.
+ */
 function routeProps(): Record<string, (() => unknown) | undefined> {
     return { params: readParams, children: undefined }
 }
@@ -453,9 +591,13 @@ function writeAddress(target: URL, replace: boolean): void {
     else history.pushState(null, '', full)
 }
 
-// 30.22 — WHAT THE BROWSER DOES WITH A FRAGMENT: its element — by id, then a named `<a>` — brought into
-// view, and the top of the page where there is none or it names none. A fragment that will not
-// percent-decode is looked up as written.
+/**
+ * Scrolls a fragment's element into view, or to the top where there is none.
+ *
+ * 30.22 — WHAT THE BROWSER DOES WITH A FRAGMENT: its element — by id, then a named `<a>` — brought
+ * into view, and the top of the page where there is none or it names none. A fragment that will not
+ * percent-decode is looked up as written.
+ */
 function scrollToFragment(hash: string): void {
     const id = decodedOrKept(hash.slice(1))
     if (id !== '') {
@@ -473,12 +615,17 @@ function scrollToFragment(hash: string): void {
     scrollTo(0, 0)
 }
 
-// THE ROUTES, MOST SPECIFIC FIRST, and the router registered as this document's. Ranking here
-// rather than asking the build to emit an order keeps the table a fact about the file tree.
+/**
+ * Builds the router over `routes` and registers it as this document's.
+ *
+ * Routes are ranked most specific first. Ranking here rather than asking the build to emit an order
+ * keeps the table a fact about the file tree.
+ */
 export function startRouter(
     routes: Route[],
     host: Element = document.body,
     transitions = false,
+    shellHead = '',
 ): Router {
     const compiled: Compiled[] = []
     for (const route of routes)
@@ -487,6 +634,7 @@ export function startRouter(
         pageRegion(host),
         rankBySpecificity(compiled),
         transitions,
+        shellHead,
     )
     CURRENT_ROUTER.current = router
     return router

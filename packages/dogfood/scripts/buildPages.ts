@@ -5,15 +5,17 @@
 // the `.abide` that carries it is written here, and from there it is an ordinary abide app —
 // `abide build`, `abide start`, `abide dev`, the same three commands an app author runs.
 //
-// WHY A GENERATOR AT ALL. A page reads its own markdown at RENDER time in the design (16.x's
-// handlers, a loader on the server seam), and none of that surface is built — what exists today
-// is a `<script>` that runs on both sides, so a page that read the file system would put the
-// file system in the browser bundle. Compiling the content IN is the honest shape until then,
-// and it is also what a docs site wants: nothing to read per request.
+// WHY A GENERATOR AT ALL. A `GET` on the server seam could hand a page its markdown per request,
+// but an `{% example %}` is a component the page runs (40.14), and a component is an import the
+// build resolves — a body read at request time cannot bring its cards' imports with it. Compiling
+// the content IN is what gives each card its import, and it is also what a docs site wants:
+// nothing to read per request.
 //
-// IT OWNS TWO DIRECTORIES WHOLE. `src/ui/pages` and `src/ui/public` are this script's output and
-// nothing else writes there, so a renamed page cannot leave its old address answering — which is
-// why the files an author DID write by hand (`assets/`) live outside them and are copied in.
+// IT OWNS TWO DIRECTORIES WHOLE, AND ONE FILE. `src/ui/pages` and `src/ui/public` are this
+// script's output and nothing else writes there, so a renamed page cannot leave its old address
+// answering — which is why the files an author DID write by hand (`assets/`) live outside them and
+// are copied in. `src/ui/NAV_ITEMS.ts` is the file: written beside them, and never pruned, since
+// every run writes it.
 //
 // AND IT REWRITES ONLY WHAT CHANGED. Emptying the two directories first was the obvious way to
 // get that and it is unusable under `abide dev`: the watcher sees 250 deletions and 250 writes
@@ -47,16 +49,24 @@ const PAGES = new URL('ui/pages/', SOURCE)
 const PUBLIC = new URL('ui/public/', SOURCE)
 const ASSETS = new URL('../assets/', import.meta.url)
 
-// A page's DIRECTORY under `pages/`, which is the whole of its address (CLAUDE.md): the app's
-// root page is `pages/page.abide` and a section's overview is the section's own directory.
+/**
+ * A page's DIRECTORY under `pages/`, with a trailing slash, or `''` for the root page.
+ *
+ * The directory is the whole of its address (CLAUDE.md): the app's root page is
+ * `pages/page.abide` and a section's overview is the section's own directory.
+ */
 export function directoryOf(slug: string): string {
     const route = routeOf(slug)
     return route === '/' ? '' : `${route.slice(1)}/`
 }
 
-// The nav is ONE module for the whole app rather than markup generated into every page: it is
-// the same list on all eighty of them, and a copy per page is that list in every route chunk a
-// reader loads. `DocsNav.abide` is the only reader.
+/**
+ * The source of `NAV_ITEMS.ts`, every page's nav entry grouped by section.
+ *
+ * The nav is ONE module for the whole app rather than markup generated into every page: it is
+ * the same list on all eighty of them, and a copy per page is that list in every route chunk a
+ * reader loads. `DocsNav.abide` is the only reader.
+ */
 function navItems(pages: Page[]): string {
     const groups: string[] = []
     let section = ''
@@ -90,7 +100,7 @@ ${groups.join('\n')}
 `
 }
 
-// The page's opening: the stub notice where there is one, the title, and the intent under it.
+/** The page's opening: the stub notice where there is one, the title, and the intent under it. */
 function headerOf(page: Page): string {
     const notice = page.stub
         ? '<p class="notice">Stub — title and intent decided, prose not written.</p>'
@@ -102,7 +112,7 @@ function headerOf(page: Page): string {
     return `${notice}<h1>${renderInline(page.title)}</h1>${intent}`
 }
 
-// Reading order, as two links. The nav is the whole set and this is the thread through it.
+/** Reading order, as two links. The nav is the whole set and this is the thread through it. */
 function footerOf(previous: Page | undefined, next: Page | undefined): string {
     let footer = ''
     if (previous !== undefined)
@@ -112,9 +122,13 @@ function footerOf(previous: Page | undefined, next: Page | undefined): string {
     return footer
 }
 
-// The rail is where a reader is already looking for "what else is here", so the markdown
-// downloads sit under the heading list rather than in the nav. It renders on EVERY page: a page
-// with one heading has no table of contents (`headingsOf`) and still has its downloads.
+/**
+ * The page's rail: its heading list, then the two markdown downloads.
+ *
+ * The rail is where a reader is already looking for "what else is here", so the downloads sit
+ * under the heading list rather than in the nav. It renders on EVERY page: a page with one
+ * heading has no table of contents (`headingsOf`) and still has its downloads.
+ */
 export function railOf(page: Page, body: string): string {
     let items = ''
     for (const heading of headingsOf(body))
@@ -130,10 +144,14 @@ export function railOf(page: Page, body: string): string {
 </ul></section></aside>`
 }
 
-// The page, as the app holds it. A record in a module of its own rather than markup in the
-// `.abide`: the body is HTML the markdown renderer produced, and HTML written into a template is
-// TEMPLATE — a `{` in a code sample opens a slot — so it crosses as a string and the page
-// renders it through `raw` (32.25). `DocsContent` says why every field is one.
+/**
+ * The source of a page's `CONTENT.ts`: its header, footer and rail as a `DocsContent` record.
+ *
+ * A record in a module of its own rather than markup in the `.abide`: that HTML is what the
+ * markdown renderer produced, and HTML written into a template is TEMPLATE — a `{` in a code
+ * sample opens a slot — so it crosses as a string and the page renders it through `raw` (32.25).
+ * `DocsContent` says why every field is one.
+ */
 function contentModule(
     page: Page,
     body: string,
@@ -195,17 +213,21 @@ import ${instrument.component} from '#ui/components/${instrument.component}.abid
 `
 }
 
-// THE PAGE: the head it contributes (39.1), the record beside it, and the BODY AS MARKUP. The body is the one part written into the template rather than carried in the
-// record, because an example is a component and a component is a tag — a `{raw}` string cannot
-// hold one, and the body cannot be cut around it either, an example sitting inside the `<section>`
-// `groupSections` wrapped it in.
-//
-// HTML WRITTEN INTO A TEMPLATE IS TEMPLATE, so a `{` in a code sample would open a slot. Every
-// brace is written as its character reference instead, which the browser reads back as the brace.
-//
-// `#ui/pages/…` RATHER THAN `./CONTENT.ts`. A relative specifier is left exactly as written and
-// the emitted module lives in the build tree, so `./CONTENT.ts` resolves beside the OUTPUT and
-// misses the source; an import-map specifier resolves the same from either tree.
+/**
+ * The source of a page's `page.abide`: its head, its `CONTENT.ts` record, and its body as markup.
+ *
+ * The head is the one the page contributes (39.1). The body is the one part written into the
+ * template rather than carried in the record, because an example is a component and a component
+ * is a tag — a `{raw}` string cannot hold one, and the body cannot be cut around it either, an
+ * example sitting inside the `<section>` `groupSections` wrapped it in.
+ *
+ * HTML WRITTEN INTO A TEMPLATE IS TEMPLATE, so a `{` in a code sample would open a slot. Every
+ * brace is written as its character reference instead, which the browser reads back as the brace.
+ *
+ * `#ui/pages/…` RATHER THAN `./CONTENT.ts`. A relative specifier is left exactly as written and
+ * the emitted module lives in the build tree, so `./CONTENT.ts` resolves beside the OUTPUT and
+ * misses the source; an import-map specifier resolves the same from either tree.
+ */
 export function pageSource(
     page: Page,
     directory: string,
@@ -232,7 +254,7 @@ export function pageSource(
     }
     return `<script>
 import { raw } from 'abide'
-import { installDocs } from '#ui/docs.ts'
+import { installDocs } from '#ui/installDocs.ts'
 import { CONTENT } from '#ui/pages/${directory}CONTENT.ts'
 ${imports}</script>
 
@@ -250,12 +272,21 @@ ${imports}</script>
 `
 }
 
+/**
+ * Compiles `content/` into `src/ui/pages` and `src/ui/public`, and returns the pages it read.
+ *
+ * Writes only the files whose bytes changed, then deletes what this run did not write.
+ */
 export async function buildPages(): Promise<Page[]> {
     const pages = await readPages()
     const written = new Set<string>()
 
-    // ONE WRITE PER FILE THAT MOVED. The path is remembered either way, which is what `prune`
-    // reads to know what the last run left behind.
+    /**
+     * Writes `contents` at `at` unless the bytes there already match.
+     *
+     * ONE WRITE PER FILE THAT MOVED. The path is remembered either way, which is what `prune`
+     * reads to know what the last run left behind.
+     */
     async function put(
         at: URL,
         contents: string | Uint8Array | Bun.BunFile,
@@ -315,9 +346,12 @@ export async function buildPages(): Promise<Page[]> {
     return pages
 }
 
-// WHAT THIS RUN DID NOT WRITE. A page renamed in `NAV.ts` leaves a directory behind, and a
-// directory under `pages/` is an ADDRESS — so what is left over is not stale output, it is a
-// page the app goes on serving.
+/**
+ * Deletes every file under `root` this run did not write, and the directories that leaves empty.
+ *
+ * A page renamed in `NAV.ts` leaves a directory behind, and a directory under `pages/` is an
+ * ADDRESS — so what is left over is not stale output, it is a page the app goes on serving.
+ */
 async function prune(root: URL, written: Set<string>): Promise<void> {
     for (const name of new Bun.Glob('**/*').scanSync({
         cwd: root.pathname,

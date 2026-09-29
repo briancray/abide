@@ -20,7 +20,9 @@ import { brandedPrototype, MEMBER_KEYS } from './Reactive.ts'
 import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
 import { currentScope, SCOPING } from './scoping.ts'
 
-// What a forwarder resolves through: the home, and how to build the same value again in a scope.
+/**
+ * What a forwarder resolves through: the home, and how to build the same value again in a scope.
+ */
 class Filed {
     home: unknown
     make: () => unknown
@@ -35,8 +37,11 @@ const FILED: unique symbol = Symbol('abide.filed')
 
 type Forwarder = { [FILED]: Filed }
 
-// The instance for the scope that is current, built there the first time it is reached. Built
-// INSIDE the scope, so every cell it makes records that scope as its own (`Cell.scope`).
+/**
+ * The instance for the scope that is current, built there the first time it is reached.
+ *
+ * Built INSIDE the scope, so every cell it makes records that scope as its own (`Cell.scope`).
+ */
 function instanceOf(filed: Filed): Record<PropertyKey, unknown> {
     const scope = currentScope()
     if (scope === undefined) return filed.home as Record<PropertyKey, unknown>
@@ -71,13 +76,18 @@ Object.defineProperty(FORWARDING_PROTOTYPE, CELL, {
     },
 })
 
-// Whether a value built here has to be a forwarder: a server is filing values, no request is
-// current, and the value did not opt out through `global` (11.34).
+/**
+ * Whether a value built here has to be a forwarder.
+ *
+ * It does where a server is filing values, no request is current, and the value did not opt out
+ * through `global` (11.34).
+ */
 export function outsideScope(global: boolean): boolean {
     const provider = SCOPING.provider
     return !global && provider !== null && provider.current() === undefined
 }
 
+/** A forwarder over `make`'s value: the home outside a request, one instance per request inside. */
 export function scoped(make: () => unknown): unknown {
     const filed = new Filed(make)
     // A keyed value, carrying both, or any other value, carrying neither.
@@ -117,7 +127,9 @@ export function scoped(make: () => unknown): unknown {
     return read
 }
 
-// Whether `value` is request-local on this server — built without `global`, outside every request.
+/**
+ * Whether `value` is request-local on this server — built without `global`, outside every request.
+ */
 export function isForwarder(value: unknown): boolean {
     return (value as Partial<Forwarder> | null)?.[FILED] !== undefined
 }

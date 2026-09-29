@@ -22,21 +22,29 @@
 // nothing, and this says so rather than a reader noticing.
 //
 // The cost, stated: an engine number is not available inside a case body, so this
-// structurally cannot wrap an engine assertion. `RENDERER.md` measurement 1 and
-// `SERVER.md` measurement 2 stay a playwright-side convention with no `worth` field.
+// structurally cannot wrap an engine assertion. Engine-lane measurements stay a
+// playwright-side convention with no `worth` field.
 
 import { test } from 'bun:test'
 
 export { inAFreshProcess } from './inAFreshProcess.ts'
 
+/** A gate's runnable revert and the numbers the broken arm reports. */
 export type GateSpec = {
-    // Installs the broken arm and hands back the undo. A gate whose revert cannot be
-    // installed — a module-level guard, a shape decided at construction — keeps its
-    // revert in the test's comment with the number it reports; this field is for the
-    // ones where the arm is swappable.
+    /**
+     * Installs the broken arm and hands back the undo.
+     *
+     * A gate whose revert cannot be installed — a module-level guard, a shape decided at
+     * construction — keeps its revert in the test's comment with the number it reports; this
+     * field is for the ones where the arm is swappable.
+     */
     revert: () => unknown
-    // What the broken arm reports. Every value has to appear in the failure the
-    // reverted run produces, or the revert did not reach the mechanism.
+    /**
+     * What the broken arm reports.
+     *
+     * Every value has to appear in the failure the reverted run produces, or the revert did not
+     * reach the mechanism.
+     */
     worth: Record<string, number | string>
 }
 
@@ -44,6 +52,10 @@ export type GateSpec = {
 // Whether that becomes a nightly rather than a flag is not decided here.
 const VERIFYING = process.env.HARNESS_VERIFY_GATES === '1'
 
+/**
+ * Registers `body` as a test and, under `HARNESS_VERIFY_GATES=1`, a second test that runs it
+ * with the revert installed and asserts it fails reporting every `worth` value.
+ */
 export function gate(
     name: string,
     spec: GateSpec,

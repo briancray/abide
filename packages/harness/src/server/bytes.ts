@@ -6,6 +6,7 @@
 
 import { estimateShallowMemoryUsageOf } from 'bun:jsc'
 
+/** A payload's byte length, or JSC's shallow memory estimate for any other value. */
 export async function bytes(of: unknown): Promise<number> {
     // CLONED, because reading a `Response`'s body consumes it: measuring what a route
     // returns and then serving the same object throws "Body already used" at the

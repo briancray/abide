@@ -1,12 +1,16 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { isContextualKeyword, type Token, tokenise } from './tokenise.ts'
 
-// A `<script>` block is per-instance setup (34.1), so its body is emitted INSIDE the component
-// function — but an `import` is only legal at the top of a module. This splits the two so the
-// imports can be hoisted and everything else stays where the author put it.
-//
-// WHERE AN IMPORT BEGINS AND ENDS IS READ OFF the one tokeniser, which carries the template
-// re-scan a bare `` ` `` needs, so an import after a template literal is still found.
+/**
+ * Splits a `<script>` into its import statements and the rest of its body.
+ *
+ * A `<script>` block is per-instance setup (34.1), so its body is emitted INSIDE the component
+ * function — but an `import` is only legal at the top of a module. This splits the two so the
+ * imports can be hoisted and everything else stays where the author put it.
+ *
+ * WHERE AN IMPORT BEGINS AND ENDS IS READ OFF the one tokeniser, which carries the template
+ * re-scan a bare `` ` `` needs, so an import after a template literal is still found.
+ */
 export function splitImports(script: string): {
     imports: string
     body: string
@@ -32,18 +36,6 @@ export function splitImports(script: string): {
     return { imports, body: body + script.slice(at) }
 }
 
-// WHERE EACH MODULE-SPECIFIER STATEMENT BEGINS AND ENDS — `import … from '…'`, a bare
-// `import '…'`, and `export … from '…'` — what `splitImports` lifts out of the component body,
-// because an import is only legal at the top of a module.
-//
-// AN `import` KEYWORD IS NOT ALWAYS A DECLARATION. `import(…)` is an expression and so is
-// `import.meta`, and neither is a case here: the scan below runs only over the tokens an import
-// CLAUSE can hold, so a `(` or a `.` ends it with no specifier found and the keyword is left
-// alone. The scan that special-cased `(` and ran on otherwise read `import.meta.url` as a
-// declaration looking for its specifier and swallowed every statement up to the next string
-// literal in the file — a write silently destroying a `Reactive` on one side, and a real
-// statement hoisted into the import block on the other.
-
 // What can stand between `import` and its specifier. A token that cannot is a malformed import,
 // and stopping there is what keeps one broken line from swallowing the statements after it.
 //
@@ -66,6 +58,20 @@ function inImportClause(kind: SyntaxKind): boolean {
     return IMPORT_CLAUSE.has(kind) || isContextualKeyword(kind)
 }
 
+/**
+ * Where each module-specifier statement begins and ends, with its specifier.
+ *
+ * `import … from '…'`, a bare `import '…'`, and `export … from '…'` — what `splitImports` lifts
+ * out of the component body, because an import is only legal at the top of a module.
+ *
+ * AN `import` KEYWORD IS NOT ALWAYS A DECLARATION. `import(…)` is an expression and so is
+ * `import.meta`, and neither is a case here: the scan runs only over the tokens an import CLAUSE
+ * can hold (`IMPORT_CLAUSE`), so a `(` or a `.` ends it with no specifier found and the keyword is
+ * left alone. The scan that special-cased `(` and ran on otherwise read `import.meta.url` as a
+ * declaration looking for its specifier and swallowed every statement up to the next string
+ * literal in the file — a write silently destroying a `Reactive` on one side, and a real
+ * statement hoisted into the import block on the other.
+ */
 function importSpans(
     source: string,
 ): { start: number; end: number; specifier: string }[] {
@@ -101,9 +107,12 @@ function importSpans(
     return spans
 }
 
-// The index of the specifier's position in `export * from '…'` / `export { … } from '…'`, or -1
-// where this `export` has no module specifier at all. A bare `export` is not hoistable — the
-// names it exports are declared in the body it would be lifted out of.
+/**
+ * The index of the specifier in `export * from '…'` / `export { … } from '…'`, or -1.
+ *
+ * -1 where this `export` has no module specifier at all. A bare `export` is not hoistable — the
+ * names it exports are declared in the body it would be lifted out of.
+ */
 function afterExportClause(tokens: Token[], from: number): number {
     let at = from
     if ((tokens[at] as Token | undefined)?.text === 'type') at += 1
@@ -133,16 +142,19 @@ function afterExportClause(tokens: Token[], from: number): number {
     return at + 1
 }
 
-// Past a `with { … }` import-attributes clause, or `end` — the specifier's own end — where there
-// is none. THE CLAUSE OPENS WITH A BRACE and nothing else can stand between the specifier and it,
-// so a keyword with no `{` behind it is not one.
-//
-// `assert` IS THE SAME CLAUSE UNDER ITS EARLIER SPELLING AND IS NOT A KEYWORD: it scans as an
-// ordinary identifier, so only its POSITION tells the clause from a statement that merely begins
-// with the name. The grammar's own answer is `[no LineTerminator here] assert`, which is exactly
-// what the spelling was replaced for — matched on its text alone, an `assert` opening the NEXT
-// line took every token to the first balanced `}` for its attributes, so `splitImports` hoisted
-// the statements after the import into module scope.
+/**
+ * The offset past a `with { … }` import-attributes clause, or `end` — the specifier's own end.
+ *
+ * `end` where there is no clause. THE CLAUSE OPENS WITH A BRACE and nothing else can stand between
+ * the specifier and it, so a keyword with no `{` behind it is not one.
+ *
+ * `assert` IS THE SAME CLAUSE UNDER ITS EARLIER SPELLING AND IS NOT A KEYWORD: it scans as an
+ * ordinary identifier, so only its POSITION tells the clause from a statement that merely begins
+ * with the name. The grammar's own answer is `[no LineTerminator here] assert`, which is exactly
+ * what the spelling was replaced for — matched on its text alone, an `assert` opening the NEXT
+ * line took every token to the first balanced `}` for its attributes, so `splitImports` hoisted
+ * the statements after the import into module scope.
+ */
 function endOfAttributes(
     tokens: Token[],
     from: number,
@@ -172,8 +184,12 @@ function endOfAttributes(
     return end
 }
 
-// Every `.abide` a script imports or re-exports, as written — read off the same spans the split
-// lifts, so the build's import graph and the emitted imports are one reading of the file.
+/**
+ * Every `.abide` specifier a script imports or re-exports, as written.
+ *
+ * Read off the same spans the split lifts, so the build's import graph and the emitted imports are
+ * one reading of the file.
+ */
 export function abideSpecifiers(script: string): string[] {
     const specifiers: string[] = []
     if (!script.includes('.abide')) return specifiers
@@ -182,12 +198,16 @@ export function abideSpecifiers(script: string): string[] {
     return specifiers
 }
 
-// 32.18 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two
-// it is is the LANE's business: the server module renders the child, the client module mounts it.
-// WHERE that module is, is the build's: `components` maps a specifier to the path, relative and
-// without an extension, the build resolved it to (`componentGraph`) — and a specifier it does not
-// map keeps the path as written, which is where a relative one lands anyway because the output
-// tree mirrors the source tree.
+/**
+ * Rewrites each `.abide` specifier in `imports` to the lane's compiled module for it.
+ *
+ * 32.18 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two
+ * it is is the LANE's business: the server module renders the child, the client module mounts it.
+ * WHERE that module is, is the build's: `components` maps a specifier to the path, relative and
+ * without an extension, the build resolved it to (`componentGraph`) — and a specifier it does not
+ * map keeps the path as written, which is where a relative one lands anyway because the output
+ * tree mirrors the source tree.
+ */
 export function componentImports(
     imports: string,
     lane: '' | '.client',
@@ -202,9 +222,13 @@ export function componentImports(
         : imports
 }
 
-// 33 — `props` IS COMPILED AWAY, so the import an author wrote for it is a name the emitted module
-// never calls. Left in, every component module imports the stub that exists to throw, and the
-// app's own tooling reports it unused in a file nobody wrote.
+/**
+ * `imports` with `props` dropped from the abide import that names it.
+ *
+ * 33 — `props` IS COMPILED AWAY, so the import an author wrote for it is a name the emitted module
+ * never calls. Left in, every component module imports the stub that exists to throw, and the
+ * app's own tooling reports it unused in a file nobody wrote.
+ */
 export function withoutProps(imports: string): string {
     if (!imports.includes('props')) return imports
     return imports

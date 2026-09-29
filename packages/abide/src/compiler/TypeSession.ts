@@ -50,7 +50,7 @@ import type { Mount } from '#server/answerRpc.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import type { Method } from '#shared/rpc.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
-import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReads.ts'
+import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReadsIn.ts'
 import { argsSchemaOf } from './argsSchemaOf.ts'
 import {
     CHECKED_SUFFIX,
@@ -98,21 +98,24 @@ import { trackingWarnings, type Warning } from './trackingWarnings.ts'
 // and bun exposes no fd on a child pipe, so the sync channel cannot connect. The async channel is
 // a stream and needs nothing.
 
-// What a `.abide`'s projection is registered with the checker as, beside the `.abide` itself.
+/** What a `.abide`'s projection is registered with the checker as, beside the `.abide` itself. */
 const SHADOW_SUFFIX = '.shadow.ts'
 
-// Whether a script can bind a name at all — a file that cannot is never handed to the checker.
+/** Whether a script can bind a name at all — a file that cannot is never handed to the checker. */
 const DECLARES = /\b(?:const|let|var|import)\b/
 
+/** A TypeScript checker session over an app, asked about its `.abide` files through shadows. */
 export class TypeSession {
     private api: API
     private shadows = new Map<string, string>()
-    // Per canonical `.abide` path, what `diagnose` last lowered it to, for `inspect` to map through.
+    /**
+     * Per canonical `.abide` path, what `diagnose` last lowered it to, for `inspect` to map through.
+     */
     private lowered = new Map<
         string,
         { text: string; projection: Projection; shadow: CheckedShadow }
     >()
-    // THE `.abide` BEHIND EACH SHADOW, for a finding in one to be placed in the other.
+    /** THE `.abide` BEHIND EACH SHADOW, for a finding in one to be placed in the other. */
     private authored = new Map<
         string,
         { path: string; text: string | undefined; origins: readonly Origin[] }
@@ -122,10 +125,14 @@ export class TypeSession {
         this.api = api
     }
 
-    // 38.40 — A `.abide` THIS SESSION HAS NOT LOWERED IS STILL A MODULE ANOTHER CAN IMPORT. What its
-    // checked module exports does not depend on what the component holds (`COMPONENT_MODULE`), so an
-    // editor checking one page resolves the components it imports without lowering each of them.
-    // Remembered, so the lowering that replaces a stand-in is reported as a change to it.
+    /**
+     * Checked-module paths a stand-in answered for, without the `.abide` being lowered.
+     *
+     * 38.40 — A `.abide` THIS SESSION HAS NOT LOWERED IS STILL A MODULE ANOTHER CAN IMPORT. What its
+     * checked module exports does not depend on what the component holds (`COMPONENT_MODULE`), so an
+     * editor checking one page resolves the components it imports without lowering each of them.
+     * Remembered, so the lowering that replaces a stand-in is reported as a change to it.
+     */
     private stoodIn = new Set<string>()
 
     private standIn(name: string): string | undefined {
@@ -140,6 +147,7 @@ export class TypeSession {
         return COMPONENT_MODULE
     }
 
+    /** Opens a session on the project `tsconfig` configures. */
     static async open(tsconfig: string): Promise<TypeSession> {
         const session = new TypeSession(
             new API({
@@ -163,25 +171,39 @@ export class TypeSession {
 
     private tsconfig = ''
 
-    // The project as of the last snapshot, so a question asked after `readsFor` shares its snapshot
-    // rather than taking a second one.
+    /**
+     * The project as of the last snapshot, so a question asked after `readsFor` shares its snapshot
+     * rather than taking a second one.
+     */
     private project: Project | undefined = undefined
 
-    // WHAT THE AUTHOR CHANGED ON DISK since the last snapshot, for a session kept across compiles
-    // (`abide dev`). The checker caches every file it has read and is told only about the shadows
-    // this class writes, so an edit to a module a page imports answered with the type it had when
-    // the session opened: a name made reactive in a `.ts` stayed static, and a handler exported
-    // since was not there. `everything` is the edit nobody could name, and drops the whole cache.
+    /**
+     * Paths edited or deleted on disk since the last snapshot, or `everything`.
+     *
+     * WHAT THE AUTHOR CHANGED ON DISK since the last snapshot, for a session kept across compiles
+     * (`abide dev`). The checker caches every file it has read and is told only about the shadows
+     * this class writes, so an edit to a module a page imports answered with the type it had when
+     * the session opened: a name made reactive in a `.ts` stayed static, and a handler exported
+     * since was not there. `everything` is the edit nobody could name, and drops the whole cache.
+     */
     private edits = { present: [] as string[], deleted: [] as string[] }
     private everything = false
 
-    // SNAPSHOTS TAKEN, and it is a counter rather than a timing because that is the only form of
-    // this claim that survives a loaded machine. One per build is the contract; one per FILE is
-    // the shape that made the checker 99.8% of compile time, and it reports the same answers.
+    /**
+     * How many snapshots this session has taken.
+     *
+     * SNAPSHOTS TAKEN, and it is a counter rather than a timing because that is the only form of
+     * this claim that survives a loaded machine. One per build is the contract; one per FILE is
+     * the shape that made the checker 99.8% of compile time, and it reports the same answers.
+     */
     snapshots = 0
 
-    // The shadow has to appear in its directory's listing or it is not a root of the project and
-    // the checker never reads it.
+    /**
+     * A directory's listing as the checker sees it, with this session's shadows added.
+     *
+     * The shadow has to appear in its directory's listing or it is not a root of the project and
+     * the checker never reads it.
+     */
     private entriesIn(
         directory: string,
     ): { files: string[]; directories: string[] } | undefined {
@@ -238,11 +260,15 @@ export class TypeSession {
         return { files, directories }
     }
 
-    // THE PATHS A WATCHER SAW MOVE, or `undefined` where it saw a move and could not say where.
-    // A file that is there is reported CREATED AND CHANGED: `changed` alone leaves a new file out
-    // of the project's root set (a `.d.ts` nothing imports is never read), and `created` alone
-    // leaves an edited file's cached text in place. A directory is dropped wholesale, because the
-    // checker is not told what was under it.
+    /**
+     * Records the paths a watcher saw move, for the next snapshot to invalidate.
+     *
+     * THE PATHS A WATCHER SAW MOVE, or `undefined` where it saw a move and could not say where.
+     * A file that is there is reported CREATED AND CHANGED: `changed` alone leaves a new file out
+     * of the project's root set (a `.d.ts` nothing imports is never read), and `created` alone
+     * leaves an edited file's cached text in place. A directory is dropped wholesale, because the
+     * checker is not told what was under it.
+     */
     edited(paths: string[] | undefined): void {
         if (paths === undefined) {
             this.everything = true
@@ -274,7 +300,9 @@ export class TypeSession {
         }
     }
 
-    // ONE SNAPSHOT TAKES EVERY EDIT WITH IT: the shadows written for it and whatever moved on disk.
+    /**
+     * ONE SNAPSHOT TAKES EVERY EDIT WITH IT: the shadows written for it and whatever moved on disk.
+     */
     private async snapshot(
         created: string[],
         changed: string[],
@@ -298,7 +326,7 @@ export class TypeSession {
         return this.project
     }
 
-    // Whether the last snapshot still answers: there is one, and nothing has moved since.
+    /** Whether the last snapshot still answers: there is one, and nothing has moved since. */
     private get current(): boolean {
         return (
             this.project !== undefined &&
@@ -317,8 +345,10 @@ export class TypeSession {
             : await this.snapshot(created, changed)
     }
 
-    // THE APP'S OWN FILES the checker holds as roots: under `within`, and neither a dependency nor a
-    // declaration file. Canonical, which is how a shadow is keyed.
+    /**
+     * THE APP'S OWN FILES the checker holds as roots: under `within`, and neither a dependency nor a
+     * declaration file. Canonical, which is how a shadow is keyed.
+     */
     private rootsUnder(project: Project, within: string): string[] {
         const root = `${this.canonical(within)}/`
         const roots: string[] = []
@@ -334,14 +364,18 @@ export class TypeSession {
         return roots
     }
 
-    // A relative path from the checker is relative to the API's own cwd, which is the tsconfig's
-    // directory rather than the process's.
+    /**
+     * A relative path from the checker is relative to the API's own cwd, which is the tsconfig's
+     * directory rather than the process's.
+     */
     private canonical(path: string): string {
         return resolve(dirname(this.tsconfig), path)
     }
 
-    // A file the checker reads out of `shadows`, reported to the next snapshot only when it is new,
-    // its text moved, or a stand-in answered for it until now.
+    /**
+     * A file the checker reads out of `shadows`, reported to the next snapshot only when it is new,
+     * its text moved, or a stand-in answered for it until now.
+     */
     private register(
         path: string,
         text: string,
@@ -356,28 +390,36 @@ export class TypeSession {
         this.shadows.set(path, text)
     }
 
-    // THE READS IN `file`: every occurrence of a name bound to a `Reactive` (31.3), classified, in
-    // its projection (`projectShadow`). Everything else is left exactly as written. ONE FILE; a
-    // build wants `readsFor`.
+    /**
+     * The classified reactive reads in one `.abide` file.
+     *
+     * THE READS IN `file`: every occurrence of a name bound to a `Reactive` (31.3), classified, in
+     * its projection (`projectShadow`). Everything else is left exactly as written. ONE FILE; a
+     * build wants `readsFor`.
+     */
     async reads(abidePath: string, file: AbideFile): Promise<Read[]> {
         const answers = await this.readsFor([{ path: abidePath, file }])
         return answers.reads[0] ?? []
     }
 
-    // EVERY FILE IN ONE SNAPSHOT, which is the whole of the compiler's build time. Measured at
-    // 19.7 ms a file taking a snapshot each against 0.8 ms a file sharing one — 25x, because
-    // adding a file to the project's root set is what costs, not asking about it.
-    //
-    // THE CHECKER'S OWN TREE ANSWERS BOTH QUESTIONS. Which names the file binds is its top-level
-    // `const`/`let`/`var` statements and its imports — an inner block's name is not the page's — and
-    // which occurrences reach one is the references to that symbol. A parameter, a row's item, a
-    // key, a member, a label and a class field of the same spelling are other symbols, and are
-    // absent. What each reference DOES — a read, a write, an update, a shorthand — is read off its
-    // parents by `classifyRead`, so no token walk re-derives the grammar.
-    //
-    // WHAT IT HAS TO SAY THAT IS NOT A TYPE ERROR comes back beside the reads: the compiler's own
-    // warnings (14.14 to 14.17, 31.13, 32.14), each on the `.abide` line where the source's text
-    // was handed in.
+    /**
+     * Reads and compiler warnings for every file, in one checker snapshot.
+     *
+     * EVERY FILE IN ONE SNAPSHOT, which is the whole of the compiler's build time. Measured at
+     * 19.7 ms a file taking a snapshot each against 0.8 ms a file sharing one — 25x, because
+     * adding a file to the project's root set is what costs, not asking about it.
+     *
+     * THE CHECKER'S OWN TREE ANSWERS BOTH QUESTIONS. Which names the file binds is its top-level
+     * `const`/`let`/`var` statements and its imports — an inner block's name is not the page's — and
+     * which occurrences reach one is the references to that symbol. A parameter, a row's item, a
+     * key, a member, a label and a class field of the same spelling are other symbols, and are
+     * absent. What each reference DOES — a read, a write, an update, a shorthand — is read off its
+     * parents by `classifyRead`, so no token walk re-derives the grammar.
+     *
+     * WHAT IT HAS TO SAY THAT IS NOT A TYPE ERROR comes back beside the reads: the compiler's own
+     * warnings (14.14 to 14.17, 31.13, 32.14), each on the `.abide` line where the source's text
+     * was handed in.
+     */
     async readsFor(
         sources: { path: string; file: AbideFile; text?: string }[],
     ): Promise<{ reads: Read[][]; warnings: Diagnosis[] }> {
@@ -658,8 +700,12 @@ export class TypeSession {
         return { reads: answers, warnings }
     }
 
-    // 11.37 — every read of a request's ambient inside a `global` value's body, in the `.abide`
-    // files `readsFor` was last handed and every `.ts` under `within`, each on its own line.
+    /**
+     * Every read of a request's ambient inside a `global` value's body, as errors.
+     *
+     * 11.37 — every read of a request's ambient inside a `global` value's body, in the `.abide`
+     * files `readsFor` was last handed and every `.ts` under `within`, each on its own line.
+     */
     async ambientReads(within: string): Promise<Diagnosis[]> {
         const project = await this.currentProject()
         if (project === undefined) return []
@@ -714,12 +760,16 @@ export class TypeSession {
         return found.flat().sort(byPlace)
     }
 
-    // 19.16 — EVERY VALUE EACH MODULE EXPORTS, and the method of the abide call that declares it, or
-    // `undefined` where it is not one. The checker's own export table, so a name exported apart from
-    // its declaration, under another name or from another module is the same export it is to an
-    // importer; and the callee's own symbol, so `GET` imported under another name or through a
-    // namespace is abide's, and an app's own function of that spelling is not. A type is not an
-    // export here: it is erased, and has no address to answer at.
+    /**
+     * Every value each module exports, with the abide method that declares it.
+     *
+     * 19.16 — EVERY VALUE EACH MODULE EXPORTS, and the method of the abide call that declares it, or
+     * `undefined` where it is not one. The checker's own export table, so a name exported apart from
+     * its declaration, under another name or from another module is the same export it is to an
+     * importer; and the callee's own symbol, so `GET` imported under another name or through a
+     * namespace is abide's, and an app's own function of that spelling is not. A type is not an
+     * export here: it is erased, and has no address to answer at.
+     */
     async handlersIn(paths: string[]): Promise<DeclaredExport[][]> {
         const project = await this.currentProject()
         if (project === undefined) return paths.map(() => [])
@@ -799,13 +849,17 @@ export class TypeSession {
         )
     }
 
-    // 38.3 — WHAT THE CHECKER SAYS ABOUT EACH FILE AS IT RUNS, placed on the `.abide` line. Each
-    // source is checked as its lowered program (`checkedShadow`), which is registered for the life
-    // of the session beside its shadow for the reason a shadow is; and every `.ts` root of the
-    // project under `within` is checked as it stands, where `scripts` asks for them — an editor
-    // asking about one page does not want the whole app. `sources` carry their text, which is what
-    // a position is a line of. A `quiet` source is lowered and not reported on: a component an
-    // editor's page imports, which is there for the props the page is held to (33.4).
+    /**
+     * The checker's diagnostics for each `.abide` source and the app's `.ts` roots.
+     *
+     * 38.3 — WHAT THE CHECKER SAYS ABOUT EACH FILE AS IT RUNS, placed on the `.abide` line. Each
+     * source is checked as its lowered program (`checkedShadow`), which is registered for the life
+     * of the session beside its shadow for the reason a shadow is; and every `.ts` root of the
+     * project under `within` is checked as it stands, where `scripts` asks for them — an editor
+     * asking about one page does not want the whole app. `sources` carry their text, which is what
+     * a position is a line of. A `quiet` source is lowered and not reported on: a component an
+     * editor's page imports, which is there for the props the page is held to (33.4).
+     */
     async diagnose(
         sources: {
             path: string
@@ -916,21 +970,27 @@ export class TypeSession {
         return found
     }
 
-    // Whether `diagnose` found a refusal in the checked lowering of `path`, which it has reported.
+    /**
+     * Whether `diagnose` found a refusal in the checked lowering of `path`, which it has reported.
+     */
     lowerRefused(path: string): boolean {
         const lowered = this.lowered.get(this.canonical(path))
         return lowered !== undefined && lowered.shadow.refusals.length > 0
     }
 
-    // 38.40 — WHAT THE NAME AT `offset` IN A `.abide` IS, asked of the program `diagnose` last lowered
-    // it to: its type and documentation for a hover, and where it is declared for a jump. The
-    // checked module is asked where the position was copied into it, which is what a member hangs
-    // off — `regions.join` is `Array`'s — and the projection where the lowering rewrote it, so a
-    // name read by name is the `Reactive` it was declared as.
-    //
-    // `text` IS WHAT THE EDITOR SHOWS, and an offset into it maps through a lowering of the same
-    // text or not at all: a file the parser refuses keeps its last lowering, whose offsets have
-    // moved under every edit since.
+    /**
+     * The hover signature, documentation and definitions of the name at `offset` in a `.abide`.
+     *
+     * 38.40 — WHAT THE NAME AT `offset` IN A `.abide` IS, asked of the program `diagnose` last lowered
+     * it to: its type and documentation for a hover, and where it is declared for a jump. The
+     * checked module is asked where the position was copied into it, which is what a member hangs
+     * off — `regions.join` is `Array`'s — and the projection where the lowering rewrote it, so a
+     * name read by name is the `Reactive` it was declared as.
+     *
+     * `text` IS WHAT THE EDITOR SHOWS, and an offset into it maps through a lowering of the same
+     * text or not at all: a file the parser refuses keeps its last lowering, whose offsets have
+     * moved under every edit since.
+     */
     async inspect(
         path: string,
         text: string,
@@ -998,9 +1058,13 @@ export class TypeSession {
         }
     }
 
-    // A span of a file the checker read, as the file the author wrote: a lowered `.abide` mapped
-    // back through both of its maps, and one this session has not lowered — or a span of the
-    // scaffolding a lowering adds, which the author never wrote — placed at its top.
+    /**
+     * A span the checker read, placed in the file the author wrote.
+     *
+     * A span of a file the checker read, as the file the author wrote: a lowered `.abide` mapped
+     * back through both of its maps, and one this session has not lowered — or a span of the
+     * scaffolding a lowering adds, which the author never wrote — placed at its top.
+     */
     private placeOf(
         fileName: string,
         text: string,
@@ -1052,7 +1116,11 @@ const AMBIENT = 'abide-check.d.ts'
 const AMBIENT_DECLARATIONS = `declare module '*.css' {}
 `
 
-// 38.3 — one thing the checker said, at a line and column of the file the author wrote, both from 1.
+/**
+ * One thing the checker said, placed in the file the author wrote.
+ *
+ * 38.3 — line and column from 1.
+ */
 export type Diagnosis = {
     path: string
     line: number
@@ -1062,21 +1130,33 @@ export type Diagnosis = {
     message: string
 }
 
-// 38.40 — where something is in a file the author wrote, line and column from 1.
+/**
+ * Where something is in a file the author wrote, line and column from 1.
+ *
+ * 38.40.
+ */
 export type Place = {
     path: string
     start: { line: number; column: number }
     end: { line: number; column: number }
 }
 
-// 38.40 — the name under a cursor: how it is declared, what its doc comment says, and where.
+/**
+ * The name under a cursor: how it is declared, what its doc comment says, and where.
+ *
+ * 38.40.
+ */
 export type Inspection = {
     signature: string
     documentation: string
     definitions: Place[]
 }
 
-// 33.4 — what a component's tag is held to: the record its stand-in is called with.
+/**
+ * The props type a component's tag is held to, printed.
+ *
+ * 33.4 — the record its stand-in is called with.
+ */
 async function propsTypeOf(
     checker: Checker,
     component: CheckedSymbol,
@@ -1093,8 +1173,10 @@ async function propsTypeOf(
         : checker.typeToString(record, undefined, NodeBuilderFlags.NoTruncation)
 }
 
-// How a hover spells a symbol, as tsserver does: the keyword it was declared with, its name, and its
-// type — a function's first signature, with how many more it has.
+/**
+ * How a hover spells a symbol, as tsserver does: the keyword it was declared with, its name, and its
+ * type — a function's first signature, with how many more it has.
+ */
 async function describe(
     project: Project,
     symbol: CheckedSymbol,
@@ -1167,8 +1249,12 @@ function byPlace(one: Diagnosis, two: Diagnosis): number {
     )
 }
 
-// THE WARNINGS A FILE'S READS EARN. The syntax alone decides 14.14 to 14.16 (`trackingWarnings`);
-// 14.17 and 31.13 ask what a read hands back, which is the return of the `Reactive`'s call.
+/**
+ * The tracking and type warnings a file's reactive reads earn.
+ *
+ * THE WARNINGS A FILE'S READS EARN. The syntax alone decides 14.14 to 14.16 (`trackingWarnings`);
+ * 14.17 and 31.13 ask what a read hands back, which is the return of the `Reactive`'s call.
+ */
 async function warningsFor(
     checker: Checker,
     located: { node: Node; read: Read }[],
@@ -1234,14 +1320,14 @@ async function warningsFor(
     return warnings
 }
 
-// The shapes that are a read of the value, which is what tracking is about.
+/** The shapes that are a read of the value, which is what tracking is about. */
 const READING: ReadonlySet<Read['shape']> = new Set([
     'value',
     'call',
     'shorthand',
 ])
 
-// What calling the `Reactive` a name holds hands back.
+/** What calling the `Reactive` a name holds hands back. */
 async function valueTypeOf(
     checker: Checker,
     node: Node,
@@ -1267,7 +1353,7 @@ async function admitsNullish(type: Type): Promise<boolean> {
     return false
 }
 
-// Indexed by the API's `DiagnosticCategory`.
+/** Indexed by the API's `DiagnosticCategory`. */
 const CATEGORIES = ['warning', 'error', 'suggestion', 'message'] as const
 
 function flatten(diagnostic: {
@@ -1283,22 +1369,24 @@ function flatten(diagnostic: {
     return message
 }
 
-// Where abide declares the five methods: `GET` is `declare('GET')` there and nowhere else.
+/** Where abide declares the five methods: `GET` is `declare('GET')` there and nowhere else. */
 const METHODS_SOURCE = new URL('../shared/rpc.ts', import.meta.url).pathname
-// And where it declares `socket` (18.1), which a module under `server/sockets` exports.
+/** And where it declares `socket` (18.1), which a module under `server/sockets` exports. */
 const SOCKET_SOURCE = new URL('../shared/socket.ts', import.meta.url).pathname
 
-// What declared an export: one of the five methods, or `socket`.
+/** What declared an export: one of the five methods, or `socket`. */
 type Declared = Mount['method']
 type DeclaredExport = Pick<Mount, 'name' | 'ui' | 'copy' | 'args'> & {
     method: Declared | undefined
-    // 18.30 — what its copy's options declare and the build could not read.
+    /** 18.30 — what its copy's options declare and the build could not read. */
     unread: Diagnosis[]
 }
 const METHODS = new Set<string>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 
-// The method of the abide call a value is declared by — `const x = GET(…)` or `export default
-// GET(…)` — or `undefined` where it is declared any other way.
+/**
+ * The method of the abide call a value is declared by — `const x = GET(…)` or `export default
+ * GET(…)` — or `undefined` where it is declared any other way.
+ */
 async function declaringMethod(
     checker: Checker,
     symbol: CheckedSymbol,
@@ -1361,8 +1449,12 @@ async function declaringMethod(
     }
 }
 
-// What a handler call is handed, followed to its function — written inline, bound to a name,
-// declared as a function, or handed to `reactive` first — or what it is where it is no function.
+/**
+ * The function a handler call is handed, followed through names and `reactive(…)`.
+ *
+ * What a handler call is handed, followed to its function — written inline, bound to a name,
+ * declared as a function, or handed to `reactive` first — or what it is where it is no function.
+ */
 async function handlerBodyOf(
     checker: Checker,
     handed: Node | undefined,
@@ -1373,8 +1465,12 @@ async function handlerBodyOf(
         : node
 }
 
-// 19.11 — THE ARGS MEMBERS A HANDLER DEFAULTS, which its annotation still calls required: the type
-// the `Rpc` carries is the one written, and a default lives on the pattern that destructures it.
+/**
+ * The args members a handler's parameter pattern gives a default.
+ *
+ * 19.11 — THE ARGS MEMBERS A HANDLER DEFAULTS, which its annotation still calls required: the type
+ * the `Rpc` carries is the one written, and a default lives on the pattern that destructures it.
+ */
 function defaultedMembers(node: Node | undefined): string[] {
     if (
         node === undefined ||
@@ -1396,13 +1492,17 @@ function defaultedMembers(node: Node | undefined): string[] {
     return defaulted
 }
 
-// 18.19 — WHAT A `GET`'s VALUE DECLARES THAT ITS BROWSER COPY BEHAVES BY, read off its declaration for
-// 20.4's reason: what the build can read without running it. The `reactive(…)` the `GET` is handed,
-// and the options object it is handed, each written inline or bound to a name first. A value is
-// read off its TYPE, so `history: SIZE` over a `const SIZE = 3` carries 3 as `history: 3` does: a
-// string `by`, string `tags`, a number `history`, and an `identity` of abide's `structural`. A
-// function form has no serialisation and stays the server's. 18.30 — anything else of `by`, `tags`
-// or `history` is handed back UNREAD, for the build to warn on.
+/**
+ * The browser-copy options a `GET` declares, read statically, and the values that could not be.
+ *
+ * 18.19 — WHAT A `GET`'s VALUE DECLARES THAT ITS BROWSER COPY BEHAVES BY, read off its declaration for
+ * 20.4's reason: what the build can read without running it. The `reactive(…)` the `GET` is handed,
+ * and the options object it is handed, each written inline or bound to a name first. A value is
+ * read off its TYPE, so `history: SIZE` over a `const SIZE = 3` carries 3 as `history: 3` does: a
+ * string `by`, string `tags`, a number `history`, and an `identity` of abide's `structural`. A
+ * function form has no serialisation and stays the server's. 18.30 — anything else of `by`, `tags`
+ * or `history` is handed back UNREAD, for the build to warn on.
+ */
 async function declaredCopy(
     checker: Checker,
     handed: Node | undefined,
@@ -1451,7 +1551,7 @@ async function declaredCopy(
     }
 }
 
-// Whether a `GET`'s handler body (`handlerBodyOf`) is an `async function*`.
+/** Whether a `GET`'s handler body (`handlerBodyOf`) is an `async function*`. */
 function declaresStream(node: Node | undefined): boolean {
     return (
         node !== undefined &&
@@ -1461,7 +1561,7 @@ function declaresStream(node: Node | undefined): boolean {
     )
 }
 
-// `boundValue`, and a function declaration where the name is one.
+/** `boundValue`, and a function declaration where the name is one. */
 async function declarationOf(
     checker: Checker,
     node: Node | undefined,
@@ -1477,7 +1577,7 @@ async function declarationOf(
     return boundInitializer(checker, named)
 }
 
-// A node, or where it is a name, what the name was initialised with.
+/** A node, or where it is a name, what the name was initialised with. */
 async function boundValue(
     checker: Checker,
     node: Node | undefined,
@@ -1487,8 +1587,10 @@ async function boundValue(
     return named === undefined ? undefined : boundInitializer(checker, named)
 }
 
-// A list of names: an array literal of string-literal-typed elements, or a tuple type of string
-// literals (`as const`). `undefined` where it is anything else.
+/**
+ * A list of names: an array literal of string-literal-typed elements, or a tuple type of string
+ * literals (`as const`). `undefined` where it is anything else.
+ */
 async function stringLiteralsOf(
     checker: Checker,
     value: Node,
@@ -1512,8 +1614,10 @@ async function stringLiteralsOf(
     return names
 }
 
-// What the value a symbol names was initialised with, through an import to the module that declares
-// it: `reactive(…)` in `const rows = reactive(…)`, wherever `rows` is read from.
+/**
+ * What the value a symbol names was initialised with, through an import to the module that declares
+ * it: `reactive(…)` in `const rows = reactive(…)`, wherever `rows` is read from.
+ */
 async function boundInitializer(
     checker: Checker,
     symbol: CheckedSymbol,
@@ -1526,8 +1630,12 @@ async function boundInitializer(
         : undefined
 }
 
-// Abide's own comparator, by its symbol rather than its spelling: an app's function of the same name
-// is not the one the browser's copy would be handed.
+/**
+ * Whether a name resolves to abide's own `structural` comparator.
+ *
+ * Abide's own comparator, by its symbol rather than its spelling: an app's function of the same name
+ * is not the one the browser's copy would be handed.
+ */
 async function isAbideStructural(
     checker: Checker,
     named: Node,
@@ -1543,9 +1651,13 @@ async function isAbideStructural(
     )
 }
 
-// 20.4 — `clients: { ui: false }` written on the declaration, which is what the build can read without
-// running it: a browser is then handed no wrapper, and importing the handler from `#ui` is 16.30's
-// compile error. An options object built elsewhere is not read, and leaves the wrapper in place.
+/**
+ * Whether a handler call declares `clients: { ui: false }` inline.
+ *
+ * 20.4 — `clients: { ui: false }` written on the declaration, which is what the build can read without
+ * running it: a browser is then handed no wrapper, and importing the handler from `#ui` is 16.30's
+ * compile error. An options object built elsewhere is not read, and leaves the wrapper in place.
+ */
 function withheldFromUi(call: Node & { arguments?: readonly Node[] }): boolean {
     const options = call.arguments?.[1]
     if (options === undefined || !isObjectLiteralExpression(options))
@@ -1558,15 +1670,19 @@ function withheldFromUi(call: Node & { arguments?: readonly Node[] }): boolean {
     )
 }
 
-// 31.3 — THE DECLARED TYPE OF THE POSITION A READ STANDS IN, where it is one of the three the
-// clause names: a call's parameter, an annotated binding, an annotated return. An array literal
-// passes its position through, because `watch([a, b], …)` is the parameter's own shape. Anything
-// else is `undefined` and stays a read.
-//
-// THE PARAMETER IS ASKED OF THE SIGNATURE'S TARGET, the generic declaration, and never of the
-// instantiated one: `structuredClone<T>(value: T)` INFERS `T` from this very argument, and an
-// instantiated signature would call the argument a `Reactive` because it already is one in the
-// shadow.
+/**
+ * The declared type of the position a read stands in: a parameter, an annotated binding or return.
+ *
+ * 31.3 — THE DECLARED TYPE OF THE POSITION A READ STANDS IN, where it is one of the three the
+ * clause names: a call's parameter, an annotated binding, an annotated return. An array literal
+ * passes its position through, because `watch([a, b], …)` is the parameter's own shape. Anything
+ * else is `undefined` and stays a read.
+ *
+ * THE PARAMETER IS ASKED OF THE SIGNATURE'S TARGET, the generic declaration, and never of the
+ * instantiated one: `structuredClone<T>(value: T)` INFERS `T` from this very argument, and an
+ * instantiated signature would call the argument a `Reactive` because it already is one in the
+ * shadow.
+ */
 async function declaredType(
     checker: Checker,
     node: Node,
@@ -1627,18 +1743,22 @@ function annotated(
         : checker.getTypeFromTypeNode(type)
 }
 
-// 14.2 — EVERY TEMPLATE POSITION THE CHECKER CAN PROVE READS NOTHING REACTIVE, marked with a
-// zero-width `static` read at its start. Everything else is bound, which is the inversion: the old
-// question — does it NAME a `Reactive` — let `{big()}` over a function reading `n` be written once.
-//
-// A PROOF IS THREE THINGS: no reactive read inside the span, a syntax that runs no author code
-// but through the answers it hands back (`provePosition`), and those answers. Every member it reads
-// resolves to a plain property — a getter is code, and a member of `any` resolves to nothing — and
-// every value a coercion or the position itself turns into a string is a primitive, whose
-// conversion runs nothing either.
-//
-// ASKED IN TWO BATCHES A FILE, the checker's round trip being what costs. Each position's own tree
-// also says what needs no type at all: its `raw` callees and its refused `await` (`slotFacts`).
+/**
+ * Marks each template position the checker proves reads nothing reactive with a `static` read.
+ *
+ * 14.2 — EVERY TEMPLATE POSITION THE CHECKER CAN PROVE READS NOTHING REACTIVE, marked with a
+ * zero-width `static` read at its start. Everything else is bound, which is the inversion: the old
+ * question — does it NAME a `Reactive` — let `{big()}` over a function reading `n` be written once.
+ *
+ * A PROOF IS THREE THINGS: no reactive read inside the span, a syntax that runs no author code
+ * but through the answers it hands back (`provePosition`), and those answers. Every member it reads
+ * resolves to a plain property — a getter is code, and a member of `any` resolves to nothing — and
+ * every value a coercion or the position itself turns into a string is a primitive, whose
+ * conversion runs nothing either.
+ *
+ * ASKED IN TWO BATCHES A FILE, the checker's round trip being what costs. Each position's own tree
+ * also says what needs no type at all: its `raw` callees and its refused `await` (`slotFacts`).
+ */
 async function proveSlots(
     checker: Checker,
     sourceFile: Node,
@@ -1726,15 +1846,17 @@ async function proveSlots(
     }
 }
 
-// A union's members, or the type alone where it is not one.
+/** A union's members, or the type alone where it is not one. */
 async function unionMembers(type: Type): Promise<readonly Type[]> {
     return (type.flags & TypeFlags.Union) !== 0
         ? await (type as UnionOrIntersectionType).getTypes()
         : [type]
 }
 
-// Whether every member of the type passes, `null` and `undefined` aside, and one at least is left
-// to: an optional parameter is its type or `undefined`, and is still the type.
+/**
+ * Whether every member of the type passes, `null` and `undefined` aside, and one at least is left
+ * to: an optional parameter is its type or `undefined`, and is still the type.
+ */
 async function everyPresentMember(
     type: Type,
     test: (member: Type) => Promise<boolean>,
@@ -1749,8 +1871,10 @@ async function everyPresentMember(
     return present
 }
 
-// Every member of the type is a primitive, whose string conversion and comparison run no code.
-// `any` and `unknown` are not: what they hold at runtime is anything.
+/**
+ * Every member of the type is a primitive, whose string conversion and comparison run no code.
+ * `any` and `unknown` are not: what they hold at runtime is anything.
+ */
 async function isPrimitiveTyped(type: Type): Promise<boolean> {
     const members = await unionMembers(type)
     for (const member of members)
@@ -1759,9 +1883,11 @@ async function isPrimitiveTyped(type: Type): Promise<boolean> {
     return true
 }
 
-// A member read that runs no code: every declaration of it is a data property, an enum member or a
-// module's own binding. A getter is code, and a member the checker cannot resolve — every member
-// of `any` — is nothing it can vouch for.
+/**
+ * A member read that runs no code: every declaration of it is a data property, an enum member or a
+ * module's own binding. A getter is code, and a member the checker cannot resolve — every member
+ * of `any` — is nothing it can vouch for.
+ */
 function isPlainProperty(symbol: CheckedSymbol | undefined): boolean {
     if (symbol === undefined) return false
     if ((symbol.flags & SymbolFlags.Accessor) !== 0) return false
@@ -1780,18 +1906,22 @@ const PLAIN_DECLARATIONS: ReadonlySet<SyntaxKind> = new Set([
     SyntaxKind.VariableDeclaration,
 ])
 
-// 31.3 — A BINDING OF A READ HOLDS THE VALUE, and the checker cannot see that. It types the SHADOW,
-// where `let shown = total` is the `Reactive` itself; the lowering reads `total` there, because an
-// un-annotated binding is not a position 31.3 holds in, so `shown` is handed the VALUE. Asked of
-// the shadow alone, `shown` was then classified a `Reactive` too and every use of it lowered to
-// `shown()` — a call on a number. Declared or imported, the name it binds from is the same case.
-//
-// SO THE ANSWER IS CORRECTED WHERE THE TWO PART COMPANY: an un-annotated binding whose initializer
-// hands on a reactive name as its value — through parentheses, a type-only wrapper, a conditional's
-// arms or a logical operand, the positions a read is the value in — is not a `Reactive`. A chain
-// falls out: `let c = b` names `b`, which the shadow typed as one, so `c` holds the value too. An
-// annotated binding is 31.3's own hold and is left alone, and so is a call: `turns(...)` is a
-// `Reactive` in the lowered program exactly as it is in the shadow.
+/**
+ * Drops names that bind a reactive read's value, rather than the `Reactive`, from `reactive`.
+ *
+ * 31.3 — A BINDING OF A READ HOLDS THE VALUE, and the checker cannot see that. It types the SHADOW,
+ * where `let shown = total` is the `Reactive` itself; the lowering reads `total` there, because an
+ * un-annotated binding is not a position 31.3 holds in, so `shown` is handed the VALUE. Asked of
+ * the shadow alone, `shown` was then classified a `Reactive` too and every use of it lowered to
+ * `shown()` — a call on a number. Declared or imported, the name it binds from is the same case.
+ *
+ * SO THE ANSWER IS CORRECTED WHERE THE TWO PART COMPANY: an un-annotated binding whose initializer
+ * hands on a reactive name as its value — through parentheses, a type-only wrapper, a conditional's
+ * arms or a logical operand, the positions a read is the value in — is not a `Reactive`. A chain
+ * falls out: `let c = b` names `b`, which the shadow typed as one, so `c` holds the value too. An
+ * annotated binding is 31.3's own hold and is left alone, and so is a call: `turns(...)` is a
+ * `Reactive` in the lowered program exactly as it is in the shadow.
+ */
 async function dropValueHolders(
     checker: Checker,
     names: readonly Node[],
@@ -1824,8 +1954,10 @@ async function dropValueHolders(
     }
 }
 
-// The names an initializer's value can BE, as opposed to names it merely uses: `a` in `(a)`,
-// `a as T`, `c ? a : b` and `a ?? b`, but not in `f(a)` or `a.b`.
+/**
+ * The names an initializer's value can BE, as opposed to names it merely uses: `a` in `(a)`,
+ * `a as T`, `c ? a : b` and `a ?? b`, but not in `f(a)` or `a.b`.
+ */
 function valueLeaves(node: Node, leaves: Node[]): void {
     switch (node.kind) {
         case SyntaxKind.Identifier:
@@ -1875,7 +2007,8 @@ function valueLeaves(node: Node, leaves: Node[]): void {
     }
 }
 
-// Where abide declares `Reactive` and `props`, found in the project the way `METHODS_SOURCE` is.
+// Where abide declares `Reactive`, `props` and `Selection`, found in the project the way
+// `METHODS_SOURCE` is.
 const REACTIVE_SOURCE = new URL(
     '../shared/reactive/Reactive.ts',
     import.meta.url,
@@ -1884,14 +2017,21 @@ const PROPS_SOURCE = new URL('../shared/props.ts', import.meta.url).pathname
 const SELECTION_SOURCE = new URL('../shared/reactive/index.ts', import.meta.url)
     .pathname
 
-// 31.3 — A `Reactive` IS TOLD BY ITS DECLARATION, never by how it prints. Every instantiation of
-// abide's `Reactive` carries the symbol of the one type literal it is declared as, whatever alias
-// or re-export the app reached it through — so `type Counter = Reactive<number>` is one, and an
-// app's own type that happens to be spelled `Reactive` is not. `undefined` where the project never
-// reaches abide, and then nothing in it is one. `props` is abide's file as the checker names it.
+/**
+ * Abide's own `Reactive`, `Selection` and `props` declarations, as this project's checker names
+ * them.
+ *
+ * 31.3 — A `Reactive` IS TOLD BY ITS DECLARATION, never by how it prints. Every instantiation of
+ * abide's `Reactive` carries the symbol of the one type literal it is declared as, whatever alias
+ * or re-export the app reached it through — so `type Counter = Reactive<number>` is one, and an
+ * app's own type that happens to be spelled `Reactive` is not. `undefined` where the project never
+ * reaches abide, and then nothing in it is one. `props` is abide's file as the checker names it.
+ */
 type Abide = {
     reactive: CheckedSymbol | undefined
-    // 31.14 — abide's `Selection` alias, which a position may be typed as rather than as a `Reactive`.
+    /**
+     * 31.14 — abide's `Selection` alias, which a position may be typed as rather than as a `Reactive`.
+     */
     selection: CheckedSymbol | undefined
     props: string | undefined
 }
@@ -1928,11 +2068,15 @@ async function abideIn(project: Project): Promise<Abide> {
     return { reactive, selection, props: props?.path }
 }
 
-// A union is `Reactive`-typed only where EVERY member is, `null` and `undefined` aside: `s.set`
-// takes `Accepted | Promise<Accepted> | Reactive<Accepted>`, and a position that also takes a
-// plain value is one where a read is what was meant. An intersection with a `Reactive` in it is
-// one. `lists` has `Reactive<X>[]` count too, being the shape a list of sources is declared as —
-// a parameter's question, and never a name's: a name holding an array is read as the array.
+/**
+ * Whether a position's type is abide's `Reactive`, or a `Selection`.
+ *
+ * A union is `Reactive`-typed only where EVERY member is, `null` and `undefined` aside: `s.set`
+ * takes `Accepted | Promise<Accepted> | Reactive<Accepted>`, and a position that also takes a
+ * plain value is one where a read is what was meant. An intersection with a `Reactive` in it is
+ * one. `lists` has `Reactive<X>[]` count too, being the shape a list of sources is declared as —
+ * a parameter's question, and never a name's: a name holding an array is read as the array.
+ */
 async function isReactiveType(
     checker: Checker,
     abide: Abide,
@@ -1947,9 +2091,13 @@ async function isReactiveType(
     )
 }
 
-// 31.14 — A POSITION TYPED AS A `Selection`, or as a type parameter constrained by one (the free
-// `refresh`, `invalidate`, `busy` and `ready` take `Chosen extends Selection`). A value is never a
-// selection of itself, so a read there hands `refresh` the invoice rather than the thing to reload.
+/**
+ * Whether a type is abide's `Selection`, or a type parameter constrained by one.
+ *
+ * 31.14 — A POSITION TYPED AS A `Selection`, or as a type parameter constrained by one (the free
+ * `refresh`, `invalidate`, `busy` and `ready` take `Chosen extends Selection`). A value is never a
+ * selection of itself, so a read there hands `refresh` the invoice rather than the thing to reload.
+ */
 async function isSelection(
     checker: Checker,
     abide: Abide,
@@ -1968,8 +2116,12 @@ async function isSelection(
     })
 }
 
-// `getSymbol` is answered from the client's cache once a symbol has been seen, so past the first
-// `Reactive` in a snapshot this is no round-trip at all.
+/**
+ * Whether one union member is abide's `Reactive`, an intersection with one, or a list of them.
+ *
+ * `getSymbol` is answered from the client's cache once a symbol has been seen, so past the first
+ * `Reactive` in a snapshot this is no round-trip at all.
+ */
 async function isReactiveMember(
     checker: Checker,
     reactive: CheckedSymbol,
@@ -1992,18 +2144,22 @@ async function isReactiveMember(
     return (await element?.getSymbol())?.id === reactive.id
 }
 
-// 33 — WHAT `props<Props>()` BINDS, and it is a second question from 31.3's rather than a case of
-// it: a prop is not a `Reactive` and is not typed as one, so no type answers this. The CALLEE
-// does: abide's own `props`, which an app's function of that spelling is not. The pattern is flat
-// (33.14), and every name it binds is one accessor (33.4).
-//
-// THREE KINDS OF READ COME BACK: the call itself, which lowers to the record the caller passed;
-// each default, which lowers to an accessor answering it; and every occurrence of every name the
-// pattern bound.
-//
-// 33.6, 33.7 — A PROP THE CHILD WRITES IS A CELL, and the child is the only side that can tell: a
-// name assigned, updated, or handed on as a `bind:` operand. Its key rides the call's read, its
-// default becomes a cell too, and every occurrence reads through the accessor as a `Reactive`.
+/**
+ * The reads a `props<Props>()` destructuring contributes, pushed onto `reads`.
+ *
+ * 33 — WHAT `props<Props>()` BINDS, and it is a second question from 31.3's rather than a case of
+ * it: a prop is not a `Reactive` and is not typed as one, so no type answers this. The CALLEE
+ * does: abide's own `props`, which an app's function of that spelling is not. The pattern is flat
+ * (33.14), and every name it binds is one accessor (33.4).
+ *
+ * THREE KINDS OF READ COME BACK: the call itself, which lowers to the record the caller passed;
+ * each default, which lowers to an accessor answering it; and every occurrence of every name the
+ * pattern bound.
+ *
+ * 33.6, 33.7 — A PROP THE CHILD WRITES IS A CELL, and the child is the only side that can tell: a
+ * name assigned, updated, or handed on as a `bind:` operand. Its key rides the call's read, its
+ * default becomes a cell too, and every occurrence reads through the accessor as a `Reactive`.
+ */
 async function propsReads(
     checker: Checker,
     abide: Abide,
@@ -2141,8 +2297,10 @@ async function propsReads(
     }
 }
 
-// A name standing alone as a `bind:` operand, which the projection wraps in `__bind` on an element
-// and `__bound` on a component (`projectShadow`'s `openerOf` and `invocation`).
+/**
+ * A name standing alone as a `bind:` operand, which the projection wraps in `__bind` on an element
+ * and `__bound` on a component (`projectShadow`'s `openerOf` and `invocation`).
+ */
 function isBindOperand(node: Node): boolean {
     const parent = node.parent
     return (
@@ -2164,9 +2322,13 @@ async function isReactiveSymbol(
     return type !== undefined && isReactiveType(checker, abide, type, false)
 }
 
-// ASCENDING, AND AN INSERTION KNOWS WHICH SIDE IT IS ON. A default's open stands at the same
-// offset as the first read inside it — `currency = fallback` — and a sort by offset alone leaves
-// which comes first to the order the two passes happened to push in.
+/**
+ * Orders reads by offset, a default's open before a read at the same offset and its close after.
+ *
+ * ASCENDING, AND AN INSERTION KNOWS WHICH SIDE IT IS ON. A default's open stands at the same
+ * offset as the first read inside it — `currency = fallback` — and a sort by offset alone leaves
+ * which comes first to the order the two passes happened to push in.
+ */
 function byPosition(left: Read, right: Read): number {
     return left.start - right.start || side(left) - side(right)
 }

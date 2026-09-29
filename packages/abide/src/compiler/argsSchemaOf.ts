@@ -22,14 +22,22 @@ import type { JsonValue } from '#shared/JsonValue.ts'
 
 type Schema = { [keyword: string]: JsonValue }
 
-// ONE WALK'S MEMORY: each object type walked once, whatever reaches it again, and a depth past which
-// a type is `{}`. An args record is JSON a few levels deep; a type that reaches the DOM or the lib's
-// class graph instead is wide enough to walk for minutes, and widening it is 19.12's answer.
+/**
+ * What one schema walk remembers: the object types it has answered, and how deep it is.
+ *
+ * ONE WALK'S MEMORY: each object type walked once, whatever reaches it again, and a depth past which
+ * a type is `{}`. An args record is JSON a few levels deep; a type that reaches the DOM or the lib's
+ * class graph instead is wide enough to walk for minutes, and widening it is 19.12's answer.
+ */
 type Walk = { seen: Map<number, Schema>; depth: number }
 const DEEPEST = 8
 
-// What the first parameter of the `Rpc`'s call takes, or `undefined` where it takes no record —
-// with each member the handler defaults made optional (19.11).
+/**
+ * The JSON Schema of a handler's args record, or `undefined` where it takes no record.
+ *
+ * What the first parameter of the `Rpc`'s call takes, or `undefined` where it takes no record —
+ * with each member the handler defaults made optional (19.11).
+ */
 export async function argsSchemaOf(
     checker: Checker,
     handler: Type,
@@ -135,9 +143,11 @@ async function objectOf(
     return schema
 }
 
-// A union, with what JSON cannot carry dropped: `undefined` is an absent member rather than a value.
-// `true | false` is `boolean`, a run of one kind's literals is an `enum` under that kind's `type` —
-// the `type` is what 19.8 coerces text by — and bare kinds merge into one `type` list.
+/**
+ * A union, with what JSON cannot carry dropped: `undefined` is an absent member rather than a value.
+ * `true | false` is `boolean`, a run of one kind's literals is an `enum` under that kind's `type` —
+ * the `type` is what 19.8 coerces text by — and bare kinds merge into one `type` list.
+ */
 async function unionOf(
     checker: Checker,
     union: UnionOrIntersectionType,
@@ -179,7 +189,7 @@ async function unionOf(
     return { type: kinds }
 }
 
-// String literals under `string`, number literals under `number`: one `enum` each.
+/** String literals under `string`, number literals under `number`: one `enum` each. */
 function literalGroups(literals: Type[]): Schema[] {
     const strings: Type[] = []
     const numbers: Type[] = []

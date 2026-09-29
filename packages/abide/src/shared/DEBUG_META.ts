@@ -1,2 +1,6 @@
-// 28.10 — the `<meta>` the server writes `DEBUG` into, and the one a browser reads it back from.
+/**
+ * The `<meta>` the server writes `DEBUG` into, and a browser reads it back from.
+ *
+ * 28.10.
+ */
 export const DEBUG_META = 'abide-debug'

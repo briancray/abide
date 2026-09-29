@@ -8,9 +8,13 @@ GlobalRegistrator.register({ url: 'http://localhost/' })
 const { install, measure, patchSet } = await import('../src/measure/index.ts')
 install()
 
-// `number | null` rather than `number`: the three rows this lane reads off the published
-// counter are absent in both substrates here, and 44.20 says absent is `null`. Typed as
-// `number` the two sides would still compare equal and the declaration would be a lie.
+/**
+ * Each case's counts under bun, keyed by case name.
+ *
+ * `number | null` rather than `number`: the three rows this lane reads off the published counter
+ * are absent in both substrates here, and 44.20 says absent is `null`. Typed as `number` the two
+ * sides would still compare equal and the declaration would be a lie.
+ */
 const cases: Record<string, Record<string, number | null>> = {}
 for (const [name, body] of Object.entries(CASES))
     cases[name] = measure(body) as unknown as Record<string, number | null>

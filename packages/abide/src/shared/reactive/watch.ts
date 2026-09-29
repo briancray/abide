@@ -29,7 +29,9 @@ export type Disposer = () => void
 // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
 export type Effect = () => void | Disposer
 
+/** Runs `effect` now, and again whenever a reactive value it read changes. */
 export function watch(effect: Effect): Disposer
+/** Runs `effect` now and whenever one of `sources` changes; its own reads subscribe to nothing. */
 export function watch<Stored>(
     sources: Reactive<Stored> | Reactive<Stored>[],
     effect: Effect,
@@ -48,12 +50,17 @@ export function watch(first: unknown, second?: Effect): Disposer {
     return watchOver(sources, null, second)
 }
 
-// THE NARROWED FORM, and what `s.watch` is (12.9). The sources are pushed into rather than
-// discovered, so there is no tracked context, no cursor and no divergence — which is also
-// why a read inside one of these subscribes to nothing.
-// `adopter` says what is being asked for: `null` is an effect, which the end of the turn may
-// run, and a value is an adoption's MIRROR into it, which carries a value and cannot wait —
-// see `isMirror` and `adopter` in `tracking.ts`.
+/**
+ * Runs `effect` now and again whenever one of the declared `sources` changes, untracked.
+ *
+ * THE NARROWED FORM, and what `s.watch` is (12.9). The sources are pushed into rather than
+ * discovered, so there is no tracked context, no cursor and no divergence — which is also why a
+ * read inside one of these subscribes to nothing.
+ *
+ * `adopter` says what is being asked for: `null` is an effect, which the end of the turn may run,
+ * and a value is an adoption's MIRROR into it, which carries a value and cannot wait — see
+ * `isMirror` and `adopter` in `tracking.ts`.
+ */
 export function watchOver(
     sources: Tracked[],
     adopter: Tracked | null,
@@ -110,14 +117,18 @@ export function watchOver(
     }
 }
 
-// A SECOND BODY BESIDE `watchOver` ON PURPOSE, and it reads as the duplication it is: the two
-// differ by the cursor reset, the probe rebuild and the tail trim, and the rest is the same lines.
-// ONE BODY WITH A `tracked` FLAG WAS BUILT AND MEASURED, under V8 against this pair, interleaved
-// four runs a side: `write a value that changed` — one bound watch — went 15.6 ns to 21.4 in every
-// run, and `mount 50 readers` +12% (+7% under JSC). Three flag tests cannot cost 6 ns. The
-// likely mechanism, inferred rather than traced: every closure made from one literal shares its
-// call-site feedback, so the template binding's `effect()` call became every `s.watch` effect's and
-// every adoption mirror's too. Two literals keep that call site to the effects a template makes.
+/**
+ * The bare form: runs `effect` as a tracked context, re-running when anything it read changes.
+ *
+ * A SECOND BODY BESIDE `watchOver` ON PURPOSE, and it reads as the duplication it is: the two
+ * differ by the cursor reset, the probe rebuild and the tail trim, and the rest is the same lines.
+ * ONE BODY WITH A `tracked` FLAG WAS BUILT AND MEASURED, under V8 against this pair, interleaved
+ * four runs a side: `write a value that changed` — one bound watch — went 15.6 ns to 21.4 in every
+ * run, and `mount 50 readers` +12% (+7% under JSC). Three flag tests cannot cost 6 ns. The likely
+ * mechanism, inferred rather than traced: every closure made from one literal shares its call-site
+ * feedback, so the template binding's `effect()` call became every `s.watch` effect's and every
+ * adoption mirror's too. Two literals keep that call site to the effects a template makes.
+ */
 function watchTracked(effect: Effect): Disposer {
     // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
     let dispose: Disposer | void

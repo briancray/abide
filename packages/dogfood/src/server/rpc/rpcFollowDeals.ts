@@ -2,7 +2,7 @@ import { GET, POST, reactive } from 'abide/server'
 
 const STAGES = ['lead', 'qualified', 'proposal', 'won']
 
-// One pipeline for the whole process, so every browser reads the same one.
+/** One pipeline for the whole process, so every browser reads the same one. */
 const pipeline = reactive(
     [
         { id: 'acme', name: 'Acme Corp', stage: 'lead' },

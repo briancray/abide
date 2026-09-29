@@ -2,15 +2,19 @@ import type { JsonValue } from './JsonValue.ts'
 import type { StandardSchemaV1 } from './Schema.ts'
 import { validateJson } from './validateJson.ts'
 
-// A JSON SCHEMA DOCUMENT AS A `Schema`, carrying its own validator. A document is data and
-// something has to read it, so the edge to `validateJson` is made HERE, by the call that declares
-// one — a page that never calls this never carries the validator (19.14), with no slot to fill
-// and nothing for the compiler to spot. A bare document handed as a `Schema` is refused (19.15).
-//
-// A STANDARD SCHEMA, because that is the form that already reports WHERE: each issue's path is
-// `validateJson`'s own, split at the dots `runSchema` joins it back at. And the document is
-// exposed where a Standard Schema exposes its JSON Schema, so 20.11's one probe publishes it with
-// no case of its own.
+/**
+ * A JSON Schema document as a Standard Schema, carrying its own validator.
+ *
+ * A document is data and something has to read it, so the edge to `validateJson` is made HERE, by
+ * the call that declares one — a page that never calls this never carries the validator (19.14),
+ * with no slot to fill and nothing for the compiler to spot. A bare document handed as a `Schema`
+ * is refused (19.15).
+ *
+ * A STANDARD SCHEMA, because that is the form that already reports WHERE: each issue's path is
+ * `validateJson`'s own, split at the dots `runSchema` joins it back at. And the document is
+ * exposed where a Standard Schema exposes its JSON Schema, so 20.11's one probe publishes it with
+ * no case of its own.
+ */
 export function jsonSchema<T>(document: JsonValue): StandardSchemaV1<T> {
     return {
         '~standard': {

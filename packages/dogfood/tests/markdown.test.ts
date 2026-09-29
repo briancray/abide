@@ -8,6 +8,7 @@ import {
     renderPageMarkdown,
     routeOf,
 } from '../scripts/readContent.ts'
+import { renderMarkdown } from '../scripts/renderMarkdown.ts'
 
 // THE PAGE AS THE APP HOLDS IT. What used to be one HTML document is now a body, a rail and a
 // `.abide` that carries both — so a gate on the prose asks the body, and a gate on what the page
@@ -346,4 +347,16 @@ test('every code caption names a syntax or a file', async () => {
         }
     }
     expect([...new Set(vague)]).toEqual([])
+})
+
+// A DIRECTIVE ENDS THE PARAGRAPH ABOVE IT, blank line or not. THE REVERT: drop `SNIPPET` from the
+// paragraph loop's stops; the directive is read as prose, joined into the `<p>`, and the page
+// ships its braces with no code under them.
+test('a snippet directly under a paragraph is not swallowed into it', () => {
+    const html = renderMarkdown(
+        'A line of prose.\n{% snippet some-example src/file.ts export %}\n',
+    )
+    expect(html).toBe(
+        '<p>A line of prose.</p>\n<!--snippet:{"example":"some-example","file":"src/file.ts","anchor":"export"}-->\n',
+    )
 })

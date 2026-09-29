@@ -204,10 +204,10 @@ test('an MCP call is answered by its own App, not the last one built — 20.10, 
         `${app}/host.ts`,
         // `bootApp` and `loadBuild` by path: the fixture builds beside itself rather than where
         // `createApp` looks (`buildDirectory`).
-        `import { bootApp } from '${SERVER}/createApp.ts'
+        `import { bootApp, originUnder } from '${SERVER}/createApp.ts'
 import { loadBuild } from '${SERVER}/serveBuild.ts'
 
-const boot = () => bootApp('${app}', () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
+const boot = () => bootApp(originUnder('${app}'), () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
 const first = await boot()
 const second = await boot()
 await second.stop()

@@ -11,7 +11,7 @@
 import { mkdtemp, rm } from 'node:fs/promises' // bun exposes no temporary-directory creation or recursive removal of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary-directory path of its own
 
-// What every abide app in the docs and the scaffold is written against.
+/** What every abide app in the docs and the scaffold is written against. */
 export const COMPILER_OPTIONS = {
     strict: true,
     target: 'esnext',
@@ -22,7 +22,8 @@ export const COMPILER_OPTIONS = {
     skipLibCheck: true,
 }
 
-export async function defaultProject(
+/** Writes a temporary tsconfig covering `root`, with the function that removes it. */
+export async function writeDefaultProject(
     root: string,
 ): Promise<{ tsconfig: string; remove: () => Promise<void> }> {
     const directory = await mkdtemp(`${tmpdir()}/abide-project-`)

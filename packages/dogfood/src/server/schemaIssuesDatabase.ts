@@ -13,7 +13,7 @@ const INVOICES: Invoice[] = [
     { id: 'inv-4023', total: '$76.50' },
 ]
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     invoices: {
         async search(query: string, limit: number): Promise<Invoice[]> {

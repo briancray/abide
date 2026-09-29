@@ -40,9 +40,13 @@ for (const shape of ['simple', 'dense'] as Shape[]) {
     }
 }
 
-// THE TWO COSTS IN ONE CURRENCY. Bytes are only comparable to a walk once they are time, and
-// they become time at a bandwidth — so the bandwidth is stated rather than assumed. These are
-// throughput figures for a warm connection, not first-byte latency, which neither scheme changes.
+/**
+ * The link speeds bytes are converted to transfer time at, in bytes a second.
+ *
+ * THE TWO COSTS IN ONE CURRENCY. Bytes are only comparable to a walk once they are time, and they
+ * become time at a bandwidth — so the bandwidth is stated rather than assumed. These are throughput
+ * figures for a warm connection, not first-byte latency, which neither scheme changes.
+ */
 const LINKS: [string, number][] = [
     ['slow 4G, 1.5 Mbps', 1.5e6 / 8],
     ['median mobile, 5 Mbps', 5e6 / 8],

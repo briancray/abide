@@ -19,12 +19,15 @@ import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 
 export type Manifest = {
-    // The entry's file name, or undefined where the bundle has none — a dev build that failed.
+    /** The entry's file name, or undefined where the bundle has none — a dev build that failed. */
     entry: string | undefined
-    // 38.24 — the stylesheet the bundler collected under the entry, or undefined where no module
-    // imported one.
+    /**
+     * The stylesheet the bundler collected under the entry, or undefined where none was imported.
+     *
+     * 38.24.
+     */
     stylesheet: string | undefined
-    // A module's path below `base` to the chunk file names it needs, its own first.
+    /** A module's path below `base` to the chunk file names it needs, its own first. */
     chunks: Record<string, string[]>
 }
 
@@ -34,11 +37,15 @@ export const NO_MANIFEST: Manifest = {
     chunks: {},
 }
 
-// `base` IS THE TREE THE ROUTE TABLE NAMES MODULES BELOW. The metafile names a file on disk
-// relative to the working directory with symlinks resolved, and a module a plugin served under its
-// namespace as the plugin spelled it — so `abide build` passes its output's real path, and
-// `abide dev` passes the virtual directory its plugin resolves into.
-export function chunksByModule(
+/**
+ * The manifest read off a bundle's metafile: the entry, its stylesheet, and each module's chunks.
+ *
+ * `base` IS THE TREE THE ROUTE TABLE NAMES MODULES BELOW. The metafile names a file on disk
+ * relative to the working directory with symlinks resolved, and a module a plugin served under its
+ * namespace as the plugin spelled it — so `abide build` passes its output's real path, and
+ * `abide dev` passes the virtual directory its plugin resolves into.
+ */
+export function manifestOf(
     metafile: Bun.BuildMetafile,
     base: string,
 ): Manifest {
@@ -83,7 +90,7 @@ export function chunksByModule(
     return manifest
 }
 
-// Every chunk the modules need, once each, in the order they were first asked for.
+/** Every chunk the modules need, once each, in the order they were first asked for. */
 export function chunksOf(modules: string[], manifest: Manifest): string[] {
     const chunks = new Set<string>()
     for (const module of modules)
@@ -91,9 +98,13 @@ export function chunksOf(modules: string[], manifest: Manifest): string[] {
     return [...chunks]
 }
 
-// A MODULE, NOT A STYLESHEET. The bundler reports the CSS it collected both as a static import of
-// the entry and as an output whose entry point IS the entry — so unfiltered it is fetched as a
-// script, and it takes the entry's own place in the manifest. 38.24 links it already.
+/**
+ * Whether a bundler output is a script module rather than a stylesheet.
+ *
+ * A MODULE, NOT A STYLESHEET. The bundler reports the CSS it collected both as a static import of
+ * the entry and as an output whose entry point IS the entry — so unfiltered it is fetched as a
+ * script, and it takes the entry's own place in the manifest. 38.24 links it already.
+ */
 function isModule(output: string): boolean {
     return output.endsWith('.js')
 }

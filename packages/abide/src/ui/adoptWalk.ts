@@ -28,6 +28,8 @@ import { closeOf, type Region } from './regions.ts'
 // kind check catches the shift wherever it lands on a different kind. What no check can see is a
 // text node standing where a different text node was due, and that is what the equivalence gates
 // (`nesting.test.ts`, `corpusRuns.test.ts`) are for.
+
+/** The node the walk stands on, checked to be a `<tag>` element; throws `Mismatch` otherwise. */
 export function elementHere(
     node: Node | null | undefined,
     tag: string,
@@ -43,10 +45,14 @@ export function elementHere(
     return node as Element
 }
 
-// A RUN, CHECKED: its text node, or — where the run holds markup (32.27) — the pair around it, read
-// back from the closing anchor the walk stood on (`runHere`). A run the server rendered as no node
-// was put back by the walk as it passed, so by the time a binding asks something is there — and
-// where the walk could not put one back, this is what refuses.
+/**
+ * A run, checked: its text node, or the `RawRun` around it where it holds markup.
+ *
+ * Where the run holds markup (32.27) the pair is read back from the closing anchor the walk stood
+ * on (`runHere`). A run the server rendered as no node was put back by the walk as it passed, so by
+ * the time a binding asks something is there — and where the walk could not put one back, this is
+ * what refuses.
+ */
 export function textHere(node: Node | null | undefined): Text | RawRun {
     if (node != null) {
         if (node.nodeType === 3) return node as Text
@@ -60,20 +66,25 @@ export function textHere(node: Node | null | undefined): Text | RawRun {
     )
 }
 
-// WHERE A RUN THAT CAN HOLD MARKUP ENDS, and it NEVER THROWS — a STEP, for the reason every step is
-// one. A run the server wrote as text is its one node; a run it wrote holding markup (32.27) is an
-// anchor pair with any number of nodes between, and the walk stands on the CLOSE, so the position
-// after it is found by `nextSibling` either way and nothing about the cursor changes.
-//
-// AND 32.24'S HOLE, where `parent` is given: a BLANK run the server rendered as no node still has to
-// be a position, because every sibling after it is found from it — so the walk puts it back as it
-// passes, whether or not anything binds it. A run that is not blank passes no parent and is never
-// put back. `textHere` is the CHECK a binding makes; this is the step a walk takes, and on a page
-// the walk is outside every guard, so a throw here would take down every unit after it rather than
-// the one that disagreed.
-//
-// A node put back at the TOP of a row needs nothing more: a row with several top-level nodes is the
-// RANGE from its anchor to `closeOf(anchor, true)`, and the node is put back inside it.
+/**
+ * Where a run that can hold markup ends; a step that never throws.
+ *
+ * A STEP, for the reason every step is one. A run the server wrote as text is its one node; a run
+ * it wrote holding markup (32.27) is an anchor pair with any number of nodes between, and the walk
+ * stands on the CLOSE, so the position after it is found by `nextSibling` either way and nothing
+ * about the cursor changes.
+ *
+ * AND 32.24'S HOLE, where `parent` is given: a BLANK run — every part an expression, each unlanded
+ * (32.24 leaves what it last rendered, which is nothing yet) or stringifying to '' — is written by
+ * the server as no node, and still has to be a position, because every sibling after it is found from it — so the walk puts it back as it
+ * passes, whether or not anything binds it. A run that is not blank passes no parent and is never
+ * put back. `textHere` is the CHECK a binding makes; this is the step a walk takes, and on a page
+ * the walk is outside every guard, so a throw here would take down every unit after it rather than
+ * the one that disagreed.
+ *
+ * A node put back at the TOP of a row needs nothing more: a row with several top-level nodes is the
+ * RANGE from its anchor to `closeOf(anchor, true)`, and the node is put back inside it.
+ */
 export function runHere(
     node: Node | null | undefined,
     parent: Node | null | undefined,
@@ -89,12 +100,16 @@ export function runHere(
     return made
 }
 
-// A REGION'S ANCHOR PAIR, taken where the walk stands rather than counted to from a root — and it
-// never throws either, for `runHere`'s reason: the walk continues from the pair's CLOSE, so a
-// region the server did not write here answers `undefined` and the walk carries on as far as it
-// can. What refuses is `regionFound`, in the unit that needed the region.
-//
-// The close is the one at DEPTH ZERO: a region nested inside this one has anchors of its own.
+/**
+ * The region whose anchor pair the walk stands on, or `undefined`; a step that never throws.
+ *
+ * Taken where the walk stands rather than counted to from a root, and never throwing for
+ * `runHere`'s reason: the walk continues from the pair's CLOSE, so a region the server did not
+ * write here answers `undefined` and the walk carries on as far as it can. What refuses is
+ * `regionFound`, in the unit that needed the region.
+ *
+ * The close is the one at DEPTH ZERO: a region nested inside this one has anchors of its own.
+ */
 export function regionHere(node: Node | null | undefined): Region | undefined {
     if (node == null || node.nodeType !== 8) return undefined
     const data = (node as Comment).data
@@ -103,6 +118,7 @@ export function regionHere(node: Node | null | undefined): Region | undefined {
     return close === null ? undefined : { open: node as Comment, close }
 }
 
+/** The region a step found, checked to be there; throws `Mismatch` where it is not. */
 export function regionFound(region: Region | undefined): Region {
     if (region === undefined)
         throw new Mismatch(

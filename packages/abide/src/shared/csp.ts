@@ -7,6 +7,11 @@ import type { Middleware } from './Middleware.ts'
 
 type Rung = Middleware<{ request: Request }, Response>
 
+/**
+ * The server's content-security-policy half, as slots `#server/csp.ts` fills.
+ *
+ * Until it does, `rung` refuses and `nonce` reads the document's.
+ */
 export const CSP: {
     rung: (sources: Record<string, string[]> | undefined) => Rung
     nonce: () => string
@@ -19,16 +24,24 @@ export const CSP: {
     nonce: documentNonce,
 }
 
-// 29.11. A browser blanks the `nonce` ATTRIBUTE once the document is parsed and keeps the value in
-// the element's `nonce` property, so the property is read first; a DOM with no such property (the
-// emulator the tests render into) still has the attribute.
+/**
+ * The nonce this document's scripts were served with, or `''`.
+ *
+ * 29.11. A browser blanks the `nonce` ATTRIBUTE once the document is parsed and keeps the value in
+ * the element's `nonce` property, so the property is read first; a DOM with no such property (the
+ * emulator the tests render into) still has the attribute.
+ */
 export function documentNonce(): string {
     const script = document.querySelector<HTMLScriptElement>('script[nonce]')
     return script?.nonce || script?.getAttribute('nonce') || ''
 }
 
-// THE RUNG IS BUILT ON ITS FIRST REQUEST, because an app's `middleware` can be read before the
-// server half has filled `CSP`: `app.ts` is one more module, and nothing orders it after that one.
+/**
+ * A middleware rung that sets the content security policy, and `csp.nonce()` for the current one.
+ *
+ * THE RUNG IS BUILT ON ITS FIRST REQUEST, because an app's `middleware` can be read before the
+ * server half has filled `CSP`: `app.ts` is one more module, and nothing orders it after that one.
+ */
 export const csp = Object.assign(
     (sources?: Record<string, string[]>): Rung => {
         let built: Rung | undefined

@@ -10,7 +10,7 @@ const BY_YEAR: Record<string, Row[]> = {
     ],
 }
 
-// A slow database, so each row lands on its own.
+/** A slow database, so each row lands on its own. */
 export const database = {
     sales: {
         async *byRegion(year: number): AsyncGenerator<Row> {

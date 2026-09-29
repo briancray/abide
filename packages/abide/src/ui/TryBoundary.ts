@@ -12,7 +12,7 @@ import { untracked } from '#shared/reactive/tracking.ts'
 import { type Disposer, watch } from '#shared/reactive/watch.ts'
 import { Mismatch } from './Mismatch.ts'
 
-// The boundary a scope built now falls under, or `undefined` outside every `{#try}` body.
+/** The boundary a scope built now falls under, or `undefined` outside every `{#try}` body. */
 export const BOUNDARY: { current: TryBoundary | undefined } = {
     current: undefined,
 }
@@ -57,12 +57,16 @@ export class TryBoundary {
     }
 }
 
-// A MOUNT UNDER THE BOUNDARY: every scope it builds carries it, and a throw straight out of the mount
-// — a handler or a node reference that failed as it was bound — is the boundary's too. A hydration
-// mismatch is not a failure of the body, and is left to the caller that rebuilds; and a value still
-// in flight is not a failure either: it aborts the run as it would anywhere (2.13).
-//
-// `again` IS WHAT A RETRY RE-RUNS: a build that threw is retried by building again, into nothing.
+/**
+ * Runs a mount under a `{#try}` boundary; a throw fails the boundary and answers `undefined`.
+ *
+ * Every scope it builds carries it, and a throw straight out of the mount — a handler or a node
+ * reference that failed as it was bound — is the boundary's too. A hydration mismatch is not a
+ * failure of the body, and is left to the caller that rebuilds; and a value still in flight is not
+ * a failure either: it aborts the run as it would anywhere (2.13).
+ *
+ * `again` IS WHAT A RETRY RE-RUNS: a build that threw is retried by building again, into nothing.
+ */
 export function inBoundary<T>(
     boundary: TryBoundary,
     mount: () => T,

@@ -14,11 +14,30 @@ import { runSchema } from '#shared/Schema.ts'
 import { appDirectories } from './appDirectories.ts'
 import { type Env, HOOKS } from './hooks.ts'
 
-// The app's root, for 27.3's derivation — set by `bootApp` before the value is first read.
-export const CONFIG_ROOT: { current: string } = { current: process.cwd() }
+/** The fields of an app's `package.json` 27.3 derives from. */
+export type AppPackage = { name?: string; version?: string }
+
+/**
+ * The app's own `package.json`, for 27.3's derivation — set by `bootApp` before `config` is read.
+ *
+ * HELD RATHER THAN FOUND: a compiled app has no directory to find it in, so what is read here is
+ * what the boot was handed.
+ */
+export const APP_PACKAGE: { current: AppPackage } = { current: {} }
+
+/** The `package.json` beside an app on disk, in the first of `appDirectories` that has one. */
+export function packageUnder(root: string): AppPackage {
+    for (const directory of appDirectories(root)) {
+        try {
+            return require(`${directory}/package.json`) as AppPackage
+        } catch {}
+    }
+    return {}
+}
 
 export interface Config extends Env {}
 
+/** The resolved configuration: abide's derived values, then `onConfig`'s defaults, then the env. */
 export const config = reactive(resolve, { global: true })
 
 function resolve(): Config {
@@ -65,17 +84,13 @@ function coerce(text: string, standing: unknown): unknown {
     return text
 }
 
-// 27.3 — THE APP'S NAME, VERSION AND DATA DIRECTORY, off the app's own `package.json` and the platform.
-// A layer under the other two, so a config or an environment that carries one wins.
+/**
+ * The app's name, version and data directory, off its own `package.json` and the platform.
+ *
+ * 27.3 — a layer under the other two, so a config or an environment that carries one wins.
+ */
 function derived(): Record<string, string> {
-    const root = CONFIG_ROOT.current
-    let manifest: { name?: string; version?: string } = {}
-    for (const directory of appDirectories(root)) {
-        try {
-            manifest = require(`${directory}/package.json`) as typeof manifest
-            break
-        } catch {}
-    }
+    const manifest = APP_PACKAGE.current
     const name = manifest.name ?? 'app'
     return {
         APP_NAME: name,
@@ -103,8 +118,11 @@ APP_NAME.derived = (): string | undefined => {
         : undefined
 }
 
-// The name and version an app reports as itself, where a surface outside the app asks. `derived`
-// supplies both, so the fallbacks only answer before the configuration has resolved.
+/**
+ * The name and version an app reports as itself, where a surface outside the app asks.
+ *
+ * `derived` supplies both, so the fallbacks only answer before the configuration has resolved.
+ */
 export function appIdentity(): { name: string; version: string } {
     const resolved = config.peek()
     return {
@@ -113,7 +131,7 @@ export function appIdentity(): { name: string; version: string } {
     }
 }
 
-// A setting that must be a positive number, and `fallback` where it is not one.
+/** A setting that must be a positive number, and `fallback` where it is not one. */
 export function positiveSetting<Fallback extends number | undefined>(
     name: string,
     fallback: Fallback,
@@ -141,7 +159,7 @@ function appUrl(): URL | undefined {
     return appUrlIs
 }
 
-// 36.2 — the app's own origin, where `APP_URL` declares one.
+/** The app's own origin, where `APP_URL` declares one. 36.2. */
 export function appOrigin(): string | undefined {
     return appUrl()?.origin
 }

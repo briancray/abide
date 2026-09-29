@@ -9,7 +9,7 @@ export type Invoice = { total: string; sent: number }
 
 let sent = 0
 
-// A slow database, so the wait is on screen.
+/** A slow database, so the wait is on screen. */
 export const database = {
     invoices: {
         async find(_id: string): Promise<Invoice> {

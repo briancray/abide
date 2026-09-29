@@ -22,12 +22,14 @@ export type Tree = {
     depth: number
 }
 
-// `leaves` slots, each `depth` elements below the root, sharing ancestors the way a real
-// component tree does rather than each having a private chain.
-// `spread` puts the leaves under MANY distinct parents rather than one, which is the shape a
-// single shared prefix cannot help: the prefix every binding shares is short, so each still walks
-// its last steps alone. It is the case that would justify hoisting per subtree, and it exists so
-// that question is answered rather than assumed.
+/**
+ * A tree of `parents` sections, each holding `perParent` slots `depth` elements below the root.
+ *
+ * The leaves sit under MANY distinct parents rather than one, which is the shape a single shared
+ * prefix cannot help: the prefix every binding shares is short, so each still walks its last steps
+ * alone. It is the case that would justify hoisting per subtree, and it exists so that question is
+ * answered rather than assumed.
+ */
 export function wide(
     depth: number,
     parents: number,
@@ -53,12 +55,18 @@ export function wide(
     }
     return {
         markup: `<main id="r">${markup}</main>`,
-        script: mount(scheme, paths),
+        script: slotScript(scheme, paths),
         bindings: parents * perParent,
         depth,
     }
 }
 
+/**
+ * A tree of `leaves` slots, each `depth` elements below the root, under one shared chain.
+ *
+ * The slots share ancestors the way a real component tree does rather than each having a private
+ * chain.
+ */
 export function tree(depth: number, leaves: number, scheme: Scheme): Tree {
     const paths: number[][] = []
     let markup = ''
@@ -90,13 +98,14 @@ export function tree(depth: number, leaves: number, scheme: Scheme): Tree {
 
     return {
         markup,
-        script: mount(scheme, paths),
+        script: slotScript(scheme, paths),
         bindings: leaves,
         depth,
     }
 }
 
-function mount(scheme: Scheme, paths: number[][]): string {
+/** The script source that finds every slot under `scheme` and leaves them on `__SLOTS__`. */
+function slotScript(scheme: Scheme, paths: number[][]): string {
     if (scheme === 'markers')
         return `
 const found = []
@@ -126,10 +135,14 @@ globalThis.__SLOTS__ = found
 `
 }
 
-// THE CURSOR, emitted the way `emitRegion` emits it: one `const` per node the walk passes through,
-// each found from the one before it (`nextSibling`) or the one it stands in (`firstChild`), with
-// `?.` on every step because on a page the walk stands outside every guard. Every position is
-// named, the ones between two bindings included, because that is what the emitter writes.
+/**
+ * The cursor walk's script source for `paths`, emitted the way `emitRegion` emits it.
+ *
+ * One `const` per node the walk passes through, each found from the one before it (`nextSibling`)
+ * or the one it stands in (`firstChild`), with `?.` on every step because on a page the walk
+ * stands outside every guard. Every position is named, the ones between two bindings included,
+ * because that is what the emitter writes.
+ */
 function cursorWalk(paths: number[][]): string {
     type Trie = Map<number, Trie>
     const root: Trie = new Map()
