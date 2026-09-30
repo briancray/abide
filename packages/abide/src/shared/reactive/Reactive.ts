@@ -1197,13 +1197,14 @@ function markReaders(cell: Cell, wanted: number): void {
         const below = reader as unknown as Cell
         // Marked is not directly servable, whatever it holds.
         below.direct = false
-        // 2.14, AND THE ONLY PLACE PUSH-PULL RUNS A DERIVED BODY. A run that aborted is one that
-        // started and did not finish, and what is asking is a GUARD: a reader on the probe edge
-        // asks `ready()` and never the value, so no read of its will ever pull this body forward
-        // and the guard answers false for as long as the page is open. A reader on the VALUE edge
-        // needs none of this — its own read pulls — so this is the probe edge alone, and a body
-        // nothing probes stays as lazy as 11.5 makes it.
-        if (was === CLEAN && below.aborted && below.probeReaders.length !== 0) {
+        // 2.14, 3.2, AND THE ONLY PLACE PUSH-PULL RUNS A DERIVED BODY. What is asking is a GUARD: a
+        // reader on the probe edge asks `ready()` and never the value, so no read of its will pull
+        // this body forward, and what the probe answers is about the value a read WOULD serve
+        // (3.2) — a body whose inputs moved to a load is not ready, whatever its last run held. So
+        // the drain pulls it, and the guard wakes only where a probe moved. A reader on the VALUE
+        // edge needs none of this — its own read pulls — so this is the probe edge alone, and a
+        // body nothing probes stays as lazy as 11.5 makes it.
+        if (was === CLEAN && below.probeReaders.length !== 0) {
             PENDING[pendingCount] = reader
             pendingCount += 1
         }
@@ -1298,6 +1299,9 @@ function resolveEffect(reader: Subscriber): void {
         reader.state = CLEAN
         return
     }
+    // Brought current since it was queued — a guard's probe pulls the cell it queued (3.2) — so
+    // there is nothing owed, and a second run would wake that guard onto what it already saw.
+    if (reader.state === CLEAN) return
     if (reader.state === CHECK) {
         const sources = reader.sources
         for (let index = 0; index < sources.length; index += 1) {
@@ -2939,8 +2943,7 @@ function walkBusy(cell: Cell, pass: number): boolean {
  * a wake nobody minted a production for.
  */
 function isBusy(cell: Cell): boolean {
-    const reader = TRACKING.reader
-    if (reader !== null) trackProbe(cell, reader)
+    probe(cell)
     return busyNow(cell)
 }
 
@@ -3008,9 +3011,28 @@ function walkReady(cell: Cell, pass: number): boolean {
 }
 
 function isReady(cell: Cell): boolean {
+    probe(cell)
+    return readyNow(cell)
+}
+
+/**
+ * The body run where it is owed, before a probe answers about it.
+ *
+ * 3.2 — A PROBE ANSWERS ABOUT THE VALUE A READ WOULD SERVE. Under push-pull a write leaves every
+ * derived value it reached unrun, so a probe that walked what the last run left answered about a
+ * value nothing would serve: `x.ready()` true over a body whose inputs had moved to a load, and the
+ * read the guard admitted threw `NotLanded`. `peek` pulls for the same reason.
+ */
+function bringCurrent(cell: Cell): void {
+    if (cell.owes !== OWES_NOTHING) settleOwed(cell)
+    if (cell.state !== CLEAN) resolve(cell)
+}
+
+/** What every probe does before it answers: subscribes the reader (3.3), then brings `cell` current. */
+function probe(cell: Cell): void {
     const reader = TRACKING.reader
     if (reader !== null) trackProbe(cell, reader)
-    return readyNow(cell)
+    bringCurrent(cell)
 }
 
 function readyNow(cell: Cell): boolean {
@@ -3238,11 +3260,11 @@ function reloadOwed(cell: Cell): void {
 /**
  * Marks one value as owing a reload, without running or waking anything.
  *
- * 7.3, 7.12, 7.14 AND 7.17: A MARK, NOT A LOAD, AND NOT A MOVE. Nothing runs, nothing is sent, and
- * nothing a reader can see changes — the value goes on being served and `ready` stays true — so no
- * reader wakes. The mark is a debt the next read settles, and THAT read is where the value stops
- * being served (7.8). Making it unservable here instead woke a `{#if s.ready()}` guard onto a branch
- * that never reads the value again, and nothing was ever left to run the producer.
+ * 7.3, 7.12, 7.14 AND 7.17: A MARK, NOT A LOAD, AND NOT A MOVE. Nothing runs, nothing is sent and
+ * no reader wakes — a guard asking `ready()` included — so a server saying "yours is stale" moves
+ * nothing on screen. The mark is a debt the next HIT settles: a read, or a probe, which answers about
+ * the value a read would serve (3.2) and so runs the reload itself. That is what keeps a guard that
+ * asks later from admitting a read that throws, and from stranding a placeholder that never reads.
  */
 function invalidateOne(cell: Cell): void {
     // 7.6 — sent on to the browsers following it whether or not there is a producer to mark.
@@ -3252,8 +3274,7 @@ function invalidateOne(cell: Cell): void {
     // Not directly servable, so the next read goes a frame in and settles the debt.
     cell.direct = false
     // 7.15: work already in flight was started from what this says is wrong. A load's answer
-    // lands nowhere once `generation` has moved; a stream is stopped outright. `busy` goes false
-    // with no wake (7.14, 7.16) — a guard still showing a load reads the truth on its next render.
+    // lands nowhere once `generation` has moved; a stream is stopped outright.
     cell.generation += 1
     cell.loading = false
     const stream = cell.stream
@@ -3791,8 +3812,7 @@ const MEMBERS = {
         // PULLS, like a read. Under push-pull a write leaves every derived value it
         // reached unrun, so a `peek` that only read the field would answer with the
         // value the last read left behind — 2.2 moved the ABSENCE here, not staleness.
-        if (cell.owes !== OWES_NOTHING) settleOwed(cell)
-        if (cell.state !== CLEAN) resolve(cell)
+        bringCurrent(cell)
         // A `peek` IS A READ by the rulebook's own term, so 6.5, 6.11 and 6.12 reach it
         // the same way. What it does not join is the FLOW (2.11) — an expiry is not a
         // subscription, and a `peek` that went on serving a production `s()` had already
@@ -3813,8 +3833,7 @@ const MEMBERS = {
         // reading it subscribes the same way `busy` and `ready` do — without this edge
         // `{#if s.error()}` reads `undefined` once and nothing wakes it when a load fails,
         // because a refusal marks the VALUE readers and this body never read the value.
-        const reader = TRACKING.reader
-        if (reader !== null) trackProbe(cell, reader)
+        probe(cell)
         return failureOf(cell)
     },
     /**

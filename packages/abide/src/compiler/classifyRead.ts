@@ -68,6 +68,7 @@ export type Read = {
         | 'absent'
         | 'static'
         | 'raw'
+        | 'routeParams'
     /** What the rewrite replaces: the name, or a whole write or update from its first token. */
     from: number
     to: number
@@ -96,6 +97,11 @@ export type Read = {
     byValue: boolean
     /** 14.8 — the name is declared by a branch-local `<script>`, inside the body it scopes. */
     local: boolean
+    /**
+     * 33.20 — on the `props` call, the keys its pattern defaults; on a default's opening, its key.
+     * 23.9 — on `route.params`, the route literal and whether the file is its page or its layout.
+     */
+    keys: string[]
 }
 
 /**
@@ -125,6 +131,7 @@ export function newRead(
         through: false,
         byValue: false,
         local: false,
+        keys: [],
     }
 }
 

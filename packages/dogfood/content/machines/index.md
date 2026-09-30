@@ -44,6 +44,7 @@ session. abide's commands belong in one place, so it is written with the rest of
 
 Read on: [OpenAPI](describe-your-api-without-writing-a-spec.md) ·
 [MCP](let-a-model-call-your-handlers.md) ·
+[Assistant](put-a-claude-assistant-on-your-site.md) ·
 [Withholding a surface](keep-a-handler-off-a-surface.md) ·
 [Call a handler](../ship/call-a-handler-from-the-terminal.md) ·
 [Watch a channel](../ship/watch-a-room-from-the-terminal.md)

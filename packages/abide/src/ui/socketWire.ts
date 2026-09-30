@@ -141,7 +141,7 @@ class Following {
      * Marks the copy stale when the answer's `max-age` runs out.
      *
      * 18.29 — the `max-age` is what is left of the production's own life on the server (21.8).
-     * Stale rather than dropped: it goes on being served until a read runs the producer (7.17). The
+     * Stale rather than dropped: it goes on being served until a read or a probe runs the producer (7.17). The
      * later answer's timer replaces the earlier.
      */
     expireAfter(life: string | null | undefined): void {

@@ -8,12 +8,21 @@ covers:
 ---
 
 ```
-abide call invoices/getInvoice '{"id": "4310"}'
+abide call invoices/getInvoice id=4310
 ```
 
 One call to one handler. The address is the mount path without the `/__abide/rpc/` prefix, and
 the arguments are the ones the handler declared — checked before the call goes out, because the
 schema is already there.
+
+An argument is `name=value`, and a name given twice is a list. The value is text until the
+handler's schema says otherwise, so `id=4310` arrives as a number where `id` is declared one —
+the same reading a `GET`'s query string gets (38.62). An argument shape one word per name cannot
+spell, an object inside an object, is typed as one JSON object instead:
+
+```
+abide call invoices/createInvoice '{"customer": {"id": "c-9"}, "lines": []}'
+```
 
 ## The schema is the interface
 
@@ -46,9 +55,11 @@ abide connect https://ledger.example
 ```
 
 A shell against a running app: the handlers are in scope, the completions come from the same
-route table, and a call is a call. It is for the questions that are one-off by nature — what
-does this record look like, does this handler still refuse that — where writing a script is
-more ceremony than the question deserves.
+route table, and a call is a call. `help` lists what it takes and `handlers` every address; Tab
+completes an address or an argument name, and the handler's arguments are shown as you type.
+Ctrl+C clears the line, or cancels a call still running. It is for the questions that are
+one-off by nature — what does this record look like, does this handler still refuse that — where
+writing a script is more ceremony than the question deserves.
 
 `abide logs` is the same kind of connection, made to one channel: a live subscription to
 `log.records`, the one `abide connect` makes to any channel (38.10). That is the shape worth

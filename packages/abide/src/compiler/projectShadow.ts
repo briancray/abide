@@ -341,6 +341,11 @@ const REACTIVE = `import(${JSON.stringify(
     new URL('../shared/reactive/Reactive.ts', import.meta.url).pathname,
 )}).Reactive`
 
+/** 23.9 — the params a page's own route promises, which the framework spells. */
+const ROUTE_PARAMS = `import(${JSON.stringify(
+    new URL('../shared/url.ts', import.meta.url).pathname,
+)}).RouteParams`
+
 /**
  * Ambient declarations of the helpers the shadow and the checked program call.
  *
@@ -359,7 +364,8 @@ declare function ${BOUND}<Value>(value: { get(): Value; set(value: Value): unkno
 declare function __propCell<Value>(read: () => Value): () => ${REACTIVE}<Value>
 declare function __raw(value: unknown): unknown
 declare function __writePath<Root>(root: Root, path: readonly PropertyKey[], value: unknown): Root
-declare function __accessors<Record, Written extends keyof Record = never>(record: Record, written?: readonly Written[]): { [Key in keyof Record]-?: Key extends Written ? () => ${REACTIVE}<Record[Key]> : () => Record[Key] }
+declare type __RouteParams<Pattern extends string, Kind extends string> = Kind extends 'layout' ? ${ROUTE_PARAMS}<Pattern> & { [name: string]: string | string[] | undefined } : ${ROUTE_PARAMS}<Pattern>
+declare function __accessors<Record, Written extends keyof Record = never, Defaulted extends keyof Record = never>(record: Record, written?: readonly Written[], defaulted?: readonly Defaulted[]): { [Key in Exclude<keyof Record, Defaulted>]-?: Key extends Written ? () => ${REACTIVE}<Record[Key]> : () => Record[Key] } & { [Key in Defaulted]?: Key extends Written ? () => ${REACTIVE}<Exclude<Record[Key], undefined>> : () => Exclude<Record[Key], undefined> }
 export {}
 `
 

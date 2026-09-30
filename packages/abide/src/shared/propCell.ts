@@ -21,6 +21,34 @@ export function propCell(read: Accessor): () => Reactive<unknown> {
 }
 
 /**
+ * 33.20 — a defaulted prop's accessor: the caller's, answering the default wherever it reads
+ * `undefined`, and the default alone where the caller passed nothing. A bound accessor asked to
+ * `hold` hands back the caller's `Reactive`, never `undefined`, so a bind still reaches the caller.
+ */
+export function propOr(
+    read: Accessor | undefined,
+    fallback: Accessor,
+): Accessor {
+    if (read === undefined) return fallback
+    return (hold) => {
+        const value = read(hold)
+        return value === undefined ? fallback(hold) : value
+    }
+}
+
+/** The record without `keys`, so the pattern's default always stands for them (33.20). */
+export function withoutKeys(
+    record: Record<string, Accessor>,
+    keys: readonly string[],
+): Record<string, Accessor> {
+    // A copy that skips the keys rather than one that deletes them — `delete` leaves a slow shape.
+    const rest: Record<string, Accessor> = {}
+    for (const key in record)
+        if (!keys.includes(key)) rest[key] = record[key] as Accessor
+    return rest
+}
+
+/**
  * The record the caller passed, with each written key the child's cell rather than the caller's
  * accessor.
  *

@@ -70,7 +70,7 @@ adopted — so the common case needs no directive written by hand.
 
 | Name | Signature | Meaning |
 | --- | --- | --- |
-| `url` | `<P extends string>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal. |
+| `url` | `<P extends RouteLiteral>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal. |
 | `HasParams<P>` | `boolean` | Whether the literal carries a required segment. |
 | `HasSegments<P>` | `boolean` | Whether the literal carries a segment of any kind. |
 | `RequiredNames<P>` | `string` | The required segment names. |
@@ -78,6 +78,9 @@ adopted — so the common case needs no directive written by hand.
 | `RestNames<P>` | `string` | The rest segment names. |
 | `Query` | `Record<string, unknown> \| URLSearchParams` | The query half. |
 | `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| (string \| number)[] }` | What a route literal's segments accept. |
+| `RouteParams<P>` | `{ [K in RequiredNames<P>]: string } & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }` | What a page filed under `P` reads its params as. |
+| `Routes` | `interface Routes {}` | The app's route literals, which `abide check` declares. |
+| `RouteLiteral` | `[keyof Routes] extends [never] ? string : Extract<keyof Routes, string>` | What `url` takes. |
 
 ### Parameters
 

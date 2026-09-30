@@ -73,8 +73,9 @@ entries something is reading and degenerates to a mark for the rest. So a scope 
 hundred catches up the handful a reader is holding and marks the other hundred and ninety-odd,
 which is exactly the line above and makes it the reconnect default.
 
-`invalidate()` is the other choice, for where nothing on screen may move: it runs nothing, sends
-nothing and wakes nobody (7.3, 7.14), and leaves every value standing until the next read (7.17). It
+`invalidate()` is the other choice, for where the values on screen must stay: it runs nothing,
+sends nothing and wakes nobody (7.3, 7.14), and leaves every value standing until the next read or
+probe of it runs its producer (7.17). It
 is not a cheaper `refresh()` to reach for first — the read or the `refresh()` that follows one
 loads over a value marked wrong, which reports `ready()` false (7.8), and every reader guarding on it
 drops to its pending branch.

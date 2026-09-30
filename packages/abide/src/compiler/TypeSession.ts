@@ -20,12 +20,14 @@ import {
     isMethodDeclaration,
     isNamedImports,
     isNewExpression,
+    isNoSubstitutionTemplateLiteral,
     isObjectBindingPattern,
     isObjectLiteralExpression,
     isParenthesizedExpression,
     isPropertyAccessExpression,
     isPropertyAssignment,
     isReturnStatement,
+    isStringLiteral,
     isTypeAliasDeclaration,
     isVariableDeclaration,
     isVariableStatement,
@@ -49,6 +51,7 @@ import {
 import type { Mount } from '#server/answerRpc.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import type { Method } from '#shared/rpc.ts'
+import { routeOf } from '#shared/routePattern.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReadsIn.ts'
 import { argsSchemaOf } from './argsSchemaOf.ts'
@@ -604,6 +607,13 @@ export class TypeSession {
                 // Awaited after the round trips below, so a 33.14 refusal would reject with nothing
                 // listening and be reported unhandled; `await props` still throws it.
                 props.catch(() => {})
+                const params = routeParamsReads(
+                    checker,
+                    abide,
+                    sourceFile,
+                    sources[at]?.path ?? '',
+                    answers[at] as Read[],
+                )
                 // No name is no round trip to ask about none.
                 const symbols =
                     names.length === 0
@@ -677,6 +687,7 @@ export class TypeSession {
                     }
                 await Promise.all(holding)
                 await props
+                await params
                 await proveSlots(checker, sourceFile, query.slots, reads)
                 reads.sort(byPosition)
                 const source = sources[at] as (typeof sources)[number]
@@ -828,6 +839,7 @@ export class TypeSession {
                             name: exported.name,
                             method: declared?.method,
                             ui: declared?.ui ?? true,
+                            description: declared?.description,
                             copy: declared?.copy,
                             args:
                                 handlerType === undefined
@@ -890,6 +902,15 @@ export class TypeSession {
         this.register(
             `${this.canonical(within)}/${AMBIENT}`,
             AMBIENT_DECLARATIONS,
+            created,
+            changed,
+        )
+        // 30.26 — THE APP'S ROUTE TABLE, which `url`'s literal is held to: every page under the
+        // root, declared into abide's own `Routes`. A module rather than a script, since only a
+        // module augments one.
+        this.register(
+            `${this.canonical(within)}/${ROUTES_DECLARATION}`,
+            routesDeclaration(within),
             created,
             changed,
         )
@@ -1113,6 +1134,45 @@ export class TypeSession {
 }
 
 const AMBIENT = 'abide-check.d.ts'
+const ROUTES_DECLARATION = 'abide-routes.d.ts'
+const URL_SOURCE = new URL('../shared/url', import.meta.url).pathname
+
+/** 30.26 — every page under `root` as a key of abide's `Routes`, or nothing where it has none. */
+function routesDeclaration(root: string): string {
+    const routes = new Set<string>()
+    routesUnder(root, '', routes)
+    let keys = ''
+    for (const route of [...routes].sort())
+        keys += `        ${JSON.stringify(route)}: true\n`
+    return `export {}\ndeclare module ${JSON.stringify(URL_SOURCE)} {\n    interface Routes {\n${keys}    }\n}\n`
+}
+/**
+ * The routes of the pages under `directory`, added to `routes`.
+ *
+ * A WALK RATHER THAN A GLOB, because it runs on every check and a glob descends `node_modules` and
+ * the build before a filter can drop them — 15.6 ms against 5.7 from this repo's root, same pages.
+ */
+function routesUnder(
+    directory: string,
+    relative: string,
+    routes: Set<string>,
+): void {
+    let entries: Dirent[]
+    try {
+        entries = readdirSync(directory, { withFileTypes: true })
+    } catch {
+        return
+    }
+    for (const entry of entries) {
+        if (entry.name.startsWith('.') || entry.name === 'node_modules')
+            continue
+        const path = `${relative}${entry.name}`
+        if (entry.isDirectory())
+            routesUnder(join(directory, entry.name), `${path}/`, routes)
+        else if (entry.name === 'page.abide' && path.includes('ui/pages/'))
+            routes.add(routeOf(path))
+    }
+}
 const AMBIENT_DECLARATIONS = `declare module '*.css' {}
 `
 
@@ -1304,14 +1364,26 @@ async function warningsFor(
                         message: `abide: \`${name} ?? …\` never takes its fallback — a read of \`${name}\` is not undefined while it loads, and its type says it is not undefined after. Ask \`${name}.ready()\` to tell the two apart. RULEBOOK 14.17.`,
                     })
                 if (member === undefined) return
-                for (const property of await checker.getPropertiesOfType(value))
-                    if (property.name === member) {
-                        warnings.push({
-                            at: read.start,
-                            message: `abide: \`${name}.${member}\` reaches the Reactive's own \`${member}\`, and the value it holds has one too. Write \`${name}().${member}\` for the value's. RULEBOOK 31.13.`,
-                        })
-                        return
-                    }
+                // Per member, because a union's properties are only those every member shares, and
+                // `undefined` shares none — so `HTMLVideoElement | undefined` would declare no `error`.
+                for (const held of await unionMembers(value)) {
+                    if ((held.flags & NULLISH) !== 0) continue
+                    for (const property of await checker.getPropertiesOfType(
+                        held,
+                    ))
+                        if (property.name === member) {
+                            const dot = (
+                                parent as { questionDotToken?: unknown }
+                            ).questionDotToken
+                                ? '?.'
+                                : '.'
+                            warnings.push({
+                                at: read.start,
+                                message: `abide: \`${name}${dot}${member}\` reaches the Reactive's own \`${member}\`, and the value it holds has one too. Write \`${name}()${dot}${member}\` for the value's. RULEBOOK 31.13.`,
+                            })
+                            return
+                        }
+                }
             }),
         )
     }
@@ -1376,7 +1448,10 @@ const SOCKET_SOURCE = new URL('../shared/socket.ts', import.meta.url).pathname
 
 /** What declared an export: one of the five methods, or `socket`. */
 type Declared = Mount['method']
-type DeclaredExport = Pick<Mount, 'name' | 'ui' | 'copy' | 'args'> & {
+type DeclaredExport = Pick<
+    Mount,
+    'name' | 'ui' | 'copy' | 'args' | 'description'
+> & {
     method: Declared | undefined
     /** 18.30 — what its copy's options declare and the build could not read. */
     unread: Diagnosis[]
@@ -1396,6 +1471,7 @@ async function declaringMethod(
     | {
           method: Declared
           ui: boolean
+          description: string | undefined
           copy: CopyOptions | undefined
           unread: Node[]
           defaulted?: string[]
@@ -1419,12 +1495,19 @@ async function declaringMethod(
     if (named === undefined) return undefined
     const method = await aliasedSymbol(checker, named)
     const ui = !withheldFromUi(call)
+    const description = describedAs(call)
     if (
         method.name === 'socket' &&
         socketPath !== undefined &&
         method.valueDeclaration?.path === socketPath
     )
-        return { method: 'SOCKET', ui, copy: undefined, unread: [] }
+        return {
+            method: 'SOCKET',
+            ui,
+            description,
+            copy: undefined,
+            unread: [],
+        }
     if (
         !METHODS.has(method.name) ||
         methodsPath === undefined ||
@@ -1444,6 +1527,7 @@ async function declaringMethod(
     return {
         method: method.name as Method,
         ui,
+        description,
         ...declared,
         defaulted: defaultedMembers(body),
     }
@@ -1649,6 +1733,27 @@ async function isAbideStructural(
             '/shared/reactive/structural.ts',
         )
     )
+}
+
+/**
+ * The `description` a handler call declares inline, where it is written as a literal.
+ *
+ * What the build can read without running the handler, as `withheldFromUi` reads `clients` — for
+ * the shell, which lists the table the build wrote. A description built at run time still reaches
+ * OpenAPI and MCP off the handler itself, and is not in the table.
+ */
+function describedAs(
+    call: Node & { arguments?: readonly Node[] },
+): string | undefined {
+    const options = call.arguments?.[1]
+    if (options === undefined || !isObjectLiteralExpression(options))
+        return undefined
+    const description = optionNamed(options, 'description')
+    return description !== undefined &&
+        (isStringLiteral(description) ||
+            isNoSubstitutionTemplateLiteral(description))
+        ? description.text
+        : undefined
 }
 
 /**
@@ -2014,6 +2119,7 @@ const REACTIVE_SOURCE = new URL(
     import.meta.url,
 ).pathname
 const PROPS_SOURCE = new URL('../shared/props.ts', import.meta.url).pathname
+const ROUTE_SOURCE = new URL('../shared/route.ts', import.meta.url).pathname
 const SELECTION_SOURCE = new URL('../shared/reactive/index.ts', import.meta.url)
     .pathname
 
@@ -2028,6 +2134,8 @@ const SELECTION_SOURCE = new URL('../shared/reactive/index.ts', import.meta.url)
  * reaches abide, and then nothing in it is one. `props` is abide's file as the checker names it.
  */
 type Abide = {
+    /** 23.9 — abide's `route`, as the file the checker names it. */
+    route: string | undefined
     reactive: CheckedSymbol | undefined
     /**
      * 31.14 — abide's `Selection` alias, which a position may be typed as rather than as a `Reactive`.
@@ -2037,10 +2145,11 @@ type Abide = {
 }
 
 async function abideIn(project: Project): Promise<Abide> {
-    const [declares, props, selects] = await Promise.all([
+    const [declares, props, selects, route] = await Promise.all([
         project.program.getSourceFile(REACTIVE_SOURCE),
         project.program.getSourceFile(PROPS_SOURCE),
         project.program.getSourceFile(SELECTION_SOURCE),
+        project.program.getSourceFile(ROUTE_SOURCE),
     ])
     let selection: CheckedSymbol | undefined
     for (const statement of selects?.statements ?? [])
@@ -2065,7 +2174,7 @@ async function abideIn(project: Project): Promise<Abide> {
             reactive = await literal?.getSymbol()
             break
         }
-    return { reactive, selection, props: props?.path }
+    return { route: route?.path, reactive, selection, props: props?.path }
 }
 
 /**
@@ -2145,6 +2254,58 @@ async function isReactiveMember(
 }
 
 /**
+ * 23.9 — `route.params` in a page or a layout, read as what that file's own route promises.
+ *
+ * THE FILE IS THE ROUTE: `ui/pages/media/[id]/page.abide` only ever renders where `id` matched, so its
+ * `route.params()` has an `id`, and a layout's has its own segments and whatever a page below adds.
+ * Told by the symbol, as `props` is, so an app's own `route` is not abide's. Only the checker reads
+ * these — the running module reads the one `route` every page shares.
+ */
+async function routeParamsReads(
+    checker: Checker,
+    abide: Abide,
+    sourceFile: Node,
+    abidePath: string,
+    reads: Read[],
+): Promise<void> {
+    if (abide.route === undefined || !abidePath.includes('ui/pages/')) return
+    const kind = abidePath.endsWith('/page.abide')
+        ? 'page'
+        : abidePath.endsWith('/layout.abide')
+          ? 'layout'
+          : undefined
+    if (kind === undefined) return
+    const accesses: Node[] = []
+    const owners: Node[] = []
+    const visit = (node: Node): void => {
+        if (
+            isPropertyAccessExpression(node) &&
+            isIdentifier(node.expression) &&
+            isIdentifier(node.name) &&
+            node.name.text === 'params'
+        ) {
+            accesses.push(node)
+            owners.push(node.expression)
+        }
+        node.forEachChild(visit)
+    }
+    sourceFile.forEachChild(visit)
+    if (owners.length === 0) return
+    const symbols = await checker.getSymbolAtLocation(owners)
+    const pattern = routeOf(abidePath)
+    for (let at = 0; at < accesses.length; at += 1) {
+        const symbol = symbols[at]
+        if (symbol === undefined) continue
+        const declared = await aliasedSymbol(checker, symbol)
+        if (declared.valueDeclaration?.path !== abide.route) continue
+        const access = accesses[at] as Node
+        const read = newRead(access.getStart(), access.end, 'routeParams')
+        read.keys.push(pattern, kind)
+        reads.push(read)
+    }
+}
+
+/**
  * The reads a `props<Props>()` destructuring contributes, pushed onto `reads`.
  *
  * 33 — WHAT `props<Props>()` BINDS, and it is a second question from 31.3's rather than a case of
@@ -2211,11 +2372,19 @@ async function propsReads(
                 throw new Error(
                     'abide: a props pattern is flat — a rename, a default and a rest element, and no nested pattern. RULEBOOK 33.14.',
                 )
+            const renamed = element.propertyName
+            const key =
+                renamed !== undefined && isIdentifier(renamed)
+                    ? renamed.text
+                    : name.text
             const defaults: Read[] = []
             if (element.initializer !== undefined) {
                 const open = element.initializer.getStart()
+                const opening = newRead(open, open, 'defaultOpen')
+                opening.keys.push(key)
+                callRead.keys.push(key)
                 defaults.push(
-                    newRead(open, open, 'defaultOpen'),
+                    opening,
                     newRead(
                         element.initializer.end,
                         element.initializer.end,
@@ -2230,13 +2399,9 @@ async function propsReads(
                 defaults.push(absent)
                 reads.push(absent)
             }
-            const renamed = element.propertyName
             bound.push(name)
             bindings.push({
-                key:
-                    renamed !== undefined && isIdentifier(renamed)
-                        ? renamed.text
-                        : name.text,
+                key,
                 call: callRead,
                 defaults,
             })

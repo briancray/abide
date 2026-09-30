@@ -131,7 +131,8 @@ continue live.
 
 3.1 A probe MUST NOT throw.
 
-3.2 A probe MUST NOT start work.
+3.2 A probe MUST answer about the value a read would serve, running what that read would run, and
+MUST NOT otherwise start work.
 
 3.3 Reading a probe MUST subscribe to that probe alone.
 
@@ -324,13 +325,14 @@ flight.
 
 7.13 A read of a value built from one `s.invalidate` marked MUST run that producer first.
 
-7.14 `s.invalidate` MUST NOT wake a reader.
+7.14 `s.invalidate` MUST NOT wake a reader, a probe's reader included.
 
 7.15 `s.invalidate` MUST discard the load or the stream it finds in flight.
 
-7.16 A value `s.invalidate` marked MUST NOT report `s.busy` true until a read runs its producer.
+7.16 A value `s.invalidate` marked MUST NOT report `s.busy` true until a read or a probe runs its
+producer.
 
-7.17 A value `s.invalidate` marked MUST go on being served until a read runs its producer.
+7.17 A value `s.invalidate` marked MUST go on being served until a read or a probe runs its producer.
 
 7.18 `s.refresh` on a wired `Reactive` MUST refresh every subscriber's copy.
 
@@ -896,7 +898,8 @@ ETag it derives, and answer 206, 416 and 304 as the protocol requires.
 16.43 A throw that is not a `Failed` MUST be answered 500.
 
 16.44 `rpc.raw` MUST issue the call the `Rpc` issues, differing only in handing back the
-`Response`.
+`Response`. On a server it MUST be answered in process by the `App` answering the request it is made
+in, and by the `App` built last only outside every request.
 
 16.45 An `Rpc` call MUST evaluate its `Args` at the call, and MUST NOT re-evaluate them.
 
@@ -956,6 +959,9 @@ included, and MUST report `s.busy` false.
 
 16.67 A call reaching a value whose last load ended under 16.53 MUST start a new load, under the `signal`
 that call passed.
+
+16.68 A throw answered once its request's signal has aborted — a handler's, or a page render's —
+MUST answer `aborted` at 499, and MUST NOT report the throw as unexpected.
 
 # 17. Response helpers
 
@@ -1226,6 +1232,10 @@ composite.
 
 23.8 On a server `online` MUST be true.
 
+23.9 In a page or a layout, `route.params()` MUST be typed by that file's own route: a required
+segment as text, an optional one as text that may be absent, a rest as a list, and in a layout any
+segment a page below it adds.
+
 # 24. Tracing
 
 24.1 `trace` MUST be built on first ask and held for the request.
@@ -1323,6 +1333,9 @@ will not coerce MUST keep that default.
 
 27.9 `config` MUST be an unkeyed `global` `reactive` over the precedence 27.2 states.
 
+27.10 Filing or unfiling `onConfig` MUST invalidate `config`, so a read taken before the app's
+module ran is not the one served after it.
+
 # 28. Logging
 
 28.1 Every line MUST be published to `log.records`, which MUST be an ordinary `reactive` declaring
@@ -1349,6 +1362,9 @@ on a server.
 
 28.11 A browser's own stored `DEBUG` setting MUST answer only where the document carries none, and
 MUST NOT override it.
+
+28.12 The app name `log.named` prefixes MUST be read per line, so a logger named before the app's
+identity resolved writes under it once it has.
 
 # 29. Content security policy
 
@@ -1445,6 +1461,8 @@ the page shown, and MUST NOT where only its query or fragment does.
 30.25 A `navigate` that does not remount the page MUST NOT move the scroll, except to the element a
 fragment it carries names.
 
+30.26 `abide check` MUST refuse a `url` literal that no page of the app is filed under.
+
 # 31. Reading and writing by name
 
 31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
@@ -1466,8 +1484,8 @@ operand — or where 31.14 holds it.
 
 31.7 `s` and `s.set` MUST keep compiling inside a `.abide` file.
 
-31.8 A write through a member path MUST copy down that path and then write, and the copy MUST NOT
-be optimised away.
+31.8 A write through a member path into plain data MUST copy down that path and then write, and the
+copy MUST NOT be optimised away.
 
 31.9 A mutator lifted per 31.8 MUST be resolved from the type of the `Reactive` rather than from
 the member name.
@@ -1483,6 +1501,10 @@ naming the explicit read.
 
 31.14 A name MUST hold the `Reactive` where the declared type of its position is a `Selection`, or a
 type parameter constrained by one.
+
+31.15 A write through a member path that reaches a value which is not plain data — an array, or an
+object whose prototype is `Object.prototype` or `null` — MUST assign on that value itself, MUST NOT
+copy it or any level above it, and MUST NOT wake a reader.
 
 # 32. Templating
 
@@ -1583,6 +1605,9 @@ presence MUST be present or absent by the value's truthiness, and a string that 
 MUST be written as its text; and any other MUST be written as its text — whether named or spread,
 and whether the server writes it or the browser does.
 
+32.39 A `bind:element` callback's `Disposer` that hands back a thenable MUST keep the nodes holding
+that element in the document until it settles, and MUST remove them then.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
@@ -1633,6 +1658,9 @@ indentation MUST be dropped at both ends of every block body and of the top-leve
 33.19 The static text of a prop a `<Name/>` passes MUST reach the child as the characters it stands
 for, decoded by HTML's attribute-value rule, and each static piece of an interpolated one MUST be
 decoded on its own.
+
+33.20 A `props` default MUST answer wherever the caller's expression reads `undefined`, the key
+left out included, and its binding MUST be typed without `undefined`.
 
 # 34. Script and style blocks
 
@@ -1710,8 +1738,8 @@ document it streams.
 
 36.6 `ABIDE_APP_TOKEN` and `ABIDE_APP_URL` MUST be read by the remote CLI only.
 
-36.7 `ABIDE_LOGS`, `ABIDE_OPENAPI` and `ABIDE_MCP` MUST each be closed by default, and a closed one
-MUST answer 404.
+36.7 `ABIDE_LOGS`, `ABIDE_OPENAPI`, `ABIDE_MCP` and `ABIDE_BRIDGE` MUST each be closed by default, and
+a closed one MUST answer 404.
 
 36.8 `ABIDE_LOG_FORMAT` unset MUST follow the TTY.
 
@@ -1916,6 +1944,19 @@ flag only such a command reads.
 modules to the ones the executable holds.
 
 38.58 `abide run` and the executable's `run` MUST resolve the configuration under the app's identity.
+
+38.59 `abide dev` and `abide start` MUST print every address the app answers at, the local one first.
+
+38.60 38.7's shell MUST answer `help` with every word it takes.
+
+38.61 A line the app logs while 38.7's shell is open on a terminal MUST NOT move the shell's prompt,
+nor the line being typed — `log` or the console alike.
+
+38.62 `abide call`'s args MUST be `name=value` words, each value coerced as 19.8 coerces a query's
+and a name given twice a list, or one JSON object where the first word opens one.
+
+38.63 38.7's shell MUST list each handler `call` reaches with its args, and with its `description`
+where the declaration writes one as a literal.
 
 # 39. Head and view transitions
 
@@ -2205,3 +2246,66 @@ MUST throw naming each field that is absent.
 reached through `globalThis.__ABIDE_WORK__`.
 
 44.23 `batch` MUST throw on a duration whose op touched an emulated DOM.
+# 45. The assistant
+
+45.1 `assistant` MUST answer only through a handler that yields it, and MUST NOT mount an address
+of its own.
+
+45.2 `assistant` MUST yield the same `AssistantEvent` sequence for one conversation whichever
+`Provider` ran it.
+
+45.3 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript whose last
+`AssistantMessage` is not the user's.
+
+45.4 `assistant` MUST hold no conversation between calls, and MUST take the whole transcript with
+each one.
+
+45.5 `claudeCode` MUST send a transcript to Claude Code as one message, its earlier turns folded
+above the last.
+
+45.6 With `mcp`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
+lists, and MUST call each through the `/__abide/mcp` of the app answering the request.
+
+45.7 A `Toolbox` call MUST carry the asking request's `cookie` and `authorization` headers, and MUST
+NOT carry any other header of it.
+
+45.8 `mcp` over an MCP surface `ABIDE_MCP` has not opened MUST throw, naming `ABIDE_MCP`.
+
+45.9 `claudeApi` MUST call the Messages API again with the tool results only while a turn stops for
+`tool_use`, and MUST send each assistant turn's blocks back as they arrived.
+
+45.10 `claudeApi` MUST throw where no `apiKey` is given, and MUST NOT read a key from the
+environment.
+
+45.11 A conversation reaching `maxTurns` with a tool call pending MUST end on a `done` whose `stop`
+is `max_turns`, and MUST NOT run that call.
+
+45.12 `claudeApi` MUST send the results of one turn's tool calls back in one message.
+
+45.13 `claudeCode` MUST run a turn on the Claude Code of the bridge paired with the asking browser,
+and MUST refuse 409 where none is paired.
+
+45.14 A code `claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that asked for
+it, once, and MUST NOT pair once it has expired.
+
+45.15 A bridge MUST run Claude Code with its built-in tools off, no setting source read and no MCP
+server but the bridge's own, in an empty directory removed when the run ends.
+
+45.16 A bridge MUST take from the site no Claude Code option `ClaudeCodeConfig` does not name.
+
+45.17 An MCP request a bridge's Claude Code makes MUST be answered from the `Toolbox` of the turn it
+was made in.
+
+45.18 `claudeCode` MUST end a turn's run on the bridge when the caller hangs up.
+
+45.19 `/__abide/bridge` MUST be gated by `ABIDE_BRIDGE`, and `claudeCode` MUST throw, naming
+`ABIDE_BRIDGE`, where it is closed.
+
+45.20 `claudeCode.bridge` MUST yield a `BridgeStatus` whenever the asking browser's pairing changes,
+and MUST yield a fresh command where the standing one's code expires unpaired.
+
+45.21 A failure the Messages API reports to `claudeApi`, or a bridge reports to `claudeCode`, MUST
+refuse 502.
+
+45.22 A bridge `claudeCode.bridge` has watched MUST be sent away once nothing watches it and it has
+run no turn for 30 seconds.

@@ -138,7 +138,8 @@ function formatOf(): 'tsv' | 'json' | 'readable' {
     return process.stdout.isTTY === true ? 'readable' : 'tsv'
 }
 
-function useColor(): boolean {
+/** Whether a line written to stdout may carry ANSI color: a terminal, unless `NO_COLOR` says not. */
+export function useColor(): boolean {
     if (typeof process === 'undefined') return false
     if (environment('NO_COLOR') !== undefined) return false
     if (environment('FORCE_COLOR') !== undefined) return true
@@ -223,8 +224,9 @@ function loggerOver(namespaceOf: () => string): Logger {
     }
     logger.warning = (...args) => write(namespaceOf(), 'warning', args)
     logger.error = (...args) => write(namespaceOf(), 'error', args)
-    // 28.4 — another segment, below this one.
-    logger.named = (name) => namedLogger(`${namespaceOf()}:${name}`)
+    // 28.4 — another segment, below this one. 28.12 — asked per line too, so a logger named at module
+    // load, before the app's name resolved, writes under the name once it has.
+    logger.named = (name) => loggerOver(() => `${namespaceOf()}:${name}`)
     logger.enabled = () => isEnabled(namespaceOf())
     Object.defineProperty(logger, 'records', { get: recordsValue })
     return logger

@@ -6,7 +6,7 @@
         "packages/*"
     ],
     "scripts": {
-        "typecheck": "tsc -p packages/abide/tsconfig.json && tsc -p packages/harness/tsconfig.json && tsc -p packages/dogfood/tsconfig.json",
+        "typecheck": "tsc -p packages/abide/tsconfig.json && tsc -p packages/harness/tsconfig.json && tsc -p packages/dogfood/tsconfig.json && tsc -p packages/bridge/tsconfig.json",
         "test": "bun run build && bun test packages/abide packages/harness/tests packages/dogfood/tests --parallel",
         "test:serial": "bun run build && bun test packages/abide packages/harness/tests packages/dogfood/tests",
         "test:changed": "bun test --changed",

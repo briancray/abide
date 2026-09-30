@@ -1,5 +1,7 @@
 import { isReactive } from '#shared/reactive/isReactive.ts'
+import { isThenable } from '#shared/reactive/isThenable.ts'
 import type { Disposer } from '#shared/reactive/watch.ts'
+import { holdWhileLeaving } from './leave.ts'
 
 /**
  * Hands an element to its `bind:element` value; returns the callback's `Disposer`, if any.
@@ -17,6 +19,8 @@ import type { Disposer } from '#shared/reactive/watch.ts'
  * the value accepts an element, and a page that reads `field.focus()` from a handler after a
  * region swapped is reading a node that left rather than a value that emptied. The callback
  * form is where teardown is decided, and its `Disposer` is the whole of it.
+ *
+ * 32.39 — A `Disposer` HANDING BACK A THENABLE IS AN EXIT: the element's nodes stay until it settles.
  */
 export function bindElement(
     element: Element,
@@ -27,6 +31,14 @@ export function bindElement(
         return undefined
     }
     if (typeof value !== 'function') return undefined
-    const disposer = (value as (node: Element) => Disposer | undefined)(element)
-    return typeof disposer === 'function' ? disposer : undefined
+    const disposer = (value as (node: Element) => (() => unknown) | undefined)(
+        element,
+    )
+    if (typeof disposer !== 'function') return undefined
+    return () => {
+        const leaving = disposer()
+        // 1.6 — the brand first: a `Reactive` is thenable, and is not an exit.
+        if (!isReactive(leaving) && isThenable(leaving))
+            holdWhileLeaving(element, leaving)
+    }
 }

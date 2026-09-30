@@ -28,6 +28,9 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     'boundProp',
     'propCell',
     'propCells',
+    // 33.20 — a default answering where the caller's accessor reads `undefined`.
+    'propOr',
+    'withoutKeys',
     // 32.11 — a spread's props, which an invocation passes on both sides, and its markup.
     'spreadProps',
     'spreadAttributes',

@@ -10,6 +10,7 @@
 // type-derived schema is the build's (19.10), and arrives here as the mount's `argsDocument`.
 
 import { log, namedLogger } from '#shared/log.ts'
+import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
 import { refuse } from '#shared/refuse.ts'
 import type { Method } from '#shared/rpc.ts'
@@ -17,6 +18,7 @@ import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import { answered, crossingOrigin, type Mounted } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
 import { appIdentity, config } from './config.ts'
+import { MCP_PROTOCOL_VERSION } from './MCP_PROTOCOL_VERSION.ts'
 
 const OPENAPI_LOG = namedLogger('abide:openapi')
 const MCP_LOG = namedLogger('abide:mcp')
@@ -183,15 +185,16 @@ type JsonRpc = {
  *
  * 20.9 — THE STREAMABLE-HTTP MCP ENDPOINT, answering JSON-RPC over `POST`. A handler that takes no
  * args is a resource, read at its address; one that takes args, and every mutation, is a tool.
- * A call is made as a request through the app (`fetch`), so its rungs run and refuse as they would
- * for anyone (20.10).
+ * A call is made as a request through the app answering this one (`RPC_SERVER.raw`, 42.12), so its
+ * rungs run and refuse as they would for anyone (20.10).
  */
 export async function answerMcp(
     handlers: Map<string, Mounted>,
     request: Request,
-    fetch: (request: Request) => Promise<Response>,
 ): Promise<unknown> {
     if (!opened('ABIDE_MCP')) return undefined
+    // Filled by the app answering this request, so never `null` here.
+    const inApp = RPC_SERVER.raw as NonNullable<typeof RPC_SERVER.raw>
     if (request.method !== 'POST')
         return new Response(null, { status: 405, headers: { allow: 'POST' } })
     // 20.12, 16.14 — A POST FROM ANOTHER ORIGIN IS REFUSED, as a mutation's is: a tool call runs a handler
@@ -218,7 +221,7 @@ export async function answerMcp(
     switch (message.method) {
         case 'initialize':
             return reply({
-                protocolVersion: '2025-06-18',
+                protocolVersion: MCP_PROTOCOL_VERSION,
                 capabilities: { tools: {}, resources: {} },
                 serverInfo: appIdentity(),
             })
@@ -255,7 +258,7 @@ export async function answerMcp(
                     -32602,
                     `No tool named ${String(message.params?.name)}.`,
                 )
-            const answer = await fetch(
+            const answer = await inApp(
                 callOf(
                     request,
                     tool,
@@ -277,7 +280,7 @@ export async function answerMcp(
             )
             if (resource === undefined)
                 return failure(message.id, -32602, `No resource at ${uri}.`)
-            const answer = await fetch(callOf(request, resource, undefined))
+            const answer = await inApp(callOf(request, resource, undefined))
             const text = await answer.text()
             if (answer.status >= 400) return failure(message.id, -32603, text)
             return reply({

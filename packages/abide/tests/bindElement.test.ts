@@ -104,3 +104,39 @@ let open = reactive(true)
     expect(document.querySelector('#widget')).toBeNull()
     expect((globalThis as { __TORN__?: number }).__TORN__).toBe(1)
 })
+
+// 32.39 — AN EXIT: a `Disposer` handing back a thenable keeps the element in the document until it
+// settles, which is where `element.animate(…).finished` goes. An arm's swap and a row the reconcile
+// drops both hold it, and the arm's replacement is in place beside it meanwhile. THE REVERT: have
+// `leave` remove the node whatever is leaving; `#leaving` is gone at the swap, where it is due to
+// stay until the exit settles.
+test('a disposer handing back a thenable holds the element until it settles — 32.39', async () => {
+    const exits: (() => void)[] = []
+    ;(globalThis as { __EXIT__?: () => Promise<void> }).__EXIT__ = () =>
+        new Promise<void>((done) => exits.push(done))
+    await mountPage(`<script>
+import { reactive } from 'abide'
+
+let open = reactive(true)
+let rows = reactive([1, 2, 3])
+const exit = () => () => (globalThis as { __EXIT__?: () => Promise<void> }).__EXIT__?.()
+</script>
+
+<button id="toggle" onclick={() => { open = !open }}>toggle</button>
+<button id="drop" onclick={() => { rows = [1, 3] }}>drop</button>
+{#if open}<p id="leaving" bind:element={exit}>arm</p>{:else}<p id="arrived">other</p>{/if}
+<ul>{#for row of rows by row}<li id={\`row\${row}\`} bind:element={exit}>{row}</li>{/for}</ul>`)
+
+    click('#toggle')
+    expect(document.querySelector('#leaving')).not.toBeNull()
+    expect(document.querySelector('#arrived')).not.toBeNull()
+    click('#drop')
+    expect(document.querySelector('#row2')).not.toBeNull()
+    expect(exits.length).toBe(2)
+    for (const done of exits) done()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(document.querySelector('#leaving')).toBeNull()
+    expect(document.querySelector('#row2')).toBeNull()
+    expect(document.querySelector('#row3')).not.toBeNull()
+})

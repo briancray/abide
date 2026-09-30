@@ -82,6 +82,17 @@ test('log.named prefixes the app name, and again appends — 28.4, 28.5', () => 
     expect(typeof pool.debug).toBe('function')
 })
 
+// 28.12 — THE PREFIX IS READ PER LINE. A module names its logger at load, which is before the server's
+// `config` has derived the app's name, so a prefix taken then is the `app` fallback forever after.
+// THE REVERT: take `namespaceOf()` once in `logger.named`; the line reads `ledger:db` where
+// `books:db` is due.
+test('a logger named before the app name changes writes under the new name — 28.12', () => {
+    const early = log.named('db')
+    process.env.APP_NAME = 'books'
+    early.warning('late')
+    expect(JSON.parse(written.at(-1) as string).namespace).toBe('books:db')
+})
+
 // 28.6, 28.9 — `DEBUG` IN debug-npm GRAMMAR: a wildcard, a list, and an exclusion that beats an
 // inclusion. THE REVERT: test the inclusions before the exclusions in `isEnabled`; `ledger:db` then
 // answers open under `ledger:*,-ledger:db`.

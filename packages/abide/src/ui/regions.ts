@@ -1,3 +1,4 @@
+import { leave } from './leave.ts'
 import { LAYER_FILL } from './LAYER_NAMES.ts'
 import { Mismatch } from './Mismatch.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
@@ -103,7 +104,7 @@ export function removeUntil(from: ChildNode | null, end: Node | null): void {
     let node = from
     while (node !== null && node !== end) {
         const next: ChildNode | null = node.nextSibling
-        node.remove()
+        leave(node)
         node = next
     }
 }

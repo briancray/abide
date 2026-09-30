@@ -11,6 +11,8 @@ covers:
   - `RequiredNames<P>`
   - `OptionalNames<P>`
   - `RestNames<P>`
+  - `Routes`
+  - `RouteLiteral`
   - `navigate`
   - `route.url`
   - `route.navigating`
@@ -56,6 +58,14 @@ string literal, and they are documented because a compile error mentions them â€
 `RequiredNames` is telling you which segment you left out.
 
 Read on: [Routes](add-a-page.md)
+
+## A link names a page the app has
+
+`url`'s literal is a `RouteLiteral`: one of the patterns the app files a page under. `abide check`
+declares them into `Routes`, so a literal no page is filed under is refused where it is written
+(30.26) â€” the stale `/invoices/[id]` left behind when the route grew a `[[tab]]` is an error, not
+an address the server answers from somewhere else. A plain `tsc` declares none, and then any
+literal is taken.
 
 ## `navigate` goes there without reloading
 

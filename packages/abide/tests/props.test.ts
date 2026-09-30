@@ -177,6 +177,34 @@ import Total from './Total.abide'
     expect(html).toContain('<strong>USD 7.00</strong>')
 })
 
+// 33.20 — AND WHERE THE CALLER PASSED `undefined`, on both sides, and live: the caller's expression
+// moving off `undefined` is answered, and back onto it answers the default again. THE REVERT: drop
+// `withoutKeys` from the `props` lowering; the key stays in the record, the pattern's default never
+// stands, and the render reads ` 3.00` where `USD 3.00` is due.
+test('a default prop is answered where the caller passed undefined — 33.20', async () => {
+    const { html, mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Total from './Total.abide'
+
+let chosen = reactive<string | undefined>(undefined)
+</script>
+<Total amount={3} currency={chosen}/><button onclick={() => (chosen = chosen ? undefined : 'EUR')}>switch</button>`,
+        { Total: TOTAL },
+    )
+    expect(html).toContain('<strong>USD 3.00</strong>')
+    const text = (): string =>
+        document.querySelector('strong')?.textContent ?? ''
+    mount(pageRegion(document.body))
+    expect(text()).toBe('USD 3.00')
+    document.querySelector('button')?.click()
+    flushSync()
+    expect(text()).toBe('EUR 3.00')
+    document.querySelector('button')?.click()
+    flushSync()
+    expect(text()).toBe('USD 3.00')
+})
+
 // 33.4 — AN OPTIONAL PROP WITH NO DEFAULT, LEFT OUT, READS `undefined` on both sides. The caller
 // passes no accessor for it, and the read of one was `label()` on nothing — a TypeError that ended
 // the render. THE REVERT: drop the `absent` read in `propsReads`; the render throws `label is not a

@@ -8,6 +8,7 @@
 
 import {
     ABIDE_ADDRESS,
+    BRIDGE_ADDRESS,
     CLIENT_ADDRESS,
     HEALTH_ADDRESS,
     LOGS_ADDRESS,
@@ -39,6 +40,7 @@ import { rpcRequest } from '#shared/rpcRequest.ts'
 import type { Socket } from '#shared/socket.ts'
 import { answerRpc, type Mounted } from './answerRpc.ts'
 import { answerBlobTagged, answerValue, contentEtag } from './answerValue.ts'
+import { answerBridge } from './bridgeRelay.ts'
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import { compressDocument } from './compressDocument.ts'
 import { answerLogs, answerMcp, openApi } from './generatedSurfaces.ts'
@@ -122,13 +124,6 @@ export type AppSources = {
      */
     own: ((request: Request) => Promise<Response | undefined>) | undefined
     /**
-     * The `App.fetch` an MCP call is answered through.
-     *
-     * 20.10 — this app's, which `RPC_SERVER.raw` is not — that slot holds whichever `App` the
-     * process booted last.
-     */
-    fetch: (request: Request) => Promise<Response>
-    /**
      * What a page that threw, unrefused, is answered with in place of 16.43's bare 500.
      *
      * 38.4 — `abide dev`'s document naming what broke, for the author looking at the browser.
@@ -138,7 +133,7 @@ export type AppSources = {
 }
 
 /** What a command reads or compiles, before `bootApp` adds what the `App` itself supplies. */
-export type LoadedSources = Omit<AppSources, 'own' | 'fetch'>
+export type LoadedSources = Omit<AppSources, 'own'>
 
 /** The `Response` to one request: a handler, a surface of abide's own, a file, or a page. */
 export async function answerRequest(
@@ -260,7 +255,12 @@ export async function answerRequest(
         document = await render(bound, found.route.document)
     } catch (thrown) {
         const failure = failureOf(thrown)
-        if (!isFailed(thrown) && app.explained !== undefined)
+        // Explained only where it was the server's fault — not a refusal, not a client that left.
+        if (
+            !isFailed(thrown) &&
+            failure.status === 500 &&
+            app.explained !== undefined
+        )
             return app.explained(thrown)
         return answerFailure(app, asked, failure)
     }
@@ -325,11 +325,9 @@ const SURFACES = new Map<
     [HEALTH_ADDRESS, reportHealth],
     [PRINCIPAL_ADDRESS, resolvePrincipal],
     [OPENAPI_ADDRESS, (app) => openApi(app.handlers)],
-    [
-        MCP_ADDRESS,
-        (app, request) => answerMcp(app.handlers, request, app.fetch),
-    ],
+    [MCP_ADDRESS, (app, request) => answerMcp(app.handlers, request)],
     [LOGS_ADDRESS, (_app, request) => answerLogs(request)],
+    [BRIDGE_ADDRESS, (_app, request) => answerBridge(request)],
 ])
 
 // What a call made in a page's render reports into: the seed buffer (41.13), and — where the handler

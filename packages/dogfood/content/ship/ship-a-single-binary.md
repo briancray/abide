@@ -48,11 +48,11 @@ Read on: [Config](../app/configure-the-app.md) ·
 ./ledger                                  # usage
 ./ledger start --port 8080                # serve, with a shell on it
 ./ledger run scripts/backfill.ts          # a script, under the app it holds
-./ledger call invoices/getInvoice '{"id": "42"}'
+./ledger call invoices/getInvoice id=42
 ```
 
 Run with no command, it prints its usage under its own name. `start` serves the app and opens
-the same shell `abide connect` opens: `call`, `logs`, `exit`. `exit` stops the app. Where
+the same shell `abide connect` opens: `call`, `handlers`, `help`, `exit`. `exit` stops the app. Where
 nothing is typing — no terminal, a container started without one — the app keeps serving.
 
 `run`, `call`, `connect`, `openapi`, `mcp` and `logs` are `abide`'s. A script `run` imports

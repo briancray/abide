@@ -4,7 +4,6 @@
 
 import { type Host, runCommands } from './commands.ts'
 import { type AppOrigin, bootApp } from './createApp.ts'
-import { methodIn } from './remote.ts'
 import { type BuildParts, builtSources, serveApp } from './serveBuild.ts'
 
 export async function runCompiled(
@@ -28,7 +27,7 @@ export async function runCompiled(
     })
     const host: Host = {
         name: process.execPath.slice(process.execPath.lastIndexOf('/') + 1),
-        methodOf: async (address) => methodIn(parts.handlers, address),
+        handlers: async () => parts.handlers,
         appPackage: () => origin.package,
         boot: () => bootApp(origin, () => builtSources(parts)),
         // 38.50.

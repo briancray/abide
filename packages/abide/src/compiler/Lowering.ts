@@ -445,28 +445,51 @@ export class Lowering {
             // 33.4 — the call IS the record of accessors the caller passed, so the pattern an
             // author wrote destructures that rather than a value nothing has. 33.6, 33.7 — a key
             // the child writes (`path`) is its cell instead (`propCells`).
+            // 33.20 — a defaulted key leaves the record, so its default always stands and asks the
+            // caller's accessor itself (`propOr`); its cell, where the child writes it, is built there.
             case 'props': {
-                const written =
-                    read.path.length === 0
-                        ? ''
-                        : `, ${JSON.stringify(read.path.map((key) => key.name))}`
-                if (this.checking)
-                    return `__accessors(${this.projection.text.slice(read.from, read.to)}${written})`
-                return written === ''
-                    ? PROPS
-                    : `${this.use('propCells')}(${PROPS}${written})`
+                const defaulted = read.keys
+                if (this.checking) {
+                    const written =
+                        read.path.length === 0
+                            ? ''
+                            : `, ${JSON.stringify(read.path.map((key) => key.name))}`
+                    const without =
+                        defaulted.length === 0
+                            ? ''
+                            : `${written === '' ? ', []' : ''}, ${JSON.stringify(defaulted)}`
+                    return `__accessors(${this.projection.text.slice(read.from, read.to)}${written}${without})`
+                }
+                const writtenKeys: (string | undefined)[] = []
+                for (const key of read.path)
+                    if (key.name === undefined || !defaulted.includes(key.name))
+                        writtenKeys.push(key.name)
+                const record =
+                    writtenKeys.length === 0
+                        ? PROPS
+                        : `${this.use('propCells')}(${PROPS}, ${JSON.stringify(writtenKeys)})`
+                return defaulted.length === 0
+                    ? record
+                    : `${this.use('withoutKeys')}(${record}, ${JSON.stringify(defaulted)})`
             }
             // 33.4 again, on the other side of the `=`: every key is an accessor, so a default
             // has to be one too — bound as written, `currency` would be a string where every
             // read of it is a call. The two insertions BRACKET the author's expression rather
             // than replacing it, so a default that reads a `Reactive` still lowers inside. A
             // written prop's default is its cell, as the caller's value would have been.
-            case 'defaultOpen':
+            case 'defaultOpen': {
+                if (this.checking)
+                    return read.through
+                        ? `${this.use('propCell')}(() => (`
+                        : '() => ('
+                const caller = `${this.use('propOr')}(${PROPS}[${JSON.stringify(read.keys[0])}], () => (`
                 return read.through
-                    ? `${this.use('propCell')}(() => (`
-                    : '() => ('
+                    ? `${this.use('propCell')}(${caller}`
+                    : caller
+            }
             case 'defaultClose':
-                return read.through ? '))' : ')'
+                if (this.checking) return read.through ? '))' : ')'
+                return read.through ? ')))' : '))'
             case 'absent':
                 if (this.checking) return undefined
                 return read.through
@@ -479,6 +502,11 @@ export class Lowering {
             // are the same object.
             case 'raw':
                 return raw ? this.use('raw') : undefined
+            // 23.9 — WHAT THIS PAGE'S OWN ROUTE PROMISES, for the checker alone: the running module
+            // reads the one `route` every page shares.
+            case 'routeParams':
+                if (!this.checking) return undefined
+                return `(${this.projection.text.slice(read.from, read.to)} as unknown as () => __RouteParams<${JSON.stringify(read.keys[0])}, ${JSON.stringify(read.keys[1])}>)`
         }
         const value =
             read.value === undefined ? '1' : this.lower(read.value, raw).trim()

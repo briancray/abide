@@ -69,6 +69,7 @@ export async function handlersUnder(
             name: exported,
             method,
             ui,
+            description,
             copy,
             args,
             unread,
@@ -92,6 +93,7 @@ export async function handlersUnder(
                 source,
                 name: exported,
                 ui,
+                description,
                 copy,
                 args,
             })

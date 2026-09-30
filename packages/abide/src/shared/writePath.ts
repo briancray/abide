@@ -14,9 +14,12 @@ import { putOwn } from './putOwn.ts'
  * object where an array was, and `length`, `map` and every later `{#for}` over it go with it. The
  * shape is decided here, where the value is.
  *
- * A `Map`, a `Set` or a class instance is copied as its OWN ENUMERABLE PROPERTIES and nothing
- * else, which is a real limit rather than a decision: there is no clause for a write through a
- * path into one, and inventing a per-container copy rule here would be deciding it.
+ * 31.15 — ONLY PLAIN DATA IS COPIED. An element, a class instance, a `Map`: anything whose prototype
+ * is not `Object.prototype`, `null` or `Array.prototype` owns its own state, and its setters say
+ * what a write means — `video.currentTime = t` seeks. A spread of one is a plain object holding a
+ * few own fields, so the write reached nothing and the `Reactive` came to hold the husk. The write
+ * lands on the object itself, like a method call on it would (31.6), and the root comes back
+ * unchanged, so the `set` it is handed to wakes nobody.
  */
 export function writePath(
     value: unknown,
@@ -24,6 +27,17 @@ export function writePath(
     next: unknown,
 ): unknown {
     if (path.length === 0) return next
+    let owner = value
+    for (let at = 0; at < path.length; at += 1) {
+        if (!isPlain(owner)) {
+            writeThrough(owner as Level, path, at, next)
+            return value
+        }
+        if (at < path.length - 1)
+            owner = (owner as Level | null | undefined)?.[
+                path[at] as string | number
+            ]
+    }
     const root = copyOf(value, path[0] as string | number)
     let level = root
     for (let at = 0; at < path.length - 1; at += 1) {
@@ -34,6 +48,30 @@ export function writePath(
     }
     putOwn(level, path[path.length - 1] as string | number, next)
     return root
+}
+
+// Plain data: what a copy reproduces whole. An absent level is plain — the copy builds it fresh.
+function isPlain(value: unknown): boolean {
+    if (value === null || typeof value !== 'object') return true
+    const prototype = Object.getPrototypeOf(value)
+    return (
+        prototype === Object.prototype ||
+        prototype === null ||
+        Array.isArray(value)
+    )
+}
+
+// The rest of the path walked on the live objects from `from`, and the last step assigned there.
+function writeThrough(
+    owner: Level,
+    path: readonly (string | number)[],
+    from: number,
+    next: unknown,
+): void {
+    let level = owner
+    for (let at = from; at < path.length - 1; at += 1)
+        level = level[path[at] as string | number] as Level
+    level[path[path.length - 1] as string | number] = next
 }
 
 // One level of the copy, written by either kind of step. An array indexes by number and an object

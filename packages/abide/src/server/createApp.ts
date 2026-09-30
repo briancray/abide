@@ -32,6 +32,7 @@ import { HOOKS, reportUnexpected } from './hooks.ts'
 import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
 import {
     applyWritten,
+    currentRequestScope,
     inScope,
     LISTENING,
     rungsTook,
@@ -168,7 +169,6 @@ export async function bootApp(
     const booted: AppSources = {
         ...sources,
         own: own === undefined ? undefined : ownRoute(own),
-        fetch: (request) => fetch(request),
     }
 
     // 16.15, 37.3 — THE APP LANE'S ONION, composed once over the whole request path. 21.20 — the
@@ -189,7 +189,7 @@ export async function bootApp(
     const run = async <Result>(
         fn: () => Result | Promise<Result>,
         options?: { request?: Request },
-    ): Promise<Result> => inScope(options?.request, fn)
+    ): Promise<Result> => inScope(options?.request, fn, fetch)
 
     const fetch = async (given: Request): Promise<Response> => {
         if (stopping) return plainAnswer('the app is stopping', 503)
@@ -223,6 +223,7 @@ export async function bootApp(
                         )
                     return stamped
                 },
+                fetch,
                 given,
             )
         } finally {
@@ -231,8 +232,10 @@ export async function bootApp(
         }
     }
 
-    // 16.44 — a `raw` call made on this server is answered by this app, in process.
-    RPC_SERVER.raw = fetch
+    // 16.44, 42.12 — A `raw` CALL MADE ON THIS SERVER IS ANSWERED IN PROCESS, by the app answering the
+    // request it was made in; only a call made outside every request falls to the app built last.
+    RPC_SERVER.raw = (request) =>
+        (currentRequestScope()?.answer ?? fetch)(request)
 
     // 42.15 — ONE STOP, however many ask for it: a signal landing while the shell's `exit` is already
     // stopping the app is answered with that stop, and `onStop` runs once.

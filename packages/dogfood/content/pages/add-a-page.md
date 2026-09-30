@@ -9,6 +9,7 @@ covers:
   - `[...name]`
   - `route.params`
   - `Params`
+  - `RouteParams<P>`
   - `route.name`
 ---
 
@@ -22,7 +23,7 @@ filesystem.
 | --- | --- | --- |
 | `[id]` | exactly one segment, required | a required key |
 | `[[tab]]` | one segment or none | an optional key, absent when it did not match |
-| `[...rest]` | the remaining segments, terminal | an optional key, a scalar or an array |
+| `[...rest]` | the remaining segments, terminal | a list, empty when it matched nothing |
 
 A rest segment is terminal because there is nothing a segment after it could match against.
 The other two compose freely, so `invoices/[id]/[[tab]]` is one route answering two addresses
@@ -65,9 +66,11 @@ Read on: [Links & navigation](link-to-another-page.md) ·
 
 ## `Params` is what the segments matched
 
-`Params` carries what `[param]`, `[[optional]]` and `[...rest]` matched, typed from the pattern
-rather than declared beside it. A required segment is a required key, an optional one is an
-optional key, and a rest segment takes an array as well as a scalar.
+`Params` carries what `[param]`, `[[optional]]` and `[...rest]` matched: text, or a list for a
+rest. In a page it is typed from the page's own route rather than declared beside it — `abide
+check` reads `route.params()` in `invoices/[id]/page.abide` as `RouteParams<'/invoices/[id]'>`, so
+`id` is text and a key the route does not have is an error (23.9). A layout gets its own segments,
+and whatever a page below it adds.
 
 Nothing else is in it. A query string is not a param — it is not part of what resolved the
 route, and treating it as one is how a route starts depending on something that never selected

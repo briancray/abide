@@ -198,7 +198,8 @@ test('a cross-origin POST to the MCP endpoint is refused, and a same-origin one 
 
 // 20.10, 42.12 — AN MCP CALL IS ANSWERED BY THE APP IT WAS MADE TO, not by whichever `App` the process
 // built last: two held in one process, the second stopped, and the first still answers its tools. THE
-// REVERT: answer the call through `RPC_SERVER.raw`; the stopped app answers it 503.
+// REVERT: set `RPC_SERVER.raw` to the app's own `fetch` alone in `createApp`, not the scope's app
+// first; the stopped app answers the call 503.
 test('an MCP call is answered by its own App, not the last one built — 20.10, 42.12', async () => {
     await Bun.write(
         `${app}/host.ts`,

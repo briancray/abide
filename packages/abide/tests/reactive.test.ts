@@ -91,16 +91,16 @@ test('refresh keeps serving while it reloads', async () => {
     expect(held()).toBe(2)
 })
 
-// SERVED UNTIL SOMETHING READS (7.16, 7.17). The mark changes nothing a reader can see — still
-// ready, not busy — and the read that follows runs the producer, which is the moment the held
-// value stops being served (7.8) and, over an async body, the first load again.
-test('invalidate keeps serving until the next read, which stops serving and loads', async () => {
+// SERVED UNTIL A READ OR A PROBE RUNS THE PRODUCER (7.16, 7.17). A probe answers about the value a
+// read would serve (3.2), so asking runs the producer the mark owes — the held value stops being
+// served (7.8) and, over an async body, the first load starts again — and the read agrees with it.
+test('invalidate keeps serving until a probe or a read runs the producer', async () => {
     const answer = 1
     const held = reactive(() => Promise.resolve(answer))
     await held
     held.invalidate()
-    expect(`busy: ${held.busy()}`).toBe('busy: false')
-    expect(`ready: ${held.ready()}`).toBe('ready: true')
+    expect(`busy: ${held.busy()}`).toBe('busy: true')
+    expect(`ready: ${held.ready()}`).toBe('ready: false')
     expect(() => held()).toThrow(NotLanded)
     expect(`busy after the read: ${held.busy()}`).toBe(
         'busy after the read: true',
@@ -1382,14 +1382,50 @@ test('re-adopting something with nothing to serve clears the outer', () => {
     expect(outer.ready()).toBe(true)
 
     pick.set(1)
-    // THE READ IS WHAT SWITCHES THE ADOPTION, and a probe is not a read (3.2 — a probe
-    // MUST NOT start work). Until something asks for the value the body has not re-run,
-    // so the probes still answer about the one it was adopting: this is the floor over the
-    // graph AS IT STANDS rather than as the next recompute will leave it.
     expect(() => outer()).toThrow(NotLanded)
     expect(outer.ready()).toBe(false)
     // 11.19: and it reports busy for the one it now adopts.
     expect(outer.busy()).toBe(true)
+})
+
+// 3.2 — A PROBE ANSWERS ABOUT THE VALUE A READ WOULD SERVE. `x.ready() ? x() : fallback` is the guard
+// every template and handler writes, and it has to mean what it says: a value whose inputs moved to a
+// load since its last run is not ready, whatever that run held. Asked from a handler, with nothing
+// subscribed to pull the body forward first.
+//
+// THE REVERT: drop `bringCurrent` from `isReady`; the probe answers `true` from the run before the
+// switch and the read it admitted throws `NotLanded`.
+test('a read a ready guard admitted does not throw — 3.2', () => {
+    const playing = reactive(false)
+    const pending = reactive(new Promise<number[]>(() => {}))
+    const keyframes = reactive(() => (playing() ? pending : []))
+    expect(keyframes()).toEqual([])
+    playing.set(true)
+    const guarded = (): unknown =>
+        keyframes.ready() ? keyframes() : 'fallback'
+    expect(guarded()).toBe('fallback')
+    expect(keyframes.busy()).toBe(true)
+})
+
+// 3.2 AS A GUARD. `{#if keyframes.ready()}` subscribes to the probe alone, so nothing reads the value
+// to pull the body forward — and what changed was an INPUT, which marks the body and moves no probe.
+// The drain pulls a marked body a guard is asking about, and the guard wakes once, onto false.
+//
+// THE REVERT: queue only an ABORTED body in `markReaders` (the `below.aborted &&` it had); the guard
+// reads `true` for the life of the page. Drop the `CLEAN` return from `resolveEffect` and the guard
+// is woken a second time onto the `false` it already showed.
+test('a guard on ready hears an input move the body to a load — 3.2', () => {
+    const playing = reactive(false)
+    const pending = reactive(new Promise<number[]>(() => {}))
+    const keyframes = reactive(() => (playing() ? pending : []))
+    const seen: boolean[] = []
+    const stop = watch(() => {
+        seen.push(keyframes.ready())
+    })
+    playing.set(true)
+    flushSync()
+    expect(seen).toEqual([true, false])
+    stop()
 })
 
 // 11.17: the adopted value's `identity` is inherited where the outer declared none — so an
@@ -1727,11 +1763,10 @@ test('a derived value is not ready while a value it read has nothing to serve', 
     await source
 
     // An invalidate does not: the source has nothing to serve, so neither has anything
-    // built from it, whatever it happens to be holding.
-    // An invalidate changes nothing until a read (7.17); the read of the source is what makes it
-    // unservable, and the floor follows it there.
+    // built from it, whatever it happens to be holding. The probe runs the reload the mark owes
+    // (3.2), and the floor follows the source there.
     source.invalidate()
-    expect(derived.ready()).toBe(true)
+    expect(derived.ready()).toBe(false)
     expect(() => source()).toThrow(NotLanded)
     expect(source.ready()).toBe(false)
     expect(derived.busy()).toBe(true)
@@ -1777,9 +1812,8 @@ test('the floor reaches the adopted value as well as the read ones', async () =>
     expect(outer.ready()).toBe(true)
 
     inner.invalidate()
-    expect(outer.ready()).toBe(true)
-    expect(() => inner()).toThrow(NotLanded)
     expect(outer.ready()).toBe(false)
+    expect(() => inner()).toThrow(NotLanded)
     expect(outer.busy()).toBe(true)
 })
 
@@ -1842,10 +1876,10 @@ test('a refresh wakes a reader that asked whether it was busy', async () => {
     stop()
 })
 
-// The same for `ready` through the READ that follows an invalidate: nothing to serve is a move a
-// guard has to hear even though no value was minted — at the read, where the value stops being
-// served (7.17), and not at the mark.
-test('the read after an invalidate wakes a reader that asked whether it was ready', async () => {
+// The same for `ready` through the HIT that follows an invalidate: nothing to serve is a move a
+// guard has to hear even though no value was minted — at the hit, where the value stops being
+// served (7.17), and not at the mark (7.14).
+test('the hit after an invalidate wakes a reader that asked whether it was ready', async () => {
     const answer = 1
     const source = reactive(() => Promise.resolve(answer))
     await source
@@ -3163,20 +3197,20 @@ function sequence(seed: number): () => number {
     }
 }
 
-// WHAT AN OPERATION'S OWN CLAUSE LETS IT DO SILENTLY, and nothing else is let off. 7.14 and 7.16
-// have an invalidate drop `busy` with no wake — a guard still showing a load reads the truth on its
-// next render. 5.7 has a patch mint over the same object, and an ungated publish mints a repeat,
+// WHAT AN OPERATION'S OWN CLAUSE LETS IT DO SILENTLY, and nothing else is let off. 7.14 has an
+// invalidate wake no guard, which goes on showing what it showed until the next hit. 5.7 has a patch
+// mint over the same object, and an ungated publish mints a repeat,
 // so a reader woken onto the value it already held is the clause working. 6.4 has an expiry wake
 // no reader, so one holding the released production until the reload lands is the clause too.
 type Allows =
-    | 'busy falls silently'
+    | 'a guard stands until the next hit'
     | 'the same value wakes'
     | 'an expiry wakes no reader'
 
 type Subject = {
     name: string
     value: Reactive<unknown>
-    ops: { op: () => void; allows?: Allows }[]
+    ops: { op: () => void; allows?: Allows | Allows[] }[]
 }
 
 // THE VALUES BOTH WALKS TAKE, built fresh per walk. Every arm `run` has, the adoption arms, a
@@ -3237,9 +3271,14 @@ function walkSubjects(): Subject[] {
             setSystemTime()
         }
     }
+    // 7.14: the mark wakes no guard, so a guard shows the probes from before it until the next hit
+    // — and the walk's own probe IS a hit (3.2), which starts the reload the guard has not heard of.
     const invalidate = (value: Reactive<unknown>) => ({
         op: () => value.invalidate(),
-        allows: 'busy falls silently' as const,
+        allows: [
+            'a guard stands until the next hit',
+            'the same value wakes',
+        ] as Allows[],
     })
 
     return [
@@ -3474,10 +3513,9 @@ test('the wake contract holds across every transition', async () => {
             const now = probesOf(subject.value)
             if (
                 subject === owner &&
-                allows.has('busy falls silently') &&
-                !now.busy
+                allows.has('a guard stands until the next hit')
             )
-                seen.probes.busy = false
+                seen.probes = now
             for (const probe of ['busy', 'ready', 'error'] as const)
                 if (!Object.is(now[probe], seen.probes[probe]))
                     throw new Error(
@@ -3498,7 +3536,11 @@ test('the wake contract holds across every transition', async () => {
                 !cell.servable &&
                 cell.owes === 0 &&
                 cell.state === CLEAN &&
-                !(subject === owner && allows.has('an expiry wakes no reader'))
+                !(
+                    subject === owner &&
+                    (allows.has('an expiry wakes no reader') ||
+                        allows.has('a guard stands until the next hit'))
+                )
             ) {
                 const error = subject.value.error()
                 const throws = error === undefined ? NOT_LANDED : error
@@ -3515,7 +3557,9 @@ test('the wake contract holds across every transition', async () => {
         walked.push(`${subject.name}[${at}]`)
         const { op, allows: declared } = subject.ops[at] as Subject['ops'][0]
         const allows = new Set<Allows>()
-        if (declared !== undefined) allows.add(declared)
+        if (Array.isArray(declared))
+            for (const each of declared) allows.add(each)
+        else if (declared !== undefined) allows.add(declared)
         // `reloadOwed`'s stated cost, read off the record: the operation settles a reload an
         // invalidate left owing (`OWES_RELOAD`).
         if (cellOf<{ owes: number }>(subject.value).owes === OWES_RELOAD)
@@ -5506,12 +5550,12 @@ test('invalidate runs nothing until the next read, which runs fresh', () => {
 })
 
 // 7.14 AND 7.17: THE MARK WAKES NOBODY. What is on screen stays — the value and every guard over it
-// — so a `{#if s.ready()}` guard cannot strand a placeholder that never reads the value again. The
-// read that follows is what moves anything.
+// — which is what lets a server say "yours is stale" without the page moving. The next hit is what
+// reloads: here a read by hand, and a guard's own probe would do the same (3.2).
 //
-// THE REVERT is `invalidateOne` making the value unservable at the mark: `guard: true,false` and a
-// guard left on a branch that never reads.
-test('invalidate wakes no reader, and a guard on ready still reads the value afterwards', () => {
+// THE REVERT is `invalidateOne` waking the probe readers: the guard runs at the mark, its probe
+// pulls the reload, and the value readers wake 1 time where 0 are due.
+test('invalidate wakes no reader, and the next hit reloads', () => {
     let answer = 1
     const held = reactive(() => answer)
     let valueWakes = 0
@@ -5945,6 +5989,38 @@ test('a write through a member path mints a new identity', () => {
     // what stops a write costing a copy of everything the value holds.
     expect(user().tags).toBe(before.tags)
     expect(before.name).toBe('ada')
+    stop()
+})
+
+// 31.15 — AN OBJECT WITH ITS OWN BEHAVIOUR IS WRITTEN, NOT COPIED. `video.currentTime = t` over a
+// `bind:element` ref is a seek: the element's setter is the whole point, and a spread of it is a
+// plain object holding a few own fields. THE REVERT: drop the `isPlain` walk from `writePath`; the
+// setter never runs (seeked reads undefined where 5 is due), the `Reactive` holds a husk rather than
+// the player, and the reader wakes 2 times where 1 is due.
+test('a write through a path into an object that is not plain data lands on it', () => {
+    class Player {
+        seeked: number | undefined = undefined
+        set currentTime(time: number) {
+            this.seeked = time
+        }
+    }
+    const element = new Player()
+    const video = reactive(element)
+    let woke = 0
+    const stop = watch(() => {
+        video()
+        woke += 1
+    })
+    // What `Lowering` emits for `video.currentTime = 5`.
+    video.set(writePath(video(), ['currentTime'], 5) as Player)
+    flushSync()
+    expect(element.seeked).toBe(5)
+    expect(video()).toBe(element)
+    expect(woke).toBe(1)
+    // And below plain data: the plain levels above it are not copied either.
+    const holder = { player: element }
+    expect(writePath(holder, ['player', 'currentTime'], 7)).toBe(holder)
+    expect(element.seeked).toBe(7)
     stop()
 })
 

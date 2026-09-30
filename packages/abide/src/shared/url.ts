@@ -55,10 +55,30 @@ export type ParamsOf<P extends string> = {
 }
 
 /**
+ * 30.26 — the route literals an app files its pages under, which `abide check` declares for the app
+ * it checks. Where nothing declared them any literal is taken, so a plain `tsc` still compiles.
+ */
+// biome-ignore lint/suspicious/noEmptyInterface: filled by declaration merging, per app
+export interface Routes {}
+
+/** 30.26 — what `url` takes: one of the app's route literals, or any where none were declared. */
+export type RouteLiteral = [keyof Routes] extends [never]
+    ? string
+    : Extract<keyof Routes, string>
+
+/**
+ * 23.9 — the params a page filed under `P` reads: what a URL carries, so text, and a rest always a
+ * list — empty where it matched nothing.
+ */
+export type RouteParams<P extends string> = {
+    [K in RequiredNames<P>]: string
+} & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }
+
+/**
  * An address from a route literal and its params, resolved against the mount, with an optional
  * query.
  */
-export function url<P extends string>(
+export function url<P extends RouteLiteral>(
     pattern?: P,
     ...rest: HasParams<P> extends true
         ? [params: ParamsOf<P>, queryParams?: Query]

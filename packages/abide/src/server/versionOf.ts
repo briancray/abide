@@ -11,9 +11,10 @@
 //
 // 18.26 — A VERSION ONLY PATCHES MOVED TO keeps what they wrote, and the version they were written
 // over, so a follower standing there is sent the writes rather than the value.
+
+import { pastOf } from '#shared/reactive/index.ts'
 import { PATCH_SINKS, type PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
 import { PATCHES } from '#shared/reactive/PATCHES.ts'
-import { pastOf } from '#shared/reactive/index.ts'
 
 let next = Date.now() * 1000
 

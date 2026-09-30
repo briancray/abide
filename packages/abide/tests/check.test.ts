@@ -43,6 +43,26 @@ const label: string = 5
 const ECHOED = `{#if f}<p title={t}>x</p>{:else if e}<i></i>{/if}
 {#for r of or}<b>{r}</b>{/for}`
 
+const ROUTED = `<script>
+import { route } from 'abide'
+
+const id: string = route.params().id
+const rest: string[] = route.params().rest
+const wrong: number = route.params().id
+</script>
+
+<p>{id} {rest.join('/')} {wrong}</p>`
+
+const LINKED = `<script>
+import { url } from 'abide'
+
+const good = url('/routed/[id]/[...rest]', { id: 1, rest: ['s', 2] })
+const home = url('/')
+const stale = url('/routed/[id]', { id: 1 })
+</script>
+
+<a href={good}>{home}</a><a href={stale}>stale</a>`
+
 const WARNED = `<script>
 import { reactive } from 'abide'
 
@@ -52,6 +72,7 @@ let two = reactive(2)
 let name = reactive('ada')
 let maybe = reactive<string | undefined>(undefined)
 let thing = reactive({ refresh: () => 1 })
+let optional = reactive<{ refresh: () => number } | undefined>(undefined)
 let rows = reactive([{ id: 1 }])
 let keyed = reactive(
     [{ id: 1 }],
@@ -74,6 +95,7 @@ const unsure = reactive(() => maybe ?? 'nobody')
 </script>
 
 <button onclick={() => thing.refresh()}>go</button>
+<button onclick={() => optional?.refresh()}>go</button>
 {#for row of rows}<input value={row.id}/>{/for}
 {#for row of rows by row.id}<input value={row.id}/>{/for}
 {#for label of ['a', 'b']}<input value={label}/>{/for}
@@ -212,6 +234,21 @@ beforeAll(async () => {
         'ui/components/Bare.abide': '<p>bare</p>',
         'ui/components/Held.abide': HELD,
         'ui/components/Optional.abide': OPTIONAL,
+        'ui/pages/routed/[id]/[...rest]/page.abide': ROUTED,
+        'ui/pages/linked/page.abide': LINKED,
+        'ui/pages/routed/layout.abide': `<script>
+import { route } from 'abide'
+
+const section: string | string[] | undefined = route.params().section
+</script>
+<slot/>`,
+        'ui/components/Defaulted.abide': `<script>
+import { props } from 'abide'
+
+const { start = 0 } = props<{ start?: number }>()
+</script>
+
+<p>{start.toFixed(1)}</p>`,
         'ui/app.css': 'p { color: red }',
         'shared/sum.ts': "export const sum: number = 'x'\n",
     })
@@ -322,6 +359,39 @@ test('a write after a line with no semicolon checks as its own statement — 38.
     expect(inFile('ui/pages/after-await/page.abide')).toEqual([])
 })
 
+// 23.9 — A PAGE READS WHAT ITS OWN ROUTE PROMISES: `id` is text, a rest is a list, and nothing else
+// is there. THE REVERT: drop `routeParamsReads` from the classify pass; `params` is the shared
+// `Record<string, string | string[]>`, and `id` and `rest` are refused (TS2322) as well as `wrong`,
+// three findings where the one is due.
+test('route.params in a page is typed by its own route — 23.9', () => {
+    expect(
+        inFile('ui/pages/routed/[id]/[...rest]/page.abide').map(
+            ({ line, column, code }) => ({ line, column, code }),
+        ),
+    ).toEqual([{ ...place(ROUTED, 'wrong'), code: 2322 }])
+    expect(inFile('ui/pages/routed/layout.abide')).toEqual([])
+})
+
+// 30.26 — A LINK NAMES A PAGE THE APP HAS. `/routed/[id]` is the stale literal a page left behind
+// when its route grew a rest segment, and it built an address the server answers from another
+// page. THE REVERT: drop the `Routes` declaration `diagnose` registers; `url` takes any literal and
+// the stale one goes unreported, 0 findings where 1 is due.
+test('url refuses a literal no page is filed under — 30.26', () => {
+    expect(
+        inFile('ui/pages/linked/page.abide').map(({ line, column, code }) => ({
+            line,
+            column,
+            code,
+        })),
+    ).toEqual([{ ...place(LINKED, "'/routed/[id]'"), code: 2345 }])
+})
+
+// 33.20 — A DEFAULTED PROP IS NEVER UNDEFINED, so its binding is typed without it. THE REVERT: hand
+// `__accessors` no `defaulted` keys; `start.toFixed` reports `start` as possibly undefined (TS18048).
+test('a defaulted prop is typed without undefined — 33.20', () => {
+    expect(inFile('ui/components/Defaulted.abide')).toEqual([])
+})
+
 test('a write narrows the name it writes — 38.3', () => {
     expect(inFile('narrowed/page.abide')).toEqual([])
 })
@@ -366,7 +436,8 @@ test('a .ts file beside the pages is checked as it stands — 38.3', () => {
 // (0 against 1); treat every created function as deferred and `[1].map(() => one)` warns (2 against
 // 1); drop `read.name !== name` from `decidesARead` and `same` warns (2 against 1); drop
 // `admitsNullish` and `maybe ?? …` warns (2 against 1); drop the property scan and `thing.refresh`
-// goes unwarned (0 against 1).
+// goes unwarned (0 against 1); scan the union whole rather than per member and `optional?.refresh`
+// goes unwarned (1 against 2), because `undefined` shares no property with anything.
 test('each tracking warning lands on its read and on no near miss — 14.14, 14.15, 14.16, 14.17, 31.13', () => {
     const warnings = inFile('warned/page.abide').filter(
         (diagnosis) => diagnosis.category === 'warning',
@@ -379,8 +450,11 @@ test('each tracking warning lands on its read and on no near miss — 14.14, 14.
     expect(by('14.15')).toEqual([place(WARNED, 'flag ? one')])
     expect(by('14.16')).toEqual([place(WARNED, 'two, 0')])
     expect(by('14.17')).toEqual([place(WARNED, "name ?? 'nobody'")])
-    expect(by('31.13')).toEqual([place(WARNED, 'thing.refresh')])
-    expect(warnings.length).toBe(7)
+    expect(by('31.13')).toEqual([
+        place(WARNED, 'thing.refresh'),
+        place(WARNED, 'optional?.refresh'),
+    ])
+    expect(warnings.length).toBe(8)
 })
 
 // 32.14 — UNKEYED, OVER STATE, OVER A LIST THAT CAN CHANGE: the loops that are all three, less the one
@@ -459,11 +533,11 @@ import Held from '#ui/components/Held.abide'
 }, 60_000)
 
 // THE SAME WARNINGS FROM THE BUILD, which is what `abide build` and `abide dev` print. THE REVERT:
-// hand back `[]` for `warnings` in `compileApp`; this reads 0 where 7 are due.
+// hand back `[]` for `warnings` in `compileApp`; this reads 0 where 8 are due.
 test('a compile carries the warnings a check reports — 14.14, 32.14', async () => {
     const warnedOnly = appFixture({ 'ui/pages/page.abide': WARNED })
     const compiled = await compileApp(warnedOnly)
-    expect(compiled.warnings.length).toBe(7)
+    expect(compiled.warnings.length).toBe(8)
     expect(compiled.warnings[0]?.path).toEndWith('ui/pages/page.abide')
 }, 60_000)
 
@@ -484,5 +558,5 @@ test('abide check fails on an error and passes on warnings alone — 38.3', () =
         { cwd: app },
     )
     expect(warned.exitCode).toBe(0)
-    expect(warned.stdout.toString()).toContain('0 errors, 7 warnings')
+    expect(warned.stdout.toString()).toContain('0 errors, 8 warnings')
 }, 60_000)

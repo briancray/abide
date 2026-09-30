@@ -49,6 +49,8 @@ export type Mount = {
     name: string
     /** Whether a browser is handed a wrapper for it. 20.4. */
     ui: boolean
+    /** Its `description`, where the declaration writes one as a literal the build can read. */
+    description: string | undefined
     /**
      * What a `GET`'s value declares that the browser's copy behaves by, or `undefined`.
      *
@@ -458,7 +460,7 @@ function preflight(found: Mounted, origin: string, request: Request): Response {
  * rung that handed `next` its own, that is a copy, and bun's `timeout` does nothing for a request
  * it was not handed itself.
  */
-function raiseTimeout(milliseconds: number): void {
+export function raiseTimeout(milliseconds: number): void {
     const scope = currentRequestScope()
     const received = scope?.received
     if (scope === undefined || received === undefined) return
@@ -489,7 +491,8 @@ async function navigated(
     request: Request,
     failurePage: (failure: Failed<string, unknown>) => Promise<Response>,
 ): Promise<Response> {
-    if (!outcome.settled) return failurePage(failureOf(outcome.error))
+    if (!outcome.settled)
+        return failurePage(failureOf(outcome.error))
     if (isFailed(outcome.value)) return failurePage(outcome.value)
     const headers = new Headers({ 'cache-control': 'private, no-store' })
     const written = currentRequestScope()?.response

@@ -130,14 +130,17 @@ test('the compiler is not reachable from the server seam', async () => {
     // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
     // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's,
     // `request`, `response` and `server` are 22.1's, `createApp` is 42's, the seven hooks are 37's,
-    // `trace` is 24's, `health` is 25's and `config` is 27's; the five response helpers are 17's
-    // and `socket` is 18's.
+    // `trace` is 24's, `health` is 25's and `config` is 27's; the five response helpers are 17's,
+    // `socket` is 18's, and `assistant`, `claudeApi` and `claudeCode` are 45's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
         [
             ...shared,
             'DELETE',
             'GET',
+            'assistant',
+            'claudeApi',
+            'claudeCode',
             'PATCH',
             'POST',
             'PUT',

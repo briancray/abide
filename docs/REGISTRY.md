@@ -181,7 +181,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `return myError(data)` | `Failed<Name, Data>` | The one spelling for every refusal. | 15.4, 15.5 |
 | `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | Abide's own refusal for an address nothing answers. | 15.7, 15.9 |
 | `validationError` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | Abide's own refusal for a schema or an `args` gate that refused. | 15.8, 15.9 |
-| `aborted` | `(data?: undefined) => Failed<'Aborted', undefined>` | Abide's own refusal for a load every caller aborted. | 15.9, 16.54 |
+| `aborted` | `(data?: undefined) => Failed<'Aborted', undefined>` | Abide's own refusal for a load every caller aborted, and for a client that left. | 15.9, 16.54, 16.68 |
 | `myError(data)` DISCARDED | compile error | A `Failed` built and thrown away. | 15.10 |
 
 ## Tracking
@@ -329,6 +329,36 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 20.5, 20.7, 20.8, 20.9, 20.10, 20.12 |
 
+# Assistant
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 45.1, 45.2, 45.3, 45.4, 45.21 |
+| `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string }` | One turn of the transcript a caller sends. | 45.3, 45.4 |
+| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call, its result, and the end. | 45.2, 45.11 |
+| `AssistantOptions` | `{ mcp?: boolean; maxTurns?: number }` | What `assistant` takes beside a provider. | 45.6, 45.8, 45.11 |
+| `Provider` | `{ run(messages: AssistantMessage[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<AssistantEvent> }` | What runs a conversation. | 45.2 |
+| `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<{ text: string; failed: boolean }> }` | The app's MCP tools, called as the asker. | 45.6, 45.7 |
+| `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown }` | A tool as the app's MCP surface lists it. | 45.6 |
+
+## `claudeApi`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `claudeApi` | `(config: ClaudeApiConfig) => Provider` | The Claude Messages API as a provider. | 45.9, 45.10, 45.12, 45.21 |
+| `ClaudeApiConfig` | `{ apiKey: string; baseURL?: string; model: string; max_tokens: number; system?: string \| unknown[]; tools?: unknown[]; [field: string]: unknown }` | A Messages API request body, less `messages` and `stream`, with the client's key and origin. | 45.9, 45.10 |
+
+## `claudeCode`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 45.5, 45.13, 45.17, 45.18, 45.19 |
+| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max' }` | The Claude Code options a site may set for a turn. | 45.16 |
+| `claudeCode.bridgeCommand` | `() => { command: string; expires: number }` | The command that pairs a bridge with this browser. | 45.14 |
+| `claudeCode.bridge` | `() => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 45.20, 45.22 |
+| `BridgeStatus` | `{ ready: boolean; command: string \| undefined }` | Whether a bridge is paired, and the command that pairs one where none is. | 45.20 |
+| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 45.14, 45.15, 45.19 |
+
 # Ambient values
 
 ## `cookies`
@@ -354,8 +384,8 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `route.url` | `Reactive<URL>` | Where we are. | 23.1, 23.2, 23.3, 23.4, 30.23 |
-| `route.params` | `Reactive<Params>` | The matched route's segments. | 23.1, 23.5, 30.23 |
-| `Params` | `Record<string, string>` | What a matched route's segments are. | 23.5 |
+| `route.params` | `Reactive<Params>` | The matched route's segments. | 23.1, 23.5, 23.9, 30.23 |
+| `Params` | `Record<string, string \| string[]>` | What a matched route's segments are. | 23.5 |
 | `route.name` | `Reactive<string>` | The resolution path. | 23.1, 23.6 |
 | `route.navigating` | `Reactive<boolean>` | Whether a navigation is in flight. | 23.1 |
 
@@ -415,7 +445,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `Config` | `interface Config { …Env }` | Every field of `Env`, plus what `onConfig` defaulted and the schema normalised. | — |
 | `Env` | `Record<string, string \| undefined>` | The process environment as read, before coercion. | 27.2, 27.8 |
 | `config.invalidate` | `() => void` | The trigger over the resolved configuration. | 7.2, 27.5 |
-| `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's defaults and its schema. | 27.3, 27.4, 27.6 |
+| `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's defaults and its schema. | 27.3, 27.4, 27.6, 27.10 |
 | `ConfigDefaults` | `(env: Env) => unknown` | The defaults function, synchronous by contract. | 27.4 |
 
 ### `ConfigOptions`
@@ -432,7 +462,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `log` | `(...args: unknown[]) => void` | A message under the default namespace. | 28.1, 28.2 |
 | `log.info` / `log.warning` / `log.error` / `log.debug` | `(...args: unknown[]) => void` | The four levels. | 28.3 |
-| `log.named` | `(name: string) => Logger` | A logger under a named namespace. | 28.4, 28.5 |
+| `log.named` | `(name: string) => Logger` | A logger under a named namespace. | 28.4, 28.5, 28.12 |
 | `Logger` | `typeof log` | What `log.named` hands back. | 28.5 |
 | `log.enabled` | `() => boolean` | Whether a gated line under this namespace would be written. | 28.6, 28.7 |
 | `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string }` | One line, as a value. | 24.3 |
@@ -462,7 +492,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `url` | `<P extends string>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal. | 30.1, 30.2, 30.8, 30.19 |
+| `url` | `<P extends RouteLiteral>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal. | 30.1, 30.2, 30.8, 30.19, 30.26 |
 | `HasParams<P>` | `boolean` | Whether the literal carries a required segment. | 30.2 |
 | `HasSegments<P>` | `boolean` | Whether the literal carries a segment of any kind. | 30.2 |
 | `RequiredNames<P>` | `string` | The required segment names. | 30.3 |
@@ -470,6 +500,9 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `RestNames<P>` | `string` | The rest segment names. | 30.5 |
 | `Query` | `Record<string, unknown> \| URLSearchParams` | The query half. | 30.6 |
 | `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| (string \| number)[] }` | What a route literal's segments accept. | 30.3, 30.4, 30.5 |
+| `RouteParams<P>` | `{ [K in RequiredNames<P>]: string } & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }` | What a page filed under `P` reads its params as. | 23.9 |
+| `Routes` | `interface Routes {}` | The app's route literals, which `abide check` declares. | 30.26 |
+| `RouteLiteral` | `[keyof Routes] extends [never] ? string : Extract<keyof Routes, string>` | What `url` takes. | 30.26 |
 
 ## `navigate`
 
@@ -488,7 +521,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `await foo` | the settling of the `Reactive`, which is its value | 1.4, 2.8, 31.3 |
 | `refresh(foo)` / a `Selection`-typed parameter | the `Reactive` | 31.14 |
 | `foo = bar` | a write | 31.4, 11.62 |
-| `foo.bar = v` | a write through a path | 31.8 |
+| `foo.bar = v` | a write through a path | 31.8, 31.15 |
 | `foo.push(v)` | the same | 31.8, 31.9 |
 | `const [a, b] = foo` / `...foo` | one read of the value | 31.12 |
 | `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one | 31.5, 31.13 |
@@ -513,7 +546,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `bind:open` | The same, on a `<details>`. | 32.7 |
 | `bind:group` | Radio or checkbox membership. | 32.8 |
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6 |
-| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9 |
+| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9, 32.39 |
 | `class:name={cond}` | Toggles a class. | 32.10 |
 | `style:prop={value}` | Sets one style property. | 32.10, 32.20 |
 | `{...expr}` | Spreads props or attributes. | 32.11, 32.38, 33.12, 33.13 |
@@ -548,7 +581,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `props` | `<Props>() => { [K in keyof Props]: Props[K] }` | One live accessor per prop the component declares. | 33.1, 33.2, 33.3, 33.4, 33.5, 33.6, 33.7, 33.8, 33.9, 33.10, 33.11, 33.14, 33.15 |
+| `props` | `<Props>() => { [K in keyof Props]: Props[K] }` | One live accessor per prop the component declares. | 33.1, 33.2, 33.3, 33.4, 33.5, 33.6, 33.7, 33.8, 33.9, 33.10, 33.11, 33.14, 33.15, 33.20 |
 | `children` | always accepted | What a caller passes between the tags. | 33.16, 32.19 |
 
 ## Script / style blocks
@@ -613,6 +646,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `ABIDE_LOGS` | `boolean` | Opts in to declaring the `GET` over `log.records`. | 36.7 |
 | `ABIDE_OPENAPI` | `boolean` | Opts in to declaring the OpenAPI address. | 20.7, 36.7 |
 | `ABIDE_MCP` | `boolean` | Opts in to declaring the MCP address. | 20.7, 36.7 |
+| `ABIDE_BRIDGE` | `boolean` | Opts in to relaying a visitor's Claude Code. | 36.7, 45.19 |
 | `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | The `history` of `log.records`. | 6.3, 28.1 |
 | `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. | 36.8 |
 | `DEBUG` | `string \| null` | Log-namespace gating. | 28.6, 28.9, 28.10, 28.11 |
@@ -673,11 +707,11 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `abide scaffold <name>` | Writes a starter project. | 38.1, 38.43 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.58 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.32, 38.33, 38.34, 38.41 |
-| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 37.8, 37.9, 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27, 38.29, 38.31, 38.36, 38.37, 38.38, 38.39, 38.42, 38.44 |
+| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 37.8, 37.9, 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27, 38.29, 38.31, 38.36, 38.37, 38.38, 38.39, 38.42, 38.44, 38.59 |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.44, 38.5, 38.19, 38.26, 38.27, 38.28, 38.31 |
-| `abide start [--port <n>]` | Boots the built app, and a shell on it. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28, 38.29, 38.30, 38.54, 38.55, 38.56 |
-| `abide connect [url]` | The interactive shell against a running app. | 38.7 |
-| `abide call <address> [args]` | One call to one handler. | 38.8 |
+| `abide start [--port <n>]` | Boots the built app, and a shell on it. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28, 38.29, 38.30, 38.54, 38.55, 38.56, 38.59, 38.60, 38.61, 38.63 |
+| `abide connect [url]` | The interactive shell against a running app. | 38.7, 38.60, 38.61, 38.63 |
+| `abide call <address> [args]` | One call to one handler. | 38.8, 38.62 |
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. | 38.9 |
 | `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.14 |
 | `abide logs` | A live subscription to `log.records`. | 38.10 |

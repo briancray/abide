@@ -39,7 +39,7 @@ export { online } from './online.ts'
 export { type Principal, principal } from './principal.ts'
 export { props } from './props.ts'
 // EMITTED CODE'S: a prop the child writes (33.6, 33.7).
-export { propCell, propCells } from './propCell.ts'
+export { propCell, propCells, propOr, withoutKeys } from './propCell.ts'
 // `markupRun` and `RAW_WRITES` are EMITTED CODE'S: a text run anchored while it holds markup (32.31).
 export { markupRun, RAW_WRITES, Raw, raw } from './Raw.ts'
 export {
@@ -89,6 +89,9 @@ export {
     type HasSegments,
     type OptionalNames,
     type ParamsOf,
+    type RouteLiteral,
+    type RouteParams,
+    type Routes,
     type Query,
     type RequiredNames,
     type RestNames,

@@ -6,13 +6,14 @@
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 import { MCP_ADDRESS, OPENAPI_ADDRESS } from '#shared/ADDRESSES.ts'
+import type { Mount } from './answerRpc.ts'
+import { banner } from './banner.ts'
 import { APP_PACKAGE, type AppPackage, config } from './config.ts'
 import type { App } from './createApp.ts'
 import {
     appUrl,
     callHandler,
     followLogs,
-    type MethodOf,
     remoteHeaders,
     remoteUrl,
     shell,
@@ -34,7 +35,12 @@ export type SourceCommands = Record<
 export type Host = {
     /** What usage and every message speak as: `abide`, or the name the executable was run by. */
     name: string
-    methodOf: MethodOf
+    /**
+     * The handler table the shell lists and a call reads a handler's method off — so a call is
+     * spelled the same whatever the handler's method, and `--method` is only for an app nobody here
+     * knows the table of. Empty where there is none to read.
+     */
+    handlers: (given: Given) => Promise<Mount[]>
     /** The identity a script `run` resolves its configuration with. 27.3. */
     appPackage: () => AppPackage
     /** The app booted in this process: `openapi` and `mcp`'s answer where no `--url` is given. */
@@ -241,10 +247,14 @@ async function start(host: Host, given: Given): Promise<number | undefined> {
     process.env.NODE_ENV ??= 'production'
     const app = await host.serve(given)
     if (typeof app === 'number') return app
-    const url = (LISTENING.server as Bun.Server<unknown>).url.href
-    console.log(`${host.name} start: ${url}`)
-    if ((await shell(url.replace(/\/$/, ''), host.methodOf)) === 'ended')
-        return undefined
+    const server = LISTENING.server as Bun.Server<unknown>
+    const ended = await shell({
+        url: server.url.href.replace(/\/$/, ''),
+        handlers: await host.handlers(given),
+        heading: banner(host.name, 'start', host.appPackage(), server),
+        local: true,
+    })
+    if (ended === 'ended') return undefined
     await app.stop()
     return 0
 }
@@ -281,13 +291,14 @@ async function run(
 }
 
 /** `call`: one call to one handler on a running app. 38.8. */
-async function call(
-    host: Host,
-    { positionals: [, address, args], values: { url, method } }: Given,
-): Promise<number> {
+async function call(host: Host, given: Given): Promise<number> {
+    const {
+        positionals: [, address, ...args],
+        values: { url, method },
+    } = given
     if (address === undefined) {
         console.error(
-            `${host.name} call: name the handler — ${host.name} call invoices/getInvoice '{"id": "4310"}'`,
+            `${host.name} call: name the handler — ${host.name} call invoices/getInvoice id=4310`,
         )
         return 1
     }
@@ -296,21 +307,22 @@ async function call(
         address,
         args,
         method,
-        host.methodOf,
-    )
+        await host.handlers(given),
+    ).catch((thrown: Error) => ({ code: 1, text: thrown.message }))
     if (answered.text !== '')
         (answered.code === 0 ? console.log : console.error)(answered.text)
     return answered.code
 }
 
 /** `connect`: the shell against a running app, booting nothing. 38.7. */
-async function connect(
-    host: Host,
-    { positionals, values }: Given,
-): Promise<number> {
-    const url = appUrl(positionals[1] ?? values.url)
-    console.log(`${host.name} connect: ${url}`)
-    await shell(url, host.methodOf)
+async function connect(host: Host, given: Given): Promise<number> {
+    const url = appUrl(given.positionals[1] ?? given.values.url)
+    await shell({
+        url,
+        handlers: await host.handlers(given),
+        heading: `${host.name} connect: ${url}`,
+        local: false,
+    })
     return 0
 }
 

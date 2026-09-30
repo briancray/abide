@@ -42,7 +42,7 @@ Two booleans, four states, and the states an interface actually shows are the co
 | reloading over a value on screen | `busy() && ready()` |
 | finished, whichever way | `!busy()` |
 | nothing landed and nothing in flight | neither |
-| marked stale by `invalidate`, before a read runs the producer | `ready()` — still served (7.17) |
+| marked stale by `invalidate`, once a read or a probe runs the producer | `busy() && !ready()` (7.8, 7.17) |
 
 `busy` and `ready` also have **free** forms that take a selection. Every signature is in
 the [`Reactive` reference](../reference/reactive.md).
@@ -97,8 +97,8 @@ has nothing to show and a reload has, so a single flag blanks the table every ti
 Refresh.
 
 An `invalidate()` is the other story: it says what is held is **wrong**, not merely stale, and it
-runs nothing (7.3). Nothing a reader can see moves until the next read (7.14, 7.17), and that read
-stops serving what is held and loads with nothing underneath (7.8) — a first load again. That is the
+runs nothing and wakes nobody (7.3, 7.14). The next read or probe of the value is what runs the
+producer (3.2, 7.17), which stops serving what is held and loads with nothing underneath (7.8) — a first load again. That is the
 whole difference between the two triggers, and it is the one a reader can see.
 
 `ready()` and `error()` are **orthogonal, not opposite**. One asks whether there is a value to

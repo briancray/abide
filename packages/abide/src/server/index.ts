@@ -21,12 +21,35 @@ export {
     type Rpc,
     type RpcOptions,
 } from '#shared/rpc.ts'
+// 18 — a value carried over a web socket.
+export {
+    type Socket,
+    type SocketEvent,
+    type SocketOptions,
+    socket,
+} from '#shared/socket.ts'
+// 45 — a conversation with a model, piped through a handler, and the two providers abide ships.
+export {
+    type AssistantEvent,
+    type AssistantMessage,
+    type AssistantOptions,
+    assistant,
+    type Provider,
+    type Toolbox,
+    type ToolDefinition,
+} from './assistant.ts'
+export { type ClaudeApiConfig, claudeApi } from './claudeApi.ts'
+export {
+    type BridgeStatus,
+    type ClaudeCodeConfig,
+    claudeCode,
+} from './claudeCode.ts'
 // 27 — the resolved configuration.
 export { type Config, config } from './config.ts'
-// 25 — the account of the app.
-export { type Health, health } from './health.ts'
 // 42 — the app object, and 37's hooks an `src/server/app.ts` calls.
 export { type App, createApp } from './createApp.ts'
+// 25 — the account of the app.
+export { type Health, health } from './health.ts'
 export {
     type ConfigDefaults,
     type ConfigOptions,
@@ -40,13 +63,11 @@ export {
     onStop,
 } from './hooks.ts'
 export { type Component, render, type Shell } from './render.ts'
-// 18 — a value carried over a web socket.
-export {
-    type Socket,
-    type SocketEvent,
-    type SocketOptions,
-    socket,
-} from '#shared/socket.ts'
+// 32.18's run-time half: one invocation, rendered where it stands, with the anchors that make the
+// child's markup one thing for the client to walk to.
+export { renderComponent } from './renderComponent.ts'
+// 22.1 — the request being served, the response being built for it, and the listening server.
+export { request, response, server } from './requestScope.ts'
 // 17 — the response helpers, each a write through `response`.
 export {
     bytes,
@@ -57,10 +78,5 @@ export {
     sse,
     type Values,
 } from './responseHelpers.ts'
-// 32.18's run-time half: one invocation, rendered where it stands, with the anchors that make the
-// child's markup one thing for the client to walk to.
-export { renderComponent } from './renderComponent.ts'
-// 22.1 — the request being served, the response being built for it, and the listening server.
-export { request, response, server } from './requestScope.ts'
 // 24 — the trace this work belongs to.
 export { trace } from './trace.ts'

@@ -33,6 +33,7 @@ variable is what a deployment actually has.
 | `ABIDE_LOGS` | `boolean` | Opts in to declaring the `GET` over `log.records`. |
 | `ABIDE_OPENAPI` | `boolean` | Opts in to declaring the OpenAPI address. |
 | `ABIDE_MCP` | `boolean` | Opts in to declaring the MCP address. |
+| `ABIDE_BRIDGE` | `boolean` | Opts in to relaying a visitor's Claude Code. |
 | `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | The `history` of `log.records`. |
 | `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. |
 | `DEBUG` | `string \| null` | Log-namespace gating. |

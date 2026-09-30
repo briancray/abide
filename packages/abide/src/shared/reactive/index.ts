@@ -260,7 +260,7 @@ type PatternOf<
 /**
  * Whether any entry in the selection has work in flight — ANY, against `ready`'s ALL.
  *
- * THE FREE PROBES AND TRIGGERS. 3.2 keeps a probe from starting work and 1.7 has reaching an
+ * THE FREE PROBES AND TRIGGERS. 3.2 keeps a probe from starting work beyond what a read would run, and 1.7 has reaching an
  * instance start it, so the allocate/do-not-allocate split is visible in the spelling rather than
  * remembered as a rule. A pattern is handed to the selection's own face, which is what narrows a
  * `Keyed` and an `Rpc` over one — so `refresh(s, pattern)` and `s.refresh(pattern)` are one call

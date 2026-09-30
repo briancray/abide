@@ -8,8 +8,10 @@
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { namedLogger } from '#shared/log.ts'
 import type { Middleware } from '#shared/Middleware.ts'
-import { refuse } from '#shared/refuse.ts'
+import { aborted, refuse } from '#shared/refuse.ts'
 import type { Schema } from '#shared/Schema.ts'
+import { config } from './config.ts'
+import { currentRequestScope } from './requestScope.ts'
 
 export type AppRung = Middleware<{ request: Request }, Response>
 
@@ -105,7 +107,8 @@ export function onHealth(report: () => unknown | Promise<unknown>): () => void {
 /**
  * Sets the app's config defaults and schema; returns what unsets them.
  *
- * 27.6, 37.7 — a second replaces the first, schema and all, and says so.
+ * 27.6, 37.7 — a second replaces the first, schema and all, and says so. 27.10 — the read after
+ * either is resolved under what is filed now, not what was filed when `config` was last read.
  */
 export function onConfig(
     fn: ConfigDefaults | null,
@@ -117,8 +120,11 @@ export function onConfig(
         )
     const entry = { defaults: fn, options }
     HOOKS.config = entry
+    config.invalidate()
     return () => {
-        if (HOOKS.config === entry) HOOKS.config = undefined
+        if (HOOKS.config !== entry) return
+        HOOKS.config = undefined
+        config.invalidate()
     }
 }
 
@@ -161,9 +167,15 @@ export function reportUnexpected(error: unknown): void {
  *
  * 16.42 — a refusal at its own status. 16.43 — anything else is the server's fault, and says
  * nothing about itself to the caller: the log and `onError` get it (37.5).
+ *
+ * 16.68 — A CLIENT THAT LEFT IS NOT A FAULT: once the request's signal has aborted, what was thrown
+ * is the cancellation arriving, so it answers `aborted` and is not reported — a handler's throw and
+ * a page render's alike, because both answer here.
  */
 export function failureOf(error: unknown): Failed<string, unknown> {
     if (isFailed(error)) return error
+    if (currentRequestScope()?.request?.signal.aborted === true)
+        return aborted()
     reportUnexpected(error)
     return refuse(500)
 }

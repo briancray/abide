@@ -14,6 +14,7 @@ import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { scaffold } from '#compiler/scaffold.ts'
 import { serveLanguage } from '#compiler/serveLanguage.ts'
 import { appPlugins } from '#server/appPlugins.ts'
+import { banner } from '#server/banner.ts'
 import {
     CLIENT_DIRECTORY,
     ENCODING_SUFFIX,
@@ -34,7 +35,6 @@ import { fenceServer } from '#server/fenceServer.ts'
 import { manifestOf, NO_MANIFEST } from '#server/manifestOf.ts'
 import { namesUnder } from '#server/namesUnder.ts'
 import { refuseAddressCollision } from '#server/refuseAddressCollision.ts'
-import { methodOnDisk } from '#server/remote.ts'
 import { shellUnder } from '#server/render.ts'
 import {
     handlersIn,
@@ -53,7 +53,12 @@ type AppDirectories = { root: string; out: string }
  */
 const DISK: Host = {
     name: 'abide',
-    methodOf: methodOnDisk,
+    handlers: async ({ values }) => {
+        const app = directoriesOf(values)
+        return app !== undefined && existsSync(`${app.out}/rpc.ts`)
+            ? await handlersIn(app.out)
+            : []
+    },
     appPackage: () => packageUnder(appRoot(undefined) ?? process.cwd()),
     boot: createApp,
     serve: inApp(({ root, out }, { values: { port } }) =>
@@ -382,23 +387,30 @@ function inApp<Answer>(
     body: (app: AppDirectories, given: Given) => Promise<Answer>,
 ): (given: Given) => Promise<Answer | number> {
     return async (given) => {
-        const { positionals, values } = given
-        const root = appRoot(values.root)
-        if (root === undefined) {
+        const app = directoriesOf(given.values)
+        if (app === undefined) {
             console.error(
-                `abide ${positionals[0]}: no app here. Looked for ui/ in ${process.cwd()} and in ${resolve('src')}. Point --root at the directory ui/ sits under.`,
+                `abide ${given.positionals[0]}: no app here. Looked for ui/ in ${process.cwd()} and in ${resolve('src')}. Point --root at the directory ui/ sits under.`,
             )
             return 1
         }
-        // BESIDE THE APP RATHER THAN BESIDE THE SHELL. An app's build belongs to the app, so
-        // `abide build --root packages/app/src` run from anywhere puts it in `packages/app/.abide` —
-        // and `abide start --root packages/app/src` then finds it without being told twice.
-        const out =
-            values.out === undefined
-                ? buildDirectory(root)
-                : resolve(values.out)
-        return await body({ root, out }, given)
+        return await body(app, given)
     }
+}
+
+/**
+ * The app `--root` finds and where its build goes — `undefined` where there is no app.
+ *
+ * BESIDE THE APP RATHER THAN BESIDE THE SHELL. An app's build belongs to the app, so
+ * `abide build --root packages/app/src` run from anywhere puts it in `packages/app/.abide` — and
+ * `abide start --root packages/app/src` then finds it without being told twice.
+ */
+function directoriesOf(values: Given['values']): AppDirectories | undefined {
+    const root = appRoot(values.root)
+    if (root === undefined) return undefined
+    const out =
+        values.out === undefined ? buildDirectory(root) : resolve(values.out)
+    return { root, out }
 }
 
 /**
@@ -500,7 +512,7 @@ async function dev(
         root,
         port: port === undefined ? undefined : Number(port),
     })
-    console.log(`abide dev: ${server.url.href}`)
+    console.log(banner('abide', 'dev', packageUnder(root), server))
     return undefined
 }
 

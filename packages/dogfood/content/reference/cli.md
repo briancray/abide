@@ -96,7 +96,7 @@ abide dev
 ### Call a handler from a shell
 
 ```
-abide call invoices/getInvoice '{"id": "4310"}'
+abide call invoices/getInvoice id=4310
 ```
 
 ### Write the OpenAPI document at build time

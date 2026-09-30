@@ -9,7 +9,8 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HANDLERS = `import { reactive, refuse } from 'abide'
-import { GET, page, POST, redirect, sse } from 'abide/server'
+import { GET, page, POST, redirect, request, sse } from 'abide/server'
+import { reported } from '../reported.ts'
 
 export const shared = GET(reactive(() => ({ n: 1 }), { global: true, ttl: 90_500 }))
 
@@ -64,6 +65,16 @@ export const nothing = POST(() => undefined)
 export const raw = GET(() => new Response('teapot', { status: 418 }))
 
 export const file = GET(() => new Blob(['hello world'], { type: 'text/plain' }))
+
+export const gone = GET(
+    () =>
+        new Promise((_, reject) =>
+            request().signal.addEventListener('abort', () => reject(new Error('the client left'))),
+        ),
+)
+
+export const reports = POST(() => reported.count)
+
 `
 
 let base = ''
@@ -74,6 +85,14 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'ui/pages/page.abide': '<main>home</main>',
         'server/rpc/answers.ts': HANDLERS,
+        'server/reported.ts': 'export const reported = { count: 0 }\n',
+        'server/app.ts': `import { onError } from 'abide/server'
+import { reported } from './reported.ts'
+
+onError(() => {
+    reported.count += 1
+})
+`,
     }))
 }, 30_000)
 
@@ -399,3 +418,25 @@ test('a GET over a global value answers the life its production has left — 21.
         expect(await maxAge(name)).toBeLessThan(first)
     }
 }, 10_000)
+
+// 16.68 — A CLIENT THAT LEFT IS NOT A FAULT. A handler waiting on work the request's signal cancels
+// throws once the client goes, and that throw is the cancellation arriving rather than something
+// broken. A raw socket, because a `fetch` abort can leave a pooled connection open and the server
+// never learns the client left. THE REVERT: drop the signal check in `failureOf`; the throw is
+// reported, and `onError` counts 1 where 0 is due.
+test('a handler that throws after its client left is not reported — 16.68', async () => {
+    const count = async (): Promise<number> =>
+        (await Bun.fetch(`${base}${RPC}/reports`, { method: 'POST' })).json()
+    const before = await count()
+    const { hostname, port } = new URL(base)
+    const socket = await Bun.connect({
+        hostname,
+        port: Number(port),
+        socket: { data() {} },
+    })
+    socket.write(`GET ${RPC}/gone HTTP/1.1\r\nhost: ${hostname}\r\n\r\n`)
+    await Bun.sleep(100)
+    socket.end()
+    await Bun.sleep(200)
+    expect((await count()) - before).toBe(0)
+})

@@ -3,6 +3,7 @@ import { LAYER_RECONCILE } from './LAYER_NAMES.ts'
 import type { List, RowBuilders } from './List.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
+import { leave } from './leave.ts'
 import { moveNode } from './moveNode.ts'
 import { closeOf, type Region, removeUntil } from './regions.ts'
 import { EMPTY_SCOPE, type Scope } from './Scope.ts'
@@ -80,7 +81,7 @@ export function replaceRow(row: Row, next: Node[]): void {
  */
 function removeRow(first: ChildNode): void {
     if (first.nodeType !== 8) {
-        first.remove()
+        leave(first)
         return
     }
     removeUntil(first, closeOf(first, true))

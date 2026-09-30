@@ -53,7 +53,7 @@ reached it, and there is no moment at which one request's is visible to another'
 | --- | --- | --- |
 | `route.url` | `Reactive<URL>` | Where we are. |
 | `route.params` | `Reactive<Params>` | The matched route's segments. |
-| `Params` | `Record<string, string>` | What a matched route's segments are. |
+| `Params` | `Record<string, string \| string[]>` | What a matched route's segments are. |
 | `route.name` | `Reactive<string>` | The resolution path. |
 | `route.navigating` | `Reactive<boolean>` | Whether a navigation is in flight. |
 

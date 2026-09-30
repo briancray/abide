@@ -1,0 +1,22 @@
+{
+    "name": "abide-bridge",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "Connects the Claude Code on your machine to the assistant on an abide site",
+    "bin": {
+        "abide-bridge": "./bin/abideBridge.ts"
+    },
+    "files": [
+        "bin",
+        "src"
+    ],
+    "engines": {
+        "bun": ">=1.3.0"
+    },
+    "devDependencies": {
+        "abide": "workspace:*"
+    },
+    "scripts": {
+        "typecheck": "tsc -p tsconfig.json"
+    }
+}

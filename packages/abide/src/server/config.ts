@@ -54,6 +54,7 @@ function resolve(): Config {
         ABIDE_LOGS: false,
         ABIDE_OPENAPI: false,
         ABIDE_MCP: false,
+        ABIDE_BRIDGE: false,
         ...derived(),
         ...(defaults as Record<string, unknown>),
     }

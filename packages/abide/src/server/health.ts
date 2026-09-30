@@ -6,10 +6,10 @@
 // would fetch `/__abide/health` on every page load whether anything read it or not; the browser's
 // half is 25.3's seeding, and waits on it.
 
-import abidePackage from '../../package.json' with { type: 'json' }
-import { namedLogger } from '#shared/log.ts'
 import { isRecord } from '#shared/isRecord.ts'
+import { namedLogger } from '#shared/log.ts'
 import { reactive } from '#shared/reactive/index.ts'
+import abidePackage from '../../package.json' with { type: 'json' }
 import { appIdentity, config } from './config.ts'
 import { HOOKS } from './hooks.ts'
 

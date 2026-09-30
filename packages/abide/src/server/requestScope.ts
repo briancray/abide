@@ -44,6 +44,12 @@ export type RequestScope = Scope & {
     /** `undefined` where the scope was opened without one — 42.8's scope, which 22.1 throws in. */
     request: Request | undefined
     /**
+     * The `App.fetch` of the app that opened this scope, which `RPC_SERVER.raw` answers through.
+     *
+     * 42.12 — ITS OWN APP, where two are held in one process: not whichever was built last.
+     */
+    answer: ((request: Request) => Promise<Response>) | undefined
+    /**
      * The request the listener was handed, before a mount or a rung made another.
      *
      * 16.23 — bun raises the idle timeout only on the one it received itself.
@@ -100,6 +106,7 @@ SCOPING.provider = {
 function scopeFor(
     given: Request | undefined,
     received: Request | undefined,
+    answer: RequestScope['answer'],
 ): RequestScope {
     return {
         instances: new Map(),
@@ -114,6 +121,7 @@ function scopeFor(
         applied: false,
         request: given,
         received,
+        answer,
         response: { status: 200, headers: new Headers() },
         timing: {
             entries: [],
@@ -128,9 +136,10 @@ function scopeFor(
 export function inScope<Result>(
     given: Request | undefined,
     body: () => Result,
+    answer: RequestScope['answer'] = undefined,
     received: Request | undefined = given,
 ): Result {
-    return STORAGE.run(scopeFor(given, received), body)
+    return STORAGE.run(scopeFor(given, received, answer), body)
 }
 
 /**

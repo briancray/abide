@@ -20,6 +20,7 @@ import type { CopyOptions } from '#shared/CopyOptions.ts'
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
 import { failed, isFailed } from '#shared/Failed.ts'
+import { framedStream } from '#shared/framedStream.ts'
 import { reactive, structural } from '#shared/reactive/index.ts'
 import { refuse } from '#shared/refuse.ts'
 import { declare, type Method } from '#shared/rpc.ts'
@@ -224,41 +225,6 @@ function framingPrefix(type: string | null | undefined): string | null {
     if (type?.startsWith('application/jsonl')) return ''
     if (type?.startsWith('text/event-stream')) return 'data: '
     return null
-}
-
-/**
- * A framed body's chunks, yielded as each line completes.
- *
- * Cancelled when the copy stops reading — a refresh starts a new run and the old one's reader has
- * nothing left to hand anything.
- */
-async function* framedStream(
-    body: ReadableStream<Uint8Array>,
-    prefix: string | null,
-): AsyncGenerator<unknown> {
-    const reader = body.getReader()
-    const decoder = new TextDecoder()
-    let buffered = ''
-    try {
-        for (;;) {
-            const { done, value } = await reader.read()
-            buffered += done
-                ? decoder.decode()
-                : decoder.decode(value, { stream: true })
-            let newline = buffered.indexOf('\n')
-            while (newline !== -1 || (done && buffered !== '')) {
-                const end = newline === -1 ? buffered.length : newline
-                const line = buffered.slice(0, end)
-                buffered = buffered.slice(end + 1)
-                if (line !== '' && line.startsWith(prefix ?? ''))
-                    yield JSON.parse(line.slice((prefix ?? '').length))
-                newline = buffered.indexOf('\n')
-            }
-            if (done) return
-        }
-    } finally {
-        void reader.cancel().catch(() => {})
-    }
 }
 
 /**

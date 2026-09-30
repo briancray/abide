@@ -21,6 +21,16 @@
         "typescript": "^7.0.2",
       },
     },
+    "packages/bridge": {
+      "name": "abide-bridge",
+      "version": "0.1.0",
+      "bin": {
+        "abide-bridge": "./bin/abideBridge.ts",
+      },
+      "devDependencies": {
+        "abide": "workspace:*",
+      },
+    },
     "packages/dogfood": {
       "name": "dogfood",
       "version": "0.0.0",
@@ -117,6 +127,8 @@
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
     "abide": ["abide@workspace:packages/abide"],
+
+    "abide-bridge": ["abide-bridge@workspace:packages/bridge"],
 
     "buffer-image-size": ["buffer-image-size@0.6.4", "", { "dependencies": { "@types/node": "*" } }, "sha512-nEh+kZOPY1w+gcCMobZ6ETUp9WfibndnosbpwB1iJk/8Gt5ZF2bhS6+B6bPYz424KtwsR6Rflc3tCz1/ghX2dQ=="],
 

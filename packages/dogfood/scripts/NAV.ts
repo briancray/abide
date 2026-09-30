@@ -103,6 +103,7 @@ export const NAV = [
             'machines/index',
             'machines/describe-your-api-without-writing-a-spec',
             'machines/let-a-model-call-your-handlers',
+            'machines/put-a-claude-assistant-on-your-site',
             'machines/keep-a-handler-off-a-surface',
         ],
     },

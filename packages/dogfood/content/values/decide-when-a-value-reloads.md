@@ -63,9 +63,10 @@ derived value that is itself subscribed. On screen is the common case rather tha
 matters for a derived value nothing renders directly. Either way the next read — a render, or a
 read by hand — is fetched fresh.
 
-An `invalidate()` says what is held is **wrong**, and changes nothing a reader can see: the value
-goes on being served, nothing is busy, and no reader wakes (7.14, 7.16, 7.17). The read that
-follows runs the producer (7.12), and that read is where the held value stops being served, with
+An `invalidate()` says what is held is **wrong**, and changes nothing a reader can see: nothing
+runs and nobody wakes, a guard asking `ready()` included (7.3, 7.14) — which is what lets a server
+say "yours is stale" without a page moving. The next read or probe of it runs the producer (3.2,
+7.12), and that is where the held value stops being served, with
 nothing trusted underneath (7.8) — a first load again, for a display, a read by hand and a
 `refresh()` alike. A `refresh()` never does that:
 it says the held value is good, where an invalidate says it is wrong, and that difference is the
@@ -214,7 +215,7 @@ back on the write.
 **A lapsed `ttl` lands almost where an `invalidate()` lands.** Nothing loads, nobody is woken (6.4,
 7.14), and the read that follows fetches with nothing to serve underneath it. The difference is
 what is held meanwhile: a lapse releases the production (6.13) and reads as not ready (6.14), where
-an invalidated value goes on being served until that read (7.17). Come back to a page after an idle spell and
+an invalidated value goes on being served until a read or a probe runs the producer (7.17). Come back to a page after an idle spell and
 find it pending: that is a lapsed `ttl`, not a bug.
 
 They separate on the **unit**. `ttl` is per retained production, each on its own clock. So on a
@@ -248,8 +249,8 @@ never does.
 
 It is otherwise a read. It runs the reload a read would run, after an `invalidate` (7.12) or a
 lapsed `ttl` (6.12), and where nothing has landed it answers `undefined` rather than throwing
-`NotLanded` (2.11). "Held, but do not load" is `ready()` in front of it, a probe never starting
-work (3.2).
+`NotLanded` (2.11). A probe runs the same reload, since it answers about the value a read would
+serve (3.2), so `ready()` in front of a read never admits one that throws.
 
 `watch(sources, effect)` is the other way to the same place, and a `reactive` body has only this
 one, having no `sources` form. They differ in what they do to the tracking: `sources` **replaces**
