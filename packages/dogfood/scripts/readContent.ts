@@ -143,6 +143,22 @@ export function routeOf(slug: string): string {
 }
 
 /**
+ * `address`, written as the page at `route` links to it: relative, so the browser resolves it
+ * below whatever the app is mounted at.
+ *
+ * 16.11 — THE BUILD BAKES NO MOUNT, and this HTML is a string the page carries into `raw` rather
+ * than template, so `url` cannot reach it. A relative address is the one spelling that is right at
+ * every mount without being told which: `/values/b` from `/values/a` is `../values/b`, whether the
+ * browser is at `/values/a` or `/docs/values/a`. The root page's is its own directory — the server
+ * sends the bare mount to it (`/docs` to `/docs/`) for exactly this.
+ */
+export function hrefFrom(route: string, address: string): string {
+    const relative =
+        '../'.repeat(route.split('/').length - 2) + address.slice(1)
+    return relative === '' ? './' : relative
+}
+
+/**
  * The markdown twin's address: the content path, served as a file.
  *
  * The same words at the same place with `.md` on the end, which is also why it cannot
@@ -227,7 +243,7 @@ function linksToRoutes(html: string, from: string): string {
     return html.replace(
         /href="(?!https?:|#|\/)([^"#]+)\.md(#[^"]*)?"/g,
         (_whole, path: string, hash: string | undefined) =>
-            `href="${routeOf(new URL(path, within).pathname.slice(1))}${hash ?? ''}"`,
+            `href="${hrefFrom(routeOf(from), routeOf(new URL(path, within).pathname.slice(1)))}${hash ?? ''}"`,
     )
 }
 

@@ -10,20 +10,39 @@
 import { expect, test } from '@playwright/test'
 import { NAV_ITEMS } from '../src/ui/NAV_ITEMS.ts'
 
-// SERVING UNDER A SUB-PATH IS NOT BUILT. The client entry's address is absolute (`ADDRESSES`)
-// and nothing mounts the route table below a prefix, so the second project has nothing to run
-// against yet — skipped by name rather than deleted, since the arm is what will catch the URL the
-// framework built by assuming '/'.
-// biome-ignore lint/correctness/noEmptyPattern: playwright refuses a first parameter that is not a destructuring pattern, and this hook reads only the second.
-test.beforeEach(({}, testInfo) => {
-    testInfo.skip(
-        testInfo.project.name === 'sub-path',
-        'a sub-path mount is not implemented',
+// TWO PROJECTS, ONE BUILD: served at the root and again below `/docs` (16.11). Every address a
+// spec asks for goes through `underMount`, so the same spec runs at either mount.
+function underMount(address: string): string {
+    const base = test.info().project.use.baseURL ?? ''
+    return new URL(base).pathname.replace(/\/$/, '') + address
+}
+
+// THE SUB-PATH ARM'S WHOLE POINT, made to fail: a request outside the mount is REFUSED rather than
+// answered. The server answers an address that is not under its mount as it came (a proxy that
+// took the prefix off), so a URL built by assuming `/` would load from the origin's root and every
+// assertion would pass over it. Inert at the root, where nothing is outside.
+let outside: string[] = []
+test.beforeEach(async ({ context }) => {
+    outside = []
+    const mount = underMount('')
+    const origin = new URL(test.info().project.use.baseURL ?? '').origin
+    await context.route(
+        (url) =>
+            url.origin === origin &&
+            url.pathname !== mount &&
+            !url.pathname.startsWith(`${mount}/`),
+        (route) => {
+            outside.push(route.request().url())
+            return route.abort()
+        },
     )
+})
+test.afterEach(() => {
+    expect(outside).toEqual([])
 })
 
 test('a page the server painted carries its own prose', async ({ page }) => {
-    await page.goto('/values/show-a-value-that-changes')
+    await page.goto(underMount('/values/show-a-value-that-changes'))
 
     await expect(page.locator('main h1')).toHaveText(
         'Show a value that changes',
@@ -40,7 +59,7 @@ test('a direct hit is painted by the server, with no script at all', async ({
 }) => {
     await page.context().route('**/__abide/client/**', (route) => route.abort())
     await page.context().route('**/docs.js', (route) => route.abort())
-    await page.goto('/reference/reactive')
+    await page.goto(underMount('/reference/reactive'))
 
     await expect(page.locator('main h1')).toHaveText('reactive()')
     await expect(page.locator('nav a[aria-current="page"]')).toHaveText(
@@ -51,7 +70,7 @@ test('a direct hit is painted by the server, with no script at all', async ({
 test('a link to another page navigates without reloading — 30.7', async ({
     page,
 }) => {
-    await page.goto('/values/show-a-value-that-changes')
+    await page.goto(underMount('/values/show-a-value-that-changes'))
     // A marker a document reload erases, which is the only way to tell the two apart.
     await page.evaluate(() => {
         ;(window as { __KEPT__?: string }).__KEPT__ = 'yes'
@@ -60,7 +79,9 @@ test('a link to another page navigates without reloading — 30.7', async ({
         ).__KEPT__ = 'yes'
     })
 
-    await page.click('nav a[href="/values/derive-a-value-from-other-values"]')
+    await page.click(
+        `nav a[href="${underMount('/values/derive-a-value-from-other-values')}"]`,
+    )
 
     await expect(page.locator('main h1')).toHaveText(
         'Derive a value from other values',
@@ -71,7 +92,7 @@ test('a link to another page navigates without reloading — 30.7', async ({
         await page.evaluate(() => (window as { __KEPT__?: string }).__KEPT__),
     ).toBe('yes')
     expect(new URL(page.url()).pathname).toBe(
-        '/values/derive-a-value-from-other-values',
+        underMount('/values/derive-a-value-from-other-values'),
     )
     // THE NAV IS THE ONE THING SHARED BETWEEN TWO PAGES, and the mark on it is the only part
     // that differs — so a navigation that rebuilt the nav from the wrong page's slug shows
@@ -98,8 +119,10 @@ test('a link to another page navigates without reloading — 30.7', async ({
 // that took its listeners (32.9). So the rail here is wired to this page's headings rather than
 // to the ones they arrived on.
 test('the rail follows the page a reader navigated to', async ({ page }) => {
-    await page.goto('/values/show-a-value-that-changes')
-    await page.click('nav a[href="/values/patch-a-list-from-a-live-feed"]')
+    await page.goto(underMount('/values/show-a-value-that-changes'))
+    await page.click(
+        `nav a[href="${underMount('/values/patch-a-list-from-a-live-feed')}"]`,
+    )
     await expect(page.locator('main h1')).toHaveText(
         'Patch a list from a live feed',
     )
@@ -120,8 +143,10 @@ test('the rail follows the page a reader navigated to', async ({ page }) => {
 test('an example card runs on a page a reader navigated to', async ({
     page,
 }) => {
-    await page.goto('/values/show-a-value-that-changes')
-    await page.click('nav a[href="/values/derive-a-value-from-other-values"]')
+    await page.goto(underMount('/values/show-a-value-that-changes'))
+    await page.click(
+        `nav a[href="${underMount('/values/derive-a-value-from-other-values')}"]`,
+    )
     const card = page.locator('.example .ex-render').first()
     await expect(card.locator('strong', { hasText: '$50' })).toBeVisible()
     await card.getByRole('button', { name: '+' }).click()
@@ -153,7 +178,7 @@ for (const group of NAV_ITEMS)
         })
         for (const item of group.pages) {
             at = item.href
-            await page.goto(item.href, { waitUntil: 'networkidle' })
+            await page.goto(underMount(item.href), { waitUntil: 'networkidle' })
         }
         expect(problems).toEqual([])
     })
@@ -161,18 +186,18 @@ for (const group of NAV_ITEMS)
 test('a file under public is answered at its own address — 36.11', async ({
     page,
 }) => {
-    const robots = await page.request.get('/robots.txt')
+    const robots = await page.request.get(underMount('/robots.txt'))
     expect(robots.status()).toBe(200)
     expect(await robots.text()).toContain('User-agent: *')
 
     // A page's markdown twin, which is a public file rather than a page.
     const markdown = await page.request.get(
-        '/values/show-a-value-that-changes.md',
+        underMount('/values/show-a-value-that-changes.md'),
     )
     expect(markdown.status()).toBe(200)
     expect(await markdown.text()).toContain('# Show a value that changes')
 
-    const bundle = await page.request.get('/abide.md')
+    const bundle = await page.request.get(underMount('/abide.md'))
     expect(bundle.status()).toBe(200)
     expect(await bundle.text()).toContain('# abide documentation')
 })
@@ -181,7 +206,7 @@ test('a file under public is answered at its own address — 36.11', async ({
 // asserts the `<link>` and that its address answers; neither can tell a sheet the document
 // applied from one it fetched and ignored, and the page looks plausible either way.
 test('the bundled stylesheet reaches the page', async ({ page }) => {
-    await page.goto('/')
+    await page.goto(underMount('/'))
 
     // The heading token out of `app.css`, computed. `--heading` is #8E4426, and a document with
     // no stylesheet leaves an h1 at the UA's near-black.

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { directoryOf, pageSource, railOf } from '../scripts/buildPages.ts'
 import {
+    hrefFrom,
     type Page,
     readPages,
     renderBody,
@@ -174,13 +175,18 @@ test('every page offers its own markdown and the bundle', async () => {
         const rail = railOf(page, await bodyOf(page, pages))
         const { body, examples } = await renderBody(page, pages)
         const source = pageSource(page, directoryOf(page.slug), body, examples)
-        if (!rail.includes(`<a href="/${page.slug}.md" download>`))
+        // 16.11 — relative, so they are the page's wherever the app is mounted (`hrefFrom`).
+        const from = routeOf(page.slug)
+        const twin = hrefFrom(from, `/${page.slug}.md`)
+        if (!rail.includes(`<a href="${twin}" download>`))
             missing.push(`${page.slug}: page`)
-        if (!rail.includes('<a href="/abide.md" download>'))
+        if (
+            !rail.includes(`<a href="${hrefFrom(from, '/abide.md')}" download>`)
+        )
             missing.push(`${page.slug}: bundle`)
         if (
             !source.includes(
-                `<link rel="alternate" type="text/markdown" href="/${page.slug}.md"`,
+                `<link rel="alternate" type="text/markdown" href="${twin}"`,
             )
         )
             missing.push(`${page.slug}: alternate`)
@@ -198,12 +204,14 @@ test('a rendered body links to an address the app answers', async () => {
     const broken: string[] = []
     for (const page of pages) {
         const body = await bodyOf(page, pages)
+        // Relative to the page (16.11), so each is resolved where the browser would resolve it.
+        const at = `http://app${routeOf(page.slug)}`
         for (const match of body.matchAll(/href="(?!https?:|#)([^"]+)"/g)) {
             const target = match[1] ?? ''
             // The example downloads and the markdown twins are files under `public`, which is
             // the other half of what the app answers (36.11).
             if (target.endsWith('.zip') || target.endsWith('.md')) continue
-            const [address] = target.split('#') as [string]
+            const address = new URL(target, at).pathname
             if (!addresses.has(address)) broken.push(`${page.slug}: ${target}`)
         }
     }

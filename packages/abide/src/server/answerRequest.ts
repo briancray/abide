@@ -250,7 +250,12 @@ export async function answerRequest(
     // one `principal.caller` reads for the rest of the request.
     const caller = callerOrMint()
     // 23.1 — WHERE THIS PAGE IS, for its setup to read, in the request's own instances (11.32).
-    arrive(request.url, found.route.pattern, found.params)
+    // 16.11 — AT THE ADDRESS IT IS SERVED AT, which is the one the browser's router arrives at: the
+    // request reached here with the mount taken off, and a page reading `route.url()` on both sides
+    // would otherwise render one address and hydrate against another.
+    const at = new URL(request.url)
+    at.pathname = mounted(at.pathname)
+    arrive(at.href, found.route.pattern, found.params)
     beginRender({ seed: seedFor(caller), calls: [] })
     // 41.1, 35.2 — THE DOCUMENT IS THE BUILT PAGE, read whole before there is a `Response` to commit a
     // status to: a refusal the page read, or a throw, is answered by the nearest error page at its own
@@ -390,8 +395,9 @@ export function appSources(
         'framework' | 'published' | 'handlers' | 'sockets' | 'explained'
     >,
 ): LoadedSources {
+    const underMount = shellUnderMount(shell)
     const documentOf = (modules: string[]): string =>
-        intoHead(shell, clientTags(manifest, modules) + head)
+        intoHead(underMount, clientTags(manifest, modules) + head)
     const routes: Ranked[] = []
     for (const route of table.routes)
         routes.push({
@@ -460,6 +466,24 @@ export function clientTags(manifest: Manifest, modules: string[]): string {
     for (const chunk of chunksOf([`${CLIENT_ENTRY}.ts`, ...modules], manifest))
         tags += `<link rel="modulepreload" href="${client}/${chunk}">`
     return tags
+}
+
+/**
+ * The shell with every root-absolute `href` and `src` it writes put below the mount.
+ *
+ * 16.11, 36.11 — THE SHELL IS NOT A TEMPLATE, so it has no `url` to spell an address with, and the
+ * `/fonts/…` it preloads is a public file answered below the mount. The same shell is every page's
+ * at every depth, so a relative address is no spelling either. `//` is another host's.
+ */
+function shellUnderMount(shell: string): string {
+    const root = mounted('/')
+    return root === '/'
+        ? shell
+        : shell.replace(
+              /\b(href|src)=(["'])\/(?!\/)/g,
+              (_whole, name: string, quote: string) =>
+                  `${name}=${quote}${root}`,
+          )
 }
 
 /**

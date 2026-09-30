@@ -194,6 +194,7 @@ export async function bootApp(
     const fetch = async (given: Request): Promise<Response> => {
         if (stopping) return plainAnswer('the app is stopping', 503)
         const request = belowMount(given)
+        if (request instanceof Response) return request
         inFlight += 1
         const started = performance.now()
         try {
@@ -364,14 +365,27 @@ function isMux(pathname: string): boolean {
 }
 
 /**
- * The request with the mount taken off its address, where it is under the mount.
+ * The request with the mount taken off its address, where it is under the mount — or the redirect
+ * to the mount's root, where it asked for the mount with no `/` after it.
  *
  * 16.11 — A REQUEST UNDER THE MOUNT IS ANSWERED AS THE ADDRESS BELOW IT; one that is not — a proxy
  * that already took the prefix off — is answered as it came.
+ *
+ * THE MOUNT'S ROOT IS `/docs/`, as `url('/')` writes it. A document answered at `/docs` resolves a
+ * relative address against `/`, which is outside the app, so the bare mount is sent to the root a
+ * relative address resolves under.
  */
-function belowMount(request: Request): Request {
-    if (MOUNT.current() === '') return request
+function belowMount(request: Request): Request | Response {
+    const mount = MOUNT.current()
+    if (mount === '') return request
     const url = new URL(request.url)
+    // A PATH RATHER THAN A URL: the origin this request names is the one it reached, which behind
+    // a proxy is not the one the browser asked.
+    if (url.pathname === mount)
+        return new Response(null, {
+            status: 308,
+            headers: { location: `${mount}/${url.search}` },
+        })
     const below = unmounted(url.pathname)
     if (below === undefined || below === url.pathname) return request
     url.pathname = below

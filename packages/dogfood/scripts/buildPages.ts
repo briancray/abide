@@ -31,6 +31,7 @@ import { escapeAttribute } from 'abide'
 import { ifPresent } from './ifPresent.ts'
 import {
     headingsOf,
+    hrefFrom,
     markdownAddressOf,
     type Page,
     readPages,
@@ -113,12 +114,17 @@ function headerOf(page: Page): string {
 }
 
 /** Reading order, as two links. The nav is the whole set and this is the thread through it. */
-function footerOf(previous: Page | undefined, next: Page | undefined): string {
+function footerOf(
+    page: Page,
+    previous: Page | undefined,
+    next: Page | undefined,
+): string {
+    const from = routeOf(page.slug)
     let footer = ''
     if (previous !== undefined)
-        footer += `<a href="${routeOf(previous.slug)}">&larr; ${renderInline(previous.nav)}</a>`
+        footer += `<a href="${hrefFrom(from, routeOf(previous.slug))}">&larr; ${renderInline(previous.nav)}</a>`
     if (next !== undefined)
-        footer += `<a class="next" href="${routeOf(next.slug)}">${renderInline(next.nav)} &rarr;</a>`
+        footer += `<a class="next" href="${hrefFrom(from, routeOf(next.slug))}">${renderInline(next.nav)} &rarr;</a>`
     return footer
 }
 
@@ -130,6 +136,7 @@ function footerOf(previous: Page | undefined, next: Page | undefined): string {
  * heading has no table of contents (`headingsOf`) and still has its downloads.
  */
 export function railOf(page: Page, body: string): string {
+    const from = routeOf(page.slug)
     let items = ''
     for (const heading of headingsOf(body))
         items += `<li class="lvl-${heading.level}"><a href="#${heading.id}">${heading.label}</a></li>`
@@ -139,8 +146,8 @@ export function railOf(page: Page, body: string): string {
             : `<section><h2 id="toc-title">On this page</h2><ul aria-labelledby="toc-title">${items}</ul></section>`
     return `<aside class="toc">${contents}<section><h2 id="md-title">Markdown</h2>
 <ul class="downloads" aria-labelledby="md-title">
-<li><a href="${markdownAddressOf(page.slug)}" download>Download this page</a></li>
-<li><a href="/abide.md" download>Download full docs</a></li>
+<li><a href="${hrefFrom(from, markdownAddressOf(page.slug))}" download>Download this page</a></li>
+<li><a href="${hrefFrom(from, '/abide.md')}" download>Download full docs</a></li>
 </ul></section></aside>`
 }
 
@@ -161,7 +168,7 @@ function contentModule(
     const record = {
         slug: page.slug,
         header: headerOf(page),
-        footer: footerOf(previous, next),
+        footer: footerOf(page, previous, next),
         rail: railOf(page, body),
     }
     return `// Written by \`scripts/buildPages.ts\` from \`content/${page.slug}.md\`.
@@ -260,7 +267,7 @@ ${imports}</script>
 
 <head>
     <title>${title} — abide</title>
-    <link rel="alternate" type="text/markdown" href="${markdownAddressOf(page.slug)}" title="${title} as Markdown">
+    <link rel="alternate" type="text/markdown" href="${hrefFrom(routeOf(page.slug), markdownAddressOf(page.slug))}" title="${title} as Markdown">
 </head>
 
 <main id="content" bind:element={installDocs}>

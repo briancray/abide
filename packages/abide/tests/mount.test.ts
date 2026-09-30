@@ -8,6 +8,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 const PAGE = `<script>
 import { reactive, url } from 'abide'
 import { getInvoice } from '#server/rpc/invoices.ts'
+import '#ui/face.css'
 
 const invoice = reactive(() => getInvoice({ id: '4' }))
 </script>
@@ -21,7 +22,14 @@ beforeAll(async () => {
     process.env.APP_URL = 'http://example.test/docs/'
     ;({ base, stop } = await serveApp({
         'ui/pages/page.abide': PAGE,
-        'ui/pages/invoices/[id]/page.abide': '<main>an invoice</main>',
+        'ui/pages/invoices/[id]/page.abide': `<script>
+import { route } from 'abide'
+</script>
+
+<main>an invoice at <b id="at">{route.url().pathname}</b></main>`,
+        'ui/app.html': `<!doctype html><html><head><meta charset="utf-8"><link rel="preload" href="/fonts/face.woff2" as="font"><link rel="preconnect" href="//cdn.example.test"></head><body></body></html>`,
+        'ui/face.css': `@font-face { font-family: Face; src: url('/fonts/face.woff2'); }\n`,
+        'ui/public/fonts/face.woff2': 'a face',
         'ui/public/robots.txt': 'User-agent: *\n',
         'server/rpc/invoices.ts': `import { GET, reactive } from 'abide/server'\n\nexport const getInvoice = GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n\nexport const count = GET(reactive({ open: 3 }, { global: true }))\n`,
     }))
@@ -98,4 +106,46 @@ console.log(JSON.stringify(frames))
         ['value', 1, { open: 3 }],
         ['value', 2, { open: 3 }],
     ])
+})
+
+// 16.11, 23.4 — A PAGE IS WHERE IT IS SERVED, on the server as in the browser: the request reaches the
+// route with the mount taken off, and the browser's router arrives at `location`. THE REVERT: `arrive`
+// the request's own URL in `answerRequest`; the server renders `/invoices/4` and the browser hydrates
+// against `/docs/invoices/4`.
+test('a page reads the address it is served at — 16.11, 23.4', async () => {
+    const html = await (await Bun.fetch(`${base}/docs/invoices/4`)).text()
+    expect(html).toMatch(/id="at">(<!--[^>]*-->)?\/docs\/invoices\/4</)
+})
+
+// 16.11, 36.11 — WHAT THE SHELL AND THE STYLESHEET NAME AT THE ROOT IS THE MOUNT'S. Neither is a
+// template with a `url` to spell an address in, so the shell's `/…` is put under the mount as the
+// document is prepared and the stylesheet's is written relative to the bundle it is served from.
+// THE REVERTS: `shellUnderMount` returning the shell, and `stylesheetUnderMount` the sheet — both
+// then name `/fonts/face.woff2`, the origin's root, where nothing of this app's is.
+test('the shell and the stylesheet name a public file under the mount — 16.11, 36.11', async () => {
+    const html = await (await Bun.fetch(`${base}/docs/`)).text()
+    expect(html).toContain(
+        '<link rel="preload" href="/docs/fonts/face.woff2" as="font">',
+    )
+    expect(html).toContain('<link rel="preconnect" href="//cdn.example.test">')
+    const sheet = /href="(\/docs\/__abide\/client\/entry-[^"]+\.css)"/.exec(
+        html,
+    )?.[1] as string
+    const css = await (await Bun.fetch(`${base}${sheet}`)).text()
+    const face = /url\(["']?([^"')]+)/.exec(css)?.[1] as string
+    const resolved = new URL(face, `${base}${sheet}`)
+    expect(resolved.pathname).toBe('/docs/fonts/face.woff2')
+    expect(await (await Bun.fetch(resolved)).text()).toBe('a face')
+})
+
+// 16.11 — THE BARE MOUNT IS SENT TO ITS ROOT, which is where `url('/')` points: a document answered at
+// `/docs` resolves a relative address against `/`, outside the app. A path, not a URL, so a proxy's
+// origin is not the one written back. THE REVERT: drop the redirect from `belowMount`; `/docs` is a
+// 200.
+test('the bare mount is sent to its root — 16.11', async () => {
+    const answer = await Bun.fetch(`${base}/docs?from=bar`, {
+        redirect: 'manual',
+    })
+    expect(answer.status).toBe(308)
+    expect(answer.headers.get('location')).toBe('/docs/?from=bar')
 })

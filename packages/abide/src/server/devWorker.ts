@@ -26,7 +26,10 @@ import { appSources, publicFilesAt } from './answerRequest.ts'
 import { connectionOf, type MuxSocket, socketHandlers } from './answerSocket.ts'
 import { appPlugins } from './appPlugins.ts'
 import { CLIENT_ENTRY, PUBLIC_DIRECTORY } from './CLIENT_BUILD.ts'
-import { clientBuildOptions } from './clientBuildOptions.ts'
+import {
+    clientBuildOptions,
+    stylesheetUnderMount,
+} from './clientBuildOptions.ts'
 import { type App, bootApp, originUnder } from './createApp.ts'
 import { fenceServer } from './fenceServer.ts'
 import { keepServing } from './keepServing.ts'
@@ -48,7 +51,8 @@ const RELOAD_CLIENT_ADDRESS = `${DEV_ADDRESS}/client.js`
 // The bundle this worker answers `/__abide/client/…` out of, the type each name is served as, and
 // the chunks each route module needs (38.29).
 type Bundle = {
-    files: Map<string, { bytes: ArrayBuffer; type: string }>
+    // A stylesheet is held as its text, rewritten (`stylesheetUnderMount`); the rest as built.
+    files: Map<string, { bytes: ArrayBuffer | string; type: string }>
     manifest: Manifest
 }
 
@@ -433,8 +437,11 @@ async function bundleInMemory(
     for (let index = 0; index < built.outputs.length; index += 1) {
         const output = built.outputs[index] as Bun.BuildArtifact
         const name = output.path.slice(output.path.lastIndexOf('/') + 1)
+        const bytes = read[index] as ArrayBuffer
         bundle.files.set(name, {
-            bytes: read[index] as ArrayBuffer,
+            bytes: name.endsWith('.css')
+                ? stylesheetUnderMount(new TextDecoder().decode(bytes))
+                : bytes,
             type: output.type,
         })
     }

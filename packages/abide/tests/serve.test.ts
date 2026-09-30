@@ -402,15 +402,20 @@ test('the document links the stylesheet the build bundled — 34.6, 38.24', asyn
 
 // 36.15. THE REVERT: drop `external` from `bundleClient` and the build fails on
 // `Could not resolve: "/img/dot.svg"` — every test in this file with it.
+//
+// 16.11 — WRITTEN RELATIVE TO THE SHEET, so it is the public file's address below any mount; read
+// the way the browser reads it, against the sheet's own address. `mount.test.ts` is the mount.
 test('a stylesheet URL naming a public file is left as its address — 36.15', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
-    const linked = /<link rel="stylesheet" href="([^"]+)">/.exec(html)
-    const sheet = await (
-        await Bun.fetch(`${base}${(linked as RegExpExecArray)[1]}`)
-    ).text()
-    expect(sheet).toMatch(/url\("?\/img\/dot\.svg"?\)/)
+    const linked = (
+        /<link rel="stylesheet" href="([^"]+)">/.exec(html) as RegExpExecArray
+    )[1]
+    const sheet = await (await Bun.fetch(`${base}${linked}`)).text()
+    const named = /url\(["']?([^"')]+)/.exec(sheet)?.[1] as string
+    const resolved = new URL(named, `${base}${linked}`)
+    expect(resolved.pathname).toBe('/img/dot.svg')
     // AND THE ADDRESS IS THE FILE.
-    expect((await Bun.fetch(`${base}/img/dot.svg`)).status).toBe(200)
+    expect((await Bun.fetch(resolved)).status).toBe(200)
 })
 
 test('a public file is answered at its path below the directory — 36.11, 36.12', async () => {

@@ -228,8 +228,9 @@ test('the client is built into memory and answered under the bundle address — 
     const styles = await sheet.text()
     expect(styles).toContain('.fixture-sheet-was-imported')
     // 36.15. THE REVERT: drop `external` from `bundleInMemory` and the bundle fails, so there is
-    // no stylesheet to read at all.
-    expect(styles).toMatch(/url\("?\/robots\.txt"?\)/)
+    // no stylesheet to read at all. Relative to the sheet (16.11), read as the browser reads it.
+    const named = /url\(["']?([^"')]+)/.exec(styles)?.[1] as string
+    expect(new URL(named, sheet.url).pathname).toBe('/robots.txt')
 })
 
 // 38.29 IN DEV TOO, where the manifest is keyed off the plugin's namespace rather than a path on

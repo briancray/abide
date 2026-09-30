@@ -21,7 +21,7 @@ for (const group of NAV_ITEMS)
     (group.section === 'Reference' ? REFERENCE : GUIDES).push(group)
 const NONE: NavGroup[] = []
 
-/** The `href` of the site tab a pathname is in — `/` for any guide page. */
+/** The `href` of the site tab a route is in — `/` for any guide page. */
 export function tabOf(pathname: string): string {
     for (const tab of SITE_TABS)
         if (
@@ -32,7 +32,7 @@ export function tabOf(pathname: string): string {
     return '/'
 }
 
-/** The nav groups the sidebar lists at a pathname: guides, reference, or none on an instrument. */
+/** The nav groups the sidebar lists at a route: guides, reference, or none on an instrument. */
 export function sidebarGroupsOf(pathname: string): NavGroup[] {
     const tab = tabOf(pathname)
     return tab === '/' ? GUIDES : tab === '/reference' ? REFERENCE : NONE

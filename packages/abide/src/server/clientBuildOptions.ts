@@ -1,3 +1,4 @@
+import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 
 /**
@@ -26,4 +27,23 @@ export function clientBuildOptions(
         // app serves is still worth a build error.
         external: publicAddresses,
     } as const
+}
+
+// From the bundle's own directory up to the app's root: `../../` below `/__abide/client`.
+const UP_TO_ROOT = '../'.repeat(CLIENT_ADDRESS.split('/').length - 1)
+
+/**
+ * A built stylesheet with every root-absolute `url()` written relative to the bundle's directory.
+ *
+ * 16.11, 36.15 — THE SAME MECHANISM AS THE HANDLER WRAPPERS: the address is written relative to
+ * where the bundle is served and the browser resolves it against the sheet, so one build serves
+ * at the root and below a mount. What survives the build as `url(/…)` is a public file's address
+ * (the `external` list above), and the browser would resolve it against the origin. `//` is
+ * another host's.
+ */
+export function stylesheetUnderMount(css: string): string {
+    return css.replace(
+        /url\((["']?)\/(?!\/)/g,
+        (_whole, quote: string) => `url(${quote}${UP_TO_ROOT}`,
+    )
 }

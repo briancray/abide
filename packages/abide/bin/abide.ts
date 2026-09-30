@@ -21,7 +21,10 @@ import {
     MANIFEST,
     PUBLIC_DIRECTORY,
 } from '#server/CLIENT_BUILD.ts'
-import { clientBuildOptions } from '#server/clientBuildOptions.ts'
+import {
+    clientBuildOptions,
+    stylesheetUnderMount,
+} from '#server/clientBuildOptions.ts'
 import { type Given, type Host, runCommands } from '#server/commands.ts'
 import { packageUnder } from '#server/config.ts'
 import {
@@ -340,7 +343,8 @@ async function bundleClient(
 }
 
 /**
- * Writes brotli and gzip copies of one bundle output beside it.
+ * Writes brotli and gzip copies of one bundle output beside it — a stylesheet's addresses written
+ * relative to the bundle first (`stylesheetUnderMount`).
  *
  * 38.5 — EVERY FILE THE BUNDLE WROTE, BESIDE ITSELF IN EACH OF `ENCODING_SUFFIX`'s ENCODINGS, at
  * the highest level each has. The price is paid here once, where a server compressing per request
@@ -351,7 +355,14 @@ async function bundleClient(
  */
 async function precompressOne(output: Bun.BuildArtifact): Promise<void> {
     // `arrayBuffer` AND NOT `bytes`: the artifact's type declares both and it answers only the one.
-    const bytes = new Uint8Array(await output.arrayBuffer())
+    let bytes = new Uint8Array(await output.arrayBuffer())
+    // A stylesheet is rewritten on disk before it is compressed, so all three copies carry it.
+    if (output.path.endsWith('.css')) {
+        bytes = new TextEncoder().encode(
+            stylesheetUnderMount(new TextDecoder().decode(bytes)),
+        )
+        await Bun.write(output.path, bytes)
+    }
     const brotli = await new Promise<Uint8Array>((compressed, failed) =>
         brotliCompress(
             bytes,

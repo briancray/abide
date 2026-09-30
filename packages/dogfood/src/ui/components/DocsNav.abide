@@ -13,18 +13,22 @@
 // wraps (41.11), so a prop the page passed would be the FIRST page's for as long as the nav stands.
 // The same route decides WHICH pages it lists — the guides, or the reference, or none beside an
 // instrument — and the site bar above it is where a reader moves between those.
-import { raw, route } from 'abide'
+//
+// THE LITERAL, NOT THE ADDRESS: `route.name()` is the route an item's `href` is spelled in, where
+// `route.url()` is where the app is served — below a mount, `/docs/values` for `/values` — and the
+// link is written through `url` for the same reason (16.11).
+import { raw, route, url } from 'abide'
 import { sidebarGroupsOf } from '#ui/siteSections.ts'
 </script>
 
-{#if sidebarGroupsOf(route.url().pathname).length > 0}
+{#if sidebarGroupsOf(route.name()).length > 0}
 <nav class="sidebar">
-    {#for group of sidebarGroupsOf(route.url().pathname)}
+    {#for group of sidebarGroupsOf(route.name())}
         <section>
             <h2>{group.section}</h2>
             <ul>
                 {#for item of group.pages}
-                    <li>{#if item.href === route.url().pathname}<a href={item.href} aria-current="page">{raw(item.nav)}</a>{:else}<a href={item.href}>{raw(item.nav)}</a>{/if}{#if item.stub}<span class="stub" title="Stub — not written yet"></span>{/if}</li>
+                    <li>{#if item.href === route.name()}<a href={url(item.href)} aria-current="page">{raw(item.nav)}</a>{:else}<a href={url(item.href)}>{raw(item.nav)}</a>{/if}{#if item.stub}<span class="stub" title="Stub — not written yet"></span>{/if}</li>
                 {/for}
             </ul>
         </section>
