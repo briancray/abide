@@ -27,11 +27,11 @@ import {
     abandonDeferred,
     createReactive,
     isStreamBody,
+    leaveSelections,
     type Reactive,
     type ReactiveOptions,
     refuseBothCaps,
     startDeferred,
-    untag,
 } from './Reactive.ts'
 import {
     detach,
@@ -337,7 +337,7 @@ export function createKeyed<
         created: Reactive<Stored, Accepted, Failures>,
     ): void {
         entries.delete(key)
-        untag(created)
+        leaveSelections(created)
     }
 
     function reach(given: Args): Reactive<Stored, Accepted, Failures> {

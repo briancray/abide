@@ -14,24 +14,24 @@
 // file (TS1149). An address is the one name CLAUDE.md's file-naming rule exempts.
 
 import type { Failed } from '../Failed.ts'
+import { isReactive } from './isReactive.ts'
 import { createKeyed, type Keyed } from './Keyed.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import {
-    busyOverTags,
+    busyOver,
     createReactive,
-    invalidateOverTags,
+    invalidateOver,
     type Reactive,
     type ReactiveOptions,
-    readyOverTags,
-    refreshOverTags,
+    readyOver,
+    refreshOver,
 } from './Reactive.ts'
-import { isReactive } from './isReactive.ts'
 import { outsideScope, scoped } from './scoped.ts'
 import { share } from './share.ts'
 
 export type { History } from './History.ts'
-export { isKeyed, type Keyed } from './Keyed.ts'
 export { isReactive } from './isReactive.ts'
+export { isKeyed, type Keyed } from './Keyed.ts'
 export { NotLanded } from './NotLanded.ts'
 // The server reaches the core through here rather than `./Reactive.ts`: `Reactive.ts` →
 // `log.ts` → this barrel → `scoped.ts` → `Reactive.ts` is a cycle, and a server module loaded
@@ -79,23 +79,20 @@ export type Selection =
       }
     | { tags: string[] }
 
-/** The tags a selection names, or `null` where it names a value — an object is the tag arm. */
-function tagsOf(selection: Selection): string[] | null {
+/**
+ * What a selection sweeps: the tags it names, `null` where it names nothing, or `undefined` where it
+ * names one value, whose own members answer.
+ *
+ * NOTHING NAMED IS EVERY LOAD IN REACH: each value in this scope, and each `global` one, whose
+ * producer is a store or has started a load (13.6, 13.8, 13.10) — see `fileProducer`.
+ */
+function sweepOf(
+    selection: Selection | undefined,
+): string[] | null | undefined {
+    if (selection === undefined) return null
     return typeof selection === 'object'
         ? (selection as { tags: string[] }).tags
-        : null
-}
-
-/** The selection a free probe was handed, refused where it was handed none. */
-function requireSelection(
-    name: string,
-    selection: Selection | undefined,
-): Selection {
-    if (selection === undefined)
-        throw new Error(
-            `${name}() was called with no selection. The bare form sweeps every entry in scope and is not built yet; name the value or the keyed face.`,
-        )
-    return selection
+        : undefined
 }
 
 type Refusal = Failed<string, unknown>
@@ -270,10 +267,9 @@ export function busy<Chosen extends Selection>(
     selection?: Chosen,
     pattern?: PatternOf<Chosen, 'busy'>,
 ): boolean {
-    const chosen = requireSelection('busy', selection)
-    const tags = tagsOf(chosen)
-    if (tags !== null) return busyOverTags(tags)
-    return (chosen as { busy(pattern: unknown): boolean }).busy(pattern)
+    const sweep = sweepOf(selection)
+    if (sweep !== undefined) return busyOver(sweep)
+    return (selection as { busy(pattern: unknown): boolean }).busy(pattern)
 }
 /**
  * Whether every entry in the selection has a value to serve — ALL, against `busy`'s ANY.
@@ -285,30 +281,30 @@ export function ready<Chosen extends Selection>(
     selection?: Chosen,
     pattern?: PatternOf<Chosen, 'ready'>,
 ): boolean {
-    const chosen = requireSelection('ready', selection)
-    const tags = tagsOf(chosen)
-    if (tags !== null) return readyOverTags(tags)
-    return (chosen as { ready(pattern: unknown): boolean }).ready(pattern)
+    const sweep = sweepOf(selection)
+    if (sweep !== undefined) return readyOver(sweep)
+    return (selection as { ready(pattern: unknown): boolean }).ready(pattern)
 }
 /** Stale-while-revalidate over the selection: reloads it while serving what it holds. */
 export function refresh<Chosen extends Selection>(
     selection?: Chosen,
     pattern?: PatternOf<Chosen, 'refresh'>,
 ): void {
-    const chosen = requireSelection('refresh', selection)
-    const tags = tagsOf(chosen)
-    if (tags !== null) refreshOverTags(tags)
-    else (chosen as { refresh(pattern: unknown): void }).refresh(pattern)
+    const sweep = sweepOf(selection)
+    if (sweep !== undefined) refreshOver(sweep)
+    else (selection as { refresh(pattern: unknown): void }).refresh(pattern)
 }
 /** Marks the selection stale: drops the cache behind it, never the value. */
 export function invalidate<Chosen extends Selection>(
     selection?: Chosen,
     pattern?: PatternOf<Chosen, 'invalidate'>,
 ): void {
-    const chosen = requireSelection('invalidate', selection)
-    const tags = tagsOf(chosen)
-    if (tags !== null) invalidateOverTags(tags)
-    else (chosen as { invalidate(pattern: unknown): void }).invalidate(pattern)
+    const sweep = sweepOf(selection)
+    if (sweep !== undefined) invalidateOver(sweep)
+    else
+        (selection as { invalidate(pattern: unknown): void }).invalidate(
+            pattern,
+        )
 }
 
 // 10.1 — `reactive.share` is a static on the factory rather than a free name, the registry's own

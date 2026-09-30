@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 import { inScope, request, response } from '#server/requestScope.ts'
-import { flushSync, reactive, refresh, watch } from '#shared'
+import { flushSync, invalidate, reactive, refresh, watch } from '#shared'
 import { GET } from '#shared/rpc.ts'
 import { socket } from '#shared/socket.ts'
 
@@ -158,6 +158,82 @@ test('a refresh by tag inside a request reaches a global value and its entries �
     prices()
     price({ id: 1 })()
     expect(loads).toBe(2)
+})
+
+// 13.8 — THE BARE SELECTION IS SCOPE-BOUNDED, as a tag is: a bare refresh inside one request reloads
+// that request's values and never another's. THE REVERT: drop the `cell.scope === scope` test from
+// `inReach`'s bare branch; B's body runs again for A's refresh — 2 loads where 1 is due.
+test('a bare refresh reaches the request it was made in and no other — 13.8', async () => {
+    let loads = 0
+    const stock = reactive(async () => {
+        loads += 1
+        return 3
+    })
+    // SUBSCRIBED ONCE LANDED: a watch that reads a load still out aborts and is re-run by the drain,
+    // under whichever request's continuation ran it rather than its own.
+    const reach = (): void => {
+        stock.peek()
+    }
+    const subscribe = (): void => {
+        watch(() => {
+            stock()
+        })
+    }
+    const a = held('a', reach, () => {
+        subscribe()
+        loads = 0
+        refresh()
+        flushSync()
+    })
+    const b = held('b', reach, subscribe)
+    expect(loads).toBe(3)
+    await tick()
+    b.open()
+    await b.done
+    a.open()
+    await a.done
+    expect(loads).toBe(1)
+})
+
+// 13.10 — ON A SERVER A BARE `invalidate()` AND A BARE `refresh()` EACH REACH EVERY `global` VALUE IN
+// THE PROCESS: the one built at import and the entry of a `global` keyed value another request made,
+// from inside a request and from outside every one. Nothing subscribes, so the refresh marks (13.7)
+// and each read after it is the load — a `peek`, which pulls as a read does and throws nothing while
+// the load is out. THE REVERT: drop `|| cell.global` from `inReach`'s bare branch;
+// inside request B neither is reached — 0 loads where 2 are due.
+test('a bare invalidate and a bare refresh reach every global load in the process — 13.10', () => {
+    let loads = 0
+    const rates = reactive(
+        async () => {
+            loads += 1
+            return 3
+        },
+        { global: true },
+    )
+    const rate = reactive(
+        async (args: { id: number }) => {
+            loads += 1
+            return args.id
+        },
+        { global: true },
+    )
+    rates.peek()
+    inScope(new Request('http://app/a'), () => rate({ id: 1 }).peek())
+    loads = 0
+    inScope(new Request('http://app/b'), () => invalidate())
+    expect(`loads before a read: ${loads}`).toBe('loads before a read: 0')
+    rates.peek()
+    rate({ id: 1 }).peek()
+    expect(`loads after an invalidate inside a request: ${loads}`).toBe(
+        'loads after an invalidate inside a request: 2',
+    )
+    loads = 0
+    refresh()
+    rates.peek()
+    rate({ id: 1 }).peek()
+    expect(`loads after a refresh outside every request: ${loads}`).toBe(
+        'loads after a refresh outside every request: 2',
+    )
 })
 
 // 11.34 — `global` IS ONE VALUE FOR THE PROCESS. THE REVERT: drop the `global` test from

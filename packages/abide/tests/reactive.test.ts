@@ -5240,25 +5240,32 @@ test('a guard over a tag selection subscribes once and comes back when the loads
     expect(`saw: ${saw.join(',')}`).toBe('saw: true,false')
 })
 
-// An entry evicted by its `ttl` is out of the map, and a tag sweep must not go on reaching it —
-// that would be a reload for a key nothing can read any more.
+// An entry evicted by its `ttl` is out of the map, and a sweep — by tag or bare — must not go on
+// reaching it: that would be a reload for a key nothing can read any more. Its handle is what every
+// selection index holds it by, so the handle being gone is the whole of it leaving.
 //
-// THE REVERT is the eviction not calling `untag`: `runs: 2`.
-test('an evicted keyed entry leaves its tags', async () => {
+// THE REVERT is the eviction not calling `leaveSelections`: `still in a selection: true`. The run
+// count cannot tell — nothing reads the entry, so the sweep reaching it only marks it — and that
+// was once the whole of this gate, green with the eviction reverted.
+test('an evicted keyed entry leaves every selection', async () => {
     let runs = 0
     const keyed = reactive(
-        (args: { id: number }) => {
+        async (args: { id: number }) => {
             runs += 1
             return args.id
         },
         { ttl: 20, tags: ['evictable'] },
     )
-    keyed({ id: 1 })
+    const entry = keyed({ id: 1 })
+    await entry
     await Bun.sleep(80)
     expect(keyed.entries.size).toBe(0)
     invalidate({ tags: ['evictable'] })
     refresh({ tags: ['evictable'] })
     expect(`runs: ${runs}`).toBe('runs: 1')
+    expect(
+        `still in a selection: ${cellOf<{ ref: unknown }>(entry).ref !== null}`,
+    ).toBe('still in a selection: false')
 })
 
 // ── `store`: where a value lives when the process does not (RULEBOOK 8, 9.11, 11.43) ──────
@@ -5441,7 +5448,9 @@ test('a failed store write warns, reaches onError, and the next production is st
     }
     expect(`written: ${written.join(',')}`).toBe('written: 2')
     expect(`warned: ${String(warnings[0])}`).toContain('abide:reactive')
-    expect(`handed: ${handed.map(String).join(',')}`).toBe('handed: Error: disk full')
+    expect(`handed: ${handed.map(String).join(',')}`).toBe(
+        'handed: Error: disk full',
+    )
 })
 
 // A STORE IN FRONT OF A BODY IS A CACHE: `get` on a cold entry, the body on a miss, `set` on every

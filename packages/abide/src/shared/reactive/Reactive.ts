@@ -846,6 +846,20 @@ class Cell {
      * entry of a `global` keyed value is one too, whichever request first reached it.
      */
     declare global: boolean
+    /**
+     * The one weak handle every selection index holds this value by, or `null` where none does.
+     *
+     * 13.1 AND 13.6: a value filed for the bare sweep or carrying `tags` is findable by one, and
+     * every index holds the same handle, so an eviction drops it from all of them at once.
+     */
+    declare ref: WeakRef<Cell> | null
+    /**
+     * Whether this value is filed for the bare selection — once, where it first becomes a load.
+     *
+     * See `fileProducer`. Not cleared by an eviction: dropping `ref` is what takes an evicted entry
+     * out, and this staying set is what keeps its next load from filing it again.
+     */
+    declare filed: boolean
 
     constructor(
         label: string,
@@ -938,6 +952,8 @@ class Cell {
         this.simple = false
         this.scope = currentScope()
         this.global = options?.global === true
+        this.ref = null
+        this.filed = false
         simpleShape(this)
     }
 
@@ -1339,6 +1355,9 @@ function markProbes(cell: Cell, pass: number): void {
     // 13.3: a guard over a tag selection asked the SELECTION, so it hears through the selection's
     // signal rather than through this value's own probe readers.
     if (cell.tags !== null) markSignals(cell.tags)
+    // The bare selection's guard hears every filed value's floor move; one load where nothing asks.
+    if (EVERY_PRODUCER.probeReaders.length !== 0 && cell.filed)
+        markAsked(EVERY_PRODUCER.probeReaders)
     // The floor of everything built from this one moved with it — what READ it, and what
     // ADOPTED it (11.51), which is on this list as its mirror rather than as itself.
     const readers = cell.readers
@@ -2765,6 +2784,8 @@ function reload(cell: Cell): void {
  * all woke every guard onto a `busy` that was false again by the time it ran.
  */
 function beginLoad(cell: Cell): void {
+    // Ahead of the early return: a deferred keyed entry is `loading` before its first start.
+    if (!cell.filed && reloads(cell)) fileProducer(cell)
     if (cell.loading) return
     cell.loading = true
     probesMoved(cell)
@@ -3670,7 +3691,7 @@ function storeWritten(cell: Cell, persisted: Persisted): void {
     sendStore(cell, persisted, persisted.unconfirmed)
 }
 
-// ── Selections over `tags` ─────────────────────────────────────────────────────────────
+// ── Selections over `tags`, and the bare sweep ──────────────────────────────────────────
 
 /**
  * Each tag to the values carrying it, held weakly.
@@ -3682,6 +3703,27 @@ function storeWritten(cell: Cell, persisted: Persisted): void {
 const TAGGED = new Map<string, Set<WeakRef<Cell>>>()
 
 /**
+ * Every value whose producer is a LOAD, held weakly — what a bare selection sweeps.
+ *
+ * 13.6: A BARE SWEEP REACHES PRODUCERS, and of those it files the ones that LOAD: a value holding
+ * a `store`, filed where it is built, and a body the first time it starts a load — a pending
+ * answer or a stream (`beginLoad`). A synchronous body is a derivation: reloading it recomputes
+ * what its sources already say, and whatever load it reads is filed on its own. And filing is
+ * what every filed value pays — a weak handle measured ~230 ns a value under V8 against ~20 under
+ * JSC — so a value with nothing to load never pays it: a derivation per cell per row stays at
+ * what it cost before, and a load pays it beside the promise it already allocates.
+ *
+ * Held weakly for `TAGGED`'s reason. AN ARRAY, COMPACTED, RATHER THAN A `Set`: a `Set` of weak
+ * handles measured ~120 ns a filing under JSC against ~10 for a push. What a `Set` bought was an
+ * O(1) delete on eviction; here an evicted value drops its `ref` instead, and a handle whose value
+ * no longer points back at it is dead, the same as one whose value was collected. Because a bare
+ * sweep may never run, the filing that finds the array past `compactProducersAt` compacts it, and
+ * the bar doubles past what survives, so the walk is amortised over the filings between two.
+ */
+let filedProducers: WeakRef<Cell>[] = []
+let compactProducersAt = 1024
+
+/**
  * The probe signal a guard over a selection subscribes to.
  *
  * 13.3 AND 13.9: ONE SIGNAL PER SELECTION, keyed by its canonical tags. A guard over a selection
@@ -3691,9 +3733,23 @@ const TAGGED = new Map<string, Set<WeakRef<Cell>>>()
 type Signal = { readers: Subscriber[]; probeReaders: Subscriber[] }
 const SIGNALS = new Map<string, Signal>()
 const SIGNALS_BY_TAG = new Map<string, Signal[]>()
+/**
+ * The bare selection's one signal. Not a key in `SIGNALS`: `{ tags: [] }` canonicalises to the
+ * empty set and matches nothing, where the bare selection matches every filed load in reach.
+ */
+const EVERY_PRODUCER: Signal = { readers: [], probeReaders: [] }
+
+function refOf(cell: Cell): WeakRef<Cell> {
+    let ref = cell.ref
+    if (ref === null) {
+        ref = new WeakRef(cell)
+        cell.ref = ref
+    }
+    return ref
+}
 
 function tagCell(cell: Cell): void {
-    const ref = new WeakRef(cell)
+    const ref = refOf(cell)
     for (const tag of cell.tags as string[]) {
         let carrying = TAGGED.get(tag)
         if (carrying === undefined) {
@@ -3704,34 +3760,69 @@ function tagCell(cell: Cell): void {
     }
 }
 
+function fileProducer(cell: Cell): void {
+    cell.filed = true
+    filedProducers.push(refOf(cell))
+    if (filedProducers.length > compactProducersAt) {
+        filedProducers = liveProducers()
+        compactProducersAt = Math.max(1024, filedProducers.length * 2)
+    }
+}
+
+/** The handles whose value is still standing and still filed — neither collected nor evicted. */
+function liveProducers(): WeakRef<Cell>[] {
+    const live: WeakRef<Cell>[] = []
+    for (let index = 0; index < filedProducers.length; index += 1) {
+        const ref = filedProducers[index] as WeakRef<Cell>
+        if (ref.deref()?.ref === ref) live.push(ref)
+    }
+    return live
+}
+
 /**
- * Removes an evicted value from every tag's index.
+ * Removes an evicted value from every selection index.
  *
  * What an eviction calls: an entry out of its `Keyed` is out of every selection with it, rather
  * than reachable by a sweep until a collection happens to run.
  */
-export function untag(value: unknown): void {
+export function leaveSelections(value: unknown): void {
     const cell = (value as Callable)[CELL]
+    const ref = cell.ref
+    if (ref === null) return
+    // What takes it out of `filedProducers`: a handle its value no longer points back at is dead.
+    cell.ref = null
     if (cell.tags === null) return
     for (const tag of cell.tags) {
         const carrying = TAGGED.get(tag)
         if (carrying === undefined) continue
-        for (const ref of carrying)
-            if (ref.deref() === cell) carrying.delete(ref)
+        carrying.delete(ref)
         if (carrying.size === 0) TAGGED.delete(tag)
     }
 }
 
 /**
- * The values carrying any of `tags` in the current scope, `global` values included.
+ * The values a selection reaches in the current scope, `global` values included: those carrying
+ * any of `tags`, or every filed load where `tags` is `null` — the bare selection.
  *
- * 13.8 — A TAG IS SCOPE-BOUNDED, so a selection inside one request never reaches the values another
- * request filed under the same tag. 13.13 — a `global` value is in every scope, so every selection
- * reaches it. In a browser every cell's scope is `undefined`, and so is this.
+ * 13.8 — A SELECTION IS SCOPE-BOUNDED, and a tag with it, so a selection inside one request never
+ * reaches the values another request filed. 13.13 — a `global` value is in every scope, so every
+ * selection reaches it, and 13.10 is the bare case of that. In a browser every cell's scope is
+ * `undefined`, and so is this.
  */
-function carrying(tags: string[]): Cell[] {
-    const found = new Set<Cell>()
+function inReach(tags: string[] | null): Cell[] {
     const scope = currentScope()
+    if (tags === null) {
+        filedProducers = liveProducers()
+        const found: Cell[] = []
+        for (let index = 0; index < filedProducers.length; index += 1) {
+            const cell = (
+                filedProducers[index] as WeakRef<Cell>
+            ).deref() as Cell
+            if (cell.scope === scope || cell.global) found.push(cell)
+        }
+        return found
+    }
+    const found = new Set<Cell>()
     for (const tag of tags) {
         const refs = TAGGED.get(tag)
         if (refs === undefined) continue
@@ -3744,9 +3835,13 @@ function carrying(tags: string[]): Cell[] {
     return [...found]
 }
 
-function trackSignal(tags: string[]): void {
+function trackSignal(tags: string[] | null): void {
     const reader = TRACKING.reader
     if (reader === null) return
+    if (tags === null) {
+        trackProbe(EVERY_PRODUCER as unknown as Tracked, reader)
+        return
+    }
     const key = JSON.stringify([...new Set(tags)].sort())
     let signal = SIGNALS.get(key)
     if (signal === undefined) {
@@ -3769,42 +3864,54 @@ function markSignals(tags: string[]): void {
     }
 }
 
-/** Whether any value carrying one of `tags` is busy; a reader subscribes to the selection. */
-export function busyOverTags(tags: string[]): boolean {
+/**
+ * Whether any value in the selection is busy; a reader subscribes to the selection.
+ *
+ * `null` is the bare selection — every filed load in reach — and so for the three below.
+ */
+export function busyOver(tags: string[] | null): boolean {
     trackSignal(tags)
-    for (const cell of carrying(tags)) if (busyNow(cell)) return true
+    for (const cell of inReach(tags)) if (busyNow(cell)) return true
     return false
 }
 
-/** Whether every value carrying one of `tags` is ready; a reader subscribes to the selection. */
-export function readyOverTags(tags: string[]): boolean {
+/** Whether every value in the selection is ready; a reader subscribes to the selection. */
+export function readyOver(tags: string[] | null): boolean {
     trackSignal(tags)
-    for (const cell of carrying(tags)) if (!readyNow(cell)) return false
+    for (const cell of inReach(tags)) if (!readyNow(cell)) return false
     return true
 }
 
-/** Invalidates every value carrying one of `tags`, and what each adopts. */
-export function invalidateOverTags(tags: string[]): void {
-    for (const cell of carrying(tags)) eachAdopted(cell, invalidateOne)
+/**
+ * Invalidates every value in the selection, and what each adopts.
+ *
+ * THE BARE SWEEP VISITS EACH VALUE ALONE: whatever an adoption reaches that has a producer is filed
+ * itself, so walking the chain as well would visit it twice.
+ */
+export function invalidateOver(tags: string[] | null): void {
+    for (const cell of inReach(tags))
+        if (tags === null) invalidateOne(cell)
+        else eachAdopted(cell, invalidateOne)
 }
 
 /**
- * Refreshes the values carrying any of `tags`, or marks the ones nothing reads.
+ * Refreshes the values in the selection, or marks the ones nothing reads.
  *
  * 13.7: RELOADED WHERE SOMETHING READS IT, MARKED WHERE NOTHING DOES. A mark is the recompute a
  * write would have owed it — `DIRTY` and not directly servable — so the next read pulls the reload
  * and until then nothing is requested. A stream is refreshed rather than marked: a pull runs a
  * BODY, and a stream's body is a generator that only `startStream` knows how to run.
  */
-export function refreshOverTags(tags: string[]): void {
-    for (const cell of carrying(tags)) {
+export function refreshOver(tags: string[] | null): void {
+    for (const cell of inReach(tags)) {
         if (
             cell.readers.length !== 0 ||
             cell.probeReaders.length !== 0 ||
             cell.stream !== null
-        )
-            eachAdopted(cell, refreshOne)
-        else if (cell.body !== null) {
+        ) {
+            if (tags === null) refreshOne(cell)
+            else eachAdopted(cell, refreshOne)
+        } else if (cell.body !== null) {
             cell.state = DIRTY
             cell.direct = false
         }
@@ -4296,6 +4403,7 @@ export function createReactive<
     self[CELL] = cell
     cell.callable = self as unknown as Reactive<unknown>
     if (cell.tags !== null) tagCell(cell)
+    if (cell.store !== null) fileProducer(cell)
 
     // 1.7: reaching an instance starts the work it is for. For the value form that is
     // the initial write; for a body it is the first run, which 11.4 has happening once
