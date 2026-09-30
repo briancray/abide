@@ -199,6 +199,67 @@ export function abideSpecifiers(script: string): string[] {
 }
 
 /**
+ * Every import declaration in a script: its text and where it starts.
+ *
+ * `import …` alone — an `export … from` binds nothing in the script it stands in.
+ */
+export function importDeclarations(
+    script: string,
+): { text: string; start: number }[] {
+    const declarations: { text: string; start: number }[] = []
+    if (!script.includes('import')) return declarations
+    for (const span of importSpans(script))
+        if (script.startsWith('import', span.start))
+            declarations.push({
+                text: script.slice(span.start, span.end),
+                start: span.start,
+            })
+    return declarations
+}
+
+/**
+ * Every name a script's import declarations bind, with the specifier it is imported from.
+ *
+ * `x as y` binds `y`, a `type` modifier binds nothing of its own, and `* as ns` binds `ns`.
+ */
+export function importedNames(
+    script: string,
+): { name: string; specifier: string }[] {
+    const names: { name: string; specifier: string }[] = []
+    for (const declaration of importDeclarations(script)) {
+        const tokens = tokenise(declaration.text)
+        const last = tokens.findLastIndex(
+            (token) => token.kind === SyntaxKind.StringLiteral,
+        )
+        if (last === -1) continue
+        const specifier = (tokens[last] as Token).text.slice(1, -1)
+        for (let at = 1; at < last; at += 1) {
+            const token = tokens[at] as Token
+            if (token.kind === SyntaxKind.FromKeyword) break
+            if (token.kind === SyntaxKind.AsKeyword) continue
+            if (
+                token.kind !== SyntaxKind.Identifier &&
+                !isContextualKeyword(token.kind)
+            )
+                continue
+            const next = tokens[at + 1] as Token
+            // A name followed by `as` is renamed, and a modifier is followed by what it modifies.
+            if (next.kind === SyntaxKind.AsKeyword) continue
+            if (
+                token.text === 'type' &&
+                (next.kind === SyntaxKind.Identifier ||
+                    next.kind === SyntaxKind.OpenBraceToken ||
+                    next.kind === SyntaxKind.AsteriskToken ||
+                    isContextualKeyword(next.kind))
+            )
+                continue
+            names.push({ name: token.text, specifier })
+        }
+    }
+    return names
+}
+
+/**
  * Rewrites each `.abide` specifier in `imports` to the lane's compiled module for it.
  *
  * 32.17 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two

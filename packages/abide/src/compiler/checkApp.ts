@@ -8,6 +8,7 @@ import {
     sourcesUnder,
     withChecker,
 } from './compileApp.ts'
+import { withInline } from './inlineSources.ts'
 import { diagnosisAt } from './lineOf.ts'
 import { type AbideFile, parseAbide } from './parseAbide.ts'
 import { abideSpecifiers } from './splitImports.ts'
@@ -33,13 +34,14 @@ export async function checkApp(
     const { root, sources } = await sourcesUnder(appRoot)
     return withChecker(root, kept, async (session) => {
         const refused: Diagnosis[] = []
-        const parsed: { path: string; text: string; file: AbideFile }[] = []
+        const read: { path: string; text: string; file: AbideFile }[] = []
         for (const source of sources)
             try {
-                parsed.push({ ...source, file: parseAbide(source.text) })
+                read.push({ ...source, file: parseAbide(source.text) })
             } catch (thrown) {
                 refused.push(refusal(source.path, thrown))
             }
+        const parsed = withInline(read)
         // ONE SNAPSHOT FOR THE LOT, and a file at a time only once that has refused — so which
         // file it was is known, and the others still answer.
         let reads: Read[][]
@@ -58,7 +60,9 @@ export async function checkApp(
                     warnings.push(...answered.warnings)
                     readable.push(source)
                 } catch (thrown) {
-                    refused.push(refusal(source.path, thrown))
+                    refused.push(
+                        refusal(source.inlineOf?.path ?? source.path, thrown),
+                    )
                 }
         }
         const typed = readable.map((source, at) => ({
@@ -157,14 +161,16 @@ export async function checkSource(
             // A component that does not parse is its own file's finding, and takes anything here.
         }
     }
+    // 32.39 — the page's inline components stand right after it, and are reported on as it is.
+    const expanded = withInline(sources)
     let answered: Awaited<ReturnType<typeof session.readsFor>>
     try {
-        answered = await session.readsFor(sources)
+        answered = await session.readsFor(expanded)
     } catch {
         // The page's own refusal, or a component's: asked alone, the page says which.
-        sources.length = 1
+        expanded.length = 1 + file.components.length
         try {
-            answered = await session.readsFor(sources)
+            answered = await session.readsFor(expanded)
         } catch (alone) {
             return [refusal(path, alone)]
         }
@@ -173,7 +179,7 @@ export async function checkSource(
     for (const warning of answered.warnings)
         if (warning.path === path) warnings.push(warning)
     const found = await session.diagnose(
-        sources.map((source, at) => ({
+        expanded.map((source, at) => ({
             ...source,
             reads: answered.reads[at] ?? [],
         })),

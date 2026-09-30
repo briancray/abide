@@ -112,3 +112,26 @@ Try, catch and finally
           (tag_name))))
     (try_end
       (block_keyword))))
+
+================================================================================
+An inline component
+================================================================================
+
+{#component Row({ label })}<li>{label}</li>{/component}
+
+--------------------------------------------------------------------------------
+
+(document
+  (component_block
+    (component_start
+      (block_keyword)
+      (code))
+    (element
+      (start_tag
+        (tag_name))
+      (expression
+        (code))
+      (end_tag
+        (tag_name)))
+    (component_end
+      (block_keyword))))

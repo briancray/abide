@@ -107,6 +107,7 @@ URL-typed attribute, where the encoding is what stops an entity forming a scheme
 
 | Spelling | Meaning |
 | --- | --- |
+| `{#component Name(pattern)}` | An inline component. |
 | `<Name/>` | A component invocation. |
 | `<slot/>` | Renders children. |
 | `<slot>fallback</slot>` | Renders children, or a fallback. |

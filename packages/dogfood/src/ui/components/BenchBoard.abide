@@ -120,6 +120,10 @@ function verdictOf(claim: string): string {
 }
 </script>
 
+{#component Figure({ tone, value }: { tone: string; value: string })}
+    <td class={`board-figure ${tone}`}>{value}</td>
+{/component}
+
 <main id="content" class="board">
     <header>
         <h1>Bench</h1>
@@ -154,11 +158,11 @@ function verdictOf(claim: string): string {
                         {#for item of section.items by item.id}
                             <tr>
                                 <td>{item.name}<span class="board-note" class:board-bad={landed.get(item.id)?.state === 'broken'}>{cellsOf(item).note}</span></td>
-                                <td class={`board-figure ${cellsOf(item).figureTone}`}>{cellsOf(item).abide}</td>
-                                <td class={`board-figure ${cellsOf(item).figureTone}`}>{cellsOf(item).vanilla}</td>
-                                <td class={`board-figure ${cellsOf(item).claimTone}`}>{cellsOf(item).claim}</td>
-                                <td class={`board-figure ${cellsOf(item).figureTone}`}>{cellsOf(item).n}</td>
-                                <td class={`board-figure ${cellsOf(item).figureTone}`}>{cellsOf(item).floor}</td>
+                                <Figure tone={cellsOf(item).figureTone} value={cellsOf(item).abide}/>
+                                <Figure tone={cellsOf(item).figureTone} value={cellsOf(item).vanilla}/>
+                                <Figure tone={cellsOf(item).claimTone} value={cellsOf(item).claim}/>
+                                <Figure tone={cellsOf(item).figureTone} value={cellsOf(item).n}/>
+                                <Figure tone={cellsOf(item).figureTone} value={cellsOf(item).floor}/>
                                 <td class="board-figure"><button class="board-run" onclick={() => start(`item:${item.id}`)} disabled={running}>Run</button></td>
                             </tr>
                         {/for}

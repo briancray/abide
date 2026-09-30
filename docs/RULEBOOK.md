@@ -1621,6 +1621,37 @@ and whether the server writes it or the browser does.
 32.38 A `bind:element` callback's `Disposer` that hands back a thenable MUST keep the nodes holding
 that element in the document until it settles, and MUST remove them then.
 
+32.39 An inline `{#component Name(pattern)}` MUST be TitleCase.
+
+32.40 The pattern of a `{#component Name(pattern)}` MUST be read as the pattern of a `props` call,
+and its annotation as that call's type argument.
+
+32.41 A name its file's `<script>` or `<script module>` declares MUST NOT be in scope in a
+`{#component Name(pattern)}`, and reading one MUST be a build error.
+
+32.42 Its file's imports, and every `{#component Name(pattern)}` its file declares, itself
+included, MUST be in scope in a `{#component Name(pattern)}`.
+
+32.43 A `{#component Name(pattern)}` MUST be invocable anywhere in its file, before its declaration
+included.
+
+32.44 A `{#component Name(pattern)}` MUST stand at the top level of its file, and one inside an
+element, a block or another `{#component Name(pattern)}` MUST be a build error.
+
+32.45 A `<style>` block of a file MUST apply to the elements its `{#component Name(pattern)}`
+blocks write.
+
+32.46 A `<script>` written at the top level of a `{#component Name(pattern)}` MUST be that
+component's per-instance setup, and a second one MUST be a build error.
+
+32.47 A `<style>` written at the top level of a `{#component Name(pattern)}` MUST apply to the
+elements that component writes, and to no other element its file writes.
+
+32.48 A `<script module>` written inside a `{#component Name(pattern)}` MUST be a build error.
+
+32.49 A `{#component Name(pattern)}` whose name an import of its file, or another
+`{#component Name(pattern)}` of its file, also binds MUST be a build error.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`

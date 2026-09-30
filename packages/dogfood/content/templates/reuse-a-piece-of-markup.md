@@ -5,6 +5,7 @@ intent: A component in the same file or its own, and the children a caller passe
 covers:
   - `props`
   - `children`
+  - `{#component Name(pattern)}`
   - `<Name/>`
   - `<Tag>…</Tag>`
   - `<slot>fallback</slot>`
@@ -12,16 +13,38 @@ examples:
   - packages/dogfood/examples/props-live.json
 ---
 
-A component is a `.abide` file. Invoking it is a capitalised tag, and that
+A component is a `.abide` file, or a block in one. Invoking it is a capitalised tag, and that
 capital is the whole of the distinction — `<Row/>` is yours and `<row/>` is the element.
 
-## The three spellings
+## The four spellings
 
 | You write | What it is |
 | --- | --- |
 | `<Name/>` | an invocation of a component |
 | `<Tag>…</Tag>` | the same, with children passed into it |
+| `{#component Name(pattern)}` | a component declared inline, in the file that uses it |
 | `<slot/>` / `<slot>fallback</slot>` | where children render, and what renders without them |
+
+An inline component is TitleCase like any other, and it exists for the piece of markup that is
+worth naming but not worth a file — a row in one table, a cell shape used twice on one page.
+The parentheses hold the pattern a `props()` call would destructure, and an annotation on it is
+that call's type argument:
+
+```abide #ui/pages/contacts/[id]/page.abide — excerpt
+{#component Field({ label, value }: { label: string; value: string })}
+    <li><span>{label}</span><strong>{value}</strong></li>
+{/component}
+
+<ul class="fields">
+    <Field label="email" value={contact.email}/>
+    <Field label="phone" value={contact.phone}/>
+</ul>
+```
+
+It sees what a file of its own would see: its props, a `<script>` written inside it, the file's
+imports, and the file's other inline components. A name the file's own `<script>` declares is not
+in scope, and reading one is a build error. So moving it into a file later changes the import and
+nothing else.
 
 ## A prop is a live read
 

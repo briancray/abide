@@ -8,10 +8,13 @@ import {
     type TypeNode,
 } from 'typescript/unstable/ast'
 import {
+    isArrayBindingPattern,
     isArrayLiteralExpression,
     isArrowFunction,
     isBinaryExpression,
     isCallExpression,
+    isClassDeclaration,
+    isEnumDeclaration,
     isExportAssignment,
     isFunctionDeclaration,
     isFunctionExpression,
@@ -82,6 +85,8 @@ import {
     type Read,
     slotFacts,
 } from './classifyRead.ts'
+import { formatDiagnosis } from './formatDiagnosis.ts'
+import type { InlineOf } from './inlineSources.ts'
 import { CHECKED_VALUES } from './Lowering.ts'
 import { diagnosisAt, lineOf } from './lineOf.ts'
 import type { AbideFile } from './parseAbide.ts'
@@ -125,7 +130,12 @@ export class TypeSession {
      */
     private lowered = new Map<
         string,
-        { text: string; projection: Projection; shadow: CheckedShadow }
+        {
+            text: string
+            projection: Projection
+            shadow: CheckedShadow
+            inlineOf: InlineOf | undefined
+        }
     >()
     /** THE `.abide` BEHIND EACH SHADOW, for a finding in one to be placed in the other. */
     private authored = new Map<
@@ -296,10 +306,11 @@ export class TypeSession {
                 // nobody has as a root of the project for the rest of the session — and a page
                 // importing it goes on reading the props its checked module declared.
                 const gone = this.canonical(path)
+                // `${gone}.` holds its shadow, its checked module and its inline
+                // components' (`inlinePath`).
                 for (const shadowPath of this.shadows.keys())
                     if (
-                        shadowPath === `${gone}${SHADOW_SUFFIX}` ||
-                        shadowPath === `${gone}${CHECKED_SUFFIX}` ||
+                        shadowPath.startsWith(`${gone}.`) ||
                         shadowPath.startsWith(`${gone}/`)
                     ) {
                         this.shadows.delete(shadowPath)
@@ -433,7 +444,12 @@ export class TypeSession {
      * was handed in.
      */
     async readsFor(
-        sources: { path: string; file: AbideFile; text?: string }[],
+        sources: {
+            path: string
+            file: AbideFile
+            text?: string
+            inlineOf?: InlineOf
+        }[],
     ): Promise<{ reads: Read[][]; warnings: Diagnosis[] }> {
         const answered = await this.classify(sources)
         for (let at = 0; at < sources.length; at += 1) {
@@ -441,7 +457,7 @@ export class TypeSession {
             if (source.text !== undefined)
                 answered.warnings.push(
                     ...templateWarnings(
-                        source.path,
+                        authoredPath(source),
                         source.text,
                         source.file,
                         answered.reads[at] ?? [],
@@ -453,7 +469,12 @@ export class TypeSession {
     }
 
     private async classify(
-        sources: { path: string; file: AbideFile; text?: string }[],
+        sources: {
+            path: string
+            file: AbideFile
+            text?: string
+            inlineOf?: InlineOf
+        }[],
     ): Promise<{ reads: Read[][]; warnings: Diagnosis[] }> {
         const warnings: Diagnosis[] = []
         // Per source, its shadow's path and where its scripts end, or '' where nothing is declared.
@@ -505,7 +526,7 @@ export class TypeSession {
             // the one page that moved is re-read rather than all of them.
             this.register(shadowPath, projection.text, created, changed)
             this.authored.set(shadowPath, {
-                path: source.path,
+                path: authoredPath(source),
                 text: source.text,
                 origins: projection.origins,
             })
@@ -708,7 +729,7 @@ export class TypeSession {
                 for (const warning of warned)
                     warnings.push(
                         diagnosisAt(
-                            source.path,
+                            authoredPath(source),
                             source.text,
                             mapBack(query.origins, warning.at),
                             'warning',
@@ -717,6 +738,7 @@ export class TypeSession {
                     )
             }),
         )
+        await refuseEnclosingNames(project, sources, queries, projected)
         return { reads: answers, warnings }
     }
 
@@ -944,6 +966,7 @@ export class TypeSession {
             file: AbideFile
             reads: Read[]
             quiet?: boolean
+            inlineOf?: InlineOf
         }[],
         within: string,
         scripts = true,
@@ -983,20 +1006,30 @@ export class TypeSession {
         if (project === undefined) return []
         const program = project.program
         // `path` is the file the author wrote, which for a checked module is not the file asked.
+        // 32.39 — an inline component's findings are its block's alone: what it copied from its
+        // file is the file's to be found on, once.
         const report = async (
             asked: string,
             path: string,
-            place: (position: number) => { line: number; column: number },
+            text: string,
+            locate: (position: number) => number,
+            within?: InlineOf,
         ): Promise<Diagnosis[]> => {
             const [syntactic, semantic] = await Promise.all([
                 program.getSyntacticDiagnostics(asked),
                 program.getSemanticDiagnostics(asked),
             ])
             const said: Diagnosis[] = []
-            for (const diagnostic of [...syntactic, ...semantic])
+            for (const diagnostic of [...syntactic, ...semantic]) {
+                const offset = locate(diagnostic.pos)
+                if (
+                    within !== undefined &&
+                    (offset < within.start || offset >= within.end)
+                )
+                    continue
                 said.push({
                     path,
-                    ...place(diagnostic.pos),
+                    ...lineOf(text, offset),
                     code: diagnostic.code,
                     category: CATEGORIES[diagnostic.category] ?? 'error',
                     // A checked module's own names are the lowering's, and read as the author's.
@@ -1005,6 +1038,7 @@ export class TypeSession {
                         '',
                     ),
                 })
+            }
             return said
         }
         const reports: Promise<Diagnosis[]>[] = []
@@ -1015,12 +1049,13 @@ export class TypeSession {
                 text: source.text,
                 projection,
                 shadow,
+                inlineOf: source.inlineOf,
             })
             if (source.quiet) continue
             for (const refusal of shadow.refusals)
                 refused.push(
                     diagnosisAt(
-                        source.path,
+                        authoredPath(source),
                         source.text,
                         mapBack(projection.origins, refusal.at),
                         'error',
@@ -1028,14 +1063,16 @@ export class TypeSession {
                     ),
                 )
             reports.push(
-                report(checkPath, source.path, (position) =>
-                    lineOf(
-                        source.text,
+                report(
+                    checkPath,
+                    authoredPath(source),
+                    source.text,
+                    (position) =>
                         mapBack(
                             projection.origins,
                             mapBack(shadow.origins, position),
                         ),
-                    ),
+                    source.inlineOf,
                 ),
             )
         }
@@ -1046,9 +1083,7 @@ export class TypeSession {
                     Bun.file(path)
                         .text()
                         .then((text) =>
-                            report(path, path, (position) =>
-                                lineOf(text, position),
-                            ),
+                            report(path, path, text, (position) => position),
                         ),
                 )
         const found = [...refused, ...(await Promise.all(reports)).flat()]
@@ -1082,7 +1117,7 @@ export class TypeSession {
         text: string,
         offset: number,
     ): Promise<Inspection | undefined> {
-        const abidePath = this.canonical(path)
+        const abidePath = this.inlineAt(this.canonical(path), offset)
         const lowered = this.lowered.get(abidePath)
         const project = this.project
         if (
@@ -1145,6 +1180,24 @@ export class TypeSession {
     }
 
     /**
+     * The lowered path answering for `offset` in `abidePath`: an inline component's where the offset
+     * is inside its block (32.39), and the file's own everywhere else.
+     */
+    private inlineAt(abidePath: string, offset: number): string {
+        for (const [path, lowered] of this.lowered) {
+            const inlineOf = lowered.inlineOf
+            if (
+                inlineOf !== undefined &&
+                offset >= inlineOf.start &&
+                offset < inlineOf.end &&
+                this.canonical(inlineOf.path) === abidePath
+            )
+                return path
+        }
+        return abidePath
+    }
+
+    /**
      * A span the checker read, placed in the file the author wrote.
      *
      * A span of a file the checker read, as the file the author wrote: a lowered `.abide` mapped
@@ -1187,7 +1240,7 @@ export class TypeSession {
             return mapBack(lowered.projection.origins, projected)
         }
         return {
-            path: abidePath,
+            path: lowered.inlineOf?.path ?? abidePath,
             start: lineOf(lowered.text, back(start)),
             end: lineOf(lowered.text, back(end)),
         }
@@ -1203,6 +1256,95 @@ const ROUTES_DECLARATION = 'abide-routes.d.ts'
 const URL_SOURCE = new URL('../shared/url', import.meta.url).pathname
 
 /** 30.26 — every page under `root` as a key of abide's `Routes`, or nothing where it has none. */
+/**
+ * Throws where an inline component reads a name its declaring file's script blocks declare.
+ *
+ * 32.41 — A BUILD ERROR RATHER THAN A NAME LEFT UNBOUND. The component's module never holds the
+ * file's `<script>` (`inlineSources`), so the name is not in scope and the checker says so; but a
+ * build does not report what the checker says, and the module it emits reads an undeclared global
+ * — a render that throws on the server, from a page that built.
+ */
+async function refuseEnclosingNames(
+    project: Project,
+    sources: { path: string; text?: string; inlineOf?: InlineOf }[],
+    queries: { shadowPath: string; scriptsEnd: number }[],
+    projected: { projection: Projection }[],
+): Promise<void> {
+    for (let at = 0; at < sources.length; at += 1) {
+        const inlineOf = (sources[at] as (typeof sources)[number]).inlineOf
+        const shadowPath = (queries[at] as (typeof queries)[number]).shadowPath
+        if (inlineOf === undefined || shadowPath === '') continue
+        let parentAt = -1
+        for (let other = 0; other < sources.length; other += 1)
+            if (sources[other]?.path === inlineOf.path) parentAt = other
+        const parent = queries[parentAt]
+        if (parent === undefined || parent.shadowPath === '') continue
+        const [unfound, parentFile] = await Promise.all([
+            project.program.getSemanticDiagnostics(shadowPath),
+            project.program.getSourceFile(parent.shadowPath),
+        ])
+        if (parentFile === undefined) continue
+        let declared: Set<string> | undefined
+        const projection = (projected[at] as (typeof projected)[number])
+            .projection
+        for (const diagnostic of unfound) {
+            if (diagnostic.code !== 2304 && diagnostic.code !== 2552) continue
+            declared ??= declaredNames(parentFile.statements, parent.scriptsEnd)
+            const name = projection.text.slice(diagnostic.pos, diagnostic.end)
+            if (!declared.has(name)) continue
+            const component = sources[at]?.path.slice(
+                inlineOf.path.length + 1,
+                -'.abide'.length,
+            )
+            throw new Error(
+                formatDiagnosis(
+                    diagnosisAt(
+                        inlineOf.path,
+                        sources[parentAt]?.text,
+                        mapBack(projection.origins, diagnostic.pos),
+                        'error',
+                        `abide: {#component ${component}} reads \`${name}\`, which its file's script declares — an inline component sees its props, its own <script> and the file's imports, as the file it would be moved into does. Pass \`${name}\` as a prop. RULEBOOK 32.41.`,
+                    ),
+                    process.cwd(),
+                ),
+            )
+        }
+    }
+}
+
+/** Every name the statements before `end` declare at their top level. */
+function declaredNames(statements: readonly Node[], end: number): Set<string> {
+    const names = new Set<string>()
+    const bind = (name: Node | undefined): void => {
+        if (name === undefined) return
+        if (isIdentifier(name)) {
+            names.add(name.text)
+            return
+        }
+        if (isObjectBindingPattern(name) || isArrayBindingPattern(name))
+            for (const element of name.elements)
+                bind((element as { name?: Node }).name)
+    }
+    for (const statement of statements) {
+        if (statement.getStart() >= end) break
+        if (isVariableStatement(statement))
+            for (const declaration of statement.declarationList.declarations)
+                bind(declaration.name)
+        else if (
+            isFunctionDeclaration(statement) ||
+            isClassDeclaration(statement) ||
+            isEnumDeclaration(statement)
+        )
+            bind(statement.name)
+    }
+    return names
+}
+
+/** The file a source's findings are on: its own, or for an inline component its declaring file's. */
+function authoredPath(source: { path: string; inlineOf?: InlineOf }): string {
+    return source.inlineOf?.path ?? source.path
+}
+
 function routesDeclaration(root: string): string {
     const routes = new Set<string>()
     routesUnder(root, '', routes)

@@ -41,6 +41,8 @@
 (catch_start "}" @keyword)
 (finally_start "}" @keyword)
 (try_end "}" @keyword)
+(component_start "}" @keyword)
+(component_end "}" @keyword)
 
 (expression
   [

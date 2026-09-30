@@ -2,7 +2,7 @@
 
 The `.abide` grammar: HTML (tree-sitter-html is the base, and its tag scanner is kept as it is) with
 what abide adds — `{…}` slots, `attr={…}`, `{...spread}`, slots in quoted attribute values, and the
-`{#if}` / `{#for}` / `{#try}` blocks with their `{:…}` arms. What stands between
+`{#if}` / `{#for}` / `{#try}` / `{#component}` blocks with their `{:…}` arms. What stands between
 braces is a `code` node, balanced by the scanner around strings, template literals and comments.
 
 ```
