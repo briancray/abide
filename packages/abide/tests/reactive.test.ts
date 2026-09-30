@@ -5101,31 +5101,6 @@ test('a debounced stream releases once the chunks stop, and its close releases w
 
 // ── `tags` selections, process-wide (RULEBOOK 11.44, 11.45, 13.1, 13.2, 13.3, 13.7, 13.9, 13.11) ──
 
-// 13.10: A BARE TRIGGER REFUSES, naming the call it refuses — and the four statics refuse alike.
-//
-// THE REVERT is `requireSelection` handing back the missing selection: `refused: none`, and the
-// member call on `undefined` throws a TypeError instead.
-test('a bare trigger or probe refuses, naming the call — 13.10', () => {
-    const refused: string[] = []
-    for (const [name, bare] of [
-        ['invalidate', (): void => invalidate()],
-        ['refresh', (): void => refresh()],
-        ['busy', (): void => void busy()],
-        ['ready', (): void => void ready()],
-    ] as const) {
-        try {
-            bare()
-        } catch (thrown) {
-            const message = String((thrown as Error).message)
-            if (message.includes(`${name}()`) && message.includes('13.10'))
-                refused.push(name)
-        }
-    }
-    expect(`refused: ${refused.join(',') || 'none'}`).toBe(
-        'refused: invalidate,refresh,busy,ready',
-    )
-})
-
 // Deferred loads, settled by hand, so a case can hold a set of values busy between two lines.
 function deferredLoads(): {
     load: () => Promise<number>

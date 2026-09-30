@@ -221,7 +221,7 @@ two is a comparator answering directly.
 
 5.14 `debounce` MUST delay a change until the changes stop.
 
-5.15 Declaring both `throttle` and `debounce` MUST be a build error naming the value.
+5.15 Declaring both `throttle` and `debounce` MUST refuse at construction.
 
 5.16 Where a `throttle` or a `debounce` window is holding a production back, the held value MUST
 be served and `s.busy` MUST be true.
@@ -604,8 +604,7 @@ refusal.
 11.60 `s.set`, `s.publish` and `s.patch` on an adopting `Reactive`, given anything but a `Reactive`, MUST
 reach the adopted `Reactive`.
 
-11.61 `args` spelled on a `reactive` whose body declares no parameter MUST refuse at construction,
-naming the value.
+11.61 `args` spelled on a `reactive` whose body declares no parameter MUST refuse at construction.
 
 11.62 `s.set` given a `Reactive` MUST adopt it per 11.12, and MUST NOT store it as a value — on a
 streaming producer, as a write that 9.15 and 11.60 do not reach through.
@@ -641,10 +640,10 @@ declaration and never from what a write outside every request left.
 12.5 On a server a `watch` MUST run once, and its `Disposer` MUST still run at scope teardown.
 
 12.6 A throw from an `Effect` or a `Disposer`, and a read of a failed `Reactive` inside one, MUST
-reach `onError` with the trace attached and MUST warn on `abide:watch`.
+reach `onError` as thrown, and MUST warn on `abide:watch` with the trace.
 
-12.7 In a browser a throw from an `Effect` MUST additionally be re-thrown as an unhandled
-rejection.
+12.7 In a browser a throw from an `Effect` MUST additionally be re-thrown, to surface as an uncaught
+error.
 
 12.8 An `Effect` that threw MUST stop its `watch`.
 
@@ -720,8 +719,7 @@ entry of a `global` `Keyed` it matches.
 
 14.11 A `Reactive` MUST push its own subscriber when it evaluates, whoever reached it.
 
-14.12 On a server a tracked read MUST register no subscriber, and MUST register the sink 3.4 opens
-where what it read is still in flight.
+14.12 On a server a tracked read of a value still in flight MUST open the sink 3.4 opens.
 
 14.13 Tracking MUST be synchronous, and a read in a continuation after an `await` MUST register
 against nothing.
@@ -891,7 +889,8 @@ ETag it derives, and answer 206, 416 and 304 as the protocol requires.
 `redirect` passes through, a returned value becomes 303 back to the referrer, and a failure renders
 `error.abide` at its own status.
 
-16.41 A handler whose return type carries a `Reactive` MUST be a compile error naming the read.
+16.41 A handler whose value carries a `Reactive` below its top level MUST be a compile error naming
+the handler and the path to it.
 
 16.42 A `Failed` escaping a handler MUST be answered at its own `status`.
 
@@ -1558,7 +1557,7 @@ MUST NOT be built as a string.
 
 32.21 An interpolation in a URL-typed attribute MUST be scheme-checked, and a scheme outside
 `http:`, `https:`, `mailto:`, `tel:` or a relative reference MUST be dropped and warned on
-`abide:render`.
+`abide:render`, naming the attribute and not the value.
 
 32.22 A control block MUST bind each reactive read and probe call in its subject once for the body.
 
@@ -1645,7 +1644,8 @@ live read with its keys enumerated per read.
 33.14 The `props` pattern MUST be flat: renames, defaults and a rest element, and no nested
 patterns.
 
-33.15 A `props` rest element MUST be live, one accessor per key the call site passed.
+33.15 A `props` rest element MUST be live, one accessor per key the call site passed, and a member
+read by name MUST read `undefined` where the call site did not pass it.
 
 33.16 `children` MUST always be accepted and MUST never be declared.
 
@@ -2114,8 +2114,8 @@ on `abide:hydrate`.
 
 41.11 A shared `layout.abide` MUST NOT be rebuilt between navigations.
 
-41.12 An `Rpc` call re-execution makes that the seed buffer cannot answer MUST be a hydration
-mismatch, per 41.10.
+41.12 An `Rpc` call the seed buffer cannot answer MUST fall through to running the handler, and
+MUST warn on `abide:hydrate`.
 
 41.13 The seed buffer MUST be filled from the production the render already had, and a handler
 MUST NOT be run a second time to fill it.
