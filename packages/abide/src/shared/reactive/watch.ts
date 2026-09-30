@@ -17,6 +17,7 @@ import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
 import { NotLanded } from './NotLanded.ts'
 import type { Reactive } from './Reactive.ts'
+import { currentScope, runInScope } from './scoping.ts'
 import {
     detach,
     detachProbes,
@@ -109,6 +110,8 @@ export function watchOver(
     // The sources are declared rather than tracked. `detach` still tears this down: it truncates
     // from the cursor, and the cursor of a body that never tracked is zero.
     const reader: Subscriber = newSubscriber(sources, adopter)
+    // 11.32 — the scope a rerun reads through: see `watchTracked`.
+    const scope = currentScope()
     reader.notify = (): void => {
         if (!reader.alive) return
         // 12.1: the disposer runs before each rerun of its effect.
@@ -128,7 +131,7 @@ export function watchOver(
         TRACKING.reader = null
         try {
             WORK.wakes += 1
-            dispose = effect()
+            dispose = runInScope(scope, effect, undefined)
         } catch (thrown) {
             TRACKING.reader = previous
             reader.running = false
@@ -172,6 +175,11 @@ function watchTracked(effect: Effect): Disposer {
     // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
     let dispose: Disposer | void
     const reader: Subscriber = newSubscriber([], null)
+    // 11.32 — A RERUN READS THROUGH THE SCOPE THE WATCH WAS OPENED IN, not the ambient one. The
+    // drain that reruns it runs in whichever request's turn scheduled it, so without this an
+    // effect a load aborted (11.64) reruns reading — and subscribing to — another request's
+    // values. The same move `run` makes for a body.
+    const scope = currentScope()
     reader.notify = (): void => {
         if (!reader.alive) return
         // 12.1: the disposer runs before each rerun, and once more at teardown.
@@ -187,7 +195,7 @@ function watchTracked(effect: Effect): Disposer {
         reader.running = true
         try {
             WORK.wakes += 1
-            dispose = effect()
+            dispose = runInScope(scope, effect, undefined)
         } catch (thrown) {
             reader.running = false
             TRACKING.reader = previous

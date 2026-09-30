@@ -100,6 +100,70 @@ test('a body reruns under its own request, whichever request drained it — 11.3
     expect(totals).toEqual({ a: 30, b: 20 })
 })
 
+// 11.64, 11.32 — AN EFFECT A LOAD ABORTED RERUNS UNDER ITS OWN REQUEST, whichever request's landing
+// drained it. Each request's `watch` reads the module-level `tenant` and then `profile`, a load still
+// in flight, so its first run aborts. B lands first and schedules the one drain that reruns both, and
+// A's effect run under B's scope reads B's `tenant` and B's `profile` — and SUBSCRIBES to them, so
+// B's next write wakes A's watch too. Both forms are gated: the tracked one and the narrowed one,
+// whose effect reads untracked but reads through the scope all the same. THE REVERT: call `effect()`
+// directly in `watchTracked` rather than through `runInScope`; A's rerun reads `a:b:b` where `a:a:a`
+// is due, and B's later write wakes A's watch — 2 runs where 1 is due. The same in `watchOver`: its
+// rerun reads `a:b:b`.
+test('an effect a load aborted reruns under its own request, whichever request drained it — 11.64', async () => {
+    const tenant = reactive('none')
+    const opens: Record<string, (answer: string) => void> = {}
+    const profile = reactive(
+        () =>
+            new Promise<string>((open) => {
+                opens[new URL(request().url).pathname.slice(1)] = open
+            }),
+    )
+    const seen: string[] = []
+    const narrowed: string[] = []
+    let finish = (): void => {}
+    const finished = new Promise<void>((release) => {
+        finish = release
+    })
+    const serve = (name: string): Promise<void> =>
+        inScope(new Request(`http://app/${name}`), async () => {
+            tenant.set(name)
+            watch(() => {
+                const who = tenant()
+                seen.push(`${name}:${who}:${profile()}`)
+            })
+            watch([profile], () => {
+                narrowed.push(`${name}:${tenant()}:${profile()}`)
+            })
+            flushSync()
+            await finished
+            // B's next write reaches B's watches alone.
+            if (name === 'b') {
+                tenant.set('b2')
+                flushSync()
+            }
+        })
+    const a = serve('a')
+    const b = serve('b')
+    expect(seen).toEqual([])
+    expect(narrowed).toEqual([])
+
+    ;(opens.b as (answer: string) => void)('b')
+    ;(opens.a as (answer: string) => void)('a')
+    await tick()
+    const landed = { seen: [...seen].sort(), narrowed: [...narrowed].sort() }
+    const later = { seen: [] as string[], narrowed: [] as string[] }
+    seen.length = 0
+    narrowed.length = 0
+    finish()
+    await Promise.all([a, b])
+    later.seen = seen
+    later.narrowed = narrowed
+    expect({ landed, later }).toEqual({
+        landed: { seen: ['a:a:a', 'b:b:b'], narrowed: ['a:a:a', 'b:b:b'] },
+        later: { seen: ['b:b2:b'], narrowed: [] },
+    })
+})
+
 // 13.8 — A TAG IS SCOPE-BOUNDED. A refresh by tag inside one request reloads that request's value
 // and never another's. THE REVERT: drop the `cell.scope === scope` test in `carrying`; B's body runs
 // again for A's refresh — 2 loads where 1 is due.

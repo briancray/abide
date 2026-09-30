@@ -22,8 +22,9 @@ export type Scoping = {
     /**
      * Runs `body` with `scope` as the current one, and `undefined` as no scope at all.
      *
-     * A body is run under the scope its value was built in rather than the ambient one, because
-     * the ambient one is whichever request scheduled the drain the body is running in.
+     * A body is run under the scope its value was built in, and an effect under the scope its
+     * `watch` was opened in, rather than the ambient one — which is whichever request scheduled
+     * the drain the body or effect is running in.
      */
     run<Given, Result>(
         scope: Scope | undefined,
