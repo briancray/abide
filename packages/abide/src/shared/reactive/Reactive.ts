@@ -1481,6 +1481,11 @@ function drainPending(): void {
  * because two identical messages are two events somebody sent on purpose.
  */
 function produce(cell: Cell, produced: unknown, gated: boolean): number {
+    // 7.9: AN ACCEPTED PRODUCTION SETTLES THE RELOAD AN INVALIDATE OWED — ahead of the gate, since
+    // a write 5.2 collapses was still accepted. Left standing, the next read unserved this value
+    // and reloaded over it. A look above (`OWES_ABOVE`) is not this value's mark and stays: 11.8
+    // has a write stand without settling what it is built from.
+    if (cell.owes === OWES_RELOAD) cell.owes = OWES_NOTHING
     const cap = cell.cap
     // THE COMPARISON TARGET IS BEHIND THE GATE, not beside it: `publish` is ungated (5.5)
     // and would otherwise load it and pick an arm on every message for a compare it never
@@ -1901,6 +1906,8 @@ function standWrite(
     value: unknown,
     gated: boolean,
 ): number {
+    // 7.9, as `produce` settles it.
+    if (cell.owes === OWES_RELOAD) cell.owes = OWES_NOTHING
     // 5.2 against what is served now, which on a stream may not have been materialised yet.
     if (gated && cell.servable) {
         const previous = heldValue(cell)
@@ -4171,10 +4178,11 @@ const ADOPTING_PROTOTYPE = brandedPrototype({
  *
  * ON A `simple` VALUE THAT IS ALREADY SERVING, `produce` -> `serve` -> `cascade` reduces to
  * what is below: the ring, the cap, the expiry and the store are absent by `simple`; `moved`
- * is false by the three state tests, so no probe moves and nothing settles; and every status
- * field `serve` writes is already at the value it writes. The three state tests are the
- * `moved` computation itself, read here to prove the rest is dead rather than to pick a
- * branch, and anything they refuse falls through to `MEMBERS.set`, which is unchanged.
+ * is false by the three state tests, so no probe moves and nothing settles; no reload is
+ * owed, so 7.9 has nothing to settle; and every status field `serve` writes is already at the
+ * value it writes. The state tests are the `moved` computation and `produce`'s 7.9 test, read
+ * here to prove the rest is dead rather than to pick a branch, and anything they refuse falls
+ * through to `MEMBERS.set`, which is unchanged.
  */
 const SIMPLE_PROTOTYPE = brandedPrototype({
     set(this: Callable, value: unknown): unknown {
@@ -4183,6 +4191,7 @@ const SIMPLE_PROTOTYPE = brandedPrototype({
             cell.servable &&
             !cell.loading &&
             cell.failure === undefined &&
+            cell.owes !== OWES_RELOAD &&
             (value === null ||
                 (typeof value !== 'object' && typeof value !== 'function') ||
                 typeof (value as PromiseLike<unknown>).then !== 'function')

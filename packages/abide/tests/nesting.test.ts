@@ -423,7 +423,8 @@ const boom = (): string => {
         }
     })
     expect(thrown).toBe('boom')
-    expect(said).toEqual([])
+    // 12.6 warns on `abide:watch` for the binding's throw; a mismatch would warn on `abide:hydrate`.
+    expect(said.filter((line) => !line.includes('abide:watch'))).toEqual([])
 })
 
 // A BLANK RUN AT AN ARM'S OWN TOP LEVEL. The position it belongs at is inside a region, between

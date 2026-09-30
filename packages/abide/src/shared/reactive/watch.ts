@@ -11,6 +11,8 @@
 // imports the narrowed form from here. A second argument is the author saying which form
 // they meant, and it needs nothing from the other module but a type.
 
+import { namedLogger } from '../log.ts'
+import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
 import { NotLanded } from './NotLanded.ts'
@@ -28,6 +30,42 @@ import {
 export type Disposer = () => void
 // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
 export type Effect = () => void | Disposer
+
+const WATCH_LOG = namedLogger('abide:watch')
+
+/**
+ * Warns on `abide:watch` and hands the throw to `onError` where there is one.
+ *
+ * 12.6 — a read of a failed value inside an effect arrives here as the throw that read is.
+ */
+function reportThrow(thrown: unknown, message: string): void {
+    WATCH_LOG.warning(message, thrown)
+    UNEXPECTED.report?.(thrown)
+}
+
+/**
+ * Reports an effect's throw, then re-throws it in a browser.
+ *
+ * 12.7 — A BROWSER HAS NO `onError`, so the throw goes on out to surface as an uncaught error. A
+ * server's has been handed it, and re-thrown there it would fail the handler or the render whose
+ * write woke this effect — a second report of one failure, against code that did not fail.
+ */
+function effectThrew(thrown: unknown): void {
+    reportThrow(
+        thrown,
+        'an effect threw, and its watch is stopped. RULEBOOK 12.6, 12.8.',
+    )
+    if (typeof document !== 'undefined') throw thrown
+}
+
+/** Runs a disposer, reporting a throw from it rather than letting it stop the effect's rerun. */
+function runDisposer(dispose: Disposer): void {
+    try {
+        dispose()
+    } catch (thrown) {
+        reportThrow(thrown, 'a disposer threw. RULEBOOK 12.6.')
+    }
+}
 
 /** Runs `effect` now, and again whenever a reactive value it read changes. */
 export function watch(effect: Effect): Disposer
@@ -74,7 +112,7 @@ export function watchOver(
     reader.notify = (): void => {
         if (!reader.alive) return
         // 12.1: the disposer runs before each rerun of its effect.
-        if (typeof dispose === 'function') dispose()
+        if (typeof dispose === 'function') runDisposer(dispose)
         dispose = undefined
         // `running` is what `markReaders` reads to skip a body already on the stack.
         // A subscriber that never sets it has no re-entrancy guard at all: an effect
@@ -102,7 +140,8 @@ export function watchOver(
             // re-running into the same throw is a loop with a log line per iteration.
             reader.alive = false
             detach(reader)
-            throw thrown
+            effectThrew(thrown)
+            return
         }
         TRACKING.reader = previous
         reader.running = false
@@ -113,7 +152,7 @@ export function watchOver(
     return (): void => {
         reader.alive = false
         detach(reader)
-        if (typeof dispose === 'function') dispose()
+        if (typeof dispose === 'function') runDisposer(dispose)
     }
 }
 
@@ -136,7 +175,7 @@ function watchTracked(effect: Effect): Disposer {
     reader.notify = (): void => {
         if (!reader.alive) return
         // 12.1: the disposer runs before each rerun, and once more at teardown.
-        if (typeof dispose === 'function') dispose()
+        if (typeof dispose === 'function') runDisposer(dispose)
         dispose = undefined
         // A conditional read makes the previous run's list the wrong list — but
         // rebuilding it wholesale is what the cursor in `tracking` exists to
@@ -161,7 +200,8 @@ function watchTracked(effect: Effect): Disposer {
             // 12.8: one that throws once usually throws every run.
             reader.alive = false
             detach(reader)
-            throw thrown
+            effectThrew(thrown)
+            return
         }
         reader.running = false
         TRACKING.reader = previous
@@ -171,6 +211,6 @@ function watchTracked(effect: Effect): Disposer {
     return (): void => {
         reader.alive = false
         detach(reader)
-        if (typeof dispose === 'function') dispose()
+        if (typeof dispose === 'function') runDisposer(dispose)
     }
 }

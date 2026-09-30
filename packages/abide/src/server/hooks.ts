@@ -10,6 +10,7 @@ import { namedLogger } from '#shared/log.ts'
 import type { Middleware } from '#shared/Middleware.ts'
 import { aborted, refuse } from '#shared/refuse.ts'
 import type { Schema } from '#shared/Schema.ts'
+import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 import { config } from './config.ts'
 import { currentRequestScope } from './requestScope.ts'
 
@@ -154,6 +155,15 @@ export function onPrincipal(
  */
 export function reportUnexpected(error: unknown): void {
     LIFECYCLE_LOG.error(error)
+    handOnError(error)
+}
+
+/**
+ * Hands an error to every `onError` hook, writing nothing of its own.
+ *
+ * 12.6 — the half of 37.5 a failure already warned on its own namespace is owed.
+ */
+function handOnError(error: unknown): void {
     for (const hook of HOOKS.errors)
         try {
             hook(error)
@@ -161,6 +171,8 @@ export function reportUnexpected(error: unknown): void {
             LIFECYCLE_LOG.error('an onError hook threw', thrown)
         }
 }
+
+UNEXPECTED.report = handOnError
 
 /**
  * The `Failed` a thrown error answers with: a refusal as it is, anything else a reported 500.

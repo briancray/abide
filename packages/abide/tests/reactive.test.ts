@@ -6,6 +6,7 @@
 
 import { expect, setSystemTime, test } from 'bun:test'
 import { gate } from 'harness/gate'
+import { onError } from '#server/hooks.ts'
 import {
     busy,
     flushSync,
@@ -1089,6 +1090,117 @@ test('an effect that throws stops its s.watch, as it stops a watch', () => {
     // one more run per write, for the life of the value.
     expect(() => count.set(2)).not.toThrow()
     expect(runs).toBe(1)
+})
+
+// 12.6's TWO WITNESSES, recorded around `body`: what `onError` was handed and what warned on
+// `abide:watch`. `server` takes `document` away for the body — the test the core reads a server by —
+// so 12.7's browser re-throw is out of it, and what reaches the caller is recorded too.
+function effectReports(
+    server: boolean,
+    body: () => void,
+): { handed: unknown[]; warned: string[]; threw: unknown[] } {
+    const handed: unknown[] = []
+    const warned: string[] = []
+    const threw: unknown[] = []
+    const unfile = onError((error) => {
+        handed.push(error)
+    })
+    const warn = console.warn
+    console.warn = (...args: unknown[]): void => {
+        const line = args.join(' ')
+        if (line.includes('abide:watch')) warned.push(line)
+    }
+    const document = Object.getOwnPropertyDescriptor(globalThis, 'document')
+    if (server)
+        Object.defineProperty(globalThis, 'document', {
+            value: undefined,
+            configurable: true,
+        })
+    try {
+        body()
+    } catch (thrown) {
+        threw.push(thrown)
+    } finally {
+        if (server && document !== undefined)
+            Object.defineProperty(globalThis, 'document', document)
+        console.warn = warn
+        unfile()
+    }
+    return { handed, warned, threw }
+}
+
+// 12.6 ON A SERVER: an effect's throw, and a read of a failed value inside one, reach `onError`
+// and warn on `abide:watch` — and 12.7 being a browser's alone, the write that woke it is not what
+// failed and does not throw. 12.8 still stops the watch.
+//
+// THE REVERT is `effectThrew` re-throwing and reporting nothing, as the catch did before:
+// `handed: 0, warned: 0, threw: 1`.
+test('on a server, an effect that throws reaches onError and warns on abide:watch — 12.6', () => {
+    const source = reactive(0)
+    const failing = reactive((): number => {
+        throw new Error('unreadable')
+    })
+    let runs = 0
+    const { handed, warned, threw } = effectReports(true, () => {
+        watch(source, () => {
+            runs += 1
+            if (source() === 1) throw new Error('boom')
+        })
+        watch(() => {
+            if (source() === 1) failing()
+        })
+        source.set(1)
+        flushSync()
+        source.set(2)
+        flushSync()
+    })
+    expect(
+        `handed: ${handed.length}, warned: ${warned.length}, threw: ${threw.length}`,
+    ).toBe('handed: 2, warned: 2, threw: 0')
+    expect(String(handed[0])).toContain('boom')
+    expect(String(handed[1])).toContain('unreadable')
+    expect(`runs: ${runs}`).toBe('runs: 2')
+})
+
+// 12.7 IN A BROWSER: the same report, and the throw goes on out to surface as an uncaught error.
+//
+// THE REVERT is `effectThrew` never re-throwing: `threw: 0`.
+test('in a browser, an effect that throws warns on abide:watch and is re-thrown — 12.6, 12.7', () => {
+    const source = reactive(0)
+    const { handed, warned, threw } = effectReports(false, () => {
+        watch(source, () => {
+            if (source() === 1) throw new Error('boom')
+        })
+        source.set(1)
+        flushSync()
+    })
+    expect(
+        `handed: ${handed.length}, warned: ${warned.length}, threw: ${threw.length}`,
+    ).toBe('handed: 1, warned: 1, threw: 1')
+})
+
+// 12.6 FOR A DISPOSER, before a rerun and at teardown alike. Neither stops the effect: 12.8 is an
+// effect's, so the rerun its disposer was clearing the way for still runs.
+//
+// THE REVERT is calling the disposer bare: the rerun's throw escapes the write and the effect never
+// reruns — `handed: 0, warned: 0, runs: 1`.
+test('a disposer that throws reaches onError and warns, and its effect still reruns — 12.6', () => {
+    const source = reactive(0)
+    let runs = 0
+    const { handed, warned } = effectReports(false, () => {
+        const stop = watch(source, () => {
+            runs += 1
+            return (): void => {
+                throw new Error('teardown')
+            }
+        })
+        source.set(1)
+        flushSync()
+        stop()
+    })
+    expect(
+        `handed: ${handed.length}, warned: ${warned.length}, runs: ${runs}`,
+    ).toBe('handed: 2, warned: 2, runs: 2')
 })
 
 // ── `s.patch`, which nothing covered ─────────────────────────────────────────────
@@ -4989,6 +5101,31 @@ test('a debounced stream releases once the chunks stop, and its close releases w
 
 // ── `tags` selections, process-wide (RULEBOOK 11.44, 11.45, 13.1, 13.2, 13.3, 13.7, 13.9, 13.11) ──
 
+// 13.10: A BARE TRIGGER REFUSES, naming the call it refuses — and the four statics refuse alike.
+//
+// THE REVERT is `requireSelection` handing back the missing selection: `refused: none`, and the
+// member call on `undefined` throws a TypeError instead.
+test('a bare trigger or probe refuses, naming the call — 13.10', () => {
+    const refused: string[] = []
+    for (const [name, bare] of [
+        ['invalidate', (): void => invalidate()],
+        ['refresh', (): void => refresh()],
+        ['busy', (): void => void busy()],
+        ['ready', (): void => void ready()],
+    ] as const) {
+        try {
+            bare()
+        } catch (thrown) {
+            const message = String((thrown as Error).message)
+            if (message.includes(`${name}()`) && message.includes('13.10'))
+                refused.push(name)
+        }
+    }
+    expect(`refused: ${refused.join(',') || 'none'}`).toBe(
+        'refused: invalidate,refresh,busy,ready',
+    )
+})
+
 // Deferred loads, settled by hand, so a case can hold a set of values busy between two lines.
 function deferredLoads(): {
     load: () => Promise<number>
@@ -5656,6 +5793,49 @@ test('reading a value adopting an invalidated one runs the adopted producer', ()
     answer = 2
     inner.invalidate()
     expect(`outer: ${outer()}`).toBe('outer: 2')
+})
+
+// 7.9: A WRITE OVER A MARKED VALUE SETTLES THE MARK. What the invalidate said was wrong has been
+// replaced by the app's own answer, so that answer is served and ready, and the reload the mark
+// owed is not run over it. Both write paths: the `simple` seat's short write and the gated one
+// (`identity` declared) through `produce`.
+//
+// THE REVERT is `produce` and the short write leaving `owes` standing: `peek: undefined`, and the
+// body reloads and `loaded` overwrites `written`.
+test('a write over an invalidated value is served, and the owed reload is not run', async () => {
+    for (const options of [undefined, { identity: structural }]) {
+        let runs = 0
+        const held = reactive(async () => {
+            runs += 1
+            return 'loaded'
+        }, options)
+        await held
+        held.invalidate()
+        held.set('written')
+        expect(`peek: ${held.peek()}`).toBe('peek: written')
+        expect(`ready: ${held.ready()}`).toBe('ready: true')
+        expect(`read: ${held()}`).toBe('read: written')
+        await Promise.resolve()
+        expect(`runs: ${runs}, then: ${held()}`).toBe('runs: 1, then: written')
+    }
+})
+
+// 7.9 OVER A STREAM, whose write stands over the accumulation through a path of its own.
+//
+// THE REVERT is `standWrite` leaving `owes` standing: `ready: false`.
+test('a write over an invalidated stream is served, and the owed run is not started', async () => {
+    let runs = 0
+    const held = reactive(async function* () {
+        runs += 1
+        yield 'chunk'
+    })
+    await held
+    held.invalidate()
+    held.set(['written'])
+    expect(`ready: ${held.ready()}`).toBe('ready: true')
+    expect(`read: ${held.peek()}`).toBe('read: written')
+    await Promise.resolve()
+    expect(`runs: ${runs}`).toBe('runs: 1')
 })
 
 // ── `history` on every value (RULEBOOK 6.16, 9.15, 9.28, 11.39) ─────────────────────────────

@@ -86,14 +86,19 @@ function tagsOf(selection: Selection): string[] | null {
         : null
 }
 
-/** The selection a free probe was handed, refused where it was handed none. */
+/**
+ * The selection a free probe was handed, refused where it was handed none.
+ *
+ * 13.10 — A BARE CALL REFUSES rather than sweeping every entry in scope. One refusal for all four
+ * statics, so `busy()` and `ready()` refuse the way `invalidate()` and `refresh()` do.
+ */
 function requireSelection(
     name: string,
     selection: Selection | undefined,
 ): Selection {
     if (selection === undefined)
         throw new Error(
-            `${name}() was called with no selection. The bare form sweeps every entry in scope and is not built yet; name the value or the keyed face.`,
+            `abide: ${name}() was called with no selection, and a bare ${name}() refuses. Name the value, the keyed face or { tags }. RULEBOOK 13.10.`,
         )
     return selection
 }
