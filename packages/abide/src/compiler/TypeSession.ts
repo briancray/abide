@@ -50,10 +50,19 @@ import {
 } from 'typescript/unstable/async'
 import type { Mount } from '#server/answerRpc.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
+import {
+    type Defaults,
+    defaultsInSource,
+} from '#shared/reactive/parameterDefaults.ts'
 import { routeOf } from '#shared/routePattern.ts'
 import type { Method } from '#shared/rpc.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReadsIn.ts'
+import {
+    argsDefaultsIn,
+    defaultedMembers,
+    parameterPattern,
+} from './argsDefaultsIn.ts'
 import { argsSchemaOf } from './argsSchemaOf.ts'
 import {
     CHECKED_SUFFIX,
@@ -720,7 +729,6 @@ export class TypeSession {
     async ambientReads(within: string): Promise<Diagnosis[]> {
         const project = await this.currentProject()
         if (project === undefined) return []
-        const checker = project.checker
         const paths = new Map<string, string>()
         const declared = await Promise.all(
             AMBIENT_SOURCES.map((source) =>
@@ -733,6 +741,48 @@ export class TypeSession {
                 paths.set(AMBIENT_SOURCES[at] as string, found)
         }
         if (paths.size === 0) return []
+        return this.findingsUnder(
+            within,
+            'error',
+            async (checker, sourceFile) => {
+                const found: Warning[] = []
+                for (const read of await ambientReadsIn(
+                    checker,
+                    sourceFile,
+                    paths,
+                ))
+                    found.push({
+                        at: read.at,
+                        message: `abide: a \`global\` value's body reads \`${read.ambient}\`, which belongs to the request it was built in — every later request would be answered with this one's. Take it out of the body, or drop \`global\`. RULEBOOK 11.37.`,
+                    })
+                return found
+            },
+        )
+    }
+
+    /**
+     * Every `args` defaulting a member its body's parameter does not, as warnings.
+     *
+     * 11.30 — over the files `ambientReads` walks, for the same reason: a keyed value is declared
+     * in a `.ts` as often as in a `.abide`.
+     */
+    argsDefaults(within: string): Promise<Diagnosis[]> {
+        return this.findingsUnder(within, 'warning', argsDefaultsIn)
+    }
+
+    /**
+     * What `find` says of each `.abide` `readsFor` was last handed and each `.ts` under `within`.
+     *
+     * Each finding on its own line of the file an author wrote.
+     */
+    private async findingsUnder(
+        within: string,
+        severity: 'error' | 'warning',
+        find: (checker: Checker, sourceFile: Node) => Promise<Warning[]>,
+    ): Promise<Diagnosis[]> {
+        const project = await this.currentProject()
+        if (project === undefined) return []
+        const checker = project.checker
         const files: string[] = []
         for (const path of this.rootsUnder(project, within))
             if (
@@ -744,8 +794,8 @@ export class TypeSession {
             files.map(async (path): Promise<Diagnosis[]> => {
                 const sourceFile = await project.program.getSourceFile(path)
                 if (sourceFile === undefined) return []
-                const reads = await ambientReadsIn(checker, sourceFile, paths)
-                if (reads.length === 0) return []
+                const findings = await find(checker, sourceFile)
+                if (findings.length === 0) return []
                 const authored = this.authored.get(path)
                 const text =
                     authored === undefined
@@ -753,16 +803,16 @@ export class TypeSession {
                         : authored.text
                 const origins = authored?.origins
                 const said: Diagnosis[] = []
-                for (const read of reads)
+                for (const finding of findings)
                     said.push(
                         diagnosisAt(
                             authored?.path ?? path,
                             text,
                             origins === undefined
-                                ? read.at
-                                : mapBack(origins, read.at),
-                            'error',
-                            `abide: a \`global\` value's body reads \`${read.ambient}\`, which belongs to the request it was built in — every later request would be answered with this one's. Take it out of the body, or drop \`global\`. RULEBOOK 11.37.`,
+                                ? finding.at
+                                : mapBack(origins, finding.at),
+                            severity,
+                            finding.message,
                         ),
                     )
                 return said
@@ -855,6 +905,7 @@ export class TypeSession {
                             ui: declared?.ui ?? true,
                             description: declared?.description,
                             copy: declared?.copy,
+                            defaults: declared?.defaults,
                             args:
                                 handlerType === undefined
                                     ? undefined
@@ -1464,7 +1515,7 @@ const SOCKET_SOURCE = new URL('../shared/socket.ts', import.meta.url).pathname
 type Declared = Mount['method']
 type DeclaredExport = Pick<
     Mount,
-    'name' | 'ui' | 'copy' | 'args' | 'description'
+    'name' | 'ui' | 'copy' | 'defaults' | 'args' | 'description'
 > & {
     method: Declared | undefined
     /** 18.30 — what its copy's options declare and the build could not read. */
@@ -1489,6 +1540,7 @@ async function declaringMethod(
           copy: CopyOptions | undefined
           unread: Node[]
           defaulted?: string[]
+          defaults?: Defaults | undefined
       }
     | undefined
 > {
@@ -1544,6 +1596,7 @@ async function declaringMethod(
         description,
         ...declared,
         defaulted: defaultedMembers(body),
+        defaults: literalDefaults(body) ?? undefined,
     }
 }
 
@@ -1563,31 +1616,30 @@ async function handlerBodyOf(
         : node
 }
 
+const TRANSPILER = new Bun.Transpiler({ loader: 'ts' })
+
 /**
- * The args members a handler's parameter pattern gives a default.
+ * The literal defaults a handler's parameter pattern writes, read as the runtime reads them.
  *
- * 19.11 — THE ARGS MEMBERS A HANDLER DEFAULTS, which its annotation still calls required: the type
- * the `Rpc` carries is the one written, and a default lives on the pattern that destructures it.
+ * 11.29 — THE PATTERN'S OWN TEXT, TRANSPILED, through the reader the runtime uses on a body's
+ * `toString()`: the server keys by what that reader makes of the handler, so the browser's copy is
+ * handed the same answer rather than a second opinion of it. A default it cannot read is the
+ * refusal the server would raise at import, raised here first.
  */
-function defaultedMembers(node: Node | undefined): string[] {
-    if (
-        node === undefined ||
-        !(
-            isArrowFunction(node) ||
-            isFunctionExpression(node) ||
-            isFunctionDeclaration(node)
+function literalDefaults(node: Node | undefined): Defaults | null {
+    const pattern = parameterPattern(node)
+    if (pattern === undefined) return null
+    try {
+        return defaultsInSource(
+            TRANSPILER.transformSync(
+                `export default (${pattern.getText()}) => 0`,
+            ),
         )
-    )
-        return []
-    const pattern = node.parameters[0]?.name
-    if (pattern === undefined || !isObjectBindingPattern(pattern)) return []
-    const defaulted: string[] = []
-    for (const element of pattern.elements) {
-        if (element.initializer === undefined) continue
-        const key = element.propertyName ?? element.name
-        if (key !== undefined && isIdentifier(key)) defaulted.push(key.text)
+    } catch (thrown) {
+        throw new Error(
+            `abide: ${pattern.getSourceFile().fileName}: ${(thrown as Error).message}`,
+        )
     }
-    return defaulted
 }
 
 /**

@@ -16,6 +16,7 @@ import { CELL } from './CELL.ts'
 import { ARGS_GATE } from './ARGS_GATE.ts'
 import type { Gated } from './Keyed.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
+import { PARAMETER_DEFAULTS } from './PARAMETER_DEFAULTS.ts'
 import { brandedPrototype, MEMBER_KEYS } from './Reactive.ts'
 import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
 import { currentScope, SCOPING } from './scoping.ts'
@@ -96,7 +97,7 @@ export function scoped(make: () => unknown): unknown {
     >
     if (home[KEYED_BRAND] === true) {
         // THE KEYED FACE: a reach, the four statics and the entries, each the current instance's —
-        // and the `args` gate, which every instance was declared with.
+        // and the `args` gate and the parameter's defaults, which every instance was declared with.
         const keyed = Object.assign(
             (args: unknown): unknown =>
                 (instanceOf(filed) as unknown as (args: unknown) => unknown)(
@@ -105,6 +106,9 @@ export function scoped(make: () => unknown): unknown {
             {
                 [KEYED_BRAND]: true,
                 [ARGS_GATE]: home[ARGS_GATE],
+                [PARAMETER_DEFAULTS]: (home as Gated<unknown>)[
+                    PARAMETER_DEFAULTS
+                ],
                 [FILED]: filed,
             },
         ) satisfies Gated<unknown>

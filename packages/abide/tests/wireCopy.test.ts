@@ -239,3 +239,64 @@ test('a copy asks past the HTTP cache', async () => {
     await cached()
     expect(asked?.cache).toBe('no-cache')
 })
+
+// 11.29 — THE DEFAULTS A HANDLER'S PARAMETER WRITES REACH ITS COPY, read by the reader the server keys
+// by, so a mutation's too; a handler with none writes none, and one the key cannot read stops the
+// build rather than the server's import. THE REVERT: leave `defaults` out of `wrappersOf`; no
+// wrapper line carries `"names"`.
+test("the build writes a handler's parameter defaults into its wrapper, and refuses one it cannot read", async () => {
+    const app = appFixture({
+        'ui/pages/page.abide': '<main>home</main>',
+        'server/rpc/paged.ts': `import { GET, POST, reactive } from 'abide/server'
+
+export const list = GET(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
+export const kept = GET(reactive(({ size = 20 }: { size?: number }) => size, { by: 'id' }))
+export const save = POST(async ({ draft = true }: { draft?: boolean }) => draft)
+export const plain = GET(async ({ id }: { id: string }) => id)
+`,
+    })
+    const built = buildApp(app)
+    expect(built.exitCode).toBe(0)
+    const wrapper = await Bun.file(
+        `${app}/.abide/wire/server/rpc/paged.ts`,
+    ).text()
+    const line = (name: string): string =>
+        wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
+        ''
+    expect(line('list')).toContain(
+        'undefined, {"names":["page","q"],"values":[1,"all"]})',
+    )
+    expect(line('kept')).toContain(
+        '{"by":"id"}, {"names":["size"],"values":[20]})',
+    )
+    expect(line('save')).toContain('{"names":["draft"],"values":[true]}')
+    expect(line('plain')).not.toContain('"names"')
+
+    const refused = appFixture({
+        'ui/pages/page.abide': '<main>home</main>',
+        'server/rpc/paged.ts': `import { GET } from 'abide/server'
+
+const PAGE_SIZE = 20
+export const list = GET(async ({ size = PAGE_SIZE }: { size?: number }) => size)
+`,
+    })
+    const stopped = buildApp(refused)
+    expect(stopped.exitCode).not.toBe(0)
+    expect(stopped.stderr).toContain('defaults `size` to `PAGE_SIZE`')
+    expect(stopped.stderr).toContain('RULEBOOK 11.29')
+})
+
+// 11.29 IN THE BROWSER — the copy keys by the defaults the build handed it, as the server does, so a
+// call leaving a member to one and a call writing it are one load. THE REVERT: skip
+// `declareDefaults` in `wire`; 2 loads are made where 1 is due.
+test("a copy keys a call leaving a member to the handler's default with one that wrote it", async () => {
+    answer = { body: ['one'], life: 'private, no-store' }
+    const paged = wire('GET', '/__abide/rpc/paged/list', undefined, {
+        names: ['page'],
+        values: [1],
+    }) as (args?: unknown) => (() => unknown) & PromiseLike<unknown>
+    const before = loads
+    await paged({})
+    await paged({ page: 1 })
+    expect(`loads: ${loads - before}`).toBe('loads: 1')
+})

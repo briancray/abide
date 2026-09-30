@@ -1,4 +1,5 @@
-// TWO ALLOCATIONS, PRICED IN BOTH ENGINES: a canonical-key level and a combinator's scratch report.
+// THREE COSTS, PRICED IN BOTH ENGINES: a canonical-key level, a combinator's scratch report, and a
+// keyed reach's parameter defaults.
 // Each case runs the shape before the change beside the shape shipped — the revert arm, kept as a
 // copy — plus SHARE rows pricing the layer against the whole op somebody waits on. JSC with
 // `bun packages/harness/scripts/benchShared.ts`, V8 with `bunx playwright test
@@ -115,6 +116,51 @@ function keyCase(name: string, args: Record<string, unknown>): SharedCase {
     }
 }
 
+// ---- parameter defaults: what 11.29 adds to a standing reach, and to building a keyed value ----
+
+// THE STANDING REACH, with and without a default to apply: a body with none pays a `null` test, one
+// whose caller wrote every member pays a walk that allocates nothing, and one whose caller left a
+// member out pays a copy of its args.
+function defaultsReachCase(): SharedCase {
+    const plain = reactive((held: { page?: number }) => held.page)
+    const defaulted = reactive(({ page = 1 }: { page?: number }) => page)
+    const written = { page: 1 }
+    const leftOut = {}
+    plain(written)
+    defaulted(written)
+    return {
+        name: 'keyed reach — parameter defaults',
+        arms: {
+            'no defaults, standing reach': (): void => {
+                sink = plain(written)
+            },
+            'defaults, member written': (): void => {
+                sink = defaulted(written)
+            },
+            'defaults, member left out': (): void => {
+                sink = defaulted(leftOut)
+            },
+        },
+    }
+}
+
+// CONSTRUCTION reads a body's text once per function — a fresh closure per build, as a component's
+// keyed value is, so here the read is paid every time rather than remembered. Apart from the reach
+// arms, whose floor the garbage these make would otherwise raise.
+function defaultsBuildCase(): SharedCase {
+    return {
+        name: 'keyed build — parameter defaults',
+        arms: {
+            'body with no default': (): void => {
+                sink = reactive((held: { page?: number }) => held.page)
+            },
+            'body with a default': (): void => {
+                sink = reactive(({ page = 1 }: { page?: number }) => page)
+            },
+        },
+    }
+}
+
 // ---- validateJson: a scratch record per branch against a mismatch flag ----
 
 function validateCase(
@@ -188,6 +234,8 @@ export function sharedCases(): SharedCase[] {
             { type: 'string', not: { const: '' } },
             'hello',
         ),
+        defaultsReachCase(),
+        defaultsBuildCase(),
     ]
 }
 

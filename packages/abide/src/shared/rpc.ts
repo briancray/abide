@@ -22,6 +22,8 @@ import { compose, type Middleware } from './Middleware.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
 import { ARGS_GATE } from './reactive/ARGS_GATE.ts'
 import { canonicalKey } from './reactive/canonicalKey.ts'
+import { PARAMETER_DEFAULTS } from './reactive/PARAMETER_DEFAULTS.ts'
+import { withDefaults } from './reactive/parameterDefaults.ts'
 import {
     type AdoptedFailures,
     type AdoptedProduced,
@@ -184,6 +186,10 @@ export function declare(method: Method): Declare {
                 : reactive(handler as (args: never) => unknown, cacheOptions)
         const keyed = isKeyed(value)
         const gate = keyed ? value[ARGS_GATE] : undefined
+        // 11.27, 11.29 — THE HANDLER'S PARAMETER DEFAULTS, applied at the call rather than left to the
+        // value's own reach: a value behind rungs is keyed ahead of the handler's, and the seed
+        // buffer files the call by the args it was handed.
+        const defaults = keyed ? value[PARAMETER_DEFAULTS] : null
         const reach = (args?: unknown): unknown =>
             keyed ? (value as (args: unknown) => unknown)(args) : value
         // 16.12, 16.13 — THE RUNGS, IN REGISTRATION ORDER, around the reach. Built once, at the
@@ -248,7 +254,9 @@ export function declare(method: Method): Declare {
         // this handler and these args is then answered from what this one reached, rather than by
         // running the handler again. In a browser nothing fills the slot, so the report is one load
         // of a `null`.
-        const call = (args?: unknown, options?: CallOptions): unknown => {
+        const call = (given?: unknown, options?: CallOptions): unknown => {
+            const args =
+                defaults === null ? given : withDefaults(given, defaults)
             const signal = options?.signal
             // A load this call starts may be ended by it, so its transport is handed a signal of
             // the load's own to end the request with (16.54) — the caller's is only one vote.
@@ -294,6 +302,7 @@ export function declare(method: Method): Declare {
             guarded: rungs.length > 0,
             // 19.8 — the handler's `args` gate, on the `Rpc` too, for the wire to coerce by.
             [ARGS_GATE]: gate,
+            [PARAMETER_DEFAULTS]: defaults,
             isError: isFailedNamed,
             url(args?: Record<string, unknown>): string {
                 return rpcRequest(method, addressOf(rpc), args).url
@@ -342,7 +351,11 @@ export function declare(method: Method): Declare {
             GLOBAL_GETS.set(rpc, (args: unknown): unknown =>
                 keyed
                     ? (value as { entries: Map<string, unknown> }).entries.get(
-                          canonicalKey(args),
+                          canonicalKey(
+                              defaults === null
+                                  ? args
+                                  : withDefaults(args, defaults),
+                          ),
                       )
                     : value,
             )

@@ -17,6 +17,12 @@ import { armTimer } from './Expiry.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
 import { NotLanded } from './NotLanded.ts'
+import { PARAMETER_DEFAULTS } from './PARAMETER_DEFAULTS.ts'
+import {
+    type Defaults,
+    parameterDefaults,
+    withDefaults,
+} from './parameterDefaults.ts'
 import {
     abandonDeferred,
     createReactive,
@@ -60,13 +66,17 @@ export type Keyed<
 }
 
 /**
- * What a keyed value carries past the face an app is handed: the `args` schema it declared.
+ * What a keyed value carries past the face an app is handed: its `args` schema and its defaults.
  *
- * 19.8 — for a transport to coerce by and a rung to check against. Declared on what the framework
+ * 19.8 — the schema, for a transport to coerce by and a rung to check against; 11.29 — the
+ * defaults its body's parameter writes, for a transport to key by. Declared on what the framework
  * builds rather than on `Keyed`, so no app type names it — and declared rather than stamped, so a
  * face built over one (a server's forwarder, an `Rpc`) that forgets to carry it does not compile.
  */
-export type Gated<Args> = { [ARGS_GATE]: Schema<Args> | undefined }
+export type Gated<Args> = {
+    [ARGS_GATE]: Schema<Args> | undefined
+    [PARAMETER_DEFAULTS]: Defaults | null
+}
 
 /** Whether `value` is a `Keyed`, read off its brand rather than its shape (16.5). */
 export function isKeyed(
@@ -315,6 +325,10 @@ export function createKeyed<
               )
     const lifetime = ttl === undefined ? null : new Lifetime(ttl)
     const entryBody = heldOnce(gate === undefined ? body : gated(body, gate))
+    // 11.27, 11.29 — the defaults are applied before the key is taken, so the entry is one for a
+    // call that wrote them and one that left them to the parameter. Read once, here: a body with
+    // none pays a `null` test per reach.
+    const defaults = parameterDefaults(body)
 
     // Out of the map and out of every selection with it, rather than reachable by a sweep until a
     // collection happens to run.
@@ -326,7 +340,8 @@ export function createKeyed<
         untag(created)
     }
 
-    function reach(args: Args): Reactive<Stored, Accepted, Failures> {
+    function reach(given: Args): Reactive<Stored, Accepted, Failures> {
+        const args = defaults === null ? given : withDefaults(given, defaults)
         const key = canonicalKey(args)
         const standing = entries.get(key)
         // 1.8: reaching an instance that exists joins the standing work.
@@ -360,6 +375,7 @@ export function createKeyed<
     const self = Object.assign(reach, {
         [KEYED_BRAND]: true,
         [ARGS_GATE]: gate,
+        [PARAMETER_DEFAULTS]: defaults,
         entries,
         busy: (pattern?: Partial<Args>): boolean => {
             for (const entry of entries.values())

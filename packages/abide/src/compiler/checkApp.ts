@@ -67,6 +67,7 @@ export async function checkApp(
         }))
         const found = await session.diagnose(typed, root)
         const ambient = await session.ambientReads(root)
+        const unkeyed = await session.argsDefaults(root)
         // A FILE WHOSE LOWERING REFUSED is `found` already, at its line — emitted too, it throws the
         // same refusal at the root and takes the rest of the app's findings with it.
         const emittable: typeof readable = []
@@ -86,7 +87,7 @@ export async function checkApp(
             } catch (thrown) {
                 refused.push(refusal(root, thrown))
             }
-        return [...refused, ...ambient, ...warnings, ...found]
+        return [...refused, ...ambient, ...unkeyed, ...warnings, ...found]
     })
 }
 

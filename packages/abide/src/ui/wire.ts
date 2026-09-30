@@ -21,6 +21,10 @@ import { failed, isFailed } from '#shared/Failed.ts'
 import { framedStream } from '#shared/framedStream.ts'
 import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
 import { reactive, structural } from '#shared/reactive/index.ts'
+import {
+    type Defaults,
+    declareDefaults,
+} from '#shared/reactive/parameterDefaults.ts'
 import { refuse } from '#shared/refuse.ts'
 import { declare, type Method } from '#shared/rpc.ts'
 import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
@@ -38,6 +42,8 @@ export function wire(
     address: string,
     // 18.19 — what the build read off the handler's declaration.
     options?: CopyOptions,
+    // 11.29 — and the defaults its parameter writes, which the copy keys by as the server does.
+    defaults?: Defaults,
 ): unknown {
     // ONE PARAMETER, so the value is keyed by args whatever the handler declared (16.6's arity rule):
     // an unkeyed handler is reached with no args, which is one key.
@@ -97,6 +103,7 @@ export function wire(
     // the copy a page walks — carries it: its key (32.33), its tags (11.44), its retention (6.1) and
     // its comparator (5.3). A `GET` alone: a mutation's value is written and read once.
     const produce = options?.stream === true ? streamed : body
+    if (defaults !== undefined) declareDefaults(produce, defaults)
     // A `GET`'S ENTRY IS LOOKED UP BY ITS FOLLOW through the value, not the `Rpc`: a call made with no
     // signal pins the load it reaches (16.53), and a frame from the server would pin one a page was
     // still free to abort.

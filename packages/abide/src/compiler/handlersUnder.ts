@@ -71,6 +71,7 @@ export async function handlersUnder(
             ui,
             description,
             copy,
+            defaults,
             args,
             unread,
         } of declared[at] ?? []) {
@@ -95,6 +96,7 @@ export async function handlersUnder(
                 ui,
                 description,
                 copy,
+                defaults,
                 args,
             })
             warnings.push(...unread)

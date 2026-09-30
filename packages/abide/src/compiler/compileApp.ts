@@ -209,11 +209,13 @@ export async function compileApp(
                 lines.push(formatDiagnosis(read, process.cwd()))
             throw new Error(lines.join('\n'))
         }
+        // 11.30 — warned on, and the build goes on.
+        const unkeyed = await session.argsDefaults(root)
         const emitted = await emitApp(root, session, parsed, reads)
         return {
             ...emitted,
             sources: sources.length,
-            warnings: [...warnings, ...emitted.warnings],
+            warnings: [...warnings, ...unkeyed, ...emitted.warnings],
         }
     })
 }
@@ -549,8 +551,13 @@ function wrappersOf(mounts: Mount[]): Map<string, string> {
         const method =
             mount.method === 'SOCKET' ? '' : `${JSON.stringify(mount.method)}, `
         // 18.19 — what the handler's value declares that the browser's copy behaves by.
+        // 11.29 — and the defaults its parameter writes, which the copy keys by.
         const copy =
-            mount.copy === undefined ? '' : `, ${JSON.stringify(mount.copy)}`
+            mount.defaults !== undefined
+                ? `, ${JSON.stringify(mount.copy)}, ${JSON.stringify(mount.defaults)}`
+                : mount.copy === undefined
+                  ? ''
+                  : `, ${JSON.stringify(mount.copy)}`
         const call = `${name}(${method}new URL(${at}, import.meta.url).pathname${copy})`
         const line =
             mount.name === 'default'

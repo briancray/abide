@@ -14,6 +14,11 @@ import { mounted as underMount } from '#shared/mount.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { deadlineOf, pastOf } from '#shared/reactive/index.ts'
 import type { Gated } from '#shared/reactive/Keyed.ts'
+import { PARAMETER_DEFAULTS } from '#shared/reactive/PARAMETER_DEFAULTS.ts'
+import {
+    type Defaults,
+    withDefaults,
+} from '#shared/reactive/parameterDefaults.ts'
 import { notFound, refuse, validationError } from '#shared/refuse.ts'
 import type { Method, Rpc } from '#shared/rpc.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'
@@ -57,6 +62,12 @@ export type Mount = {
      * 18.19 — set where its declaration names any of it.
      */
     copy: CopyOptions | undefined
+    /**
+     * The defaults the handler's parameter writes, for the browser's copy to key by.
+     *
+     * 11.29 — the server reads its own off the handler.
+     */
+    defaults: Defaults | undefined
     /** The JSON Schema the handler's args annotation derives, where it takes a record. 19.10. */
     args: JsonValue | undefined
 }
@@ -64,7 +75,7 @@ export type Mount = {
 /** A handler's row, mounted: the handler imported and its args schema probed. */
 export type Mounted = Mount & {
     method: Method
-    handler: Rpc<unknown, unknown>
+    handler: Rpc<unknown, unknown> & Gated<unknown>
     /**
      * The args' JSON Schema, probed once at mount.
      *
@@ -181,7 +192,7 @@ export async function answerRpc(
     if (isFailed(raw)) return answered(raw)
     // 19.8 — the text a URL carried, as the types the handler's `args` declares — and a form's, which
     // is text for the same reason.
-    const args =
+    const coerced =
         inUrl || form
             ? coerceArgs(
                   raw as Record<string, string | string[]> | undefined,
@@ -189,6 +200,10 @@ export async function answerRpc(
                   inUrl ? url.search : '',
               )
             : raw
+    // 11.27 — then the handler's parameter defaults, ahead of every key taken below: the seed a
+    // render filed and the `global` entry standing were both filed under them (11.29).
+    const defaults = handler[PARAMETER_DEFAULTS]
+    const args = defaults === null ? coerced : withDefaults(coerced, defaults)
     // 19.10 — THE WIRE HELD TO THE ANNOTATION, where no `args` schema is declared to hold it. Args
     // that did not come are the handler's to answer, as they were before.
     if (found.wireArgs !== undefined && args !== undefined) {
