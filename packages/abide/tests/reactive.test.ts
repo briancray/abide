@@ -5433,7 +5433,7 @@ test('writes to a slow store coalesce latest-wins and never block a read', async
 
 // 8.12: A PERSISTER THAT SILENTLY STOPPED IS WORSE THAN NONE. A failed write warns and the store
 // stays attached, so the next production is written like any other.
-test('a failed store write warns and the next production is still written', () => {
+test('a failed store write warns, reaches onError, and the next production is still written', () => {
     let fail = true
     const written: number[] = []
     const store = {
@@ -5447,10 +5447,14 @@ test('a failed store write warns and the next production is still written', () =
         },
     }
     const warnings: unknown[] = []
+    const handed: unknown[] = []
     const warn = console.warn
     console.warn = (...args: unknown[]): void => {
         warnings.push(args.join(' '))
     }
+    const unfile = onError((error) => {
+        handed.push(error)
+    })
     try {
         // No opening value, so the first production is the first write and nothing precedes it.
         const value = reactive<number>(undefined, { store: store as never })
@@ -5458,9 +5462,11 @@ test('a failed store write warns and the next production is still written', () =
         value.set(2)
     } finally {
         console.warn = warn
+        unfile()
     }
     expect(`written: ${written.join(',')}`).toBe('written: 2')
     expect(`warned: ${String(warnings[0])}`).toContain('abide:reactive')
+    expect(`handed: ${handed.map(String).join(',')}`).toBe('handed: Error: disk full')
 })
 
 // A STORE IN FRONT OF A BODY IS A CACHE: `get` on a cold entry, the body on a miss, `set` on every

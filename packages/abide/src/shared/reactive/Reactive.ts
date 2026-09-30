@@ -16,6 +16,7 @@ import { type Failed, isFailed, isFailedNamed } from '../Failed.ts'
 import { namedLogger } from '../log.ts'
 import { validationError } from '../refuse.ts'
 import { type Found, runSchema, type Schema } from '../Schema.ts'
+import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
 import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
@@ -3414,8 +3415,8 @@ function readStore(cell: Cell, persisted: Persisted): unknown {
 /**
  * The logger a store failure warns through.
  *
- * 8.12 SAYS `onError` TOO, and there is no `onError` yet. The warning is under the namespace the
- * clause names.
+ * 8.12 — under the namespace the clause names; a failed write also reaches `onError`, through
+ * `storeWriteFailed`.
  */
 const STORE_LOG = namedLogger('abide:reactive')
 
@@ -3623,6 +3624,11 @@ function writeStore(cell: Cell, persisted: Persisted, value: unknown): void {
     sendStore(cell, persisted, value)
 }
 
+function storeWriteFailed(cell: Cell, failed: unknown): void {
+    warnStore(cell, 'write failed, and the store stays attached (8.12)', failed)
+    UNEXPECTED.report?.(failed)
+}
+
 /**
  * Hands one value to the store's `set`, warning where it fails.
  *
@@ -3634,11 +3640,7 @@ function sendStore(cell: Cell, persisted: Persisted, value: unknown): void {
     try {
         sent = persisted.store.set(value, { ttl: persisted.ttl })
     } catch (failed) {
-        warnStore(
-            cell,
-            'write failed, and the store stays attached (8.12)',
-            failed,
-        )
+        storeWriteFailed(cell, failed)
         sent = undefined
     }
     if (!isThenable(sent)) {
@@ -3650,11 +3652,7 @@ function sendStore(cell: Cell, persisted: Persisted, value: unknown): void {
             storeWritten(cell, persisted)
         },
         (failed: unknown) => {
-            warnStore(
-                cell,
-                'write failed, and the store stays attached (8.12)',
-                failed,
-            )
+            storeWriteFailed(cell, failed)
             storeWritten(cell, persisted)
         },
     )
