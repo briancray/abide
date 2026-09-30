@@ -1140,10 +1140,11 @@ function emitTry(
     // was built is not mounted, and one that failed as it mounted is replaced. ONE UNIT, for
     // `emitBlock`'s reason.
     //
-    // AND THE FIRST RUN HYDRATES THE ARM THE SERVER PAINTED. Where the server's render failed its
-    // anchor says so (`REGION_CAUGHT`), and the body is evaluated under the boundary for the failure
-    // the catch binds — without being filled, so the catch the server sent is the one adopted. A
-    // body that succeeds here after failing there empties the region, and the run fills it.
+    // AND THE FIRST RUN HYDRATES THE ARM THE SERVER PAINTED. The body it adopts; the catch — which
+    // its anchor says it is (`REGION_CAUGHT`) — it keeps until the body has been tried behind it
+    // (`TryBoundary.mountBehind`), and adopts where the body fails here too, so the catch the server sent
+    // is the one on the page. A body that succeeds here after failing there replaces it.
+    const caught = JSON.stringify(REGION_CAUGHT)
     lines.push(`const ${name} = ${lowering.use('regionFound')}(${at.name})
 let ${name}_at
 const ${name}_scope = ${SCOPE}.own(new ${lowering.use('Scope')}())
@@ -1153,10 +1154,18 @@ const ${name}_again = () => ${name}_arms[0]().build(document)
 // Swapped untracked, as an {#if} arm is: only the failure decides which arm.
 const ${name}_swap = (next) => {
     while (next !== ${name}_at) {
-        const filling = ${name}_at !== undefined || ${lowering.use('isEmptyRegion')}(${name})
+        const painted = ${name}_at === undefined && !${lowering.use('isEmptyRegion')}(${name})
         ${name}_at = next
         const arm = ${name}_arms[next](${boundary}.failure.peek())
-        if (filling) {
+        if (painted && next === 0 && ${name}.open.data === ${caught}) {
+            ${name}_scope.own(${boundary}.mountBehind(${name}, arm, ${name}_again))
+            if (${boundary}.failure.peek() !== undefined) {
+                ${name}_at = undefined
+                next = 1
+            }
+            continue
+        }
+        if (!painted) {
             ${name}_scope.stop()
             if (next === 0 && ${inBoundary}(${boundary}, () => (${fillRegion}(${name}, arm.build), true), ${name}_again) === undefined) {
                 next = 1
@@ -1169,7 +1178,6 @@ const ${name}_swap = (next) => {
     }
 }
 ${SCOPE}.watch(() => {
-    if (${name}_at === undefined && ${name}.open.data === ${JSON.stringify(REGION_CAUGHT)} && ${inBoundary}(${boundary}, ${name}_again, ${name}_again) !== undefined) ${fillRegion}(${name})
     const next = ${boundary}.failure() === undefined ? 0 : 1
     if (next !== ${name}_at) ${lowering.use('untracked')}(${name}_swap, next, undefined)
 })`)

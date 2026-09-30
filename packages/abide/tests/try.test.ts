@@ -3,11 +3,13 @@
 // failure clears comes back.
 
 import { afterAll, expect, test } from 'bun:test'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { measure } from 'harness/measure'
+import { compileFile, emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync, NotLanded } from '#shared'
 import { Mismatch } from '#ui/Mismatch.ts'
+import { markupNodes } from '#ui/parseMarkup.ts'
 import { pageRegion } from '#ui/regions.ts'
 import { Scope } from '#ui/Scope.ts'
 import { BOUNDARY, inBoundary, TryBoundary } from '#ui/TryBoundary.ts'
@@ -234,9 +236,10 @@ test('a mismatch in a server-painted body warns — 41.10', async () => {
 })
 
 // A BODY THAT FAILED ON THE SERVER AND SUCCEEDS IN THE BROWSER is filled, not left in its catch: the
-// one evaluation the caught anchor asks for is what finds that out, and it is not a mismatch. THE
-// REVERT: leave the region painted when that evaluation succeeds; the body is hydrated over the
-// catch, which 41.10 rebuilds — right in the end, and a warning about a disagreement there was not.
+// caught anchor has the body tried behind the catch, which is what finds that out, and it is not a
+// mismatch. THE REVERT: hydrate the body over a caught anchor as over a plain one (no `mountBehind`); the
+// body is walked over the catch, which 41.10 rebuilds — right in the end, and a warning about a
+// disagreement there was not.
 test('a body that only failed on the server is filled on the client, quietly — 32.16', async () => {
     const flagged = globalThis as { serverOnly?: boolean }
     flagged.serverOnly = true
@@ -260,4 +263,152 @@ test('a body that only failed on the server is filled on the client, quietly —
     expect(document.getElementById('converted')?.textContent).toBe('$1351.60')
     expect(document.querySelector('.status')).toBeNull()
     expect(warned.filter((line) => line.includes('abide:hydrate'))).toEqual([])
+})
+
+// A page and the component files it imports, compiled as the build compiles them and served; the
+// mount is handed back unrun, so a test can count what hydrating does.
+async function servedWith(
+    page: string,
+    components: Record<string, string>,
+): Promise<() => void> {
+    const modules: Record<string, string> = {}
+    for (const [name, source] of Object.entries({
+        ...components,
+        Page: page,
+    })) {
+        const file = parseAbide(source)
+        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
+        modules[`${name}.ts`] = emitComponent(file, reads)
+        modules[`${name}.client.ts`] =
+            emitClient(file, reads, name === 'Page' ? 'none' : 'invoked') ||
+            'export default () => {}'
+    }
+    const dir = temporaryModule(modules)
+    const { default: Component } = await import(`${dir}/Page.ts`)
+    const html = new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + 6,
+        html.indexOf('</body>'),
+    )
+    const { default: mount } = await import(`${dir}/Page.client.ts`)
+    // The parser's one template, made before anything is counted.
+    markupNodes(document, '')
+    return () => {
+        mount(pageRegion(document.body))
+        flushSync()
+    }
+}
+
+// A component that throws as it is set up, unless told to succeed.
+const FAILING = `<script>
+if (!(globalThis as { childSucceeds?: boolean }).childSucceeds) throw new Error('child failed')
+</script>
+<b class="child">child</b>`
+const succeeds = globalThis as { childSucceeds?: boolean }
+
+const CATCH = `{:catch problem}<p class="status">{problem.message}</p>{/try}`
+
+// One body, three places a component in it can fail — a file component's setup, an inline
+// component's template, a file component's setup two levels down — and the nodes hydrating the
+// server's catch creates.
+const FAILING_PAGES: [string, string, Record<string, string>, number][] = [
+    [
+        'a file component',
+        `<script>
+import Child from './Child.abide'
+</script>
+{#try}<Child/>${CATCH}`,
+        { Child: FAILING },
+        4,
+    ],
+    [
+        'an inline component',
+        `<script>
+function fail(): string {
+    if (!(globalThis as { childSucceeds?: boolean }).childSucceeds) throw new Error('child failed')
+    return 'child'
+}
+</script>
+{#component Child()}<b class="child">{fail()}</b>{/component}
+{#try}<Child/>${CATCH}`,
+        {},
+        4,
+    ],
+    [
+        'a component two levels down',
+        `<script>
+import Middle from './Middle.abide'
+</script>
+{#try}<Middle/>${CATCH}`,
+        {
+            Child: FAILING,
+            Middle: `<script>
+import Child from './Child.abide'
+</script>
+<i class="middle"><Child/></i>`,
+        },
+        7,
+    ],
+]
+
+// 32.16 AND 41.10 — A COMPONENT THAT THROWS IN A `{#try}` BODY IS NOT FOUND BY BUILDING THE BODY: the
+// build writes the component as an empty anchor pair, and the component runs when the body mounts.
+// So where the server painted the catch, the body is tried BEHIND it (`TryBoundary.mountBehind`), and a
+// body that fails there too leaves the catch the server sent — adopted, not rebuilt. What is still
+// created is the body's own nodes up to the component that throws, which is where a component runs,
+// and the body's build the retry makes to watch it (`TryBoundary.fail`). THE REVERT: empty the
+// caught region once the body's build succeeds (the first run's `fillRegion`, as it was); the body
+// is built into the page, fails as it mounts, and the catch is built again — a node the server never
+// sent, with 8, 8 and 11 nodes created.
+for (const [what, page, components, created] of FAILING_PAGES)
+    test(`a server-painted catch over ${what} that throws is adopted — 32.16, 41.10`, async () => {
+        succeeds.childSucceeds = false
+        const mount = await servedWith(page, components)
+        const sent = document.querySelector('.status')
+        expect(sent?.textContent).toBe('child failed')
+        const work = measure(mount)
+        expect({
+            adopted: document.querySelector('.status') === sent,
+            body: document.querySelector('.child, .middle'),
+            created: work.nodesCreated,
+        }).toEqual({ adopted: true, body: null, created })
+    })
+
+// A BODY THAT ONLY FAILED ON THE SERVER, with a component in it, is built ONCE: behind the catch, and
+// kept. Four nodes — the component's anchor pair and its `<b>` and text — and the catch's leave.
+// THE REVERT: evaluate the caught body in the first run by building it, as it was; that build is
+// thrown away and 6 are created.
+test('a caught body that succeeds in the browser is built once — 32.16', async () => {
+    succeeds.childSucceeds = false
+    const [, page, components] = FAILING_PAGES[0] as (typeof FAILING_PAGES)[0]
+    const mount = await servedWith(page, components)
+    succeeds.childSucceeds = true
+    const work = measure(mount)
+    expect({
+        body: document.querySelector('.child')?.textContent,
+        caught: document.querySelector('.status'),
+        created: work.nodesCreated,
+    }).toEqual({ body: 'child', caught: null, created: 4 })
+})
+
+// 32.16 — A BODY THE SERVER RENDERED WHOLE is adopted with nothing made, and where its component
+// throws in the browser instead, the catch replaces the whole body.
+test('a server-painted body is adopted, or replaced where its component throws in the browser — 32.16', async () => {
+    const [, page, components] = FAILING_PAGES[0] as (typeof FAILING_PAGES)[0]
+    succeeds.childSucceeds = true
+    const adopted = await servedWith(page, components)
+    const sent = document.querySelector('.child')
+    expect(measure(adopted).nodesCreated).toBe(0)
+    expect(document.querySelector('.child')).toBe(sent)
+
+    const replaced = await servedWith(page, components)
+    succeeds.childSucceeds = false
+    replaced()
+    expect(document.querySelector('.child')).toBeNull()
+    expect(document.querySelector('.status')?.textContent).toBe('child failed')
 })

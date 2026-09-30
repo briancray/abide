@@ -11,6 +11,8 @@ import { NotLanded } from '#shared/reactive/NotLanded.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
 import { type Disposer, watch } from '#shared/reactive/watch.ts'
 import { Mismatch } from './Mismatch.ts'
+import { fillRegion, type Region, removeUntil } from './regions.ts'
+import type { Stoppable } from './Scope.ts'
 
 /** The boundary a scope built now falls under, or `undefined` outside every `{#try}` body. */
 export const BOUNDARY: { current: TryBoundary | undefined } = {
@@ -44,6 +46,52 @@ export class TryBoundary {
             untracked(recoverOf, this, undefined)
         })
         this.failure.set(error)
+    }
+
+    /**
+     * Mounts the body BEHIND the catch the server painted, and keeps whichever arm stands after.
+     *
+     * 32.16, 41.10 — a caught anchor says the body threw on the server, and the client cannot know
+     * its own body throws until the body has MOUNTED: an invoked component is an empty anchor pair
+     * to its parent's build (`emitBuild`) and runs its setup and its template at mount, so building
+     * the body is not evaluating it. So the body is built after the catch's last node and mounted
+     * there, and the catch's nodes stay until it has: a body that mounts drops them, and one that
+     * fails is dropped instead, leaving the nodes the server sent for the caller to adopt. A throw
+     * in the build itself inserts nothing (`fillRegion` builds before it inserts).
+     *
+     * The body's scope, stopped where the body failed — which `failure` says, as it does for a
+     * mount (`inBoundary`).
+     */
+    mountBehind(
+        region: Region,
+        arm: {
+            build: (document: Document) => Node[]
+            mount: (root: Region) => Stoppable | undefined
+        },
+        again: () => unknown,
+    ): Stoppable | undefined {
+        // THE LAST NODE STANDING IS THE BODY'S OPEN ANCHOR, whatever kind of node it is: a build
+        // and a mount read nothing of their root's open but its `nextSibling`. The region's own open
+        // where the catch painted nothing.
+        const body = {
+            open: region.close.previousSibling as Comment,
+            close: region.close,
+        }
+        const mounted = inBoundary(
+            this,
+            () => {
+                fillRegion(body, arm.build)
+                return arm.mount(body)
+            },
+            again,
+        )
+        if (this.failure.peek() === undefined) {
+            removeUntil(region.open.nextSibling, body.open.nextSibling)
+            return mounted
+        }
+        mounted?.stop()
+        fillRegion(body)
+        return undefined
     }
 
     recover(): void {
