@@ -195,8 +195,8 @@ const counted = globalThis as { converts?: number }
 
 // 32.16 AND 41.10 — THE ARM THE SERVER PAINTED IS THE ARM THE CLIENT HYDRATES. The open anchor of a
 // region whose body threw on the server says so, so the catch's markup is ADOPTED — the very node the
-// server sent — and the body is evaluated once, for the failure the catch binds and the retry that
-// watches it. THE REVERT: write the plain open anchor in the server's catch; the client walks the
+// server sent — and the body is evaluated once: by the retry's first run, which finds the failure
+// the catch binds and watches what it read in the same attempt (`TryBoundary.retryCaught`). THE REVERT: write the plain open anchor in the server's catch; the client walks the
 // catch as if it were the body, throws, rebuilds the catch and evaluates the body three times.
 test('a server-painted catch is adopted, and the body is evaluated once — 32.16', async () => {
     let sent: Element | null = null
@@ -208,7 +208,7 @@ test('a server-painted catch is adopted, and the body is evaluated once — 32.1
     expect({
         adopted: document.querySelector('.status') === sent,
         evaluated: counted.converts,
-    }).toEqual({ adopted: true, evaluated: 2 })
+    }).toEqual({ adopted: true, evaluated: 1 })
 })
 
 // 41.10 — A MISMATCH IN A BODY THE SERVER PAINTED WARNS, on `abide:hydrate`, and is rebuilt. The first
@@ -324,7 +324,7 @@ import Child from './Child.abide'
 </script>
 {#try}<Child/>${CATCH}`,
         { Child: FAILING },
-        4,
+        2,
     ],
     [
         'an inline component',
@@ -352,7 +352,7 @@ import Child from './Child.abide'
 </script>
 <i class="middle"><Child/></i>`,
         },
-        7,
+        5,
     ],
 ]
 
@@ -360,8 +360,8 @@ import Child from './Child.abide'
 // build writes the component as an empty anchor pair, and the component runs when the body mounts.
 // So where the server painted the catch, the body is tried BEHIND it (`TryBoundary.mountBehind`), and a
 // body that fails there too leaves the catch the server sent — adopted, not rebuilt. What is still
-// created is the body's own nodes up to the component that throws, which is where a component runs,
-// and the body's build the retry makes to watch it (`TryBoundary.fail`). THE REVERT: empty the
+// created is the body's own nodes up to the component that throws, which is where a component runs —
+// once, by the retry's first run (`TryBoundary.retryCaught`). THE REVERT: empty the
 // caught region once the body's build succeeds (the first run's `fillRegion`, as it was); the body
 // is built into the page, fails as it mounts, and the catch is built again — a node the server never
 // sent, with 8, 8 and 11 nodes created.
@@ -412,3 +412,76 @@ test('a server-painted body is adopted, or replaced where its component throws i
     expect(document.querySelector('.child')).toBeNull()
     expect(document.querySelector('.status')?.textContent).toBe('child failed')
 })
+
+// A component that throws as it is set up while its `ok` prop is false.
+const GATED = `<script>
+import { props } from 'abide'
+
+const { ok } = props<{ ok: boolean }>()
+if (!ok) throw new Error('child failed')
+</script>
+<b class="child">child</b>`
+
+// A page whose button fixes what the component reads, starting from what `childSucceeds` says —
+// on the server and again in the browser, so the two can disagree.
+const gatedPage = (invoked: string, imported: string) => `<script>
+import { reactive } from 'abide'
+import ${imported} from './${imported}.abide'
+
+let ok = reactive(Boolean((globalThis as { childSucceeds?: boolean }).childSucceeds))
+</script>
+<button onclick={() => { ok = true }}>fix</button>
+{#try}${invoked}${CATCH}`
+
+const GATED_PAGES: [string, string, Record<string, string>, number][] = [
+    [
+        'a file component',
+        gatedPage('<Child ok={ok}/>', 'Child'),
+        { Child: GATED },
+        4,
+    ],
+    [
+        'a component two levels down',
+        gatedPage('<Middle ok={ok}/>', 'Middle'),
+        {
+            Child: GATED,
+            Middle: `<script>
+import { props } from 'abide'
+import Child from './Child.abide'
+
+const { ok } = props<{ ok: boolean }>()
+</script>
+<i class="middle"><Child ok={ok}/></i>`,
+        },
+        7,
+    ],
+]
+
+const fix = (): void => {
+    ;(document.querySelector('button') as HTMLElement).click()
+    flushSync()
+}
+
+// 32.16 — A CATCH A COMPONENT RAISED RECOVERS when what the component read is fixed: the retry mounts
+// the body behind the catch (`TryBoundary.retryBehind`), so it sees a component's failure — and what
+// the component read — as the mount does, and the body that mounts is the one kept: built once, the
+// count in `GATED_PAGES`. Whether the server painted the catch or the browser raised it. THE
+// REVERT: retry by building the body, as it was; the build writes the component as an empty pair,
+// sees nothing fail and reads nothing, so the fix wakes nothing and the catch stays.
+for (const [what, page, components, created] of GATED_PAGES)
+    for (const where of ['on the server', 'in the browser'])
+        test(`a catch raised by ${what} ${where} recovers when it is fixed — 32.16`, async () => {
+            succeeds.childSucceeds = where === 'in the browser'
+            const mount = await servedWith(page, components)
+            succeeds.childSucceeds = false
+            mount()
+            expect(document.querySelector('.status')?.textContent).toBe(
+                'child failed',
+            )
+            const work = measure(fix)
+            expect({
+                body: document.querySelector('.child')?.textContent,
+                caught: document.querySelector('.status') !== null,
+                created: work.nodesCreated,
+            }).toEqual({ body: 'child', caught: false, created })
+        })

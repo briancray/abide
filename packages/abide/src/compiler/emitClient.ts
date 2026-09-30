@@ -1149,20 +1149,18 @@ function emitTry(
 let ${name}_at
 const ${name}_scope = ${SCOPE}.own(new ${lowering.use('Scope')}())
 const ${boundary} = ${SCOPE}.own(new ${lowering.use('TryBoundary')}())
-// Building the body evaluates it, so a failed body is retried by building it again.
-const ${name}_again = () => ${name}_arms[0]().build(document)
+// Only a mount runs the components in a body, so a failed body is retried by mounting it again.
+const ${name}_again = () => ${boundary}.retryBehind(${name}, ${name}_arms[0]())
 // Swapped untracked, as an {#if} arm is: only the failure decides which arm.
 const ${name}_swap = (next) => {
     while (next !== ${name}_at) {
         const painted = ${name}_at === undefined && !${lowering.use('isEmptyRegion')}(${name})
         ${name}_at = next
         const arm = ${name}_arms[next](${boundary}.failure.peek())
-        if (painted && next === 0 && ${name}.open.data === ${caught}) {
-            ${name}_scope.own(${boundary}.mountBehind(${name}, arm, ${name}_again))
-            if (${boundary}.failure.peek() !== undefined) {
-                ${name}_at = undefined
-                next = 1
-            }
+        const standing = next === 0 ? ${boundary}.takeStanding() : undefined
+        if (standing !== undefined) {
+            ${name}_scope.stop()
+            ${name}_scope.own(standing)
             continue
         }
         if (!painted) {
@@ -1174,10 +1172,12 @@ const ${name}_swap = (next) => {
             if (next === 1) ${fillRegion}(${name}, arm.build)
         }
         ${name}_scope.own(next === 0 ? ${inBoundary}(${boundary}, () => arm.mount(${name}), ${name}_again) : arm.mount(${name}))
+        if (next === 1) ${boundary}.startRetry()
         next = ${boundary}.failure.peek() === undefined ? 0 : 1
     }
 }
 ${SCOPE}.watch(() => {
+    if (${name}_at === undefined && ${name}.open.data === ${caught}) ${boundary}.retryCaught(${name}_again)
     const next = ${boundary}.failure() === undefined ? 0 : 1
     if (next !== ${name}_at) ${lowering.use('untracked')}(${name}_swap, next, undefined)
 })`)
