@@ -4,7 +4,12 @@ import { Lowering } from './Lowering.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import { diagnosisAt } from './lineOf.ts'
 import type { AbideFile } from './parseAbide.ts'
-import { childListsOf, type TemplateNode } from './TemplateNode.ts'
+import {
+    childListsOf,
+    componentsOf,
+    type InlineComponent,
+    type TemplateNode,
+} from './TemplateNode.ts'
 import type { Diagnosis } from './TypeSession.ts'
 
 // 32.14 — A `{#for}` WITH NO KEY OVER A BODY THAT HOLDS STATE. Unkeyed, a row is matched to the
@@ -45,7 +50,12 @@ export function templateWarnings(
         return lowering
     }
     const warnings: Diagnosis[] = []
-    const walk = (nodes: TemplateNode[]): void => {
+    const walk = (
+        nodes: TemplateNode[],
+        components: readonly InlineComponent[],
+    ): void => {
+        for (const component of components)
+            walk(component.children, component.components)
         for (const node of nodes) {
             if (
                 node.kind === 'block' &&
@@ -66,10 +76,11 @@ export function templateWarnings(
                     ),
                 )
             }
-            for (const children of childListsOf(node)) walk(children)
+            for (const children of childListsOf(node)) walk(children, [])
+            walk([], componentsOf(node))
         }
     }
-    walk(file.template)
+    walk(file.template, file.components)
     return warnings
 }
 

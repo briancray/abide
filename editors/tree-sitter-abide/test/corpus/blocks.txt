@@ -135,3 +135,122 @@ An inline component
         (tag_name)))
     (component_end
       (block_keyword))))
+
+================================================================================
+An inline component declared inside an element, an arm and a row
+================================================================================
+
+<ul>{#component Row({ label })}<li>{label}</li>{/component}<Row label="a"/></ul>
+{#if open}{#component Said()}<em>{label}</em>{/component}<Said/>{/if}
+{#for row of rows}{#component Cell()}<b>{row.name}</b>{/component}<Cell/>{/for}
+
+--------------------------------------------------------------------------------
+
+(document
+  (element
+    (start_tag
+      (tag_name))
+    (component_block
+      (component_start
+        (block_keyword)
+        (code))
+      (element
+        (start_tag
+          (tag_name))
+        (expression
+          (code))
+        (end_tag
+          (tag_name)))
+      (component_end
+        (block_keyword)))
+    (element
+      (self_closing_tag
+        (tag_name)
+        (attribute
+          (attribute_name)
+          (quoted_attribute_value
+            (attribute_value)))))
+    (end_tag
+      (tag_name)))
+  (if_block
+    (if_start
+      (block_keyword)
+      (code))
+    (component_block
+      (component_start
+        (block_keyword)
+        (code))
+      (element
+        (start_tag
+          (tag_name))
+        (expression
+          (code))
+        (end_tag
+          (tag_name)))
+      (component_end
+        (block_keyword)))
+    (element
+      (self_closing_tag
+        (tag_name)))
+    (if_end
+      (block_keyword)))
+  (for_block
+    (for_start
+      (block_keyword)
+      (code))
+    (component_block
+      (component_start
+        (block_keyword)
+        (code))
+      (element
+        (start_tag
+          (tag_name))
+        (expression
+          (code))
+        (end_tag
+          (tag_name)))
+      (component_end
+        (block_keyword)))
+    (element
+      (self_closing_tag
+        (tag_name)))
+    (for_end
+      (block_keyword))))
+
+================================================================================
+An inline component passed between a component's tags, beside children
+================================================================================
+
+<Table rows={rows}>{#component Row({ row })}<td>{row.name}</td>{/component}<p>after</p></Table>
+
+--------------------------------------------------------------------------------
+
+(document
+  (element
+    (start_tag
+      (tag_name)
+      (attribute
+        (attribute_name)
+        (expression
+          (code))))
+    (component_block
+      (component_start
+        (block_keyword)
+        (code))
+      (element
+        (start_tag
+          (tag_name))
+        (expression
+          (code))
+        (end_tag
+          (tag_name)))
+      (component_end
+        (block_keyword)))
+    (element
+      (start_tag
+        (tag_name))
+      (text)
+      (end_tag
+        (tag_name)))
+    (end_tag
+      (tag_name))))

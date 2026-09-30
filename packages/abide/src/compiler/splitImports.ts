@@ -203,9 +203,7 @@ export function abideSpecifiers(script: string): string[] {
  *
  * `import …` alone — an `export … from` binds nothing in the script it stands in.
  */
-export function importDeclarations(
-    script: string,
-): { text: string; start: number }[] {
+function importDeclarations(script: string): { text: string; start: number }[] {
     const declarations: { text: string; start: number }[] = []
     if (!script.includes('import')) return declarations
     for (const span of importSpans(script))

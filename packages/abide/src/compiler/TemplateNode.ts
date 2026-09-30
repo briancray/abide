@@ -41,6 +41,34 @@ export type Branch = {
     setup: Setup | null
     /** 34.11 — the arm's branch-local `<style>`, or `null`. */
     style: string | null
+    /** 32.43 — the inline components the arm declares. */
+    components: InlineComponent[]
+}
+
+/**
+ * A `{#component Name(pattern)}…{/component}` block: its name, its props pattern and the annotation
+ * typing it, and a body shaped as a block body is, with the `<script>` and `<style>` written in it.
+ *
+ * NOT A NODE. It renders nothing where it stands, so it is never pushed into the list it is
+ * written in — the text either side of it is one run, as the browser parses it — and it is filed
+ * on the body whose scope it is in instead (32.43), or on the invocation it is passed to (32.50).
+ */
+export type InlineComponent = {
+    kind: 'component'
+    name: string
+    /** Where the name starts in the source. */
+    at: number
+    /** The props pattern as written, or `''` where the parentheses are empty. */
+    pattern: string
+    patternAt: number
+    /** The pattern's type annotation as written, or `''` where it has none. */
+    type: string
+    typeAt: number
+    children: TemplateNode[]
+    setup: Setup | null
+    style: string | null
+    /** 32.43 — the inline components its own body declares. */
+    components: InlineComponent[]
 }
 
 /**
@@ -59,6 +87,14 @@ export type TemplateNode =
           lowerTag: string
           attributes: Attribute[]
           children: TemplateNode[]
+          /**
+           * 32.43 — the inline components declared between an invocation's or a `<slot>`'s tags
+           * and inside an element there. An element of any other kind files its own on the body
+           * around it, and holds none.
+           */
+          components: InlineComponent[]
+          /** 32.50 — the inline components written directly between an invocation's tags. */
+          passed: InlineComponent[]
       }
     | { kind: 'text'; text: string }
     // The source between the braces, verbatim. 32.1 renders it escaped.
@@ -86,6 +122,8 @@ export type TemplateNode =
           setup: Setup | null
           /** 34.11 — the row's branch-local `<style>`, or `null`. */
           style: string | null
+          /** 32.43 — the inline components the row declares. */
+          components: InlineComponent[]
       }
 
 /**
@@ -95,8 +133,26 @@ export type TemplateNode =
  * once over kinds rather than once per kind.
  */
 export function childListsOf(node: TemplateNode): TemplateNode[][] {
+    // An inline component's body is not one of them (`componentsOf`): it renders where it is
+    // invoked, not where it is declared.
     if (node.kind === 'element') return [node.children]
     if (node.kind !== 'block') return []
     if (node.block === 'for') return [node.children]
     return node.branches.map((branch) => branch.children)
+}
+
+/**
+ * The inline components filed on a node: the ones its bodies declare, and the ones an invocation
+ * is passed. What a walk over every body a file writes adds to `childListsOf`.
+ */
+export function componentsOf(node: TemplateNode): InlineComponent[] {
+    if (node.kind === 'element')
+        return node.passed.length === 0
+            ? node.components
+            : [...node.components, ...node.passed]
+    if (node.kind !== 'block') return []
+    if (node.block === 'for') return node.components
+    const components: InlineComponent[] = []
+    for (const branch of node.branches) components.push(...branch.components)
+    return components
 }

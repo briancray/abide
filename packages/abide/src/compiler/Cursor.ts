@@ -6,7 +6,7 @@ import {
     isSlot,
     isTextish,
 } from './classifyTemplate.ts'
-import type { TemplateNode } from './TemplateNode.ts'
+import type { InlineComponent, TemplateNode } from './TemplateNode.ts'
 
 // WHAT A TEMPLATE IS, ONCE, as the positions its nodes stand at: every text run, element and region,
 // in document order and as a tree. `placeTemplate` is the one walk over the template nodes, and
@@ -150,6 +150,11 @@ export class Cursor {
      * through every sink it stands inside, so a component three regions down marks all three.
      */
     holdsComponent = false
+    /**
+     * 32.43 — the inline components this region's body declares, which both lanes declare at its
+     * head. What an invocation in it is passed (32.50) is on the invocation.
+     */
+    components: readonly InlineComponent[] = []
     /** The sink this one is nested in (`nest`), or null at a page's or component's own root. */
     private outer: Cursor | null = null
     private readonly head: string
@@ -316,21 +321,23 @@ export function placeTemplate(nodes: TemplateNode[], cursor: Cursor): void {
             const here = cursor.region(node)
             if (node.block === 'for') {
                 const single = isSingleRooted(node.children)
-                placeTemplate(
-                    node.children,
-                    cursor.nest(
-                        here,
-                        single
-                            ? `${ROW_ROOT}.node`
-                            : `${ROW_ROOT}.node.nextSibling`,
-                        `${ROW_ROOT}.node.parentNode`,
-                        true,
-                    ),
+                const row = cursor.nest(
+                    here,
+                    single
+                        ? `${ROW_ROOT}.node`
+                        : `${ROW_ROOT}.node.nextSibling`,
+                    `${ROW_ROOT}.node.parentNode`,
+                    true,
                 )
+                row.components = node.components
+                placeTemplate(node.children, row)
                 continue
             }
-            for (const branch of node.branches)
-                placeTemplate(branch.children, cursor.nest(here))
+            for (const branch of node.branches) {
+                const arm = cursor.nest(here)
+                arm.components = branch.components
+                placeTemplate(branch.children, arm)
+            }
             continue
         }
         if (node.kind !== 'element') continue
@@ -338,8 +345,11 @@ export function placeTemplate(nodes: TemplateNode[], cursor: Cursor): void {
             const here = cursor.region(node)
             // A slot's fallback is always a sink, empty or not; an invocation's children are one
             // only where the caller wrote some.
-            if (isSlot(node) || node.children.length > 0)
-                placeTemplate(node.children, cursor.nest(here))
+            if (isSlot(node) || node.children.length > 0) {
+                const inside = cursor.nest(here)
+                inside.components = node.components
+                placeTemplate(node.children, inside)
+            }
             continue
         }
         cursor.element(node)

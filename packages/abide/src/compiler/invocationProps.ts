@@ -11,7 +11,7 @@
 
 import { propKeyOf } from './classifyTemplate.ts'
 import type { Lowering } from './Lowering.ts'
-import type { TemplateNode } from './TemplateNode.ts'
+import type { InlineComponent, TemplateNode } from './TemplateNode.ts'
 
 /** The props-record entries a component tag hands its child: spreads first, then each prop. */
 export function invocationProps(
@@ -45,5 +45,22 @@ export function invocationProps(
             : JSON.stringify(attribute.value)
         explicit.push(`${JSON.stringify(key)}: () => (${value})`)
     }
+    // 32.50 — a component written between the tags is the prop of its name, the one each lane's
+    // region declares under `passedName`, so every read of the accessor is the same function (32.35).
+    for (const passed of node.passed)
+        explicit.push(
+            `${JSON.stringify(passed.name)}: () => ${passedName(passed)}`,
+        )
     return [...spreads, ...explicit]
+}
+
+/**
+ * What a region declares an inline component passed to an invocation under (32.50).
+ *
+ * Not its own name, which is in scope nowhere around the invocation (32.51): numbered by where it
+ * is written, which is unique in its file. Its own name is the function expression's, so its body
+ * still invokes itself (32.44).
+ */
+export function passedName(component: InlineComponent): string {
+    return `__passed${component.at}`
 }

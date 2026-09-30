@@ -1,14 +1,14 @@
-// 32.39 TO 32.49 — `{#component Name(pattern)}`, A COMPONENT DECLARED IN THE FILE THAT USES IT. It
-// compiles as the file it would be moved into (`inlineSources`), so what is asserted here is that
-// the file path's contracts hold for it unchanged: the server renders it where it stands, the
-// client hydrates it without making a node, and a prop is a live read — counted, not compared.
+// 32.39 TO 32.55 — `{#component Name(pattern)}`, A COMPONENT DECLARED WHERE IT IS USED. It is a
+// function declared in the body it is written in, so it closes over every name in scope there, and
+// it is invoked as a file component is. What is asserted is the work as well as the markup: the
+// server renders it where it is invoked, the client hydrates it without making a node, and a read
+// of the page's own value wakes one binding inside it — counted, not compared.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
 import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
-import { withInline } from '#compiler/inlineSources.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -24,42 +24,23 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-// Two invocations of one inline component, each handed a live read of the page's own value.
-const LEDGER = `<script>
-import { reactive } from 'abide'
-
-let lines = reactive(2)
-</script>
-
-{#component Line({ label, amount }: { label: string; amount: number })}
-<li><span>{label}</span><strong>{amount.toFixed(2)}</strong></li>
-{/component}
-
-<ul><Line label="net" amount={lines * 10}/><Line label="gross" amount={lines * 12}/></ul>
-<button onclick={() => { lines = lines + 1 }}>+</button>`
-
-// A page and every inline component it declares, compiled as the build compiles them and mounted
-// into the markup the server wrote.
+// A page, and any component file it imports, compiled as the build compiles them and mounted into
+// the markup the server wrote. The mount is handed back unrun, so a test can count what it does.
 async function mountPage(
     page: string,
-): Promise<{ html: string; mount: (root: unknown) => void }> {
-    const sources = withInline([
-        { path: `${ROOT}src/Page.abide`, text: page, file: parseAbide(page) },
-    ])
-    const { reads } = await session.readsFor(sources)
+    components: Record<string, string> = {},
+): Promise<{ html: string; mount: () => void }> {
     const modules: Record<string, string> = {}
-    for (let at = 0; at < sources.length; at += 1) {
-        const source = sources[at] as (typeof sources)[number]
-        const name = source.path
-            .slice(source.path.lastIndexOf('/') + 1)
-            .replace(/\.abide$/, '')
-        modules[`${name}.ts`] = emitComponent(source.file, reads[at])
+    for (const [name, source] of Object.entries({
+        ...components,
+        Page: page,
+    })) {
+        const file = parseAbide(source)
+        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
+        modules[`${name}.ts`] = emitComponent(file, reads)
         modules[`${name}.client.ts`] =
-            emitClient(
-                source.file,
-                reads[at],
-                source.inlineOf === undefined ? 'none' : 'invoked',
-            ) || 'export default () => {}'
+            emitClient(file, reads, name === 'Page' ? 'none' : 'invoked') ||
+            'export default () => {}'
     }
     const dir = temporaryModule(modules)
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -74,50 +55,160 @@ async function mountPage(
         html.indexOf('</body>'),
     )
     const { default: mount } = await import(`${dir}/Page.client.ts`)
-    return { html, mount }
+    return {
+        html,
+        mount: () => {
+            mount(pageRegion(document.body))
+            flushSync()
+        },
+    }
 }
 
-// THE REVERT: drop the import `withInline` adds to the declaring file; the page's `<Line/>` is an
-// unbound name, and the render throws `Line is not defined` before any markup is written.
-test('an inline component renders where it stands, once per invocation — 32.39', async () => {
-    const { html } = await mountPage(LEDGER)
-    expect(html).toContain(
-        '<ul><!--[--><li><span>net</span><strong>20.00</strong></li><!--]--><!--[--><li><span>gross</span><strong>24.00</strong></li><!--]--></ul>',
-    )
-})
+const click = (selector: string): void => {
+    ;(document.querySelector(selector) as HTMLElement).click()
+    flushSync()
+}
 
-// 41.9 AND 33.5 THROUGH AN INLINE COMPONENT: hydration adopts what the server wrote, and a click
-// wakes one binding per invocation and builds nothing. THE REVERT: hand the inline component the
-// no-op client module a file with nothing to mount gets; the click moves `lines` and `net` stays
-// `20.00`.
-test('an inline component hydrates with no node made, and a prop re-reads live — 32.39, 33.5', async () => {
-    const { mount } = await mountPage(LEDGER)
-    const hydrated = measure(() => {
-        mount(pageRegion(document.body))
-        flushSync()
-    })
+// 32.42 — THE PAGE'S OWN VALUE, read by name inside the body, with no prop to carry it.
+const COUNTER = `<script>
+import { reactive } from 'abide'
+
+let count = reactive(1)
+</script>
+
+{#component Shown()}
+<b>{count}</b>
+{/component}
+
+<p><Shown/><Shown/></p>
+<button onclick={() => { count = count + 1 }}>+</button>`
+
+// THE REVERTS: declare the template's components nowhere (`definitions` answering '' in
+// `emitComponent`) — the render throws `Shown is not defined`; or keep an inline component's units
+// out of its mount (`clientComponent` emitting no `bindings`) — the click moves `count`, the text
+// stays `1`, and wakes is 0.
+test("an inline component reads its file's script by name, live — 32.42, 31.2", async () => {
+    const { html, mount } = await mountPage(COUNTER)
+    expect(html).toContain(
+        '<p><!--[--><b>1</b><!--]--><!--[--><b>1</b><!--]--></p>',
+    )
+
+    const hydrated = measure(mount)
     expect(hydrated.nodesCreated).toBe(0)
 
-    const [net, gross] = document.querySelectorAll('strong')
-    const before = (net as Element).firstChild
-    const work = measure(() => {
-        ;(document.querySelector('button') as HTMLElement).click()
-        flushSync()
-    })
-    expect((net as Element).textContent).toBe('30.00')
-    expect((gross as Element).textContent).toBe('36.00')
-    expect((net as Element).firstChild).toBe(before)
+    const [first, second] = document.querySelectorAll('b')
+    const text = (first as Element).firstChild
+    const work = measure(() => click('button'))
+    expect((first as Element).textContent).toBe('2')
+    expect((second as Element).textContent).toBe('2')
+    // Written in place: the text node the server wrote, and no node made or moved.
+    expect((first as Element).firstChild).toBe(text)
     expect(work.nodesCreated).toBe(0)
     expect(work.elementsMoved).toBe(0)
-    // One binding per invocation, and nothing else: the page reads `lines` only through the props.
+    // One binding per invocation, and nothing else reads `count`.
+    expect(work.wakes).toBe(2)
+})
+
+// 32.41, 32.42 — DECLARED IN A ROW, IT CLOSES OVER THE ROW: each invocation reads its own row's
+// item. A row the browser grows is filled by the component itself (32.17). THE REVERTS: leave a
+// row's components out of the loop body on the server (`definitions` off the row's `setup`) — the
+// render throws `Cell is not defined`; or out of the row's mount on the client (`emitRegion`
+// declaring nothing in a repeated region) — hydration throws it.
+test('an inline component declared in a {#for} row reads the row — 32.41, 32.42', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let rows = reactive([{ id: 1, name: 'one' }, { id: 2, name: 'two' }])
+</script>
+
+<ul>{#for row of rows by row.id}{#component Cell()}<b>{row.name}</b>{/component}<li><Cell/></li>{/for}</ul>
+<button onclick={() => { rows = [...rows, { id: 3, name: 'three' }] }}>+</button>`)
+    expect(html).toContain(
+        '<li><!--[--><b>one</b><!--]--></li><li><!--[--><b>two</b><!--]--></li>',
+    )
+    expect(measure(mount).nodesCreated).toBe(0)
+
+    const grown = measure(() => click('button'))
+    expect(
+        [...document.querySelectorAll('li')].map((li) => li.textContent),
+    ).toEqual(['one', 'two', 'three'])
+    // The row's `<li>`, its two anchors, and the `<b>` and its text the component fills them with.
+    expect(grown.nodesCreated).toBe(5)
+})
+
+// 32.41, 32.43 — DECLARED INSIDE AN ELEMENT, it is its body's, and invocable before where it is
+// written; DECLARED IN AN ARM, it closes over the page and is built with the arm. THE REVERT: file
+// a component written inside an ordinary element on nothing (`collect` skipping `declared` for an
+// element's own list) — `Mark` is unbound and the render throws.
+test('an inline component declared in an element and in an {#if} arm — 32.41, 32.43', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let open = reactive(false)
+let label = reactive('shut')
+</script>
+
+<Mark/><div>{#component Mark()}<i>mark</i>{/component}</div>
+{#if open}{#component Said()}<em>{label}</em>{/component}<Said/>{/if}
+<button id="open" onclick={() => { open = true }}>open</button>
+<button id="label" onclick={() => { label = 'open' }}>label</button>`)
+    expect(html).toContain('<!--[--><i>mark</i><!--]--><div></div>')
+    expect(measure(mount).nodesCreated).toBe(0)
+
+    click('#open')
+    expect(document.querySelector('em')?.textContent).toBe('shut')
+    const em = document.querySelector('em')
+    const work = measure(() => click('#label'))
+    expect(document.querySelector('em')).toBe(em)
+    expect(em?.textContent).toBe('open')
+    expect(work.nodesCreated).toBe(0)
+    expect(work.wakes).toBe(1)
+})
+
+// 32.50, 32.52 — WRITTEN BETWEEN AN INVOCATION'S TAGS, it is the prop of its name: the child
+// invokes it by that name, hands it props of its own, and what else stands between the tags is
+// still the child's `<slot/>`. It closes over the caller, so a write there reaches it in place.
+const OUTER = `<script>
+import { props } from 'abide'
+
+const { Item, title } = props<{ Item: (props: { n: number }) => unknown; title: string }>()
+</script>
+
+<section><h2>{title}</h2><ol><Item n={1}/><Item n={2}/></ol><slot/></section>`
+
+// THE REVERTS: pass nothing for it (`invocationProps` skipping `node.passed`), or file nothing as
+// passed (`fileComponents` leaving `passed` empty) — either way `Item` is absent in `Outer`, and
+// both of its positions render the empty pair (32.36).
+test('an inline component written between the tags is passed as a prop — 32.50, 32.52', async () => {
+    const { html, mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Outer from './Outer.abide'
+
+let unit = reactive('kg')
+</script>
+
+<Outer title="Weights">{#component Item({ n }: { n: number })}<li>{n} {unit}</li>{/component}<p>after</p></Outer>
+<button onclick={() => { unit = 'lb' }}>lb</button>`,
+        { Outer: OUTER },
+    )
+    expect(html).toContain(
+        '<section><h2>Weights</h2><ol><!--[--><li>1 kg</li><!--]--><!--[--><li>2 kg</li><!--]--></ol><!--[--><p>after</p><!--]--></section>',
+    )
+    expect(measure(mount).nodesCreated).toBe(0)
+
+    const items = document.querySelectorAll('li')
+    const work = measure(() => click('button'))
+    expect([...document.querySelectorAll('li')]).toEqual([...items])
+    expect((items[1] as Element).textContent).toBe('2 lb')
+    expect(work.nodesCreated).toBe(0)
     expect(work.wakes).toBe(2)
 })
 
 // 32.18 — `<slot/>` IN AN INLINE COMPONENT is a file component's: the caller's markup, or the
-// fallback. And 32.43 — invoked above the block that declares it. THE REVERT: drop `holdsSlot` from
-// `Lowering.takesProps`; the component is emitted taking no record, and the render throws on the
-// `__props` it reads the children from.
-test('children render into an inline component slot, and the fallback where none were passed — 32.18, 32.43', async () => {
+// fallback. THE REVERT: give an inline component no record (`clientComponent` and `serverComponent`
+// taking `__root` alone) — the render throws on the `__props` the slot reads its children from.
+test('children render into an inline component slot, and the fallback where none were passed — 32.18', async () => {
     const { html } = await mountPage(`<Panel><b>given</b></Panel><Panel/>
 {#component Panel()}
 <section><slot>empty</slot></section>
@@ -127,10 +218,9 @@ test('children render into an inline component slot, and the fallback where none
     )
 })
 
-// 32.46 AND 32.42 — its own `<script>` is its per-instance setup, and it sees every inline
-// component of its file, itself included. THE REVERT: drop `inlineComponent.setup` from the scripts
-// `withInline` hands it; `depth` is unbound and the render throws before any markup is written.
-test('an inline component sets itself up and invokes itself — 32.42, 32.46', async () => {
+// 32.44, 32.46 — its own `<script>` is its per-instance setup, and it invokes itself. THE REVERT:
+// drop the component's setup from `serverComponent`; `label` is unbound and the render throws.
+test('an inline component sets itself up and invokes itself — 32.44, 32.46', async () => {
     const { html } =
         await mountPage(`{#component Nest({ depth }: { depth: number })}
 <script>
@@ -144,22 +234,24 @@ const label = 'level ' + depth
     )
 })
 
-// 38.40 — A HOVER INSIDE THE BLOCK IS ANSWERED BY THE COMPONENT'S OWN LOWERING, which is where the
-// body is typed. THE REVERT: answer every offset from the file's own (`inlineAt` returning
-// `abidePath`); the file's projection holds nothing of the body, and the hover is undefined.
+// 38.40 — A HOVER INSIDE THE BLOCK IS ANSWERED, from the file's own projection, where the body is
+// typed. THE REVERT: project no inline component (`declare` doing nothing); `diagnose` reports
+// `Price` unbound (TS2304) and nothing in the body is typed.
 test('a hover inside an inline component is answered — 38.40', async () => {
     const page = `{#component Price({ amount }: { amount: number })}
 <b>{amount.toFixed(2)}</b>
 {/component}
 <Price amount={3}/>`
     const path = `${ROOT}src/Hover.abide`
-    const sources = withInline([{ path, text: page, file: parseAbide(page) }])
-    const { reads } = await session.readsFor(sources)
-    const typed = sources.map((source, at) => ({
-        ...source,
-        reads: reads[at] ?? [],
-    }))
-    expect(await session.diagnose(typed, ROOT, false)).toEqual([])
+    const file = parseAbide(page)
+    const { reads } = await session.readsFor([{ path, text: page, file }])
+    expect(
+        await session.diagnose(
+            [{ path, text: page, file, reads: reads[0] ?? [] }],
+            ROOT,
+            false,
+        ),
+    ).toEqual([])
     const hover = await session.inspect(path, page, page.indexOf('toFixed'))
     expect(hover?.signature).toContain('(method) toFixed(')
 })
@@ -172,44 +264,15 @@ test('an inline component named in lowercase is refused — 32.39', () => {
     ).toThrow(/\{#component row\} is not TitleCase.*RULEBOOK 32\.39/)
 })
 
-// THE REVERT: return early from `refuseEnclosingNames`; the build reads `count` as an undeclared
-// global, and the refusal below never comes.
-test("an inline component does not see its file's script — 32.41", async () => {
-    const page = `<script>
-import { reactive } from 'abide'
-
-let count = reactive(0)
-</script>
-
-{#component Counter()}
-<b>{count}</b>
-{/component}
-
-<Counter/>`
-    let refused = ''
-    try {
-        await session.readsFor(
-            withInline([
-                {
-                    path: `${ROOT}src/Scoped.abide`,
-                    text: page,
-                    file: parseAbide(page),
-                },
-            ]),
-        )
-    } catch (thrown) {
-        refused = (thrown as Error).message
-    }
-    expect(refused).toContain('Scoped.abide:8:5')
-    expect(refused).toContain(
-        "{#component Counter} reads `count`, which its file's script declares",
-    )
-    expect(refused).toContain('RULEBOOK 32.41')
-})
-
-// THE REVERT: drop the import walk from `refuseCollisions`; the file parses, and the emitted
-// module declares `Row` twice.
-test('an inline component named as an import is refused, naming both — 32.49', () => {
+// 32.49, 32.55 — ONE NAME, TWO THINGS, IN ONE SCOPE. THE REVERTS: drop `refuseTwice` from `open`, then
+// `refuseImported`, then `refuseDeclared` — each file below then parses and reads, and the module
+// emitted for it declares the name twice.
+test('an inline component named as another in its body, an import or a script name is refused — 32.49, 32.55', async () => {
+    expect(() =>
+        parseAbide(
+            '{#if on}{#component Row()}<li/>{/component}<p>{#component Row()}<b/>{/component}</p>{/if}',
+        ),
+    ).toThrow('{#component Row} is declared twice in one body')
     expect(() =>
         parseAbide(`<script>
 import Row from './Row.abide'
@@ -218,14 +281,45 @@ import Row from './Row.abide'
     ).toThrow(
         "{#component Row} is declared inline and Row is also imported from './Row.abide'",
     )
+    const page = `<script>
+import { props } from 'abide'
+
+const { Row } = props<{ Row: string }>()
+</script>
+{#component Row()}<li/>{/component}`
+    let refused = ''
+    try {
+        await session.readsFor([
+            {
+                path: `${ROOT}src/Twice.abide`,
+                text: page,
+                file: parseAbide(page),
+            },
+        ])
+    } catch (thrown) {
+        refused = (thrown as Error).message
+    }
+    expect(refused).toContain(
+        "{#component Row} is declared inline and `Row` is also declared by its file's script",
+    )
+    // A body inside another is a scope of its own, and its name shadows the outer one.
+    expect(() =>
+        parseAbide(
+            '{#component Row()}<li/>{/component}{#if on}{#component Row()}<b/>{/component}<Row/>{/if}',
+        ),
+    ).not.toThrow()
 })
 
-// THE REVERT: drop the `open.length > 1` refusal; the block's body is parsed into the arm around
-// it, and its name is never bound.
-test('an inline component inside a block is refused — 32.44', () => {
+// 32.53 — THE PROP GIVEN TWICE. THE REVERT: drop the attribute walk from `collect`; the record
+// carries `Item` twice and the component between the tags silently wins.
+test('an invocation given a prop both ways is refused — 32.53', () => {
     expect(() =>
-        parseAbide('{#if on}{#component Row()}<li/>{/component}{/if}'),
-    ).toThrow(/RULEBOOK 32\.44/)
+        parseAbide(
+            '<Outer Item={x}>{#component Item()}<li/>{/component}</Outer>',
+        ),
+    ).toThrow(
+        /<Outer> is given Item as an attribute and as the \{#component Item\}.*RULEBOOK 32\.53/,
+    )
 })
 
 let app = ''
@@ -247,24 +341,24 @@ let count = reactive(0)
 <style>
 .row { color: red }
 </style>`,
-        'ui/pages/body/page.abide': `<script>
-import { missing } from './nowhere.ts'
+        'ui/components/Outer.abide': OUTER,
+        'ui/pages/passed/page.abide': `<script>
+import Outer from '../../components/Outer.abide'
 </script>
 
-{#component Tag({ label }: { label: string })}
-<b>{label.toFixed(2)} {missing}</b>
-{/component}
-
-<Tag label="x"/>{missing}`,
+<Outer title="t">{#component Item({ n }: { n: string })}<li>{n}</li>{/component}</Outer>
+<Outer title="u">{#component Item({ n }: { n: number })}<li>{n}</li>{/component}</Outer>
+<Item n={1}/>`,
     })
 }, 60_000)
 
-// A tag is held to the props its pattern's annotation declares, and a finding inside the body is on
-// the file's own line. THE REVERTS: report an inline component's findings at its own path rather
-// than its file's (`authoredPath`) — the `toFixed` finding is filed under `page.abide.Tag.abide`,
-// which no editor has open; or keep its findings outside its block — the unresolved import is
-// reported twice, once for the file and once for the copy the component carries.
-test('abide check holds an inline component to its props, on the lines of its file — 32.40, 38.41', async () => {
+// 38.41, 32.54 — A TAG IS HELD TO THE PROPS ITS PATTERN'S ANNOTATION DECLARES, and a component passed
+// between the tags to the type its receiver declares for it, each on the file's own line; and a
+// component passed is in scope nowhere after the tag (32.51). THE REVERTS: key the record on no
+// passed component (`invocation` skipping `node.passed`) — each `<Outer>` reports `Item` missing
+// (TS2741) and the `n: string` mismatch is not; or declare the passed components without braces
+// around the call — `<Item n={1}/>` after the tags resolves, and two `Item`s collide (TS2393).
+test('abide check holds an inline component to its props and a passed one to its receiver — 32.40, 32.51, 32.54, 38.41', async () => {
     const found = await checkApp(app)
     const reported: {
         path: string
@@ -275,32 +369,27 @@ test('abide check holds an inline component to its props, on the lines of its fi
     for (const { path, line, column, code } of found)
         reported.push({ path: path.slice(app.length), line, column, code })
     expect(reported).toEqual([
-        { path: '/ui/pages/body/page.abide', line: 2, column: 25, code: 2307 },
-        { path: '/ui/pages/body/page.abide', line: 6, column: 11, code: 2551 },
         { path: '/ui/pages/page.abide', line: 11, column: 17, code: 2322 },
+        {
+            path: '/ui/pages/passed/page.abide',
+            line: 5,
+            column: 30,
+            code: 2322,
+        },
+        { path: '/ui/pages/passed/page.abide', line: 7, column: 2, code: 2304 },
     ])
 })
 
-// 32.45 — THE FILE'S `<style>` REACHES THE ELEMENTS ITS INLINE COMPONENT WRITES, and the build files
-// the component as a module of its own, invoked. THE REVERTS: skip the inline components in
-// `emitApp`'s marking loop — the `<li>` carries no token, and `.row` matches nothing; or resolve no
-// relative specifier `componentGraph` cannot hand to bun — the component is not invoked, and its
-// client module fills no region the browser grew.
-test('a build compiles an inline component as a module of its own, scoped by its file — 32.45', async () => {
+// 32.45, 32.47 — THE FILE'S `<style>` REACHES THE ELEMENTS ITS INLINE COMPONENT WRITES, and its own
+// `<style>` is a body's, reaching its elements and no other. THE REVERT: pass `markScoped` none of
+// the file's components in `emitApp` — the `<li>` carries no token, and `.row` matches nothing.
+test('an inline component is scoped by its file and by its own style — 32.45, 32.47', async () => {
     const compiled = await compileApp(app)
-    const server = compiled.modules.get('ui/pages/page.abide.Row.ts') ?? ''
-    const client =
-        compiled.modules.get('ui/pages/page.abide.Row.client.ts') ?? ''
+    const server = compiled.modules.get('ui/pages/page.ts') ?? ''
     const token = /li class=\\"row\\" (a-[\w]+) (a-[\w]+-0)/.exec(server)
     expect(token).not.toBeNull()
     const [, file, own] = token as RegExpExecArray
     const sheet = compiled.modules.get('ui/pages/page.style.css')
     expect(sheet).toContain(`.row[${file}]`)
-    // 32.47 — and its own `<style>` is a body's, reaching its elements and no other.
     expect(sheet).toContain(`li[${own}]`)
-    // Invoked, so it carries its own markup for a region the browser grew (32.17).
-    expect(client).toContain('isEmptyRegion')
-    expect(compiled.modules.get('ui/pages/page.ts')).toContain(
-        "from './page.abide.Row.ts'",
-    )
 })

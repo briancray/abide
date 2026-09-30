@@ -2,7 +2,12 @@ import { isEventName } from '#shared/isEventName.ts'
 import { isComponentTag, propKeyOf } from './classifyTemplate.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import type { AbideFile } from './parseAbide.ts'
-import type { Branch, Setup, TemplateNode } from './TemplateNode.ts'
+import type {
+    Branch,
+    InlineComponent,
+    Setup,
+    TemplateNode,
+} from './TemplateNode.ts'
 import { tokenise } from './tokenise.ts'
 
 export type Span = { start: number; end: number }
@@ -43,6 +48,11 @@ export type Projection = {
      * 14.8 — every branch-local `<script>`, whose declarations are names as the page's are (31.1).
      */
     setups: Span[]
+    /**
+     * 32.40 — every inline component's `props` statement, whose pattern binds props as a file's
+     * `props` call does (33.4). Also in `slots`, keyed by the component.
+     */
+    heads: Span[]
     /**
      * 38.3 — every run of the text copied out of the source, ascending, with where it came from.
      * What lies between two is scaffolding the source never held.
@@ -106,6 +116,8 @@ function project(file: AbideFile): Projection {
     const keys = new Map<object, Span>()
     const tags = new Map<object, Span>()
     const setups: Span[] = []
+    const heads: Span[] = []
+    let inlineProps = false
 
     // `open` is what the statement starts with: a bare parenthesis, or a call that hands the value
     // the type its position gives it (`openerOf`).
@@ -185,6 +197,14 @@ function project(file: AbideFile): Projection {
             if (attribute.expression) prop(attribute)
             else text += `${JSON.stringify(attribute.value)},\n`
         }
+        // 32.50, 32.54 — each component passed between the tags is the prop of its name, held to
+        // the type the child declares for it and found at the component's own name.
+        for (const passed of node.passed) {
+            place(passed.at, 0)
+            text += `${JSON.stringify(passed.name)}: `
+            copied(passed.name, passed.at)
+            text += ',\n'
+        }
         text += '}))\n'
         for (const attribute of refused)
             slots.set(
@@ -195,6 +215,53 @@ function project(file: AbideFile): Projection {
                     `${ANY}(`,
                 ),
             )
+    }
+
+    // 32.40, 32.42 — AN INLINE COMPONENT IS A FUNCTION DECLARED WHERE IT IS WRITTEN, so it sees
+    // every name in scope there, as the emitted one does, and a tag invoking it is the call on it
+    // that `invocation` already writes. It takes the record its pattern types, and binds its pattern
+    // with a `props` call of its own.
+    const component = (declared: InlineComponent): void => {
+        text += 'function '
+        copied(declared.name, declared.at)
+        text += `(${RECORD}: `
+        if (declared.pattern === '') text += NO_PROPS
+        else if (declared.type === '') text += 'Record<string, unknown>'
+        else copied(declared.type, declared.typeAt)
+        text += '): void {\n'
+        if (declared.pattern !== '') {
+            inlineProps = true
+            const start = text.length
+            text += 'const '
+            copied(declared.pattern, declared.patternAt)
+            text += ` = ${INLINE_PROPS}<typeof ${RECORD}>()`
+            const span = { start, end: text.length }
+            slots.set(declared, span)
+            heads.push(span)
+            text += '\n'
+        }
+        setup(declared.setup)
+        declare(declared.components)
+        walk(declared.children)
+        text += '}\n'
+    }
+    // 32.43 — a body's components stand at its head, so each is in scope throughout it.
+    const declare = (components: readonly InlineComponent[]): void => {
+        for (const declared of components) component(declared)
+    }
+    // A body with no braces of its own is given some where it declares a component (32.43).
+    const body = (
+        nodes: TemplateNode[],
+        components: readonly InlineComponent[],
+    ): void => {
+        if (components.length === 0) {
+            walk(nodes)
+            return
+        }
+        text += '{\n'
+        declare(components)
+        walk(nodes)
+        text += '}\n'
     }
 
     const walk = (nodes: TemplateNode[]): void => {
@@ -208,29 +275,35 @@ function project(file: AbideFile): Projection {
                 continue
             }
             if (node.kind === 'element') {
-                if (isComponentTag(node.tag) && isNamedAlone(node.tag)) {
-                    invocation(node)
-                    walk(node.children)
-                    continue
+                // 32.51 — what an invocation is passed is in scope at the call and nowhere after.
+                if (node.passed.length > 0) {
+                    text += '{\n'
+                    declare(node.passed)
                 }
-                for (const attribute of node.attributes)
-                    if (attribute.expression)
-                        slots.set(
-                            attribute,
-                            expression(
-                                attribute.value,
-                                file.origins.holders.get(attribute),
-                                openerOf(node.tag, attribute.lowerName),
-                            ),
-                        )
-                walk(node.children)
+                if (isComponentTag(node.tag) && isNamedAlone(node.tag))
+                    invocation(node)
+                else
+                    for (const attribute of node.attributes)
+                        if (attribute.expression)
+                            slots.set(
+                                attribute,
+                                expression(
+                                    attribute.value,
+                                    file.origins.holders.get(attribute),
+                                    openerOf(node.tag, attribute.lowerName),
+                                ),
+                            )
+                if (node.passed.length > 0) text += '}\n'
+                body(node.children, node.components)
                 continue
             }
             // 32.16 — the catch arm binds the failure, and the checker has to see the name.
             if (node.block === 'try') {
-                walk((node.branches[0] as Branch).children)
+                const [tried, caught] = node.branches as [Branch, Branch]
+                body(tried.children, tried.components)
                 text += `{ const ${node.error === '' ? '__failure' : node.error}: any = undefined\n`
-                walk((node.branches[1] as Branch).children)
+                declare(caught.components)
+                walk(caught.children)
                 text += '}\n'
                 continue
             }
@@ -259,6 +332,7 @@ function project(file: AbideFile): Projection {
                     }
                     first = false
                     setup(branch.setup)
+                    declare(branch.components)
                     walk(branch.children)
                     text += '}'
                 }
@@ -280,6 +354,7 @@ function project(file: AbideFile): Projection {
             text += `for (const ${node.item} of ${ROWS_OF}(${subject})) {\n`
             if (node.index !== '') text += `const ${node.index} = 0\n`
             setup(node.setup)
+            declare(node.components)
             if (node.key !== '')
                 keys.set(
                     node,
@@ -289,9 +364,11 @@ function project(file: AbideFile): Projection {
             text += '}\n'
         }
     }
+    declare(file.components)
     walk(file.head)
     walk(file.template)
     if (subjects > 0) text += ROWS_OF_DECLARATION
+    if (inlineProps) text += INLINE_PROPS_IMPORT
     text += POSITION_DECLARATIONS
     // 34.3 — BOTH BLOCKS, and the reason is the SERVER. `<script module>` is request-local there
     // (34.2), so the emitted component carries its body as well as the `<script>`'s — an `await`
@@ -308,6 +385,7 @@ function project(file: AbideFile): Projection {
         keys,
         tags,
         setups,
+        heads,
         origins,
     }
 }
@@ -331,6 +409,22 @@ function openerOf(tag: string, lowerName: string): string {
 }
 
 const PROP = '__prop'
+// What an inline component's function names the record it is called with, and abide's `props` as
+// its head calls it (32.40) — bound here, since the author imports `props` only where they call it.
+const RECORD = '__record'
+export const INLINE_PROPS = '__inlineProps'
+const INLINE_PROPS_IMPORT = `
+import { props as ${INLINE_PROPS} } from ${JSON.stringify(
+    new URL('../shared/props.ts', import.meta.url).pathname,
+)}
+`
+/**
+ * The props type of a component with no `props` call.
+ *
+ * 33.2 — a component with no `props` call takes no prop of its own; 33.16 — `children` is the one
+ * key every component takes, and the tag's body passes it rather than an attribute.
+ */
+export const NO_PROPS = '{ [key: string]: never }'
 const ON = '__on'
 const ANY = '__any'
 const BIND = '__bind'

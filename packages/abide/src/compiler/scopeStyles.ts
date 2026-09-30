@@ -8,7 +8,12 @@
 // mechanisms already share.
 
 import { isComponentTag, isSlot } from './classifyTemplate.ts'
-import { childListsOf, type TemplateNode } from './TemplateNode.ts'
+import {
+    childListsOf,
+    componentsOf,
+    type InlineComponent,
+    type TemplateNode,
+} from './TemplateNode.ts'
 import { skipQuoted } from './tokenise.ts'
 
 // What never carries a token: a document-level tag, and the tags a head contributes. The head's
@@ -40,29 +45,36 @@ export function scopeToken(relative: string): string {
  * beside the component's and any enclosing body's, so its rules reach that body and nothing else
  * the component wrote. Numbered in the order the walk meets them, which is the file's, so a body's
  * token is stable across builds.
+ *
+ * 32.45, 32.47 — AN INLINE COMPONENT'S ELEMENTS ARE ITS FILE'S, marked with every token in force
+ * where it is declared, and its own `<style>` is a body's.
  */
 export function markScoped(
     nodes: TemplateNode[],
     token: string,
     tokens: string[] = [token],
     bodies: { css: string; token: string }[] = [],
+    components: readonly InlineComponent[] = [],
 ): { css: string; token: string }[] {
+    for (const component of components) {
+        const own = bodyTokens(component.style, token, tokens, bodies)
+        markScoped(component.children, token, own, bodies, component.components)
+    }
     for (const node of nodes) {
         if (node.kind === 'block') {
             const arms = node.block === 'for' ? [node] : node.branches
-            for (const arm of arms) {
-                let own = tokens
-                if (arm.style !== null) {
-                    const body = `${token}-${bodies.length}`
-                    bodies.push({ css: arm.style, token: body })
-                    own = [...tokens, body]
-                }
-                markScoped(arm.children, token, own, bodies)
-            }
+            for (const arm of arms)
+                markScoped(
+                    arm.children,
+                    token,
+                    bodyTokens(arm.style, token, tokens, bodies),
+                    bodies,
+                    arm.components,
+                )
             continue
         }
         for (const children of childListsOf(node))
-            markScoped(children, token, tokens, bodies)
+            markScoped(children, token, tokens, bodies, componentsOf(node))
         if (node.kind !== 'element') continue
         // A child's own elements are the child's; what the caller passes between its tags is the
         // caller's, and is marked as the caller's.
@@ -80,6 +92,19 @@ export function markScoped(
                 })
     }
     return bodies
+}
+
+/** The tokens a body's elements carry: the ones around it, and its own where it has a `<style>`. */
+function bodyTokens(
+    style: string | null,
+    token: string,
+    tokens: string[],
+    bodies: { css: string; token: string }[],
+): string[] {
+    if (style === null) return tokens
+    const body = `${token}-${bodies.length}`
+    bodies.push({ css: style, token: body })
+    return [...tokens, body]
 }
 
 /** The styles, every selector made to require the token. */

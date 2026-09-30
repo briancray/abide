@@ -23,12 +23,16 @@ import {
     type ValueBind,
     valueBindOf,
 } from './classifyTemplate.ts'
-import { invocationProps } from './invocationProps.ts'
+import { invocationProps, passedName } from './invocationProps.ts'
 import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { SERVER_SPECIFIER } from './SPECIFIERS.ts'
 import { componentImports, splitImports, withoutProps } from './splitImports.ts'
-import type { Attribute, TemplateNode } from './TemplateNode.ts'
+import type {
+    Attribute,
+    InlineComponent,
+    TemplateNode,
+} from './TemplateNode.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 // A region's anchors, as the JS string literals the emitted server render concatenates.
@@ -100,8 +104,12 @@ export function emitComponent(
     const used = lowering.used
 
     const page = new Cursor()
+    page.components = file.components
     placeTemplate(file.template, page)
     const body = renderLevel(page.top, lowering, false)
+    // 32.43 — the template's own components, declared where the body is built: they read the
+    // setup's names, and a child they invoke adds its head to the body's.
+    const declared = definitions(page, lowering)
 
     // EMITTED AFTER THE BODY, NOT BEFORE. 39.12 merges across the whole FILE, so a second `<head>`
     // further down the template shadows the first one's `<title>` — and `emitNode` adds to `used`,
@@ -124,7 +132,9 @@ export function emitComponent(
 
     // A child invoked inside `<head>` pushes to the same array from the head expression.
     const heads =
-        head.includes(HEADS) || body.some((part) => part.includes(HEADS))
+        head.includes(HEADS) ||
+        declared.includes(HEADS) ||
+        body.some((part) => part.includes(HEADS))
     // 10.5 — around the setup that calls `reactive.share`, and the body whose children are
     // rendered inside it and find it on the way up.
     const { opened, closed } = shareScope(lowering, '    ')
@@ -137,7 +147,7 @@ export function emitComponent(
     // body is built and the body is bound to a name before the return reads them. The array is
     // emitted only where the page invokes something: a page with no component pays nothing.
     // `head` is read before `__heads.join` in the return, so a child in the head lands too.
-    const build = `${heads ? `    const ${HEADS} = []\n` : ''}\
+    const build = `${heads ? `    const ${HEADS} = []\n` : ''}${declared}\
     const ${BODY} = ${concat(body)}
     return {
         head: ${head}${heads ? ` + ${HEADS}.join('')` : ''},
@@ -296,8 +306,8 @@ function renderPosition(
         const guarded = unlandable(lowering, node, subject)
         // 14.8 — the row's branch-local `<script>`, run at the head of each row, untracked like the
         // component's own setup (14.7) since the render tracks nothing.
-        const setup =
-            node.setup === null ? '' : `${lowering.setup(node.setup)}\n`
+        // 32.43 — and the components it declares, each closing over the row.
+        const setup = `${node.setup === null ? '' : `${lowering.setup(node.setup)}\n`}${client ? '' : definitions(at.inner[0] as Cursor, lowering)}`
         return `${OPEN_ANCHOR} + ((__list) => {
         if (!Array.isArray(__list)) return ''
         let __out = ''
@@ -317,9 +327,9 @@ function renderPosition(
         const bound = node.error === '' ? '__failure' : node.error
         return `(() => {
         try {
-            return ${OPEN_ANCHOR} + ${body}
+            ${armDefinitions(at, 0, lowering, client)}return ${OPEN_ANCHOR} + ${body}
         } catch (__thrown) {
-            return ${CAUGHT_ANCHOR} + ((${bound}) => ${rescue})(__thrown)
+            return ${CAUGHT_ANCHOR} + ((${bound}) => ${scoped(armDefinitions(at, 1, lowering, client), rescue)})(__thrown)
         }
     })() + ${CLOSE_ANCHOR}`
     }
@@ -354,10 +364,10 @@ function renderPosition(
             return {
                 subject:
                     branch.subject === '' ? '' : lowering.expression(branch),
-                body:
-                    branch.setup === null
-                        ? body
-                        : `(() => {\n${lowering.setup(branch.setup)}\nreturn ${body}\n})()`,
+                body: scoped(
+                    `${branch.setup === null ? '' : `${lowering.setup(branch.setup)}\n`}${armDefinitions(at, arm, lowering, client)}`,
+                    body,
+                ),
             }
         })
         let expression = "''"
@@ -467,7 +477,7 @@ function emitSlot(at: Position, lowering: Lowering, client: boolean): string {
     // addressing, so it is not this file's to place.
     if (client) return EMPTY_REGION
     const fallback = renderMarkup(at.inner[0] as Cursor, lowering, client)
-    return `${OPEN_ANCHOR} + (${given} === undefined ? ${fallback} : ${given}()) + ${CLOSE_ANCHOR}`
+    return `${OPEN_ANCHOR} + (${given} === undefined ? ${scoped(armDefinitions(at, 0, lowering, client), fallback)} : ${given}()) + ${CLOSE_ANCHOR}`
 }
 
 /**
@@ -507,7 +517,7 @@ function emitInvocation(
     // this is the tag's own body, so the child reaches it through `<slot/>` and nothing else.
     if (!client && node.children.length > 0)
         props.push(
-            `${JSON.stringify(CHILDREN)}: () => (${renderMarkup(at.inner[0] as Cursor, lowering, client)})`,
+            `${JSON.stringify(CHILDREN)}: () => ${scoped(armDefinitions(at, 0, lowering, client), `(${renderMarkup(at.inner[0] as Cursor, lowering, client)})`)}`,
         )
     return client
         ? EMPTY_REGION
@@ -582,6 +592,65 @@ export function emitRow(
     return anchored
         ? `${JSON.stringify(`<!--${ROW_OPEN}-->`)} + ${markup}`
         : markup
+}
+
+/**
+ * The statements declaring a region's inline components on the server: the ones its body declares
+ * (32.43), each under its name, and the ones an invocation in it is passed (32.50), each under
+ * `passedName`.
+ *
+ * 32.42 — DECLARED WHERE THE REGION IS BUILT, so each is a closure over every name in scope there:
+ * the setup's, a row's item, an arm's own, an enclosing component's props.
+ */
+function definitions(sink: Cursor, lowering: Lowering): string {
+    let out = ''
+    for (const component of sink.components)
+        out += `${serverComponent(component, lowering)}\n`
+    for (const at of sink.positions)
+        if (at.kind === 'region' && at.holder.kind === 'element')
+            for (const passed of at.holder.passed)
+                out += `const ${passedName(passed)} = ${serverComponent(passed, lowering)}\n`
+    return out
+}
+
+/** `definitions` for a region's nested sink, on the server lane alone. */
+function armDefinitions(
+    at: Position,
+    arm: number,
+    lowering: Lowering,
+    client: boolean,
+): string {
+    return client ? '' : definitions(at.inner[arm] as Cursor, lowering)
+}
+
+/**
+ * An inline component on the server: the function a file component's module exports, declared in
+ * place.
+ *
+ * 32.17, 32.40 — CALLED AS A FILE COMPONENT IS (`renderComponent`), with the record of accessors its
+ * pattern binds from, and answering its head and its body apart. It has no head of its own (39.2).
+ */
+function serverComponent(
+    component: InlineComponent,
+    lowering: Lowering,
+): string {
+    const sink = new Cursor()
+    sink.components = component.components
+    placeTemplate(component.children, sink)
+    const head =
+        component.pattern === '' ? '' : `${lowering.setup(component)}\n`
+    const setup =
+        component.setup === null ? '' : `${lowering.setup(component.setup)}\n`
+    return `function ${component.name}(${PROPS} = {}) {
+${head}${setup}${definitions(sink, lowering)}return { head: '', body: ${renderMarkup(sink, lowering, false)} }
+}`
+}
+
+/** `markup` with `prelude` run ahead of it, in a scope of its own where there is one. */
+function scoped(prelude: string, markup: string): string {
+    return prelude === ''
+        ? markup
+        : `(() => {\n${prelude}\nreturn ${markup}\n})()`
 }
 
 /** Emitted parts as one concatenation, and the empty string for none. */

@@ -1,7 +1,7 @@
 ---
 title: Reuse a piece of markup
 nav: Components
-intent: A component in the same file or its own, and the children a caller passes into it.
+intent: A component in the same file or its own, the children a caller passes into it, and markup it fills in.
 covers:
   - `props`
   - `children`
@@ -22,8 +22,10 @@ capital is the whole of the distinction — `<Row/>` is yours and `<row/>` is th
 | --- | --- |
 | `<Name/>` | an invocation of a component |
 | `<Tag>…</Tag>` | the same, with children passed into it |
-| `{#component Name(pattern)}` | a component declared inline, in the file that uses it |
+| `{#component Name(pattern)}` | a component declared inline, where it is used |
 | `<slot/>` / `<slot>fallback</slot>` | where children render, and what renders without them |
+
+## A component declared where it is used
 
 An inline component is TitleCase like any other, and it exists for the piece of markup that is
 worth naming but not worth a file — a row in one table, a cell shape used twice on one page.
@@ -41,10 +43,78 @@ that call's type argument:
 </ul>
 ```
 
-It sees what a file of its own would see: its props, a `<script>` written inside it, the file's
-imports, and the file's other inline components. A name the file's own `<script>` declares is not
-in scope, and reading one is a build error. So moving it into a file later changes the import and
-nothing else.
+It can be written anywhere markup can: at the top of the file, inside an element, in an `{#if}`
+arm or a `{#for}` row, or inside another inline component. It is invocable anywhere in the block
+it is written in, before it included, and nowhere outside that block.
+
+**It closes over where it is written.** A value the file's `<script>` declares is read by name
+inside it, and live, the same as anywhere else in the template. Declared in a row, it reads that
+row's item without being handed it:
+
+```abide #ui/pages/contacts/page.abide — excerpt
+<script>
+import { reactive } from 'abide'
+import { listContacts } from '#server/contacts.ts'
+import type { Contact } from '#shared/Contact.ts'
+
+const contacts = listContacts()
+let masked = reactive(true)
+</script>
+
+<ul>
+    {#for contact of contacts by contact.id}
+        {#component Phone()}
+            <strong>{masked ? '••• ••••' : contact.phone}</strong>
+        {/component}
+        <li><span>{contact.name}</span><Phone/></li>
+    {/for}
+</ul>
+```
+
+Setting `masked` rewrites each `<strong>` in place. Its own `<script>` is set up once per
+invocation, its own `<style>` reaches only what it writes, and the file's `<style>` reaches it too.
+
+## Markup a component fills in
+
+An inline component written directly between a component's tags is **passed to it as a prop** of
+the same name. The component declares that prop as a function of the props it hands over, and
+invokes it by name:
+
+```abide #ui/components/ContactTable.abide
+<script>
+import { props } from 'abide'
+import type { Contact } from '#shared/Contact.ts'
+
+const { contacts, Row } = props<{
+    contacts: Contact[]
+    Row: (props: { contact: Contact }) => unknown
+}>()
+</script>
+
+<table>
+    <tbody>
+        {#for contact of contacts by contact.id}
+            <tr><Row contact={contact}/></tr>
+        {/for}
+    </tbody>
+</table>
+<slot/>
+```
+
+```abide #ui/pages/contacts/page.abide — excerpt
+<ContactTable contacts={contacts}>
+    {#component Row({ contact }: { contact: Contact })}
+        <td>{contact.name}</td><td>{masked ? '••• ••••' : contact.phone}</td>
+    {/component}
+    <p>{contacts.length} contacts</p>
+</ContactTable>
+```
+
+The table decides where each row goes and the page decides what is in it, reading its own
+`masked` as it does. Anything else between the tags is still `children`, for the `<slot/>`. The
+passed component is the prop and nothing more: it is not in scope anywhere else on the page.
+`abide check` holds its pattern to the type the table declares, so a row shaped differently is
+an error at the `{#component}`.
 
 ## A prop is a live read
 

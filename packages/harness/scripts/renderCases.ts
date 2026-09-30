@@ -133,6 +133,22 @@ const { title, body, count } = props<{ title: string; body: string; count: numbe
 ${cardRow('{title}', '{body}', '{count}')}`
 }
 
+/**
+ * The `{#for}` page with an inline component declared in each row, its data left as `CARDS`.
+ *
+ * 32.42 — the component closes over the row. `invoked` renders the row through it; without, the row
+ * is `abideLoopSource`'s and the component is declared and never invoked — the declaration alone.
+ */
+export function abideDeclaredSource(invoked: boolean): string {
+    const card = cardRow('{row.title}', '{row.body}', '{row.count}')
+    return `<script>
+import { reactive } from 'abide'
+
+let rows = reactive(CARDS)
+</script>
+<main id="list">{#for row of rows by row.id}{#component Card()}${card}{/component}${invoked ? '<Card/>' : card}{/for}</main>`
+}
+
 /** The card-list page with each row a `<Card>` invocation, its data left as `CARDS`. */
 export function abideComponentSource(): string {
     return `<script>

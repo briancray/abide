@@ -15,6 +15,7 @@ import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
 import {
     abideCardSource,
     abideComponentSource,
+    abideDeclaredSource,
     abideLoopSource,
     cards,
     vanillaMarkup,
@@ -40,6 +41,22 @@ async function main(): Promise<void> {
                 abideComponentSource().replace('CARDS', JSON.stringify(list)),
                 { 'Card.ts': card.module },
             )
+            // 32.42 — AN INLINE COMPONENT IN THE ROW, declared alone and then invoked: a function
+            // declared per row, closing over it.
+            const declared = await compile(
+                'Declared',
+                abideDeclaredSource(false).replace(
+                    'CARDS',
+                    JSON.stringify(list),
+                ),
+            )
+            const invoked = await compile(
+                'Invoked',
+                abideDeclaredSource(true).replace(
+                    'CARDS',
+                    JSON.stringify(list),
+                ),
+            )
 
             const measured = batch({
                 case: `render ${size} cards`,
@@ -53,17 +70,28 @@ async function main(): Promise<void> {
                     component: (): void => {
                         void nested.render().body
                     },
+                    declared: (): void => {
+                        void declared.render().body
+                    },
+                    invoked: (): void => {
+                        void invoked.render().body
+                    },
                 },
                 emulated: null,
             })
             const vanilla = measured.samples.vanilla as Sample
             const flat = measured.samples.inline as Sample
             const child = measured.samples.component as Sample
+            const alone = measured.samples.declared as Sample
+            const called = measured.samples.invoked as Sample
             console.log(
                 `  ${String(size).padStart(4)} cards   vanilla ${µs(vanilla)}   inline ${µs(flat)} (${times(flat, vanilla)})   component ${µs(child)} (${times(child, vanilla)})`,
             )
             console.log(
                 `              ${perRow(flat, size)} ns a row inline, ${perRow(child, size)} ns a row as a component — ${times(child, flat)} for the invocation`,
+            )
+            console.log(
+                `              inline component: ${perRow(alone, size)} ns a row declared alone (${times(alone, flat)}), ${perRow(called, size)} ns a row invoked (${times(called, flat)})`,
             )
             if (size === SIZES[SIZES.length - 1]) {
                 bytes(inline.render().body, nested.render().body, size)

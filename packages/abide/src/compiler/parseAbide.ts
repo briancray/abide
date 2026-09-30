@@ -1,6 +1,6 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
-import { isComponentTag } from './classifyTemplate.ts'
+import { isComponentTag, isSlot, propKeyOf } from './classifyTemplate.ts'
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import { importedNames } from './splitImports.ts'
@@ -8,6 +8,7 @@ import {
     type Attribute,
     type Branch,
     childListsOf,
+    type InlineComponent,
     type Setup,
     type TemplateNode,
 } from './TemplateNode.ts'
@@ -47,10 +48,7 @@ export type AbideFile = {
      */
     head: TemplateNode[]
     template: TemplateNode[]
-    /**
-     * 32.39 — every `{#component Name(pattern)}` the file declares, in source order. Apart from
-     * `template`: each compiles as a component file of its own (`inlineSources`).
-     */
+    /** 32.43 — the inline components the template's own body declares, in source order. */
     components: InlineComponent[]
     /**
      * Where each piece the projection copies starts in the source.
@@ -63,28 +61,6 @@ export type AbideFile = {
      * text starts, which is its line if not its column.
      */
     origins: Origins
-}
-
-/**
- * A `{#component Name(pattern)}…{/component}` block: its name, its props pattern and the annotation
- * typing it, and a body shaped as a block body is, with the `<script>` and `<style>` written in it.
- */
-export type InlineComponent = {
-    name: string
-    /** Where the name starts in the source. */
-    at: number
-    /** The props pattern as written, or `''` where the parentheses are empty. */
-    pattern: string
-    patternAt: number
-    /** The pattern's type annotation as written, or `''` where it has none. */
-    type: string
-    typeAt: number
-    children: TemplateNode[]
-    setup: Setup | null
-    style: string | null
-    /** From the `{` opening the block to past the `}` closing `{/component}`. */
-    start: number
-    end: number
 }
 
 type Origins = {
@@ -146,11 +122,12 @@ export function parseAbide(source: string): AbideFile {
     // document nobody asked for and nothing about it says so. A `{#if}` arm is `ARM`, which no
     // tag name can be.
     const open: (string | null)[] = [ARM]
-    // The open control blocks, so a `{:else}` knows which block it belongs to.
-    const blocks: TemplateNode[] = []
-    const components: InlineComponent[] = []
-    // The `{#component}` open at the top level, whose body is the level `open` holds at index 1.
-    let inline: InlineComponent | undefined
+    // The open control blocks, so a `{:else}` knows which block it belongs to, and the open
+    // `{#component}` blocks, whose body a `<script>` or a `<style>` written in it belongs to.
+    const blocks: (TemplateNode | InlineComponent)[] = []
+    // 32.43 — each `{#component}` under the list it was written in, which says whose scope it is in
+    // once the tree is whole (`fileComponents`).
+    const declared = new Map<TemplateNode[], InlineComponent[]>()
     let at = 0
 
     while (at < source.length) {
@@ -239,35 +216,12 @@ export function parseAbide(source: string): AbideFile {
                 // names (`{#for item …}`) were not in scope.
                 // 34.11 — AND A `<style>` INSIDE A BLOCK IS THAT BODY'S, scoped to the elements it
                 // holds (`markScoped`) rather than to the whole component.
-                // 32.46, 32.47 — AT AN INLINE COMPONENT'S OWN LEVEL, a `<script>` is its setup and a
-                // `<style>` its own, as a component file's are.
-                if (inline !== undefined && blocks.length === 0) {
-                    if (block === modules)
-                        throw new Error(
-                            `abide: a <script module> belongs to the file, and this one is inside {#component ${inline.name}}. Move it to the top level. RULEBOOK 32.48.`,
-                        )
-                    if (block === styles) {
-                        inline.style =
-                            inline.style === null
-                                ? raw.body
-                                : `${inline.style}\n${raw.body}`
-                        at = raw.end
-                        continue
-                    }
-                    if (block === scripts) {
-                        if (inline.setup !== null)
-                            throw new Error(
-                                `abide: {#component ${inline.name}} has two <script> blocks. A component is set up once, by one. RULEBOOK 32.46.`,
-                            )
-                        inline.setup = { text: raw.body }
-                        origins.holders.set(inline.setup, tag.end)
-                        at = raw.end
-                        continue
-                    }
-                }
+                // 32.46, 32.47 — AND IN AN INLINE COMPONENT'S OWN BODY, its setup and its own style.
                 if (block === styles && blocks.length > 0) {
                     const owner = bodyOf(
-                        blocks[blocks.length - 1] as TemplateNode,
+                        blocks[blocks.length - 1] as
+                            | TemplateNode
+                            | InlineComponent,
                     )
                     owner.style =
                         owner.style === null
@@ -277,12 +231,15 @@ export function parseAbide(source: string): AbideFile {
                     continue
                 }
                 if (block === scripts && blocks.length > 0) {
-                    const owner = bodyOf(
-                        blocks[blocks.length - 1] as TemplateNode,
-                    )
+                    const holder = blocks[blocks.length - 1] as
+                        | TemplateNode
+                        | InlineComponent
+                    const owner = bodyOf(holder)
                     if (owner.setup !== null)
                         throw new Error(
-                            'abide: this block body has two <script> blocks. A body is set up once, by one. RULEBOOK 14.8.',
+                            holder.kind === 'component'
+                                ? `abide: {#component ${holder.name}} has two <script> blocks. A component is set up once, by one. RULEBOOK 32.48.`
+                                : 'abide: this block body has two <script> blocks. A body is set up once, by one. RULEBOOK 14.8.',
                         )
                     owner.setup = { text: raw.body }
                     origins.holders.set(owner.setup, tag.end)
@@ -308,6 +265,8 @@ export function parseAbide(source: string): AbideFile {
                         raw.body === ''
                             ? []
                             : [{ kind: 'text', text: raw.body }],
+                    components: [],
+                    passed: [],
                 }
                 children.push(kept)
                 at = raw.end
@@ -320,6 +279,8 @@ export function parseAbide(source: string): AbideFile {
                 lowerTag,
                 attributes: tag.attributes,
                 children: [],
+                components: [],
+                passed: [],
             }
             origins.holders.set(element, at + 1)
             children.push(element)
@@ -339,29 +300,30 @@ export function parseAbide(source: string): AbideFile {
             const slot = trimmed(source, at + 1, end)
             const inner = slot.text
 
-            // 32.39 — `{#component Name(pattern)}` and `{/component}`. Its body is a level of its
-            // own and is not the template's: it compiles as a component file does.
+            // 32.41 — `{#component Name(pattern)}` and `{/component}`, wherever a node may stand. It
+            // opens an arm as a block does, and is filed under the list it stands in rather than
+            // pushed into it: it renders nothing there, so the text either side is one run.
             if (/^#component(?![\w$])/.test(inner)) {
-                if (open.length > 1)
-                    throw new Error(
-                        `abide: {${inner}} stands inside ${inline === undefined ? 'an element or a block' : `{#component ${inline.name}}`}, and an inline component is declared at the top level of its file. RULEBOOK 32.44.`,
-                    )
-                inline = inlineComponent(
+                const component = inlineComponent(
                     trimmed(source, slot.at + '#component'.length, end),
-                    at,
                 )
-                components.push(inline)
-                stack.push(inline.children)
+                const here = declared.get(children)
+                if (here === undefined) declared.set(children, [component])
+                else here.push(component)
+                blocks.push(component)
+                stack.push(component.children)
                 open.push(ARM)
                 at = end + 1
                 continue
             }
             if (inner === '/component') {
-                if (inline !== undefined) {
-                    blocks.length = 0
-                    unwindTo(1, open, stack)
-                    inline.end = end + 1
-                    inline = undefined
+                const level = armLevel(open)
+                if (
+                    blocks[blocks.length - 1]?.kind === 'component' &&
+                    level > 0
+                ) {
+                    blocks.pop()
+                    unwindTo(level, open, stack)
                 }
                 at = end + 1
                 continue
@@ -461,9 +423,17 @@ export function parseAbide(source: string): AbideFile {
                 ) {
                     blocks.pop()
                     unwindTo(level, open, stack)
-                    ;(stack[stack.length - 1] as TemplateNode[]).push(
-                        ...closeTry(block),
-                    )
+                    const after = closeTry(block)
+                    const around = stack[stack.length - 1] as TemplateNode[]
+                    around.push(...after)
+                    // The `{:finally}` markup stands in the list around the block now, and so
+                    // does what it declares.
+                    const moved = declared.get(after)
+                    if (moved !== undefined) {
+                        const here = declared.get(around)
+                        if (here === undefined) declared.set(around, moved)
+                        else here.push(...moved)
+                    }
                 }
                 at = end + 1
                 continue
@@ -491,7 +461,7 @@ export function parseAbide(source: string): AbideFile {
                 // condition was false. Closing whatever the block still holds open is what the
                 // close tag of the element AROUND it would have to do anyway.
                 const level = armLevel(open)
-                if (blocks.length > 0 && level > 0) {
+                if (blocks[blocks.length - 1]?.kind === 'block' && level > 0) {
                     blocks.pop()
                     unwindTo(level, open, stack)
                 }
@@ -511,14 +481,10 @@ export function parseAbide(source: string): AbideFile {
 
         at = pushText(children, source, at, at)
     }
-    if (inline !== undefined) inline.end = source.length
 
+    const components = fileComponents(root, declared)
+    refuseImported(components, [...modules, ...scripts])
     collapseWhitespace(root)
-    for (const component of components) {
-        collapseWhitespace(component.children)
-        assertNoNestedHead(component.children, `{#component ${component.name}}`)
-    }
-    refuseCollisions(components, [...modules, ...scripts])
     const head: TemplateNode[] = []
     const template: TemplateNode[] = []
     for (const node of root) {
@@ -548,10 +514,10 @@ export function parseAbide(source: string): AbideFile {
  * lowercase inline component could never be invoked. The parentheses hold what a file component's
  * `props` call destructures into, and the annotation is the type argument that call would take.
  */
-function inlineComponent(
-    header: { text: string; at: number },
-    start: number,
-): InlineComponent {
+function inlineComponent(header: {
+    text: string
+    at: number
+}): InlineComponent {
     const tokens = tokenise(header.text)
     const name = tokens[0]
     const opener = tokens[1]
@@ -597,6 +563,7 @@ function inlineComponent(
             ? { text: '', at: closing }
             : inside(colon.end, closing)
     return {
+        kind: 'component',
         name: name.text,
         at: header.at + name.start,
         pattern: pattern.text,
@@ -606,36 +573,103 @@ function inlineComponent(
         children: [],
         setup: null,
         style: null,
-        start,
-        end: start,
+        components: [],
     }
 }
 
 /**
- * Throws where two inline components share a name, or one shares a name with an import.
+ * Files every inline component on the body whose scope it is in; returns the template's own.
  *
- * 32.49 — one name, two components: which one a tag invokes would be decided by whichever binding
- * the emitted module happened to keep.
+ * 32.43 — A BODY IS A SCOPE, AND AN ELEMENT IS NOT ONE: the template, a row, an arm, an inline
+ * component's body, and what stands between an invocation's or a `<slot>`'s tags. A component
+ * written inside an ordinary element is filed on the body around the element. 32.50 — one written
+ * DIRECTLY between an invocation's tags is the invocation's, passed rather than declared.
+ *
+ * Each body's own are then walked in turn, and its whitespace collapsed: nothing else reaches a
+ * component's body, which is not in any list the template's walks descend.
  */
-function refuseCollisions(
-    components: InlineComponent[],
-    blocks: string[],
-): void {
-    if (components.length === 0) return
-    const declared = new Set<string>()
-    for (const component of components) {
-        if (declared.has(component.name))
-            throw new Error(
-                `abide: {#component ${component.name}} is declared twice in this file. RULEBOOK 32.49.`,
-            )
-        declared.add(component.name)
+function fileComponents(
+    template: TemplateNode[],
+    declared: ReadonlyMap<TemplateNode[], InlineComponent[]>,
+): InlineComponent[] {
+    // The components `nodes` declares, filed on `scope`, down through every ordinary element.
+    const collect = (
+        nodes: TemplateNode[],
+        scope: InlineComponent[],
+        own: boolean,
+    ): void => {
+        if (own) for (const one of declared.get(nodes) ?? []) scope.push(one)
+        for (const node of nodes) {
+            if (node.kind === 'element') {
+                if (isSlot(node)) open(node.children, node.components, true)
+                else if (isComponentTag(node.tag)) {
+                    node.passed = declared.get(node.children) ?? []
+                    refuseTwice(node.passed, `<${node.tag}>`)
+                    for (const passed of node.passed)
+                        for (const attribute of node.attributes)
+                            if (propKeyOf(attribute) === passed.name)
+                                throw new Error(
+                                    `abide: <${node.tag}> is given ${passed.name} as an attribute and as the {#component ${passed.name}} between its tags — one prop, two values. RULEBOOK 32.53.`,
+                                )
+                    open(node.children, node.components, false)
+                    for (const passed of node.passed) inside(passed)
+                } else collect(node.children, scope, true)
+                continue
+            }
+            if (node.kind !== 'block') continue
+            if (node.block === 'for') open(node.children, node.components, true)
+            else
+                for (const branch of node.branches)
+                    open(branch.children, branch.components, true)
+        }
     }
+    // A body: what it declares, each of those walked in turn.
+    const open = (
+        nodes: TemplateNode[],
+        scope: InlineComponent[],
+        own: boolean,
+    ): void => {
+        collect(nodes, scope, own)
+        refuseTwice(scope, 'one body')
+        for (const one of scope) inside(one)
+    }
+    const inside = (component: InlineComponent): void => {
+        assertNoNestedHead(component.children, `{#component ${component.name}}`)
+        open(component.children, component.components, true)
+        collapseWhitespace(component.children)
+    }
+    const file: InlineComponent[] = []
+    open(template, file, true)
+    return file
+}
+
+/** Throws where two inline components in one list share a name (32.49). */
+function refuseTwice(components: InlineComponent[], where: string): void {
+    for (let at = 1; at < components.length; at += 1) {
+        const name = (components[at] as InlineComponent).name
+        for (let before = 0; before < at; before += 1)
+            if ((components[before] as InlineComponent).name === name)
+                throw new Error(
+                    `abide: {#component ${name}} is declared twice in ${where} — one name, two components. Rename one. RULEBOOK 32.49.`,
+                )
+    }
+}
+
+/**
+ * Throws where an inline component the template's own body declares shares a name with an import.
+ *
+ * 32.55 — the template's own body is its file's scope. A name the `<script>` DECLARES is the
+ * checker's to find (`TypeSession`); an import is found here, without one.
+ */
+function refuseImported(components: InlineComponent[], blocks: string[]): void {
+    if (components.length === 0) return
     for (const block of blocks)
         for (const imported of importedNames(block))
-            if (declared.has(imported.name))
-                throw new Error(
-                    `abide: {#component ${imported.name}} is declared inline and ${imported.name} is also imported from '${imported.specifier}' — one name, two components. Rename one. RULEBOOK 32.49.`,
-                )
+            for (const component of components)
+                if (component.name === imported.name)
+                    throw new Error(
+                        `abide: {#component ${imported.name}} is declared inline and ${imported.name} is also imported from '${imported.specifier}' — one name, two components. Rename one. RULEBOOK 32.55.`,
+                    )
 }
 
 /**
@@ -691,7 +725,7 @@ function closeTry(
 
 /** An arm under `subject`, with nothing in it yet. */
 function newBranch(subject: string): Branch {
-    return { subject, children: [], setup: null, style: null }
+    return { subject, children: [], setup: null, style: null, components: [] }
 }
 
 /**
@@ -701,10 +735,11 @@ function newBranch(subject: string): Branch {
  * open where it stands. A `{#try}` body refuses one: what a boundary sets up when its body is replaced
  * by the catch (32.16) is not decided, and a guess here would be the decision.
  */
-function bodyOf(block: TemplateNode): {
+function bodyOf(block: TemplateNode | InlineComponent): {
     setup: Setup | null
     style: string | null
 } {
+    if (block.kind === 'component') return block
     if (block.kind === 'block' && block.block === 'for') return block
     if (block.kind === 'block' && block.block === 'if')
         return block.branches[block.branches.length - 1] as Branch
@@ -928,6 +963,7 @@ function forBlock(
         children: [],
         setup: null,
         style: null,
+        components: [],
     }
     origins.holders.set(block, subject.at)
     if (key.text !== '') origins.keys.set(block, key.at)

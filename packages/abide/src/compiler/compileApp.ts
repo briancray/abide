@@ -14,7 +14,6 @@ import { emitClient } from './emitClient.ts'
 import { emitComponent } from './emitComponent.ts'
 import { formatDiagnosis } from './formatDiagnosis.ts'
 import { declaresHandlers, handlersUnder } from './handlersUnder.ts'
-import { type InlineOf, withInline } from './inlineSources.ts'
 import { type AbideFile, parseAbide } from './parseAbide.ts'
 import { ROUTING_SPECIFIER, WIRE_SPECIFIER } from './SPECIFIERS.ts'
 import {
@@ -194,10 +193,9 @@ export async function compileApp(
     // One session for the whole build: opening it spawns the checker, and the cost is paid once
     // rather than per file.
     return withChecker(root, kept, async (session) => {
-        const read: { path: string; text: string; file: AbideFile }[] = []
+        const parsed: { path: string; text: string; file: AbideFile }[] = []
         for (const source of sources)
-            read.push({ ...source, file: parseAbide(source.text) })
-        const parsed = withInline(read)
+            parsed.push({ ...source, file: parseAbide(source.text) })
 
         // ONE SNAPSHOT FOR THE WHOLE BUILD. Asking file by file costs 19.7 ms each against 0.8 ms
         // sharing one, because what is expensive is adding a file to the project's root set
@@ -231,7 +229,7 @@ export async function compileApp(
 export async function emitApp(
     root: string,
     session: TypeSession,
-    sources: readonly { path: string; file: AbideFile; inlineOf?: InlineOf }[],
+    sources: readonly { path: string; file: AbideFile }[],
     reads: readonly Read[][],
 ): Promise<Pick<CompiledApp, 'modules' | 'routes' | 'warnings'>> {
     const modules = new Map<string, string>()
@@ -241,7 +239,6 @@ export async function emitApp(
         relative: string
         kind: FileKind
         file: AbideFile
-        inline: boolean
     }[] = []
     for (const source of sources) {
         const relative = source.path.slice(root.length + 1)
@@ -250,7 +247,6 @@ export async function emitApp(
             relative,
             kind: fileKind(relative),
             file: source.file,
-            inline: source.inlineOf !== undefined,
         })
     }
     // 32.17 — WHICH FILES ARE INVOKED AS COMPONENTS, and where each import of one lands. A
@@ -291,25 +287,15 @@ export async function emitApp(
         // stylesheet the document links (38.24).
         // 34.11 — each body's own `<style>`, scoped to the token its elements carry; the
         // component's token is added only where a component-level `<style>` requires it.
-        //
-        // 32.45 — AN INLINE COMPONENT'S ELEMENTS ARE ITS FILE'S, and are marked with the file's:
-        // its own `<style>` is a body's (32.47, 34.11), numbered on with the file's, and one sheet is
-        // the file's for all of them. Marked here, so its own source marks nothing again.
         const token = scopeToken(relative)
         const componentStyled = entry.file.styles.length > 0
-        const tokens = componentStyled ? [token] : []
-        const bodies = entry.inline
-            ? []
-            : markScoped(entry.file.template, token, tokens)
-        for (const component of entry.file.components) {
-            let own = tokens
-            if (component.style !== null) {
-                const body = `${token}-${bodies.length}`
-                bodies.push({ css: component.style, token: body })
-                own = [...tokens, body]
-            }
-            markScoped(component.children, token, own, bodies)
-        }
+        const bodies = markScoped(
+            entry.file.template,
+            token,
+            componentStyled ? [token] : [],
+            [],
+            entry.file.components,
+        )
         const styled = componentStyled || bodies.length > 0
         if (styled) {
             const styles = entry.file.styles.join('\n')

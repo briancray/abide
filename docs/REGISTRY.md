@@ -571,7 +571,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `{#component Name(pattern)}` | An inline component. | 32.39, 32.40, 32.41, 32.42, 32.43, 32.44, 32.45, 32.46, 32.47, 32.48, 32.49 |
+| `{#component Name(pattern)}` | An inline component. | 32.39, 32.40, 32.41, 32.42, 32.43, 32.44, 32.45, 32.46, 32.47, 32.48, 32.49, 32.50, 32.51, 32.52, 32.53, 32.54, 32.55 |
 | `<Name/>` | A component invocation. | 32.17, 32.34, 32.35, 32.36, 33.19 |
 | `<slot/>` | The position children render into. | 32.18 |
 | `<slot>fallback</slot>` | Renders children, or a fallback. | 32.18 |

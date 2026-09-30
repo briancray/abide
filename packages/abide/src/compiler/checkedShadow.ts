@@ -1,7 +1,7 @@
 import type { Read } from './classifyRead.ts'
 import { CHECKED_VALUES, CHECKED_WRITE, Lowering } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
-import type { Origin, Span } from './projectShadow.ts'
+import { NO_PROPS, type Origin, type Span } from './projectShadow.ts'
 
 // 38.3 — A `.abide` FILE AS THE PROGRAM IT RUNS AS, for the checker to report on. The projection
 // (`projectShadow`) is the file as WRITTEN, which is what the checker answers 31.3 about — and a
@@ -46,14 +46,6 @@ export default ${COMPONENT_STAND_IN}
 
 /** A component nothing has lowered takes anything, which is no finding rather than a wrong one. */
 export const COMPONENT_MODULE = componentModule('any')
-
-/**
- * The props type of a component with no `props` call.
- *
- * 33.2 — a component with no `props` call takes no prop of its own; 33.16 — `children` is the one
- * key every component takes, and the tag's body passes it rather than an attribute.
- */
-const NO_PROPS = '{ [key: string]: never }'
 
 /** The file lowered the way the emitters lower it, for the checker to report on. */
 export function checkedShadow(
@@ -100,7 +92,9 @@ export function checkedShadow(
     }
     origins.push({ at: text.length, source: at, length: source.length - at })
     text += source.slice(at)
-    text += componentModule(propsOf(projection.text, reads))
+    text += componentModule(
+        propsOf(projection.text, reads, projection.scripts.end),
+    )
     // What each name read by name holds when it is read: what calling it hands back, and through a
     // props accessor, what calling what that hands back does.
     let values = ''
@@ -125,9 +119,14 @@ export function checkedShadow(
  * off the call as the author wrote it, which stands at the top of the module where this is
  * declared. 33.3 — `props()` with no argument hands back the untyped record, and takes anything.
  */
-function propsOf(text: string, reads: readonly Read[]): string {
+function propsOf(
+    text: string,
+    reads: readonly Read[],
+    scriptsEnd: number,
+): string {
+    // The file's own, in its `<script>`: an inline component's stands in the template (32.40).
     for (const read of reads)
-        if (read.shape === 'props')
+        if (read.shape === 'props' && read.start < scriptsEnd)
             return `ReturnType<typeof ${text
                 .slice(read.from, read.to)
                 .replace(/\(\s*\)$/, '')}>`

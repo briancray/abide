@@ -29,14 +29,19 @@ import {
     type WrittenAttribute,
     writtenAttributes,
 } from './emitComponent.ts'
-import { invocationProps } from './invocationProps.ts'
+import { invocationProps, passedName } from './invocationProps.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import { Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { SHARED_NAMES } from './SHARED_NAMES.ts'
 import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from './SPECIFIERS.ts'
 import { componentImports, splitImports, withoutProps } from './splitImports.ts'
-import type { Attribute, Setup, TemplateNode } from './TemplateNode.ts'
+import type {
+    Attribute,
+    InlineComponent,
+    Setup,
+    TemplateNode,
+} from './TemplateNode.ts'
 
 // The client half of one `.abide`. WHERE A NODE STANDS IS DECIDED ONCE, by `placeTemplate`, and the
 // server's markup is rendered from the same positions this module walks, builds and fills from. So
@@ -108,9 +113,10 @@ export function emitClient(
         false,
         selfFill === 'invoked' || selfFill === 'both',
     )
+    page.components = file.components
     placeTemplate(file.template, page)
     const counter = { next: 0 }
-    const { chain, helpers, lines } = emitRegion(page, lowering, counter)
+    const { defs, chain, helpers, lines } = emitRegion(page, lowering, counter)
 
     // 34.2 — A `<script module>` IS PROCESS-WIDE IN A BROWSER, which is MODULE SCOPE: it is
     // evaluated once when this module is first imported rather than once per `mount`, so a second
@@ -211,8 +217,6 @@ export function emitClient(
     // unit declares is read inside it, the anchors excepted, and those are declared above. The
     // wrapper is the SAME BYTES every time, which is what makes the repetition nearly free once
     // gzipped, where a `guard(() => …)` helper would be a closure allocated per binding at mount.
-    const guard = (unit: string): string =>
-        `try {\n${unit}\n} catch (thrown) { if (!${lowering.use('warnMismatch')}(thrown)) throw thrown }`
 
     // THE WALK STANDS OUTSIDE EVERY GUARD, which is why it cannot throw (see `emitRegion`): it runs
     // once, top to bottom, after `fills` has put the page in place, and each unit then checks the
@@ -220,7 +224,7 @@ export function emitClient(
     const bindings = live
         ? `const ${SCOPE} = new ${lowering.use('Scope')}()
 ${chain.map((line) => `${line}\n`).join('')}\
-${lines.map(guard).join('\n')}
+${lines.map((unit) => guard(unit, lowering)).join('\n')}
 return ${SCOPE}`
         : ''
 
@@ -249,10 +253,91 @@ ${componentImports(withoutProps(moduleSetup.imports), '.client', components)}${c
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}\
 export default function mount(${REGION_ROOT}${heads ? `, ${PROPS} = {}, ${ROUTED}` : lowering.takesProps() ? `, ${PROPS} = {}` : ''}) {
 ${opened}${setup.body}
-${helpers.join('\n')}
+${[...defs, ...helpers].join('\n')}
 ${fills}${captured}${bindings}${closed}
 }
 `
+}
+
+/**
+ * One unit of a component's mount, guarded apart from the others.
+ *
+ * The wrapper is the SAME BYTES every time, which is what makes the repetition nearly free once
+ * gzipped, where a `guard(() => …)` helper would be a closure allocated per binding at mount.
+ */
+function guard(unit: string, lowering: Lowering): string {
+    return `try {\n${unit}\n} catch (thrown) { if (!${lowering.use('warnMismatch')}(thrown)) throw thrown }`
+}
+
+/**
+ * An inline component on the client: the mount a file component's module exports, declared in
+ * place.
+ *
+ * 32.17, 32.40 — INVOKED AS A FILE COMPONENT IS, against its region and with the record of
+ * accessors its pattern binds from, and it FILLS ITS OWN REGION where no server painted one — an
+ * invoked file's `SelfFill`, which every inline component is, and built rather than parsed since
+ * it can stand in a row (`Cursor.repeated`). Its units are guarded apart as a file's are.
+ *
+ * 32.42 — DECLARED WHERE ITS REGION MOUNTS, so it closes over every name in scope there.
+ */
+function clientComponent(
+    component: InlineComponent,
+    lowering: Lowering,
+    counter: Counter,
+): string {
+    const sink = new Cursor(undefined, undefined, false, true)
+    sink.components = component.components
+    placeTemplate(component.children, sink)
+    const { defs, chain, helpers, lines } = emitRegion(sink, lowering, counter)
+    const head =
+        component.pattern === '' ? '' : `${lowering.setup(component)}\n`
+    const setup =
+        component.setup === null ? '' : `${lowering.setup(component.setup)}\n`
+    const fill =
+        sink.positions.length === 0
+            ? ''
+            : `function __build(__document) {\n    ${emitMaker(sink, lowering)}\n}
+if (${lowering.use('isEmptyRegion')}(${REGION_ROOT})) ${lowering.use('fillRegion')}(${REGION_ROOT}, __build)\n`
+    const captured = sink.holdsComponent
+        ? `const ${SHARE_AT} = ${lowering.use('currentShare')}()\n`
+        : ''
+    const bindings =
+        lines.length === 0
+            ? ''
+            : `const ${SCOPE} = new ${lowering.use('Scope')}()
+${chain.map((line) => `${line}\n`).join('')}\
+${lines.map((unit) => guard(unit, lowering)).join('\n')}
+return ${SCOPE}`
+    return `function ${component.name}(${REGION_ROOT}, ${PROPS} = {}) {
+${head}${setup}${[...defs, ...helpers].join('\n')}
+${fill}${captured}${bindings}
+}`
+}
+
+/**
+ * The statements declaring a region's inline components on the client: the ones its body declares
+ * (32.43), each under its name, and the ones an invocation in it is passed (32.50), each under
+ * `passedName`.
+ *
+ * DECLARED IN THE REGION EVEN WHERE NOTHING IN IT IS READ, a row's included: one function a row
+ * mount, which `inlineRowShare.ts` prices inside the noise of the mount around it. Hoisting the
+ * ones that read nothing of the row would be a scope analysis and a branch with no ratio to earn it.
+ */
+function definitions(
+    sink: Cursor,
+    lowering: Lowering,
+    counter: Counter,
+): string[] {
+    const out: string[] = []
+    for (const component of sink.components)
+        out.push(clientComponent(component, lowering, counter))
+    for (const at of sink.positions)
+        if (at.kind === 'region' && at.holder.kind === 'element')
+            for (const passed of at.holder.passed)
+                out.push(
+                    `const ${passedName(passed)} = ${clientComponent(passed, lowering, counter)}`,
+                )
+    return out
 }
 
 /**
@@ -485,10 +570,20 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
             else emitInvocation(at, holder, lowering, lines, helpers, counter)
         }
     }
-    return { chain, helpers, lines }
+    // 32.43 — A REGION THAT MOUNTS NOTHING INVOKES NOTHING, so what it declares is reached from
+    // nowhere and is not declared: a row declaring a component it never invokes stays a row whose
+    // mount is the shared empty one.
+    const defs = lines.length === 0 ? [] : definitions(sink, lowering, counter)
+    return { defs, chain, helpers, lines }
 }
 
-type RegionEmitted = { chain: string[]; helpers: string[]; lines: string[] }
+type RegionEmitted = {
+    /** 32.43 — the region's inline components, declared ahead of everything that invokes them. */
+    defs: string[]
+    chain: string[]
+    helpers: string[]
+    lines: string[]
+}
 
 type ElementNode = Extract<TemplateNode, { kind: 'element' }>
 
@@ -519,7 +614,7 @@ const RAW_CLOSE_MARKUP = JSON.stringify(`<!--${RAW_CLOSE}-->`)
 
 /** A nested region's body, in the order the emitted function needs it: walk, helpers, units. */
 function regionBody(region: RegionEmitted): string[] {
-    return [...region.chain, ...region.helpers, ...region.lines]
+    return [...region.defs, ...region.chain, ...region.helpers, ...region.lines]
 }
 
 /**

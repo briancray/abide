@@ -1,4 +1,4 @@
-import { dirname, join, relative as relativePath } from 'node:path' // bun exposes no path helpers of its own
+import { dirname, relative as relativePath } from 'node:path' // bun exposes no path helpers of its own
 import type { AbideFile } from './parseAbide.ts'
 import { abideSpecifiers } from './splitImports.ts'
 
@@ -20,9 +20,7 @@ import { abideSpecifiers } from './splitImports.ts'
  * a source tree where the compiler wrote nothing.
  *
  * `resolve` is the app's: a build asks bun, and a harness that lays an app out by hand answers for
- * its own seams. A specifier it cannot resolve, or that lands outside `files`, is left as written —
- * but a relative one naming a file in `files` is that file, which is how an inline component
- * (`inlineSources`), on no disk bun can read, is found.
+ * its own seams. A specifier it cannot resolve, or that lands outside `files`, is left as written.
  */
 export function componentGraph(
     files: readonly { path: string; file: AbideFile }[],
@@ -41,11 +39,7 @@ export function componentGraph(
         for (const script of [...entry.file.modules, ...entry.file.scripts])
             for (const specifier of abideSpecifiers(script)) {
                 if (landed.has(specifier)) continue
-                const target =
-                    resolve(specifier, from) ??
-                    (specifier.startsWith('.')
-                        ? join(from, specifier)
-                        : undefined)
+                const target = resolve(specifier, from)
                 if (target === undefined || !known.has(target)) continue
                 invoked.add(target)
                 const path = relativePath(

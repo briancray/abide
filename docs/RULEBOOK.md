@@ -1626,31 +1626,55 @@ that element in the document until it settles, and MUST remove them then.
 32.40 The pattern of a `{#component Name(pattern)}` MUST be read as the pattern of a `props` call,
 and its annotation as that call's type argument.
 
-32.41 A name its file's `<script>` or `<script module>` declares MUST NOT be in scope in a
-`{#component Name(pattern)}`, and reading one MUST be a build error.
+32.41 A `{#component Name(pattern)}` MUST be accepted wherever a node may stand in a `.abide`
+template: at its top level, inside an element, in a `{#if}`, `{#for}` or `{#try}` body, and in the
+body of another `{#component Name(pattern)}`.
 
-32.42 Its file's imports, and every `{#component Name(pattern)}` its file declares, itself
-included, MUST be in scope in a `{#component Name(pattern)}`.
+32.42 Every name in scope where a `{#component Name(pattern)}` is written — its file's `<script>`
+and `<script module>` names, its file's imports, a `{#for}` row's item and index, a `{:catch e}`
+binding, and an enclosing `{#component Name(pattern)}`'s props — MUST be in scope in its body.
 
-32.43 A `{#component Name(pattern)}` MUST be invocable anywhere in its file, before its declaration
-included.
+32.43 A `{#component Name(pattern)}` MUST be in scope throughout the body it is written in, before
+its declaration and in every body nested inside that one included, and in no other; that body is
+the template's top level, a `{#for}` row, a `{#if}` or `{#try}` arm, what stands between the tags
+of a `<Name/>` or a `<slot>`, or a `{#component Name(pattern)}`'s own, and an element around it is
+not one.
 
-32.44 A `{#component Name(pattern)}` MUST stand at the top level of its file, and one inside an
-element, a block or another `{#component Name(pattern)}` MUST be a build error.
+32.44 A `{#component Name(pattern)}` MUST be in scope in its own body.
 
 32.45 A `<style>` block of a file MUST apply to the elements its `{#component Name(pattern)}`
 blocks write.
 
-32.46 A `<script>` written at the top level of a `{#component Name(pattern)}` MUST be that
-component's per-instance setup, and a second one MUST be a build error.
+32.46 A `<script>` written in the body of a `{#component Name(pattern)}`, outside any block in it,
+MUST be that component's per-instance setup.
 
-32.47 A `<style>` written at the top level of a `{#component Name(pattern)}` MUST apply to the
-elements that component writes, and to no other element its file writes.
+32.47 A `<style>` written in the body of a `{#component Name(pattern)}`, outside any block in it,
+MUST apply to the elements that component writes, and to no other element its file writes.
 
-32.48 A `<script module>` written inside a `{#component Name(pattern)}` MUST be a build error.
+32.48 A `{#component Name(pattern)}` whose body holds two `<script>` blocks outside any block in it
+MUST be a build error.
 
-32.49 A `{#component Name(pattern)}` whose name an import of its file, or another
-`{#component Name(pattern)}` of its file, also binds MUST be a build error.
+32.49 A `{#component Name(pattern)}` whose name another `{#component Name(pattern)}` in the same
+body also declares MUST be a build error.
+
+32.50 A `{#component Name(pattern)}` written directly between the tags of a `<Name/>` MUST be passed
+to that component as the prop its name spells.
+
+32.51 A `{#component Name(pattern)}` passed under 32.50 MUST NOT be in scope in the body the
+`<Name/>` it is passed to stands in.
+
+32.52 A `{#component Name(pattern)}` passed under 32.50 MUST NOT be among the children a `<slot/>`
+renders.
+
+32.53 A `<Name/>` given a prop both as an attribute and as a `{#component Name(pattern)}` passed
+under 32.50 MUST be a build error.
+
+32.54 `abide check` MUST hold a `{#component Name(pattern)}` passed under 32.50 to the type its
+component's `props` call declares for that prop, and MUST report a mismatch on the
+`{#component Name(pattern)}`.
+
+32.55 A `{#component Name(pattern)}` at the template's top level whose name an import, a `<script>`
+declaration or a `<script module>` declaration of its file also binds MUST be a build error.
 
 # 33. Props
 

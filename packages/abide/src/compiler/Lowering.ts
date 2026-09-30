@@ -8,7 +8,7 @@ import {
     projectShadow,
     type Span,
 } from './projectShadow.ts'
-import type { Setup, TemplateNode } from './TemplateNode.ts'
+import type { InlineComponent, Setup, TemplateNode } from './TemplateNode.ts'
 import { nesting, type Token, tokenise } from './tokenise.ts'
 
 // 31.1 and 31.4 — inside a `.abide` a name bound to a `Reactive` is READ where it stands and
@@ -98,7 +98,10 @@ export class Lowering {
      */
     takesProps(): boolean {
         if (this.holdsSlot) return true
-        for (const read of this.reads) if (read.shape === 'props') return true
+        // The file's own call, in its `<script>`: an inline component's takes its own (32.40).
+        const scriptsEnd = this.projection.scripts.end
+        for (const read of this.reads)
+            if (read.shape === 'props' && read.start < scriptsEnd) return true
         return false
     }
 
@@ -172,8 +175,13 @@ export class Lowering {
         return grouped(this.lower(this.spanOf(holder), false))
     }
 
-    /** 14.8 — a branch-local `<script>`: statements, spliced as a body rather than as one value. */
-    setup(holder: Setup): string {
+    /**
+     * 14.8 — a branch-local `<script>`: statements, spliced as a body rather than as one value.
+     *
+     * 32.40 — AND AN INLINE COMPONENT'S HEAD, the `props` statement its pattern is bound by, which
+     * lowers to its own record as a file's does to the file's.
+     */
+    setup(holder: Setup | InlineComponent): string {
         return this.lower(this.spanOf(holder), false)
     }
 
