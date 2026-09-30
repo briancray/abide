@@ -6,7 +6,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 afterAll(removeTemporaryModules)
 
-// 32.18 — A COMPONENT IS A PATH, NOT A FILE NAME. Two `Row.abide` in two directories are two
+// 32.17 — A COMPONENT IS A PATH, NOT A FILE NAME. Two `Row.abide` in two directories are two
 // components, and only the one a page imports is mounted into a row the browser built — so only
 // that one carries a second copy of its template (`selfFill`). Read by name, the unimported one
 // ships the copy too: the output is still right and the client is bigger, which is why the gate
@@ -27,7 +27,7 @@ const SAME_NAMES = {
     'ui/b/Row.abide': `<script>\nimport { reactive } from 'abide'\n\nlet n = reactive(0)\n</script>\n\n<button onclick={() => { n = n + 1 }}>{n}</button>`,
 }
 
-test('two components with one file name are told apart by path — 32.18', async () => {
+test('two components with one file name are told apart by path — 32.17', async () => {
     const { modules } = await compileApp(temporaryModule(SAME_NAMES))
 
     // The seam specifier lands in the output tree, in both lanes.
@@ -45,7 +45,7 @@ test('two components with one file name are told apart by path — 32.18', async
 // taken out, so a walk listing the root as spelled finds no import landing on any file it listed.
 // THE REVERT: drop `realpathSync` from `compileApp` and the page imports `#ui/a/Row.ts` — a module
 // that exists nowhere — and `ui/a/Row` loses its template copy: 0 components linked, against 1.
-test('an app compiled through a symlinked root links its components — 32.18', async () => {
+test('an app compiled through a symlinked root links its components — 32.17', async () => {
     const outside = mkdtempSync(`${tmpdir()}/abide-link-`)
     try {
         const link = `${outside}/app`

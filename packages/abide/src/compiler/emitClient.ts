@@ -67,7 +67,7 @@ function claim(counter: Counter, prefix: string): string {
  *
  * How this module can be mounted against an EMPTY region: a file a ROUTE reaches
  * (30.11) is mounted against a page no server painted, once a navigation; a file another INVOKES
- * as a component (32.18) can stand in a row a list grew by, once A ROW. Both need a second copy of
+ * as a component (32.17) can stand in a row a list grew by, once A ROW. Both need a second copy of
  * the template, and one that needs neither is 34% more client than it needs: measured at 1797 ->
  * 2405 shipped lines over the corpus with every file carrying one. INVOKED decides whether that
  * copy is markup or a build (`Cursor.repeated`) — a page's fill is one parse, and a component's is
@@ -117,7 +117,7 @@ export function emitClient(
     // mount of the same page reads what the first one left.
     const moduleSetup = splitImports(lowering.modules())
     const setup = splitImports(lowering.scripts())
-    // 32.18 — A COMPONENT FILLS ITS OWN REGION where the server wrote none. A row the list grew by
+    // 32.17 — A COMPONENT FILLS ITS OWN REGION where the server wrote none. A row the list grew by
     // is built in the browser, and the child's markup is in the child's SERVER module — which the
     // browser may not reach. So the caller writes the anchor pair alone and the child fills it
     // from the template this module already holds, once, inside the instance whose setup just ran.
@@ -180,7 +180,7 @@ export function emitClient(
     //
     // A FILL IS SOMETHING TO DO, which is why this asks `fills` rather than `lines` alone.
     // An INVOKED component with no binding in it still owns the markup for a row the browser grew
-    // — the caller writes the anchor pair and nothing else (32.18) — so without its module every
+    // — the caller writes the anchor pair and nothing else (32.17) — so without its module every
     // browser-grown row of a static child would be empty.
     //
     // A FILE MOUNTED AGAINST AN EMPTY REGION SHIPS A MODULE REGARDLESS: the router or the caller's
@@ -352,7 +352,7 @@ function emitRegion(
             chain.push(
                 `const ${at.name} = ${lowering.use('regionHere')}(${at.from})`,
             )
-        // A RUN THAT CAN HOLD MARKUP (32.27) is stepped over to its closing anchor where it does,
+        // A RUN THAT CAN HOLD MARKUP (32.26) is stepped over to its closing anchor where it does,
         // and a blank one is put back where it rendered nothing — the same step (`runHere`). A run
         // of proven parts is text for good and is its node as found.
         else if (
@@ -389,7 +389,7 @@ function emitRegion(
                 const node = at.run[piece] as TemplateNode
                 if (node.kind === 'text') {
                     markup.push(JSON.stringify(node.text))
-                    // 32.28 — static text is markup, and `data` is not a parse: a piece with an
+                    // 32.27 — static text is markup, and `data` is not a parse: a piece with an
                     // entity in it goes in as the characters it stands for, decoded by the build.
                     text.push(
                         JSON.stringify(
@@ -408,7 +408,7 @@ function emitRegion(
             // lands on is the same one on every run while the run holds text — the walk put a blank
             // run's back and `setText` never removes it — so re-finding it per write is the same
             // answer bought again: measured in Chromium at 0.47 µs a write against 0.22 µs with the
-            // node held. 32.27 is the one write that changes it: a `Raw` part turns the run into an
+            // node held. 32.26 is the one write that changes it: a `Raw` part turns the run into an
             // anchored one (`setMarkup`) and a later text value turns it back, so each write hands
             // back what the run now is and the binding holds that.
             texts.push(
@@ -433,7 +433,7 @@ ${SCOPE}.watch(() => {
         if (bindings.attributes.length > 0) {
             const writes: string[] = []
             for (const one of bindings.attributes) {
-                // 32.21 IS THE INTERPOLATION'S CLAUSE ON THIS SIDE TOO, and 32.38's absence with it:
+                // 32.20 IS THE INTERPOLATION'S CLAUSE ON THIS SIDE TOO, and 32.37's absence with it:
                 // `setAttribute` answers through `attributeText`, as the server's markup did, so a
                 // `javascript:` the server refused is refused the moment the value moves too.
                 // A WATCH PER ATTRIBUTE, not one over the group: two attributes reading two
@@ -513,7 +513,7 @@ const SHARE_AT = '__shareAt'
 // The document a region's maker is handed and builds its nodes from.
 const DOCUMENT = '__document'
 
-// A run's anchors while it holds markup (32.31), as the JS string literals a built run parses with.
+// A run's anchors while it holds markup (32.30), as the JS string literals a built run parses with.
 const RAW_OPEN_MARKUP = JSON.stringify(`<!--${RAW_OPEN}-->`)
 const RAW_CLOSE_MARKUP = JSON.stringify(`<!--${RAW_CLOSE}-->`)
 
@@ -616,7 +616,7 @@ function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
             const value = builtAttribute(written, lowering, render)
             if (value === null) continue
             const set = `${at.name}.setAttribute(${JSON.stringify(written.name)}, `
-            // 32.38 — a whole-value attribute may be absent, which the server wrote as nothing.
+            // 32.37 — a whole-value attribute may be absent, which the server wrote as nothing.
             lines.push(
                 written.kind === 'dynamic'
                     ? `{ const __text = ${value}; if (__text !== null) ${set}__text) }`
@@ -633,7 +633,7 @@ function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
  * The lines that build one text run of a built row.
  *
  * A RUN, BUILT. What the server writes for a run is its static bytes and each expression escaped —
- * except a `Raw` value (32.27), whose html goes in unescaped, is PARSED into elements, and is
+ * except a `Raw` value (32.26), whose html goes in unescaped, is PARSED into elements, and is
  * anchored (`markupRun`). A text node cannot hold that, so a run whose expression answers a `Raw`
  * is parsed from the very markup the server writes for it, anchors and all — the parser for the one
  * thing only it makes — and every other run is one text node. The check is an `instanceof` a piece,
@@ -700,7 +700,7 @@ function builtAttribute(
         return `${lowering.use('attributeText')}(${JSON.stringify(written.name)}, ${lowering.slot(written.attribute)})`
     }
     if (written.value === '') return "''"
-    // 32.29 — a URL attribute's bytes are its value escaped whole, so they decode back to it exactly.
+    // 32.28 — a URL attribute's bytes are its value escaped whole, so they decode back to it exactly.
     return render.bytes(staticAttributeBytes(written.lowerName, written.value))
 }
 
@@ -726,7 +726,7 @@ function buildRender(lowering: Lowering): ValueRender {
  * Emits a region's `_build` and `_mount` pair into `helpers`, for a region nobody painted.
  *
  * A REGION NOBODY PAINTED, as the pair that fills it: `_build` for the nodes and `_mount` for the
- * bindings. 32.18 and 32.19 are the same mechanism from two sides — a caller's children handed to a
+ * bindings. 32.17 and 32.18 are the same mechanism from two sides — a caller's children handed to a
  * child, and the child's own fallback for a slot nothing was passed — so they are one emitter
  * rather than two that have to be kept byte-compatible by hand.
  */
@@ -805,7 +805,7 @@ function mountFunction(
 /**
  * Emits a component invocation's client mount: the child mounting itself against its region.
  *
- * 32.18 ON THE CLIENT — the child mounts ITSELF, against the region its markup was written into.
+ * 32.17 ON THE CLIENT — the child mounts ITSELF, against the region its markup was written into.
  * The parent hands over the same accessors it handed the server emitter (33.5), so the prop is the
  * caller's expression on both sides and the child re-reads it when the parent's value moves.
  *
@@ -823,7 +823,7 @@ function emitInvocation(
     counter: Counter,
 ): void {
     const props = invocationProps(node, lowering)
-    // 32.19 — THE CHILDREN ARE MARKUP AND A MOUNT, and they have to be both: the markup is what
+    // 32.18 — THE CHILDREN ARE MARKUP AND A MOUNT, and they have to be both: the markup is what
     // fills a slot the server never painted, and the mount is the CALLER's bindings — which only
     // this module has, addressed from a region only the child knows where to put.
     const children = at.inner[0]
@@ -848,14 +848,14 @@ function emitInvocation(
         )
         return
     }
-    // 32.35, 32.36 — A TAG CHOOSING BY A VALUE IS AN `{#if}` WHOSE ARMS ARE COMPONENTS: the watch
+    // 32.34, 32.35 — A TAG CHOOSING BY A VALUE IS AN `{#if}` WHOSE ARMS ARE COMPONENTS: the watch
     // reads which, and the swap runs untracked (`emitBlock`). The first run hydrates what the server
     // painted, and a later one empties the region for the next child to fill itself — the fill an
-    // invoked component already makes where no server painted (32.18). The props record is the
+    // invoked component already makes where no server painted (32.17). The props record is the
     // caller's accessors, so one record serves every child the value chooses.
     //
     // 10.5 — a swap after the first runs from the watch, with no instance on the stack.
-    // 32.37 — an absent value mounts nothing, and the region it leaves is the empty pair.
+    // 32.36 — an absent value mounts nothing, and the region it leaves is the empty pair.
     const name = claim(counter, 'dc')
     lines.push(`const ${name} = ${lowering.use('regionFound')}(${at.name})
 const ${name}_scope = ${SCOPE}.own(new ${lowering.use('Scope')}())
@@ -884,7 +884,7 @@ ${SCOPE}.watch(() => {
 /**
  * Emits a `<slot/>`'s client unit: the caller's children, or the child's own fallback.
  *
- * 32.19 ON THE CHILD'S SIDE — the position the caller's children render into. Not a watch and not
+ * 32.18 ON THE CHILD'S SIDE — the position the caller's children render into. Not a watch and not
  * a swap: whether children were given is fixed at the call site, so this is read once and the
  * region holds whichever of the two was decided there for the rest of its life.
  *
@@ -902,7 +902,7 @@ function emitSlot(
 
     emitFillable(name, at.inner[0] as Cursor, lowering, helpers, counter)
 
-    // THE EMPTY REGION IS THE ONE THE SERVER DID NOT PAINT — a child built in the browser (32.18)
+    // THE EMPTY REGION IS THE ONE THE SERVER DID NOT PAINT — a child built in the browser (32.17)
     // or a page navigated to (30.7). Filled from whichever side owns what goes there, and then
     // mounted from the same side, so the markup and the bindings can never come from two.
     lines.push(`const ${name} = ${lowering.use('regionFound')}(${at.name})
@@ -969,7 +969,7 @@ function emitBlock(
     // continue past a subject still in flight, and what the server writes then is the anchor pair
     // with nothing between it (see `emitComponent`'s `{#if}` arm) — so hydrating here walks for
     // nodes that were never painted. `isEmptyRegion` is the same signal an invoked component
-    // already reads (32.18), asked ONCE on the first run: from the second onward `${name}_at` is
+    // already reads (32.17), asked ONCE on the first run: from the second onward `${name}_at` is
     // set and the fill happens anyway, so the region is never scanned twice for it.
     //
     // ARMS THAT BIND NOTHING ARE ONLY FILLED: there is no mount to call and no scope to stop.
@@ -1151,7 +1151,7 @@ function emitArms(
  * every row's element is already in the document and only its bindings are missing. Only a change
  * to the list reconciles, and only the rows that moved move.
  *
- * 32.22 — the subject is read ONCE for the block. 32.23 — an absent subject iterates zero times.
+ * 32.21 — the subject is read ONCE for the block. 32.22 — an absent subject iterates zero times.
  */
 function emitList(
     position: Position,
@@ -1177,7 +1177,7 @@ function emitList(
     // what says so: they are a `for … of` binding there, so no read in the body or the key reaches
     // the page's name of the same spelling.
     const written = `(${item}, ${at}) => ${block.key === '' ? at : lowering.key(block)}`
-    // 32.33 — ONLY A NAME ALONE hands the list its `Reactive`. Any other subject is a value computed
+    // 32.32 — ONLY A NAME ALONE hands the list its `Reactive`. Any other subject is a value computed
     // from one, which declared no `by` of its own, and evaluating it a second time to ask would run
     // the computation twice. `reference` keeps the name the `Reactive` (31.3) rather than a read.
     const key =

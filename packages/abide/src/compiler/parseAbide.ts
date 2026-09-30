@@ -36,7 +36,7 @@ export type AbideFile = {
     modules: string[]
     /**
      * `<style>` bodies in source order, outside any block body — each scoped to the component (34.4). A
-     * body's own is on its block (34.13).
+     * body's own is on its block (34.11).
      */
     styles: string[]
     /**
@@ -178,7 +178,7 @@ export function parseAbide(source: string): AbideFile {
             }
 
             // 34.1, 34.4 — a `<script>` or a `<style>` is the FILE's, or inside a block the BODY's
-            // (14.8, 34.13), never markup, and its body is taken raw. Here rather than in a pass of its own: a scan that runs before the
+            // (14.8, 34.11), never markup, and its body is taken raw. Here rather than in a pass of its own: a scan that runs before the
             // template is parsed cannot tell a tag from the same characters inside a string in an
             // expression, and lifted the second into component setup.
             // LOWERCASED, for the reason the close tag above is: `<SCRIPT>let z = 1</SCRIPT>` was
@@ -192,7 +192,7 @@ export function parseAbide(source: string): AbideFile {
             // statement, so the module did not parse and the document lost the tag.
             //
             // A `<style>` HAS NO SECOND FORM — no attribute decides where one goes, only whether it
-            // stands in a block body (34.13) — so this is one rule about `<script>` rather than an
+            // stands in a block body (34.11) — so this is one rule about `<script>` rather than an
             // exception carved out of a rule about both.
             const block =
                 lowerTag === 'style'
@@ -205,7 +205,7 @@ export function parseAbide(source: string): AbideFile {
                 // 14.8 — A `<script>` INSIDE A BLOCK IS THAT BODY'S, set up once each time the body is
                 // built, and not the component's: lifted, it ran once for the page and a row's own
                 // names (`{#for item …}`) were not in scope.
-                // 34.13 — AND A `<style>` INSIDE A BLOCK IS THAT BODY'S, scoped to the elements it
+                // 34.11 — AND A `<style>` INSIDE A BLOCK IS THAT BODY'S, scoped to the elements it
                 // holds (`markScoped`) rather than to the whole component.
                 if (block === styles && blocks.length > 0) {
                     const owner = bodyOf(
@@ -520,7 +520,7 @@ function bodyOf(block: TemplateNode): {
     if (block.kind === 'block' && block.block === 'if')
         return block.branches[block.branches.length - 1] as Branch
     throw new Error(
-        'abide: a <script> or a <style> inside a {#try} belongs to no body. Move it into a component the {#try} holds, or into a {#for} or {#if} inside it. RULEBOOK 34.12.',
+        'abide: a <script> or a <style> inside a {#try} belongs to no body. Move it into a component the {#try} holds, or into a {#for} or {#if} inside it. RULEBOOK 34.10.',
     )
 }
 
@@ -528,7 +528,7 @@ function bodyOf(block: TemplateNode): {
  * Whether two tag names match, ASCII case-insensitively.
  *
  * An HTML tag name is ASCII case-INSENSITIVE, so `</DIV>` closes a `<div>`. A component name is
- * TitleCase (32.18) and an exact match is a case of this one, so there is no second rule here.
+ * TitleCase (32.17) and an exact match is a case of this one, so there is no second rule here.
  */
 function sameTag(left: string, right: string): boolean {
     return left.toLowerCase() === right.toLowerCase()
@@ -705,7 +705,7 @@ function forBlock(
             by = token
     }
     // A `{#for}` with nothing to iterate rendered as a block over the subject '' — zero rows,
-    // forever, with nothing saying why (32.23 is an ABSENT subject, not a missing one).
+    // forever, with nothing saying why (32.22 is an ABSENT subject, not a missing one).
     if (of === undefined)
         throw new Error(
             `abide: {#for ${source}} has no \` of \`, so there is nothing to iterate. Write {#for item of list}.`,
@@ -859,7 +859,7 @@ function readTag(
             at += 1
         // 32.3 HOLDS WHETHER OR NOT THE VALUE IS QUOTED. Pushed straight as a literal, a slot in
         // an unquoted value — `<a href=/x/{id}>` — was served as the author's own braces, never
-        // lowered and never past the `safeUrl` 32.21 asks a URL attribute for.
+        // lowered and never past the `safeUrl` 32.20 asks a URL attribute for.
         const from = attributes.length
         pushQuoted(attributes, attrName, source.slice(valueStart, at), name)
         place(from, valueStart, attrStart)
@@ -877,20 +877,20 @@ function readTag(
  *
  * REWRITTEN AS A TEMPLATE LITERAL rather than given a parts array of its own, because that is one
  * expression and the whole `class={expr}` path already takes one: lowered by `Lowering`,
- * escaped by `escapeAttribute`, and scheme-checked by `safeUrl` where 32.21 asks for it. A second
+ * escaped by `escapeAttribute`, and scheme-checked by `safeUrl` where 32.20 asks for it. A second
  * shape here would be a second copy of all three.
  *
- * 32.28 — ITS STATIC TEXT IS DECODED HERE, so what is left is data whole and takes that one path on
+ * 32.27 — ITS STATIC TEXT IS DECODED HERE, so what is left is data whole and takes that one path on
  * both sides: `title="AT&amp;T {n}"` is the literal `AT&T ${n}`, escaped as one value by the server
  * and set as it stands by the browser. Each static piece is decoded ON ITS OWN, so a slot's text can
- * never finish a reference the author's began: `&amp{x}` is `&` and then the slot. 32.29 keeps a URL
+ * never finish a reference the author's began: `&amp{x}` is `&` and then the slot. 32.28 keeps a URL
  * attribute's static text as written, escaped with its slots the way `{expr}` is.
  *
  * 33.19 — A COMPONENT'S PROP IS DECODED WHEN IT IS STATIC TOO, because it is never markup: an element's
  * static value is served as the author's bytes (`staticAttributeBytes`), and a prop is handed over
  * as a string, so `<Card title="AT&amp;T">` hands the child `AT&T`.
  *
- * 32.20 — AN INTERPOLATED `style` TAKES THE OTHER ROAD and lowers to one `style:prop` per
+ * 32.19 — AN INTERPOLATED `style` TAKES THE OTHER ROAD and lowers to one `style:prop` per
  * declaration, which is why the split happens here, where the interpolated form is still told
  * apart from the whole `style={expr}` one.
  */
@@ -926,12 +926,12 @@ function pushQuoted(
         // string it would let a value decide which property it sets.
         if (colon === -1 || declaration.slice(0, colon).includes('{'))
             throw new Error(
-                `abide: an interpolated style on <${tag}> sets one property per declaration under a static name, and \`${declaration.trim()}\` has none. Write style:prop={value}. RULEBOOK 32.20.`,
+                `abide: an interpolated style on <${tag}> sets one property per declaration under a static name, and \`${declaration.trim()}\` has none. Write style:prop={value}. RULEBOOK 32.19.`,
             )
         const property = declaration.slice(0, colon).trim()
         if (property === '')
             throw new Error(
-                `abide: an interpolated style on <${tag}> has a declaration with no property name. Write style:prop={value}. RULEBOOK 32.20.`,
+                `abide: an interpolated style on <${tag}> has a declaration with no property name. Write style:prop={value}. RULEBOOK 32.19.`,
             )
         const value = declaration.slice(colon + 1).trim()
         const slotted = interpolated(value, false)
@@ -1030,7 +1030,7 @@ function topLevelAt(source: string, target: string, from: number): number {
             continue
         }
         // A QUOTED VALUE IS NOT A LIST OF DECLARATIONS. The `;` inside
-        // `url('data:image/svg+xml;utf8,<svg/>')` split one style declaration into two and 32.20's
+        // `url('data:image/svg+xml;utf8,<svg/>')` split one style declaration into two and 32.19's
         // refusal named a fragment the author never wrote — a build failure on valid CSS.
         if (char === '"' || char === "'") {
             at = skipQuoted(source, at)

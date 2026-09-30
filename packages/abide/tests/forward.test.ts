@@ -52,7 +52,7 @@ test('the emitted binding walks the markup and adds nothing to the document', as
     expect(client).toContain('const __c3 = __c2?.firstChild\n')
     expect(client).toContain('const __c5 = __c3?.nextSibling\n')
     // `{b} tail` carries a static piece, so it always renders a node — but it is live, so it can
-    // hold markup (32.27) and is stepped to its closing anchor where it does, and never put back.
+    // hold markup (32.26) and is stepped to its closing anchor where it does, and never put back.
     // `{a}` is every part an expression and can render none, so the walk puts one back as it
     // passes.
     expect(client).toContain('const __c4 = __runHere(__c3?.firstChild, null)\n')

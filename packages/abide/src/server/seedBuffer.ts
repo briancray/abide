@@ -263,7 +263,7 @@ export function outcomeOf(reached: unknown): Promise<Outcome> {
     return Promise.resolve(reached).then(
         (value): Outcome => ({
             settled: true,
-            // 16.50 — A VALUE DECLARING `history` IS HANDED ON AS ITSELF, settled, for the answer to
+            // 16.49 — A VALUE DECLARING `history` IS HANDED ON AS ITSELF, settled, for the answer to
             // frame per production where the reader asks — so a seeded answer is framed as a run
             // one is. A refusal and nothing at all are answered as they are.
             value:

@@ -71,7 +71,7 @@ export type Position = {
      */
     from: string
     /**
-     * What the run hangs off, which `textHere` needs for 32.24's hole: a run every part of which
+     * What the run hangs off, which `textHere` needs for 32.23's hole: a run every part of which
      * is an expression renders NO node when they are all empty, and the position still has to
      * exist because the walk continues through it.
      */
@@ -96,7 +96,7 @@ export type Position = {
      * build. Carried down through nested regions, so a list inside an `<svg>` arm knows it.
      */
     parserOwned: boolean
-    /** Whether a text run can render as no node at all (32.24). False for the other two kinds. */
+    /** Whether a text run can render as no node at all (32.23). False for the other two kinds. */
     blank: boolean
     /**
      * A nested region's own sink, one per root the walk descends into: one for a `{#for}` row, one

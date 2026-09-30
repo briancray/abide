@@ -9,16 +9,16 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     'escapeAttribute',
     'escapeStyleValue',
     'safeUrl',
-    // 32.38 — present, absent or text: the markup's answer and a built row's.
+    // 32.37 — present, absent or text: the markup's answer and a built row's.
     'attributeMarkup',
     'attributeText',
     'raw',
-    // 32.31's anchored run, which the server's markup and a browser's parsed row both write.
+    // 32.30's anchored run, which the server's markup and a browser's parsed row both write.
     'markupRun',
     'RAW_WRITES',
     'writePath',
     'listOf',
-    // 32.24's abort, which only the server lane can need: a client binding is its own `watch`
+    // 32.23's abort, which only the server lane can need: a client binding is its own `watch`
     // and gets one from 2.13. Emitted on both sides because `renderMarkup` is both sides.
     'slotValue',
     // 32.5, 32.8 — what a `bind:` operand holds, which the markup writes into the tag.

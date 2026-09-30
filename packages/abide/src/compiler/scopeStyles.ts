@@ -36,7 +36,7 @@ export function scopeToken(relative: string): string {
  * The token is added as a static bare attribute — so the server's markup, a row the browser builds
  * and hydration all carry it with nothing added to any of them.
  *
- * 34.13 — AND A BODY WITH A `<style>` OF ITS OWN adds a token of its own to every element it holds,
+ * 34.11 — AND A BODY WITH A `<style>` OF ITS OWN adds a token of its own to every element it holds,
  * beside the component's and any enclosing body's, so its rules reach that body and nothing else
  * the component wrote. Numbered in the order the walk meets them, which is the file's, so a body's
  * token is stable across builds.

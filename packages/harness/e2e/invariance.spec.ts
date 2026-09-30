@@ -173,7 +173,7 @@ function differencesOf(authored: Answers, compiledAnswers: Answers): string[] {
 // has nothing on the list.
 //
 // A RATCHET ONCE MOUNTED, of one entry: a slot whose value is EMPTY is no node in the served
-// markup (32.24's hole), and `runHere` in `packages/abide/src/ui/adoptWalk.ts` puts an empty
+// markup (32.23's hole), and `runHere` in `packages/abide/src/ui/adoptWalk.ts` puts an empty
 // Text back as the walk passes, because every sibling after it is found from it. So `#blank` has 1 child node where the
 // author wrote none, and that child is a Text — `:empty` still matches, since a zero-length Text
 // does not count against it, and `blankIsEmpty` is on the probe to say so. Named here so that

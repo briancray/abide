@@ -637,7 +637,7 @@ export class TypeSession {
                     ),
                 )
                 await dropValueHolders(checker, names, reactive)
-                // 32.33 — A VALUE WHOSE `reactive(…)` DECLARES `by` keys a `{#for}` over it,
+                // 32.32 — A VALUE WHOSE `reactive(…)` DECLARES `by` keys a `{#for}` over it,
                 // wherever the value is declared.
                 const byValue = await Promise.all(
                     reactive.map(async (symbol) => {
@@ -896,7 +896,7 @@ export class TypeSession {
                             )
                             if (at !== undefined)
                                 throw new Error(
-                                    `abide: ${path} — \`${exported.name}\` returns a \`Reactive\` at \`${at}\`, which the wire would carry as the function it is rather than the value it holds. Read it there, or return the \`Reactive\` itself to have it adopted (11.12). RULEBOOK 16.41.`,
+                                    `abide: ${path} — \`${exported.name}\` returns a \`Reactive\` at \`${at}\`, which the wire would carry as the function it is rather than the value it holds. Read it there, or return the \`Reactive\` itself to have it adopted (11.12). RULEBOOK 16.40.`,
                                 )
                         }
                         return {
@@ -2345,7 +2345,7 @@ async function valueOfRpc(
 }
 
 /**
- * 16.41 — the path to the first `Reactive` nested in a handler's value, or `undefined`.
+ * 16.40 — the path to the first `Reactive` nested in a handler's value, or `undefined`.
  *
  * `.name` for a member, `[]` for an array's items and `[n]` for a tuple's. A callable that is not
  * a `Reactive` is not walked — it cannot be JSON, and a lib type's methods are most of what it is —

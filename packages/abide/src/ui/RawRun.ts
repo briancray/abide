@@ -6,7 +6,7 @@ import { removeUntil } from './regions.ts'
 /**
  * A live text run while it holds markup: its anchor pair and the markup last parsed between them.
  *
- * 32.27 — a run holding text is its text node and nothing else, so this exists only while a `Raw`
+ * 32.26 — a run holding text is its text node and nothing else, so this exists only while a `Raw`
  * is in the run — the ordinary slot allocates none of it (`setText`, `setMarkup`).
  *
  * `html` IS UNDEFINED FOR A RUN THE SERVER PAINTED. What is between the anchors is what the server

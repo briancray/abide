@@ -105,12 +105,12 @@ let open = reactive(true)
     expect((globalThis as { __TORN__?: number }).__TORN__).toBe(1)
 })
 
-// 32.39 — AN EXIT: a `Disposer` handing back a thenable keeps the element in the document until it
+// 32.38 — AN EXIT: a `Disposer` handing back a thenable keeps the element in the document until it
 // settles, which is where `element.animate(…).finished` goes. An arm's swap and a row the reconcile
 // drops both hold it, and the arm's replacement is in place beside it meanwhile. THE REVERT: have
 // `leave` remove the node whatever is leaving; `#leaving` is gone at the swap, where it is due to
 // stay until the exit settles.
-test('a disposer handing back a thenable holds the element until it settles — 32.39', async () => {
+test('a disposer handing back a thenable holds the element until it settles — 32.38', async () => {
     const exits: (() => void)[] = []
     ;(globalThis as { __EXIT__?: () => Promise<void> }).__EXIT__ = () =>
         new Promise<void>((done) => exits.push(done))

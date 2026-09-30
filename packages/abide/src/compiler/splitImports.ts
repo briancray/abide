@@ -201,7 +201,7 @@ export function abideSpecifiers(script: string): string[] {
 /**
  * Rewrites each `.abide` specifier in `imports` to the lane's compiled module for it.
  *
- * 32.18 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two
+ * 32.17 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two
  * it is is the LANE's business: the server module renders the child, the client module mounts it.
  * WHERE that module is, is the build's: `components` maps a specifier to the path, relative and
  * without an extension, the build resolved it to (`componentGraph`) — and a specifier it does not

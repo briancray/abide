@@ -148,7 +148,7 @@ function writeIsConstantInHistory(): void {
  * mechanism measures.
  *
  * THE BAR, AND WHAT IT IS A FACT ABOUT. Three runs each way on this machine under JSC at these
- * two widths: 5.88x / 6.49x / 7.00x with the reader-side dedup, against 8.72x / 8.73x / 9.40x
+ * two widths: 5.87x / 6.49x / 7.00x with the reader-side dedup, against 8.72x / 8.73x / 9.40x
  * with the readers-side scan. 7.8 sits ~11% clear of both ends. Linear predicts 112/16 = 7x and
  * the fixed arm measures there, which is the check on the check.
  *

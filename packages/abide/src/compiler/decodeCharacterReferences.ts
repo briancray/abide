@@ -1,7 +1,7 @@
 import { CHARACTER_REFERENCES } from './CHARACTER_REFERENCES.ts'
 
 // STATIC TEMPLATE TEXT AS THE CHARACTERS IT STANDS FOR, decoded at BUILD time by the HTML spec's
-// rules — 32.28's `AT&amp;T` is `AT&T` wherever the build hands text over as data rather than as
+// rules — 32.27's `AT&amp;T` is `AT&T` wherever the build hands text over as data rather than as
 // markup: a component's prop, the static pieces of an interpolated attribute, and every static
 // string a row the browser BUILDS writes through `data` or `setAttribute`. The rule exactly, edges
 // included — a numeric reference with or without its `;`, the windows-1252 remap for 0x80–0x9F,

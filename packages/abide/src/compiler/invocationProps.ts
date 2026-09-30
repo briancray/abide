@@ -1,4 +1,4 @@
-// 32.18 — WHAT A COMPONENT INVOCATION HANDS ITS CHILD, as the entries of the props record both lanes
+// 32.17 — WHAT A COMPONENT INVOCATION HANDS ITS CHILD, as the entries of the props record both lanes
 // write: one accessor per prop (33.4). Written once, because the server calls the child with this
 // record and the browser mounts it with the same one, and two copies are two answers to what a tag
 // passes.

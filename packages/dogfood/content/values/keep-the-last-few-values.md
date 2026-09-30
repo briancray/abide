@@ -167,9 +167,8 @@ wherever a transcript is held:
 | --- | --- |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | bytes, default `Infinity` |
 
-It governs both holders of a stream transcript — a seed buffer entry, and a `global` keyed value's entry
-fanning one producer out to late readers. One number for one shape, rather than a second variable
-meaning the same thing somewhere else.
+It governs a seed buffer entry's transcript: an entry past it stops holding the stream, and the
+browser's call runs the handler again and says so on `abide:hydrate`.
 
 A seed buffer entry needs no other bound: it is single-use and lives seconds, so the exposure is
 request rate multiplied by transcript size, and size is the only dimension that can grow. A count

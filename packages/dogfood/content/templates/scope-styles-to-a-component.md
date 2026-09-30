@@ -39,11 +39,6 @@ the selector because nothing else will, and the cost is not the typing — it is
 component reusing `badge` has to already know the other two exist. A convention holds only as
 long as everybody remembers it; the token is on the element whether anybody remembered or not.
 
-A component scope the document never linked reaches the page through
-`document.adoptedStyleSheets`, and there is **no fallback** for that. It is a platform feature the
-supported browsers have, and a shim would be a second code path for styling that only ever ran
-where nothing else did.
-
 Read on: [Components](reuse-a-piece-of-markup.md)
 
 ## `:global(…)` is the per-selector escape

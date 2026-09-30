@@ -1,5 +1,5 @@
 // 18.26 — WHAT A PATCH WROTE ON THE SERVER, WRITTEN AGAIN HERE: each op walked to its path and
-// replayed. Called inside the copy's own `s.patch`, so the rows it reaches are the rows 32.34 remakes.
+// replayed. Called inside the copy's own `s.patch`, so the rows it reaches are the rows 32.33 remakes.
 import { putOwn } from '#shared/putOwn.ts'
 import type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
 

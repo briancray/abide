@@ -1,6 +1,6 @@
 (tag_name) @tag
 
-; 32.18 — a capitalised tag is a component.
+; 32.17 — a capitalised tag is a component.
 ((tag_name) @type
   (#match? @type "^[A-Z]"))
 
@@ -41,8 +41,6 @@
 (catch_start "}" @keyword)
 (finally_start "}" @keyword)
 (try_end "}" @keyword)
-(component_start "}" @keyword)
-(component_end "}" @keyword)
 
 (expression
   [

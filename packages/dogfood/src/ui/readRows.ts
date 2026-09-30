@@ -5,7 +5,7 @@ import { linesOf } from '#shared/linesOf.ts'
  * Reads a run's newline-delimited JSON rows off `rpc.raw`'s `Response`, handing each to `each`.
  *
  * One JSON row per line, each handed to `each` once, as it lands; a runner-failure row rejects.
- * The call's own value streams and takes a signal too (16.33, 16.53), but it is the ACCUMULATION:
+ * The call's own value streams and takes a signal too (16.33, 16.52), but it is the ACCUMULATION:
  * a board merging rows into results it already holds would walk the whole of it again for every
  * row that landed.
  */

@@ -36,7 +36,7 @@ export type Projection = {
      */
     keys: Map<object, Span>
     /**
-     * 32.35 — per invocation, the span of its tag: a read there is a component chosen by a value.
+     * 32.34 — per invocation, the span of its tag: a read there is a component chosen by a value.
      */
     tags: Map<object, Span>
     /**
@@ -133,7 +133,7 @@ function project(file: AbideFile): Projection {
         refuseTopLevelAwait(owned.text, 'branch-local <script>')
     }
 
-    // 32.18 — A COMPONENT TAG IS A CALL, AND IT IS PROJECTED AS ONE: the name it invokes, handed the
+    // 32.17 — A COMPONENT TAG IS A CALL, AND IT IS PROJECTED AS ONE: the name it invokes, handed the
     // record the build hands it (`invocationProps`), so the checker holds each value to the prop the
     // child declares (33.4), reports a name nobody imported, and answers a hover or a jump on the
     // tag with the import's (38.40). Spreads first and explicit keys after, which is the order 33.12
@@ -142,10 +142,10 @@ function project(file: AbideFile): Projection {
     const invocation = (
         node: Extract<TemplateNode, { kind: 'element' }>,
     ): void => {
-        // 32.37 — CALLED OPTIONALLY, so a value that may be absent is checked as one that may
+        // 32.36 — CALLED OPTIONALLY, so a value that may be absent is checked as one that may
         // render nothing; a tag that is always a component reads the same either way.
         //
-        // 32.35 — AND THE STATEMENT IS THE PARENTHESES, NOT THE CALL. A call standing as a statement
+        // 32.34 — AND THE STATEMENT IS THE PARENTHESES, NOT THE CALL. A call standing as a statement
         // is one the checker asks whether it ASSERTS, which it answers from the callee's type while
         // it is still walking the flow — so a callee whose type is `ReturnType<typeof Shown>`
         // reached back into `Shown`'s own initializer and reported it circular (TS2502).
@@ -394,7 +394,7 @@ declare function ${ROWS_OF}<T>(subject: Iterable<T> | AsyncIterable<T> | null | 
  *
  * 34.3 — A SCRIPT BLOCK MAY NOT AWAIT AT ITS TOP LEVEL. Component setup is a function body on both
  * sides, so nothing in the render is held and every value a page reads is a hole the document is
- * written around (41.4, 32.24). Refused rather than emitted: the module bun then fails to build
+ * written around (41.4, 32.23). Refused rather than emitted: the module bun then fails to build
  * names neither the page nor the line.
  *
  * DEPTH IS WHAT "TOP LEVEL" MEANS, and it is the whole of what this rule costs. An `await` inside a

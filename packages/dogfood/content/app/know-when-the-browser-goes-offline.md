@@ -71,7 +71,8 @@ watch(() => { if (online) refresh() })
 `refresh()` is bounded by what is **subscribed** rather than by the scope: it reloads the
 entries something is reading and degenerates to a mark for the rest. So a scope holding two
 hundred catches up the handful a reader is holding and marks the other hundred and ninety-odd,
-which is exactly the line above and makes it the reconnect default.
+which is exactly the line above and makes it the reconnect default. The watch also runs once as
+the layout mounts, with `online` already true, so what is subscribed then reloads once as well.
 
 `invalidate()` is the other choice, for where the values on screen must stay: it runs nothing,
 sends nothing and wakes nobody (7.3, 7.14), and leaves every value standing until the next read or

@@ -4,7 +4,7 @@ import type { Component, Rendered } from './render.ts'
 /**
  * One component invocation's body markup, wrapped in region anchors; its head goes onto `heads`.
  *
- * 32.18 on the server — one invocation, rendered where it stands. The child is a function of its
+ * 32.17 on the server — one invocation, rendered where it stands. The child is a function of its
  * props record and hands back its head and its body apart, the same pair a page hands `render`.
  *
  * THE ANCHORS ARE THE PARENT'S PROBLEM, not the child's: how many top-level nodes the child writes
@@ -16,7 +16,7 @@ import type { Component, Rendered } from './render.ts'
  * reaches the document the way a page's does. The array is the caller's, which is what keeps the
  * order the tree order.
  *
- * 32.37 — A TAG CHOOSING BY A VALUE (32.35) MAY CHOOSE NOTHING, and writes the pair alone: the
+ * 32.36 — A TAG CHOOSING BY A VALUE (32.34) MAY CHOOSE NOTHING, and writes the pair alone: the
  * region is still there for the browser to fill when the value arrives.
  */
 export function renderComponent(

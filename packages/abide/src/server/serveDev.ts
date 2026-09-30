@@ -393,7 +393,7 @@ export async function serveDev(
 
     const server = Bun.serve<Carried>({
         ...(options.port === undefined ? {} : { port: options.port }),
-        // 16.59, as `App.listen` lifts it: the worker behind this is where the ceiling is read.
+        // 16.58, as `App.listen` lifts it: the worker behind this is where the ceiling is read.
         maxRequestBodySize: Number.MAX_SAFE_INTEGER,
         async fetch(request, listening) {
             const asked = new URL(request.url).pathname

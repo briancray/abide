@@ -167,8 +167,8 @@ Read on: [Derived values](derive-a-value-from-other-values.md)
 
 An error in an effect is never silent. A throwing effect, a throwing disposer, and a read of a
 **failed** value inside one — which throws where nothing has landed (2.2) — all reach `onError`
-with the trace attached and warn on `abide:watch`. In a browser it is additionally re-thrown as an
-unhandled rejection, so an error reporter sees it.
+with the trace attached and warn on `abide:watch`. In a browser a throw from the effect is
+additionally re-thrown, and surfaces as an uncaught error an error reporter sees.
 
 Then the watch stops. An effect that throws once usually throws every run, and a watch that
 re-runs into the same throw is a loop with a log line per iteration. The warning names the watch,

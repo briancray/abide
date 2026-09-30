@@ -1,8 +1,8 @@
 // WHAT A HANDLER'S VALUE IS ANSWERED AS, over http. JSON by default (16.31), and otherwise by what the
 // value is: a `Response` as it stands (16.37), a binary as bytes (16.35), a `Blob` range-aware
 // (16.36), a document where `page` named one (17.2), a stream — a streaming handler's chunks, or
-// `Values` a handler returned — framed one chunk per pull (16.33, 16.46–16.49), and a value declaring
-// `history` framed one production per pull where the reader asks for frames (16.50–16.52).
+// `Values` a handler returned — framed one chunk per pull (16.33, 16.45–16.48), and a value declaring
+// `history` framed one production per pull where the reader asks for frames (16.49–16.51).
 
 import { chunksFrom, isReactive } from '#shared/reactive/index.ts'
 import { prefers } from './prefers.ts'
@@ -84,7 +84,7 @@ export async function answerValue(
     if (isReactive(value))
         return answerProductions(value, request, headers, status)
     const framing = currentRequestScope()?.framing
-    // 16.32 — nothing to say is 204, where the handler wrote no status of its own, and 16.57 — a
+    // 16.32 — nothing to say is 204, where the handler wrote no status of its own, and 16.56 — a
     // type for no content is noise.
     if (value === undefined) {
         if (status === 200) headers.delete('content-type')
@@ -133,14 +133,14 @@ function isIterable(value: unknown): value is Iterable<unknown> {
 /**
  * A value declaring `history`, answered as its productions, or as the one standing.
  *
- * 16.50 — ONE FRAME PER PRODUCTION, each carrying the sequence number and the epoch the socket lane
+ * 16.49 — ONE FRAME PER PRODUCTION, each carrying the sequence number and the epoch the socket lane
  * carries (`resumeProductions`): the ring, and then every production live. Only where the reader
  * asks for frames over JSON; a reader asking for the value is answered the standing production as
  * any value is (16.31), which is what a browser's `Rpc` asks for.
  *
- * jsonl frames are the mux's own (`ServerFrame`, less its `id`). 16.51 — AN EVENT STREAM carries
+ * jsonl frames are the mux's own (`ServerFrame`, less its `id`). 16.50 — AN EVENT STREAM carries
  * each production's value as `data:`, and its place as `id: <seq>:<epoch>`, so an `EventSource`
- * reconnecting hands both back as `Last-Event-ID` (16.52) and 18.13's epoch comparison has an epoch
+ * reconnecting hands both back as `Last-Event-ID` (16.51) and 18.13's epoch comparison has an epoch
  * to compare; a moved one is one `event: reset` whose data is the ring. A `Last-Event-ID` naming no
  * epoch is compared as a moved one — the whole ring, never a gap.
  */
@@ -199,7 +199,7 @@ function answerProductions(
         },
     })
     headers.set('content-type', sse ? 'text/event-stream' : 'application/jsonl')
-    // 16.47 — a feed is never stored, whatever the production's own life said (21.8).
+    // 16.46 — a feed is never stored, whatever the production's own life said (21.8).
     headers.set('cache-control', 'no-cache')
     if (sse) headers.set('x-accel-buffering', 'no')
     return new Response(body, { status, headers })
@@ -225,7 +225,7 @@ async function* lifted(value: Iterable<unknown>): AsyncGenerator<unknown> {
 /**
  * A stream answered at the framing a helper fixed, or the first the first chunk's type admits.
  *
- * 16.33, 16.48, 16.49 — binary chunks admit bytes alone, and values admit jsonl and then sse, sse
+ * 16.33, 16.47, 16.48 — binary chunks admit bytes alone, and values admit jsonl and then sse, sse
  * where `Accept` asks for it.
  */
 async function answerStream(
@@ -263,7 +263,7 @@ export function framed(
     else if (framing === 'jsonl')
         headers.set('content-type', 'application/jsonl')
     else {
-        // 16.47.
+        // 16.46.
         headers.set('content-type', 'text/event-stream')
         headers.set('cache-control', 'no-cache')
         headers.set('x-accel-buffering', 'no')
@@ -277,7 +277,7 @@ export function framed(
 /**
  * A response body writing each chunk as one frame of `framing`.
  *
- * 16.46, 16.47 — ONE FRAME PER PULL, so a reader sees each chunk as it is produced rather than
+ * 16.45, 16.46 — ONE FRAME PER PULL, so a reader sees each chunk as it is produced rather than
  * once the stream has finished. A reader who hangs up returns the generator, which stops what it
  * was reading in its scope.
  *
@@ -417,7 +417,7 @@ function namesEtag(header: string | null, etag: string): boolean {
  * else is named by its bytes: a blob in memory has no other identity, and a slice of a file shares
  * the file's path and write time with every other slice of its size. A file that stats empty is
  * read too, which costs nothing where it is empty and throws where it is missing — inside the
- * handler's answer, as 16.43 answers it, rather than out of the server's send.
+ * handler's answer, as 16.42 answers it, rather than out of the server's send.
  */
 async function etagOf(blob: Blob): Promise<string> {
     // A file `Bun.file` made carries its path as `name` and its write time as `lastModified`.

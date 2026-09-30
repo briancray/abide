@@ -238,7 +238,7 @@ test('a write under a row popped and put back is sent in its copy', () => {
     expect(result).toMatchObject({ kept: true, same: true })
 })
 
-// 32.34 — NOTHING FROM A PATCH STAYS IN THE VALUE. A `filter` reads its rows through the patch's
+// 32.33 — NOTHING FROM A PATCH STAYS IN THE VALUE. A `filter` reads its rows through the patch's
 // proxies and hands back a new array holding them, and a spread row holds the proxies of what it
 // spread. THE REVERT: unwrap only the top of a stored value; the kept row is stored as a proxy
 // (`same row: false`), and so is the spread row's place.

@@ -102,8 +102,8 @@ test('a handler answers at its file path and export name, as JSON — 16.2, 16.3
     expect(await health.json()).toEqual({ up: true })
 })
 
-// 16.42, 15.1 — the refusal the handler RETURNED, at its own status, as the four fields it is.
-test('a refusal is answered at its own status with its name and data — 16.42', async () => {
+// 16.41, 15.1 — the refusal the handler RETURNED, at its own status, as the four fields it is.
+test('a refusal is answered at its own status with its name and data — 16.41', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/getInvoice?id=4311`)
     expect(answer.status).toBe(403)
     expect(await answer.json()).toEqual({
@@ -114,8 +114,8 @@ test('a refusal is answered at its own status with its name and data — 16.42',
     })
 })
 
-// 16.32, 16.43 — nothing is 204; a throw is 500 and says nothing about itself.
-test('nothing is 204, and a throw is 500 with nothing of the error in it — 16.32, 16.43', async () => {
+// 16.32, 16.42 — nothing is 204; a throw is 500 and says nothing about itself.
+test('nothing is 204, and a throw is 500 with nothing of the error in it — 16.32, 16.42', async () => {
     expect((await Bun.fetch(`${base}${RPC}/ping`)).status).toBe(204)
     const broken = await Bun.fetch(`${base}${RPC}/broken`)
     expect(broken.status).toBe(500)

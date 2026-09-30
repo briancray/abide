@@ -91,10 +91,6 @@
         {
           "type": "SYMBOL",
           "name": "try_block"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "component_block"
         }
       ]
     },
@@ -910,70 +906,6 @@
           "content": {
             "type": "STRING",
             "value": "{/try"
-          },
-          "named": true,
-          "value": "block_keyword"
-        },
-        {
-          "type": "STRING",
-          "value": "}"
-        }
-      ]
-    },
-    "component_block": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "SYMBOL",
-          "name": "component_start"
-        },
-        {
-          "type": "REPEAT",
-          "content": {
-            "type": "SYMBOL",
-            "name": "_node"
-          }
-        },
-        {
-          "type": "SYMBOL",
-          "name": "component_end"
-        }
-      ]
-    },
-    "component_start": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "ALIAS",
-          "content": {
-            "type": "STRING",
-            "value": "{#component"
-          },
-          "named": true,
-          "value": "block_keyword"
-        },
-        {
-          "type": "FIELD",
-          "name": "signature",
-          "content": {
-            "type": "SYMBOL",
-            "name": "code"
-          }
-        },
-        {
-          "type": "STRING",
-          "value": "}"
-        }
-      ]
-    },
-    "component_end": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "ALIAS",
-          "content": {
-            "type": "STRING",
-            "value": "{/component"
           },
           "named": true,
           "value": "block_keyword"

@@ -1,4 +1,4 @@
-// 34.13 — A `<style>` INSIDE A BLOCK IS SCOPED TO THAT BODY. Its elements carry a token of their own
+// 34.11 — A `<style>` INSIDE A BLOCK IS SCOPED TO THAT BODY. Its elements carry a token of their own
 // beside the component's, its rules require that token, and an element of the same kind anywhere else
 // in the component is untouched by them. Served, so what is asserted is the markup and the stylesheet
 // a browser is actually handed.
@@ -64,5 +64,5 @@ test("a body's style reaches that body's elements and no other the component wro
 test('a style inside a {#try} is refused', () => {
     expect(() =>
         parseAbide('{#try}<style>p { color: red }</style><p>x</p>{/try}'),
-    ).toThrow('34.12')
+    ).toThrow('34.10')
 })

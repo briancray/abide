@@ -122,7 +122,7 @@ function escapeByHand(value: string): string {
  *
  * THE SAME CARD, AS A COMPONENT — the same `cardRow`, so the only difference between this arm and
  * `abideLoopSource` is the invocation: a call, an anchor pair, and one accessor per prop. What
- * that costs a row is the whole question 32.18 and 33 owe an answer to.
+ * that costs a row is the whole question 32.17 and 33 owe an answer to.
  */
 export function abideCardSource(): string {
     return `<script>

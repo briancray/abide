@@ -233,7 +233,7 @@ export async function bootApp(
         }
     }
 
-    // 16.44, 42.12 — A `raw` CALL MADE ON THIS SERVER IS ANSWERED IN PROCESS, by the app answering the
+    // 16.43, 42.12 — A `raw` CALL MADE ON THIS SERVER IS ANSWERED IN PROCESS, by the app answering the
     // request it was made in; only a call made outside every request falls to the app built last.
     RPC_SERVER.raw = (request) =>
         (currentRequestScope()?.answer ?? fetch)(request)
@@ -277,7 +277,7 @@ export async function bootApp(
                     : port !== undefined
                       ? { port }
                       : {}),
-                // 16.59 — THE CEILING IS THE HANDLER'S, and bun's own 128 MB would refuse a body
+                // 16.58 — THE CEILING IS THE HANDLER'S, and bun's own 128 MB would refuse a body
                 // before one that declared none could accept it.
                 maxRequestBodySize: Number.MAX_SAFE_INTEGER,
                 // 18.2 — THE ONE MUX, upgraded before anything else is asked of the request.

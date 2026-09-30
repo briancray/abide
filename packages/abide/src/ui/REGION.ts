@@ -1,6 +1,6 @@
 // The comment anchors a dynamic region is delimited by — one of the TWO things a compiled document
 // carries that an authored one does not. The other is a slot's own pair while it holds a `Raw`
-// value (`#shared/RAW_RUN.ts`, 32.31), kept apart from this one by 32.32.
+// value (`#shared/RAW_RUN.ts`, 32.30), kept apart from this one by 32.31.
 //
 // WHY ANYTHING AT ALL, when a static region needs nothing: a region's content length depends on a
 // value, so every sibling after it moves. Child-index addressing cannot survive that, and the

@@ -1,10 +1,10 @@
-// THE CURSOR. RULEBOOK 2.5, 2.6, 2.7, 5.11, 9.10: a reader that wants every production
+// THE CURSOR. RULEBOOK 2.5, 2.6, 2.7, 5.10, 9.10: a reader that wants every production
 // rather than the latest one. `s()` answers the latest and nothing else, whatever the
 // retention, so this is the only way to what came before it and the only way to take
 // productions one at a time, in order, as they arrive.
 //
 // IT READS THE RING, NOT THE WAKES, and that is the whole reason it is a separate
-// mechanism rather than a `watch`. 5.11 has a cursor deliver every production a window
+// mechanism rather than a `watch`. 5.10 has a cursor deliver every production a window
 // collapsed that retention still holds, so a cursor that counted wakes would lose
 // exactly what `throttle` and `debounce` are going to start collapsing. Position is an
 // ORDINAL — the count of productions minted — and the ring is indexed from it, so two
@@ -148,7 +148,7 @@ class Cursor implements AsyncIterator<unknown> {
             if (source.value === undefined) return null
             // Nothing is retained, so the only production a cursor can be handed is the
             // one standing. Everything minted since its last turn has been collapsed by
-            // the absence of a ring, which is 5.11's "that retention still holds".
+            // the absence of a ring, which is 5.10's "that retention still holds".
             this.at = source.ordinal
             return { value: source.value, done: false }
         }

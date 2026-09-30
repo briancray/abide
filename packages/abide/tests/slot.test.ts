@@ -1,4 +1,4 @@
-// 32.19 — `<slot/>`, END TO END. A caller writes markup between a component's tags, the child
+// 32.18 — `<slot/>`, END TO END. A caller writes markup between a component's tags, the child
 // decides where it goes, and the two halves of that sentence live in different files — which is
 // the whole difficulty: the MARKUP belongs to the child's document position and the BINDINGS in
 // it belong to the caller's scope.
@@ -32,7 +32,7 @@ const { title } = props<{ title: string }>()
 
 <section class="card"><h2>{title}</h2><div class="body"><slot/></div></section>`
 
-// 32.19's second row: children, or a fallback where the caller wrote none.
+// 32.18's second row: children, or a fallback where the caller wrote none.
 const NOTE = `<aside><slot>nothing yet</slot></aside>`
 
 async function mountPage(
@@ -74,8 +74,8 @@ const click = (selector: string): void => {
     flushSync()
 }
 
-// THE REVERT: the throw this replaced — `<Card>` with children was a compile error naming 32.19.
-test('a caller writes markup between the tags and the child places it — 32.19', async () => {
+// THE REVERT: the throw this replaced — `<Card>` with children was a compile error naming 32.18.
+test('a caller writes markup between the tags and the child places it — 32.18', async () => {
     const { html, mount } = await mountPage(
         `<script>
 import { reactive } from 'abide'
@@ -103,7 +103,7 @@ let clicks = reactive(0)
     expect(document.querySelector('#count')?.textContent).toBe('1 so far')
 })
 
-test('a slot with no children renders its fallback — 32.19', async () => {
+test('a slot with no children renders its fallback — 32.18', async () => {
     const { html } = await mountPage(
         `<script>
 import Note from './Note.abide'
@@ -115,7 +115,7 @@ import Note from './Note.abide'
     expect(html).toContain('nothing yet')
 })
 
-test('children given win over the fallback — 32.19', async () => {
+test('children given win over the fallback — 32.18', async () => {
     const { html } = await mountPage(
         `<script>
 import Note from './Note.abide'
@@ -130,7 +130,7 @@ import Note from './Note.abide'
 
 // A REGION INSIDE THE SLOT, which is where the addressing is easiest to get wrong: the arm's
 // paths are counted from the slot's anchors, and the slot's from the child's.
-test('a block inside the children swaps where the child put it — 32.12, 32.19', async () => {
+test('a block inside the children swaps where the child put it — 32.12, 32.18', async () => {
     const { mount } = await mountPage(
         `<script>
 import { reactive } from 'abide'
@@ -153,7 +153,7 @@ let open = reactive(false)
 
 // THE CHILD BUILT IN THE BROWSER, which is the lane where the caller's markup is not in the
 // document at all: a row the client grew has no server markup behind it, so the child fills its
-// own region (32.18) and the slot has to fill from the record the caller handed over.
+// own region (32.17) and the slot has to fill from the record the caller handed over.
 // 33.16 — `children` is never declared, so passing it twice is a mistake with a silent shape:
 // two keys of the same name in one record literal, the last one winning.
 test('children as an attribute beside a body is refused — 33.16', async () => {
@@ -166,7 +166,7 @@ import Note from './Note.abide'
     expect(() => emitComponent(file, [])).toThrow('RULEBOOK 33.16')
 })
 
-test('a child grown in the browser fills its slot from the caller — 32.18, 32.19', async () => {
+test('a child grown in the browser fills its slot from the caller — 32.17, 32.18', async () => {
     const { mount } = await mountPage(
         `<script>
 import { reactive } from 'abide'

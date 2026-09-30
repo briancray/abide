@@ -130,11 +130,12 @@ selection narrowed to part of its args space, which is the next section (13.4, 1
 
 Two rules make the wide forms safe to reach for.
 
-**An explicit argument reaches anything; a bare sweep reaches producers.** Passing a `Reactive`
+**An explicit argument reaches anything; a bare sweep reaches loads.** Passing a `Reactive`
 is a deliberate act about one value, so the triggers are on every `Reactive` — including the ones
-where they do nothing. A bare `invalidate()` is indiscriminate, so it matches only entries
-**with** a producer: a `reactive(0)` caught by a sweep is silent data loss, and a value with no
-producer has nothing for a trigger to re-run (7.6).
+where they do nothing. A bare `invalidate()` is indiscriminate, so it matches only entries whose
+producer is a **load**: a `store`, or a body that handed back a pending answer or a stream. A
+`reactive(0)` caught by a sweep is silent data loss, and a value with no producer has nothing for
+a trigger to re-run (7.6). A synchronous derivation recomputes from the load it reads (13.14).
 
 **A selection is scope-bounded**, as a reactive value is: this scope's entries plus `global` ones.
 So one request can never invalidate another's. On a server that makes a bare `invalidate()` reach

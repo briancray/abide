@@ -542,8 +542,8 @@ gate(
         ).REVERT_PUBLISH_GATE
         const room = reactive<string>(undefined, { history: 4 })
         // THE PRODUCTION IS THE CLAIM, NOT THE WAKE, and batching is what made the
-        // difference visible. Two publishes in one turn reach a `watch` ONCE — 5.10 has a
-        // window cap the wake and not the production, and 5.11 has the cursor deliver what
+        // difference visible. Two publishes in one turn reach a `watch` ONCE — 5.9 has a
+        // window cap the wake and not the production, and 5.10 has the cursor deliver what
         // the window collapsed. So counting wakes here measured the batch; counting what
         // retention holds measures whether the second message existed at all.
         //
@@ -905,7 +905,7 @@ test('a value is directly servable again after a mark that changed nothing', () 
     expect(inner(room).direct).toBe(true)
 })
 
-// ── The cursor: RULEBOOK 2.5, 2.6, 2.7, 5.11, 9.10 ───────────────────────────────
+// ── The cursor: RULEBOOK 2.5, 2.6, 2.7, 5.10, 9.10 ───────────────────────────────
 
 // Takes `count` turns and stops, so a live cursor cannot hang a test. `break` is also
 // what exercises the iterator's `return` — the only thing that drops its subscriber.
@@ -994,7 +994,7 @@ test('a cursor older than the ring is answered with the whole ring', async () =>
     expect(taken).toEqual([7, 8, 9, 10])
 })
 
-// 5.11 IS A WORK CLAIM AND CANNOT BE SEEN IN A VALUE. A cursor driven by WAKES collapses
+// 5.10 IS A WORK CLAIM AND CANNOT BE SEEN IN A VALUE. A cursor driven by WAKES collapses
 // two productions that land between two turns into one — the reader still sees a correct
 // message, just not both. So the assertion is the COUNT of turns, and the distinguishing
 // case is two publishes with no `await` between them.
@@ -2053,10 +2053,10 @@ test('a probe a body stops reading stops waking it', async () => {
     await watched
 })
 
-// THE CAP (RULEBOOK 5.9-5.16). Every claim below is about WORK — the values these tests
+// THE CAP (RULEBOOK 5.8-5.15). Every claim below is about WORK — the values these tests
 // read are right whether or not a window exists, which is what makes a correctness test
 // blind to the whole mechanism. So they count wakes, and they count PRODUCTIONS against
-// them, because 5.10's "caps the wake, does not drop a production" is exactly a pair of
+// them, because 5.9's "caps the wake, does not drop a production" is exactly a pair of
 // counts moving apart.
 //
 // THE REVERTS, AND WHAT EACH REPORTS. Releasing every production instead of holding it
@@ -2082,7 +2082,7 @@ test('a throttle lets the leading change through and holds the rest', () => {
     const query = reactive<number>(undefined, { throttle: WINDOW })
     const woken = wakes(query)
     for (let write = 1; write <= 10; write += 1) query.set(write)
-    // 5.13: the first change immediately, and then at most once per window — so nine of
+    // 5.12: the first change immediately, and then at most once per window — so nine of
     // the ten reached nobody, and the one that did is the one that opened the window.
     expect(woken.count()).toBe(1)
     expect(query()).toBe(1)
@@ -2095,7 +2095,7 @@ test('a debounce holds every change after the first landing', () => {
     const query = reactive<number>(0, { debounce: WINDOW })
     const woken = wakes(query)
     for (let write = 1; write <= 10; write += 1) query.set(write)
-    // 5.14: the change waits for the changes to STOP, so nobody has been woken and what
+    // 5.13: the change waits for the changes to STOP, so nobody has been woken and what
     // a reader sees is still the value the run started from.
     expect(woken.count()).toBe(0)
     expect(query()).toBe(0)
@@ -2109,12 +2109,12 @@ test('a window caps the wake and drops no production', async () => {
     for (let write = 1; write <= 10; write += 1) feed.publish(write)
     expect(woken.count()).toBe(0)
     await sleep(AFTER_WINDOW)
-    // 5.10: ONE wake for ten productions. The counts moving apart is the mechanism —
+    // 5.9: ONE wake for ten productions. The counts moving apart is the mechanism —
     // equal counts would mean the window capped nothing, and ten against ten productions
     // retained would mean it had dropped nine.
     expect(woken.count()).toBe(1)
     expect(feed.peek()).toBe(10)
-    // 5.11: the cursor is handed every production the window collapsed, retention having
+    // 5.10: the cursor is handed every production the window collapsed, retention having
     // held them. A reader watching the value saw one; a reader walking the ring sees all
     // ten, behind the opening value the ring also took.
     expect([...feed.history(20)]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
@@ -2125,7 +2125,7 @@ test('a held value goes on being served, and the window reads as busy', async ()
     const query = reactive<number>(undefined, { throttle: WINDOW })
     query.set(1)
     query.set(2)
-    // 5.16: what a reader sees is the value the window released, not the one it holds.
+    // 5.15: what a reader sees is the value the window released, not the one it holds.
     expect(query()).toBe(1)
     expect(query.busy()).toBe(true)
     expect(query.ready()).toBe(true)
@@ -2140,14 +2140,14 @@ test('the identity gate compares against the last production, not the last relea
     query.set(2)
     query.set(1)
     // Three productions. Comparing the third against the RELEASED 1 would collapse it,
-    // and 5.10 forbids a window dropping a production — the reader would then settle on
+    // and 5.9 forbids a window dropping a production — the reader would then settle on
     // 2 for a value whose last write was 1.
     expect([...query.history(10)]).toEqual([1, 2, 1])
 })
 
-// THE OTHER HALF OF 5.10, AND IT IS A CAP OVER A BODY. A window over a value form moves
+// THE OTHER HALF OF 5.9, AND IT IS A CAP OVER A BODY. A window over a value form moves
 // the last production MINTED apart from the last one RELEASED, which is what `cap.minted`
-// carries; a window over a BODY caps the RUN instead (5.12), so the production it lets
+// carries; a window over a BODY caps the RUN instead (5.11), so the production it lets
 // through goes straight out and `cap.minted` is never written on one. Read
 // unconditionally, the gate compared every recompute against `undefined` — so 5.2
 // collapsed nothing and a derived value that recomputed to the figure it already held woke
@@ -2157,7 +2157,7 @@ test('the identity gate compares against the last production, not the last relea
 // about the OUTPUT moves — the sanity case beside this one is what says the gate still
 // wakes where the value really changed, which is the pairing that tells a fixed gate from
 // a dead one.
-// 5.24 — A PATCH IS CAPPED LIKE A PRODUCTION. The object changes at once, so what the window holds is
+// 5.23 — A PATCH IS CAPPED LIKE A PRODUCTION. The object changes at once, so what the window holds is
 // the wake: ten patches inside one window reach a reader once, when it closes, carrying the last.
 // THE REVERT: cascade unconditionally in `patchCell`; the reader is woken inside the window, 1 where
 // 0 are due.
@@ -2169,7 +2169,7 @@ test('a throttle caps the wakes a run of patches makes', async () => {
             ;(list[0] as { n: number }).n = write
         })
     expect(woken.count()).toBe(0)
-    // 5.16: the window is holding a change, so the value reads as busy while it does.
+    // 5.15: the window is holding a change, so the value reads as busy while it does.
     expect(rows.busy()).toBe(true)
     await sleep(AFTER_WINDOW)
     expect(woken.count()).toBe(1)
@@ -2178,7 +2178,7 @@ test('a throttle caps the wakes a run of patches makes', async () => {
     woken.stop()
 })
 
-// 5.25 — A REFRESH IS HELD LIKE A PRODUCTION: a throttle starts the first reload and holds the rest,
+// 5.24 — A REFRESH IS HELD LIKE A PRODUCTION: a throttle starts the first reload and holds the rest,
 // and what it held is ONE reload when the window closes. THE REVERT: drop the window arm from
 // `refreshOne`; three refreshes start 3 loads at once where 1 is due.
 test('a throttle collapses a run of refreshes into one reload per window', async () => {
@@ -2201,7 +2201,7 @@ test('a throttle collapses a run of refreshes into one reload per window', async
     expect(loads - before).toBe(2)
 })
 
-// 5.25 AND 7.11 — a debounce holds every refresh until they stop, and the one reload it owes runs
+// 5.24 AND 7.11 — a debounce holds every refresh until they stop, and the one reload it owes runs
 // though nothing reads the value. THE REVERT: owe the run (`cap.owed`) instead of the reload; with
 // no reader the run is never pulled, and 0 loads start where 1 is due.
 test('a debounce holds refreshes until they stop, and reloads with nobody reading', async () => {
@@ -2266,7 +2266,7 @@ test('a throttled derived value that does move still wakes, once per window', as
 })
 
 test('a value declaring both throttle and debounce refuses, naming the value', () => {
-    // 5.15 is a build error and there is no build, so it lands at construction. `toThrow`
+    // 5.14 is a build error and there is no build, so it lands at construction. `toThrow`
     // rather than a returned refusal: this is not a value refusing a write, it is a value
     // that cannot be constructed.
     expect(() =>
@@ -2289,7 +2289,7 @@ test('a run of writes wakes once per window rather than twice at its edges', asy
     woken.stop()
 })
 
-// 5.14'S DISTINGUISHING CASE, and it took two tries to find. Writes made in ONE turn
+// 5.13'S DISTINGUISHING CASE, and it took two tries to find. Writes made in ONE turn
 // cannot tell a window armed once at the first change from one pushed back by every
 // change — both hold the LATEST production, and both release it when the first timer
 // fires. Spreading the writes out does not do it either, so long as they are all in
@@ -2318,7 +2318,7 @@ test('a debounce waits for the changes to stop, not for the first of them', asyn
 })
 
 test('a window does not hold back the first landing', () => {
-    // 5.16 is what decides this: holding needs a held value to go on serving, and before
+    // 5.15 is what decides this: holding needs a held value to go on serving, and before
     // the first landing there is none — so a reader would get neither. A `debounce: 300`
     // left a value unreadable for 300 ms after construction, which is every form on a
     // page reading as not-ready on mount.
@@ -2338,7 +2338,7 @@ test('a window does not hold back the first landing', () => {
 
 // A CAP ON THE KEY SPARES THE CALL. A key that was superseded inside the window is never
 // reached, so the call behind it is never issued. A cap on the body that WRAPS the call
-// spares it too, by holding the run rather than the key (5.12) — the `searchRig` tests
+// spares it too, by holding the run rather than the key (5.11) — the `searchRig` tests
 // below are that placement.
 //
 // THE WRITES ARE IN SEPARATE TURNS. Four writes in one turn reach a reader once whatever
@@ -2372,9 +2372,9 @@ test('a cap on the key spares the call a superseded key would have made', async 
     stop()
 })
 
-// 5.12, AND THE OTHER ARM OF THE CAP. A value's production has already been handed in
-// when a window meets it, so the window holds it and retention keeps it (5.10). A BODY's
-// work has not started, and 5.12 says not to start it — so the cap sits on the run rather
+// 5.11, AND THE OTHER ARM OF THE CAP. A value's production has already been handed in
+// when a window meets it, so the window holds it and retention keeps it (5.9). A BODY's
+// work has not started, and 5.11 says not to start it — so the cap sits on the run rather
 // than on what the run produced, and the load the body would have issued is never issued.
 //
 // THE COUNTS THAT MATTER ARE CALLS AND KEYS. A correctness test sees `n=south` whichever
@@ -2428,9 +2428,9 @@ test('a debounced body runs once for a burst, with the last key', async () => {
     flushSync()
     // ONE call, and the key it was made with is the one the typist stopped on. The three
     // intermediate keys were never reached, so no entry exists for them and no request
-    // was issued — which is 5.12 rather than 5.10.
+    // was issued — which is 5.11 rather than 5.9.
     expect(rig.keys).toEqual(['south'])
-    // And the barrier held: nothing downstream woke while the window was open (5.9).
+    // And the barrier held: nothing downstream woke while the window was open (5.8).
     expect(rig.wakes()).toBe(1)
     expect(rig.orders.peek()).toBe('n=south')
     rig.stop()
@@ -2441,7 +2441,7 @@ test('a throttled body runs the leading change and the trailing one', async () =
     await typeInto(rig.region, ['s', 'so', 'sou', 'south'])
     await sleep(450)
     flushSync()
-    // 5.13: the leading change goes straight through, and the window caps what follows —
+    // 5.12: the leading change goes straight through, and the window caps what follows —
     // so the two calls are the first key and the last, and neither middle key was reached.
     expect(rig.keys).toEqual(['s', 'south'])
     expect(rig.wakes()).toBe(2)
@@ -3073,7 +3073,7 @@ test("an args gate that normalises decides the body's args but not the entry", (
 
 // 11.42 AT CONSTRUCTION. The clause asks for a compile error and the checker cannot raise one —
 // `() => 1` is assignable to the keyed overload's body, so the call type-checks as keyed — so
-// the refusal lands on the first moment there is, naming the value, the way 5.15's does. What
+// the refusal lands on the first moment there is, naming the value, the way 5.14's does. What
 // it stops is a gate that silently gates nothing.
 //
 // THE REVERT is dropping the `args` test from `createReactive`: the refusal is `undefined`.
@@ -3793,7 +3793,7 @@ test('a failed revalidation goes on serving and wakes nobody', async () => {
     expect(`wakes: ${woken}`).toBe('wakes: 0')
     // A CAST, AND IT IS HONEST RATHER THAN LAZY: this producer rejected with a plain
     // `Error`, which is outside anything it declared. `s.error()` is typed `Failures |
-    // undefined` and a raw throw is neither — 16.43 is the clause that says what happens to
+    // undefined` and a raw throw is neither — 16.42 is the clause that says what happens to
     // one, and nothing narrows it here.
     expect(`error: ${(loaded.error() as unknown as Error).message}`).toBe(
         'error: the reload failed',
@@ -5026,8 +5026,8 @@ test('a cursor over a stream past takes a turn per run that closes', async () =>
     await cursor.return?.()
 })
 
-// 5.18: A WINDOW ON A STREAM CAPS THE WAKE. Chunks go on landing and a cursor is handed every one
-// of them (5.11), but a reader of the value hears at most once per window — a table re-rendered per
+// 5.17: A WINDOW ON A STREAM CAPS THE WAKE. Chunks go on landing and a cursor is handed every one
+// of them (5.10), but a reader of the value hears at most once per window — a table re-rendered per
 // chunk of a fast stream is the cost `throttle` exists to cap.
 //
 // THE REVERT is `acceptChunk` releasing every chunk whatever the cap: `wakes: 6`.
@@ -5060,7 +5060,7 @@ test('throttle on a stream wakes readers once per window, and a cursor still get
     stop()
 })
 
-// 5.19: WHAT A READER SEES IS WHAT THE WINDOW RELEASED, not the chunks it is holding — the read
+// 5.18: WHAT A READER SEES IS WHAT THE WINDOW RELEASED, not the chunks it is holding — the read
 // agrees with the wake, so a value that has not been told of a chunk does not show it either.
 //
 // THE REVERT is `materialise` slicing the whole buffer: `during: 1,2`.
@@ -5079,7 +5079,7 @@ test('a read of a throttled stream serves the accumulation as the last release l
     expect(`after: ${rows().join(',')}`).toBe('after: 1,2')
 })
 
-// 5.14 ON A STREAM: a debounce releases once the chunks stop, and a close releases what it holds, so
+// 5.13 ON A STREAM: a debounce releases once the chunks stop, and a close releases what it holds, so
 // awaiting the stream is never handed a partial accumulation (2.8).
 test('a debounced stream releases once the chunks stop, and its close releases what is held', async () => {
     const feed = streamOf<number>()
@@ -6063,11 +6063,11 @@ test('reactive() is empty and reactive(undefined) is loaded', () => {
     expect(loaded()).toBeUndefined()
 })
 
-// ── A window on a keyed value holds back starting a key (RULEBOOK 5.20, 5.21, 5.22) ─────────
+// ── A window on a keyed value holds back starting a key (RULEBOOK 5.19, 5.20, 5.21) ─────────
 
-// 5.20 AND 5.21: A DEBOUNCE STARTS THE KEY THE REACHES STOPPED AT. A search box typing `n`, `no`,
+// 5.19 AND 5.20: A DEBOUNCE STARTS THE KEY THE REACHES STOPPED AT. A search box typing `n`, `no`,
 // `nor` reaches three keys, and the two superseded before the window closed never make their call
-// — 5.12's "don't start work a window would discard", across keys. They are not held either, so a
+// — 5.11's "don't start work a window would discard", across keys. They are not held either, so a
 // later reach of one of them goes through the window again.
 //
 // THE REVERT is the factory starting each entry as it is reached: `calls: n,no,nor`.
@@ -6084,7 +6084,7 @@ test('a debounce on a keyed value starts only the key the reaches stopped at', a
     search({ query: 'no' })
     const last = search({ query: 'nor' })
     expect(`calls: ${calls.join(',')}`).toBe('calls: ')
-    // 5.22: held back is busy, with nothing to serve yet.
+    // 5.21: held back is busy, with nothing to serve yet.
     expect(`busy: ${last.busy()}, ready: ${last.ready()}`).toBe(
         'busy: true, ready: false',
     )
@@ -6095,7 +6095,7 @@ test('a debounce on a keyed value starts only the key the reaches stopped at', a
     expect(`superseded busy: ${first.busy()}`).toBe('superseded busy: false')
 })
 
-// 5.13 ACROSS KEYS: a throttle starts the first key at once, holds what is reached inside its
+// 5.12 ACROSS KEYS: a throttle starts the first key at once, holds what is reached inside its
 // window, and starts the latest of those when the window ends.
 test('a throttle on a keyed value starts the first key at once and the latest at the window end', async () => {
     const calls: string[] = []

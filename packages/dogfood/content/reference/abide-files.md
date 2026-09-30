@@ -70,10 +70,10 @@ places a value belongs, so the name reads. A position whose declared type is a
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
 | --- | --- | --- |
 | `{raw(...)}` | Raw HTML. | 32.2 |
-| `name={expr}` | A reactive attribute or property. | 32.3, 32.21 |
+| `name={expr}` | A reactive attribute or property. | 32.3, 32.20 |
 | `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3 |
-| `bind:value` | Two-way bind on an element. | 5.17, 32.5 |
+| `bind:value` | Two-way bind on an element. | 5.16, 32.5 |
 | `bind:prop={state}` | Hands a component prop the caller's `Reactive`, or a `{get, set}` pair, to write through. | 32.6, 33.6, 33.8, 14.18 |
 | `bind:checked` | A boolean bind on an input. | 32.7 |
 | `bind:open` | The same, on a `<details>`. | 32.7 |
@@ -81,7 +81,7 @@ places a value belongs, so the name reads. A position whose declared type is a
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6 |
 | `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9 |
 | `class:name={cond}` | Toggles a class. | 32.10 |
-| `style:prop={value}` | Sets one style property. | 32.10, 32.20 |
+| `style:prop={value}` | Sets one style property. | 32.10, 32.19 |
 | `{...expr}` | Spreads props or attributes. | 32.11, 33.12, 33.13 |
 
 Static text is markup. An author-written `&amp;` or `&copy;` renders the same in body text and
@@ -107,7 +107,6 @@ URL-typed attribute, where the encoding is what stops an entity forming a scheme
 
 | Spelling | Meaning |
 | --- | --- |
-| `{#component Name(pattern)}` | An inline component. |
 | `<Name/>` | A component invocation. |
 | `<slot/>` | Renders children. |
 | `<slot>fallback</slot>` | Renders children, or a fallback. |

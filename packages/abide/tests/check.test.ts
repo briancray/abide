@@ -135,7 +135,7 @@ let name = reactive('ada')
 <Held value={name}/>
 <Held bind:value={count}/>`
 
-// 32.35 — a tag choosing by a value is held to the props of what it may hold, and may hold nothing.
+// 32.34 — a tag choosing by a value is held to the props of what it may hold, and may hold nothing.
 const CHOSEN = `<script>
 import { reactive } from 'abide'
 import Card from '#ui/components/Card.abide'
@@ -312,7 +312,7 @@ test('a tag is held to the props its component declares, on the attribute — 38
 
 // THE REVERT: drop the tag spans from `checkedShadow`'s units; the tag is checked as a call on the
 // `Reactive` itself, and both tags report its arity (TS2554) in place of the one wrong prop.
-test('a tag choosing by a value is held to the props of what it holds — 32.35, 38.41', () => {
+test('a tag choosing by a value is held to the props of what it holds — 32.34, 38.41', () => {
     const reported: { line: number; column: number; code: number }[] = []
     for (const { line, column, code } of inFile('chosen/page.abide'))
         reported.push({ line, column, code })
@@ -458,7 +458,7 @@ test('each tracking warning lands on its read and on no near miss — 14.14, 14.
 })
 
 // 32.14 — UNKEYED, OVER STATE, OVER A LIST THAT CAN CHANGE: the loops that are all three, less the one
-// whose value declares `by` (32.33) — and not the decoy, whose ROWS carry a `by` and whose value does
+// whose value declares `by` (32.32) — and not the decoy, whose ROWS carry a `by` and whose value does
 // not. THE REVERT: drop `holdsState` from `templateWarnings`; the `<b>` loop warns too (3 against 2).
 // Drop `canChange` and the constant list warns (3 against 2). Drop `keyedByValue` and `keyed` warns
 // (3 against 2).
@@ -472,10 +472,10 @@ test('an unkeyed loop over a body holding state warns at its subject — 32.14',
     ])
 })
 
-// 32.33 — A VALUE DECLARED IN ANOTHER MODULE KEYS BY ITS `by` TOO, imported under its own name or
+// 32.32 — A VALUE DECLARED IN ANOTHER MODULE KEYS BY ITS `by` TOO, imported under its own name or
 // another. THE REVERT: read `by` off the page's own setup text rather than the checker's
 // declaration; both imported loops warn (3 against 1).
-test('an unkeyed loop over an imported value that declares `by` does not warn — 32.33', async () => {
+test('an unkeyed loop over an imported value that declares `by` does not warn — 32.32', async () => {
     const imported = appFixture({
         'ui/rows.ts': `import { reactive } from 'abide'
 export const shared = reactive([{ id: 1 }], { by: 'id' })
@@ -510,11 +510,11 @@ test('a check reports what only building the whole app refuses — 19.16', async
     expect(refused.length).toBe(1)
 }, 60_000)
 
-// 16.41 — A `Reactive` NESTED IN WHAT A HANDLER RETURNS is refused, by the handler and the path to
+// 16.40 — A `Reactive` NESTED IN WHAT A HANDLER RETURNS is refused, by the handler and the path to
 // it; one returned whole is adopted (11.12) and is not — `getUser` is declared first, so a refusal
 // of it would be the one read. THE REVERT: skip `nestedReactiveIn` in `handlersIn`; the check reads
 // 0 refusals where 1 is due, in each app.
-test('a handler returning a Reactive nested in its value is refused by path — 16.41', async () => {
+test('a handler returning a Reactive nested in its value is refused by path — 16.40', async () => {
     const refusals = async (handlers: string) => {
         const said: string[] = []
         const app = appFixture({
@@ -528,7 +528,7 @@ export const getUser = GET(() => user)
 ${handlers}`,
         })
         for (const diagnosis of await checkApp(app))
-            if (diagnosis.message.includes('16.41'))
+            if (diagnosis.message.includes('16.40'))
                 said.push(diagnosis.message)
         return said
     }

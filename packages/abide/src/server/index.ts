@@ -9,7 +9,7 @@
 // `reactive` through this one specifier — the same callable, by the same name, that `abide`
 // hands a page. It is also every run-time half an
 // emitted module reaches through here: 32.1's escaping and 32.2's `raw`, which both sides render
-// markup with, 32.21's `safeUrl`, and 31.8's `writePath`.
+// markup with, 32.20's `safeUrl`, and 31.8's `writePath`.
 export * from '#shared'
 export {
     type Clients,
@@ -63,7 +63,7 @@ export {
     onStop,
 } from './hooks.ts'
 export { type Component, render, type Shell } from './render.ts'
-// 32.18's run-time half: one invocation, rendered where it stands, with the anchors that make the
+// 32.17's run-time half: one invocation, rendered where it stands, with the anchors that make the
 // child's markup one thing for the client to walk to.
 export { renderComponent } from './renderComponent.ts'
 // 22.1 — the request being served, the response being built for it, and the listening server.

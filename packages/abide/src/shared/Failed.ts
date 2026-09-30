@@ -1,6 +1,6 @@
 // THE ONE REFUSAL TYPE, in-process and over a wire alike. RULEBOOK 15.1: a refusal is a
 // declared VALUE, not a status code and not a transport concern — so the same object a
-// `transform` returns (4.6) is the one a handler answers with (16.42) and the one a client
+// `transform` returns (4.6) is the one a handler answers with (16.41) and the one a client
 // narrows on (3.1), with nothing converting between three spellings on the way.
 //
 // IT IS AN `Error` AND IT IS NEVER THROWN, which is the pairing that takes the most

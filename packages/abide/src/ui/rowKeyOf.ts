@@ -1,4 +1,4 @@
-// 32.33 — A `{#for}` WITH NO KEY OVER A `Reactive` NAMED ALONE takes the value's `by`, and falls back
+// 32.32 — A `{#for}` WITH NO KEY OVER A `Reactive` NAMED ALONE takes the value's `by`, and falls back
 // to `positional` (32.13) on anything else. Resolved ONCE, when the block is built, so a row pays
 // one call and no lookup.
 //

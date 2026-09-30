@@ -88,7 +88,7 @@ validation refusal wherever a `schema` is declared, without the app declaring it
 
 1.6 Where a load is told apart from a value, a `Reactive` MUST be taken as a value.
 
-1.7 Reaching a `Reactive` MUST start the work it is for, unless a window holds it back per 5.20.
+1.7 Reaching a `Reactive` MUST start the work it is for, unless a window holds it back per 5.19.
 
 1.8 Reaching a `Reactive` that already exists MUST join the standing work rather than start a
 second.
@@ -207,45 +207,43 @@ two is a comparator answering directly.
 
 5.7 `s.patch` MUST replace the head production rather than append one.
 
-5.8 A callback given to `s.patch` MUST return nothing.
+5.8 `throttle` and `debounce` MUST cap how often a value changes for a reader.
 
-5.9 `throttle` and `debounce` MUST cap how often a value changes for a reader.
+5.9 A capped window MUST cap the wake, and MUST NOT itself drop a production.
 
-5.10 A capped window MUST cap the wake, and MUST NOT itself drop a production.
+5.10 A cursor MUST deliver every production a window collapsed that retention still holds.
 
-5.11 A cursor MUST deliver every production a window collapsed that retention still holds.
+5.11 An implementation MUST NOT start work a window would discard.
 
-5.12 An implementation MUST NOT start work a window would discard.
+5.12 `throttle` MUST allow a change immediately and then at most once per window.
 
-5.13 `throttle` MUST allow a change immediately and then at most once per window.
+5.13 `debounce` MUST delay a change until the changes stop.
 
-5.14 `debounce` MUST delay a change until the changes stop.
+5.14 Declaring both `throttle` and `debounce` MUST refuse at construction.
 
-5.15 Declaring both `throttle` and `debounce` MUST refuse at construction.
-
-5.16 Where a `throttle` or a `debounce` window is holding a production back, the held value MUST
+5.15 Where a `throttle` or a `debounce` window is holding a production back, the held value MUST
 be served and `s.busy` MUST be true.
 
-5.17 A `bind:` read MUST NOT be capped.
+5.16 A `bind:` read MUST NOT be capped.
 
-5.18 `throttle` and `debounce` on a streaming producer MUST cap how often its readers are woken.
+5.17 `throttle` and `debounce` on a streaming producer MUST cap how often its readers are woken.
 
-5.19 A read of a capped streaming producer MUST serve the accumulation as the last release left it.
+5.18 A read of a capped streaming producer MUST serve the accumulation as the last release left it.
 
-5.20 `throttle` and `debounce` on a `Keyed` MUST hold back starting a newly reached entry until the
+5.19 `throttle` and `debounce` on a `Keyed` MUST hold back starting a newly reached entry until the
 window allows it.
 
-5.21 An entry a `Keyed` window replaced with a later key before it started MUST NOT be started, and
+5.20 An entry a `Keyed` window replaced with a later key before it started MUST NOT be started, and
 MUST NOT be held.
 
-5.22 An entry a `Keyed` window is holding back MUST report `s.busy` true.
+5.21 An entry a `Keyed` window is holding back MUST report `s.busy` true.
 
-5.23 `by` MUST key an element by the property it names, or by what the function it is returns for
+5.22 `by` MUST key an element by the property it names, or by what the function it is returns for
 that element.
 
-5.24 `throttle` and `debounce` MUST cap the wakes an `s.patch` makes as they cap a production's.
+5.23 `throttle` and `debounce` MUST cap the wakes an `s.patch` makes as they cap a production's.
 
-5.25 `throttle` and `debounce` MUST hold an `s.refresh` as they hold a production, and a refresh a
+5.24 `throttle` and `debounce` MUST hold an `s.refresh` as they hold a production, and a refresh a
 window held MUST start one reload when the window closes.
 
 # 6. Retention
@@ -532,7 +530,8 @@ the body.
 
 11.28 An `args` gate MUST refuse and MUST NOT decide which entry an `Args` object lands on.
 
-11.29 A default written in the body's parameter MUST participate in the `Args` key, on both sides.
+11.29 A literal default written in the body's parameter MUST participate in the `Args` key, on
+both sides, and an absent `Args` MUST be keyed as `{}` where the parameter writes one.
 
 11.30 The build MUST warn where `args` declares a default the parameter does not.
 
@@ -674,14 +673,16 @@ mechanism.
 
 13.5 An implementation MUST NOT provide a free `done`, `success` or `error` over a `Selection`.
 
-13.6 A bare `invalidate` MUST match only entries that have a producer.
+13.6 A bare `invalidate`, `refresh`, `busy` or `ready` MUST match only entries whose producer is a
+load: a `store`, or a body that has handed back a pending answer or a stream.
 
 13.7 A bare `refresh`, and `refresh` over a `Selection` that is not one `Reactive`, MUST reload
 only entries something subscribes to and MUST mark the rest.
 
 13.8 A `Selection` MUST be scope-bounded, and a tag MUST be scoped the same way.
 
-13.9 A `Selection`'s signal MUST be keyed by the canonical form of its `tags`.
+13.9 A `Selection`'s signal MUST be keyed by the canonical form of its `tags`, and a bare
+selection MUST hold exactly one.
 
 13.10 On a server a bare `invalidate` and a bare `refresh` MUST each reach every `global` `reactive`
 in the process.
@@ -693,6 +694,9 @@ pattern.
 
 13.13 A `Selection` made in any scope MUST reach every `global` `reactive` it matches, and every
 entry of a `global` `Keyed` it matches.
+
+13.14 A bare `refresh` MUST NOT re-run a synchronous derivation, which MUST recompute from the
+load it reads.
 
 # 14. Tracking
 
@@ -882,84 +886,84 @@ ETag it derives, and answer 206, 416 and 304 as the protocol requires.
 
 16.38 Where a handler returns a `Response`, `clients.mcp` and `clients.cli` MUST default to false.
 
-16.39 A second reader of a returned `Response` in one scope MUST be teed, bounded by
-`ABIDE_MAX_STREAM_BUFFER_SIZE`.
-
-16.40 A mutation MUST answer a request preferring `text/html` as a navigation: a returned
+16.39 A mutation MUST answer a request preferring `text/html` as a navigation: a returned
 `redirect` passes through, a returned value becomes 303 back to the referrer, and a failure renders
 `error.abide` at its own status.
 
-16.41 A handler whose value carries a `Reactive` below its top level MUST be a compile error naming
+16.40 A handler whose value carries a `Reactive` below its top level MUST be a compile error naming
 the handler and the path to it.
 
-16.42 A `Failed` escaping a handler MUST be answered at its own `status`.
+16.41 A `Failed` escaping a handler MUST be answered at its own `status`.
 
-16.43 A throw that is not a `Failed` MUST be answered 500.
+16.42 A throw that is not a `Failed` MUST be answered 500.
 
-16.44 `rpc.raw` MUST issue the call the `Rpc` issues, differing only in handing back the
+16.43 `rpc.raw` MUST issue the call the `Rpc` issues, differing only in handing back the
 `Response`. On a server it MUST be answered in process by the `App` answering the request it is made
 in, and by the `App` built last only outside every request.
 
-16.45 An `Rpc` call MUST evaluate its `Args` at the call, and MUST NOT re-evaluate them.
+16.44 An `Rpc` call MUST evaluate its `Args` at the call, and MUST NOT re-evaluate them.
 
-16.46 A jsonl answer MUST write one JSON value per line, per pull.
+16.45 A jsonl answer MUST write one JSON value per line, per pull.
 
-16.47 An sse answer MUST frame each value as `data: <json>` followed by a blank line, with
+16.46 An sse answer MUST frame each value as `data: <json>` followed by a blank line, with
 `text/event-stream`, `no-cache` and `X-Accel-Buffering: no`.
 
-16.48 A stream of value chunks MUST admit jsonl and then sse, and a stream of binary chunks MUST
+16.47 A stream of value chunks MUST admit jsonl and then sse, and a stream of binary chunks MUST
 admit `application/octet-stream` alone.
 
-16.49 Where no handler fixed the framing, the chunk type MUST be read from the first chunk
+16.48 Where no handler fixed the framing, the chunk type MUST be read from the first chunk
 produced.
 
-16.50 An `Rpc` over a `Reactive` declaring `history` MUST frame each production with the sequence
-number and the epoch 18.10 and 18.11 mint, on the wire and in the seed buffer alike.
+16.49 An `Rpc` over a `Reactive` declaring `history` MUST frame each production with the sequence
+number and the epoch 18.10 and 18.11 mint where the reader asks for jsonl or sse over JSON, on the
+wire and in the seed buffer alike, and MUST answer a reader asking for JSON the standing production.
 
-16.51 An sse answer over a `Reactive` declaring `history` MUST carry that sequence number as `id:`, and
-a moved epoch as `event: reset`.
+16.50 An sse answer over a `Reactive` declaring `history` MUST carry each production's sequence
+number and epoch as `id: <seq>:<epoch>`, and a moved epoch as one `event: reset` whose data is the
+ring.
 
-16.52 `Last-Event-ID` MUST be read as the last sequence number a reconnect carries, per 18.13.
+16.51 `Last-Event-ID` MUST be read as the sequence number and epoch a reconnect carries, per 18.13,
+and one naming no epoch MUST be compared as a moved epoch.
 
-16.53 A call's `signal` MUST end the load the call reached only where every call that reached that
+16.52 A call's `signal` MUST end the load the call reached only where every call that reached that
 load passed a `signal`, and every one of those has aborted.
 
-16.54 A load ended under 16.53 MUST keep serving what its value held, MUST report `s.busy` false,
+16.53 A load ended under 16.52 MUST keep serving what its value held, MUST report `s.busy` false,
 MUST refuse with `aborted` at status 499, and MUST abort the request carrying it where one does.
 
-16.55 A `HEAD` MUST be answered by the `GET` handler mounted at its address.
+16.54 A `HEAD` MUST be answered by the `GET` handler mounted at its address.
 
-16.56 A `HEAD` MUST NOT take from the seed buffer.
+16.55 A `HEAD` MUST NOT take from the seed buffer.
 
-16.57 An `Rpc` answered 204 MUST NOT carry `content-type`.
+16.56 An `Rpc` answered 204 MUST NOT carry `content-type`.
 
-16.58 The 303 16.40 answers MUST go to the mount's root where the referrer is absent or is not of
+16.57 The 303 16.39 answers MUST go to the mount's root where the referrer is absent or is not of
 `APP_URL`'s origin, per 36.2.
 
-16.59 `maxBodySize` and `ABIDE_MAX_REQUEST_BODY_SIZE` MUST default to no ceiling.
+16.58 `maxBodySize` and `ABIDE_MAX_REQUEST_BODY_SIZE` MUST default to no ceiling.
 
-16.60 A mutation's body over the ceiling `maxBodySize` or `ABIDE_MAX_REQUEST_BODY_SIZE` sets MUST
+16.59 A mutation's body over the ceiling `maxBodySize` or `ABIDE_MAX_REQUEST_BODY_SIZE` sets MUST
 be refused 413, whether its length was declared or streamed.
 
-16.61 Where neither `timeout` nor `ABIDE_RPC_TIMEOUT` is set, a call MUST NOT raise the request's
+16.60 Where neither `timeout` nor `ABIDE_RPC_TIMEOUT` is set, a call MUST NOT raise the request's
 idle timeout.
 
-16.62 A `timeout` of `Infinity` MUST leave the request's idle timeout off.
+16.61 A `timeout` of `Infinity` MUST leave the request's idle timeout off.
 
-16.63 Where a handler names no `timeout`, `ABIDE_RPC_TIMEOUT` MUST be its `timeout`.
+16.62 Where a handler names no `timeout`, `ABIDE_RPC_TIMEOUT` MUST be its `timeout`.
 
-16.64 A load that goes `timeout` milliseconds without settling, or without a stream's next chunk,
+16.63 A load that goes `timeout` milliseconds without settling, or without a stream's next chunk,
 MUST be ended and MUST refuse with `refuse(504)`.
 
-16.65 A load ended under 16.64 MUST keep serving what its value held, a stream's chunks so far
+16.64 A load ended under 16.63 MUST keep serving what its value held, a stream's chunks so far
 included, and MUST report `s.busy` false.
 
-16.66 A call joining a load MUST NOT extend that load's `timeout`.
+16.65 A call joining a load MUST NOT extend that load's `timeout`.
 
-16.67 A call reaching a value whose last load ended under 16.53 MUST start a new load, under the `signal`
+16.66 A call reaching a value whose last load ended under 16.52 MUST start a new load, under the `signal`
 that call passed.
 
-16.68 A throw answered once its request's signal has aborted — a handler's, or a page render's —
+16.67 A throw answered once its request's signal has aborted — a handler's, or a page render's —
 MUST answer `aborted` at 499, and MUST NOT report the throw as unexpected.
 
 # 17. Response helpers
@@ -1103,6 +1107,18 @@ optional.
 19.16 Every value a module under `src/server/rpc` exports MUST be declared by a call of abide's
 `GET`, `POST`, `PUT`, `PATCH` or `DELETE` — however the language spells the export, the call or its
 import — and an export that is not MUST be a build error naming it.
+
+19.17 A default in a keyed body's parameter or a handler's parameter that is not a literal MUST
+be refused at construction, naming its `Args` member, and the build MUST refuse one on a handler.
+
+19.18 `route.url` MUST hold the address a page is served at, the path `APP_URL` names included, on
+the server as in the browser.
+
+19.19 A root-absolute `href` or `src` in the `Shell` MUST be answered below the path `APP_URL`
+names.
+
+19.20 A request for the path `APP_URL` names, without its trailing `/`, MUST be redirected 308 to
+that path with one, by path alone.
 
 # 20. Generated surfaces
 
@@ -1535,7 +1551,7 @@ string.
 
 32.12 `{#if}` MUST render one branch.
 
-32.13 `{#for}` with neither a key nor a `by` 32.33 reads MUST be positional.
+32.13 `{#for}` with neither a key nor a `by` 32.32 reads MUST be positional.
 
 32.14 `{#for}` without a key over a stateful body and a subject that reads a `Reactive` or calls a
 function MUST warn in development.
@@ -1546,65 +1562,63 @@ than reconcile.
 32.16 `{#try}` MUST be a render-time boundary over a region, and a failure MUST replace the whole
 body.
 
-32.17 An inline `{#component Name(pattern)}` MUST be TitleCase.
+32.17 A capitalised tag `<Name/>` MUST be a component invocation.
 
-32.18 A capitalised tag `<Name/>` MUST be a component invocation.
+32.18 `<slot/>` MUST render children, and a fallback MUST render where none were passed.
 
-32.19 `<slot/>` MUST render children, and a fallback MUST render where none were passed.
-
-32.20 An interpolated `style` attribute MUST lower to `style:prop` under a static property name, and
+32.19 An interpolated `style` attribute MUST lower to `style:prop` under a static property name, and
 MUST NOT be built as a string.
 
-32.21 An interpolation in a URL-typed attribute MUST be scheme-checked, and a scheme outside
+32.20 An interpolation in a URL-typed attribute MUST be scheme-checked, and a scheme outside
 `http:`, `https:`, `mailto:`, `tel:` or a relative reference MUST be dropped and warned on
 `abide:render`, naming the attribute and not the value.
 
-32.22 A control block MUST bind each reactive read and probe call in its subject once for the body.
+32.21 A control block MUST bind each reactive read and probe call in its subject once for the body.
 
-32.23 `{#for}` over an absent subject MUST iterate zero times.
+32.22 `{#for}` over an absent subject MUST iterate zero times.
 
-32.24 A template expression a `NotLanded` aborted MUST leave what it last rendered in place.
+32.23 A template expression a `NotLanded` aborted MUST leave what it last rendered in place.
 
-32.25 `raw` MUST hand back a value branded as raw markup.
+32.24 `raw` MUST hand back a value branded as raw markup.
 
-32.26 `{raw(...)}` MUST lower to a call to `raw`.
+32.25 `{raw(...)}` MUST lower to a call to `raw`.
 
-32.27 A slot MUST render a value branded by `raw` without escaping it.
+32.26 A slot MUST render a value branded by `raw` without escaping it.
 
-32.28 Static text in a `.abide` template MUST render as markup, in body text and in an attribute
+32.27 Static text in a `.abide` template MUST render as markup, in body text and in an attribute
 value alike.
 
-32.29 A static value in an attribute 32.21 scheme-checks MUST be escaped the way `{expr}` is.
+32.28 A static value in an attribute 32.20 scheme-checks MUST be escaped the way `{expr}` is.
 
-32.30 A keyed `{#for}` MUST move a row it keeps, and the move MUST NOT take the row's nodes out of
+32.29 A keyed `{#for}` MUST move a row it keeps, and the move MUST NOT take the row's nodes out of
 the document.
 
-32.31 A slot MUST be bounded by an anchor pair of its own while it holds a value branded by `raw`,
+32.30 A slot MUST be bounded by an anchor pair of its own while it holds a value branded by `raw`,
 and MUST NOT be bounded by one while it holds none.
 
-32.32 The anchor pair bounding a slot under 32.31 MUST be distinct from the one bounding a `{#if}`,
+32.31 The anchor pair bounding a slot under 32.30 MUST be distinct from the one bounding a `{#if}`,
 a `{#for}`, a `{#try}`, a `<slot/>` or a `<Name/>`.
 
-32.33 `{#for}` without a key over a subject that is a `Reactive` named alone MUST key its rows by
+32.32 `{#for}` without a key over a subject that is a `Reactive` named alone MUST key its rows by
 that value's `by`, where it declares one.
 
-32.34 A `{#for}` MUST NOT keep a row showing an item as it stood before an `s.patch` wrote to that
+32.33 A `{#for}` MUST NOT keep a row showing an item as it stood before an `s.patch` wrote to that
 item, or to an object the patch reached through it.
 
-32.35 A `<Name/>` whose name is bound to a `Reactive`, or to a prop `props` hands back, MUST invoke
+32.34 A `<Name/>` whose name is bound to a `Reactive`, or to a prop `props` hands back, MUST invoke
 the component the value holds.
 
-32.36 A `<Name/>` under 32.35 MUST replace its component when the value changes to a different
+32.35 A `<Name/>` under 32.34 MUST replace its component when the value changes to a different
 one, and MUST NOT rebuild it when the value is the same component.
 
-32.37 A `<Name/>` under 32.35 whose value is absent MUST render nothing.
+32.36 A `<Name/>` under 32.34 whose value is absent MUST render nothing.
 
-32.38 An attribute whose value is `null` or `undefined` MUST be absent; an attribute HTML reads by
+32.37 An attribute whose value is `null` or `undefined` MUST be absent; an attribute HTML reads by
 presence MUST be present or absent by the value's truthiness, and a string that makes one present
 MUST be written as its text; and any other MUST be written as its text — whether named or spread,
 and whether the server writes it or the browser does.
 
-32.39 A `bind:element` callback's `Disposer` that hands back a thenable MUST keep the nodes holding
+32.38 A `bind:element` callback's `Disposer` that hands back a thenable MUST keep the nodes holding
 that element in the document until it settles, and MUST remove them then.
 
 # 33. Props
@@ -1679,22 +1693,17 @@ carry a scope token, and every selector MUST require it on its rightmost compoun
 34.6 A stylesheet imported from any `<script>` in the file, or any `.ts` it reaches, MUST be a
 dependency of that component.
 
-34.7 A component scope the document never linked MUST reach the page through
-`document.adoptedStyleSheets`.
-
-34.8 An implementation MUST NOT provide a fallback for `document.adoptedStyleSheets`.
-
-34.9 A branch-local `<script>` MUST run once each time the `{#for}` row or `{#if}` arm it is written
+34.7 A branch-local `<script>` MUST run once each time the `{#for}` row or `{#if}` arm it is written
 in is built.
 
-34.10 A name a branch-local `<script>` declares MUST be in scope in the body it is written in, and in
+34.8 A name a branch-local `<script>` declares MUST be in scope in the body it is written in, and in
 no other.
 
-34.11 A block body holding two branch-local `<script>` blocks MUST be a build error.
+34.9 A block body holding two branch-local `<script>` blocks MUST be a build error.
 
-34.12 A `<script>` or a `<style>` inside a `{#try}` MUST be a build error.
+34.10 A `<script>` or a `<style>` inside a `{#try}` MUST be a build error.
 
-34.13 A `<style>` written in a `{#for}` row or an `{#if}` arm MUST apply to the elements that body holds,
+34.11 A `<style>` written in a `{#for}` row or an `{#if}` arm MUST apply to the elements that body holds,
 and to no other element the component writes.
 
 # 35. Pages, rendering and sinks
@@ -1757,14 +1766,19 @@ mount rather than at the origin.
 
 36.14 A file under `src/ui/public` MUST carry a `content-type` derived from its extension.
 
-36.15 A URL in the client bundle naming the address of a file under `src/ui/public` MUST be left as
-that address by `abide build` and by `abide dev`, and MUST NOT be resolved as a path on disk.
+36.15 A URL in the client bundle naming the address of a file under `src/ui/public` MUST resolve
+to that address below the path `APP_URL` names, and MUST NOT be resolved as a path on disk by
+`abide build` or by `abide dev`.
 
 36.16 `NODE_ENV` MUST default to `development` under `abide dev`, and to `production` under
 `abide build` and `abide start`.
 
 36.17 A file under `src/ui/public` whose `content-type` is `text/*` MUST name `charset=utf-8` where
 its extension's type names none.
+
+36.18 A seed buffer entry whose stream transcript passes `ABIDE_MAX_STREAM_BUFFER_SIZE`, counted in
+the chunk type's default framing, MUST stop holding it, and the `Rpc` call it was for MUST be
+answered per 41.12.
 
 # 37. Lifecycle hooks
 
@@ -2140,6 +2154,9 @@ run, before it builds any of their markup.
 markup, starting each `Rpc` call the setup made as the request the browser's `Rpc` makes for it.
 
 41.21 The browser's `Rpc` MUST take a call 41.20's script started in place of making it, once.
+
+41.22 An `Rpc` call for args a seed buffer entry already answered MUST NOT warn on
+`abide:hydrate`.
 
 # 42. The app object
 

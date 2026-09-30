@@ -578,7 +578,7 @@ function publishIntoCappedRing(): Case {
 /**
  * Case: a burst of productions taken from a cursor, one turn each.
  *
- * THE CURSOR, PRICED PER TURN. RULEBOOK 5.11 has a cursor deliver every production
+ * THE CURSOR, PRICED PER TURN. RULEBOOK 5.10 has a cursor deliver every production
  * retention still holds, so the arms are BALANCED — k productions in, k turns out — and
  * what is left is the cost of finding a production by ordinal against finding it by index
  * in an array somebody trimmed themselves.

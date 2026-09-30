@@ -1,4 +1,4 @@
-// 16.13, 16.63 TO 16.66 — `timeout` ON EVERY CALL, in process as over the wire: a load that goes that
+// 16.13, 16.62 TO 16.65 — `timeout` ON EVERY CALL, in process as over the wire: a load that goes that
 // long without progress — its answer, or a stream's next chunk — is ended where it stands and refuses
 // 504, keeping what the value held. One clock per load, which a joining call does not wind back.
 
@@ -29,7 +29,7 @@ afterEach(() => {
 
 // THE REVERT: drop the `timeLoad` call from `call` in `#shared/rpc.ts`; the load never settles and
 // `busy` still reads true.
-test('a load that goes its timeout without settling refuses 504 — 16.64', async () => {
+test('a load that goes its timeout without settling refuses 504 — 16.63', async () => {
     const never = GET(() => new Promise<string>(() => {}), {
         timeout: 40,
     }) as unknown as () => Loading
@@ -42,7 +42,7 @@ test('a load that goes its timeout without settling refuses 504 — 16.64', asyn
 
 // PER CHUNK, NOT PER RUN: four chunks 25 ms apart run 100 ms under a 60 ms timeout. THE REVERT: drop
 // the `arm()` in the cursor loop; the clock runs from the first call and the run is ended at 60 ms.
-test('a stream that keeps producing outlives its timeout — 16.64', async () => {
+test('a stream that keeps producing outlives its timeout — 16.63', async () => {
     const rows = GET(
         async function* () {
             for (let row = 0; row < 4; row += 1) {
@@ -58,9 +58,9 @@ test('a stream that keeps producing outlives its timeout — 16.64', async () =>
     expect(value.peek()).toEqual([0, 1, 2, 3])
 })
 
-// 16.65 — WHAT THE RUN HAD SAID STAYS, and the generator is stopped. THE REVERT: drop `timeLoad`; the
+// 16.64 — WHAT THE RUN HAD SAID STAYS, and the generator is stopped. THE REVERT: drop `timeLoad`; the
 // stream never ends and `busy` still reads true.
-test('a stream that stops producing is ended with the chunks it had — 16.64, 16.65', async () => {
+test('a stream that stops producing is ended with the chunks it had — 16.63, 16.64', async () => {
     let after = false
     const rows = GET(
         async function* () {
@@ -81,9 +81,9 @@ test('a stream that stops producing is ended with the chunks it had — 16.64, 1
     expect(after).toBe(true)
 })
 
-// 16.65 — A RELOAD THAT TIMES OUT KEEPS SERVING WHAT THE VALUE HELD, as 16.54's abort does. THE
+// 16.64 — A RELOAD THAT TIMES OUT KEEPS SERVING WHAT THE VALUE HELD, as 16.53's abort does. THE
 // REVERT: clear the value in `abandonLoad` rather than refusing over it; the read then throws.
-test('a reload that times out keeps serving what the value held — 16.65', async () => {
+test('a reload that times out keeps serving what the value held — 16.64', async () => {
     let calls = 0
     const invoice = GET(
         () => {
@@ -104,10 +104,10 @@ test('a reload that times out keeps serving what the value held — 16.65', asyn
     expect(statusOf(value)).toBe(504)
 })
 
-// 16.66 — ONE CLOCK PER LOAD. A call joining at 150 ms does not start the 200 ms over: the refusal
+// 16.65 — ONE CLOCK PER LOAD. A call joining at 150 ms does not start the 200 ms over: the refusal
 // lands at 200, where a joined call's own clock would have held it to 350. THE REVERT: have a call
 // that finds its load already timed re-arm that load's clock in `timeLoad`; the load runs to 350.
-test('a call joining a load does not extend its timeout — 16.66', async () => {
+test('a call joining a load does not extend its timeout — 16.65', async () => {
     const never = GET(() => new Promise<string>(() => {}), {
         timeout: 200,
     }) as unknown as () => Loading
@@ -120,9 +120,9 @@ test('a call joining a load does not extend its timeout — 16.66', async () => 
     expect(performance.now() - started).toBeLessThan(300)
 })
 
-// 16.63 — the environment's `timeout`, which a server fills through `RPC_SERVER`, for a handler that
+// 16.62 — the environment's `timeout`, which a server fills through `RPC_SERVER`, for a handler that
 // names none. THE REVERT: time the load by `rpc.timeout` alone in `call`; nothing ends it.
-test('a handler naming no timeout takes the environment one — 16.63', async () => {
+test('a handler naming no timeout takes the environment one — 16.62', async () => {
     RPC_SERVER.timeout = () => 40
     const never = GET(
         () => new Promise<string>(() => {}),

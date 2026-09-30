@@ -1,4 +1,4 @@
-// 16.10 TO 16.25, 16.44 AND 19.8 — WHAT A HANDLER'S OPTIONS DO, over a served app (spawned, for
+// 16.10 TO 16.25, 16.43 AND 19.8 — WHAT A HANDLER'S OPTIONS DO, over a served app (spawned, for
 // `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -128,7 +128,7 @@ beforeAll(async () => {
     ;({ app, base, stop } = await serveApp({
         'ui/pages/page.abide': '<main>home</main>',
         'server/rpc/options.ts': HANDLERS,
-        // 16.60 — the environment's ceiling, for a handler that names none of its own.
+        // 16.59 — the environment's ceiling, for a handler that names none of its own.
         'server/app.ts': `import { onConfig } from 'abide/server'
 
 onConfig(() => ({ ABIDE_MAX_REQUEST_BODY_SIZE: 1024 }))
@@ -271,10 +271,10 @@ test('a mutation over maxBodySize is refused 413 — 16.14', async () => {
     expect(large.status).toBe(413)
 })
 
-// 16.60 — A BODY THAT NEVER SAID HOW LONG IT WAS IS BOUNDED AS IT STREAMS, at the handler's ceiling
+// 16.59 — A BODY THAT NEVER SAID HOW LONG IT WAS IS BOUNDED AS IT STREAMS, at the handler's ceiling
 // and at the environment's. THE REVERT: read the body with `request.text()` in `argsOf` rather than
 // through `bodyUnder`; both are paid 200.
-test('a streamed body over the ceiling is refused 413 — 16.60', async () => {
+test('a streamed body over the ceiling is refused 413 — 16.59', async () => {
     const streamed = (text: string) =>
         new ReadableStream<Uint8Array>({
             start(controller) {
@@ -303,9 +303,9 @@ test('a streamed body over the ceiling is refused 413 — 16.60', async () => {
     expect(await under.json()).toEqual({ paid: 5 })
 })
 
-// 16.64 OVER THE WIRE — a call that timed out is answered at the refusal's own status. THE REVERT:
+// 16.63 OVER THE WIRE — a call that timed out is answered at the refusal's own status. THE REVERT:
 // drop the `timeLoad` call in `#shared/rpc.ts`; the request hangs until the test's own timeout.
-test('a call that goes its timeout without settling is answered 504 — 16.64', async () => {
+test('a call that goes its timeout without settling is answered 504 — 16.63', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/stalls`)
     expect(answer.status).toBe(504)
     expect(await answer.json()).toMatchObject({
@@ -373,8 +373,8 @@ test('a GET from an origin the handler did not admit carries no allow-origin —
     expect(own.headers.get('vary')).toContain('origin')
 })
 
-// 16.10, 16.44 — `url` is the address a call makes, and `raw` the same call as its response.
-test('rpc.url builds the address and rpc.raw answers the call as a response — 16.10, 16.44', async () => {
+// 16.10, 16.43 — `url` is the address a call makes, and `raw` the same call as its response.
+test('rpc.url builds the address and rpc.raw answers the call as a response — 16.10, 16.43', async () => {
     expect(
         await (await Bun.fetch(`${base}${RPC}/addressOfLookup`)).json(),
     ).toBe(`${RPC}/guarded?id=5`)
@@ -415,12 +415,12 @@ test('a streaming handler behind a rung sends each chunk as it lands — 16.33, 
     expect((await Bun.fetch(`${base}${RPC}/streamed?n=13`)).status).toBe(451)
 })
 
-// 16.23, 16.61, 16.62 — WHAT A CALL RAISES THE REQUEST'S IDLE TIMEOUT TO, read off a recording server:
+// 16.23, 16.60, 16.61 — WHAT A CALL RAISES THE REQUEST'S IDLE TIMEOUT TO, read off a recording server:
 // nothing where no `timeout` is named, the seconds where one is, and bun's 0 — never reaped — for
 // `Infinity`. In process, because the idle timeout a socket was given is not observable from the
 // far end short of waiting it out. THE REVERT: fall back to 30_000 for `ABIDE_RPC_TIMEOUT`; the
 // untimed call raises to 30.
-test('a call raises the idle timeout only as far as its timeout says — 16.61, 16.62', async () => {
+test('a call raises the idle timeout only as far as its timeout says — 16.60, 16.61', async () => {
     const server = new URL('../src/server/', import.meta.url).pathname
     await Bun.write(
         `${app}/timeouts.ts`,

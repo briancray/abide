@@ -51,7 +51,7 @@ async function appTree(session: TypeSession): Promise<Record<string, string>> {
             path: `${APP}${path}`,
             file: parseAbide(await Bun.file(`${APP}${path}`).text()),
         })
-    // 32.18 — which components another one invokes decides whether a module carries its own
+    // 32.17 — which components another one invokes decides whether a module carries its own
     // markup for a row built in the browser.
     const graph = componentGraph(files, Bun.resolveSync)
     const { reads } = await session.readsFor(files)

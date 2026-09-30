@@ -91,7 +91,7 @@ export type Mounted = Mount & {
     wireArgs: JsonValue | undefined
 }
 
-// 16.63 — the environment's `timeout`, for every call a handler that names none makes.
+// 16.62 — the environment's `timeout`, for every call a handler that names none makes.
 RPC_SERVER.timeout = () => positiveSetting('ABIDE_RPC_TIMEOUT', undefined)
 
 /**
@@ -145,7 +145,7 @@ export async function answerRpc(
     handlers: Map<string, Mounted>,
     url: URL,
     request: Request,
-    // 16.40 — what paints a refusal for a request that came as a navigation.
+    // 16.39 — what paints a refusal for a request that came as a navigation.
     failurePage: (failure: Failed<string, unknown>) => Promise<Response>,
 ): Promise<Response> {
     const pathname = url.pathname
@@ -159,7 +159,7 @@ export async function answerRpc(
         allows(found.handler.crossOrigin, origin)
     )
         return preflight(found, origin, request)
-    // 16.55 — a `HEAD` is the `GET`'s answer, which the server sends without its body.
+    // 16.54 — a `HEAD` is the `GET`'s answer, which the server sends without its body.
     const head = request.method === 'HEAD'
     // 15.7 — no handler at this address AND this method is one refusal, not two.
     if (found === undefined || found.method !== (head ? 'GET' : request.method))
@@ -181,7 +181,7 @@ export async function answerRpc(
                 `A ${found.method} from ${crossing} is not allowed here.`,
             ),
         )
-    // 16.59 — THE BODY CEILING, none where neither the handler nor the environment names one; 16.60 —
+    // 16.58 — THE BODY CEILING, none where neither the handler nor the environment names one; 16.59 —
     // read off the declared length before a byte of the body is.
     const ceiling =
         handler.maxBodySize ??
@@ -210,12 +210,12 @@ export async function answerRpc(
         const issues = validateJson(found.wireArgs, args)
         if (issues !== null) return answered(validationError(issues))
     }
-    // 16.61 — where neither names one, nothing is raised and the server's own idle timeout stands.
+    // 16.60 — where neither names one, nothing is raised and the server's own idle timeout stands.
     const timeout = handler.timeout ?? RPC_SERVER.timeout()
     if (timeout !== undefined) raiseTimeout(timeout)
     // 41.7 — the call a hydrating page makes for what its render already reached is answered from
     // that, and the handler is not run again (41.13).
-    // 16.56 — a `HEAD` leaves the seed for the `GET` it stands in front of.
+    // 16.55 — a `HEAD` leaves the seed for the `GET` it stands in front of.
     const caller = head ? undefined : callerOf()
     const seeded =
         caller === undefined ? undefined : takeSeed(caller, handler, args)
@@ -237,7 +237,7 @@ export async function answerRpc(
         heldAt !== undefined &&
         GLOBAL_GETS.get(handler)?.(args) === held &&
         pastOf(held).generation === heldAt
-    // 16.40 — A MUTATION A DOCUMENT MADE — a form posted with no script — is answered as a navigation.
+    // 16.39 — A MUTATION A DOCUMENT MADE — a form posted with no script — is answered as a navigation.
     if (!inUrl && prefers(request, 'text/html', 'application/json'))
         return navigated(outcome, request, failurePage)
     const answer = await answerOutcome(outcome, request, handler, args)
@@ -300,9 +300,9 @@ async function answerOutcome(
             'cache-control',
             `private, max-age=${Math.max(0, Math.floor((deadline - Date.now()) / 1000))}`,
         )
-    // 16.42 FOR A STREAM TOO. A stream's head waits on its first chunk, so one refusing before it
+    // 16.41 FOR A STREAM TOO. A stream's head waits on its first chunk, so one refusing before it
     // said anything throws out of the answer rather than settling into the outcome — and was answered
-    // 500, as a throw that is not a `Failed` is (16.43), where the refusal named its own status. Any
+    // 500, as a throw that is not a `Failed` is (16.42), where the refusal named its own status. Any
     // other throw goes on to where it went before.
     try {
         return await answerValue(
@@ -376,7 +376,7 @@ async function argsOf(
         ? await bodyUnder(request, ceiling)
         : request
     if (isFailed(body)) return body
-    // 16.40 — a form's fields, a field given more than once a list, as a query's are.
+    // 16.39 — a form's fields, a field given more than once a list, as a query's are.
     if (form) {
         return collapsed(await body.formData())
     }
@@ -397,7 +397,7 @@ async function argsOf(
 /**
  * The request's body read up to `ceiling`, as a `Response`, or a 413 refusal past it.
  *
- * 16.60 — A BODY WITH NO DECLARED LENGTH, BOUNDED AS IT STREAMS: counted chunk by chunk and cut
+ * 16.59 — A BODY WITH NO DECLARED LENGTH, BOUNDED AS IT STREAMS: counted chunk by chunk and cut
  * off at the chunk that passes the ceiling, so a caller that never said how much it would send is
  * never held past it. What it read is handed back as a `Response` for the parse to read as it
  * would the request.
@@ -468,7 +468,7 @@ function preflight(found: Mounted, origin: string, request: Request): Response {
  * 16.23, 16.24 — the floor is the longest any handler in the request asked for. Where no socket is
  * bound there is no idle timeout to raise.
  *
- * 16.62 — `Infinity` is never reaped, which bun spells 0; any finite bound is capped at the 255
+ * 16.61 — `Infinity` is never reaped, which bun spells 0; any finite bound is capped at the 255
  * seconds bun's idle timeout can hold.
  *
  * ON THE REQUEST THE LISTENER RECEIVED, never the one being answered: under a mount, or past a
@@ -498,7 +498,7 @@ function isForm(request: Request): boolean {
 /**
  * The answer a form posted with no script gets.
  *
- * 16.40 — a `redirect` the handler wrote passes through; a value is a 303 back where the form was;
+ * 16.39 — a `redirect` the handler wrote passes through; a value is a 303 back where the form was;
  * a refusal renders the nearest error page at its own status, and a fault renders it at 500.
  */
 async function navigated(
@@ -518,7 +518,7 @@ async function navigated(
         written?.headers.has('location') === true
     )
         return new Response(null, { status, headers })
-    // 16.58 — back where the form was only where that is this app: a `Referer` naming another
+    // 16.57 — back where the form was only where that is this app: a `Referer` naming another
     // origin makes the 303 an open redirect.
     const referer = request.headers.get('referer')
     const from = referer === null ? null : URL.parse(referer)

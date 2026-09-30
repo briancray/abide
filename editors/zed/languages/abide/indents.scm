@@ -28,7 +28,3 @@
 (catch_clause) @indent
 
 (finally_clause) @indent
-
-(component_block
-  (component_start) @start
-  (component_end)? @end) @indent

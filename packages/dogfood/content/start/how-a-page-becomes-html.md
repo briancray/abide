@@ -64,7 +64,8 @@ Read on: [Auth & principal](../app/know-who-is-calling.md) ·
 
 The path picks a `page.abide`, and the layouts above it in the directory tree wrap it. All of
 that renders into one document, and `#ui/app.html` is that document. `<slot></slot>` is where the
-outermost layout goes; everything around it is yours, and it is served as written.
+outermost layout goes; everything around it is yours, and it is served as written — a root-absolute
+`href` or `src` in it moved below the app's path when `APP_URL` names one.
 
 ```html #ui/app.html
 <!doctype html>

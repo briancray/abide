@@ -49,7 +49,7 @@ export type Rendered = { head: string; body: string }
  * The page inside its layouts, every level set up first and then built.
  *
  * 35.1 — THE PAGE, INSIDE ITS LAYOUTS, outermost first. A layout renders its child through a
- * slot (32.19), so the composition is the same `children` thunk a caller writing markup between
+ * slot (32.18), so the composition is the same `children` thunk a caller writing markup between
  * two tags hands over — there is no layout API and no second kind of component, which is what
  * the documentation says a layout is and what this is.
  *

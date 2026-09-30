@@ -57,7 +57,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `Failures` | union of `Failed` | What a read hands back in place of a value. | 1.3 |
 | `Shaped` | `unknown` | What a `transform` hands back: the value to store, or a refusal. | 4.6, 4.9 |
 | `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.2, 9.7 |
-| `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.9, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.65 |
+| `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.9, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.65, 19.17 |
 | `reactive` | `<Computed, Shaped = Awaited<Computed>>(body: () => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never> & { transform?: (value: Awaited<Computed>) => Shaped }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The unkeyed body overload. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.51, 11.52, 11.53, 11.54, 11.55, 11.58, 11.59, 41.6, 11.63, 11.64, 11.66, 11.67 |
 | `reactive` | `<Chunk, Shaped = Chunk[]>(body: () => AsyncGenerator<Chunk>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never> & { transform?: (value: Chunk[]) => Shaped }) => Reactive<Kept<Shaped>, Chunk[], Refused<Shaped>, Chunk>` | The streaming body overload. | 3.7, 3.8, 4.8, 9.2, 9.3, 9.20, 9.21, 9.22, 9.23 |
 | `reactive` | `<Chunk, Args, Shaped = Chunk[]>(body: (args: Args) => AsyncGenerator<Chunk>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never, Args> & { transform?: (value: Chunk[]) => Shaped }) => Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped>, Chunk>` | The keyed streaming body overload. | 9.20, 9.23 |
@@ -86,14 +86,14 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `store` | `Store<Stored> \| ((args: Args) => Store<Stored>)` | Where the value lives when the process does not. | 8.1, 8.2, 8.3, 8.14, 9.11, 11.43 |
 | `identity` | `(next: Stored, previous: Stored) => unknown` | What makes it the same value. | 5.1, 5.2, 5.3, 5.4, 5.5, 9.6, 9.7, 11.17, 18.19 |
 | `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator an app declares on `identity`. | 5.4, 5.5, 18.19 |
-| `by` | `(keyof Element & string) \| ((element: Element) => unknown)`, over the `Element` a `Stored` array holds | What tells one element of the value from another. | 5.23, 18.19, 18.30, 32.33 |
+| `by` | `(keyof Element & string) \| ((element: Element) => unknown)`, over the `Element` a `Stored` array holds | What tells one element of the value from another. | 5.22, 18.19, 18.30, 32.32 |
 | `history` | `number` | How many past productions a value retains beside the standing one. | 6.1, 6.2, 6.3, 6.16, 6.17, 6.18, 9.3, 9.10, 9.17, 9.18, 9.19, 9.28, 11.39, 18.19, 18.30 |
 | `ttl` | `number` | The life of a retained production. | 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 6.12, 6.13, 6.14, 6.15, 6.22, 11.6, 11.35, 11.46, 11.49, 11.50 |
 | `args` | `Schema<Args>` | The gate on a keyed value's args. | 9.9, 11.28, 11.30, 11.41, 11.42, 11.57, 11.61, 11.69 |
 | `global` | `boolean` | Opts out of the default scope into one cache shared by every caller in the process. | 11.34, 11.35, 11.36, 11.37, 11.38, 11.40, 11.54, 11.68 |
 | `tags` | `string[] \| ((args: Args) => string[])` | What a `Selection` matches on. | 11.44, 11.45, 18.19, 18.30 |
-| `throttle` | `number` | A ceiling on how often the value changes. | 5.9, 5.10, 5.12, 5.13, 5.15, 5.16, 5.18, 5.19, 5.20, 5.21, 5.22, 5.24, 5.25 |
-| `debounce` | `number` | A wait for the changes to stop before the value changes. | 5.9, 5.10, 5.12, 5.14, 5.15, 5.16, 5.18, 5.19, 5.20, 5.21, 5.22, 5.24, 5.25 |
+| `throttle` | `number` | A ceiling on how often the value changes. | 5.8, 5.9, 5.11, 5.12, 5.14, 5.15, 5.17, 5.18, 5.19, 5.20, 5.21, 5.23, 5.24 |
+| `debounce` | `number` | A wait for the changes to stop before the value changes. | 5.8, 5.9, 5.11, 5.13, 5.14, 5.15, 5.17, 5.18, 5.19, 5.20, 5.21, 5.23, 5.24 |
 
 
 ### Reads
@@ -104,7 +104,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `s.peek` | `() => Stored \| undefined` | Read what is held without joining the flow. | 2.11, 2.12 |
 | `NotLanded` | `Error & { name: 'NotLanded'; source: object }` | What a read throws where nothing has landed yet. | 2.10, 2.13, 2.14, 2.15 |
 | `History<Stored>` | `Iterable<Stored> & AsyncIterable<Stored>` | What `s.history` hands back. | — |
-| `s.history` | `(n?: number) => History<Stored>` | A cursor over the productions a value retains, replayed and then live. | 2.5, 2.6, 5.11, 6.3, 6.7, 6.19, 6.20, 6.21, 9.10, 9.15 |
+| `s.history` | `(n?: number) => History<Stored>` | A cursor over the productions a value retains, replayed and then live. | 2.5, 2.6, 5.10, 6.3, 6.7, 6.19, 6.20, 6.21, 9.10, 9.15 |
 | `s.then` | `<Result>(onSettled?: (value: Stored) => Result \| PromiseLike<Result>, onFailed?: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Result>` | The settling, as a promise. | 1.4, 2.8, 2.9 |
 | `s.catch` | `<Result>(onFailed: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Stored \| Result>` | The settling's refusal path. | 1.4, 1.5 |
 | `s.finally` | `(onSettled: () => void) => Promise<Stored>` | The settling's end, whichever way it went. | 1.4, 1.5 |
@@ -117,13 +117,13 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `s.set` | `(value: Accepted \| Promise<Accepted> \| Reactive<Accepted>) => void \| Failures` | Write the current value here, gated by `identity`. | 3.6, 4.1, 4.2, 4.9, 4.13, 4.17, 5.6, 9.4, 9.9, 9.25, 9.26, 11.60, 11.62, 11.66, 11.67 |
 | `s.publish` | `(value: Accepted \| Promise<Accepted>) => number \| Failures` | Mint a production whatever `identity` says, and send it to every subscriber. | 5.6, 9.1, 9.5, 9.6, 9.8, 9.12, 9.13, 9.14, 11.60 |
-| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate in place and mint a production for it. | 5.7, 5.8, 5.24, 9.27, 11.60, 18.26, 18.28, 32.34 |
+| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate in place and mint a production for it. | 5.7, 5.23, 9.27, 11.60, 18.26, 18.28, 32.33 |
 
 ### Probes
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `s.busy` | `() => boolean` | Work is in flight for this value. | 3.1, 3.2, 3.3, 3.4, 3.7, 3.9, 5.16, 7.5, 7.8, 11.19, 11.20, 11.21, 11.22, 11.51 |
+| `s.busy` | `() => boolean` | Work is in flight for this value. | 3.1, 3.2, 3.3, 3.4, 3.7, 3.9, 5.15, 7.5, 7.8, 11.19, 11.20, 11.21, 11.22, 11.51 |
 | `s.ready` | `() => boolean` | There is a value to serve. | 3.1, 3.2, 3.3, 3.5, 3.6, 3.8, 7.8, 9.14, 11.20, 11.55, 11.59 |
 | `s.error` | `() => unknown` | The standing refusal. | 3.1, 3.2, 3.3, 3.5, 4.10, 4.11, 4.12 |
 | `s.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. | 3.1 |
@@ -133,7 +133,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `s.invalidate` | `() => void` | Drop the cache behind the value. | 7.1, 7.2, 7.3, 7.6, 7.7, 7.9, 7.10, 7.12, 7.13, 7.14, 7.15, 7.16, 7.17, 11.52 |
-| `s.refresh` | `() => void` | Reload while continuing to serve what is held. | 4.12, 7.1, 7.4, 7.5, 7.6, 7.11, 7.18, 11.52, 5.25 |
+| `s.refresh` | `() => void` | Reload while continuing to serve what is held. | 4.12, 7.1, 7.4, 7.5, 7.6, 7.11, 7.18, 11.52, 5.24 |
 
 ### Effects
 
@@ -167,7 +167,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `Selection` | `Reactive<any, any, any, any> \| Keyed<any, any, any, any> \| Rpc<any, any, any, any> \| { tags: string[] }` | What is being asked about. | 13.1, 13.8, 13.9, 13.13, 31.14 |
 | `busy` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether any entry in the selection has work in flight. | 13.2, 13.3, 13.5, 13.12 |
 | `ready` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection has a value to serve. | 13.3, 13.5, 13.11, 13.12 |
-| `refresh` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.12 |
+| `refresh` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.12, 13.14 |
 | `invalidate` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Marks the selection stale. | 13.4, 13.6, 13.10, 13.12 |
 
 
@@ -177,11 +177,11 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `refuse.named` | `<Name extends string>(name: Name, status?: number, message?: string) => ((data?: undefined) => Failed<Name, undefined>) & { is: (error: unknown) => error is Failed<Name, undefined> }` | A reusable factory for a named, narrowable failure. | 15.3, 15.13, 15.18 |
 | `refuse.named` | `<Name extends string, Data extends JsonValue>(name: Name, status: number \| undefined, message: string \| ((data: Data) => string) \| undefined, options: { schema: Schema<Data> }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | The same, carrying data its schema declares. | 15.3, 15.11, 15.12, 15.13, 15.14, 15.15, 15.18 |
-| `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }` | The one refusal type, in-process and over a wire alike. | 15.1, 15.2, 15.6, 16.42, 16.43 |
+| `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }` | The one refusal type, in-process and over a wire alike. | 15.1, 15.2, 15.6, 16.41, 16.42 |
 | `return myError(data)` | `Failed<Name, Data>` | The one spelling for every refusal. | 15.4, 15.5 |
 | `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | Abide's own refusal for an address nothing answers. | 15.7, 15.9 |
 | `validationError` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | Abide's own refusal for a schema or an `args` gate that refused. | 15.8, 15.9 |
-| `aborted` | `(data?: undefined) => Failed<'Aborted', undefined>` | Abide's own refusal for a load every caller aborted, and for a client that left. | 15.9, 16.54, 16.68 |
+| `aborted` | `(data?: undefined) => Failed<'Aborted', undefined>` | Abide's own refusal for a load every caller aborted, and for a client that left. | 15.9, 16.53, 16.67 |
 | `myError(data)` DISCARDED | compile error | A `Failed` built and thrown away. | 15.10 |
 
 ## Tracking
@@ -189,7 +189,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Context | Meaning | Rules |
 | --- | --- | --- |
 | template expression | The flow itself. | 14.1, 14.2, 14.11, 14.17 |
-| branch-local `<script>` | An item's own setup scope. | 14.8, 34.9, 34.10, 34.11, 34.12 |
+| branch-local `<script>` | An item's own setup scope. | 14.8, 34.7, 34.8, 34.9, 34.10 |
 | `reactive` body, unkeyed | The unkeyed body's own scope. | 14.3, 14.11, 14.15, 14.16, 14.17 |
 | `reactive` body, keyed | The keyed body's own scope. | 14.4 |
 | block body binding | A live read, like a prop. | 14.5 |
@@ -207,19 +207,19 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.26, 16.27, 16.28, 16.29, 16.30, 16.34, 16.45, 16.53, 16.54, 16.67, 41.5, 41.7, 41.12, 41.21 |
+| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.26, 16.27, 16.28, 16.29, 16.30, 16.34, 16.44, 16.52, 16.53, 16.66, 41.5, 41.7, 41.12, 41.21, 41.22 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.31 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
-| `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.19 |
+| `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.19, 19.17 |
 | `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of an onion. | 16.15, 16.16, 16.17, 16.22 |
-| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced> \| ((args?: Args) => Value), options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.31, 16.32, 16.33, 16.35, 16.36, 16.37, 16.38, 16.39, 16.41, 16.46, 16.47, 16.48, 16.49, 16.50, 16.51, 16.52, 16.55, 16.56, 16.57, 18.17, 18.21, 18.23, 18.25, 18.27 |
-| `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. | 16.2, 16.7, 16.8, 16.40, 16.58 |
+| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced> \| ((args?: Args) => Value), options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.31, 16.32, 16.33, 16.35, 16.36, 16.37, 16.38, 16.40, 16.45, 16.46, 16.47, 16.48, 16.49, 16.50, 16.51, 16.54, 16.55, 16.56, 18.17, 18.21, 18.23, 18.25, 18.27 |
+| `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. | 16.2, 16.7, 16.8, 16.39, 16.57 |
 | `rpc.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to the handler's matching entries. | 13.2, 13.3, 13.12 |
 | `rpc.ready` | `(pattern?: Partial<Args>) => boolean` | `ready` narrowed to the handler's matching entries. | 13.11, 13.12 |
 | `rpc.invalidate` | `(pattern?: Partial<Args>) => void` | `invalidate` narrowed to the handler's matching entries. | 7.2, 7.3, 13.4, 13.12 |
 | `rpc.refresh` | `(pattern?: Partial<Args>) => void` | `refresh` narrowed to the handler's matching entries. | 7.4, 7.5, 13.4, 13.12 |
 | `rpc.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. | 16.9 |
-| `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response. | 16.12, 16.44 |
+| `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response. | 16.12, 16.43 |
 | `rpc.method` | `string` | The HTTP method. | 16.2 |
 | `rpc.url` | `(args?: Args) => string` | The address, resolved against the mount. | 16.10, 16.11 |
 | `rpc.description` | `string \| undefined` | The human description. | 16.29 |
@@ -230,10 +230,10 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `description` | `string` | The human description carried onto every generated surface. | 16.29 |
 | `middleware` | `Middleware<{ request: Request; args: () => Args }, Value \| Failures>[]` | The rungs run per call. | 16.12, 16.13, 16.17, 16.18, 16.19, 16.20, 16.21 |
-| `timeout` | `number` | How long the call may stay open, and the floor under the request's idle timeout. | 16.23, 16.24, 16.61, 16.62, 16.63, 16.64, 16.65, 16.66 |
+| `timeout` | `number` | How long the call may stay open, and the floor under the request's idle timeout. | 16.23, 16.24, 16.60, 16.61, 16.62, 16.63, 16.64, 16.65 |
 | `clients` | `Clients` | Which surfaces carry this handler. | 20.3 |
 | `crossOrigin` | `boolean \| string[]` | Whether other origins may call it. | 16.25, 21.19 |
-| `maxBodySize` | `number` | The largest request body a mutation will accept, in bytes. | 16.14, 16.59, 16.60 |
+| `maxBodySize` | `number` | The largest request body a mutation will accept, in bytes. | 16.14, 16.58, 16.59 |
 
 ### Response helpers
 
@@ -242,11 +242,11 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `Values<T>` | `Iterable<T> \| AsyncIterable<T> \| ReadableStream<T>` | What every body helper takes. | 17.1 |
 | `page` | `<Body extends string \| Uint8Array \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 17.2 |
 | `redirect` | `(to: string, status?: RedirectStatus) => undefined` | A navigation. | 17.3 |
-| `jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.46, 17.6, 17.7 |
-| `sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.47, 17.6, 17.7 |
+| `jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.45, 17.6, 17.7 |
+| `sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.46, 17.6, 17.7 |
 | `bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.35, 17.6, 17.7 |
 | `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `redirect` may carry. | 17.3 |
-| `refuse` | `(status: number, message?: string) => Failed<'HttpError', undefined>` | An undeclared refusal at a status. | 15.5, 15.9, 15.10, 15.16, 16.42, 17.4, 17.5, 17.8 |
+| `refuse` | `(status: number, message?: string) => Failed<'HttpError', undefined>` | An undeclared refusal at a status. | 15.5, 15.9, 15.10, 15.16, 16.41, 17.4, 17.5, 17.8 |
 
 ## `socket` — `reactive` + transport
 
@@ -383,7 +383,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `route.url` | `Reactive<URL>` | Where we are. | 23.1, 23.2, 23.3, 23.4, 30.23 |
+| `route.url` | `Reactive<URL>` | Where we are. | 23.1, 23.2, 23.3, 23.4, 30.23, 19.18 |
 | `route.params` | `Reactive<Params>` | The matched route's segments. | 23.1, 23.5, 23.9, 30.23 |
 | `Params` | `Record<string, string \| string[]>` | What a matched route's segments are. | 23.5 |
 | `route.name` | `Reactive<string>` | The resolution path. | 23.1, 23.6 |
@@ -534,55 +534,54 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `{expr}` | Reactive text, escaped. | 32.1, 32.24 |
+| `{expr}` | Reactive text, escaped. | 32.1, 32.23 |
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
-| `{raw(...)}` | Raw HTML. | 32.2, 32.26, 32.27, 32.31, 32.32 |
-| `name={expr}` | A reactive attribute or property. | 32.3, 32.21, 32.24, 32.38 |
+| `{raw(...)}` | Raw HTML. | 32.2, 32.25, 32.26, 32.30, 32.31 |
+| `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37 |
 | `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3 |
-| `bind:value` | Two-way bind on an element. | 5.17, 32.5 |
+| `bind:value` | Two-way bind on an element. | 5.16, 32.5 |
 | `bind:prop={state}` | Hands a component prop the caller's `Reactive`, or a `{get, set}` pair, to write through. | 32.6, 33.6, 33.8, 14.18 |
 | `bind:checked` | A boolean bind on an input. | 32.7 |
 | `bind:open` | The same, on a `<details>`. | 32.7 |
 | `bind:group` | Radio or checkbox membership. | 32.8 |
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6 |
-| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9, 32.39 |
+| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9, 32.38 |
 | `class:name={cond}` | Toggles a class. | 32.10 |
-| `style:prop={value}` | Sets one style property. | 32.10, 32.20 |
-| `{...expr}` | Spreads props or attributes. | 32.11, 32.38, 33.12, 33.13 |
-| static template text | What an author writes outside a slot, in body text and in an attribute value. | 32.28, 32.29 |
+| `style:prop={value}` | Sets one style property. | 32.10, 32.19 |
+| `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13 |
+| static template text | What an author writes outside a slot, in body text and in an attribute value. | 32.27, 32.28 |
 
 ### Raw markup
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.25, 32.27, 32.31, 32.32 |
-| `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.25 |
+| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.24, 32.26, 32.30, 32.31 |
+| `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.24 |
 
 ### Control flow
 
 | Spelling | Branches | Meaning | Rules |
 | --- | --- | --- | --- |
-| `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.12, 32.22 |
-| `{#for item, index of list by key}` | `{:catch}` | Repeats markup over a list, or over a cursor as it produces. | 18.16, 32.13, 32.14, 32.15, 32.23, 32.30, 32.33, 32.34, 41.8, 41.14, 41.15 |
+| `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.12, 32.21 |
+| `{#for item, index of list by key}` | `{:catch}` | Repeats markup over a list, or over a cursor as it produces. | 18.16, 32.13, 32.14, 32.15, 32.22, 32.29, 32.32, 32.33, 41.8, 41.14, 41.15 |
 | `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16 |
 
 ### Components
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `{#component Name(pattern)}` | An inline component. | 32.17 |
-| `<Name/>` | A component invocation. | 32.18, 32.35, 32.36, 32.37, 33.19 |
-| `<slot/>` | The position children render into. | 32.19 |
-| `<slot>fallback</slot>` | Renders children, or a fallback. | 32.19 |
-| `<Tag>…</Tag>` | Children passed to a component's slot. | 32.19 |
+| `<Name/>` | A component invocation. | 32.17, 32.34, 32.35, 32.36, 33.19 |
+| `<slot/>` | The position children render into. | 32.18 |
+| `<slot>fallback</slot>` | Renders children, or a fallback. | 32.18 |
+| `<Tag>…</Tag>` | Children passed to a component's slot. | 32.18 |
 
 ## Props
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `props` | `<Props>() => { [K in keyof Props]: Props[K] }` | One live accessor per prop the component declares. | 33.1, 33.2, 33.3, 33.4, 33.5, 33.6, 33.7, 33.8, 33.9, 33.10, 33.11, 33.14, 33.15, 33.20 |
-| `children` | always accepted | What a caller passes between the tags. | 33.16, 32.19 |
+| `children` | always accepted | What a caller passes between the tags. | 33.16, 32.18 |
 
 ## Script / style blocks
 
@@ -590,7 +589,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- |
 | `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3 |
 | `<script module>` | Module scope. | 34.2, 34.3 |
-| `<style>` | Component-scoped styles. | 34.4, 34.5, 34.7, 34.8, 34.12, 34.13 |
+| `<style>` | Component-scoped styles. | 34.4, 34.5, 34.10, 34.11 |
 | `import './app.css'` | A stylesheet the component depends on. | 34.6 |
 | `:global(…)` | The per-selector escape from scoping. | 34.5 |
 
@@ -611,9 +610,9 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Component` | `interface Component {}` | A component bound to its props. | 32.18, 35.4 |
+| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 35.4 |
 | `render` | `(component: Component, shell?: Shell) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 35.11 |
-| `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.6 |
+| `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.6, 19.19 |
 
 ## Sinks
 
@@ -631,7 +630,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Name | Type | Meaning | Rules |
 | --- | --- | --- | --- |
 | `PORT` | `number` | The listen port. | 36.1 |
-| `APP_URL` | `string \| null` | The app's public URL. | 36.2 |
+| `APP_URL` | `string \| null` | The app's public URL. | 36.2, 19.20 |
 | `NODE_ENV` | `string` | The environment name, verbatim. | 36.3, 36.16 |
 | `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.4 |
 | `APP_VERSION` | `string` | The version beside that name. | 27.3 |
@@ -640,9 +639,9 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `ABIDE_PRINCIPAL_TTL` | `number` | The principal cookie's life, in ms. | 26.15, 26.16 |
 | `ABIDE_APP_TOKEN` | `string \| null` | The bearer the remote CLI sends. | 36.6 |
 | `ABIDE_APP_URL` | `string \| null` | Names an app somewhere else, for the remote CLI. | 36.6 |
-| `ABIDE_RPC_TIMEOUT` | `number` | The default ms a call may go without progress. | 16.23, 16.61, 16.63 |
-| `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.14, 16.59, 16.60 |
-| `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 16.39 |
+| `ABIDE_RPC_TIMEOUT` | `number` | The default ms a call may go without progress. | 16.23, 16.60, 16.62 |
+| `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.14, 16.58, 16.59 |
+| `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
 | `ABIDE_LOGS` | `boolean` | Opts in to declaring the `GET` over `log.records`. | 36.7 |
 | `ABIDE_OPENAPI` | `boolean` | Opts in to declaring the OpenAPI address. | 20.7, 36.7 |
 | `ABIDE_MCP` | `boolean` | Opts in to declaring the MCP address. | 20.7, 36.7 |

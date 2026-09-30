@@ -101,17 +101,17 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-// 16.32, 16.57 — nothing to say is a 204 with no type for the nothing. THE REVERT: drop the
+// 16.32, 16.56 — nothing to say is a 204 with no type for the nothing. THE REVERT: drop the
 // `delete('content-type')` in `answerValue`; the 204 reads `application/json`.
-test('a handler returning undefined answers 204 with no content-type — 16.32, 16.57', async () => {
+test('a handler returning undefined answers 204 with no content-type — 16.32, 16.56', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/nothing`, { method: 'POST' })
     expect(answer.status).toBe(204)
     expect(answer.headers.get('content-type')).toBeNull()
 })
 
-// 16.59 — NO CEILING WHERE NOTHING NAMES ONE, bun's own included. THE REVERT: fall back to
+// 16.58 — NO CEILING WHERE NOTHING NAMES ONE, bun's own included. THE REVERT: fall back to
 // `1024 * 1024` in `answerRpc`'s ceiling; the body is refused 413.
-test('a mutation with no ceiling named takes a body of any size — 16.59', async () => {
+test('a mutation with no ceiling named takes a body of any size — 16.58', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/nothing`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -120,20 +120,20 @@ test('a mutation with no ceiling named takes a body of any size — 16.59', asyn
     expect(answer.status).toBe(204)
 })
 
-// 16.55 — A `HEAD` IS THE `GET`'S ANSWER without its body. THE REVERT: match `found.method` against
+// 16.54 — A `HEAD` IS THE `GET`'S ANSWER without its body. THE REVERT: match `found.method` against
 // `request.method` alone in `answerRpc`; the `HEAD` is refused 404.
-test('a HEAD is answered by the GET handler at its address — 16.55', async () => {
+test('a HEAD is answered by the GET handler at its address — 16.54', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/shared`, { method: 'HEAD' })
     expect(answer.status).toBe(200)
     expect(answer.headers.get('content-type')).toBe('application/json')
     expect(await answer.text()).toBe('')
 })
 
-// 16.33, 16.46 — A STREAMING HANDLER IS ANSWERED AS IT PRODUCES, jsonl by default, one line a chunk:
+// 16.33, 16.45 — A STREAMING HANDLER IS ANSWERED AS IT PRODUCES, jsonl by default, one line a chunk:
 // the first line is read while the handler is still waiting to produce the second. THE REVERT:
 // drop the `isStreaming` check in `outcomeOf`; the stream settles to one snapshot, and the first read
 // waits the 300 ms out and arrives as one JSON array.
-test('a streaming handler is framed as jsonl, a chunk per line, as it produces — 16.33, 16.46', async () => {
+test('a streaming handler is framed as jsonl, a chunk per line, as it produces — 16.33, 16.45', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/feed`)
     expect(answer.headers.get('content-type')).toBe('application/jsonl')
     const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
@@ -225,8 +225,8 @@ test('a streaming answer times its handler to the first chunk — 21.15', async 
     await answer.text()
 })
 
-// 16.47, 16.48 — sse WHERE `Accept` ASKS FOR IT, with its three headers.
-test('Accept naming event-stream frames as sse — 16.47, 16.48', async () => {
+// 16.46, 16.47 — sse WHERE `Accept` ASKS FOR IT, with its three headers.
+test('Accept naming event-stream frames as sse — 16.46, 16.47', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/feed`, {
         headers: { accept: 'text/event-stream' },
     })
@@ -236,8 +236,8 @@ test('Accept naming event-stream frames as sse — 16.47, 16.48', async () => {
     expect(await answer.text()).toBe(':\n\ndata: {"n":1}\n\ndata: {"n":2}\n\n')
 })
 
-// 16.48, 16.49 — binary chunks admit bytes alone, read off the first chunk.
-test('binary chunks are answered as octet-stream — 16.48, 16.49', async () => {
+// 16.47, 16.48 — binary chunks admit bytes alone, read off the first chunk.
+test('binary chunks are answered as octet-stream — 16.47, 16.48', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/binary`, {
         headers: { accept: 'text/event-stream' },
     })
@@ -419,12 +419,12 @@ test('a GET over a global value answers the life its production has left — 21.
     }
 }, 10_000)
 
-// 16.68 — A CLIENT THAT LEFT IS NOT A FAULT. A handler waiting on work the request's signal cancels
+// 16.67 — A CLIENT THAT LEFT IS NOT A FAULT. A handler waiting on work the request's signal cancels
 // throws once the client goes, and that throw is the cancellation arriving rather than something
 // broken. A raw socket, because a `fetch` abort can leave a pooled connection open and the server
 // never learns the client left. THE REVERT: drop the signal check in `failureOf`; the throw is
 // reported, and `onError` counts 1 where 0 is due.
-test('a handler that throws after its client left is not reported — 16.68', async () => {
+test('a handler that throws after its client left is not reported — 16.67', async () => {
     const count = async (): Promise<number> =>
         (await Bun.fetch(`${base}${RPC}/reports`, { method: 'POST' })).json()
     const before = await count()

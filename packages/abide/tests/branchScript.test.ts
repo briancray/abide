@@ -1,4 +1,4 @@
-// 14.8, 34.9–34.12 — A BRANCH-LOCAL `<script>`: setup for the body it is written in, run once each time
+// 14.8, 34.7–34.10 — A BRANCH-LOCAL `<script>`: setup for the body it is written in, run once each time
 // that body is built, tracking nothing, with its names in scope for that body alone. Rendered on the server,
 // hydrated and then driven on the client, because each side builds a body its own way.
 
@@ -176,7 +176,7 @@ test("an arm's script runs once each time the arm is swapped in", async () => {
 test('a script inside a {#try} is refused', () => {
     expect(() =>
         parseAbide('{#try}<script>const a = 1</script><p>{a}</p>{/try}'),
-    ).toThrow('34.12')
+    ).toThrow('34.10')
 })
 
 const ARM_VALUE = `<script>

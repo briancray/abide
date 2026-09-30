@@ -8,7 +8,7 @@ import { textOf } from '#shared/Raw.ts'
 // same on both sides: the server concatenates escaped pieces, the client concatenates raw ones,
 // and a reader comparing the two modules should see one difference in one place.
 //
-// 32.27 — WHAT THIS WRITES IS TEXT, a `Raw` included: its html, which matches the server's bytes
+// 32.26 — WHAT THIS WRITES IS TEXT, a `Raw` included: its html, which matches the server's bytes
 // where `String(new Raw(…))` was `[object Object]`. A run holding a `Raw` part is not written
 // through here at all — its binding asks `isRaw` first and parses the markup (`setMarkup`).
 export { textOf as escapeless }

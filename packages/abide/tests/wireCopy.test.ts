@@ -131,7 +131,7 @@ export const unread = GET(reactive(() => [{ isbn: '1' }], { history: grown }))
     expect(built.stderr).toContain('RULEBOOK 18.30')
 })
 
-// 32.33 — THE KEY. THE REVERT: build the copy without its record in `wire`; the list over it is
+// 32.32 — THE KEY. THE REVERT: build the copy without its record in `wire`; the list over it is
 // positional, and the key it hands back for a row is its index.
 test('a copy the wrapper keys is what a {#for} over it keys by', () => {
     const books = wire('GET', '/__abide/rpc/library/keyed', {

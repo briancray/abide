@@ -6,7 +6,7 @@ import { markupToText, RawRun } from './RawRun.ts'
  *
  * What a slot's binding writes, and where a COMPILED SLOT RUNNING is counted. The emitted watch
  * writes `setText(node, escapeless(a) + '…' + escapeless(b))` — or `setMarkup` where a part is
- * `Raw` (32.27) — the node resolved once before it, so this is the LAST call in it and the only one
+ * `Raw` (32.26) — the node resolved once before it, so this is the LAST call in it and the only one
  * that runs exactly once per slot however many dynamic parts the run has. `bindingRuns` is counted
  * here rather than in the emitted code so the count is a property of the runtime and not of what a
  * particular emitter remembered to write.

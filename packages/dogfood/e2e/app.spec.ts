@@ -48,7 +48,7 @@ test('a page the server painted carries its own prose', async ({ page }) => {
         'Show a value that changes',
     )
     await expect(page).toHaveTitle('Show a value that changes — abide')
-    // 32.25 THROUGH A PAGE. The body is markdown the build rendered, carried into the page as a
+    // 32.24 THROUGH A PAGE. The body is markdown the build rendered, carried into the page as a
     // `raw` slot — so a table in it is a table rather than the source of one, which is exactly
     // what a client binding over the same slot would have left on screen.
     await expect(page.locator('main table').first()).toBeVisible()

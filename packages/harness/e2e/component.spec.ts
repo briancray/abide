@@ -1,6 +1,6 @@
 // WHAT A COMPONENT COSTS A ROW IN A BROWSER. `bun run bench:component` prices the server half —
 // the render — and this is the other half a reader waits on: the mount, where the caller builds
-// one accessor per prop per row (33.4) and the child mounts against its own anchors (32.18).
+// one accessor per prop per row (33.4) and the child mounts against its own anchors (32.17).
 //
 // THE ARMS ARE THE SAME CARD. The component's body is byte-identical to the inline row's, so the
 // ratio is the invocation and nothing else. Both pages are built by `buildCompiledPage`, from one

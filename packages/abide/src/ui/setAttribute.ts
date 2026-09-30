@@ -13,8 +13,8 @@ import { WORK } from '#shared/WORK.ts'
  * `setAttribute` is not a parse. Escaping here would put `&amp;` in a `title` where the server put
  * `&`.
  *
- * 32.38 — PRESENT, ABSENT OR TEXT is `attributeText`'s answer, the one the server's markup took, so
- * `disabled={busy}` going false removes the attribute the server wrote, and 32.21's scheme check is
+ * 32.37 — PRESENT, ABSENT OR TEXT is `attributeText`'s answer, the one the server's markup took, so
+ * `disabled={busy}` going false removes the attribute the server wrote, and 32.20's scheme check is
  * the same call on both sides.
  *
  * THE COMPARE IS THE REST OF THE POINT. `getAttribute` reads a value the element already holds —

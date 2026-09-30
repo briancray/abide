@@ -1,4 +1,4 @@
-// 32.34 — THE CALLBACK AN `s.patch` IS HANDED WRITES THROUGH A PROXY, so what it wrote to is known
+// 32.33 — THE CALLBACK AN `s.patch` IS HANDED WRITES THROUGH A PROXY, so what it wrote to is known
 // without a copy of the value to diff against. A write marks the object written AND every object on
 // the path down to it: a row reads its item, and `row.address.city = x` changed what that row shows
 // without touching the row's own object.

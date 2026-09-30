@@ -161,11 +161,11 @@ export type ReactiveOptions<
     /**
      * Wakes a reader at once, then at most once per window.
      *
-     * RULEBOOK 5.9, 5.13: a change reaches a reader immediately and then at most once per
-     * window. Declaring this beside `debounce` is refused at construction (5.15).
+     * RULEBOOK 5.8, 5.12: a change reaches a reader immediately and then at most once per
+     * window. Declaring this beside `debounce` is refused at construction (5.14).
      */
     throttle?: number
-    /** Wakes a reader once the changes stop (RULEBOOK 5.9, 5.14). */
+    /** Wakes a reader once the changes stop (RULEBOOK 5.8, 5.13). */
     debounce?: number
     /**
      * What a `Selection` matches on; the function form is handed the entry's args.
@@ -192,7 +192,7 @@ export type ReactiveOptions<
     /**
      * What tells one array element from another.
      *
-     * RULEBOOK 5.23, 32.33: what tells one element from another. The property-name form is the one
+     * RULEBOOK 5.22, 32.32: what tells one element from another. The property-name form is the one
      * that crosses a wire (18.19) — a function has no serialisation.
      */
     by?:
@@ -300,14 +300,14 @@ type Adoption = { source: Cell; stop: () => void }
 /**
  * The window a `throttle` or a `debounce` holds open, allocated only where one is declared.
  *
- * THE WINDOW A `throttle` OR A `debounce` HOLDS OPEN (RULEBOOK 5.9). One field on the
+ * THE WINDOW A `throttle` OR A `debounce` HOLDS OPEN (RULEBOOK 5.8). One field on the
  * cell rather than five, allocated only where a value declared one — the shape `adoption`
  * already uses, and for the same reason.
  *
- * WHAT A WINDOW CAPS IS THE WAKE, NEVER THE PRODUCTION (5.10). Every write still mints:
+ * WHAT A WINDOW CAPS IS THE WAKE, NEVER THE PRODUCTION (5.9). Every write still mints:
  * the ordinal moves, the ring takes it, and a cursor walking retention is handed every one
- * of them (5.11). What waits is the value a READER sees and the cascade that tells it so,
- * which is the whole of 5.9's "how often a value changes for a reader".
+ * of them (5.10). What waits is the value a READER sees and the cascade that tells it so,
+ * which is the whole of 5.8's "how often a value changes for a reader".
  *
  * WHAT IT COSTS EVERY VALUE THAT NEVER CAPS: one field load and one branch on the write
  * path, plus `serve` as a frame rather than five stores inline. Measured at 0.99x -> 1.08x
@@ -322,7 +322,7 @@ type Cap = {
     /**
      * True for a throttle, which lets the leading change through; false for a debounce.
      *
-     * 5.13 against 5.14, and the only difference between the two mechanisms: a throttle
+     * 5.12 against 5.13, and the only difference between the two mechanisms: a throttle
      * lets the leading change through and holds what follows, a debounce holds everything
      * until the changes stop.
      */
@@ -344,22 +344,22 @@ type Cap = {
      * WHAT THE IDENTITY GATE COMPARES AGAINST. On every uncapped value that is `cell.value`
      * and the two are one thing; a window moves the last production MINTED apart from the
      * last one RELEASED, and comparing against the released one would collapse a production
-     * 5.10 forbids dropping — A, B, A inside one window is three productions, and only the
+     * 5.9 forbids dropping — A, B, A inside one window is three productions, and only the
      * third's own predecessor makes it a repeat.
      */
     minted: unknown
     /**
      * Whether the window is holding back a body run.
      *
-     * A BODY RUN THE WINDOW IS HOLDING BACK (5.12), against `holding`'s production. The two
+     * A BODY RUN THE WINDOW IS HOLDING BACK (5.11), against `holding`'s production. The two
      * are separate flags because they can stand together: a stream has a body AND tells its
-     * chunks through the window (5.18), so one close can owe a run and a telling at once.
+     * chunks through the window (5.17), so one close can owe a run and a telling at once.
      */
     owed: boolean
     /**
      * Whether the window is holding back a refresh, started when it closes.
      *
-     * 5.25 — A RELOAD THE WINDOW IS HOLDING BACK: a refresh made inside it, started when it closes.
+     * 5.24 — A RELOAD THE WINDOW IS HOLDING BACK: a refresh made inside it, started when it closes.
      * Started there rather than owed like a run, because 7.11 reloads whether or not anything reads
      * and an owed run waits for a read to pull it.
      */
@@ -441,7 +441,7 @@ type Stream = {
      * How many chunks a reader has been told of.
      *
      * HOW MANY CHUNKS A READER HAS BEEN TOLD OF. Every chunk as it lands, without a cap; with one,
-     * only what the window has released (5.19) — the rest are in `chunks` for a cursor (5.11) and
+     * only what the window has released (5.18) — the rest are in `chunks` for a cursor (5.10) and
      * out of what a read materialises until the release.
      */
     visible: number
@@ -786,7 +786,7 @@ class Cell {
     /**
      * The declared `by`.
      *
-     * 5.23 — held as declared rather than as a function, so the property name is still there to send.
+     * 5.22 — held as declared rather than as a function, so the property name is still there to send.
      */
     declare by: string | ((element: unknown) => unknown) | null
     /** The probe pass this cell was last visited in. See `walkBusy` and `walkReady`. */
@@ -968,11 +968,11 @@ type Callable = { [CELL]: Cell }
 /**
  * Throws where a value declares both `throttle` and `debounce`.
  *
- * 5.15 is a BUILD error and there is no build yet, so it lands at construction — the
+ * 5.14 is a BUILD error and there is no build yet, so it lands at construction — the
  * earliest moment that exists, and the one the app still has a stack for. Naming the value
  * is the clause's own requirement; without it a page declaring both on one of forty values
  * says only that something did. One statement for both producers of a window: a value's
- * (5.9) and a keyed value's, which caps starts rather than wakes (5.20).
+ * (5.8) and a keyed value's, which caps starts rather than wakes (5.19).
  */
 export function refuseBothCaps(
     label: string,
@@ -1225,12 +1225,12 @@ function markReaders(cell: Cell, wanted: number): void {
             PENDING[pendingCount] = reader
             pendingCount += 1
         }
-        // 5.12: A CAPPED BODY IS A BARRIER IN THE CASCADE. The mark arrives here and
-        // stops — nothing downstream is woken (5.9) and the body does not run, so the
+        // 5.11: A CAPPED BODY IS A BARRIER IN THE CASCADE. The mark arrives here and
+        // stops — nothing downstream is woken (5.8) and the body does not run, so the
         // load it would have issued is never issued rather than issued and discarded.
         // That is the whole difference between capping a value and capping a body: a
-        // value's production has already been handed in and must be retained (5.10),
-        // where a body's work has not started yet and 5.12 says not to start it.
+        // value's production has already been handed in and must be retained (5.9),
+        // where a body's work has not started yet and 5.11 says not to start it.
         //
         // THE WINDOW IS ARMED HERE BECAUSE THIS IS WHERE A SOURCE PRODUCING IS VISIBLE.
         // A read cannot tell one change from ten, so a debounce armed at the read fires
@@ -1511,11 +1511,11 @@ function produce(cell: Cell, produced: unknown, gated: boolean): number {
     // and would otherwise load it and pick an arm on every message for a compare it never
     // makes.
     //
-    // 5.10: the gate compares against the last production MINTED. That is the held value
+    // 5.9: the gate compares against the last production MINTED. That is the held value
     // on everything that never caps, and `cap.minted` is where a window has moved the two
     // apart.
     //
-    // A CAP OVER A BODY MOVES NEITHER. 5.12 caps the RUN there, so the production goes
+    // A CAP OVER A BODY MOVES NEITHER. 5.11 caps the RUN there, so the production goes
     // straight out and `capped` — which writes `cap.minted` for a production — is never
     // reached. Read unconditionally, `previous` was `undefined` on every recompute of a
     // capped derived value, so 5.2 collapsed nothing and every reader woke on a value that
@@ -1598,7 +1598,7 @@ function produce(cell: Cell, produced: unknown, gated: boolean): number {
         // the value is not servable yet and the deadline it holds cannot be read.
         expiry.dropped = false
     }
-    // A BODY'S CAP GATED THE RUN, NOT WHAT IT PRODUCED (5.12): the window has already
+    // A BODY'S CAP GATED THE RUN, NOT WHAT IT PRODUCED (5.11): the window has already
     // decided this run should happen, and holding its production too would delay it a
     // second window.
     if (cap !== null && cell.body === null)
@@ -1652,10 +1652,10 @@ function serve(cell: Cell, value: unknown): void {
 /**
  * Whether a window holds this arrival, opening or pushing back the window either way.
  *
- * HOLD OR GO, for everything a window caps — a body's run (5.12), a refresh (5.25), a production
- * and a stream's chunks (5.18) — and the window is opened or pushed back either way. 5.13: a
+ * HOLD OR GO, for everything a window caps — a body's run (5.11), a refresh (5.24), a production
+ * and a stream's chunks (5.17) — and the window is opened or pushed back either way. 5.12: a
  * throttle with no window open lets this one through and opens one, and re-arming inside an open
- * one would make it a debounce. 5.14: a debounce holds everything and every arrival pushes its
+ * one would make it a debounce. 5.13: a debounce holds everything and every arrival pushes its
  * window back, so the release is what happens when they stop.
  */
 function windowHolds(cell: Cell, cap: Cap): boolean {
@@ -1667,7 +1667,7 @@ function windowHolds(cell: Cell, cap: Cap): boolean {
 /**
  * Whether an arrival passes the window; the first landing always does.
  *
- * 5.16: the first landing goes through, having nothing to collapse against — and a debounce's
+ * 5.15: the first landing goes through, having nothing to collapse against — and a debounce's
  * window is not opened by it, where a throttle's is.
  */
 function passes(cell: Cell, cap: Cap): boolean {
@@ -1680,7 +1680,7 @@ function passes(cell: Cell, cap: Cap): boolean {
  * Whether a production wakes readers now; holds it for the window's close if not.
  *
  * A production's wake goes now or is held for the window's close — the pass-or-hold tail that a
- * write (`capped`) and a patch (5.24) share. The window moves `minted` apart from `value` either way.
+ * write (`capped`) and a patch (5.23) share. The window moves `minted` apart from `value` either way.
  */
 function wakes(cell: Cell, cap: Cap, produced: unknown): boolean {
     cap.minted = produced
@@ -1692,7 +1692,7 @@ function wakes(cell: Cell, cap: Cap, produced: unknown): boolean {
 /**
  * Whether a stream's readers are told of its chunks now, or at the window's close.
  *
- * A stream's chunks: the buffer already has them, so what the window holds is the telling (5.18).
+ * A stream's chunks: the buffer already has them, so what the window holds is the telling (5.17).
  */
 function tellsChunks(cell: Cell, cap: Cap | null): boolean {
     if (cap === null || passes(cell, cap)) return true
@@ -1712,7 +1712,7 @@ function capped(
     produced: unknown,
     moved: boolean,
 ): number {
-    // 5.16 CANNOT BE SATISFIED BY HOLDING THE FIRST LANDING: there is no held value to go
+    // 5.15 CANNOT BE SATISFIED BY HOLDING THE FIRST LANDING: there is no held value to go
     // on serving, so a reader would get neither the value it had nor the one that arrived
     // — a `debounce` of 300 left a value not ready for 300 ms after construction. A window
     // collapses a RUN of changes and the first landing has nothing to collapse with.
@@ -1727,7 +1727,7 @@ function capped(
 /**
  * Holds a production for the window's close and marks the value busy.
  *
- * HELD FOR THE WINDOW'S CLOSE, which `release` serves. 5.16: `loading` IS "work in flight", and a
+ * HELD FOR THE WINDOW'S CLOSE, which `release` serves. 5.15: `loading` IS "work in flight", and a
  * window with something held is exactly that — so the probe answers from the field it already
  * reads rather than from a second one. `isBusy` is the leaf a spinner reads every frame and a load
  * it did not need was refused there once already.
@@ -1743,7 +1743,7 @@ function hold(cell: Cell, cap: Cap, value: unknown): void {
 /**
  * Serves the held production as the window closes.
  *
- * The window closing, and the one wake per window that 5.13 and 5.14 each allow.
+ * The window closing, and the one wake per window that 5.12 and 5.13 each allow.
  */
 function release(cell: Cell, cap: Cap): void {
     cap.holding = false
@@ -1752,7 +1752,7 @@ function release(cell: Cell, cap: Cap): void {
     cell.loading = false
     serve(cell, value)
     cascade(cell)
-    // The close is a `busy` edge (5.16) even though the value's readiness never moved.
+    // The close is a `busy` edge (5.15) even though the value's readiness never moved.
     probesMoved(cell)
 }
 
@@ -1765,7 +1765,7 @@ function releaseHeld(cell: Cell, cap: Cap): void {
 }
 
 function openWindow(cell: Cell, cap: Cap): void {
-    // 5.14 NEEDS THIS: a debounce calls in here on every production inside its window, and
+    // 5.13 NEEDS THIS: a debounce calls in here on every production inside its window, and
     // the reset is what "until the changes stop" means. Without it each write arms its own
     // timer and the first to fire releases — a fixed delay from the FIRST change, which
     // reads identically to a debounce under any run of writes made in one turn.
@@ -1774,7 +1774,7 @@ function openWindow(cell: Cell, cap: Cap): void {
     // process open. The keyed window already armed through it, so the two agree.
     armTimer(cap, cap.ms, () => {
         cap.timer = null
-        // 5.25: the reload the window held back, which is the run as well. A production held beside
+        // 5.24: the reload the window held back, which is the run as well. A production held beside
         // it is served first — the reload re-reads a store that production has not been written to
         // yet, and skipping it dropped the write and left `holding` standing.
         if (cap.reloading) {
@@ -1785,7 +1785,7 @@ function openWindow(cell: Cell, cap: Cap): void {
             if (cap.leading) openWindow(cell, cap)
             return
         }
-        // 5.12: the run the window held back. Marking and cascading is all it does — the
+        // 5.11: the run the window held back. Marking and cascading is all it does — the
         // body is pulled forward by the read that wants it, which is the same laziness
         // every other recompute gets.
         if (cap.owed) {
@@ -2547,7 +2547,7 @@ function acceptChunk(cell: Cell, stream: Stream, chunk: unknown): void {
     cell.ordinal += 1
     // 3.8: `ready` from the first chunk, and `error` cleared by an accepted production (4.11).
     if (!cell.servable || cell.failure !== undefined) stream.probesOwed = true
-    // 5.18: THE WINDOW CAPS THE WAKE, and the chunk is already in the buffer for a cursor.
+    // 5.17: THE WINDOW CAPS THE WAKE, and the chunk is already in the buffer for a cursor.
     if (tellsChunks(cell, cell.cap)) releaseChunks(cell, stream)
 }
 
@@ -3176,12 +3176,12 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
         // turn read one past the end of the ring and handed over `undefined`. The wake was never
         // the ordinal's doing — it is the cascade's.
         //
-        // 5.24 — AND THE CASCADE IS WHAT A WINDOW CAPS. The object has already changed, so what is
+        // 5.23 — AND THE CASCADE IS WHAT A WINDOW CAPS. The object has already changed, so what is
         // held is the wake alone: readers are told once per window, and `busy` stands meanwhile
-        // (5.16). A body's cap caps its runs instead (5.12), so a patch there wakes as before.
+        // (5.15). A body's cap caps its runs instead (5.11), so a patch there wakes as before.
         //
         // 8.8 AS `serve` READS IT: a patch the window held is written by the release that serves
-        // it, so a run of patches in one window is one write rather than one per patch (5.12).
+        // it, so a run of patches in one window is one write rather than one per patch (5.11).
         wakePatched(cell, head)
         return
     }
@@ -3201,7 +3201,7 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
         )
     }
     stream.version += 1
-    // 5.24, as for a chunk (5.18): the window's close is what tells the readers.
+    // 5.23, as for a chunk (5.17): the window's close is what tells the readers.
     if (tellsChunks(cell, cell.cap)) cascade(cell)
 }
 
@@ -3253,7 +3253,7 @@ function refreshOne(cell: Cell): void {
     // 7.6: inert on a value with no producer. 8.2 makes a store one, so a refresh re-reads it —
     // another tab may have written.
     if (!reloads(cell)) return
-    // 5.25 — A WINDOW HOLDS A REFRESH AS IT HOLDS A PRODUCTION: a throttle lets the first through
+    // 5.24 — A WINDOW HOLDS A REFRESH AS IT HOLDS A PRODUCTION: a throttle lets the first through
     // and opens, a debounce holds every one and is pushed back by each, and what a window held is
     // one reload when it closes. Three refreshes in a row were three loads, two of them superseded.
     const cap = cell.cap
@@ -3392,7 +3392,7 @@ function setThroughGates(cell: Cell, value: unknown): unknown {
 /**
  * Starts the producer of a keyed entry a window was holding back.
  *
- * 5.20 AND 5.22: AN ENTRY A WINDOW IS HOLDING BACK is busy with nothing to serve, and starting it is
+ * 5.19 AND 5.21: AN ENTRY A WINDOW IS HOLDING BACK is busy with nothing to serve, and starting it is
  * the window's call. Starting runs the producer the reach would have run.
  */
 export function startDeferred(value: unknown): void {
@@ -3402,7 +3402,7 @@ export function startDeferred(value: unknown): void {
 /**
  * Ends the load of a keyed entry a window superseded before it started.
  *
- * 5.21: an entry the window superseded before it started. Nothing is in flight for it any more,
+ * 5.20: an entry the window superseded before it started. Nothing is in flight for it any more,
  * and a reader still holding it hears that.
  */
 export function abandonDeferred(value: unknown): void {
@@ -4088,7 +4088,7 @@ export function deadlineOf(value: unknown): number {
 /**
  * The generation of the load `value` has in flight, or `undefined`.
  *
- * 16.53 — WHICH LOAD A VALUE HAS IN FLIGHT, as the generation that started it, or `undefined` where
+ * 16.52 — WHICH LOAD A VALUE HAS IN FLIGHT, as the generation that started it, or `undefined` where
  * none is. Read off the cell rather than through `busy`, which is a probe and would subscribe the
  * caller that asked (3.3).
  */
@@ -4100,7 +4100,7 @@ export function loadOf(value: unknown): number | undefined {
 /**
  * Ends `value`'s load in flight, refusing it with `failure`.
  *
- * 16.54 — THE LOAD IN FLIGHT, ENDED WHERE IT STANDS. The generation moves so a settle arriving after
+ * 16.53 — THE LOAD IN FLIGHT, ENDED WHERE IT STANDS. The generation moves so a settle arriving after
  * is the stale one `absorb` already drops, a stream stops reaching the value, and the value refuses
  * with `failure` — which leaves what it held being served (2.4), a stream's chunks so far included.
  */
@@ -4128,7 +4128,7 @@ export function isStreaming(value: unknown): boolean {
  *
  * 16.33 — THE CHUNKS A STREAMING VALUE HAS TOLD ITS READERS OF PAST `from`, for a writer sending each
  * once. Ungated they are read out of the accumulation in place, to `visible` rather than its length
- * (5.19): a read materialises a copy of the whole of it (9.2), which for a writer woken per chunk is
+ * (5.18): a read materialises a copy of the whole of it (9.2), which for a writer woken per chunk is
  * n²/2 elements copied to send n. A schema or a transform has to see the whole accumulation (9.22),
  * so a gated value answers from what a read would.
  */
@@ -4341,12 +4341,12 @@ export function createReactive<
     args: unknown,
     initial: unknown,
     options: ReactiveOptions<Accepted, Stored, Failures> | undefined,
-    // 5.20: a keyed value's window decides when this entry's producer starts, not the reach.
+    // 5.19: a keyed value's window decides when this entry's producer starts, not the reach.
     deferred = false,
 ): Reactive<Stored, Accepted, Failures, Produced> {
     // 11.42 IS A COMPILE ERROR THE TYPES CANNOT RAISE: a body declaring no parameter is still
     // assignable to the keyed overload's `(args: Args) => Computed`, so the checker falls through
-    // to it and accepts the call. Like 5.15 it lands at construction instead, the earliest moment
+    // to it and accepts the call. Like 5.14 it lands at construction instead, the earliest moment
     // there is — and a keyed value strips `args` before building an entry, so any that arrives
     // here was spelled on a form that has no args to gate.
     if ((options as { args?: unknown } | undefined)?.args !== undefined)

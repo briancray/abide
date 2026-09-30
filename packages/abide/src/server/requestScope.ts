@@ -30,7 +30,7 @@ export type RequestScope = Scope & {
     /**
      * The longest `timeout` any handler that ran in this request asked for, in seconds.
      *
-     * 16.24 — and `Infinity` for one that is never reaped (16.62).
+     * 16.24 — and `Infinity` for one that is never reaped (16.61).
      */
     timeout: number
     /** This response's nonce, minted by the `csp` rung or on the first ask. 29.3. */

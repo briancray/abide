@@ -427,7 +427,7 @@ export class Router {
     /**
      * Mounts the chain from level `at` into `region`, each level handed the next as `children`.
      *
-     * 35.1 — each level is handed the one below it as `children` (32.19), so a layout puts the page
+     * 35.1 — each level is handed the one below it as `children` (32.18), so a layout puts the page
      * in its `<slot/>` with the same mechanism a caller writing markup between two tags uses — and
      * the router learns where that slot is on the way past, which is what lets it swap the page
      * there later without the layout knowing.
@@ -449,7 +449,7 @@ export class Router {
         const props = routeProps()
         if (at < this.chain.length - 1)
             props.children = () => ({
-                // NO BUILD, because the level below carries its own (32.18): a module a route
+                // NO BUILD, because the level below carries its own (32.17): a module a route
                 // reaches fills the region it is mounted against when that region is empty, so
                 // the build and the mount are one call rather than two.
                 build: undefined,

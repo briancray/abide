@@ -81,9 +81,9 @@ latest value, which is why the same rule looks like two behaviours.
 cap, so a capped channel with no `history` serves the latest production and loses the ones between it.
 Raise `history` where the ones between are the point.
 
-A stream takes either cap too, and the window is over how often its **readers** wake (5.18). A read
+A stream takes either cap too, and the window is over how often its **readers** wake (5.17). A read
 serves the accumulation as the last release left it, not the chunks the window is still holding
-(5.19), while a cursor still gets every chunk (5.11). The close releases what the window holds, so
+(5.18), while a cursor still gets every chunk (5.10). The close releases what the window holds, so
 `await` resolves with the whole accumulation (2.8).
 
 Read on: [History](keep-the-last-few-values.md) ·
@@ -94,13 +94,13 @@ Read on: [History](keep-the-last-few-values.md) ·
 
 A body with a parameter is a space of values, and what a filter box drives through it is a new
 **key** per keystroke, not a new value under one key. So the window on a keyed value holds back
-**starting** a key it has not reached before (5.20). `search({ q })` reached for `n`, `no`, `nor`
+**starting** a key it has not reached before (5.19). `search({ q })` reached for `n`, `no`, `nor`
 and `north` inside one debounce starts `north` alone. A throttle starts `n` at once and, at the end
 of the window, the latest key reached since.
 
-A key the window passed over for a later one is never started and never kept (5.21). No request
+A key the window passed over for a later one is never started and never kept (5.20). No request
 goes out for `no`, and there is no entry for it left to hold. The key being held back reports
-`busy()` (5.22), so the page reads a load in flight, which is what it is about to be.
+`busy()` (5.21), so the page reads a load in flight, which is what it is about to be.
 
 A key already started is an ordinary entry. Reaching it again is a cache hit and does not wait.
 What moves it after that — a dependency, an `invalidate`, a `ttl` — is capped as any value is. A keyed

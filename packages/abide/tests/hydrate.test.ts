@@ -153,7 +153,7 @@ test('a static page emits no client module', async () => {
     expect(await clientOf('<h1>static</h1>', [])).toBe('')
 })
 
-// 41.4 — A RENDER MUST CONTINUE PAST A VALUE STILL IN FLIGHT, and 32.24 is what the slot itself
+// 41.4 — A RENDER MUST CONTINUE PAST A VALUE STILL IN FLIGHT, and 32.23 is what the slot itself
 // does: a template expression a `NotLanded` aborted leaves what it last rendered, which on a first
 // server render is nothing. Together they are one page with a hole in it, not no page at all.
 //
@@ -172,7 +172,7 @@ test('a static page emits no client module', async () => {
 // THE REVERT: make `unlandable` answer `lowered` unconditionally, so `emitNode`'s expression arm
 // emits `escapeText(...)` directly — `render` throws `NotLanded: reactive has not landed` and this
 // test reports no document at all rather than a document with one empty slot.
-test('a render continues past a value still in flight — 41.4, 32.24', async () => {
+test('a render continues past a value still in flight — 41.4, 32.23', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -186,7 +186,7 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
     expect(html).toContain('<h1 id="static">Invoice</h1>')
     expect(html).toContain('<strong id="slot">')
     expect(document.querySelector('#static')?.textContent).toBe('Invoice')
-    // The hole: 32.24 leaves what it last rendered, and nothing has been rendered yet.
+    // The hole: 32.23 leaves what it last rendered, and nothing has been rendered yet.
     expect(document.querySelector('#slot')?.textContent).toBe('')
 
     // AND IT FILLS. The client re-runs the body (41.6), the value lands, and the binding writes
@@ -199,8 +199,8 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 })
 
 // 41.4 THROUGH A BLOCK'S ONE EXPRESSION. A `{#for}` reads its subject once for the whole block
-// (32.22), so an unlanded subject took the page down the same way a slot did — and the fallback
-// needs no deciding, because 32.23 already says an absent subject iterates zero times and
+// (32.21), so an unlanded subject took the page down the same way a slot did — and the fallback
+// needs no deciding, because 32.22 already says an absent subject iterates zero times and
 // `listOf` already answers `[]` for absent. The abort just makes "in flight" reach it.
 //
 // TWO REVERTS, BECAUSE THE SERVER HALF ALONE IS THE WORSE BUG. Drop the `slotValue` wrapper from
@@ -209,7 +209,7 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 // empty for ever — the watch that would have hydrated the rows threw on the same subject, so
 // `hydrating` was still set when the value landed and the rows were walked against nothing. This
 // test reports [] against [north, south] either way, and only the second one looks fine on screen.
-test('a render continues past a {#for} subject still in flight — 41.4, 32.23', async () => {
+test('a render continues past a {#for} subject still in flight — 41.4, 32.22', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -219,7 +219,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
 <main><h1 id="static">Regions</h1><ul id="list">{#for row of rows by row}<li>{row}</li>{/for}</ul></main>`)
 
     expect(html).toContain('<h1 id="static">Regions</h1>')
-    // The block rendered its anchors and no rows, which is 32.23's zero times.
+    // The block rendered its anchors and no rows, which is 32.22's zero times.
     expect(document.querySelectorAll('#list li')).toHaveLength(0)
 
     mount(pageRegion(document.body))
@@ -244,7 +244,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
 // empty attribute was permanent, and the test below asserted it and called that the answer.
 //
 // EACH ABSENCE IS THE ONE ALREADY DECIDED WHERE IT LANDS — an attribute holding `undefined` is
-// absent (32.38), and `escapeStyleValue` reads it as '' through `textOf`, so nothing new was decided
+// absent (32.37), and `escapeStyleValue` reads it as '' through `textOf`, so nothing new was decided
 // to make this work.
 //
 // THE REVERT: make `unlandable` answer `lowered` unconditionally and `render` throws
@@ -282,7 +282,7 @@ const width = reactive(() => Promise.resolve('40px'))
     )
 })
 
-// 32.38 — `disabled="false"` IS A DISABLED BUTTON. A whole-value attribute was written as its text,
+// 32.37 — `disabled="false"` IS A DISABLED BUTTON. A whole-value attribute was written as its text,
 // so `disabled={busy}` shipped every button disabled whatever `busy` held, and the docs' own cards
 // were written around it. Presence is the answer for an attribute HTML reads by presence; text for
 // every other, where `aria-busy="false"` means something its absence does not; and `undefined`
@@ -291,7 +291,7 @@ const width = reactive(() => Promise.resolve('40px'))
 //
 // THE REVERT: skip the `BOOLEAN_ATTRIBUTES` arm of `attributeText`; the server then writes
 // `disabled="false"` and `hidden="false"`, and the first assertion reports it.
-test('a boolean attribute is present or absent, and any other is its text — 32.38', async () => {
+test('a boolean attribute is present or absent, and any other is its text — 32.37', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -335,11 +335,11 @@ function flip() {
     expect(document.querySelector('#s')?.hasAttribute('hidden')).toBe(false)
 })
 
-// 32.38 — A STRING THAT MAKES A PRESENCE ATTRIBUTE PRESENT IS ITS TEXT. `hidden` is one, and
+// 32.37 — A STRING THAT MAKES A PRESENCE ATTRIBUTE PRESENT IS ITS TEXT. `hidden` is one, and
 // `hidden="until-found"` is a real value: written bare, the content is hidden for good and a reader's
 // find-in-page can no longer reveal it. THE REVERT: answer `''` for every truthy value in
 // `attributeText`'s presence arm; the server writes a bare `hidden` and the binding does too.
-test('a presence attribute given a string carries it — 32.38', async () => {
+test('a presence attribute given a string carries it — 32.37', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -369,7 +369,7 @@ let found = reactive<string | boolean>('until-found')
 // wrote; where that arm holds no binding there is nothing to walk and 41.10 never fires, so the
 // region is wrong until the condition CHANGES.
 //
-// SO THE ABORT EMPTIES THE REGION, and `isEmptyRegion` — 32.18's signal for a component whose row
+// SO THE ABORT EMPTIES THE REGION, and `isEmptyRegion` — 32.17's signal for a component whose row
 // the browser grew — is what the block's first run reads to fill instead of hydrate. Nothing was
 // added to the document to carry it.
 //
@@ -538,7 +538,7 @@ let shown = reactive('waiting')
 
 // 34.3 — A SCRIPT BLOCK MAY NOT AWAIT AT ITS TOP LEVEL, and the compiler says so. Setup is a
 // function body on both sides, so nothing holds the render: every value a page reads is a hole the
-// document is written around (41.4, 32.24).
+// document is written around (41.4, 32.23).
 //
 // BOTH BLOCKS, AND THE SERVER IS WHY. `<script module>` is request-local there (34.2), so the
 // emitted component carries its body too — in a browser that same block IS module scope, where the
@@ -656,7 +656,7 @@ let b = reactive('B')
     expect(document.querySelector('#one')?.textContent).toBe('aA')
 })
 
-// 32.28 IN A RUN THAT MOVES. Static text is markup, so `AT&amp;T` is the four characters `AT&T`
+// 32.27 IN A RUN THAT MOVES. Static text is markup, so `AT&amp;T` is the four characters `AT&T`
 // wherever it is written — and a LIVE run's binding writes the whole run through `data`, which is
 // not a parse, so the static piece has to go in decoded or the entity lands on the screen as its
 // own bytes the first time the binding runs. The compiler decodes the piece by the text rule
@@ -666,7 +666,7 @@ let b = reactive('B')
 // THE REVERT: push the static piece's bytes as they stand (`JSON.stringify(node.text)`) into the
 // live run's text branch in `emitClient`, rather than decoded. This reports `AT&amp;T 0` at mount and `AT&amp;T 1` after
 // the click, where `AT&T 0` and `AT&T 1` are due.
-test('a live run writes its static entities as the characters they stand for — 32.28', async () => {
+test('a live run writes its static entities as the characters they stand for — 32.27', async () => {
     const { mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -684,11 +684,11 @@ let count = reactive(0)
     expect(out.textContent).toBe('AT&T 1')
 })
 
-// 32.28 IN AN ATTRIBUTE THAT ALSO HOLDS A SLOT. The static text around a slot is the author's markup
+// 32.27 IN AN ATTRIBUTE THAT ALSO HOLDS A SLOT. The static text around a slot is the author's markup
 // exactly as it is in an attribute with none — `AT&amp;T` is `AT&T` — and only the slot is data.
 // Taken as one string, the whole value was escaped on the server (`AT&amp;amp;T`) and set as its
 // own bytes by the client, so `title="AT&amp;T {n}"` showed `AT&amp;T 0` on both, while a bare `&`
-// happened to come out right on both and hid it. A URL attribute is the exception 32.29 already
+// happened to come out right on both and hid it. A URL attribute is the exception 32.28 already
 // makes: its static text is escaped the way a slot is, so `&amp;` stays those five characters.
 //
 // DECODED BY THE BUILD, and the value is data whole after that: the parser turns each static piece
@@ -706,7 +706,7 @@ let count = reactive(0)
 // THE REVERT: decode only a component's prop in `pushQuoted` (`interpolated(raw, prop)`), so an
 // element's static pieces reach the escape as the author's bytes: the server writes
 // `title="AT&amp;amp;T 0"` and the first assertion reports it.
-test('the static text of an interpolated attribute is markup, and its slots are data — 32.28, 32.29', async () => {
+test('the static text of an interpolated attribute is markup, and its slots are data — 32.27, 32.28', async () => {
     const { html, mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 
@@ -762,7 +762,7 @@ const slotted = '#38;'
 // reads `&notin & 2|` where `¬in & 2|` is due. Hand a static attribute over as its bytes
 // (`buildRender`'s `bytes` as `JSON.stringify(bytes)`) — the grown row's `data-s` reads
 // `&notin;x &amp;notin` where `∉x &notin` is due.
-test('a built row decodes static text by the text rule and an attribute by the attribute rule — 32.28', async () => {
+test('a built row decodes static text by the text rule and an attribute by the attribute rule — 32.27', async () => {
     const { mount } = await mountPage(`<script>
 import { reactive } from 'abide'
 

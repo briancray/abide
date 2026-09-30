@@ -1,6 +1,6 @@
 // 18.10, 18.11, 18.13, 18.14 — WHERE A READER OF A VALUE'S PRODUCTIONS STARTS, for every lane that
 // carries them: a socket's subscription over the mux, and a `GET` answered one production per frame
-// (16.50). ONE MINTING FOR BOTH: the sequence number is the ordinal the value's owner minted (9.14),
+// (16.49). ONE MINTING FOR BOTH: the sequence number is the ordinal the value's owner minted (9.14),
 // and the epoch is minted here the first time the value is carried — so a reader that moves from one
 // lane to the other resumes rather than starting over.
 
@@ -29,7 +29,7 @@ function epochOf(cell: object): string {
  * is read and the cursor opened in one turn, so no production lands between the two.
  *
  * The cursor is NUMBERED BY WHERE IT STANDS (`at`) rather than by counting its turns: a cursor with
- * no ring collapses a burst onto the standing production (5.11), and that production's number is
+ * no ring collapses a burst onto the standing production (5.10), and that production's number is
  * the one a reconnect resumes from.
  */
 export function resumeProductions(

@@ -148,7 +148,7 @@ no `store` is written, and no reader is served. You write no `?.`, because nothi
 runs.
 
 The hole is where the wait shows. `mode === 'locked'` throws the same way, and an abandoned
-expression leaves what it last rendered in place (32.24). On the first frame that is no `disabled`
+expression leaves what it last rendered in place (32.23). On the first frame that is no `disabled`
 at all, so the top `Save` is live until the answer arrives.
 
 Only you know which answer is safe before there is one, so say it with the probe:

@@ -14,7 +14,6 @@
 //   {#if c}…{:else if c}…{:else}…{/if}
 //   {#for item, index of list by key}…{/for}
 //   {#try}…{:catch error}…{:finally}…{/try}
-//   {#component Name(pattern)}…{/component}
 //
 // What stands between the braces is `code`, which the external scanner reads by balancing braces
 // around strings, template literals and comments — the one thing a regular expression cannot do.
@@ -34,7 +33,6 @@ module.exports = grammar(HTML, {
       $.if_block,
       $.for_block,
       $.try_block,
-      $.component_block,
     ),
 
     expression: $ => seq('{', optional($.code), '}'),
@@ -77,17 +75,6 @@ module.exports = grammar(HTML, {
     finally_clause: $ => seq($.finally_start, repeat($._node)),
     finally_start: $ => seq(keyword($, '{:finally'), '}'),
     try_end: $ => seq(keyword($, '{/try'), '}'),
-
-    component_block: $ => seq(
-      $.component_start,
-      repeat($._node),
-      $.component_end,
-    ),
-    component_start: $ => seq(keyword($, '{#component'),
-      field('signature', $.code),
-      '}',
-    ),
-    component_end: $ => seq(keyword($, '{/component'), '}'),
 
     attribute: $ => choice(
       seq(

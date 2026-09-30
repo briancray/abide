@@ -48,7 +48,7 @@ export function wire(
     // ONE PARAMETER, so the value is keyed by args whatever the handler declared (16.6's arity rule):
     // an unkeyed handler is reached with no args, which is one key.
     const body = (args: Record<string, unknown> | undefined) => {
-        // 16.54 — the load's own signal, set by the call starting it and read before anything awaits.
+        // 16.53 — the load's own signal, set by the call starting it and read before anything awaits.
         const signal = LOAD_SIGNAL.current
         const request = rpcRequest(method, address, args)
         const settle = (answer: Answer): unknown => {
@@ -73,7 +73,7 @@ export function wire(
     const streamed = async function* (
         args: Record<string, unknown> | undefined,
     ): AsyncGenerator<unknown> {
-        // 16.54 — read on the first line: the core's pump takes the first step inside the reach, so
+        // 16.53 — read on the first line: the core's pump takes the first step inside the reach, so
         // this runs while the call that started the load still has its signal set.
         const signal = LOAD_SIGNAL.current
         const request = rpcRequest(method, address, args)
@@ -100,12 +100,12 @@ export function wire(
         if (Array.isArray(value)) yield* value
     }
     // A KEYED VALUE OF ITS OWN where the handler's declares what its copy behaves by, so every entry —
-    // the copy a page walks — carries it: its key (32.33), its tags (11.44), its retention (6.1) and
+    // the copy a page walks — carries it: its key (32.32), its tags (11.44), its retention (6.1) and
     // its comparator (5.3). A `GET` alone: a mutation's value is written and read once.
     const produce = options?.stream === true ? streamed : body
     if (defaults !== undefined) declareDefaults(produce, defaults)
     // A `GET`'S ENTRY IS LOOKED UP BY ITS FOLLOW through the value, not the `Rpc`: a call made with no
-    // signal pins the load it reaches (16.53), and a frame from the server would pin one a page was
+    // signal pins the load it reaches (16.52), and a frame from the server would pin one a page was
     // still free to abort.
     const value =
         method === 'GET' || options !== undefined

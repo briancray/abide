@@ -165,7 +165,7 @@ test('refuse with no message takes the reason phrase for its status — 17.8', (
     ).toBe('Not Found | Service Unavailable | HttpError')
 })
 
-// 15.7, 15.8 and 16.54 — the only three refusals the framework declares beyond the one 17.4
+// 15.7, 15.8 and 16.53 — the only three refusals the framework declares beyond the one 17.4
 // names, and 15.9 caps it there. The statuses are not interchangeable: a 422 says the request
 // parsed and its contents are wrong, which is what a schema that ran and refused found out.
 test('abide declares four refusal names and no more', () => {

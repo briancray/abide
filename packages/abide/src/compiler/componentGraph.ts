@@ -6,7 +6,7 @@ import { abideSpecifiers } from './splitImports.ts'
  * The build's component graph: which files are invoked as components, and where each file's
  * `.abide` imports land in the output tree.
  *
- * 32.18 — off ONE reading of every file's imports: each `.abide` specifier is resolved once,
+ * 32.17 — off ONE reading of every file's imports: each `.abide` specifier is resolved once,
  * against the file that wrote it, and both answers the build needs are read off that resolution.
  *
  * `invoked` is every source path another file imports as a component (`emitClient`'s `selfFill`).

@@ -1,4 +1,4 @@
-// 32.27 IN A SLOT THAT MOVES. A slot renders a value `raw` branded as markup, and the server has
+// 32.26 IN A SLOT THAT MOVES. A slot renders a value `raw` branded as markup, and the server has
 // always done so — but a LIVE run on the client was a text node written through `data`, so the
 // first time the value changed its markup went on the screen as text, and a server-painted raw
 // value was not a text node at all where the walk expected one.
@@ -147,7 +147,7 @@ let html = reactive('<b>one</b>')
     expect(shapeOf(out())).toBe('<!--{-->,"before ",i(two)," after",<!--}-->')
 })
 
-// `{x}` WHERE `x` HOLDS A STRING ONE MOMENT AND A `Raw` THE NEXT — 32.27 is a slot's clause, not
+// `{x}` WHERE `x` HOLDS A STRING ONE MOMENT AND A `Raw` THE NEXT — 32.26 is a slot's clause, not
 // the `raw(` spelling's. Both ways round, from a first value of either kind, and a string after a
 // raw value is TEXT again: its `<` escaped, no element made of it.
 //

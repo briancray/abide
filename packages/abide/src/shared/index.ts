@@ -40,7 +40,7 @@ export { type Principal, principal } from './principal.ts'
 export { props } from './props.ts'
 // EMITTED CODE'S: a prop the child writes (33.6, 33.7).
 export { propCell, propCells, propOr, withoutKeys } from './propCell.ts'
-// `markupRun` and `RAW_WRITES` are EMITTED CODE'S: a text run anchored while it holds markup (32.31).
+// `markupRun` and `RAW_WRITES` are EMITTED CODE'S: a text run anchored while it holds markup (32.30).
 export { markupRun, RAW_WRITES, Raw, raw } from './Raw.ts'
 export {
     busy,
@@ -76,12 +76,12 @@ export { aborted, notFound, refuse, validationError } from './refuse.ts'
 export type { Schema, StandardSchemaV1 } from './Schema.ts'
 export { route } from './route.ts'
 export { safeUrl } from './safeUrl.ts'
-// 32.38 — what a value writes into an attribute, on both sides.
+// 32.37 — what a value writes into an attribute, on both sides.
 export { attributeMarkup, attributeText } from './attributeText.ts'
 // EMITTED CODE'S — 32.11's spread, as props and as markup.
 export { spreadAttributes, spreadProps } from './spread.ts'
 // EMITTED CODE'S, not an author's — no REGISTRY row, the way `escapeText` and `listOf` have
-// none. A markup position that aborts on an unlanded read (32.24) is the compiler's business.
+// none. A markup position that aborts on an unlanded read (32.23) is the compiler's business.
 export { slotValue } from './slotValue.ts'
 // 30.1 — the address builder, and the types that read a route literal for it.
 export {

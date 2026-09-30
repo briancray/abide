@@ -31,7 +31,7 @@ import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
  * channel rather than a second one because it is the same kind of answer — the checker's, about
  * this projection, at an offset — and every emitter already takes exactly this list.
  *
- * AND `raw` IS NOT ONE EITHER: the callee of a slot's bare `raw(…)` (32.26), which a markup-writing
+ * AND `raw` IS NOT ONE EITHER: the callee of a slot's bare `raw(…)` (32.25), which a markup-writing
  * position lowers to the framework's own `raw` and every other position leaves as written.
  *
  * THE SHAPE IS FIXED: every field on every read, so `Lowering`'s splice sees one hidden class.
@@ -95,7 +95,7 @@ export type Read = {
      * pair, that the default is one too.
      */
     through: boolean
-    /** 32.33 — the name is bound to a `reactive(…)` whose options declare `by`. */
+    /** 32.32 — the name is bound to a `reactive(…)` whose options declare `by`. */
     byValue: boolean
     /** 14.8 — the name is declared by a branch-local `<script>`, inside the body it scopes. */
     local: boolean
@@ -347,7 +347,7 @@ export function classifyRead(node: Node): Read | undefined {
  * `false` is "unproven", never "reads a Reactive": this is a proof or nothing.
  *
  * A POSITION'S OWN VALUE IS DEMANDED PRIMITIVE, because every position this is asked of converts it
- * to a string or tests it, and an object's `toString` is code. THE ONE OBJECT EXEMPT is 32.26's
+ * to a string or tests it, and an object's `toString` is code. THE ONE OBJECT EXEMPT is 32.25's
  * `raw(x)`: a slot's bare `raw(` is always the framework's (`slotFacts`), which converts its
  * argument and whose result the escaper reads a field of. It is also the one value a LIVE text
  * binding cannot write (`setText` writes text, never markup), so leaving it unproven is not only a
@@ -382,7 +382,7 @@ function rawArgument(node: Node): Node | undefined {
  * Collects a slot's bare `raw(…)` callees into `rawCallees`, and throws where the slot awaits.
  *
  * WHAT A SLOT'S OWN TREE SAYS WITHOUT A TYPE: every bare `raw(…)` callee, lowered to the
- * framework's `raw` (32.26) — a member (`markdown.raw(x)`) is that object's method, and a `raw`
+ * framework's `raw` (32.25) — a member (`markdown.raw(x)`) is that object's method, and a `raw`
  * that is not called is whatever the file bound — and whether the slot AWAITS.
  *
  * A TEMPLATE POSITION CANNOT `await`: every slot, subject and attribute value is lowered into an

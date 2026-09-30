@@ -46,7 +46,7 @@ export function isTextish(node: TemplateNode): boolean {
 /**
  * Whether the text run starting at `from` can render as no node at all.
  *
- * 32.24 — every part is an expression, so a value that stringifies to '' writes nothing and the
+ * 32.23 — every part is an expression, so a value that stringifies to '' writes nothing and the
  * parent holds one fewer child than every position after it in that parent assumes. One static
  * character anywhere in the run and it cannot happen, which is why this is a property of the RUN
  * rather than of a binding.
@@ -112,7 +112,7 @@ export function bindingsOf(node: TemplateNode & { kind: 'element' }): {
             bound.spreads.push({ attribute, explicit: explicitNames(node) })
             continue
         }
-        // 32.10, 32.20 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE and every
+        // 32.10, 32.19 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE and every
         // `class:name` ONE `class`, merged by the server emitter. So a plain `style={expr}` or
         // `class={expr}` standing beside one cannot be written back on its own: `setAttribute`
         // replaces the whole value and takes the directives' halves with it, and the two bindings
@@ -124,7 +124,7 @@ export function bindingsOf(node: TemplateNode & { kind: 'element' }): {
         // the hole: this one attribute keeps the value standing at render where 32.3 says it
         // moves, and nothing reports that.
         //
-        // 32.20 IS WHAT CLOSES THE `style` HALF, not a binding here: an interpolated `style`
+        // 32.19 IS WHAT CLOSES THE `style` HALF, not a binding here: an interpolated `style`
         // lowers to `style:prop` under a static name and is never built as a string, and then
         // there is no whole-attribute write left to clobber anything. No clause spells the same
         // road for `class`, and until one does the two share this answer rather than each getting
@@ -138,7 +138,7 @@ export function bindingsOf(node: TemplateNode & { kind: 'element' }): {
 /**
  * Whether a tag names a component: it starts with an uppercase ASCII letter.
  *
- * 32.18 — `<Row/>` is a component and `<row/>` is the element. An HTML tag is matched
+ * 32.17 — `<Row/>` is a component and `<row/>` is the element. An HTML tag is matched
  * case-insensitively everywhere else (`lowerTag`), and this is the one comparison where the
  * author's own spelling decides. Here rather than beside the emitter that calls it most, because
  * this is what both emitters read and the edge the other way round is a cycle.
@@ -151,7 +151,7 @@ export function isComponentTag(tag: string): boolean {
 /**
  * Whether a node is `<slot/>`, the position a caller's children render into.
  *
- * 32.19 — it is the one lowercase tag that is not an element. Here for `isComponentTag`'s reason:
+ * 32.18 — it is the one lowercase tag that is not an element. Here for `isComponentTag`'s reason:
  * the server writes the caller's markup there and the client mounts the caller's bindings there,
  * and a predicate each is the two lanes disagreeing about which `<slot>` an author meant.
  */
@@ -162,7 +162,7 @@ export function isSlot(node: TemplateNode): boolean {
 /**
  * Whether a template has a `<slot/>` anywhere in it.
  *
- * 32.19 — which is what says its emitted function takes the props record: the caller's children
+ * 32.18 — which is what says its emitted function takes the props record: the caller's children
  * arrive on it, and a component whose only prop is its own body never calls `props` (33.2) and
  * would otherwise be handed nothing to read them from. One walk answering for both lanes is why it
  * is here.

@@ -20,7 +20,7 @@ import { holdWhileLeaving } from './leave.ts'
  * region swapped is reading a node that left rather than a value that emptied. The callback
  * form is where teardown is decided, and its `Disposer` is the whole of it.
  *
- * 32.39 — A `Disposer` HANDING BACK A THENABLE IS AN EXIT: the element's nodes stay until it settles.
+ * 32.38 — A `Disposer` HANDING BACK A THENABLE IS AN EXIT: the element's nodes stay until it settles.
  */
 export function bindElement(
     element: Element,

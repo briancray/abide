@@ -67,8 +67,7 @@ export const playFile = GET(async ({ id }: { id: number }) => {
 symptom. Reach it from markup with [`playFile.url({ id })`](find-the-url-a-handler-answers-on.md).
 
 A handler returning a whole `Response` instead — a playlist at `no-store` beside the segments it
-names at `immutable` — is answering the same way. Two consequences are worth knowing. A second
-reader in the same request is teed rather than handed a consumed body, and `clients.mcp` and
+names at `immutable` — is answering the same way, with one consequence worth knowing: `clients.mcp` and
 `clients.cli` default to **false**, a `Response` having no output schema to publish. Turn them
 back on where the body is JSON you wanted a header on.
 

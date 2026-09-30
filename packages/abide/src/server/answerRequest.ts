@@ -124,7 +124,7 @@ export type AppSources = {
      */
     own: ((request: Request) => Promise<Response | undefined>) | undefined
     /**
-     * What a page that threw, unrefused, is answered with in place of 16.43's bare 500.
+     * What a page that threw, unrefused, is answered with in place of 16.42's bare 500.
      *
      * 38.4 — `abide dev`'s document naming what broke, for the author looking at the browser.
      * `abide start` has none, and says nothing about itself to the caller.

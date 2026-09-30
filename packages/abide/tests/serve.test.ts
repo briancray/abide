@@ -39,7 +39,7 @@ let count = reactive(0)
 <head><title>Home</title></head>
 <main id="home"><h1>Home</h1><p id="n">{count}</p><Badge label="live"/></main>`
 
-// 32.18 THROUGH A BUILD, which is the one arm that can say a component import RESOLVES. Left as
+// 32.17 THROUGH A BUILD, which is the one arm that can say a component import RESOLVES. Left as
 // written with its extension swapped, the specifier the emitted page carries is
 // `#ui/components/Badge.ts` — a file that exists in the output tree and nowhere in the source tree
 // the import map points at. `componentGraph` resolves it to a path inside the build; without that
@@ -165,7 +165,7 @@ test('an address a page matches is painted into the shell — 38.6', async () =>
 // THE REVERT: hand the emitters no `componentGraph` imports in `compileApp` and the build this
 // file serves fails before any address answers — `Could not resolve: "#ui/components/Badge.client.ts"`,
 // the module the page imports being in the source tree, where the compiler wrote nothing.
-test('a page invoking a component is painted with it — 32.18, 38.6', async () => {
+test('a page invoking a component is painted with it — 32.17, 38.6', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     expect(html).toContain('<span id="badge">live</span>')
 })
@@ -304,7 +304,7 @@ test('nothing of a page is on the wire before it is built — 41.1', async () =>
 })
 
 // 41.1 — A PAGE THAT FAILS BEFORE IT IS BUILT is answered at the failure's status, which for a throw
-// is the server's 500 (16.43), and this app has no error page to paint it. THE REVERT: construct the
+// is the server's 500 (16.42), and this app has no error page to paint it. THE REVERT: construct the
 // `Response` in `answerRequest` before pulling the first chunk; it answers 200 and the stream errors.
 test('a page that fails before it is built answers at its status — 41.1', async () => {
     const response = await Bun.fetch(`${base}/broken`)

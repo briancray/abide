@@ -1122,7 +1122,7 @@ test('a document holding more rows than the client computes warns and rebuilds �
     expect(said.join(' ')).toContain('holds 5 rows')
 })
 
-// 32.33 — A `{#for}` WITH NO KEY OVER A `Reactive` NAMED ALONE KEYS BY THAT VALUE'S `by`. The page
+// 32.32 — A `{#for}` WITH NO KEY OVER A `Reactive` NAMED ALONE KEYS BY THAT VALUE'S `by`. The page
 // is `PAGE` with the key moved off the block and onto the value, so the counts are the ones the
 // written key earns above.
 //
@@ -1232,7 +1232,7 @@ test('a {#for} over a value computed from one declaring `by` stays positional', 
 // 5.7 — A PATCH MUTATES IN PLACE, so the list's next run finds every key over the SAME object and
 // `reconcile` keeps the row. The row's text reads a field of a plain object, which wakes nothing.
 //
-// THE REVERT, for this and the three 32.34 cases below it: `patchedSince` answering false. Every row
+// THE REVERT, for this and the three 32.33 cases below it: `patchedSince` answering false. Every row
 // is kept, and each of the four reports the text it showed before the patch.
 test('a row patched in place shows the patch', async () => {
     await mountSource(
@@ -1249,7 +1249,7 @@ test('a row patched in place shows the patch', async () => {
     ).toBe('Grace Brewster Hopper')
 })
 
-// 32.34 — AND ONLY THAT ROW. The array is written by nothing but a mutation of its own, so the rows
+// 32.33 — AND ONLY THAT ROW. The array is written by nothing but a mutation of its own, so the rows
 // whose items the patch never reached are the same nodes.
 const PATCHED = (subject: string, mutation: string): string => `<script>
 import { reactive } from 'abide'

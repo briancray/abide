@@ -1,7 +1,7 @@
 /**
  * The attributes HTML reads by presence, written present or absent by the value's truthiness.
  *
- * 32.38 — THE ATTRIBUTES HTML READS BY PRESENCE, whose value is never looked at:
+ * 32.37 — THE ATTRIBUTES HTML READS BY PRESENCE, whose value is never looked at:
  * `disabled="false"` is a disabled button. So these, and only these, are written present or absent
  * by the value's truthiness. Every other attribute is written as its text — `aria-expanded="false"`
  * and `spellcheck="false"` mean something their absence does not. A leaf, because the compiler's

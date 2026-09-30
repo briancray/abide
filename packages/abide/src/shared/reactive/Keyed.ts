@@ -190,10 +190,10 @@ class Lifetime {
 /**
  * One throttle or debounce window for a whole keyed face, holding back starting what it reaches.
  *
- * 5.20, 5.21, 5.22. A throttle starts the first key at once and the latest reached inside its
+ * 5.19, 5.20, 5.21. A throttle starts the first key at once and the latest reached inside its
  * window when it ends; a debounce starts the latest once the reaches stop. Either way only the
  * LATEST held key starts — one reached and then superseded inside a window is work the window
- * would discard (5.12), so it is abandoned and dropped instead.
+ * would discard (5.11), so it is abandoned and dropped instead.
  */
 class StartWindow {
     leading: boolean
@@ -231,7 +231,7 @@ class StartWindow {
             if (held === null) return
             this.pending = null
             startDeferred(held.entry)
-            // A throttle's window reopens behind what it just started, as a value's does (5.13).
+            // A throttle's window reopens behind what it just started, as a value's does (5.12).
             if (this.leading) this.open()
         })
     }
@@ -313,9 +313,9 @@ export function createKeyed<
     const gate = args as Schema<Args> | undefined
     // 9.28: `history` is among what every entry is built from, so each entry keeps its own.
     const entryOptions = rest
-    // 5.15, at the factory: a keyed value is capped one way or the other.
+    // 5.14, at the factory: a keyed value is capped one way or the other.
     refuseBothCaps(`${label}()`, throttle, debounce)
-    // 5.20: A KEYED VALUE'S WINDOW HOLDS BACK STARTING A KEY, rather than capping each entry's wakes.
+    // 5.19: A KEYED VALUE'S WINDOW HOLDS BACK STARTING A KEY, rather than capping each entry's wakes.
     const starts =
         throttle === undefined && debounce === undefined
             ? null
@@ -365,7 +365,7 @@ export function createKeyed<
             )
         if (starts !== null)
             starts.reached(created, () => {
-                // 5.21: superseded before it started — not held, so a later reach starts afresh.
+                // 5.20: superseded before it started — not held, so a later reach starts afresh.
                 if (entries.get(key) === created) release(key, created)
             })
         return created

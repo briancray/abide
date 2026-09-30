@@ -5,7 +5,6 @@ intent: A component in the same file or its own, and the children a caller passe
 covers:
   - `props`
   - `children`
-  - `{#component Name(pattern)}`
   - `<Name/>`
   - `<Tag>…</Tag>`
   - `<slot>fallback</slot>`
@@ -13,21 +12,16 @@ examples:
   - packages/dogfood/examples/props-live.json
 ---
 
-A component is a `.abide` file, or a block in one. Invoking it is a capitalised tag, and that
+A component is a `.abide` file. Invoking it is a capitalised tag, and that
 capital is the whole of the distinction — `<Row/>` is yours and `<row/>` is the element.
 
-## The four spellings
+## The three spellings
 
 | You write | What it is |
 | --- | --- |
 | `<Name/>` | an invocation of a component |
 | `<Tag>…</Tag>` | the same, with children passed into it |
-| `{#component Name(pattern)}` | a component declared inline, in the file that uses it |
 | `<slot/>` / `<slot>fallback</slot>` | where children render, and what renders without them |
-
-An inline component is TitleCase like any other, and it exists for the piece of markup that is
-worth naming but not worth a file — a row in one table, a cell shape used twice on one page.
-Moving it into a file later changes the import and nothing else.
 
 ## A prop is a live read
 

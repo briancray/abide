@@ -46,7 +46,7 @@ export class Lowering {
     /** Ascending by `start`, so a span with none in it is one binary search. */
     readonly reads: readonly Read[]
     /**
-     * 32.19 — whether the template holds a `<slot/>`, walked ONCE here.
+     * 32.18 — whether the template holds a `<slot/>`, walked ONCE here.
      *
      * Both emitters ask `takesProps()` about the same file, and the walk was a recursion over the
      * whole template per lane per file — twice the work for an answer fixed when the file was
@@ -91,7 +91,7 @@ export class Lowering {
      * 33 — the one thing the emitters need from the props pass: the emitted function takes the
      * record, and a file that never calls `props` takes none (33.2).
      *
-     * A `<slot/>` IS THAT QUESTION WITH A SECOND ANSWER (32.19): the caller's children arrive on
+     * A `<slot/>` IS THAT QUESTION WITH A SECOND ANSWER (32.18): the caller's children arrive on
      * the props record, so a file holding one takes props whether or not it names them. Answered
      * here rather than at each emitter, or a third reason to take the record has to be remembered
      * in two files.
@@ -112,7 +112,7 @@ export class Lowering {
      *
      * 10.2 IS CHECKED IN THE SAME SCAN: the key is a literal or it is a build error. Found by
      * SPELLING, as `raw` is — a file that binds its own `reactive` is not something the token walk
-     * can see, and that is the same limit 32.26 already carries.
+     * can see, and that is the same limit 32.25 already carries.
      */
     opensShareScope(): boolean {
         const text = this.projection.text
@@ -159,7 +159,7 @@ export class Lowering {
     /**
      * A markup-writing template expression, lowered with its `raw(x)` as the framework's.
      *
-     * 32.26 — a SLOT's `raw(x)` lowers to the framework's own `raw`, which is why the
+     * 32.25 — a SLOT's `raw(x)` lowers to the framework's own `raw`, which is why the
      * markup-writing holders (an expression, an attribute value) ask for it and a subject, a key
      * and a listener do not.
      */
@@ -196,7 +196,7 @@ export class Lowering {
     /**
      * The component a tag chooses by a value, lowered to the read of it, or `undefined`.
      *
-     * 32.35 — `undefined` where the tag names a component itself. The checker's answer and nothing
+     * 32.34 — `undefined` where the tag names a component itself. The checker's answer and nothing
      * else: a tag holding no read is a binding that never moves, and a file lowered with no
      * checker invokes it as written.
      */
@@ -236,8 +236,8 @@ export class Lowering {
     /**
      * Whether a text run can hold markup: a part that is live, or a part that calls `raw`.
      *
-     * 32.27 — a part the checker PROVED is a primitive (`isLive` false) cannot be `Raw` — the proof
-     * is that its value's type is primitive — save 32.26's `raw(x)`, which `provePosition` exempts
+     * 32.26 — a part the checker PROVED is a primitive (`isLive` false) cannot be `Raw` — the proof
+     * is that its value's type is primitive — save 32.25's `raw(x)`, which `provePosition` exempts
      * and which is `Raw` always. So a run of proven parts is text for good, and neither side pays
      * for markup it cannot hold: a row reading its own item, most slots on most pages, is one.
      */
@@ -500,7 +500,7 @@ export class Lowering {
                     : ' = () => undefined'
             case 'static':
                 return undefined
-            // 32.26, 32.2 — THE SLOT SPELLING `raw(x)` IS A CALL TO THE FRAMEWORK'S `raw`, the
+            // 32.25, 32.2 — THE SLOT SPELLING `raw(x)` IS A CALL TO THE FRAMEWORK'S `raw`, the
             // export an app imports, so a value branded in a `<script>` and one branded in a slot
             // are the same object.
             case 'raw':

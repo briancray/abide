@@ -35,7 +35,7 @@ const missing = undefined as unknown as { boom: string }
 
 <p>{missing.boom} {failure.data.path}</p>`
 
-// 16.40 — handlers a form posts to with no script on the page.
+// 16.39 — handlers a form posts to with no script on the page.
 const FORMS = `import { POST, redirect, refuse } from 'abide/server'
 
 export const save = POST(({ amount }: { amount: string | string[] }) =>
@@ -156,7 +156,7 @@ const FORM_HEADERS = {
     'content-type': 'application/x-www-form-urlencoded',
 }
 
-// The form's own page, on the app's own origin — 16.58 sends a foreign one to the root.
+// The form's own page, on the app's own origin — 16.57 sends a foreign one to the root.
 const formHeaders = (): Record<string, string> => ({
     ...FORM_HEADERS,
     referer: `${base}/invoices/42`,
@@ -180,18 +180,18 @@ test('a page whose record is refused answers at the refusal status — 41.1, 35.
     )
 })
 
-// 41.1, 16.43 — A PAGE THAT THROWS is the server's fault, answered 500 by the nearest error page.
-test('a page that throws as it is built answers 500 — 41.1, 16.43', async () => {
+// 41.1, 16.42 — A PAGE THAT THROWS is the server's fault, answered 500 by the nearest error page.
+test('a page that throws as it is built answers 500 — 41.1, 16.42', async () => {
     const answer = await Bun.fetch(`${base}/thrown`)
     expect(answer.status).toBe(500)
     expect(await answer.text()).toContain('<h1>Something went wrong</h1>')
 })
 
-// 16.40 — A FORM POSTED WITH NO SCRIPT IS ANSWERED AS A NAVIGATION: a value is a 303 back where the
+// 16.39 — A FORM POSTED WITH NO SCRIPT IS ANSWERED AS A NAVIGATION: a value is a 303 back where the
 // form was, a refusal is the error page at its own status, and a redirect passes through. A call made
 // from a page's script is still answered as JSON. THE REVERT: drop the `navigation` branch from
 // `answerRpc`; the form's reader is handed a JSON body where a page was due.
-test('a mutation a form posted is answered as a navigation — 16.40', async () => {
+test('a mutation a form posted is answered as a navigation — 16.39', async () => {
     const saved = await Bun.fetch(`${base}/__abide/rpc/forms/save`, {
         method: 'POST',
         headers: formHeaders(),
@@ -226,10 +226,10 @@ test('a mutation a form posted is answered as a navigation — 16.40', async () 
     expect(await scripted.json()).toEqual({ saved: '7' })
 })
 
-// 16.58 — A `Referer` FROM ANOTHER ORIGIN IS NOT WHERE A FORM GOES BACK TO, and nor is one that is
+// 16.57 — A `Referer` FROM ANOTHER ORIGIN IS NOT WHERE A FORM GOES BACK TO, and nor is one that is
 // missing. THE REVERT: put `request.headers.get('referer') ?? '/'` back in `navigated`; the first
 // reads `https://elsewhere.example/phish`.
-test('a form posted with a foreign referer goes back to the root — 16.58', async () => {
+test('a form posted with a foreign referer goes back to the root — 16.57', async () => {
     const post = (referer: string | undefined) =>
         Bun.fetch(`${base}/__abide/rpc/forms/save`, {
             method: 'POST',

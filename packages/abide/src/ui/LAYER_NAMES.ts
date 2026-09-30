@@ -15,7 +15,7 @@ export const LAYER_RECONCILE = 'abide.reconcile'
  * The layer every region fill that runs a build is measured under.
  *
  * EVERY REGION THE BROWSER FILLS BY A BUILD — an `{#if}` arm, a navigated-to page building itself
- * (30.11), a component filling its own region (32.18). A fill with no build merely empties the
+ * (30.11), a component filling its own region (32.17). A fill with no build merely empties the
  * region and opens no layer, so the run count is the number of builds a navigation really ran
  * rather than the number of call sites the build emitted.
  */

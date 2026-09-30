@@ -177,11 +177,11 @@ test('a patch over a version the copy does not hold makes it read again', async 
     expect(archived()()).toEqual(['the whole shelf, read again'])
 })
 
-// 16.53 THROUGH A FOLLOW: every frame the server sends reaches the follow's entry, and a reach made
+// 16.52 THROUGH A FOLLOW: every frame the server sends reaches the follow's entry, and a reach made
 // through the `Rpc` is a call with no signal — which pins the load, so the page's abort no longer
 // ends it. THE REVERT: have `wire`'s follow reach `rpc(args)` rather than the value; the frame pins
 // the reload the page is waiting on, and it is still busy after the page aborts.
-test("a frame the follow takes does not keep a page's load going — 16.53", async () => {
+test("a frame the follow takes does not keep a page's load going — 16.52", async () => {
     const reading = wire('GET', '/__abide/rpc/library/reading') as (
         args?: unknown,
         options?: { signal?: AbortSignal },

@@ -4,7 +4,7 @@ import { RawRun, refillRun, textToMarkup } from './RawRun.ts'
 /**
  * Writes markup into a live run while part of it is `Raw`; returns the run's new state.
  *
- * 32.27 — what a live run's binding writes while a part of it is `Raw`: the run's markup, parsed
+ * 32.26 — what a live run's binding writes while a part of it is `Raw`: the run's markup, parsed
  * between its anchors. `setText`'s other half, and the run's new state is what it hands back —
  * the binding holds whichever the last write made.
  *

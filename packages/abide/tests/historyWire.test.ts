@@ -1,4 +1,4 @@
-// 16.50–16.52 — A `GET` OVER A VALUE DECLARING `history`, ANSWERED PER PRODUCTION. Over a served app,
+// 16.49–16.51 — A `GET` OVER A VALUE DECLARING `history`, ANSWERED PER PRODUCTION. Over a served app,
 // fetched with bun's own `fetch` from this process; the socket client is a spawned script, for
 // socket.test.ts's reason.
 
@@ -100,10 +100,10 @@ async function framesOf(
 
 type Production = { op: string; seq: number; epoch: string; value: unknown }
 
-// 16.50 — THE RING AND THEN EVERY PRODUCTION LIVE, each framed with its sequence number and epoch.
+// 16.49 — THE RING AND THEN EVERY PRODUCTION LIVE, each framed with its sequence number and epoch.
 // THE REVERT: hand the settled value on in `outcomeOf` rather than the value itself; the answer is
 // the standing production as JSON, and 0 of the 2 frames arrive.
-test('a jsonl reader of a history value is framed each production with its seq and epoch — 16.50', async () => {
+test('a jsonl reader of a history value is framed each production with its seq and epoch — 16.49', async () => {
     const answer = await Bun.fetch(`${base}${FEED_ADDRESS}`, {
         headers: { accept: 'application/jsonl' },
     })
@@ -120,10 +120,10 @@ test('a jsonl reader of a history value is framed each production with its seq a
     expect(live?.epoch).toBe(ring?.epoch as string)
 })
 
-// 16.50, 18.11 — ONE MINTING: the epoch and the sequence number an http reader is framed with are the
+// 16.49, 18.11 — ONE MINTING: the epoch and the sequence number an http reader is framed with are the
 // ones a socket subscriber to the same value is sent. THE REVERT: mint the http lane's epoch from a
 // map of its own; the two epochs differ, and the seq still agrees — which is why both are asserted.
-test('an http reader and a socket subscriber are framed with one epoch and one numbering — 16.50, 18.11', async () => {
+test('an http reader and a socket subscriber are framed with one epoch and one numbering — 16.49, 18.11', async () => {
     const answer = await Bun.fetch(`${base}${FEED_ADDRESS}`, {
         headers: { accept: 'application/jsonl' },
     })
@@ -154,11 +154,11 @@ console.log(JSON.stringify(frames))
     expect(socketLast?.seq).toBe(last?.seq as number)
 })
 
-// 16.51, 16.52 — AN EVENT STREAM NUMBERS EACH EVENT, and a reconnect naming where it stood is sent
+// 16.50, 16.51 — AN EVENT STREAM NUMBERS EACH EVENT, and a reconnect naming where it stood is sent
 // what came after; one naming another epoch is sent the ring as a reset. THE REVERT: drop the
 // `Last-Event-ID` read; the resuming reader is replayed the ring from its oldest, and its first event
 // is a production it already had rather than `resumed`.
-test('an sse reader is numbered by id, resumes from Last-Event-ID, and is reset on a moved epoch — 16.51, 16.52', async () => {
+test('an sse reader is numbered by id, resumes from Last-Event-ID, and is reset on a moved epoch — 16.50, 16.51', async () => {
     const first = await Bun.fetch(`${base}${FEED_ADDRESS}`, {
         headers: { accept: 'text/event-stream' },
     })
@@ -201,9 +201,9 @@ test('a reader asking for JSON is answered the standing production — 16.31', a
     expect(await answer.json()).toBe('standing')
 })
 
-// 16.50 — IN THE SEED BUFFER ALIKE: the browser's call a render left an entry for is framed as a run
+// 16.49 — IN THE SEED BUFFER ALIKE: the browser's call a render left an entry for is framed as a run
 // one is. THE REVERT: the same as the first test's — the seeded answer is the JSON value.
-test('a seeded answer is framed per production as a run one is — 16.50, 41.13', async () => {
+test('a seeded answer is framed per production as a run one is — 16.49, 41.13', async () => {
     const page = await Bun.fetch(`${base}/`)
     await page.text()
     const cookie = (page.headers.get('set-cookie') ?? '').split(

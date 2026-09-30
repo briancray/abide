@@ -179,7 +179,7 @@ test('a row addresses from the first node of the row the reconcile holds', () =>
     ])
 })
 
-// 32.24 — a run every part of which is an expression can render NO node, and the position still
+// 32.23 — a run every part of which is an expression can render NO node, and the position still
 // has to exist because the walk continues through it. One static character anywhere in the run and
 // it cannot happen, which is a property of the RUN and not of any binding in it.
 test('a blank run is the run with no static text in it', () => {

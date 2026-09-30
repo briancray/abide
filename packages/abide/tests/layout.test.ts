@@ -1,6 +1,6 @@
 // 35.1 — A LAYOUT WRAPS THE PAGES UNDER IT, end to end: `abide build` finds the chain off the
 // file tree and `abide start` serves a page inside it. There is no layout API and no second kind
-// of component — a layout is a component with a `<slot/>` (32.19) and the router is what puts a
+// of component — a layout is a component with a `<slot/>` (32.18) and the router is what puts a
 // page in it — so what is asserted here is the COMPOSITION rather than a second mechanism.
 //
 // A SUBPROCESS, for `serve.test.ts`'s reasons: happy-dom's preload replaces `Response` and

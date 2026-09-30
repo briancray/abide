@@ -1,4 +1,4 @@
-// WHAT A COMPONENT COSTS A ROW. 32.18 and 33 put a call, an anchor pair and one accessor per prop
+// WHAT A COMPONENT COSTS A ROW. 32.17 and 33 put a call, an anchor pair and one accessor per prop
 // between a list and its markup, and every one of those is per ROW — which is the definition of a
 // hot path CLAUDE.md gives, so the three are owed a number rather than an argument.
 //
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
 /**
  * Prints the bytes a row's component anchors add, raw and gzipped.
  *
- * 32.18's anchors, in the bytes they actually add to a document — which is the form the claim has
+ * 32.17's anchors, in the bytes they actually add to a document — which is the form the claim has
  * to take, a marker being free to argue about and not free to send.
  */
 function bytes(flat: string, nested: string, size: number): void {

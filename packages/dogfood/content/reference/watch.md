@@ -47,8 +47,8 @@ sides mean the same thing and only the schedule differs.
 
 An error in an effect is never silent. A throw from the effect, a throw from the disposer, and
 a read of a failed value inside one all reach `onError` with the trace attached and warn on
-`abide:watch`. In a browser it is additionally re-thrown as an unhandled rejection so an error
-reporter sees it.
+`abide:watch`. In a browser a throw from the effect is additionally re-thrown, and surfaces as an
+uncaught error an error reporter sees.
 
 **An effect that threw stops its watch.** One that throws once usually throws every run, and a
 watch re-running into the same throw is a loop with a log line per iteration.

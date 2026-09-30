@@ -50,7 +50,7 @@ export type Row = {
      */
     at: number
     /**
-     * The patch epoch the row was made at (32.34).
+     * The patch epoch the row was made at (32.33).
      *
      * Its item written past this is content the row never saw, under the same object a kept row is
      * matched by.
@@ -266,7 +266,7 @@ export function reconcile(list: List, data: unknown[]): void {
             continue
         }
         // In the run that is already ordered: untouched, since a move there changes nothing and
-        // still counts as one. 32.30 — a survivor is moved without leaving the document (`moveNode`).
+        // still counts as one. 32.29 — a survivor is moved without leaving the document (`moveNode`).
         if (keep !== null && keep[at] !== 1)
             moveRow(parent, existing.node, anchor)
         existing.at = at
@@ -327,7 +327,7 @@ export function rowOf(
 /**
  * Whether a patch wrote to the row's item since the row was made.
  *
- * 32.34 — the epoch is compared first, so a reconcile with no patch since its rows were made pays
+ * 32.33 — the epoch is compared first, so a reconcile with no patch since its rows were made pays
  * one integer compare a row and never reaches the map.
  */
 function patchedSince(row: Row): boolean {

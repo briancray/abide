@@ -18,7 +18,7 @@ const SPECIAL = /[&<>]/
 
 /** A slot value as markup text: escaped, or a `Raw`'s html as it is. */
 export function escapeText(value: unknown): string {
-    // 32.27 — a branded raw value renders unescaped, and the brand is read FIRST: `String(value)`
+    // 32.26 — a branded raw value renders unescaped, and the brand is read FIRST: `String(value)`
     // below turns a `Raw` into its html and the scan then escapes exactly the markup the brand
     // was put on to keep. What the check costs is in `Raw.ts`, and why it is counted is `markupRun`.
     if (value instanceof Raw) {
@@ -54,10 +54,10 @@ function escapeMarkup(text: string): string {
  * The same rewrite as a slot's, plus the quote that would end it. A separate function rather than
  * a flag: the flag would be read on every slot to answer a question the call site already knows.
  *
- * 32.27 IS A SLOT'S CLAUSE, NOT AN ATTRIBUTE'S. Delegating straight to `escapeText` handed the
+ * 32.26 IS A SLOT'S CLAUSE, NOT AN ATTRIBUTE'S. Delegating straight to `escapeText` handed the
  * brand this path too, so `<iframe srcdoc={raw(html)}>` copied markup into a value a browser
  * parses as a document, and `title={raw('AT&T')}` lost the `&` encoding — which is the only thing
- * standing behind `safeUrl`'s scheme check, per 32.29. A `Raw` here is escaped like the string it
+ * standing behind `safeUrl`'s scheme check, per 32.28. A `Raw` here is escaped like the string it
  * holds, which is why this runs the rewrite rather than `escapeText`.
  */
 export function escapeAttribute(value: unknown): string {
@@ -67,7 +67,7 @@ export function escapeAttribute(value: unknown): string {
 /**
  * Text with only its `"` encoded: the one rewrite the author's own attribute text takes.
  *
- * 32.28 — it is markup, so its `&` stays a reference, and only the `"` that would end the
+ * 32.27 — it is markup, so its `&` stays a reference, and only the `"` that would end the
  * attribute is encoded.
  */
 export function escapeQuote(text: string): string {

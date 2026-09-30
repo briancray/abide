@@ -78,7 +78,7 @@ export function checkedShadow(
         })
     for (const span of projection.keys.values())
         units.push({ span, holds: false })
-    // 32.35 — a tag choosing by a value is checked as the call on what it reads.
+    // 32.34 — a tag choosing by a value is checked as the call on what it reads.
     for (const span of projection.tags.values())
         units.push({ span, holds: false })
     units.sort((one, two) => one.span.start - two.span.start)

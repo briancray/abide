@@ -249,7 +249,7 @@ export async function emitApp(
             file: source.file,
         })
     }
-    // 32.18 — WHICH FILES ARE INVOKED AS COMPONENTS, and where each import of one lands. A
+    // 32.17 — WHICH FILES ARE INVOKED AS COMPONENTS, and where each import of one lands. A
     // caller's client module imports its child's, so a child with nothing to hydrate still
     // needs one to exist (the no-op below), and only a child carries its own markup
     // (`emitClient`). Built before the emit loop because a page may invoke a component the
@@ -285,7 +285,7 @@ export async function emitApp(
         // 34.4 — A COMPONENT WITH STYLES: its elements carry its token, and the styles, scoped,
         // are a stylesheet its client module imports — which the bundle collects into the
         // stylesheet the document links (38.24).
-        // 34.13 — each body's own `<style>`, scoped to the token its elements carry; the
+        // 34.11 — each body's own `<style>`, scoped to the token its elements carry; the
         // component's token is added only where a component-level `<style>` requires it.
         const token = scopeToken(relative)
         const componentStyled = entry.file.styles.length > 0

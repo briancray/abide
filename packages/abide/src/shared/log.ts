@@ -204,7 +204,7 @@ export function namedLogger(namespace: string): Logger {
     return loggerOver(() => namespace)
 }
 
-/** Both lanes' render logger (28.8): the server's escalations and 32.21's dropped URLs. */
+/** Both lanes' render logger (28.8): the server's escalations and 32.20's dropped URLs. */
 export const RENDER_LOG = namedLogger('abide:render')
 
 /**

@@ -90,7 +90,7 @@ test('a replay after an expiry numbers each production with its own ordinal — 
 })
 
 // 18.10 ON THE LIVE TAIL: with no ring a cursor collapses what was minted between two of its turns
-// onto the standing production (5.11), and the frame carries THAT production's number. Counting the
+// onto the standing production (5.10), and the frame carries THAT production's number. Counting the
 // frames instead numbers the third production 2, and a reconnect resuming from 2 is handed it again.
 test('a live production carries its own ordinal where the cursor collapsed a burst — 18.10', async () => {
     const room = reactive<string>(undefined, { global: true })

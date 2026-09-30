@@ -1,5 +1,5 @@
 /**
- * 32.39 — AN ELEMENT LEAVING UNDER AN ANIMATION. A `bind:element` callback's `Disposer` that hands
+ * 32.38 — AN ELEMENT LEAVING UNDER AN ANIMATION. A `bind:element` callback's `Disposer` that hands
  * back a thenable — `element.animate(…).finished` — keeps the nodes holding that element in the
  * document until it settles, wherever a region or a row removes them, and removes them then.
  *

@@ -6,7 +6,7 @@
 // `ValidationError`, `Aborted` and the `HttpError` 17.4 names — everything else is the app's,
 // through `refuse.named`. A fifth built-in here is a refusal an app cannot have predicted and
 // cannot narrow against a name it never wrote. `Aborted` is the one the app asks for itself: it
-// comes back only from a call the app handed a signal and then aborted (16.54).
+// comes back only from a call the app handed a signal and then aborted (16.53).
 
 import { FAILURE_STATUS_TEXT } from './FAILURE_STATUS_TEXT.ts'
 import { type Failed, failed, isFailed } from './Failed.ts'
@@ -181,7 +181,7 @@ export const notFound = named<'NotFound', { path: string; method: string }>(
 /**
  * The `Aborted` refusal, at 499.
  *
- * 16.54: a load every caller of which aborted. 499 is the status a server logs for a request its
+ * 16.53: a load every caller of which aborted. 499 is the status a server logs for a request its
  * client closed, and the one thing true of this refusal is that nobody is waiting for the answer.
  */
 export const aborted = named<'Aborted', undefined>('Aborted', 499)

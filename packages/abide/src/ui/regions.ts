@@ -52,7 +52,7 @@ export function pageRegion(host: Node): Region {
 /**
  * Whether a region is an empty anchor pair waiting to be filled.
  *
- * 32.18 — a component the SERVER rendered arrives with its markup between its anchors and is
+ * 32.17 — a component the SERVER rendered arrives with its markup between its anchors and is
  * hydrated; one a row builder wrote in the browser arrives as the anchor pair alone, and the child
  * fills it from its own template. The empty pair is the whole of the signal, so nothing is added to
  * the document to carry it.

@@ -156,7 +156,7 @@ export function railOf(page: Page, body: string): string {
  *
  * A record in a module of its own rather than markup in the `.abide`: that HTML is what the
  * markdown renderer produced, and HTML written into a template is TEMPLATE — a `{` in a code
- * sample opens a slot — so it crosses as a string and the page renders it through `raw` (32.25).
+ * sample opens a slot — so it crosses as a string and the page renders it through `raw` (32.24).
  * `DocsContent` says why every field is one.
  */
 function contentModule(

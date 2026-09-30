@@ -48,7 +48,7 @@ import type { Schema } from './Schema.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
-/** What a call is handed beside its args (16.53). */
+/** What a call is handed beside its args (16.52). */
 export type CallOptions = { signal?: AbortSignal }
 
 /**
@@ -83,7 +83,7 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
      * 16.10, 16.11 — a mutation's takes no args.
      */
     url(...args: undefined extends Args ? [args?: Args] : [args: Args]): string
-    /** The same call, handed back as the `Response` (16.44). */
+    /** The same call, handed back as the `Response` (16.43). */
     raw(args?: Args, init?: RequestInit): Promise<Response>
     /** Where the handler is mounted, stamped by whoever mounted it — `undefined` until then. */
     address: string | undefined
@@ -259,7 +259,7 @@ export function declare(method: Method): Declare {
                 defaults === null ? given : withDefaults(given, defaults)
             const signal = options?.signal
             // A load this call starts may be ended by it, so its transport is handed a signal of
-            // the load's own to end the request with (16.54) — the caller's is only one vote.
+            // the load's own to end the request with (16.53) — the caller's is only one vote.
             const ending =
                 signal === undefined ? undefined : new AbortController()
             LOAD_SIGNAL.current = ending?.signal
@@ -269,7 +269,7 @@ export function declare(method: Method): Declare {
                     wrapped === null
                         ? reach(args)
                         : (wrapped as (args: unknown) => unknown)(args)
-                // 16.67 — the callers of an aborted load stopped waiting, and this one has not.
+                // 16.66 — the callers of an aborted load stopped waiting, and this one has not.
                 if (
                     ABANDONED.delete(reached as object) &&
                     loadOf(reached) === undefined
@@ -381,7 +381,7 @@ function addressOf(rpc: { address: string | undefined }): string {
 /**
  * Who is waiting on one load: pinned by a call with no signal, else ended when every signal aborts.
  *
- * 16.53 — WHO IS WAITING ON A LOAD. Calls with the same args join one load (1.8), so one caller's
+ * 16.52 — WHO IS WAITING ON A LOAD. Calls with the same args join one load (1.8), so one caller's
  * signal is not the load's to end: a call with no signal pins it, and a load no call pinned ends
  * once every signal handed to it has aborted. Per value and replaced per load, so a refresh starts
  * the count again.
@@ -396,10 +396,10 @@ type Hold = {
 
 const HOLDS = new WeakMap<object, Hold>()
 
-/** The values whose last load 16.53 ended, until a call reaches one again. */
+/** The values whose last load 16.52 ended, until a call reaches one again. */
 const ABANDONED = new WeakSet<object>()
 
-/** Files a call's signal, or its pin, against the load it reached (16.53). */
+/** Files a call's signal, or its pin, against the load it reached (16.52). */
 function holdLoad(
     reached: unknown,
     signal: AbortSignal | undefined,
@@ -461,8 +461,8 @@ const TIMED = new WeakMap<object, number>()
 /**
  * Ends a load that goes `milliseconds` without progress, refusing it 504.
  *
- * 16.13, 16.63, 16.64 — `timeout` ON EVERY CALL: a load that goes that long without progress — its
- * answer, or a stream's next chunk — is ended where it stands, as 16.54 ends one, and refuses 504.
+ * 16.13, 16.62, 16.63 — `timeout` ON EVERY CALL: a load that goes that long without progress — its
+ * answer, or a stream's next chunk — is ended where it stands, as 16.53 ends one, and refuses 504.
  * ONE CLOCK PER LOAD: a call joining a load (1.8) is not a reason to give it longer, and the first
  * clock would end the load at its own time whatever a second one did — so a join starts none.
  */

@@ -40,7 +40,7 @@ test('only what is on offer is chosen — 38.30', () => {
     expect(negotiateEncoding('br, gzip', [])).toBeUndefined()
 })
 
-// `accept` IS THE SAME GRAMMAR, read by `prefers` for 16.40's html-or-json and 16.33's framing. THE
+// `accept` IS THE SAME GRAMMAR, read by `prefers` for 16.39's html-or-json and 16.33's framing. THE
 // REVERT: find each type by `indexOf`, as it was; `text/html;q=0` then reads as preferring html,
 // and a type named second at a higher quality loses to the one written first.
 test('an accept header prefers by quality, then by order, and q=0 refuses', () => {

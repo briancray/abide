@@ -1,7 +1,7 @@
 /**
  * What a `{#for}` subject iterates as: an array, or an async iterable as itself.
  *
- * 32.15, 32.23 — nothing for an absent subject, an ASYNC iterable handed back as itself, and
+ * 32.15, 32.22 — nothing for an absent subject, an ASYNC iterable handed back as itself, and
  * anything else as an array. Named by the async brand AND the absence of the sync one, in that
  * order, because `for … of` prefers the sync brand where a value carries both. A subject carrying
  * neither fails on the spread. An array is not copied: a reconcile reads it synchronously and

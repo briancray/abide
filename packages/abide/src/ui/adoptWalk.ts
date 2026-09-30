@@ -48,7 +48,7 @@ export function elementHere(
 /**
  * A run, checked: its text node, or the `RawRun` around it where it holds markup.
  *
- * Where the run holds markup (32.27) the pair is read back from the closing anchor the walk stood
+ * Where the run holds markup (32.26) the pair is read back from the closing anchor the walk stood
  * on (`runHere`). A run the server rendered as no node was put back by the walk as it passed, so by
  * the time a binding asks something is there — and where the walk could not put one back, this is
  * what refuses.
@@ -70,12 +70,12 @@ export function textHere(node: Node | null | undefined): Text | RawRun {
  * Where a run that can hold markup ends; a step that never throws.
  *
  * A STEP, for the reason every step is one. A run the server wrote as text is its one node; a run
- * it wrote holding markup (32.27) is an anchor pair with any number of nodes between, and the walk
+ * it wrote holding markup (32.26) is an anchor pair with any number of nodes between, and the walk
  * stands on the CLOSE, so the position after it is found by `nextSibling` either way and nothing
  * about the cursor changes.
  *
- * AND 32.24'S HOLE, where `parent` is given: a BLANK run — every part an expression, each unlanded
- * (32.24 leaves what it last rendered, which is nothing yet) or stringifying to '' — is written by
+ * AND 32.23'S HOLE, where `parent` is given: a BLANK run — every part an expression, each unlanded
+ * (32.23 leaves what it last rendered, which is nothing yet) or stringifying to '' — is written by
  * the server as no node, and still has to be a position, because every sibling after it is found from it — so the walk puts it back as it
  * passes, whether or not anything binds it. A run that is not blank passes no parent and is never
  * put back. `textHere` is the CHECK a binding makes; this is the step a walk takes, and on a page

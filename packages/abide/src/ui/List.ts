@@ -119,7 +119,7 @@ export function listAt(
  * NOBODY PAINTED THIS REGION is 41.4 — a render continues past a subject still in flight, which
  * writes the anchors and no rows. That is not a disagreement, because there is nothing to disagree
  * with, so it builds in silence. `isEmptyRegion` is the signal the rest of the block machinery
- * already reads for exactly this (32.18), rather than a zero this function infers on its own.
+ * already reads for exactly this (32.17), rather than a zero this function infers on its own.
  *
  * THE SERVER'S ROWS ARE NOT THE CLIENT'S ITEMS is 41.10, and it MUST warn. Hydration wires row
  * `at` to item `at` BY POSITION, so a run where the two lengths disagree has items with no node,

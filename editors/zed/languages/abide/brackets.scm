@@ -43,8 +43,3 @@
   (try_start) @open
   (try_end) @close)
   (#set! newline.only))
-
-((component_block
-  (component_start) @open
-  (component_end) @close)
-  (#set! newline.only))

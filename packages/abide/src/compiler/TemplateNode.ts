@@ -7,7 +7,7 @@
  * AN HTML TAG OR ATTRIBUTE NAME IS ASCII CASE-INSENSITIVE, so every comparison reads the `lower`
  * form the parser folded once, and the author's spelling is what the emitters write. Folded at each
  * comparison instead, every site that forgot was its own bug: `<HEAD>` never hoisted, `HREF=`
- * skipped 32.21's check, `ONCLICK=` shipped as a live attribute, `</BR>` was emitted.
+ * skipped 32.20's check, `ONCLICK=` shipped as a live attribute, `</BR>` was emitted.
  */
 export type Attribute = {
     name: string
@@ -16,7 +16,7 @@ export type Attribute = {
      * The literal text, or the expression source where `expression` is true.
      *
      * A quoted value with a slot in it is a template literal whose static text is already decoded
-     * (32.28, 32.29), and on a component a static value is too (`pushQuoted`).
+     * (32.27, 32.28), and on a component a static value is too (`pushQuoted`).
      */
     value: string
     /**
@@ -39,7 +39,7 @@ export type Branch = {
     children: TemplateNode[]
     /** 14.8 — the arm's branch-local `<script>`, or `null`. */
     setup: Setup | null
-    /** 34.13 — the arm's branch-local `<style>`, or `null`. */
+    /** 34.11 — the arm's branch-local `<style>`, or `null`. */
     style: string | null
 }
 
@@ -84,7 +84,7 @@ export type TemplateNode =
           children: TemplateNode[]
           /** 14.8 — the row's branch-local `<script>`, or `null`. */
           setup: Setup | null
-          /** 34.13 — the row's branch-local `<style>`, or `null`. */
+          /** 34.11 — the row's branch-local `<style>`, or `null`. */
           style: string | null
       }
 
