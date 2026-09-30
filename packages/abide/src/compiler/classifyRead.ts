@@ -48,9 +48,10 @@ export type Read = {
      * explicit `n()` (31.7), which `arguments` says was given any; `shorthand` is `{ n }`;
      * `write` and `update` are 31.4, and 31.8 where `path` is not empty.
      *
-     * 33's four: the `props<Props>()` call, which lowers to the record the caller passed; the pair
+     * 33's five: the `props<Props>()` call, which lowers to the record the caller passed; the pair
      * that brackets a binding element's initializer, which together make a default an accessor;
-     * and `absent`, which gives a binding with no default an accessor of `undefined` (33.4). The
+     * `absent`, which gives a binding with no default an accessor of `undefined` (33.4); and
+     * `restMember`, a member of the rest element, which calls that key's accessor (33.15). The
      * pair and `absent` are INSERTIONS — zero-width, so what stands between the pair goes on being
      * lowered by the same walk, and a default reading a `Reactive` still reads it.
      */
@@ -66,6 +67,7 @@ export type Read = {
         | 'defaultOpen'
         | 'defaultClose'
         | 'absent'
+        | 'restMember'
         | 'static'
         | 'raw'
         | 'routeParams'

@@ -4,7 +4,8 @@
 // time, which is also the only place untrusted data ever arrives. Checking only the literal read
 // as compliance and guarded nothing.
 //
-// The warning on `abide:render` the clause also asks for is not built.
+// The warning on `abide:render` the clause also asks for is `attributeText`'s, which knows the
+// attribute's name.
 import { textOf } from './Raw.ts'
 
 const SAFE_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:'])

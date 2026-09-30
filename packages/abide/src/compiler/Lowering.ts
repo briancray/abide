@@ -434,6 +434,9 @@ export class Lowering {
                     this.refusals.push({ at: read.start, message })
                 }
                 return read.through ? name : undefined
+            // 33.15 — a props rest element's member: the key's accessor, called.
+            case 'restMember':
+                return `${spelled}?.()`
             // 31.1 — a read. A member that is not the `Reactive`'s own reaches the value (31.5,
             // 31.6), so `regions.join(', ')` reads first and `n?.x` reads `n()?.x`.
             case 'value':

@@ -22,7 +22,7 @@ import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
-import { namedLogger } from '#shared/log.ts'
+import { RENDER_LOG } from '#shared/log.ts'
 import { MOUNT_META } from '#shared/MOUNT_META.ts'
 import { coversPrefix, firstMatch, partsOf } from '#shared/matchRoute.ts'
 import { MOUNT, mounted } from '#shared/mount.ts'
@@ -581,8 +581,6 @@ function errorsFor(errors: RankedError[], pathname: string): RankedError[] {
         if (coversPrefix(error.segments, parts)) found.push(error)
     return found
 }
-
-const RENDER_LOG = namedLogger('abide:render')
 
 /**
  * A refusal, painted by the nearest error page at the refusal's own status.

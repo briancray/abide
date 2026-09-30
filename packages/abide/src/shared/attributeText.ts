@@ -3,9 +3,12 @@
 // ABSENT: for `null` and `undefined` everywhere, and for a falsy value on an attribute HTML reads by
 // presence. A URL attribute's text is scheme-checked here too (32.21), after the absence is decided
 // — `safeUrl(undefined)` is `''`, which would have written an empty `href` where none was asked for.
+// And WARNED HERE, the one place that has both the interpolation and the attribute's name: a
+// literal the compiler drops never reaches it.
 
 import { BOOLEAN_ATTRIBUTES } from './BOOLEAN_ATTRIBUTES.ts'
 import { escapeAttribute } from './escapeText.ts'
+import { RENDER_LOG } from './log.ts'
 import { textOf } from './Raw.ts'
 import { safeUrl } from './safeUrl.ts'
 import { URL_ATTRIBUTES } from './URL_ATTRIBUTES.ts'
@@ -23,7 +26,14 @@ export function attributeText(name: string, value: unknown): string | null {
     // `until-found`, where the presence alone would hide the content from find-in-page for good.
     if (BOOLEAN_ATTRIBUTES.has(folded))
         return value ? (typeof value === 'string' ? value : '') : null
-    return URL_ATTRIBUTES.has(folded) ? safeUrl(value) : textOf(value)
+    const text = textOf(value)
+    if (!URL_ATTRIBUTES.has(folded)) return text
+    const safe = safeUrl(text)
+    if (safe !== text)
+        RENDER_LOG.warning(
+            `abide: \`${name}\` was handed a URL whose scheme is not http:, https:, mailto: or tel:, and is written empty. RULEBOOK 32.21.`,
+        )
+    return safe
 }
 
 /** The same answer as the bytes the server's tag carries, leading space included, or nothing. */

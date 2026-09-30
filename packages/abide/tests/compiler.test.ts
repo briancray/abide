@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from 'bun:test'
+import { afterAll, expect, spyOn, test } from 'bun:test'
 import { compileFile, emitClient, parseAbide } from '#compiler'
 import { attributeText, escapeStyleValue, escapeText, render } from '#server'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
@@ -422,6 +422,31 @@ const ok = '/docs'
     )
     expect(out).not.toContain('javascript:')
     expect(out).toContain('href="/docs"')
+})
+
+// 32.21's SECOND HALF — A DROPPED URL IS WARNED ON `abide:render`, naming the attribute, and only a
+// dropped one: a safe URL, an absent one and an empty one say nothing. `attributeText` is the one
+// path the server's markup, a client binding and a spread all write through. THE REVERT: drop the
+// warning from `attributeText`; this reads 0 lines where 1 is due.
+test('a dropped url is warned on abide:render — 32.21', () => {
+    const warned: string[] = []
+    const quiet = spyOn(console, 'warn').mockImplementation((line) => {
+        if (String(line).includes('abide:render')) warned.push(String(line))
+    })
+    try {
+        expect(attributeText('href', 'javascript:alert(1)')).toBe('')
+        expect(attributeText('href', '/docs')).toBe('/docs')
+        expect(attributeText('src', 'https://example.com/a.png')).toBe(
+            'https://example.com/a.png',
+        )
+        expect(attributeText('href', '')).toBe('')
+        expect(attributeText('href', undefined)).toBe(null)
+    } finally {
+        quiet.mockRestore()
+    }
+    expect(warned.length).toBe(1)
+    expect(warned[0]).toContain('`href`')
+    expect(warned[0]).toContain('RULEBOOK 32.21')
 })
 
 // A BROWSER DOES NOT PARSE THE BYTES IT WAS SENT: it trims C0 and spaces, strips tab, LF and CR,

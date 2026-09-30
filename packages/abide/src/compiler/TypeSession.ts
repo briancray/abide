@@ -50,8 +50,8 @@ import {
 } from 'typescript/unstable/async'
 import type { Mount } from '#server/answerRpc.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
-import type { Method } from '#shared/rpc.ts'
 import { routeOf } from '#shared/routePattern.ts'
+import type { Method } from '#shared/rpc.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReadsIn.ts'
 import { argsSchemaOf } from './argsSchemaOf.ts'
@@ -793,6 +793,7 @@ export class TypeSession {
         )?.path
         const socketPath = (await project.program.getSourceFile(SOCKET_SOURCE))
             ?.path
+        const abide = await abideIn(project)
         return Promise.all(
             paths.map(async (path) => {
                 const sourceFile = await project.program.getSourceFile(path)
@@ -835,6 +836,19 @@ export class TypeSession {
                             declared.method === 'SOCKET'
                                 ? undefined
                                 : await checker.getTypeOfSymbol(target)
+                        if (handlerType !== undefined && abide.reactive) {
+                            const at = await nestedReactiveIn(
+                                checker,
+                                abide.reactive,
+                                await valueOfRpc(checker, handlerType),
+                                '',
+                                { seen: new Set(), depth: 0 },
+                            )
+                            if (at !== undefined)
+                                throw new Error(
+                                    `abide: ${path} — \`${exported.name}\` returns a \`Reactive\` at \`${at}\`, which the wire would carry as the function it is rather than the value it holds. Read it there, or return the \`Reactive\` itself to have it adopted (11.12). RULEBOOK 16.41.`,
+                                )
+                        }
                         return {
                             name: exported.name,
                             method: declared?.method,
@@ -2254,6 +2268,106 @@ async function isReactiveMember(
 }
 
 /**
+ * What a handler's value is, as its `Rpc` hands it back: the `Reactive` its call returns, read.
+ *
+ * `Kept<Awaited<…>>` has already adopted a `Reactive` returned whole (11.12), so what is left of
+ * one here is nested.
+ */
+async function valueOfRpc(
+    checker: Checker,
+    rpc: Type,
+): Promise<Type | undefined> {
+    const [call] = await checker.getSignaturesOfType(rpc, SignatureKind.Call)
+    const returned =
+        call === undefined
+            ? undefined
+            : await checker.getReturnTypeOfSignature(call)
+    if (returned === undefined) return undefined
+    const [read] = await checker.getSignaturesOfType(
+        returned,
+        SignatureKind.Call,
+    )
+    return read === undefined
+        ? undefined
+        : checker.getReturnTypeOfSignature(read)
+}
+
+/**
+ * 16.41 — the path to the first `Reactive` nested in a handler's value, or `undefined`.
+ *
+ * `.name` for a member, `[]` for an array's items and `[n]` for a tuple's. A callable that is not
+ * a `Reactive` is not walked — it cannot be JSON, and a lib type's methods are most of what it is —
+ * and nor is anything deeper than `argsSchemaOf`'s depth, for its reason.
+ */
+async function nestedReactiveIn(
+    checker: Checker,
+    reactive: CheckedSymbol,
+    type: Type | undefined,
+    path: string,
+    walk: { seen: Set<number>; depth: number },
+): Promise<string | undefined> {
+    if (type === undefined || walk.depth > 8) return undefined
+    if (type.flags & TypeFlags.Union) {
+        for (const member of await (
+            type as UnionOrIntersectionType
+        ).getTypes()) {
+            const found = await nestedReactiveIn(
+                checker,
+                reactive,
+                member,
+                path,
+                walk,
+            )
+            if (found !== undefined) return found
+        }
+        return undefined
+    }
+    if (!(type.flags & (TypeFlags.Object | TypeFlags.Intersection)))
+        return undefined
+    if (
+        walk.depth > 0 &&
+        (await isReactiveMember(checker, reactive, type, false))
+    )
+        return path
+    if (walk.seen.has(type.id)) return undefined
+    walk.seen.add(type.id)
+    const inner = { seen: walk.seen, depth: walk.depth + 1 }
+    const [array, tuple, calls] = await Promise.all([
+        checker.isArrayType(type),
+        checker.isTupleType(type),
+        checker.getSignaturesOfType(type, SignatureKind.Call),
+    ])
+    if (array || tuple) {
+        const items = await checker.getTypeArguments(type as TypeReference)
+        for (let at = 0; at < items.length; at += 1) {
+            const found = await nestedReactiveIn(
+                checker,
+                reactive,
+                items[at],
+                `${path}${array ? '[]' : `[${at}]`}`,
+                inner,
+            )
+            if (found !== undefined) return found
+        }
+        return undefined
+    }
+    if (calls.length > 0) return undefined
+    const members = await checker.getPropertiesOfType(type)
+    const types = await checker.getTypeOfSymbol(members)
+    for (let at = 0; at < members.length; at += 1) {
+        const found = await nestedReactiveIn(
+            checker,
+            reactive,
+            types[at],
+            `${path}.${(members[at] as CheckedSymbol).name}`,
+            inner,
+        )
+        if (found !== undefined) return found
+    }
+    return undefined
+}
+
+/**
  * 23.9 — `route.params` in a page or a layout, read as what that file's own route promises.
  *
  * THE FILE IS THE ROUTE: `ui/pages/media/[id]/page.abide` only ever renders where `id` matched, so its
@@ -2353,7 +2467,12 @@ async function propsReads(
     // One entry per name a pattern binds: the key it takes, the call's read its key joins where
     // the child writes it, and its default's pair.
     const bound: Node[] = []
-    const bindings: { key: string; call: Read; defaults: Read[] }[] = []
+    const bindings: {
+        key: string
+        call: Read
+        defaults: Read[]
+        rest: boolean
+    }[] = []
     for (let at = 0; at < calls.length; at += 1) {
         const symbol = named[at]
         if (symbol === undefined) continue
@@ -2404,6 +2523,7 @@ async function propsReads(
                 key,
                 call: callRead,
                 defaults,
+                rest: element.dotDotDotToken !== undefined,
             })
         }
     }
@@ -2426,6 +2546,10 @@ async function propsReads(
     )
     for (let at = 0; at < found.length; at += 1) {
         const binding = bindings[at] as (typeof bindings)[number]
+        if (binding.rest) {
+            restReads(found[at] as (Node | undefined)[], reads)
+            continue
+        }
         const uses: Read[] = []
         let written = false
         for (const node of found[at] as (Node | undefined)[]) {
@@ -2459,6 +2583,30 @@ async function propsReads(
             read.through = true
             reads.push(read)
         }
+    }
+}
+
+/**
+ * 33.15 — the reads of a props rest element: `rest.note`, each read of the accessor it holds.
+ *
+ * THE REST ELEMENT IS THE RECORD OF ACCESSORS the caller passed, not one of them, so the name alone
+ * is never called — `rest()` would call the record — and stands as written wherever it is handed
+ * on whole. A member read is the key's accessor called, `?.` because a key the caller left out has
+ * none (33.4), and `rest.note()` is that accessor called by hand, left alone as 31.7's is.
+ */
+function restReads(nodes: (Node | undefined)[], reads: Read[]): void {
+    for (const node of nodes) {
+        const member = node?.parent
+        if (
+            node === undefined ||
+            member === undefined ||
+            !isPropertyAccessExpression(member) ||
+            member.expression !== node
+        )
+            continue
+        const outer = member.parent
+        if (isCallExpression(outer) && outer.expression === member) continue
+        reads.push(newRead(node.getStart(), member.end, 'restMember'))
     }
 }
 

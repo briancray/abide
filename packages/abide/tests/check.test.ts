@@ -510,6 +510,43 @@ test('a check reports what only building the whole app refuses — 19.16', async
     expect(refused.length).toBe(1)
 }, 60_000)
 
+// 16.41 — A `Reactive` NESTED IN WHAT A HANDLER RETURNS is refused, by the handler and the path to
+// it; one returned whole is adopted (11.12) and is not — `getUser` is declared first, so a refusal
+// of it would be the one read. THE REVERT: skip `nestedReactiveIn` in `handlersIn`; the check reads
+// 0 refusals where 1 is due, in each app.
+test('a handler returning a Reactive nested in its value is refused by path — 16.41', async () => {
+    const refusals = async (handlers: string) => {
+        const said: string[] = []
+        const app = appFixture({
+            'ui/pages/page.abide': '<p>hello</p>',
+            'server/rpc/people.ts': `import { reactive } from 'abide'
+import { GET } from 'abide/server'
+
+const user = reactive({ name: 'Ada' })
+
+export const getUser = GET(() => user)
+${handlers}`,
+        })
+        for (const diagnosis of await checkApp(app))
+            if (diagnosis.message.includes('16.41'))
+                said.push(diagnosis.message)
+        return said
+    }
+    const member = await refusals(
+        'export const getProfile = GET(() => ({ user, since: 1815 }))\n',
+    )
+    expect(member.length).toBe(1)
+    expect(member[0]).toContain('`getProfile` returns a `Reactive` at `.user`')
+    const item = await refusals(
+        'export const getRows = GET(async () => [{ owner: { held: user } }])\n',
+    )
+    expect(item.length).toBe(1)
+    expect(item[0]).toContain(
+        '`getRows` returns a `Reactive` at `[].owner.held`',
+    )
+    expect(await refusals('')).toEqual([])
+}, 60_000)
+
 // 32.6 — A `bind:` WITH NOTHING BOUND IS NO PROP, to the checker as to the build: both key a tag's
 // props by `propKeyOf`. THE REVERT: key a `bind:` whatever it holds in `projectShadow`; the checker
 // then holds `""` to `Reactive<string>` (TS2322) beside the build's refusal, two answers to one tag.

@@ -232,6 +232,43 @@ const { label } = props<{ label?: string }>()
     expect(document.body.textContent).toContain('givennone')
 })
 
+// 33.15 — A REST ELEMENT IS LIVE, one accessor per key the caller passed: `rest.note` is read
+// where it stands and re-read when the caller's expression moves, as a named binding is, and a key
+// the caller left out reads `undefined` (33.4). THE REVERT: drop `restReads` from `propsReads`; the
+// rest element reads as a named binding and the render throws `rest is not a function`; drop the
+// `?.` from the `restMember` lowering and it throws `rest.count is not a function`.
+test('a props rest element renders and re-reads each key live — 33.15', async () => {
+    const { html, mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Note from './Note.abide'
+
+let note = reactive('first')
+</script>
+<Note title="t" note={note}/><button onclick={() => { note = 'second' }}>next</button>`,
+        {
+            Note: `<script>
+import { props } from 'abide'
+
+const { title, ...rest } = props<{ title: string; note: string; count?: number }>()
+</script>
+
+<b>{title} {rest.note} {rest.count ?? 'none'}</b>`,
+        },
+    )
+    expect(html).toContain('<b>t first none</b>')
+    mount(pageRegion(document.body))
+    flushSync()
+    const work = measure(() => {
+        document.querySelector('button')?.click()
+        flushSync()
+    })
+    expect(document.querySelector('b')?.textContent).toBe('t second none')
+    // The child's own read woke, and nothing was rebuilt to answer it.
+    expect(work.nodesCreated).toBe(0)
+    expect(work.wakes).toBe(1)
+})
+
 // 32.18 THROUGH THE BUILD — A CHILD WITH NOTHING TO HYDRATE STILL SHIPS A MODULE, because the
 // caller's client module imports one by name. "A static page ships no client" is the rule this is
 // the exception to, and the import is what forces it: the child is static, the page is not, and
