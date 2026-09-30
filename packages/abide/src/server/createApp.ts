@@ -3,8 +3,8 @@
 // what its worker compiled. Where the parts come from is the caller's (`sources`); what is done with
 // them — the hooks, the onion, the one scope a request is answered in — is here, once.
 //
-// NOT HERE YET: 42.11's ending of every live stream and socket and timer, of which only the drain
-// is done.
+// NOT HERE YET: 42.11's ending of every live stream and timer. Its sockets are closed, and the
+// requests in flight drained, in `stopOnce`.
 
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own

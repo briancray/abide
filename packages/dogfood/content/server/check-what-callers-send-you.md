@@ -87,14 +87,14 @@ system cannot express goes — a non-empty array, an ISO date, a bounded number.
 
 ## A schema runs where its value lives
 
-Not "on the server" — **where the `Reactive` is declared**. One in `#ui` checks in the browser,
-one in `#server` checks on the server, one in `#shared` checks wherever it was used. That is the
-seams doing their job rather than a rule of validation's own.
-
 {% example schema-browser %}
 
 *1 option, 0 validators* — the arm spells the shape a second time, in a form nothing compares
 against the annotation it came from.
+
+Not "on the server" — **where the `Reactive` is declared**. One in `#ui` checks in the browser,
+one in `#server` checks on the server, one in `#shared` checks wherever it was used. That is the
+seams doing their job rather than a rule of validation's own.
 
 A refused write fills `error()` rather than throwing, and stores nothing — so the field keeps
 what was typed while the record keeps what it had. On a primitive the issues are a bare
@@ -157,6 +157,8 @@ with the sentence naming the wrapper (19.15), rather than accepting a shape it n
 
 ## `Issues<T>` is keyed by path, not a list
 
+{% example schema-issues %}
+
 ```ts shared
 type Issues<T> = T extends object
     ? Partial<Record<Paths<T> | '', string[]>>
@@ -164,11 +166,7 @@ type Issues<T> = T extends object
 ```
 
 A record on a composite, a bare list on a primitive — because the reader always has the path in
-hand.
-
-{% example schema-issues %}
-
-A flat list would cost a `find` **per field per render** — twenty scans on a twenty-field form.
+hand. A flat list would cost a `find` **per field per render** — twenty scans on a twenty-field form.
 It is `string[]` and not `string` because one field fails two ways at once, too short *and*
 malformed, and one message per path is a loss with nothing naming it.
 

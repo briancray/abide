@@ -165,7 +165,7 @@ test('a file under public is answered at its own address — 36.11', async ({
     expect(robots.status()).toBe(200)
     expect(await robots.text()).toContain('User-agent: *')
 
-    // 40.4's markdown twin, which is a public file rather than a page.
+    // A page's markdown twin, which is a public file rather than a page.
     const markdown = await page.request.get(
         '/values/show-a-value-that-changes.md',
     )

@@ -30,13 +30,13 @@ export const bridge = GET(() => claudeCode.bridge(), { ...HIDDEN, timeout: Infin
 export const command = GET(() => claudeCode.bridgeCommand(), HIDDEN)
 
 export const ask = POST(
-    async function* ({ messages, via }: { messages: AssistantMessage[]; via: 'api' | 'code' }) {
+    async function* ({ messages, via, maxTurns }: { messages: AssistantMessage[]; via: 'api' | 'code'; maxTurns?: number }) {
         yield* assistant(
             messages,
             via === 'api'
                 ? claudeApi({ apiKey: 'key', baseURL: process.env.FAKE_API, model: 'claude-opus-5', max_tokens: 1000 })
                 : claudeCode({ model: 'sonnet', appendSystemPrompt: 'Be brief.' }),
-            { mcp: true },
+            { mcp: true, maxTurns },
         )
     },
     HIDDEN,
@@ -126,6 +126,7 @@ function ask(
     caller: string,
     via: 'api' | 'code',
     content: string,
+    maxTurns?: number,
 ): Promise<Response> {
     return Bun.fetch(`${base}/__abide/rpc/ask/ask`, {
         method: 'POST',
@@ -136,6 +137,7 @@ function ask(
         },
         body: JSON.stringify({
             via,
+            maxTurns,
             messages: [
                 { role: 'user', content: 'earlier question' },
                 { role: 'assistant', content: 'earlier answer' },
@@ -174,6 +176,19 @@ test('both providers play one conversation as one event sequence, tools called a
         expected,
     )
 }, 30_000)
+
+// 45.11 — THE LAST TURN'S TOOL CALL IS NEVER RUN. With one turn allowed, the model's call to
+// `invoices_whoami` is announced as it streams, but no `result` follows and the conversation ends on
+// `max_turns` rather than the `tool_use` the turn stopped for. THE REVERTS: yield `stop` as it arrived
+// in `claudeApi`'s `done`, and this reads `tool_use`; drop `turn >= maxTurns`, and the call runs and a
+// second turn answers `saw "ada"`.
+test('a conversation out of turns ends on max_turns without running the pending call — 45.11', async () => {
+    expect(await events(await ask('one', 'api', 'who am I?', 1))).toEqual([
+        { type: 'text', text: 'checking' },
+        { type: 'tool', id: 'toolu_1', name: 'invoices_whoami', input: {} },
+        { type: 'done', stop: 'max_turns', usage: { input: 1, output: 2 } },
+    ])
+})
 
 // 45.20 — THE PAGE SEES THE PAIRING LAND. The status stream says not ready, with the command, and then
 // ready once a bridge connects with that command's code. THE REVERT: drop `wakeWatchers` from `pair`;

@@ -2224,11 +2224,10 @@ test('a window does not hold back the first landing', () => {
     expect(capped.busy()).toBe(true)
 })
 
-// WHERE THE CAP GOES DECIDES WHETHER A CALL IS MADE AT ALL, and the two placements are
-// not interchangeable. Capping the KEY means a key that was superseded is never reached,
-// so the call behind it is never issued. Capping the value that WRAPS the call only
-// delays each answer — the body has already run by the time a window can hold anything,
-// which is 5.12, and it is not built.
+// A CAP ON THE KEY SPARES THE CALL. A key that was superseded inside the window is never
+// reached, so the call behind it is never issued. A cap on the body that WRAPS the call
+// spares it too, by holding the run rather than the key (5.12) — the `searchRig` tests
+// below are that placement.
 //
 // THE WRITES ARE IN SEPARATE TURNS. Four writes in one turn reach a reader once whatever
 // any cap says, the turn batch having collapsed them — an earlier version of this test

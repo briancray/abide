@@ -13,6 +13,8 @@ cache key, and a type you keep in sync by hand.
 In abide it is the handler, and a page that reads it. You declare what a value *is*, and
 reading it loads it — there is nothing in between for you to write.
 
+## Call a server function from a page
+
 {% example read-invoice %}
 
 *2 files, 0 API between them* — one of those seven is left standing, and it is the handler.

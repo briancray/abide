@@ -145,7 +145,7 @@ export function routeOf(slug: string): string {
 /**
  * The markdown twin's address: the content path, served as a file.
  *
- * 40.4 — the same words at the same place with `.md` on the end, which is also why it cannot
+ * The same words at the same place with `.md` on the end, which is also why it cannot
  * collide with a route (36.13).
  */
 export function markdownAddressOf(slug: string): string {

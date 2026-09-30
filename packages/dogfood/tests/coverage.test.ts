@@ -307,6 +307,28 @@ test('no heading leans on a pronoun for its subject', async () => {
     expect(offenders).toEqual([])
 })
 
+// 40.27 — a card follows its heading with nothing between them. A paragraph there is a fourth voice
+// restating the heading, the title or the summary (docs/BRAND.md, "Four layers reach a card"), and
+// the copy it was trying to be belongs after the card.
+test('an example follows its heading directly', async () => {
+    const separated: string[] = []
+    for (const page of await readPages()) {
+        let fenced = false
+        let previous = ''
+        for (const line of page.body.split('\n')) {
+            if (line.startsWith('```')) fenced = !fenced
+            if (
+                !fenced &&
+                EXAMPLE.test(line.trim()) &&
+                !/^#{2,4}\s/.test(previous)
+            )
+                separated.push(`${page.slug}: ${line.trim()}`)
+            if (line.trim() !== '') previous = line
+        }
+    }
+    expect(separated).toEqual([])
+})
+
 // A `.abide` file is where a state is read and written BY NAME — `count += 1`, not
 // `count.set(count() + 1)`. Both spellings compile and that is deliberate, but a guide
 // showing the explicit one teaches back the ceremony the file exists to remove. Where the

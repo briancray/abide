@@ -5,9 +5,9 @@
 // THE SURFACES ANSWER INSIDE THE APP'S OWN MIDDLEWARE (20.8), because they are answered from the one
 // request path everything under `/__abide` is — and a tool call is a request through it again (20.10).
 //
-// NOT HERE YET: 20.4's `ui: false`, which is the build's to withhold; 16.38's default of `mcp` and
-// `cli` to false for a handler returning a `Response`, which wants the return type. 20.11's
-// type-derived schema is the build's (19.10), and arrives here as the mount's `argsDocument`.
+// NOT HERE YET: 16.38's default of `mcp` and `cli` to false for a handler returning a `Response`,
+// which wants the return type. 20.4's `ui: false` is the build's to withhold, and 20.11's
+// type-derived schema is the build's too (19.10), arriving here as the mount's `argsDocument`.
 
 import { log, namedLogger } from '#shared/log.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'

@@ -420,9 +420,12 @@ export function appSources(
  * a document that parses its script before its styles paints once unstyled. It is a plain `<link>`
  * rather than anything the client does, so a page the server painted is styled with no JS at all.
  *
- * ONE STYLESHEET FOR THE APP, which is NOT 34.5's per-component dependency: the bundler collects
- * every stylesheet reachable from the entry into one file, so a page that imports none is served
- * this too. 34.3's scope token is what makes that distinction matter and it is not built.
+ * ONE STYLESHEET FOR THE APP: the bundler collects every stylesheet reachable from the entry — each
+ * component's scoped `<style>` (34.4) and each one a component imports (34.6) — into one file, so a
+ * page that renders none of those components is served them too. For a `<style>` block that costs
+ * bytes rather than correctness: every rule requires its component's scope token, so on a page the
+ * component is not on it matches nothing. An imported stylesheet carries no token and applies as
+ * written, wherever it is served.
  *
  * 38.29 — THE ROUTE'S CHUNKS ARE PRELOADED BESIDE THE ENTRY. Left to the client, the page's chunk
  * and the shared runtime it imports are only asked for once the entry has arrived and run the
