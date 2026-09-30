@@ -1,14 +1,13 @@
 // WHAT A HANDLER'S VALUE IS ANSWERED AS, over http. JSON by default (16.31), and otherwise by what the
 // value is: a `Response` as it stands (16.37), a binary as bytes (16.35), a `Blob` range-aware
-// (16.36), a document where `page` named one (17.2), and a stream — a streaming handler's chunks, or
-// `Values` a handler returned — framed one chunk per pull (16.33, 16.46–16.49).
-//
-// NOT HERE YET: 16.50–16.52, a `history` value's sequence numbers on the wire, which wait on the
-// socket lane that mints them; and 16.34's transcript of a stream in the seed buffer.
+// (16.36), a document where `page` named one (17.2), a stream — a streaming handler's chunks, or
+// `Values` a handler returned — framed one chunk per pull (16.33, 16.46–16.49), and a value declaring
+// `history` framed one production per pull where the reader asks for frames (16.50–16.52).
 
-import { chunksFrom } from '#shared/reactive/index.ts'
+import { chunksFrom, isReactive } from '#shared/reactive/index.ts'
 import { prefers } from './prefers.ts'
 import { currentRequestScope, type Framing } from './requestScope.ts'
+import { resumeProductions } from './resumeProductions.ts'
 
 const ENCODER = new TextEncoder()
 
@@ -81,6 +80,9 @@ export async function answerValue(
     status: number,
 ): Promise<Response> {
     if (value instanceof Response) return value
+    // A `Reactive` is what `outcomeOf` hands on for a value declaring `history`, and for nothing else.
+    if (isReactive(value))
+        return answerProductions(value, request, headers, status)
     const framing = currentRequestScope()?.framing
     // 16.32 — nothing to say is 204, where the handler wrote no status of its own, and 16.57 — a
     // type for no content is noise.
@@ -126,6 +128,81 @@ function isIterable(value: unknown): value is Iterable<unknown> {
         typeof value === 'object' &&
         Symbol.iterator in (value as object)
     )
+}
+
+/**
+ * A value declaring `history`, answered as its productions, or as the one standing.
+ *
+ * 16.50 — ONE FRAME PER PRODUCTION, each carrying the sequence number and the epoch the socket lane
+ * carries (`resumeProductions`): the ring, and then every production live. Only where the reader
+ * asks for frames over JSON; a reader asking for the value is answered the standing production as
+ * any value is (16.31), which is what a browser's `Rpc` asks for.
+ *
+ * jsonl frames are the mux's own (`ServerFrame`, less its `id`). 16.51 — AN EVENT STREAM carries
+ * each production's value as `data:`, and its place as `id: <seq>:<epoch>`, so an `EventSource`
+ * reconnecting hands both back as `Last-Event-ID` (16.52) and 18.13's epoch comparison has an epoch
+ * to compare; a moved one is one `event: reset` whose data is the ring. A `Last-Event-ID` naming no
+ * epoch is compared as a moved one — the whole ring, never a gap.
+ */
+function answerProductions(
+    value: unknown,
+    request: Request,
+    headers: Headers,
+    status: number,
+): Promise<Response> | Response {
+    const sse = prefers(request, 'text/event-stream', 'application/json')
+    if (!sse && !prefers(request, 'application/jsonl', 'application/json'))
+        return answerValue(
+            (value as { peek(): unknown }).peek(),
+            request,
+            headers,
+            status,
+        )
+    const last = request.headers.get('last-event-id') ?? ''
+    const colon = last.indexOf(':')
+    const seq = Number.parseInt(colon === -1 ? last : last.slice(0, colon), 10)
+    const { epoch, moved, ring, cursor } = resumeProductions(
+        value,
+        Number.isNaN(seq) ? undefined : seq,
+        colon === -1 ? undefined : last.slice(colon + 1),
+    )
+    const production = (at: number, item: unknown): Uint8Array =>
+        ENCODER.encode(
+            sse
+                ? `id: ${at}:${epoch}\ndata: ${JSON.stringify(item)}\n\n`
+                : `${JSON.stringify({ op: 'prod', seq: at, epoch, value: item })}\n`,
+        )
+    const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+            if (sse) controller.enqueue(ENCODER.encode(':\n\n'))
+            if (!moved) {
+                for (const [at, item] of ring)
+                    controller.enqueue(production(at, item))
+                return
+            }
+            const at = ring.at(-1)?.[0] ?? cursor.at
+            controller.enqueue(
+                ENCODER.encode(
+                    sse
+                        ? `event: reset\nid: ${at}:${epoch}\ndata: ${JSON.stringify(ring)}\n\n`
+                        : `${JSON.stringify({ op: 'reset', epoch, ring })}\n`,
+                ),
+            )
+        },
+        async pull(controller) {
+            const next = await cursor.next()
+            if (next.done === true) controller.close()
+            else controller.enqueue(production(cursor.at, next.value))
+        },
+        cancel() {
+            void cursor.return?.(undefined)
+        },
+    })
+    headers.set('content-type', sse ? 'text/event-stream' : 'application/jsonl')
+    // 16.47 — a feed is never stored, whatever the production's own life said (21.8).
+    headers.set('cache-control', 'no-cache')
+    if (sse) headers.set('x-accel-buffering', 'no')
+    return new Response(body, { status, headers })
 }
 
 /**

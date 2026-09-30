@@ -5,6 +5,7 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, POST, principal } from 'abide/server'
+import { RESOLVED } from '#server/RESOLVED.ts'
 
 export const signIn = POST(async ({ name }: { name: string }) => {
     await principal.set({ name })
@@ -21,7 +22,19 @@ export const signOut = POST(() => {
     principal.clear()
     return principal.authenticated()
 })
+
+export const resolutions = GET(() => RESOLVED.count)
 `
+
+// How many times `onPrincipal` ran, in the server's process.
+const RESOLVED = `export const RESOLVED = { count: 0 }
+`
+
+const PAGE = `<script>
+import { principal } from 'abide'
+</script>
+
+<main>{principal.authenticated() ? 'in' : 'out'}</main>`
 
 let base = ''
 let stop = (): void => {}
@@ -30,10 +43,11 @@ const RPC = '/__abide/rpc/session'
 beforeAll(async () => {
     process.env.ABIDE_PRINCIPAL_SECRET = 'new-secret,old-secret'
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': '<main>home</main>',
+        'ui/pages/page.abide': PAGE,
         'server/rpc/session.ts': HANDLERS,
+        'server/RESOLVED.ts': RESOLVED,
         // 26.4 — an app answer that tries to claim the baseline's fields.
-        'server/app.ts': `import { onPrincipal } from 'abide/server'\n\nonPrincipal((claims) => ({ ...(claims as object), role: 'admin', authenticated: 'spoofed' }))\n`,
+        'server/app.ts': `import { onPrincipal } from 'abide/server'\nimport { RESOLVED } from '#server/RESOLVED.ts'\n\nonPrincipal((claims) => {\n    RESOLVED.count += 1\n    return { ...(claims as object), role: 'admin', authenticated: 'spoofed' }\n})\n`,
     }))
 }, 30_000)
 
@@ -69,7 +83,7 @@ async function signedIn(): Promise<{ principal: string; caller: string }> {
 // 26.10 — an anonymous visitor is a document, never null.
 test('an anonymous caller is authenticated false — 26.10', async () => {
     const answer = await Bun.fetch(`${base}/__abide/principal`)
-    expect(answer.headers.get('cache-control')).toBe('no-store')
+    expect(answer.headers.get('cache-control')).toBe('private, no-store')
     expect(await answer.json()).toEqual({ authenticated: false })
 })
 
@@ -132,4 +146,29 @@ test('clear signs out now and next time, and rotates the caller — 26.7, 26.9',
     const rotated = cookieFrom(answer, 'abide-caller')
     expect(rotated).toBeDefined()
     expect(rotated).not.toBe(caller)
+})
+
+// 26.17, 41.5, 41.13, 41.20 — A PAGE THAT READ THE PRINCIPAL SEEDS IT as it seeds any handler: the head
+// starts the browser's request for it, and that request is answered from the render's resolution
+// rather than by resolving again. Counted as `onPrincipal` runs, because a second resolution answers
+// the same document. THE REVERT: `PRINCIPAL.document = resolvePrincipal` in `#server/principal.ts`;
+// the head starts nothing, the answer is `Direct`, and `onPrincipal` runs 2 times where 1 is due.
+test("a page's read of the principal is seeded, and the browser's read is answered from it — 26.17", async () => {
+    const { principal, caller } = await signedIn()
+    const cookie = `${principal}; ${caller}`
+    const count = async (): Promise<number> =>
+        (await (await Bun.fetch(`${base}${RPC}/resolutions`)).json()) as number
+    const before = await count()
+    const page = await Bun.fetch(`${base}/`, { headers: { cookie } })
+    const html = await page.text()
+    expect(html).toContain('"/__abide/principal"')
+    const answer = await Bun.fetch(`${base}/__abide/principal`, {
+        headers: { cookie },
+    })
+    expect(answer.headers.get('server-timing')).toStartWith('Seeded;')
+    expect(await answer.json()).toMatchObject({
+        authenticated: true,
+        name: 'ada',
+    })
+    expect((await count()) - before).toBe(1)
 })

@@ -3,7 +3,9 @@
 // output cannot tell a seeded answer from a re-run, and the run count is the whole of the contract.
 
 import { afterAll, beforeAll, expect, setSystemTime, test } from 'bun:test'
+import { onConfig } from '#server/hooks.ts'
 import { seedFor, takeSeed } from '#server/seedBuffer.ts'
+import { reactive } from '#shared/reactive/index.ts'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -204,4 +206,77 @@ test("an answer says how long its handler took, and whether the render's run ans
         /dur=([\d.]+)/.exec(fresh.headers.get('server-timing') ?? '')?.[1],
     )
     expect(duration).toBeGreaterThanOrEqual(140)
+})
+
+/** The `abide:hydrate` lines `body` logs. */
+async function hydrateWarnings(body: () => unknown): Promise<string[]> {
+    const warned: string[] = []
+    const warn = console.warn
+    console.warn = (...args: unknown[]) => {
+        warned.push(args.map(String).join(' '))
+    }
+    try {
+        await body()
+    } finally {
+        console.warn = warn
+    }
+    return warned.filter((line) => line.includes('abide:hydrate'))
+}
+
+// 41.12 — A CALL THE BUFFER CANNOT ANSWER RUNS THE HANDLER AND WARNS, where the buffer can tell the call
+// was its to answer: the render left this handler an entry, for other args. A call for args an entry
+// already answered is a refresh, and is quiet. THE REVERT: drop the `missed` call for args with no
+// list in `takeSeed`; 0 warnings where 1 is due. And keep `drop` deleting a key's emptied list; the
+// refresh warns too, 2 where 1 is due.
+test('a call the render made with other args runs the handler and warns on abide:hydrate, and a refresh is quiet — 41.12', async () => {
+    const handler = { address: '/__abide/rpc/invoices/getInvoice' }
+    const seed = seedFor('caller-miss')
+    seed(handler, { id: 1 }, Promise.resolve('one'))
+    seed(handler, { id: 2 }, Promise.resolve('two'))
+    const warned = await hydrateWarnings(async () => {
+        // 19.8's case: the render passed a number, and the query arrives as text.
+        expect(takeSeed('caller-miss', handler, { id: '1' })).toBeUndefined()
+        expect(await takeSeed('caller-miss', handler, { id: 1 })).toMatchObject(
+            {
+                value: 'one',
+            },
+        )
+        // The refresh, while the entry for 2 still stands.
+        expect(takeSeed('caller-miss', handler, { id: 1 })).toBeUndefined()
+    })
+    expect(warned.length).toBe(1)
+    expect(warned[0]).toContain('/__abide/rpc/invoices/getInvoice')
+    expect(warned[0]).toContain('41.12')
+})
+
+// 16.34 — A STREAM'S TRANSCRIPT PAST `ABIDE_MAX_STREAM_BUFFER_SIZE` STOPS BEING HELD, and its call is
+// one the buffer cannot answer (41.12). Counted in jsonl bytes: `"aaaa"\n` is 7, so two chunks pass
+// 10 and one does not. THE REVERT: skip `boundTranscript` in `seedFor`; the entry over the bound
+// answers, and 0 warnings arrive where 1 is due.
+test('a seeded stream whose transcript passes ABIDE_MAX_STREAM_BUFFER_SIZE is not answered from the buffer — 16.34, 41.12', async () => {
+    const unfile = onConfig(() => ({ ABIDE_MAX_STREAM_BUFFER_SIZE: 10 }))
+    try {
+        const handler = { address: '/__abide/rpc/reports/rows' }
+        const streamOf = (count: number) =>
+            reactive(async function* () {
+                for (let at = 0; at < count; at += 1) yield 'aaaa'
+            })
+        const over = streamOf(2)
+        const under = streamOf(1)
+        seedFor('caller-bound')(handler, { size: 2 }, over)
+        seedFor('caller-bound')(handler, { size: 1 }, under)
+        await over
+        await under
+        await Bun.sleep(0)
+        const warned = await hydrateWarnings(async () => {
+            expect(
+                takeSeed('caller-bound', handler, { size: 2 }),
+            ).toBeUndefined()
+            expect(takeSeed('caller-bound', handler, { size: 1 })).toBeDefined()
+        })
+        expect(warned.length).toBe(1)
+        expect(warned[0]).toContain('ABIDE_MAX_STREAM_BUFFER_SIZE')
+    } finally {
+        unfile()
+    }
 })

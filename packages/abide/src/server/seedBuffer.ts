@@ -10,11 +10,31 @@
 //
 // ONE CALL PER ENTRY (41.16), and a bounded life for the entries nothing takes (41.17): a page read
 // with scripting off, or by a crawler, fills entries no call will ever come for.
+//
+// 16.34 — A STREAM'S TRANSCRIPT IS THE VALUE'S OWN ACCUMULATION, held as chunks and framed when the
+// entry is taken, so it is one transcript whichever framing the call asks for. Where
+// `ABIDE_MAX_STREAM_BUFFER_SIZE` bounds it, the bytes are counted in the chunk type's default framing
+// as the chunks land, and an entry past the bound stops holding the stream — its call is then one the
+// buffer cannot answer.
+//
+// 41.12 — A CALL THE BUFFER CANNOT ANSWER RUNS THE HANDLER, AND WARNS on `abide:hydrate` where the
+// buffer can tell the call was its to answer: an entry left for other args of the same handler, one
+// past its life, or one past the transcript bound. A call for args an entry already answered is a
+// refresh, and says nothing.
 
+import { isFailed } from '#shared/Failed.ts'
+import { namedLogger } from '#shared/log.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
-import { isStreaming } from '#shared/reactive/index.ts'
+import { isReactive, isStreaming, pastOf } from '#shared/reactive/index.ts'
 import { chunksOfStream } from './answerValue.ts'
+import { positiveSetting } from './config.ts'
 import type { PageRender } from './requestScope.ts'
+
+const HYDRATE_LOG = namedLogger('abide:hydrate')
+
+const ENCODER = new TextEncoder()
+
+const NOTHING_HELD = (): void => {}
 
 // 41.17.
 const SEED_LIFE_MS = 30_000
@@ -32,16 +52,21 @@ export type Outcome =
 type Entry = {
     rpc: object
     key: string
-    outcome: Promise<Outcome>
+    // `undefined` once a stream's transcript passed `ABIDE_MAX_STREAM_BUFFER_SIZE` (16.34).
+    outcome: Promise<Outcome> | undefined
     expires: number
     // Cleared when the entry is taken, so an answered entry's value is not held for the rest of its life.
     timer: ReturnType<typeof setTimeout> | undefined
+    // Stops counting a stream's transcript against its bound.
+    release: () => void
 }
 
 // INDEXED BY THE THREE THINGS 41.18 MATCHES ON — caller, handler, args key — so a call finds its entry
 // without reading the others. A caller whose calls never match (a crawler, a render whose args the
 // wire does not reproduce) leaves every entry standing for 30 seconds, and a list read end to end
-// made each of its calls pay for all of them. Several entries under one key are taken oldest first.
+// made each of its calls pay for all of them. Several entries under one key are taken oldest first,
+// and a key whose entries are all taken keeps its empty list while the handler has others standing,
+// which is how a refresh of it is told from a call the render never made (41.12).
 const BUFFER = new Map<string, Map<object, Map<string, Entry[]>>>()
 
 /**
@@ -71,7 +96,17 @@ export function seedFor(caller: string): PageRender['seed'] {
             outcome: outcomeOf(reached),
             expires: Date.now() + SEED_LIFE_MS,
             timer: undefined,
+            release: NOTHING_HELD,
         }
+        const bound = positiveSetting(
+            'ABIDE_MAX_STREAM_BUFFER_SIZE',
+            Number.POSITIVE_INFINITY,
+        )
+        if (Number.isFinite(bound) && isStreaming(reached))
+            entry.release = boundTranscript(reached, bound, () => {
+                entry.outcome = undefined
+                entry.release = NOTHING_HELD
+            })
         let byRpc = BUFFER.get(caller)
         if (byRpc === undefined) {
             byRpc = new Map()
@@ -98,11 +133,47 @@ export function seedFor(caller: string): PageRender['seed'] {
 }
 
 /**
+ * Counts a stream's transcript as it lands; calls `over` once it passes `bound` bytes.
+ *
+ * 16.34 — IN THE CHUNK TYPE'S DEFAULT FRAMING: a binary chunk's bytes, a value's jsonl line. Read
+ * through the reader an answer uses, so nothing is copied to count it. Returns what stops counting.
+ */
+function boundTranscript(
+    reached: unknown,
+    bound: number,
+    over: () => void,
+): () => void {
+    let counting = true
+    void (async () => {
+        let bytes = 0
+        try {
+            for await (const chunk of chunksOfStream(reached)) {
+                if (!counting) return
+                bytes +=
+                    chunk instanceof Uint8Array
+                        ? chunk.byteLength
+                        : ENCODER.encode(`${JSON.stringify(chunk)}\n`)
+                              .byteLength
+                if (bytes > bound) {
+                    over()
+                    return
+                }
+            }
+        } catch {
+            // A stream that failed is answered as it failed, by whichever call takes the entry.
+        }
+    })()
+    return () => {
+        counting = false
+    }
+}
+
+/**
  * Takes the outcome this caller's render left for this handler and these args, or `undefined`.
  *
- * `undefined` where there is none, it has been taken, or its life is over. The args are keyed
- * only once the caller is known to have entries for this handler, which a call from a page that
- * was not rendered for it never does.
+ * `undefined` where there is none, it has been taken, its life is over, or its transcript passed
+ * its bound. The args are keyed only once the caller is known to have entries for this handler,
+ * which a call from a page that was not rendered for it never does.
  */
 export function takeSeed(
     caller: string,
@@ -113,11 +184,41 @@ export function takeSeed(
     if (byKey === undefined) return undefined
     const key = seedKey(args)
     if (key === undefined) return undefined
-    const entry = byKey.get(key)?.[0]
+    const entries = byKey.get(key)
+    if (entries === undefined) {
+        const standing: string[] = []
+        for (const [other, left] of byKey)
+            if (left.length > 0) standing.push(other)
+        missed(
+            rpc,
+            key,
+            `the render made it with other args: ${standing.join(', ')}`,
+        )
+        return undefined
+    }
+    const entry = entries[0]
     if (entry === undefined) return undefined
     drop(caller, entry)
     // READ AS WELL AS SWEPT: a timer can fire late, and an entry past its life answers nothing.
-    return entry.expires > Date.now() ? entry.outcome : undefined
+    if (entry.expires <= Date.now()) {
+        missed(
+            rpc,
+            key,
+            `its entry outlived its ${SEED_LIFE_MS / 1000} seconds`,
+        )
+        return undefined
+    }
+    if (entry.outcome === undefined)
+        missed(rpc, key, 'its transcript passed ABIDE_MAX_STREAM_BUFFER_SIZE')
+    return entry.outcome
+}
+
+/** 41.12 — the warning a call the buffer was expected to answer, and did not, is logged with. */
+function missed(rpc: object, key: string, why: string): void {
+    const address = (rpc as { address?: string }).address ?? 'a handler'
+    HYDRATE_LOG.warning(
+        `the call to ${address} with args ${key} was not answered from the seed buffer, because ${why}, so the handler ran again. RULEBOOK 41.12.`,
+    )
 }
 
 /** 11.24's key, or `undefined` where 11.65 refuses the args — which the call itself then says. */
@@ -131,17 +232,17 @@ function seedKey(args: unknown): string | undefined {
 
 function drop(caller: string, entry: Entry): void {
     clearTimeout(entry.timer)
+    entry.release()
     const byRpc = BUFFER.get(caller)
     const byKey = byRpc?.get(entry.rpc)
     const entries = byKey?.get(entry.key)
-    if (entries === undefined) return
+    if (byRpc === undefined || byKey === undefined || entries === undefined)
+        return
     const at = entries.indexOf(entry)
     if (at !== -1) entries.splice(at, 1)
-    if (entries.length > 0) return
-    byKey?.delete(entry.key)
-    if (byKey?.size !== 0) return
-    byRpc?.delete(entry.rpc)
-    if (byRpc?.size === 0) BUFFER.delete(caller)
+    for (const left of byKey.values()) if (left.length > 0) return
+    byRpc.delete(entry.rpc)
+    if (byRpc.size === 0) BUFFER.delete(caller)
 }
 
 /**
@@ -162,7 +263,16 @@ export function outcomeOf(reached: unknown): Promise<Outcome> {
     return Promise.resolve(reached).then(
         (value): Outcome => ({
             settled: true,
-            value,
+            // 16.50 — A VALUE DECLARING `history` IS HANDED ON AS ITSELF, settled, for the answer to
+            // frame per production where the reader asks — so a seeded answer is framed as a run
+            // one is. A refusal and nothing at all are answered as they are.
+            value:
+                value !== undefined &&
+                !isFailed(value) &&
+                isReactive(reached) &&
+                pastOf(reached).ringDepth > 0
+                    ? reached
+                    : value,
             duration: performance.now() - started,
         }),
         (error: unknown): Outcome => ({

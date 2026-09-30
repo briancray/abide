@@ -49,7 +49,7 @@ import { failureOf } from './hooks.ts'
 import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
 import { chunksOf, type Manifest } from './manifestOf.ts'
 import { ENCODINGS, negotiateEncoding } from './negotiateEncoding.ts'
-import { callerOrMint, resolvePrincipal } from './principal.ts'
+import { callerOrMint, PRINCIPAL_HANDLERS } from './principal.ts'
 import { type Component, composePage, headAnchor, render } from './render.ts'
 import {
     adoptRequest,
@@ -150,7 +150,12 @@ export async function answerRequest(
         return answerRpc(app.handlers, url, request, (failure) =>
             answerFailure(app, asked, failure),
         )
-    // 25.1, 26.1, 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where its `ABIDE_*` has not
+    // 26.17 — the principal is a handler abide mounts, answered as the app's are.
+    if (asked === PRINCIPAL_ADDRESS)
+        return answerRpc(PRINCIPAL_HANDLERS, url, request, (failure) =>
+            answerFailure(app, asked, failure),
+        )
+    // 25.1, 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where its `ABIDE_*` has not
     // opened it.
     const surface = SURFACES.get(asked)
     if (surface !== undefined) {
@@ -323,7 +328,6 @@ const SURFACES = new Map<
     (app: AppSources, request: Request) => unknown
 >([
     [HEALTH_ADDRESS, reportHealth],
-    [PRINCIPAL_ADDRESS, resolvePrincipal],
     [OPENAPI_ADDRESS, (app) => openApi(app.handlers)],
     [MCP_ADDRESS, (app, request) => answerMcp(app.handlers, request)],
     [LOGS_ADDRESS, (_app, request) => answerLogs(request)],

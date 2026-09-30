@@ -17,48 +17,20 @@
 // wrapper imports it, and a page with no handler pays nothing for it.
 
 import type { CopyOptions } from '#shared/CopyOptions.ts'
-import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
-import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
 import { failed, isFailed } from '#shared/Failed.ts'
 import { framedStream } from '#shared/framedStream.ts'
+import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
 import { reactive, structural } from '#shared/reactive/index.ts'
 import { refuse } from '#shared/refuse.ts'
 import { declare, type Method } from '#shared/rpc.ts'
 import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
+import {
+    type Answer,
+    type EarlyCall,
+    takeEarlyCall,
+} from '#shared/takeEarlyCall.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
 import { followRpc } from './socketWire.ts'
-
-/**
- * What a call answered: the status and the text — which stays unset where the request itself did
- * not complete.
- */
-type Answer = {
-    status: number | undefined
-    statusText: string | undefined
-    type: string | null | undefined
-    /**
-     * The answer's version, or `null` where it named none (18.20).
-     *
-     * A `null` is a value built per request.
-     */
-    version: string | null | undefined
-    /** The answer's `cache-control`, whose `max-age` is how long the copy may serve it (21.8). */
-    life: string | null | undefined
-    text: string | undefined
-    /**
-     * A streamed answer's body, left unread so its chunks are taken as they land (16.33).
-     *
-     * Set in place of `text` for a handler the build marked as streaming, and by the early-call
-     * script for any framed answer.
-     */
-    body: ReadableStream<Uint8Array> | null | undefined
-}
-
-/**
- * What the early-call script leaves per call: the request in flight, and once it has answered, what
- * it answered.
- */
-type Early = Answer & { promise: Promise<void> }
 
 /** The browser's `Rpc` for a handler: the server's declaration over a body that fetches. */
 export function wire(
@@ -81,16 +53,9 @@ export function wire(
             }
             return answered(answer)
         }
-        const started = (
-            globalThis as unknown as Record<
-                string,
-                Record<string, Early | undefined> | undefined
-            >
-        )[EARLY_CALLS]
-        const early = started?.[request.key]
+        const early = takeEarlyCall(request.key)
         if (early === undefined)
             return fetched(request, false, signal).then(settle)
-        ;(started as Record<string, Early | undefined>)[request.key] = undefined
         if (early.text !== undefined) return settle(early)
         return early.promise.then(() =>
             answerWithText(early, request, signal).then(settle),
@@ -106,18 +71,10 @@ export function wire(
         // this runs while the call that started the load still has its signal set.
         const signal = LOAD_SIGNAL.current
         const request = rpcRequest(method, address, args)
-        const started = (
-            globalThis as unknown as Record<
-                string,
-                Record<string, Early | undefined> | undefined
-            >
-        )[EARLY_CALLS]
-        const early = started?.[request.key]
+        const early = takeEarlyCall(request.key)
         let answer: Answer
         if (early === undefined) answer = await fetched(request, true, signal)
         else {
-            ;(started as Record<string, Early | undefined>)[request.key] =
-                undefined
             await early.promise
             answer =
                 early.body === undefined && early.text === undefined
@@ -203,7 +160,7 @@ async function fetched(
  * lands and this one reads to the end.
  */
 async function answerWithText(
-    early: Early,
+    early: EarlyCall,
     request: RpcRequest,
     signal: AbortSignal | undefined,
 ): Promise<Answer> {

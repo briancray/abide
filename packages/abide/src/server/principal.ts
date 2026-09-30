@@ -3,16 +3,20 @@
 // store to look them up in and nothing to revoke (26.16). Resolved at most once per request (26.14),
 // by `onPrincipal` where the app registered one, and the baseline is laid over what it answered (26.4).
 
+import { PRINCIPAL_ADDRESS } from '#shared/ADDRESSES.ts'
 import { cookies } from '#shared/cookies.ts'
 import { isFailed } from '#shared/Failed.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { namedLogger } from '#shared/log.ts'
+import { mounted } from '#shared/mount.ts'
 import {
     PRINCIPAL,
     type Principal,
     principalMembers,
 } from '#shared/principal.ts'
 import { refuse } from '#shared/refuse.ts'
+import { declare, type Rpc } from '#shared/rpc.ts'
+import type { Mounted } from './answerRpc.ts'
 import { callerOf, mintCaller } from './callerOf.ts'
 import { config, positiveSetting } from './config.ts'
 import { HOOKS } from './hooks.ts'
@@ -213,8 +217,44 @@ function clear(): void {
     PRINCIPAL_LOG.debug('clear')
 }
 
-// 21.4 — the answer is about this caller alone, and is never cached.
-PRINCIPAL.document = resolvePrincipal
+// 26.17 — THE DOCUMENT IS A `GET` LIKE ANY OTHER, so it reaches a browser as any handler's value does
+// (41.5): a render's read of it is reported as the call it is, left in the seed buffer (41.13) and
+// started from the head (41.20), and the browser's own read takes that answer rather than asking
+// again. Built on the core's `declare` with no generated surface (20.1) — abide mounts it, not the
+// app's tree.
+const principalDocument = declare('GET')(resolvePrincipal, {
+    clients: { ui: false, mcp: false, cli: false, openapi: false },
+})
+
+// 16.11 — READ WHEN IT IS REPORTED, where a mounted handler's is stamped at boot: the mount is the
+// configuration's, and nothing boots this handler.
+Object.defineProperty(principalDocument, 'address', {
+    get: () => mounted(PRINCIPAL_ADDRESS),
+})
+
+/** The handler `/__abide/principal` is answered by, keyed as `answerRpc` looks one up. */
+export const PRINCIPAL_HANDLERS = new Map<string, Mounted>([
+    [
+        PRINCIPAL_ADDRESS,
+        {
+            address: PRINCIPAL_ADDRESS,
+            method: 'GET',
+            source: '',
+            name: 'principal',
+            ui: false,
+            description: undefined,
+            copy: undefined,
+            args: undefined,
+            handler: principalDocument as Rpc<unknown, unknown>,
+            argsDocument: undefined,
+            wireArgs: undefined,
+        },
+    ],
+])
+
+// 21.4 — the answer is about this caller alone, and is never cached. 1.4 — the call's `Reactive` is
+// thenable, and a promise of it is the document.
+PRINCIPAL.document = () => Promise.resolve(principalDocument())
 PRINCIPAL.caller = callerOrMint
 PRINCIPAL.set = set
 PRINCIPAL.clear = clear

@@ -21,7 +21,6 @@ import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { namedLogger } from '#shared/log.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { FOLLOWED } from '#shared/reactive/FOLLOWED.ts'
-import { historyFrom, retained } from '#shared/reactive/History.ts'
 import { pastOf } from '#shared/reactive/index.ts'
 import { matchesPattern } from '#shared/reactive/matchesPattern.ts'
 import { PATCH_SINKS } from '#shared/reactive/PATCH_SINKS.ts'
@@ -29,6 +28,7 @@ import { refuse } from '#shared/refuse.ts'
 import type { BrowserFrame, ServerFrame, Socket } from '#shared/socket.ts'
 import { allows, crossingOrigin, type Mounted } from './answerRpc.ts'
 import { failureOf } from './hooks.ts'
+import { resumeProductions } from './resumeProductions.ts'
 import { patchesOf, versionOf } from './versionOf.ts'
 
 export type Connection = {
@@ -59,19 +59,6 @@ export function connectionOf(request: Request): Connection {
 }
 
 const SOCKET_LOG = namedLogger('abide:socket')
-
-// 18.11 — ONE EPOCH PER VALUE, minted the first time the value is carried and never moved after
-// (9.19). Compared for equality alone.
-const EPOCHS = new WeakMap<object, string>()
-
-function epochOf(cell: object): string {
-    let epoch = EPOCHS.get(cell)
-    if (epoch === undefined) {
-        epoch = crypto.randomUUID()
-        EPOCHS.set(cell, epoch)
-    }
-    return epoch
-}
 
 // 18.17 — EVERY SUBSCRIPTION TO A HANDLER, by handler, for its triggers to reach (7.10, 7.18).
 // PROCESS-WIDE because a trigger is: `rpc.invalidate({ id })` inside one request reaches every browser
@@ -270,23 +257,15 @@ function subscribe(
     seq: number | undefined,
     epoch: string | undefined,
 ): void {
-    // The past `s.history` would hand back — the adopted value's, swept of what outlived its `ttl`.
-    const cell = pastOf(value)
-    const current = epochOf(cell)
-    const resumed = seq !== undefined && epoch === current
-    const moved = seq !== undefined && epoch !== current
-    const replay: [number, unknown][] = []
-    // THE OLDEST PRODUCTION THE VALUE STILL RETAINS, which is where a fresh subscription starts and
-    // where one older than it is clamped to (9.10).
-    const floor = cell.ordinal - retained(cell)
-    let at = resumed ? Math.max(seq, floor) : floor
-    for (const item of historyFrom(cell, at) as Iterable<unknown>) {
-        at += 1
-        replay.push([at, item])
-    }
-    if (moved) send(ws, { op: 'reset', id, epoch: current, ring: replay })
+    const {
+        epoch: current,
+        moved,
+        ring,
+        cursor,
+    } = resumeProductions(value, seq, epoch)
+    if (moved) send(ws, { op: 'reset', id, epoch: current, ring })
     else
-        for (const [number, item] of replay)
+        for (const [number, item] of ring)
             send(ws, {
                 op: 'prod',
                 id,
@@ -294,13 +273,6 @@ function subscribe(
                 epoch: current,
                 value: item,
             })
-
-    // NUMBERED BY WHERE THE CURSOR STANDS rather than by counting its turns: a cursor with no ring
-    // collapses a burst onto the standing production (5.11), and that production's number is the
-    // one a reconnect resumes from.
-    const cursor = (historyFrom(cell, cell.ordinal) as AsyncIterable<unknown>)[
-        Symbol.asyncIterator
-    ]() as AsyncIterator<unknown> & { at: number }
     let stopped = false
     ws.data.subscriptions.set(id, () => {
         stopped = true

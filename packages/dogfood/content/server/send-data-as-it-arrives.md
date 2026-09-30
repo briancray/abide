@@ -126,9 +126,10 @@ The document is **not held** for one — nothing holds it. What the stream produ
 walk finished is already inline; the client's own request picks the rest up from where the render
 reached, and the rows keep appending.
 
-Seeding holds the jsonl transcript whichever framing the caller asked for — SSE is that
-transcript with `data: ` in front of each line, so the reframe happens at replay and the buffer
-stays a byte count. `ABIDE_MAX_STREAM_BUFFER_SIZE` is the ceiling on one.
+Seeding holds one transcript whichever framing the caller asked for — the stream's own chunks,
+framed as jsonl or SSE when the browser's call takes them. `ABIDE_MAX_STREAM_BUFFER_SIZE` is the
+ceiling on one, counted in jsonl bytes, and an entry past it is dropped: the browser's call runs
+the handler again, and says so on `abide:hydrate`.
 
 Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 [Request to paint](../start/how-a-page-becomes-html.md)
