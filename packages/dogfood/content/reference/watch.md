@@ -41,9 +41,9 @@ A function that stops the watch.
 A watch registered inside a component is owned by it, and its disposer runs at unmount. One
 registered from a plain `.ts` module has no owner, so you stop it with the returned function.
 
-**On a server a watch runs once.** There is no rerender, so a tracked read registers no
-subscriber and nothing wakes it a second time; the disposer still runs at scope teardown. Both
-sides mean the same thing and only the schedule differs.
+**A watch reruns on a server too.** A write wakes it at the end of the turn, as in a browser, and
+it reruns under the request it was opened in. The disposer runs when that request's scope ends.
+Same callable, same schedule, on both sides.
 
 An error in an effect is never silent. A throw from the effect, a throw from the disposer, and
 a read of a failed value inside one all reach `onError` with the trace attached and warn on

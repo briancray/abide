@@ -125,14 +125,15 @@ value it is in the middle of producing.
 Read on: [Values by name](../templates/read-and-write-a-value-by-name.md) ·
 [Lifecycle](../app/run-code-at-start-and-stop.md)
 
-## A watch runs once on a server
+## A watch reruns on a server too
 
-There is no rerender, so a tracked read registers no subscriber and there is nothing to wake it a
-second time. The disposer still runs at scope teardown.
+A server watch is the same watch. A write in a handler wakes it at the end of that turn, and it
+reruns under the request it was opened in, never under another request's turn (11.32). The
+disposer runs when that request's scope ends, so a watch opened per request lives exactly as long
+as the request.
 
-Both sides mean the same thing and only the schedule differs — same callable, same name, and one
-side has a flow to feed where the other does not. It is worth saying out loud because an effect
-written for its side effects reads as though it will run again.
+A read that has not landed ends the run early rather than counting as one. The watch runs again,
+in its own request, in the turn the value lands.
 
 ## Effects run at the end of the turn
 

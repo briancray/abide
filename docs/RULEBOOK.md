@@ -636,7 +636,8 @@ declaration and never from what a write outside every request left.
 
 12.4 A `watch` registered inside a component MUST be owned by that component.
 
-12.5 On a server a `watch` MUST run once, and its `Disposer` MUST still run at scope teardown.
+12.5 On a server a `watch` MUST rerun as it does in a browser, and its `Disposer` MUST run at the
+teardown of the scope it was opened in.
 
 12.6 A throw from an `Effect` or a `Disposer`, and a read of a failed `Reactive` inside one, MUST
 reach `onError` as thrown, and MUST warn on `abide:watch` with the trace.

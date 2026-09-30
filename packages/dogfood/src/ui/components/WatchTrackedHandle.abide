@@ -6,7 +6,7 @@ let tab = reactive('')
 
 // The tab title is not the page's to own: it follows the VALUE, not the field.
 watch(() => {
-    // A server has no tab to name; the watch still runs there once (12.5).
+    // A server has no tab to name, though the watch runs there too (12.5).
     if (typeof document === 'undefined') return
     document.title = `@${handle} — Contacts`
     tab = document.title
