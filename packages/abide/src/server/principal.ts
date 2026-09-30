@@ -15,7 +15,7 @@ import {
     principalMembers,
 } from '#shared/principal.ts'
 import { refuse } from '#shared/refuse.ts'
-import { declare, type Rpc } from '#shared/rpc.ts'
+import { declare } from '#shared/rpc.ts'
 import type { Mounted } from './answerRpc.ts'
 import { callerOf, mintCaller } from './callerOf.ts'
 import { config, positiveSetting } from './config.ts'
@@ -244,8 +244,9 @@ export const PRINCIPAL_HANDLERS = new Map<string, Mounted>([
             ui: false,
             description: undefined,
             copy: undefined,
+            defaults: undefined,
             args: undefined,
-            handler: principalDocument as Rpc<unknown, unknown>,
+            handler: principalDocument as Mounted['handler'],
             argsDocument: undefined,
             wireArgs: undefined,
         },
