@@ -13,7 +13,7 @@ abide logs
 ```
 
 Tails the app's log records. It reads the `GET` over `log.records`, and a client reading a `GET` is
-subscribed to what it produces (18.17), so this is a live subscription — the one `abide connect`
+subscribed to what it produces (18.17), so this is a live subscription — the one the shell
 makes to any channel (38.10). That is worth stating first because it explains everything else
 about it: the channel is a channel, the ring is that channel's `history`, and there is no separate
 log API for this to be a client of.

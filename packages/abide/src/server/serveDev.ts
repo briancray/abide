@@ -27,8 +27,10 @@ import {
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { Ask, FromWorker, ToWorker } from './devWorker.ts'
-import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
+import { upgraded } from './muxUpgrade.ts'
+import { plainAnswer } from './plainAnswer.ts'
 import { SETTLE_MILLISECONDS } from './SETTLE_MILLISECONDS.ts'
+import { VIRTUAL_DIRECTORY } from './VIRTUAL_DIRECTORY.ts'
 
 /** What `abide dev` serves, and where. */
 export type DevOptions = {
@@ -59,7 +61,13 @@ type DevWorker = {
 
 type Compiled = { modules: Map<string, string>; failure: string }
 
-// An app-mux socket's data: the id the worker knows its connection by, and what `connectionOf` reads
+const FIRST_DEV_PORT = 3000
+const LAST_DEV_PORT = 3099
+
+// 37.3 — the answers the worker said `admitsMux`, which the listener upgrades on.
+const ADMITTED = new WeakSet<Response>()
+
+// An app-mux socket's data: the id the worker knows its connection by, and what `Mux.connect` reads
 // off the upgrade. `undefined` on the reload client's.
 type Carried =
     | { conn: number; url: string; headers: [string, string][] }
@@ -120,7 +128,11 @@ export async function serveDev(
             if (checker !== undefined && !checker.current())
                 await closeChecker()
             checker ??= await openChecker(options.root)
-            const compiled = await compileApp(options.root, checker)
+            const compiled = await compileApp(
+                options.root,
+                `${options.root}/${VIRTUAL_DIRECTORY}`,
+                checker,
+            )
             // 14 and 32.14 — what the compiler has to say, on every compile.
             for (const warning of compiled.warnings)
                 console.warn(formatDiagnosis(warning, process.cwd()))
@@ -212,15 +224,7 @@ export async function serveDev(
                 held.stream.error(new Error(why))
                 held.pulled?.()
             } else if (reask) queued.push(held)
-            else
-                held.settle(
-                    new Response(why, {
-                        status: 500,
-                        headers: {
-                            'content-type': 'text/plain; charset=utf-8',
-                        },
-                    }),
-                )
+            else held.settle(plainAnswer(why, 500))
         }
         inFlight.clear()
     }
@@ -309,13 +313,14 @@ export async function serveDev(
         if (message.kind === 'head') {
             if (message.empty || message.whole !== undefined) {
                 inFlight.delete(id)
-                waiting.settle(
-                    new Response(message.whole ?? null, {
-                        status: message.status,
-                        statusText: message.statusText,
-                        headers: message.headers,
-                    }),
-                )
+                const answered = new Response(message.whole ?? null, {
+                    status: message.status,
+                    statusText: message.statusText,
+                    headers: message.headers,
+                })
+                // The admission has no body, so an admitted answer is always settled here.
+                if (message.admitted) ADMITTED.add(answered)
+                waiting.settle(answered)
                 return
             }
             const body = new ReadableStream<Uint8Array>(
@@ -391,78 +396,101 @@ export async function serveDev(
             void closeChecker().finally(() => process.kill(process.pid, signal))
         })
 
-    const server = Bun.serve<Carried>({
-        ...(options.port === undefined ? {} : { port: options.port }),
-        // 16.58, as `App.listen` lifts it: the worker behind this is where the ceiling is read.
-        maxRequestBodySize: Number.MAX_SAFE_INTEGER,
-        async fetch(request, listening) {
-            const asked = new URL(request.url).pathname
-            // THE MUX STANDS UNDER THE MOUNT, which is the app's configuration and so the worker's to
-            // read: every upgrade but the reload client's is taken for one, and the worker says
-            // whether it is (`MUX_ADMITTED`).
-            const mux =
-                asked !== DEV_ADDRESS &&
-                request.headers.get('upgrade') === 'websocket'
-            if (!mux && asked !== DEV_ADDRESS) return ask(request)
-            // 37.3 — THE MUX'S UPGRADE IS ASKED OF THE APP FIRST, whose lane runs in the worker.
-            if (mux && ready) {
-                const answered = await ask(request)
-                if (answered.status !== MUX_ADMITTED) return answered
-            }
-            // NOT WHILE THE APP IS COMPILING. The reload client and the browser's mux both read a
-            // refusal as "still rebuilding" and retry, which is what keeps a reload from racing
-            // the worker it is meant to show.
-            if (!ready) return new Response('rebuilding', { status: 503 })
-            let data: Carried
-            if (mux) {
-                nextConnection += 1
-                data = {
-                    conn: nextConnection,
-                    url: request.url,
-                    headers: [...request.headers.entries()],
+    const listen = (port: number | undefined) =>
+        Bun.serve<Carried>({
+            ...(port === undefined ? {} : { port }),
+            // 16.58, as `App.listen` lifts it: the worker behind this is where the ceiling is read.
+            maxRequestBodySize: Number.MAX_SAFE_INTEGER,
+            async fetch(request, listening) {
+                const asked = new URL(request.url).pathname
+                // THE MUX STANDS UNDER THE MOUNT, which is the app's configuration and so the worker's to
+                // read: every upgrade but the reload client's is asked of it, and the worker says
+                // whether it is the mux's (`muxUpgrade`) — a status alone is not, since any rung at any
+                // address can answer one.
+                const mux =
+                    asked !== DEV_ADDRESS &&
+                    request.headers.get('upgrade') === 'websocket'
+                if (!mux && asked !== DEV_ADDRESS) return ask(request)
+                // 37.3 — THE MUX'S UPGRADE IS ASKED OF THE APP FIRST, whose lane runs in the worker.
+                if (mux && ready) {
+                    const answered = await ask(request)
+                    if (!ADMITTED.has(answered)) return answered
                 }
-            }
-            return listening.upgrade(request, { data })
-                ? undefined
-                : new Response('expected a websocket', { status: 400 })
-        },
-        websocket: {
-            open(socket) {
-                // A RELOAD LANDED between the upgrade and this open: the worker it was meant for is
-                // gone and the next one would never hear of it, so it is closed and retried instead.
-                if (!ready) {
-                    socket.terminate()
-                    return
+                // NOT WHILE THE APP IS COMPILING. The reload client and the browser's mux both read a
+                // refusal as "still rebuilding" and retry, which is what keeps a reload from racing
+                // the worker it is meant to show.
+                if (!ready) return plainAnswer('rebuilding', 503)
+                let data: Carried
+                if (mux) {
+                    nextConnection += 1
+                    data = {
+                        conn: nextConnection,
+                        url: request.url,
+                        headers: [...request.headers.entries()],
+                    }
                 }
-                sockets.add(socket)
-                const carried = socket.data
-                if (carried === undefined) return
-                muxed.set(carried.conn, socket)
-                worker?.postMessage({ kind: 'socket-open', ...carried })
+                return upgraded(listening, request, data)
             },
-            close(socket) {
-                sockets.delete(socket)
-                const carried = socket.data
-                if (carried === undefined) return
-                // A socket a reload terminated is the old worker's, and the new one never knew it.
-                if (muxed.delete(carried.conn))
+            websocket: {
+                open(socket) {
+                    // A RELOAD LANDED between the upgrade and this open: the worker it was meant for is
+                    // gone and the next one would never hear of it, so it is closed and retried instead.
+                    if (!ready) {
+                        socket.terminate()
+                        return
+                    }
+                    sockets.add(socket)
+                    const carried = socket.data
+                    if (carried === undefined) return
+                    muxed.set(carried.conn, socket)
+                    worker?.postMessage({ kind: 'socket-open', ...carried })
+                },
+                close(socket) {
+                    sockets.delete(socket)
+                    const carried = socket.data
+                    if (carried === undefined) return
+                    // A socket a reload terminated is the old worker's, and the new one never knew it.
+                    if (muxed.delete(carried.conn))
+                        worker?.postMessage({
+                            kind: 'socket-close',
+                            conn: carried.conn,
+                        })
+                },
+                // The reload client says nothing; an app socket's frames go to the mux in the worker.
+                message(socket, text) {
+                    const carried = socket.data
+                    if (carried === undefined) return
                     worker?.postMessage({
-                        kind: 'socket-close',
+                        kind: 'socket-message',
                         conn: carried.conn,
+                        text: String(text),
                     })
+                },
             },
-            // The reload client says nothing; an app socket's frames go to the mux in the worker.
-            message(socket, text) {
-                const carried = socket.data
-                if (carried === undefined) return
-                worker?.postMessage({
-                    kind: 'socket-message',
-                    conn: carried.conn,
-                    text: String(text),
-                })
-            },
-        },
-    })
+        })
 
+    // 38.65 — A PORT SOMEONE NAMED IS THE PORT, and one taken is the failure. `Bun.serve` given
+    // none reads `PORT` itself.
+    const server =
+        options.port !== undefined || process.env.PORT
+            ? listen(options.port)
+            : listenOnFirstFree(listen)
     return server as unknown as Bun.Server<undefined>
+}
+
+// 38.64 — NAMED BY NOBODY, the first free port from 3000. A port taken is the next one tried, and
+// any other failure is the failure.
+function listenOnFirstFree<Listener>(
+    listen: (port: number) => Listener,
+): Listener {
+    for (let port = FIRST_DEV_PORT; ; port += 1)
+        try {
+            return listen(port)
+        } catch (thrown) {
+            if (
+                (thrown as { code?: unknown }).code !== 'EADDRINUSE' ||
+                port === LAST_DEV_PORT
+            )
+                throw thrown
+        }
 }

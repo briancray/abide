@@ -57,6 +57,7 @@ A **transport** gives a producer an address. `rpc` is a `reactive` value reachab
 | --- | --- | --- |
 | `Values<T>` | `Iterable<T> \| AsyncIterable<T> \| ReadableStream<T>` | What every body helper takes. |
 | `page` | `<Body extends string \| Uint8Array \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. |
+| `json` | `<T>(value: T) => T` | A value as JSON, fixed, with `undefined` sent as `null`. |
 | `redirect` | `(to: string, status?: RedirectStatus) => undefined` | A navigation. |
 | `jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. |
 | `sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. |

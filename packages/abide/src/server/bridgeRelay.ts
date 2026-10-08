@@ -12,7 +12,8 @@
 // the one its bridge dialled.
 
 import { refuse } from '#shared/refuse.ts'
-import { answered, raiseTimeout } from './answerRpc.ts'
+import { answered } from './answerFailure.ts'
+import { raiseTimeout } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
 import { config } from './config.ts'
 import { Inbox } from './Inbox.ts'

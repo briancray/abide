@@ -138,23 +138,21 @@ class Following {
     }
 
     /**
-     * Marks the copy stale when the answer's `max-age` runs out.
+     * Marks the copy stale once `lifeMs` runs out.
      *
-     * 18.29 — the `max-age` is what is left of the production's own life on the server (21.8).
-     * Stale rather than dropped: it goes on being served until a read or a probe runs the producer (7.17). The
-     * later answer's timer replaces the earlier.
+     * 18.29 — the life is what is left of the production's own on the server (21.8). Stale rather
+     * than dropped: it goes on being served until a read or a probe runs the producer (7.17). The
+     * later answer's timer replaces the earlier, and an answer naming no life is bounded by
+     * `invalidate` alone (21.17).
      */
-    expireAfter(life: string | null | undefined): void {
+    expireAfter(lifeMs: number | undefined): void {
         clearTimeout(this.expiry)
-        // `max-age=0` is a life the server rounded down to nothing, and stale now — only an answer
-        // with no `max-age` at all is bounded by `invalidate` alone (21.17).
-        const seconds = /max-age=(\d+)/.exec(life ?? '')?.[1]
         this.expiry =
-            seconds === undefined
+            lifeMs === undefined
                 ? undefined
                 : setTimeout(
                       () => (this.entry() as Reactive<unknown>).invalidate(),
-                      Number(seconds) * 1000,
+                      lifeMs,
                   )
     }
 
@@ -310,25 +308,27 @@ export function socketWire(address: string): unknown {
  */
 const FOLLOWING = new Map<string, Following>()
 
-/** Follows a loaded `GET`'s copy over the mux, raising its version and resetting its expiry. */
+/**
+ * Follows a loaded `GET`'s copy over the mux, raising its version and resetting its expiry.
+ *
+ * `version` and `lifeMs` are what the answer named, read off its headers by the wire.
+ */
 export function followRpc(
     address: string,
     args: unknown,
-    version: string | null | undefined,
-    life: string | null | undefined,
+    version: number | undefined,
+    lifeMs: number | undefined,
     entry: () => unknown,
 ): void {
     const key = `${address} ${canonicalKey(args)}`
-    const named =
-        version === null || version === undefined ? undefined : Number(version)
     let following = FOLLOWING.get(key)
     if (following === undefined) {
         const mux = muxFor(address)
-        following = new Following(mux.nextId++, address, args, named, entry)
+        following = new Following(mux.nextId++, address, args, version, entry)
         FOLLOWING.set(key, following)
         mux.subscribe(following)
-    } else if (named !== undefined && (following.version ?? 0) < named)
+    } else if (version !== undefined && (following.version ?? 0) < version)
         // 18.22 — versions only rise, so the larger is the later.
-        following.version = named
-    following.expireAfter(life)
+        following.version = version
+    following.expireAfter(lifeMs)
 }

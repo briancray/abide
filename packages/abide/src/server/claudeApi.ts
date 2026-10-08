@@ -6,7 +6,7 @@
 // Every block of an assistant turn goes back as it came — a `thinking` block with its signature
 // included, which a turn continuing after a tool call is refused without.
 
-import { framedStream } from '#shared/framedStream.ts'
+import { framedStream } from '#shared/framing.ts'
 import { refuse } from '#shared/refuse.ts'
 import type { AssistantEvent, Provider } from './assistant.ts'
 

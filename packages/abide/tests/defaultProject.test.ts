@@ -10,6 +10,7 @@
 import { afterAll, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
+import { spawned } from 'harness/gate'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
@@ -30,7 +31,7 @@ test('an app with no tsconfig.json is typed against a default project — 38.31'
     for (let at = app; dirname(at) !== at; at = dirname(at))
         expect(existsSync(`${at}/tsconfig.json`)).toBe(false)
 
-    const built = Bun.spawnSync([
+    const built = await spawned([
         'bun',
         BIN,
         'build',

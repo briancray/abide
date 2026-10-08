@@ -12,6 +12,7 @@
 
 export { type Batched, type BatchSpec, batch } from './batch.ts'
 export { clockResolution, nanoseconds } from './clock.ts'
+export { emulatedDom, underBun } from './environment.ts'
 export { claimOf, type Ratio, type RatioSpec, ratio } from './ratio.ts'
 export type { Sample } from './Sample.ts'
 export { substrate } from './substrate.ts'

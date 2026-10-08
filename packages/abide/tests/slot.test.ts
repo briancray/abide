@@ -8,7 +8,8 @@
 // on working after they have been mounted inside somebody else's region.
 
 import { afterAll, expect, test } from 'bun:test'
-import { emitClient, emitComponent, parseAbide } from '#compiler'
+import { emitComponent, parseAbide } from '#compiler'
+import { emitSource } from '#compiler/emitSource.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -18,8 +19,8 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
 
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -46,10 +47,15 @@ async function mountPage(
     })) {
         const file = parseAbide(source)
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
-        modules[`${name}.ts`] = emitComponent(file, reads)
-        modules[`${name}.client.ts`] =
-            emitClient(file, reads, name !== 'Page' ? 'invoked' : 'none') ||
-            'export default () => {}'
+        const page = name === 'Page'
+        const { server, client } = emitSource(
+            page ? 'ui/pages/page.abide' : `${name}.abide`,
+            file,
+            reads,
+            !page,
+        )
+        modules[`${name}.ts`] = server
+        modules[`${name}.client.ts`] = client
     }
     const dir = temporaryModule(modules)
 
@@ -163,7 +169,7 @@ import Note from './Note.abide'
 
 <Note children="one">two</Note>`
     const file = parseAbide(source)
-    expect(() => emitComponent(file, [])).toThrow('RULEBOOK 33.16')
+    expect(() => emitComponent(file)).toThrow('RULEBOOK 33.16')
 })
 
 test('a child grown in the browser fills its slot from the caller — 32.17, 32.18', async () => {

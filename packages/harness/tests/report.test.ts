@@ -31,24 +31,24 @@ test('the clock reports a measured resolution, not an assumed one', () => {
 //
 // Run in a child rather than in this process, because the mark is read at import and
 // the suite's own mode would otherwise decide which half of the gate ran.
-test('the batcher throws in a parallel worker, and not outside one', () => {
+test('the batcher throws in a parallel worker, and not outside one', async () => {
     const call = `batch({ case: 'c', arms: { one: () => { Math.sqrt(2) }, two: () => { Math.sqrt(3) } }, emulated: null, reps: 1, warmup: 1 })`
-    const marked = inAFreshProcess(`${IMPORTS}\n${call}`, '3')
+    const marked = await inAFreshProcess(`${IMPORTS}\n${call}`, '3')
     expect(marked.ok).toBe(false)
     expect(marked.output).toContain('test:serial')
     expect(marked.output).toContain('parallel worker 3')
 
-    const unmarked = inAFreshProcess(`${IMPORTS}\n${call}`)
+    const unmarked = await inAFreshProcess(`${IMPORTS}\n${call}`)
     expect(unmarked.output).not.toContain('test:serial')
     expect(unmarked.ok).toBe(true)
 })
 
 // Refusal 4. Reverted — predicate on `substrate === 'jsc' && unit === 'ms'` — a
 // build-time µs and a TTFB are refused and a `ns` spelling walks through.
-test('the batcher throws on a duration whose op touched an emulated DOM', () => {
+test('the batcher throws on a duration whose op touched an emulated DOM', async () => {
     // In a child, because the worker refusal is checked first and `bun run test` is
     // `--parallel` — the suite's own mode would otherwise decide which throw this saw.
-    const run = inAFreshProcess(
+    const run = await inAFreshProcess(
         `${IMPORTS}\nbatch({ case: 'emulated', arms: { abide: () => {}, vanilla: () => {} }, emulated: 'dom' })`,
     )
     expect(run.ok).toBe(false)
@@ -57,8 +57,8 @@ test('the batcher throws on a duration whose op touched an emulated DOM', () => 
 
 // Refusal 3. Reverted — return the sample anyway — an empty body at n=1 comes back as
 // 0 ns and is quoted as a result.
-test('the batcher throws on a sample under 100x the clock', () => {
-    const run = inAFreshProcess(
+test('the batcher throws on a sample under 100x the clock', async () => {
+    const run = await inAFreshProcess(
         `${IMPORTS}\nbatch({ case: 'trivial', arms: { one: () => {}, two: () => {} }, emulated: null, n: 1, reps: 1, warmup: 0 })`,
     )
     expect(run.ok).toBe(false)
@@ -68,8 +68,8 @@ test('the batcher throws on a sample under 100x the clock', () => {
 // The growth half of the same refusal, and the record of the n it used: a per-op
 // figure at n=10,000 has different GC and cache behaviour than at n=10, so the number
 // is carried rather than discarded.
-test('the batcher grows n until the sample clears the bar, and records it', () => {
-    const run = inAFreshProcess(
+test('the batcher grows n until the sample clears the bar, and records it', async () => {
+    const run = await inAFreshProcess(
         `${IMPORTS}
 const done = batch({
     case: 'trivial',

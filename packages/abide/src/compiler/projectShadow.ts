@@ -1,8 +1,15 @@
+import { SyntaxKind } from 'typescript/unstable/ast'
 import { isEventName } from '#shared/isEventName.ts'
 import { isComponentTag, propKeyOf } from './classifyTemplate.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
+import {
+    type Position,
+    type PositionKind,
+    PositionTable,
+} from './PositionTable.ts'
 import type { AbideFile } from './parseAbide.ts'
 import type {
+    Body,
     Branch,
     InlineComponent,
     Setup,
@@ -31,28 +38,22 @@ export type Projection = {
     text: string
     modules: Span
     scripts: Span
+    /** Every template position, ascending, each with its kind — what the checker's tree is asked. */
+    positions: PositionTable
     /**
-     * Per holder — an expression node, an attribute, an `{#if}` arm, a `{#for}` block — the span of
-     * the expression it holds.
+     * Per holder — an expression node, an attribute, an `{#if}` arm, a `{#for}` block, a setup, an
+     * inline component's head — the position of the expression it holds. A `bind:` operand's kind
+     * says it holds the `Reactive` rather than reading it (31.3, `Lowering.reference`).
      */
-    slots: Map<object, Span>
+    slots: Map<object, Position>
     /**
-     * Per `{#for}` block, the span of its `by` key, which stands inside the loop and sees the row.
+     * Per `{#for}` block, the position of its `by` key, which stands inside the loop and sees the row.
      */
-    keys: Map<object, Span>
+    keys: Map<object, Position>
     /**
-     * 32.34 — per invocation, the span of its tag: a read there is a component chosen by a value.
+     * 32.34 — per invocation, the position of its tag: a read there is a component chosen by a value.
      */
-    tags: Map<object, Span>
-    /**
-     * 14.8 — every branch-local `<script>`, whose declarations are names as the page's are (31.1).
-     */
-    setups: Span[]
-    /**
-     * 32.40 — every inline component's `props` statement, whose pattern binds props as a file's
-     * `props` call does (33.4). Also in `slots`, keyed by the component.
-     */
-    heads: Span[]
+    tags: Map<object, Position>
     /**
      * 38.3 — every run of the text copied out of the source, ascending, with where it came from.
      * What lies between two is scaffolding the source never held.
@@ -84,7 +85,9 @@ export function projectShadow(file: AbideFile): Projection {
 
 function project(file: AbideFile): Projection {
     const origins: Origin[] = []
-    let text = ''
+    // 34.13 — scaffolding ahead of every block, so each one and the template are in their scope.
+    let text =
+        file.generics === undefined ? '' : genericDeclarations(file.generics)
     // What is written next came from `origin` in the `.abide`, where the parser found one.
     const place = (origin: number | undefined, length: number): void => {
         if (origin !== undefined)
@@ -112,22 +115,28 @@ function project(file: AbideFile): Projection {
     const scripts = blocks(file.scripts, file.origins.scripts)
     const scriptsText = text.slice(scripts.start, scripts.end)
     text += '\n'
-    const slots = new Map<object, Span>()
-    const keys = new Map<object, Span>()
-    const tags = new Map<object, Span>()
-    const setups: Span[] = []
-    const heads: Span[] = []
+    const positions: Position[] = []
+    const slots = new Map<object, Position>()
+    const keys = new Map<object, Position>()
+    const tags = new Map<object, Position>()
     let inlineProps = false
+    // Spans are written in ascending order, so the table is sorted as it is pushed.
+    const position = (span: Span, kind: PositionKind): Position => {
+        const found = { start: span.start, end: span.end, kind }
+        positions.push(found)
+        return found
+    }
 
     // `open` is what the statement starts with: a bare parenthesis, or a call that hands the value
     // the type its position gives it (`openerOf`).
     const expression = (
         source: string,
         origin: number | undefined,
+        kind: PositionKind,
         open = '(',
-    ): Span => {
+    ): Position => {
         text += `;${open}`
-        const span = copied(source, origin)
+        const span = position(copied(source, origin), kind)
         text += ')\n'
         return span
     }
@@ -138,9 +147,13 @@ function project(file: AbideFile): Projection {
     // braces that scope it, so its names are the body's and the checker reads it as the body does.
     const setup = (owned: Setup | null): void => {
         if (owned === null) return
-        const span = copied(owned.text, file.origins.holders.get(owned))
-        slots.set(owned, span)
-        setups.push(span)
+        slots.set(
+            owned,
+            position(
+                copied(owned.text, file.origins.holders.get(owned)),
+                'setup',
+            ),
+        )
         text += '\n'
         refuseTopLevelAwait(owned.text, 'branch-local <script>')
     }
@@ -149,8 +162,7 @@ function project(file: AbideFile): Projection {
     // record the build hands it (`invocationProps`), so the checker holds each value to the prop the
     // child declares (33.4), reports a name nobody imported, and answers a hover or a jump on the
     // tag with the import's (38.40). Spreads first and explicit keys after, which is the order 33.12
-    // resolves them in. A value is wrapped in `__prop` rather than in bare parentheses, so
-    // `proveSlots` does not take a prop for a template position.
+    // resolves them in.
     const invocation = (
         node: Extract<TemplateNode, { kind: 'element' }>,
     ): void => {
@@ -162,17 +174,25 @@ function project(file: AbideFile): Projection {
         // it is still walking the flow — so a callee whose type is `ReturnType<typeof Shown>`
         // reached back into `Shown`'s own initializer and reported it circular (TS2502).
         text += ';(('
-        tags.set(node, copied(node.tag, file.origins.holders.get(node)))
+        tags.set(
+            node,
+            position(copied(node.tag, file.origins.holders.get(node)), 'tag'),
+        )
         text += ')?.({\n'
         // 32.6 — a `bind:` hands over the caller's `Reactive` or a `{ get, set }` pair, held to
         // the prop as the value it holds, and marked for `propsReads` as a name the child hands on.
         const prop = (attribute: (typeof node.attributes)[number]): void => {
-            text += attribute.lowerName.startsWith('bind:')
-                ? `${BOUND}(`
-                : `${PROP}(`
+            const operand = attribute.lowerName.startsWith('bind:')
+            text += operand ? `${BOUND}(` : `${PROP}(`
             slots.set(
                 attribute,
-                copied(attribute.value, file.origins.holders.get(attribute)),
+                position(
+                    copied(
+                        attribute.value,
+                        file.origins.holders.get(attribute),
+                    ),
+                    operand ? 'componentBind' : 'prop',
+                ),
             )
             text += '),\n'
         }
@@ -212,6 +232,7 @@ function project(file: AbideFile): Projection {
                 expression(
                     attribute.value,
                     file.origins.holders.get(attribute),
+                    'untyped',
                     `${ANY}(`,
                 ),
             )
@@ -235,21 +256,24 @@ function project(file: AbideFile): Projection {
             text += 'const '
             copied(declared.pattern, declared.patternAt)
             text += ` = ${INLINE_PROPS}<typeof ${RECORD}>()`
-            const span = { start, end: text.length }
-            slots.set(declared, span)
-            heads.push(span)
+            slots.set(declared, position({ start, end: text.length }, 'head'))
             text += '\n'
         }
-        setup(declared.setup)
-        declare(declared.components)
-        walk(declared.children)
+        inBody(declared)
         text += '}\n'
     }
     // 32.43 — a body's components stand at its head, so each is in scope throughout it.
     const declare = (components: readonly InlineComponent[]): void => {
         for (const declared of components) component(declared)
     }
-    // A body with no braces of its own is given some where it declares a component (32.43).
+    // A body inside braces of its own: its setup (14.8), its components, then its nodes.
+    const inBody = (owned: Body): void => {
+        setup(owned.setup)
+        declare(owned.components)
+        walk(owned.children)
+    }
+    // What an element holds has no braces of its own, and is given some where it declares a
+    // component (32.43).
     const body = (
         nodes: TemplateNode[],
         components: readonly InlineComponent[],
@@ -270,7 +294,11 @@ function project(file: AbideFile): Projection {
             if (node.kind === 'expression') {
                 slots.set(
                     node,
-                    expression(node.source, file.origins.holders.get(node)),
+                    expression(
+                        node.source,
+                        file.origins.holders.get(node),
+                        'slot',
+                    ),
                 )
                 continue
             }
@@ -283,16 +311,23 @@ function project(file: AbideFile): Projection {
                 if (isComponentTag(node.tag) && isNamedAlone(node.tag))
                     invocation(node)
                 else
-                    for (const attribute of node.attributes)
-                        if (attribute.expression)
-                            slots.set(
-                                attribute,
-                                expression(
-                                    attribute.value,
-                                    file.origins.holders.get(attribute),
-                                    openerOf(node.tag, attribute.lowerName),
-                                ),
-                            )
+                    for (const attribute of node.attributes) {
+                        if (!attribute.expression) continue
+                        const [kind, open] = attribute.lowerName.startsWith(
+                            'bind:',
+                        )
+                            ? (['elementBind', `${BIND}(`] as const)
+                            : openerOf(node.tag, attribute.lowerName)
+                        slots.set(
+                            attribute,
+                            expression(
+                                attribute.value,
+                                file.origins.holders.get(attribute),
+                                kind,
+                                open,
+                            ),
+                        )
+                    }
                 if (node.passed.length > 0) text += '}\n'
                 body(node.children, node.components)
                 continue
@@ -300,10 +335,10 @@ function project(file: AbideFile): Projection {
             // 32.16 — the catch arm binds the failure, and the checker has to see the name.
             if (node.block === 'try') {
                 const [tried, caught] = node.branches as [Branch, Branch]
-                body(tried.children, tried.components)
-                text += `{ const ${node.error === '' ? '__failure' : node.error}: any = undefined\n`
-                declare(caught.components)
-                walk(caught.children)
+                text += '{\n'
+                inBody(tried)
+                text += `}\n{ const ${node.error === '' ? '__failure' : node.error}: any = undefined\n`
+                inBody(caught)
                 text += '}\n'
                 continue
             }
@@ -312,28 +347,27 @@ function project(file: AbideFile): Projection {
             // narrows its union, and `{:else}` has the rest. Written as a bare `(subject)` statement
             // beside its arms, every arm was checked as if the condition had never been asked.
             //
-            // THE SUBJECT IS DOUBLY PARENTHESISED: the `if`'s own parentheses are not an expression,
-            // and a position is found by the parenthesised expression it opens (`proveSlots`). The
-            // braces are also what scope an arm's branch-local `<script>` (14.8).
+            // The braces are also what scope an arm's branch-local `<script>` (14.8).
             if (node.block === 'if') {
                 let first = true
                 for (const branch of node.branches) {
                     if (branch.subject === '') text += ' else {\n'
                     else {
-                        text += first ? ';if ((' : ' else if (('
+                        text += first ? ';if (' : ' else if ('
                         slots.set(
                             branch,
-                            copied(
-                                branch.subject,
-                                file.origins.holders.get(branch),
+                            position(
+                                copied(
+                                    branch.subject,
+                                    file.origins.holders.get(branch),
+                                ),
+                                'condition',
                             ),
                         )
-                        text += ')) {\n'
+                        text += ') {\n'
                     }
                     first = false
-                    setup(branch.setup)
-                    declare(branch.components)
-                    walk(branch.children)
+                    inBody(branch)
                     text += '}'
                 }
                 text += '\n'
@@ -348,17 +382,21 @@ function project(file: AbideFile): Projection {
             text += `;const ${subject} = (`
             slots.set(
                 node,
-                copied(node.subject, file.origins.holders.get(node)),
+                position(
+                    copied(node.subject, file.origins.holders.get(node)),
+                    'subject',
+                ),
             )
             text += ')\n'
             text += `for (const ${node.item} of ${ROWS_OF}(${subject})) {\n`
             if (node.index !== '') text += `const ${node.index} = 0\n`
+            // `inBody` but for the key, which stands after the row's setup and before its nodes.
             setup(node.setup)
             declare(node.components)
             if (node.key !== '')
                 keys.set(
                     node,
-                    expression(node.key, file.origins.keys.get(node)),
+                    expression(node.key, file.origins.keys.get(node), 'key'),
                 )
             walk(node.children)
             text += '}\n'
@@ -381,11 +419,10 @@ function project(file: AbideFile): Projection {
         text,
         modules,
         scripts,
+        positions: new PositionTable(positions),
         slots,
         keys,
         tags,
-        setups,
-        heads,
         origins,
     }
 }
@@ -395,17 +432,19 @@ function project(file: AbideFile): Projection {
  *
  * WHAT AN ATTRIBUTE'S POSITION TYPES ITS VALUE AS. A listener on an element is handed that
  * element's event, so a handler's parameter has the type the browser gives it rather than an
- * implicit `any`; a `bind:` operand, and an attribute on a component whose tag is no name a call
- * can spell (`invocation` has the rest), are typed by nothing the shadow can see, and say so with
- * `any` rather than with an error the author did not make. A `bind:` operand has a name of its own
- * so `propsReads` can tell a prop handed on as one.
+ * implicit `any`; an attribute on a component whose tag is no name a call can spell (`invocation`
+ * has the rest) is typed by nothing the shadow can see, and says so with `any` rather than with an
+ * error the author did not make. A `bind:` operand is not asked about here: the caller opens it
+ * with `BIND`, which types it as `any` too.
  */
-function openerOf(tag: string, lowerName: string): string {
-    if (lowerName.startsWith('bind:')) return `${BIND}(`
-    if (isComponentTag(tag)) return `${ANY}(`
+function openerOf(
+    tag: string,
+    lowerName: string,
+): readonly [PositionKind, string] {
+    if (isComponentTag(tag)) return ['untyped', `${ANY}(`]
     if (isEventName(lowerName))
-        return `${ON}(${JSON.stringify(lowerName.slice(2))}, `
-    return '('
+        return ['listener', `${ON}(${JSON.stringify(lowerName.slice(2))}, `]
+    return ['attribute', '(']
 }
 
 const PROP = '__prop'
@@ -427,6 +466,7 @@ import { props as ${INLINE_PROPS} } from ${JSON.stringify(
 export const NO_PROPS = '{ [key: string]: never }'
 const ON = '__on'
 const ANY = '__any'
+/** 31.3 — what a `bind:` operand is wrapped in on an element and on a component. */
 const BIND = '__bind'
 const BOUND = '__bound'
 
@@ -455,18 +495,19 @@ declare function ${PROP}<Value>(value: Value): Value
 declare function ${BIND}(value: any): void
 declare function ${BOUND}<Value>(value: ${REACTIVE}<Value, any, any, any>): Value
 declare function ${BOUND}<Value>(value: { get(): Value; set(value: Value): unknown }): Value
+declare function __restValues<Accessors>(record: Accessors): { [Key in keyof Accessors]: NonNullable<Accessors[Key]> extends () => infer Value ? Value : never }
 declare function __propCell<Value>(read: () => Value): () => ${REACTIVE}<Value>
 declare function __raw(value: unknown): unknown
 declare function __writePath<Root>(root: Root, path: readonly PropertyKey[], value: unknown): Root
 declare type __RouteParams<Pattern extends string, Kind extends string> = Kind extends 'layout' ? ${ROUTE_PARAMS}<Pattern> & { [name: string]: string | string[] | undefined } : ${ROUTE_PARAMS}<Pattern>
-declare function __accessors<Record, Written extends keyof Record = never, Defaulted extends keyof Record = never>(record: Record, written?: readonly Written[], defaulted?: readonly Defaulted[]): { [Key in Exclude<keyof Record, Defaulted>]-?: Key extends Written ? () => ${REACTIVE}<Record[Key]> : () => Record[Key] } & { [Key in Defaulted]?: Key extends Written ? () => ${REACTIVE}<Exclude<Record[Key], undefined>> : () => Exclude<Record[Key], undefined> }
+declare function __accessors<Record, Written extends keyof Record = never, Defaulted extends keyof Record = never>(record: Record, written?: readonly Written[], defaulted?: readonly Defaulted[]): { [Key in keyof Record as Key extends Defaulted ? never : Key]-?: Key extends Written ? () => ${REACTIVE}<Record[Key]> : () => Record[Key] } & { [Key in Defaulted]?: Key extends Written ? () => ${REACTIVE}<Exclude<Record[Key], undefined>> : () => Exclude<Record[Key], undefined> }
 export {}
 `
 
 const AWAIT = 'await'
 
 /** The prefix of the `const` a `{#for}`'s subject is held in, numbered per block. */
-export const SUBJECT = '__subject'
+const SUBJECT = '__subject'
 const ROWS_OF = '__rowsOf'
 /**
  * Ambient declaration of the helper that types a row's item from its subject.
@@ -507,4 +548,73 @@ function refuseTopLevelAwait(source: string, block: string): void {
                 `abide: a ${block} cannot await at its top level — setup is a function body, and nothing holds the render. Await inside a handler or a reactive body, or read the value and let the position fill. RULEBOOK 34.3.`,
             )
     }
+}
+
+/**
+ * 34.13 — each type parameter a component declares, as a type its body cannot see inside.
+ *
+ * THE BODY IS CHECKED AS A GENERIC FUNCTION'S BODY WOULD BE: for every `T` at once, so a parameter
+ * is an OPAQUE type — its constraint, and a brand nothing else carries. The blocks stand at the
+ * module's top level rather than in a function a type parameter could be declared on, because
+ * an `import` cannot stand inside one.
+ */
+function genericDeclarations(generics: string): string {
+    let declarations = ''
+    for (const { name, constraint } of typeParametersOf(generics))
+        declarations += `declare const __generic_${name}: unique symbol\ntype ${name} = (${constraint}) & { readonly [__generic_${name}]: true }\n`
+    return declarations
+}
+
+/** The names and constraints a type parameter list spells, `unknown` where one has none. */
+function typeParametersOf(
+    generics: string,
+): { name: string; constraint: string }[] {
+    const found: { name: string; constraint: string }[] = []
+    let depth = 0
+    let name: string | undefined
+    let constraintFrom = -1
+    let constraintTo = -1
+    const close = (end: number): void => {
+        if (name !== undefined)
+            found.push({
+                name,
+                constraint:
+                    constraintFrom === -1
+                        ? 'unknown'
+                        : generics.slice(
+                              constraintFrom,
+                              constraintTo === -1 ? end : constraintTo,
+                          ),
+            })
+        name = undefined
+        constraintFrom = -1
+        constraintTo = -1
+    }
+    for (const token of tokenise(generics)) {
+        const kind = token.kind
+        if (
+            kind === SyntaxKind.LessThanToken ||
+            kind === SyntaxKind.OpenParenToken ||
+            kind === SyntaxKind.OpenBracketToken ||
+            kind === SyntaxKind.OpenBraceToken
+        )
+            depth += 1
+        else if (
+            kind === SyntaxKind.GreaterThanToken ||
+            kind === SyntaxKind.CloseParenToken ||
+            kind === SyntaxKind.CloseBracketToken ||
+            kind === SyntaxKind.CloseBraceToken
+        )
+            depth -= 1
+        if (depth !== 0) continue
+        if (kind === SyntaxKind.CommaToken) close(token.start)
+        else if (name === undefined && kind === SyntaxKind.Identifier)
+            name = token.text
+        else if (kind === SyntaxKind.ExtendsKeyword && constraintFrom === -1)
+            constraintFrom = token.end
+        else if (kind === SyntaxKind.EqualsToken && constraintTo === -1)
+            constraintTo = token.start
+    }
+    close(generics.length)
+    return found
 }

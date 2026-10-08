@@ -9,7 +9,12 @@
 import type { Failed } from '../Failed.ts'
 import { checkArgs } from '../refuse.ts'
 import type { Schema } from '../Schema.ts'
-import { ARGS_GATE } from './ARGS_GATE.ts'
+import {
+    ARGS_GATE,
+    type Gated,
+    normalised,
+    PARAMETER_DEFAULTS,
+} from './argsContract.ts'
 import { CELL } from './CELL.ts'
 import { canonicalKey } from './canonicalKey.ts'
 import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
@@ -17,15 +22,11 @@ import { armTimer } from './Expiry.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
 import { NotLanded } from './NotLanded.ts'
-import { PARAMETER_DEFAULTS } from './PARAMETER_DEFAULTS.ts'
-import {
-    type Defaults,
-    parameterDefaults,
-    withDefaults,
-} from './parameterDefaults.ts'
+import { parameterDefaults } from './parameterDefaults.ts'
 import {
     abandonDeferred,
     createReactive,
+    failedTransiently,
     isStreamBody,
     leaveSelections,
     type Reactive,
@@ -35,12 +36,15 @@ import {
 } from './Reactive.ts'
 import {
     detach,
+    detachProbes,
     dropReader,
     newSubscriber,
     type Subscriber,
     TRACKING,
     type Tracked,
+    trackProbe,
 } from './tracking.ts'
+import { unowned } from './watch.ts'
 
 /**
  * The keyed face: one `Reactive` per `Args` key, plus the probes and triggers over its entries.
@@ -63,19 +67,6 @@ export type Keyed<
     invalidate(pattern?: Partial<Args>): void
     /** The entries reached so far. Not app surface — the statics and the tests read it. */
     entries: Map<string, Reactive<Stored, Accepted, Failures>>
-}
-
-/**
- * What a keyed value carries past the face an app is handed: its `args` schema and its defaults.
- *
- * 19.8 — the schema, for a transport to coerce by and a rung to check against; 11.29 — the
- * defaults its body's parameter writes, for a transport to key by. Declared on what the framework
- * builds rather than on `Keyed`, so no app type names it — and declared rather than stamped, so a
- * face built over one (a server's forwarder, an `Rpc`) that forgets to carry it does not compile.
- */
-export type Gated<Args> = {
-    [ARGS_GATE]: Schema<Args> | undefined
-    [PARAMETER_DEFAULTS]: Defaults | null
 }
 
 /** Whether `value` is a `Keyed`, read off its brand rather than its shape (16.5). */
@@ -102,7 +93,7 @@ function argsOf(entry: unknown): unknown {
 type Follower = {
     at: number
     ms: number
-    cell: Tracked
+    cell: Tracked & { servable: boolean; loading: boolean }
     reader: Subscriber
     evict: () => void
 }
@@ -139,16 +130,20 @@ class Lifetime {
     follow(key: string, entry: { [CELL]: Tracked }, evict: () => void): void {
         // 11.33: `Infinity` is the life of the scope, which no timer here can reach.
         if (this.ms === Number.POSITIVE_INFINITY) return
-        const cell = entry[CELL]
+        const cell = entry[CELL] as Follower['cell']
         // A MIRROR WITH NO ADOPTER — `Subscriber.isMirror` says why.
         const reader = newSubscriber([cell], null, true)
         const follower: Follower = { at: 0, ms: this.ms, cell, reader, evict }
         ENTRY_LIVES.set(cell, follower)
         reader.notify = (): void => {
-            if ((cell as unknown as { servable: boolean }).servable)
+            // Or a parked entry's load ended with nothing to serve — a refusal ends a load too.
+            if (cell.servable || (!cell.loading && !this.followed.has(key)))
                 this.touch(key, follower)
         }
         cell.readers.push(reader)
+        // 11.70 — AND ITS PROBES, so a load ending is heard as one: the sweep parks an entry whose
+        // load is in flight, and this is what starts its life again once the load is over.
+        trackProbe(cell, reader)
         // The life starts at the reach: an entry whose load never lands still ends.
         this.touch(key, follower)
     }
@@ -179,8 +174,12 @@ class Lifetime {
         for (const [key, follower] of this.followed) {
             if (follower.at > deadline) break
             this.followed.delete(key)
+            // 11.70 — PARKED, NOT EVICTED: a call reaching it joins the load, and the load's end
+            // touches it back into the order.
+            if (follower.cell.loading) continue
             follower.reader.alive = false
             dropReader(follower.cell, follower.reader)
+            detachProbes(follower.reader)
             follower.evict()
         }
         this.arm()
@@ -245,8 +244,9 @@ class StartWindow {
  * `error` holds it and its read throws it (2.2), and the body the gate stands in front of is never
  * called. What it accepts is what the body is handed (11.69).
  *
- * A STREAM STAYS A STREAM. 9.20 reads the body's KIND, so the wrapper around an async generator
- * is an async generator, or gating a keyed stream would silently make it a value holding one.
+ * A STREAM STAYS A STREAM FROM CONSTRUCTION. 9.20 reads the body's KIND, so the wrapper around an
+ * async generator is an async generator, or a gated keyed stream would be one only from its first
+ * run.
  */
 function gated<Args>(
     body: (args: Args) => unknown,
@@ -341,18 +341,26 @@ export function createKeyed<
     }
 
     function reach(given: Args): Reactive<Stored, Accepted, Failures> {
-        const args = defaults === null ? given : withDefaults(given, defaults)
+        const args = normalised(self, given)
         const key = canonicalKey(args)
         const standing = entries.get(key)
-        // 1.8: reaching an instance that exists joins the standing work.
-        if (standing !== undefined) return standing
-        const created = createReactive<Stored, Accepted, Failures>(
-            `${label}(${key})`,
-            entryBody as (args: unknown) => unknown,
-            args,
-            undefined,
-            entryOptions as ReactiveOptions<Accepted, Stored, Failures>,
-            starts !== null,
+        // 1.8: reaching an instance that exists joins the standing work — 15.19, unless that work
+        // failed transiently, which this reach runs again.
+        if (standing !== undefined) {
+            if (failedTransiently(standing)) standing.refresh()
+            return standing
+        }
+        // UNOWNED: an entry is its value's cache's, held for whoever reaches it next, and not the
+        // setup or the request that happened to reach it first (12.4, 12.5).
+        const created = unowned(() =>
+            createReactive<Stored, Accepted, Failures>(
+                `${label}(${key})`,
+                entryBody as (args: unknown) => unknown,
+                args,
+                undefined,
+                entryOptions as ReactiveOptions<Accepted, Stored, Failures>,
+                starts !== null,
+            ),
         )
         entries.set(key, created)
         if (lifetime !== null)

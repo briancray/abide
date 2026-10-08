@@ -45,17 +45,18 @@ Read on: [Config](../app/configure-the-app.md) ·
 ## The executable is `abide`, for one app
 
 ```
-./ledger                                  # usage
-./ledger start --port 8080                # serve, with a shell on it
+./ledger                                  # serve, with a shell on it
+./ledger start --port 8080                # serve
+./ledger --help                           # usage
 ./ledger run scripts/backfill.ts          # a script, under the app it holds
 ./ledger call invoices/getInvoice id=42
 ```
 
-Run with no command, it prints its usage under its own name. `start` serves the app and opens
-the same shell `abide connect` opens: `call`, `handlers`, `help`, `exit`. `exit` stops the app. Where
-nothing is typing — no terminal, a container started without one — the app keeps serving.
+Run with no command, it serves the app and opens the shell on it: `call`, `handlers`, `help`,
+`exit`. `exit` stops the app; input that ends leaves it serving. `start` only serves, and
+`--help` prints its usage under its own name.
 
-`run`, `call`, `connect`, `openapi`, `mcp` and `logs` are `abide`'s. A script `run` imports
+The shell, `run`, `call`, `openapi`, `mcp` and `logs` are `abide`'s. A script `run` imports
 `abide/server` and the app's handlers from the executable, so it needs no `node_modules`
 beside it. What needs the source — `dev`, `build`, `check` — is not listed, and answers with
 the `abide` command to run where the source is.

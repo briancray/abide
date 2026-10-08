@@ -22,8 +22,12 @@
 
 import { CLIENT_ADDRESS, DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import { escapeText } from '#shared/escapeText.ts'
-import { appSources, publicFilesAt } from './answerRequest.ts'
-import { connectionOf, type MuxSocket, socketHandlers } from './answerSocket.ts'
+import {
+    appSources,
+    type LoadedSources,
+    type ServerTable,
+} from './answerRequest.ts'
+import { Mux, type MuxConnection } from './answerSocket.ts'
 import { appPlugins } from './appPlugins.ts'
 import { CLIENT_ENTRY, PUBLIC_DIRECTORY } from './CLIENT_BUILD.ts'
 import {
@@ -31,19 +35,16 @@ import {
     stylesheetUnderMount,
 } from './clientBuildOptions.ts'
 import { type App, bootApp, originUnder } from './createApp.ts'
+import { keepServing } from './faultPolicy.ts'
 import { fenceServer } from './fenceServer.ts'
-import { keepServing } from './keepServing.ts'
+import { McpSurface } from './generatedSurfaces.ts'
 import { type Manifest, manifestOf, NO_MANIFEST } from './manifestOf.ts'
+import { admitsMux } from './muxUpgrade.ts'
 import { refuseAddressCollision } from './refuseAddressCollision.ts'
 import { shellUnder } from './render.ts'
 import { LISTENING } from './requestScope.ts'
-import { loadTables, pathsUnder } from './serveBuild.ts'
-
-// Where the compiled modules pretend to live. Under the app's own root so that `#ui/…` and a bare
-// package name resolve from here exactly as they resolve from the build tree — both sit inside
-// the app's package — and under a `__abide` directory for the reason the addresses are: no app
-// writes one.
-const VIRTUAL_DIRECTORY = '__abide'
+import { handlersIn, pathsUnder, sourceModuleLoader } from './serveBuild.ts'
+import { VIRTUAL_DIRECTORY } from './VIRTUAL_DIRECTORY.ts'
 
 // The reload client, which the worker serves and every document it answers loads.
 const RELOAD_CLIENT_ADDRESS = `${DEV_ADDRESS}/client.js`
@@ -99,6 +100,8 @@ export type FromWorker =
           statusText: string
           headers: [string, string][]
           empty: boolean
+          /** 37.3 — whether the listener upgrades this request to the mux (`admitsMux`). */
+          admitted: boolean
           /** A body whose length the answer declared, sent with its head rather than pulled. */
           whole: ArrayBuffer | undefined
       }
@@ -133,10 +136,11 @@ process.on('disconnect', () => process.exit(0))
 let opening: Promise<void> | undefined
 
 let app: App | undefined
-// 18.2 — the mux over this worker's handlers and sockets, and each connection the listener holds,
-// as the stand-in the mux sends through.
-let mux: ReturnType<typeof socketHandlers> | undefined
-const connections = new Map<number, MuxSocket>()
+// 18.2 — the mux over this worker's handlers and sockets, and each connection the listener holds.
+let mux: Mux | undefined
+// What the mux carries, which `admitsMux` reads: an app with neither table has no mux to open.
+let carried: LoadedSources | undefined
+const connections = new Map<number, MuxConnection>()
 // What stopped the app compiling, kept rather than thrown: 38.4 keeps the server up and 38.18
 // keeps it up through a bundle that failed, so the failure is something to SERVE.
 let failure = ''
@@ -162,24 +166,26 @@ async function receive(message: ToWorker): Promise<void> {
     if (message.kind === 'request') return answerAsk(message)
     if (message.kind === 'socket-open') {
         const { conn } = message
-        const connection: MuxSocket = {
-            data: connectionOf(
-                new Request(message.url, { headers: message.headers }),
-            ),
-            send(text: string) {
-                toListener({ kind: 'socket-send', conn, text })
+        const connection = mux?.connect(
+            new Request(message.url, { headers: message.headers }),
+            {
+                send(text: string) {
+                    toListener({ kind: 'socket-send', conn, text })
+                },
+                // NOTHING TO CLOSE: the listener holds the browser's socket, and it outlives this
+                // worker (38.15). Nothing here stops the mux, either.
+                close() {},
             },
-        }
-        connections.set(conn, connection)
-        mux?.open(connection)
+        )
+        if (connection !== undefined) connections.set(conn, connection)
         return
     }
     const connection = connections.get(message.conn)
     if (connection === undefined) return
     if (message.kind === 'socket-message')
-        return mux?.message(connection, message.text)
+        return connection.message(message.text)
     connections.delete(message.conn)
-    mux?.close(connection)
+    connection.close()
 }
 
 // Each answer whose head has gone out, by request id: what its chunks are read from, and whether a
@@ -238,6 +244,8 @@ async function answerAsk(ask: Ask): Promise<void> {
         statusText: response.statusText,
         headers: [...response.headers.entries()],
         empty: body === null,
+        admitted:
+            carried !== undefined && admitsMux(request, response, carried),
         whole,
     })
     if (body === null || whole !== undefined) return
@@ -300,6 +308,7 @@ async function open(
 ): Promise<void> {
     app = undefined
     mux = undefined
+    carried = undefined
     failure = start.failure
     if (failure !== '') return
     const root = start.root
@@ -321,49 +330,67 @@ async function open(
 
         // ASKED FOR TOGETHER. The bundle, the shell, the public directory and the server's own
         // tables depend on none of each other — the plugin is registered above, before any of
-        // them asks it anything — and on a reload every one of them is latency the author waits on.
+        // them asks it anything — and on a reload every one of them is latency the author waits on,
+        // so the bundle is handed over still building (`SourceParts.client`).
         //
         // ONE LISTING of the public directory, for the bundle's externals and for what is served.
-        const publicDirectory = `${root}/ui/${PUBLIC_DIRECTORY}`
-        const publicPaths = pathsUnder(publicDirectory)
-        const [bundle, shell, published, [table, mounted]] = await Promise.all([
-            // 38.44 — the app's own plugins, imported beside the reads below rather than ahead of them.
-            appPlugins(root).then((own) =>
-                bundleInMemory(
-                    root,
-                    base,
-                    // 16.29, 16.30 — the browser's view of `server/`, as `abide build` gives it.
-                    [plugin, fenceServer(root, start.modules), ...own],
-                    paged,
-                    Array.from(publicPaths.keys(), (name) => `/${name}`),
-                ),
+        // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev has no
+        // output, so the address answers where the author's file actually is.
+        const published = pathsUnder(`${root}/ui/${PUBLIC_DIRECTORY}`)
+        const publicAddresses = Array.from(
+            published.keys(),
+            (name) => `/${name}`,
+        )
+        // 38.44 — the app's own plugins, imported beside the reads below rather than ahead of them.
+        const bundling = appPlugins(root).then((own) =>
+            bundleInMemory(
+                root,
+                base,
+                // 16.29, 16.30 — the browser's view of `server/`, as `abide build` gives it.
+                [plugin, fenceServer(root, start.modules), ...own],
+                paged,
+                publicAddresses,
             ),
+        )
+        const [shell, table, handlers] = await Promise.all([
             shellUnder(root),
-            // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev
-            // has no output, so the address answers where the author's file actually is.
-            publicFilesAt(publicPaths),
-            loadTables(base, root),
+            import(
+                Bun.pathToFileURL(`${base}/server.ts`).href
+            ) as Promise<ServerTable>,
+            handlersIn(base),
         ])
+        // 38.18 — THE RELOAD CLIENT IS THIS WORKER'S, not the bundle's, and it goes in whether or
+        // not there is an entry beside it: a bundle that failed is exactly when a reader needs the
+        // next save to reach them. `clientTags` writes nothing for a manifest with no entry.
+        const sources = await appSources({
+            table,
+            shell,
+            handlers,
+            handlerModule: sourceModuleLoader(root),
+            published,
+            client: bundling.then((bundle) => ({
+                manifest: bundle.manifest,
+                head: `<script type="module" src="${RELOAD_CLIENT_ADDRESS}"></script>`,
+                framework: (pathname) => served(bundle, pathname),
+            })),
+            explained: (thrown) => failedDocument(describe(thrown)),
+        })
 
         // 36.13, IN THIS LANE TOO. A throw here lands in `failure`, which is what 38.4 asks
         // for: the command keeps answering and what it answers names both halves. Without it
         // `answerRequest` below would silently prefer the file — its public-before-routes
         // order rests on this collision being impossible.
-        refuseAddressCollision(table.routes, published.keys(), 'abide dev')
+        refuseAddressCollision(table.routes, publicAddresses, 'abide dev')
 
-        // 38.18 — THE RELOAD CLIENT IS THIS WORKER'S, not the bundle's, and it goes in whether or
-        // not there is an entry beside it: a bundle that failed is exactly when a reader needs the
-        // next save to reach them. `clientTags` writes nothing for a manifest with no entry.
-        const reload = `<script type="module" src="${RELOAD_CLIENT_ADDRESS}"></script>`
-        const sources = appSources(table, shell, bundle.manifest, reload, {
-            framework: (pathname) => served(bundle, pathname),
-            published,
-            explained: (thrown) => failedDocument(describe(thrown)),
-            ...mounted,
-        })
-        mux = socketHandlers(mounted.sockets, mounted.handlers)
+        carried = sources
         // THE SAME `App` `abide start` boots, so an app's hooks and middleware run in dev too.
         app = await bootApp(originUnder(root), async () => sources)
+        // 18.2 — the mux over the same tables `App.listen` would run one over.
+        // The app's own record, as `bootApp` holds it: a frame's `rpc.raw` and MCP surface are this app's.
+        mux = new Mux(sources.sockets, sources.handlers, {
+            answer: app.fetch,
+            mcp: new McpSurface(sources.handlers, app.fetch),
+        })
     } catch (thrown) {
         failure = thrown instanceof Error ? thrown.message : String(thrown)
     }
@@ -550,7 +577,12 @@ function failedDocument(why: string): Response {
 <body>${failureMarkup(why)}</body></html>`,
         {
             status: 500,
-            headers: { 'content-type': 'text/html; charset=utf-8' },
+            // 21.1, 21.3 — this answers where no app stands to stamp it.
+            headers: {
+                'content-type': 'text/html; charset=utf-8',
+                'cache-control': 'private, no-store',
+                'x-content-type-options': 'nosniff',
+            },
         },
     )
 }

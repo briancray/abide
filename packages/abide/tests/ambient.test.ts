@@ -7,8 +7,8 @@ import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
 import type { Diagnosis } from '#compiler/TypeSession.ts'
 import { appFixture } from './builtApp.ts'
-import { refusal } from './typed.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
+import { refusal } from './typed.ts'
 
 const SESSION = `import { cookies as jar, principal, reactive } from 'abide'
 import { csp, request } from 'abide/server'
@@ -77,7 +77,7 @@ test('a global body reading an ambient is found at the read — 11.37', () => {
     expect(found[2]?.message).toContain('`csp.nonce`')
 })
 
-// THE BUILD REFUSES, every read named. THE REVERT: drop the `ambientReads` call in `compileApp`;
+// THE BUILD REFUSES, every read named. THE REVERT: drop the `ambient` throw in `compileApp`;
 // the compile succeeds.
 test('a build refuses a global body reading an ambient — 11.37', async () => {
     const refused = await refusal(compileApp(app))

@@ -48,7 +48,7 @@ app serving requests against a schema it did not get.
 `onStop` mirrors it. `await stop()` first, then tear down what you opened — so a connection is
 closed after the last request that could have used it, not during.
 
-`abide start` runs it however the process is told to end: `exit` in its shell, a `SIGTERM` from
+A served app runs it however the process is told to end: `exit` in its shell, a `SIGTERM` from
 `docker stop` or a deploy, `Ctrl-C`. A rejection nobody awaited or a throw nothing caught reaches
 `onError` first and then stops the app the same way, exiting with 1 so a supervisor restarts a
 clean process. A second signal while it is stopping ends it at once.

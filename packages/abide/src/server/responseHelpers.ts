@@ -1,7 +1,7 @@
 // SECTION 17 — THE RESPONSE HELPERS. Each is a write through `response` and hands back what it was
 // given, so a handler returns the helper's call and its value type is unchanged: `page` names the
-// document's type (17.2), `redirect` the status and the address (17.3), and the three stream helpers
-// the framing (17.6) that nothing then negotiates past (17.7).
+// document's type (17.2), `json` the serialization (17.9), `redirect` the status and the address
+// (17.3), and the three stream helpers the framing (17.6) that nothing then negotiates past (17.7).
 
 import { type Framing, response, within } from './requestScope.ts'
 
@@ -25,6 +25,17 @@ export function page<
     response().headers.set('content-type', 'text/html; charset=utf-8')
     within('page').framing = 'html'
     return body
+}
+
+/**
+ * Fixes the answer as JSON and returns `value` unchanged.
+ *
+ * 17.9, 17.10 — the serialization a bare return gets, with nothing negotiated past it and an
+ * `undefined` sent as `null` rather than as 204.
+ */
+export function json<T>(value: T): T {
+    within('json').framing = 'json'
+    return value
 }
 
 /**

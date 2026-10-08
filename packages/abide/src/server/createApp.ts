@@ -7,8 +7,7 @@
 // requests in flight drained, in `stopOnce`.
 
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
-import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
-import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { FAILURE_STATUS_TEXT } from '#shared/FAILURE_STATUS_TEXT.ts'
 import { namedLogger } from '#shared/log.ts'
 import { compose } from '#shared/Middleware.ts'
@@ -18,26 +17,25 @@ import {
     type AppSources,
     answerRequest,
     type LoadedSources,
-    plainAnswer,
 } from './answerRequest.ts'
-import {
-    type Connection,
-    connectionOf,
-    socketHandlers,
-} from './answerSocket.ts'
+import { Mux, type MuxConnection } from './answerSocket.ts'
+import { buildDirectory } from './buildDirectory.ts'
 import { APP_PACKAGE, type AppPackage, config, packageUnder } from './config.ts'
-// 29 — `csp`'s server half, filled in before any app's rung or page can ask for it.
-import './csp.ts'
+import { McpSurface } from './generatedSurfaces.ts'
 import { HOOKS, reportUnexpected } from './hooks.ts'
-import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
+import { installServer } from './installServer.ts'
+import { admitsMux, upgraded } from './muxUpgrade.ts'
+import { plainAnswer } from './plainAnswer.ts'
 import {
+    type AnsweringApp,
     applyWritten,
     currentRequestScope,
-    inScope,
+    inReleasedScope,
     LISTENING,
     rungsTook,
     serverTiming,
 } from './requestScope.ts'
+import { testBuild } from './testBuild.ts'
 import { traceResponse } from './trace.ts'
 
 // 28.8 — one line per request.
@@ -79,18 +77,15 @@ export async function createApp(): Promise<App> {
         throw new Error(
             `abide: createApp found no app. Looked for ui/ in ${process.cwd()} and in ${resolve('src')}.`,
         )
-    const out = buildDirectory(root)
+    // 42.16 — under `bun test` the app is built for its sources as they stand rather than read off
+    // whatever `abide build` last left, which a test run would otherwise need first and could find
+    // stale.
+    const out =
+        process.env.NODE_ENV === 'test'
+            ? await testBuild(root)
+            : buildDirectory(root)
     const { loadBuild } = await import('./serveBuild.ts')
     return bootApp(originUnder(root), () => loadBuild({ root, out }))
-}
-
-/**
- * Where an app's build goes: `.abide` in the directory above its source root.
- *
- * BESIDE THE APP RATHER THAN BESIDE THE SHELL: an app's build belongs to the app.
- */
-export function buildDirectory(root: string): string {
-    return `${dirname(root)}/.abide`
 }
 
 /**
@@ -143,6 +138,7 @@ export async function bootApp(
     origin: AppOrigin,
     load: () => Promise<LoadedSources>,
 ): Promise<App> {
+    installServer()
     // 37.1 — OPTIONAL, and imported for what it CALLS: every hook it runs is filed by the time the
     // import settles.
     const own =
@@ -180,7 +176,9 @@ export async function bootApp(
         return answered
     })
 
-    const open = new Set<Bun.ServerWebSocket<Connection>>()
+    // The mux `listen` runs over this app's tables. `abide dev` holds its sockets in another process,
+    // and its worker runs one over the same tables (`devWorker`).
+    let mux: Mux | undefined
     let inFlight = 0
     let drained: (() => void) | undefined
     let stopping = false
@@ -189,7 +187,8 @@ export async function bootApp(
     const run = async <Result>(
         fn: () => Result | Promise<Result>,
         options?: { request?: Request },
-    ): Promise<Result> => inScope(options?.request, fn, fetch)
+    ): Promise<Result> =>
+        inReleasedScope(options?.request, async () => await fn(), answering)
 
     const fetch = async (given: Request): Promise<Response> => {
         if (stopping) return plainAnswer('the app is stopping', 503)
@@ -201,7 +200,7 @@ export async function bootApp(
             // 42.6 — `run`, with dispatch over it — and the headers every answer carries stamped
             // inside it, where the trace the request was answered under is still the current one.
             // 16.23 — the scope keeps `given` too, the one request bun will raise a timeout on.
-            return await inScope(
+            return await inReleasedScope(
                 request,
                 async () => {
                     let answered: Response
@@ -224,7 +223,7 @@ export async function bootApp(
                         )
                     return stamped
                 },
-                fetch,
+                answering,
                 given,
             )
         } finally {
@@ -233,10 +232,16 @@ export async function bootApp(
         }
     }
 
+    // 20.10, 42.12 — THE APP'S MCP SURFACE CALLS THROUGH ITS OWN `fetch`, whichever scope asks.
+    const answering: AnsweringApp = {
+        answer: fetch,
+        mcp: new McpSurface(booted.handlers, fetch),
+    }
+
     // 16.43, 42.12 — A `raw` CALL MADE ON THIS SERVER IS ANSWERED IN PROCESS, by the app answering the
     // request it was made in; only a call made outside every request falls to the app built last.
     RPC_SERVER.raw = (request) =>
-        (currentRequestScope()?.answer ?? fetch)(request)
+        (currentRequestScope()?.app?.answer ?? fetch)(request)
 
     // 42.15 — ONE STOP, however many ask for it: a signal landing while the shell's `exit` is already
     // stopping the app is answered with that stop, and `onStop` runs once.
@@ -250,8 +255,7 @@ export async function bootApp(
     async function stopOnce(): Promise<void> {
         stopping = true
         // 42.11 — every open socket is closed rather than left to the process's exit.
-        for (const ws of open) ws.close(1001, 'the app is stopping')
-        open.clear()
+        mux?.closeAll(1001, 'the app is stopping')
         await bound?.stop()
         if (inFlight > 0)
             await new Promise<void>((done) => {
@@ -268,10 +272,14 @@ export async function bootApp(
         // 42.9 — the socket, and what `server` hands back from then on.
         async listen(options) {
             const port = options?.port
-            // Built here, where it is bound: `abide dev` holds its sockets in another process and
-            // runs a mux of its own over the same tables.
-            const sockets = socketHandlers(booted.sockets, booted.handlers)
-            const server = Bun.serve<Connection>({
+            const opened = new Mux(booted.sockets, booted.handlers, answering)
+            mux = opened
+            // The upgrade carries its request to `open`, where the connection is made over the socket.
+            type Upgraded = {
+                request: Request
+                connection: MuxConnection | undefined
+            }
+            const server = Bun.serve<Upgraded>({
                 ...(options?.unix !== undefined
                     ? { unix: options.unix }
                     : port !== undefined
@@ -280,36 +288,25 @@ export async function bootApp(
                 // 16.58 — THE CEILING IS THE HANDLER'S, and bun's own 128 MB would refuse a body
                 // before one that declared none could accept it.
                 maxRequestBodySize: Number.MAX_SAFE_INTEGER,
-                // 18.2 — THE ONE MUX, upgraded before anything else is asked of the request.
+                // 18.2, 37.3 — THE ONE MUX, upgraded where the app lane admitted it.
                 fetch: async (request, server) => {
-                    // 18.17 — a handler is followed over the mux as a socket is carried. 16.11 —
-                    // the mux's address is read below the mount as every other request's is, so
-                    // an address under some other prefix is not the mux.
-                    if (
-                        (booted.sockets.size > 0 || booted.handlers.size > 0) &&
-                        request.headers.get('upgrade') === 'websocket' &&
-                        isMux(new URL(request.url).pathname)
-                    ) {
-                        // 37.3 — through the app lane first, and upgraded only where it let it by.
-                        const answered = await fetch(request)
-                        if (answered.status !== MUX_ADMITTED) return answered
-                        return server.upgrade(request, {
-                            data: connectionOf(request),
-                        })
-                            ? undefined
-                            : plainAnswer('expected a websocket', 400)
-                    }
-                    return fetch(request)
+                    const answered = await fetch(request)
+                    return admitsMux(request, answered, booted)
+                        ? upgraded(server, request, {
+                              request,
+                              connection: undefined,
+                          })
+                        : answered
                 },
                 websocket: {
-                    ...sockets,
                     open(ws) {
-                        open.add(ws)
-                        sockets.open(ws)
+                        ws.data.connection = opened.connect(ws.data.request, ws)
+                    },
+                    message(ws, raw) {
+                        return ws.data.connection?.message(raw)
                     },
                     close(ws) {
-                        open.delete(ws)
-                        sockets.close(ws)
+                        ws.data.connection?.close()
                     },
                 },
             })
@@ -358,10 +355,6 @@ function stamp(answered: Response): Response {
     const traced = traceResponse()
     if (traced !== undefined) stamped.headers.set('traceresponse', traced)
     return stamped
-}
-
-function isMux(pathname: string): boolean {
-    return (unmounted(pathname) ?? pathname) === SOCKET_ADDRESS
 }
 
 /**

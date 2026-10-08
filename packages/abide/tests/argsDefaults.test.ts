@@ -105,7 +105,7 @@ test('an args default the parameter does not write is warned on at the args — 
     expect(found[2]?.message).toContain('`limit`')
 })
 
-// A WARNING, AND THE BUILD GOES ON. THE REVERT: drop the `argsDefaults` call in `compileApp`; the
+// A WARNING, AND THE BUILD GOES ON. THE REVERT: drop `unkeyed` from `compileApp`'s warnings; the
 // build's warnings carry no 11.30.
 test('a build warns on an args default the parameter does not write, and compiles — 11.30', async () => {
     const compiled = await compileApp(app)

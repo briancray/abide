@@ -4,22 +4,22 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { compileFile, emitClient, emitComponent, parseAbide } from '#compiler'
+import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync, NotLanded } from '#shared'
 import { Mismatch } from '#ui/Mismatch.ts'
 import { markupNodes } from '#ui/parseMarkup.ts'
 import { pageRegion } from '#ui/regions.ts'
-import { Scope } from '#ui/Scope.ts'
-import { BOUNDARY, inBoundary, TryBoundary } from '#ui/TryBoundary.ts'
+import { BOUNDARY, Scope } from '#ui/Scope.ts'
+import { TryRegion } from '#ui/TryRegion.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
 
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -56,7 +56,7 @@ async function served(
     const file = parseAbide(source)
     const reads = await session.reads(`${ROOT}src/try.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(source, reads),
+        'Page.ts': emitComponent(file, reads),
         'Page.client.ts': emitClient(file, reads),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -88,6 +88,19 @@ const typed = (value: string): void => {
 // 32.16 ON THE SERVER — THE BODY, OR WHERE IT THROWS THE CATCH IN ITS PLACE, and `{:finally}` either
 // way. THE REVERT: render the body without the `try` around it; the render throws and the page is
 // lost rather than the region.
+// 32.56 — ONLY A `{#try}` HAS A CATCH OR A FINALLY. A `{:catch}` written in a `{#for}` was dropped
+// without a word and the markup after it read as the row: every row rendered the catch. THE REVERT:
+// drop the throw from `parseAbide`'s `:catch` arm; each spelling parses, and nothing is refused.
+test('a {:catch} or a {:finally} outside a {#try} is refused — 32.56', () => {
+    for (const source of [
+        '{#for row of [1]}<i>{row}</i>{:catch}<p>caught</p>{/for}',
+        '{#if true}<i>yes</i>{:finally}<p>after</p>{/if}',
+        '{#try}{#if true}<i>yes</i>{:catch e}<p>no</p>{/if}{/try}',
+        '<p>{:catch}</p>',
+    ])
+        expect(() => parseAbide(source), source).toThrow('32.56')
+})
+
 test('the server renders the body, or the catch where the body throws — 32.16', async () => {
     const good = await served(pageWith('1.09'))
     expect(good).toContain('<strong id="converted">$1351.60</strong>')
@@ -164,16 +177,22 @@ test('a mismatch or an unlanded value passes through the boundary — 2.13, 41.1
         }
         return undefined
     }
-    const mounting = new TryBoundary()
+    const tryRegion = () => {
+        const parent = document.createElement('div')
+        const open = parent.appendChild(document.createComment('['))
+        const close = parent.appendChild(document.createComment(']'))
+        return new TryRegion({ open, close }, new Scope(), [])
+    }
+    const mounting = tryRegion()
     const unlanded = () => {
         throw new NotLanded({}, 'rate')
     }
-    expect(
-        escaped(() => inBoundary(mounting, unlanded, unlanded)),
-    ).toBeInstanceOf(NotLanded)
+    expect(escaped(() => mounting.guard(unlanded, unlanded))).toBeInstanceOf(
+        NotLanded,
+    )
     expect(mounting.failure.peek()).toBeUndefined()
 
-    const binding = new TryBoundary()
+    const binding = tryRegion()
     BOUNDARY.current = binding
     const scope = new Scope()
     BOUNDARY.current = undefined
@@ -196,7 +215,7 @@ const counted = globalThis as { converts?: number }
 // 32.16 AND 41.10 — THE ARM THE SERVER PAINTED IS THE ARM THE CLIENT HYDRATES. The open anchor of a
 // region whose body threw on the server says so, so the catch's markup is ADOPTED — the very node the
 // server sent — and the body is evaluated once: by the retry's first run, which finds the failure
-// the catch binds and watches what it read in the same attempt (`TryBoundary.retryCaught`). THE REVERT: write the plain open anchor in the server's catch; the client walks the
+// the catch binds and watches what it read in the same attempt (`TryRegion.follow`). THE REVERT: write the plain open anchor in the server's catch; the client walks the
 // catch as if it were the body, throws, rebuilds the catch and evaluates the body three times.
 test('a server-painted catch is adopted, and the body is evaluated once — 32.16', async () => {
     let sent: Element | null = null
@@ -358,10 +377,10 @@ import Child from './Child.abide'
 
 // 32.16 AND 41.10 — A COMPONENT THAT THROWS IN A `{#try}` BODY IS NOT FOUND BY BUILDING THE BODY: the
 // build writes the component as an empty anchor pair, and the component runs when the body mounts.
-// So where the server painted the catch, the body is tried BEHIND it (`TryBoundary.mountBehind`), and a
+// So where the server painted the catch, the body is tried BEHIND it (`TryRegion.mountBehind`), and a
 // body that fails there too leaves the catch the server sent — adopted, not rebuilt. What is still
 // created is the body's own nodes up to the component that throws, which is where a component runs —
-// once, by the retry's first run (`TryBoundary.retryCaught`). THE REVERT: empty the
+// once, by the retry's first run (`TryRegion.follow`). THE REVERT: empty the
 // caught region once the body's build succeeds (the first run's `fillRegion`, as it was); the body
 // is built into the page, fails as it mounts, and the catch is built again — a node the server never
 // sent, with 8, 8 and 11 nodes created.
@@ -463,7 +482,7 @@ const fix = (): void => {
 }
 
 // 32.16 — A CATCH A COMPONENT RAISED RECOVERS when what the component read is fixed: the retry mounts
-// the body behind the catch (`TryBoundary.retryBehind`), so it sees a component's failure — and what
+// the body behind the catch (`TryRegion.remount`), so it sees a component's failure — and what
 // the component read — as the mount does, and the body that mounts is the one kept: built once, the
 // count in `GATED_PAGES`. Whether the server painted the catch or the browser raised it. THE
 // REVERT: retry by building the body, as it was; the build writes the component as an empty pair,

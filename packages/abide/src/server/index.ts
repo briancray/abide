@@ -5,6 +5,8 @@
 // THE COMPILER IS NOT HERE — it has its own #compiler seam. This module is public surface, so a
 // compiler under it is one `export *` from being an app's dependency. `packages/abide/tests/compiler.test.ts` holds that apart.
 
+import { installServer } from './installServer.ts'
+
 // THE WHOLE ISOMORPHIC SURFACE, re-exported rather than owned. A server module imports `GET` and
 // `reactive` through this one specifier — the same callable, by the same name, that `abide`
 // hands a page. It is also every run-time half an
@@ -48,8 +50,6 @@ export {
 export { type Config, config } from './config.ts'
 // 42 — the app object, and 37's hooks an `src/server/app.ts` calls.
 export { type App, createApp } from './createApp.ts'
-// 25 — the account of the app.
-export { type Health, health } from './health.ts'
 export {
     type ConfigDefaults,
     type ConfigOptions,
@@ -62,6 +62,8 @@ export {
     onStart,
     onStop,
 } from './hooks.ts'
+// 23.10 — whether a host answers, asked before a call to it.
+export { reachable } from './reachable.ts'
 export { type Component, render, type Shell } from './render.ts'
 // 32.17's run-time half: one invocation, rendered where it stands, with the anchors that make the
 // child's markup one thing for the client to walk to.
@@ -71,6 +73,7 @@ export { request, response, server } from './requestScope.ts'
 // 17 — the response helpers, each a write through `response`.
 export {
     bytes,
+    json,
     jsonl,
     page,
     type RedirectStatus,
@@ -80,3 +83,7 @@ export {
 } from './responseHelpers.ts'
 // 24 — the trace this work belongs to.
 export { trace } from './trace.ts'
+
+// AN APP THAT IMPORTS `abide/server` IS ON A SERVER, booted or not: its own tests render, call and
+// read `config` through these names without `createApp`.
+installServer()

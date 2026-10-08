@@ -83,8 +83,7 @@ Read on: [Loading states](../values/show-a-value-that-isnt-there-yet.md)
 ## Over a cursor, the same block appends
 
 A cursor — `chat.history(50)`, `log.records.history(20)` — produces over time, and the block appends as
-each item lands rather than waiting for the last. A `{:catch}` on it **appends** after the rows
-already painted, the block having accumulated rather than rendered as a unit.
+each item lands rather than waiting for the last.
 
 Read on: [Streaming data](../server/send-data-as-it-arrives.md) ·
 [Channels](../values/let-anything-publish-and-anything-read.md)

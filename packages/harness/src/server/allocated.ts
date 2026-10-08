@@ -9,31 +9,9 @@
 // batch is halved and the two halves are reported apart. Zero growth across them is
 // the leak check.
 
-import { fullGC, heapStats } from 'bun:jsc'
+import { countsMoved, liveCounts } from './liveCounts.ts'
 
 const DEFAULT_REPS = 1000
-
-/** Live object counts by JSC type, after a full collection. */
-function counts(): Record<string, number> {
-    fullGC()
-    return heapStats().objectTypeCounts as Record<string, number>
-}
-
-function meanPerRep(
-    before: Record<string, number>,
-    after: Record<string, number>,
-    reps: number,
-): Record<string, number> {
-    const out: Record<string, number> = {}
-    for (const type of new Set([
-        ...Object.keys(before),
-        ...Object.keys(after),
-    ])) {
-        const moved = (after[type] ?? 0) - (before[type] ?? 0)
-        if (moved !== 0) out[type] = moved / reps
-    }
-    return out
-}
 
 /**
  * Mean objects per rep by JSC type over a batch, and how that mean grew between its halves.
@@ -60,31 +38,19 @@ export function allocated(
      */
     growth: Record<string, number>
 } {
-    if (typeof document !== 'undefined')
-        throw new Error(
-            'allocated() ran in a process with a DOM. happy-dom buckets as `Object` exactly where the framework does, so the totals would move with the emulator.',
-        )
     const half = Math.max(1, Math.floor(reps / 2))
-    const start = counts()
+    const start = liveCounts('allocated')
     for (let rep = 0; rep < half; rep += 1) body()
-    const middle = counts()
+    const middle = liveCounts('allocated')
     for (let rep = 0; rep < half; rep += 1) body()
-    const end = counts()
+    const end = liveCounts('allocated')
 
-    const first = meanPerRep(start, middle, half)
-    const second = meanPerRep(middle, end, half)
-    const growth: Record<string, number> = {}
-    for (const type of new Set([
-        ...Object.keys(first),
-        ...Object.keys(second),
-    ])) {
-        const moved = (second[type] ?? 0) - (first[type] ?? 0)
-        if (moved !== 0) growth[type] = moved
-    }
+    const first = countsMoved(start, middle, half)
+    const second = countsMoved(middle, end, half)
     return {
         tagged: 'batch mean',
         reps: half * 2,
-        perRep: meanPerRep(start, end, half * 2),
-        growth,
+        perRep: countsMoved(start, end, half * 2),
+        growth: countsMoved(first, second, 1),
     }
 }

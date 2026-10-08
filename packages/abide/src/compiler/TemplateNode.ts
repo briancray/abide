@@ -127,32 +127,61 @@ export type TemplateNode =
       }
 
 /**
- * The node lists one level down: an element's children, a row's body, each arm of a block.
- *
- * Each arm of an `{#if}` or a `{#try}` is its own list, so a walk that only descends is written
- * once over kinds rather than once per kind.
+ * What every body holds: its nodes, its branch-local `<script>` and `<style>`, and the inline
+ * components it declares. A row, an arm, an inline component and the template itself are each one,
+ * and so is what an element holds, with no `<script>` or `<style>` of its own.
  */
-export function childListsOf(node: TemplateNode): TemplateNode[][] {
-    // An inline component's body is not one of them (`componentsOf`): it renders where it is
-    // invoked, not where it is declared.
-    if (node.kind === 'element') return [node.children]
-    if (node.kind !== 'block') return []
-    if (node.block === 'for') return [node.children]
-    return node.branches.map((branch) => branch.children)
+export type Body = {
+    children: TemplateNode[]
+    setup: Setup | null
+    style: string | null
+    components: InlineComponent[]
+}
+
+const NO_BODIES: readonly Body[] = []
+
+/**
+ * The bodies one level down from a node: a row, each arm of a block, what an element holds.
+ *
+ * ONE LAYOUT, READ BY EVERY WALK, so a body's setup, style and components are not each walk's own
+ * restatement of which kind carries which. An element's body declares what is filed on it, and on
+ * an invocation that is also what it is passed (32.50) — each one a body written between its tags.
+ * 34.10 refuses a `<script>` or a `<style>` in a `{#try}` arm where the file is parsed, so its arms
+ * are read as any arm is and carry none.
+ */
+export function bodiesOf(node: TemplateNode): readonly Body[] {
+    if (node.kind === 'element')
+        return [
+            {
+                children: node.children,
+                setup: null,
+                style: null,
+                components:
+                    node.passed.length === 0
+                        ? node.components
+                        : [...node.components, ...node.passed],
+            },
+        ]
+    if (node.kind !== 'block') return NO_BODIES
+    if (node.block === 'for') return [node]
+    return node.branches
 }
 
 /**
- * The inline components filed on a node: the ones its bodies declare, and the ones an invocation
- * is passed. What a walk over every body a file writes adds to `childListsOf`.
+ * Visits `body` and every body under it, in the file's order: a body, then what it declares, then
+ * the bodies its nodes hold.
+ *
+ * `visit` is handed what the visit of the body around it returned, and an inline component is
+ * handed what the body that DECLARES it returned — it is that body's (32.45), wherever it renders.
  */
-export function componentsOf(node: TemplateNode): InlineComponent[] {
-    if (node.kind === 'element')
-        return node.passed.length === 0
-            ? node.components
-            : [...node.components, ...node.passed]
-    if (node.kind !== 'block') return []
-    if (node.block === 'for') return node.components
-    const components: InlineComponent[] = []
-    for (const branch of node.branches) components.push(...branch.components)
-    return components
+export function visitBodies<Around>(
+    body: Body,
+    around: Around,
+    visit: (body: Body, around: Around) => Around,
+): void {
+    const inner = visit(body, around)
+    for (const component of body.components)
+        visitBodies(component, inner, visit)
+    for (const node of body.children)
+        for (const child of bodiesOf(node)) visitBodies(child, inner, visit)
 }

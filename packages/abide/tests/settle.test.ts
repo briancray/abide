@@ -4,8 +4,10 @@
 // What is asserted is the markup the server sent, and that nothing was set up twice to get it.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { render } from '#server'
 import { serveApp } from './builtApp.ts'
-import { removeTemporaryModules } from './temporaryModule.ts'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { closeTyped, serverOf } from './typed.ts'
 
 const HANDLERS = `import { GET } from 'abide/server'
 
@@ -49,9 +51,10 @@ beforeAll(async () => {
     }))
 }, 30_000)
 
-afterAll(() => {
+afterAll(async () => {
     stop()
     removeTemporaryModules()
+    await closeTyped()
 })
 
 // THE REVERT: drop the `setImmediate` wait in `composePage`; the invoice is a hole like the slow one,
@@ -62,4 +65,43 @@ test('a value that answers within the turn is painted, and one that waits is a h
     expect(html).toContain('<p id="invoice">4021 1</p>')
     expect(html).toMatch(/<p id="slow">(<!--[^>]*-->)*<\/p>/)
     expect(html).toContain('<main>')
+})
+
+// 41.2 — EVERY ASYNCHRONOUS READ IS STARTED UP FRONT, so two loads a page reads overlap rather than
+// queue: the second has started before the first has answered, and the render costs the slower of
+// the two rather than their sum — which holds because a body starts where it is built (1.7), not
+// where it is read. THE REVERT, as the two serialized by hand: `await first` at the head of
+// `second`'s body — `overlapped` reads false where true is due.
+test('a render starts every asynchronous read before any answers — 41.2', async () => {
+    const source = `<script>
+import { reactive } from 'abide'
+
+const seen = ((globalThis as { overlap?: { firstDone: boolean; overlapped: boolean } }).overlap ??= {
+    firstDone: false,
+    overlapped: false,
+})
+const first = reactive(async () => {
+    await new Promise((done) => setTimeout(done, 20))
+    seen.firstDone = true
+    return 'one'
+})
+const second = reactive(async () => {
+    seen.overlapped = !seen.firstDone
+    await new Promise((done) => setTimeout(done, 20))
+    return 'two'
+})
+</script>
+
+<p>{first()} {second()}</p>`
+    const dir = temporaryModule({ 'Overlap.ts': await serverOf(source) })
+    const { default: Component } = await import(`${dir}/Overlap.ts`)
+    await render(
+        Component,
+        '<!doctype html><html><head></head><body></body></html>',
+    )
+    await new Promise((done) => setTimeout(done, 60))
+    expect(
+        (globalThis as { overlap?: { overlapped: boolean } }).overlap
+            ?.overlapped,
+    ).toBe(true)
 })

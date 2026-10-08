@@ -16,7 +16,6 @@
 // a budget, never a claim.
 
 import {
-    compileFile,
     componentGraph,
     emitClient,
     emitComponent,
@@ -141,7 +140,7 @@ async function compileCeiling(
     // PARSE AND EMIT ALONE first — no checker in it — because the two costs have different
     // shapes and a single total hides which one to look at when it moves.
     const emitStart = Bun.nanoseconds()
-    for (const source of sources) compileFile(source.text)
+    for (const source of sources) emitComponent(parseAbide(source.text))
     const emitNanoseconds = (Bun.nanoseconds() - emitStart) / sources.length
 
     // THE CHECKER LEG IS TWO NUMBERS, NOT ONE, and averaging them hides the one that matters.

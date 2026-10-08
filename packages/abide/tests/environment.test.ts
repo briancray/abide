@@ -17,7 +17,7 @@ const ADDRESS = '/__abide/rpc/environment/name'
 let app = ''
 const stops: (() => void)[] = []
 
-beforeAll(() => {
+beforeAll(async () => {
     app = appFixture({
         'ui/pages/page.abide': '<main>home</main>',
         'server/rpc/environment.ts': `import { GET } from 'abide/server'
@@ -25,7 +25,7 @@ beforeAll(() => {
 export const name = GET(() => process.env.NODE_ENV ?? null)
 `,
     })
-    const built = buildApp(app)
+    const built = await buildApp(app)
     if (built.exitCode !== 0) throw new Error(built.stderr)
 }, 30_000)
 

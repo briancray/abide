@@ -17,6 +17,7 @@ import type { Failed } from '../Failed.ts'
 import { isReactive } from './isReactive.ts'
 import { createKeyed, type Keyed } from './Keyed.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
+import { declaresParameter } from './parameterDefaults.ts'
 import {
     busyOver,
     createReactive,
@@ -29,6 +30,7 @@ import {
 import { outsideScope, scoped } from './scoped.ts'
 import { share } from './share.ts'
 
+export { chunksOfStream } from './chunksOfStream.ts'
 export type { History } from './History.ts'
 export { isReactive } from './isReactive.ts'
 export { isKeyed, type Keyed } from './Keyed.ts'
@@ -38,19 +40,21 @@ export { NotLanded } from './NotLanded.ts'
 // first that imports the core directly meets `MEMBER_KEYS` before it is initialised.
 export {
     abandonLoad,
-    chunksFrom,
     deadlineOf,
+    failedTransiently,
     flushSync,
+    heldGenerationOf,
     type Identity,
-    isStreamBody,
     isStreaming,
     loadOf,
     pastOf,
     type Reactive,
     type ReactiveOptions,
     type Store,
+    streamingOrSettled,
     type Transformer,
 } from './Reactive.ts'
+export { STREAMING } from './STREAMING.ts'
 export {
     currentShare,
     enterShare,
@@ -117,6 +121,27 @@ type Shaping<Accepted, Shaped, Args = never> = Omit<
 > & {
     transform?: (value: Accepted) => Shaped
 }
+/**
+ * `unknown` where `Body`'s one parameter is optional, and `never` otherwise — `any` included, which
+ * would otherwise distribute to both and take every `reactive(x as any)` for a keyed body.
+ */
+export type OptionalParameter<Body> = 0 extends 1 & Body
+    ? never
+    : Body extends (...given: infer Given) => unknown
+      ? Given extends []
+          ? never
+          : [] extends Given
+            ? unknown
+            : never
+      : never
+/** What a streaming body's generator yields. */
+export type ChunkOf<Body extends (...given: never[]) => unknown> =
+    Awaited<ReturnType<Body>> extends AsyncGenerator<infer Chunk>
+        ? Chunk
+        : never
+/** `unknown` where `Body` hands back a generator or a promise of one, and `never` otherwise. */
+export type Streams<Body extends (...given: never[]) => unknown> =
+    Awaited<ReturnType<Body>> extends AsyncGenerator<unknown> ? unknown : never
 /** The failures a body handing back a `Reactive` adopts from it (11.12). */
 export type AdoptedFailures<Computed> =
     Computed extends Reactive<unknown, never, infer Failures, unknown>
@@ -129,23 +154,82 @@ export type AdoptedProduced<Computed, Otherwise> =
         : Otherwise
 
 /**
+ * A value opening at `undefined`: `reactive<User | undefined>(undefined)`, loaded at `undefined`
+ * (4.15).
+ *
+ * FIRST, AHEAD OF EVERY BODY: without `strictNullChecks` `undefined` is assignable to a function
+ * type, so behind the streaming overloads `reactive<User | undefined>(undefined)` typed a stream of
+ * `User` chunks. Nothing but `undefined` itself is assignable to `undefined`, so nothing else stops
+ * here.
+ */
+export function reactive<Accepted = undefined, Shaped = Accepted>(
+    initial: undefined,
+    options?: Shaping<Accepted, Shaped>,
+): Reactive<Kept<Shaped>, Accepted, Refused<Shaped>>
+/**
  * A streaming value: an `async function*` body whose chunks accumulate as it runs.
  *
  * THE STREAMING OVERLOADS COME FIRST, and for the reason the keyed one comes after the unkeyed:
+ * the first is the keyed stream whose parameter is optional, for the reason given at the
+ * optional-parameter overload below.
  * `() => AsyncGenerator<Chunk>` is a `() => Computed`, so the general form would type a stream as
- * holding its generator. The TYPE reads the return; what 9.20 reads at run time is the function's
- * kind, and an arrow handing back a generator types as a stream and runs as a value — the one
- * place the two readings part, closed by writing `async function*`.
+ * holding its generator. The TYPE reads the return, and so does 9.20: an arrow handing back a
+ * generator, or a promise of one, is promoted to a stream by the run that hands it back.
  */
+export function reactive<
+    Body extends (args?: never) => unknown,
+    Optional extends OptionalParameter<Body>,
+    Shaped = ChunkOf<Body>[],
+>(
+    // `unknown` FOR THE RETURN, and the stream told by `Streams`: a return type in the constraint is
+    // a contextual type for the body, and `Promise.reject(…)` in an unkeyed body inferred its
+    // promise as one of a generator from it before this overload was passed over.
+    body: Body & OptionalParameter<Body> & Streams<Body>,
+    options?: Shaping<ChunkOf<Body>[], Shaped, Parameters<Body>[0]>,
+): Keyed<
+    Kept<Shaped>,
+    Parameters<Body>[0],
+    ChunkOf<Body>[],
+    Refused<Shaped>,
+    ChunkOf<Body>
+>
+/** A stream whose body declares no parameter. */
 export function reactive<Chunk, Shaped = Chunk[]>(
-    body: () => AsyncGenerator<Chunk>,
+    body: () => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>,
     options?: Shaping<Chunk[], Shaped>,
 ): Reactive<Kept<Shaped>, Chunk[], Refused<Shaped>, Chunk>
 /** A keyed stream: one streaming entry per `Args` key. */
 export function reactive<Chunk, Args, Shaped = Chunk[]>(
-    body: (args: Args) => AsyncGenerator<Chunk>,
+    body: (
+        args: Args,
+    ) => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>,
     options?: Shaping<Chunk[], Shaped, Args>,
 ): Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped>, Chunk>
+/**
+ * A keyed value whose parameter is optional: `undefined` is one key among the rest.
+ *
+ * 11.2 — FIRST, because a body with an optional parameter is also a `() => Computed`, and the
+ * checker would otherwise type it unkeyed while it runs keyed. The intersection is what keeps a
+ * body declaring no parameter, or a required one, off this overload.
+ *
+ * `Optional` IS NEVER WRITTEN, and is there to be counted: an instantiation expression applies
+ * every overload its type arguments fit, so with one type parameter required `typeof
+ * reactive<number>` was refused by this one's constraint rather than passed over.
+ */
+export function reactive<
+    Body extends (args?: never) => unknown,
+    Optional extends OptionalParameter<Body>,
+    Shaped = Awaited<ReturnType<Body>>,
+>(
+    body: Body & OptionalParameter<Body>,
+    options?: Shaping<Awaited<ReturnType<Body>>, Shaped, Parameters<Body>[0]>,
+): Keyed<
+    Kept<Shaped>,
+    Parameters<Body>[0],
+    Awaited<ReturnType<Body>>,
+    AdoptedFailures<ReturnType<Body>> | Refused<Shaped>,
+    AdoptedProduced<ReturnType<Body>, Kept<Shaped>>
+>
 /** A computed value: `body` produces it, and runs again when a value it read changes. */
 export function reactive<Computed, Shaped = Awaited<Computed>>(
     body: () => Computed,
@@ -167,14 +251,20 @@ export function reactive<Computed, Args, Shaped = Awaited<Computed>>(
     AdoptedFailures<Computed> | Refused<Shaped>,
     AdoptedProduced<Computed, Kept<Shaped>>
 >
-/** A value the scope owns outright: `initial`, or nothing until the first `set` if none is given. */
+/** A value the scope owns outright, opening at `initial`. */
 export function reactive<Accepted, Shaped = Accepted>(
-    // Optional: `reactive<User>()` is a value nothing has written yet, not ready until the first
-    // `set` (2.10). A function to STORE rather than run is wrapped — `reactive({ handler })` —
-    // since a function here is a body.
-    initial?: Accepted | PromiseLike<Accepted>,
+    // REQUIRED: against an optional parameter the checker infers `Accepted` with `undefined` taken
+    // out, so `reactive(maybe)` was a value that refused the `undefined` it opened with. A function to STORE rather than run is wrapped —
+    // `reactive({ handler })` — since a function here is a body.
+    initial: Accepted | PromiseLike<Accepted>,
     options?: Shaping<Accepted, Shaped>,
 ): Reactive<Kept<Shaped>, Accepted, Refused<Shaped>>
+/** A value nothing has written yet: `reactive<User>()`, not ready until the first `set` (2.10). */
+export function reactive<Accepted>(): Reactive<
+    Kept<Accepted>,
+    Accepted,
+    Refused<Accepted>
+>
 export function reactive(
     // A REST TUPLE rather than two parameters, so the count of what was passed is read: 4.14 has no
     // argument land nothing where 4.15 has `undefined` land `undefined`.
@@ -187,6 +277,7 @@ export function reactive(
     // overloads' promises are made good.
     ...given: [first?: unknown, options?: unknown]
 ): unknown {
+    const keyed = isKeyedBody(given[0])
     // 11.32 — ON A SERVER, OUTSIDE A REQUEST, THE VALUE IS FILED: a forwarder to one instance per
     // request, and to the one built here where there is no request at all. `global` is what keeps
     // a value process-wide (11.34).
@@ -195,8 +286,8 @@ export function reactive(
             (given[1] as { global?: boolean } | undefined)?.global === true,
         )
     )
-        return scoped(() => build(given))
-    return build(given)
+        return scoped(() => build(given, keyed))
+    return build(given, keyed)
 }
 
 /**
@@ -207,17 +298,45 @@ export function reactive(
  * A forwarder resolves to its home wherever no scope is current, so in a browser this is the one
  * value it always was, behind one more call.
  */
-export const ambient = ((...given: [first?: unknown, options?: unknown]) =>
-    scoped(() => build(given))) as unknown as typeof reactive
+export const ambient = ((...given: [first?: unknown, options?: unknown]) => {
+    const keyed = isKeyedBody(given[0])
+    return scoped(() => build(given, keyed))
+}) as unknown as typeof reactive
 
-function build(given: [first?: unknown, options?: unknown]): unknown {
+/**
+ * `reactive` over a handler's plain function, for `declare`.
+ *
+ * 16.68 — a body declaring no parameter is not started where the handler is declared: outside a
+ * request its value is built by the first call rather than by the import.
+ */
+export function handlerValue(body: unknown, options: unknown): unknown {
+    const given: [unknown, unknown] = [body, options]
+    const keyed = isKeyedBody(body)
+    if (!keyed && outsideScope(false))
+        return scoped(() => build(given, keyed), true)
+    return reactive(body as () => unknown, options as undefined)
+}
+
+// The two body forms are told apart by WHETHER A PARAMETER IS DECLARED, which is the author saying
+// this value is keyed. Not by `length`, which counts neither a defaulted parameter nor a rest one.
+function isKeyedBody(first: unknown): boolean {
+    return (
+        typeof first === 'function' &&
+        !isReactive(first) &&
+        declaresParameter(first as (...given: never[]) => unknown)
+    )
+}
+
+// `keyed` is `isKeyedBody(first)`, decided once by the caller: a filed value is built again per
+// request from the same function, and the answer reads its source text.
+function build(
+    given: [first?: unknown, options?: unknown],
+    keyed: boolean,
+): unknown {
     const [first, options] = given
     if (typeof first === 'function' && !isReactive(first)) {
         const body = first as (args?: unknown) => unknown
-        // The two body forms are told apart by ARITY, which is the discriminator that
-        // refusing an optional parameter was protecting: a declared parameter is the
-        // author saying this value is keyed.
-        if (body.length >= 1)
+        if (keyed)
             return createKeyed(
                 'reactive',
                 body,

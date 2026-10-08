@@ -42,6 +42,31 @@ export function parseRoutePattern(pattern: string): Segment[] {
 
 const ROUTES = 'ui/pages/'
 
+/** Whether a source is a page, a layout, an error page or a component. */
+export type FileKind = 'page' | 'layout' | 'error' | 'component'
+
+/**
+ * Whether the `.abide` at `path` is a page, a layout, an error page or a component.
+ *
+ * AN ADDRESS RATHER THAN A NAME. Both halves are load-bearing: the file name is the address and
+ * the directory is what says the address is a ROUTE rather than a component filed anywhere. One
+ * test for every name (35.1 reads `layout.abide` the same way), so the directory half cannot be
+ * got right for one and wrong for another — and one test for every reader: the build's routes,
+ * the checker's `Routes` and the `route.params` a page is typed by.
+ *
+ * 23.3 — under `ui/pages/` and nowhere else: a `page.abide` filed in some other `pages/`
+ * directory is a component, as it is to the `Routes` the checker declares. `path` may be relative
+ * to the app or the project, or absolute.
+ */
+export function fileKind(path: string): FileKind {
+    if (routesAt(path) === -1) return 'component'
+    // The WHOLE basename: `homepage.abide` ends with `page.abide` and is a component.
+    const name = path.slice(path.lastIndexOf('/') + 1)
+    if (name === 'page.abide') return 'page'
+    if (name === 'layout.abide') return 'layout'
+    return name === 'error.abide' ? 'error' : 'component'
+}
+
 /**
  * The route literal a page file is filed under, read off its path below `ui/pages/`.
  *
@@ -53,12 +78,19 @@ const ROUTES = 'ui/pages/'
  * served `ui/pages/pages/add-a-page` at `/add-a-page` and gave `/` two pages.
  */
 export function routeOf(pagePath: string): string {
-    const at = pagePath.indexOf(ROUTES)
+    const at = routesAt(pagePath)
     const tail = at === -1 ? pagePath : pagePath.slice(at + ROUTES.length)
     const parts: string[] = []
     for (const part of tail.split('/'))
         if (part !== '' && !part.endsWith('.abide')) parts.push(part)
     return `/${parts.join('/')}`
+}
+
+/** Where the first `ui/pages/` in `path` begins, as whole directories, or -1. */
+function routesAt(path: string): number {
+    if (path.startsWith(ROUTES)) return 0
+    const at = path.indexOf(`/${ROUTES}`)
+    return at === -1 ? -1 : at + 1
 }
 
 /**
@@ -97,15 +129,18 @@ function specificity(segment: Segment): number {
 }
 
 /**
- * Sorts route rows in place, most specific first, and returns the same array.
+ * A route table compiled for matching: each row with its pattern parsed, most specific first.
  *
  * 30.9 — MOST SPECIFIC FIRST, for whichever seam is asking. The ranking POLICY is what decides
  * which page an address resolves to, so it is here with `compareRoutes` rather than written out
- * beside each table: the server's boot and the client router's start sort through one call.
+ * beside each table: the server's boot and the client router's start compile through one call.
  */
-export function rankBySpecificity<T extends { segments: Segment[] }>(
+export function rankRoutes<T extends { pattern: string }>(
     rows: T[],
-): T[] {
-    rows.sort((a, b) => compareRoutes(a.segments, b.segments))
-    return rows
+): (T & { segments: Segment[] })[] {
+    const ranked: (T & { segments: Segment[] })[] = []
+    for (const row of rows)
+        ranked.push({ ...row, segments: parseRoutePattern(row.pattern) })
+    ranked.sort((a, b) => compareRoutes(a.segments, b.segments))
+    return ranked
 }

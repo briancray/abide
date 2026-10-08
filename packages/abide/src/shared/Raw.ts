@@ -1,4 +1,4 @@
-import { RAW_CLOSE, RAW_OPEN } from './RAW_RUN.ts'
+import { RAW_CLOSE, RAW_OPEN } from './ANCHORS.ts'
 
 /**
  * The brand `raw` hands back: markup a slot writes unescaped.
@@ -77,7 +77,7 @@ export function isRaw(value: unknown): value is Raw {
 export const RAW_WRITES = { count: 0 }
 
 /**
- * A run's markup, wrapped in the `RAW_RUN` anchors when a `Raw` part was written since `before`.
+ * A run's markup, wrapped in the `RAW_OPEN` / `RAW_CLOSE` anchors when a `Raw` part was written since `before`.
  *
  * 32.30 — A RUN HOLDING MARKUP IS ANCHORED, and one holding text is written as it always was. What
  * the server writes and what a browser parses for a row or an arm, so the walk that finds a run

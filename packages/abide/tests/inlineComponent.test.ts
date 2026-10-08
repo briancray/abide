@@ -6,9 +6,11 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { emitClient, emitComponent, parseAbide } from '#compiler'
+import { parseAbide } from '#compiler'
+import { UNCHECKED } from '#compiler/CheckerAnswer.ts'
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
+import { emitSource } from '#compiler/emitSource.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -19,8 +21,8 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
 
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -37,10 +39,15 @@ async function mountPage(
     })) {
         const file = parseAbide(source)
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
-        modules[`${name}.ts`] = emitComponent(file, reads)
-        modules[`${name}.client.ts`] =
-            emitClient(file, reads, name === 'Page' ? 'none' : 'invoked') ||
-            'export default () => {}'
+        const page = name === 'Page'
+        const { server, client } = emitSource(
+            page ? 'ui/pages/page.abide' : `${name}.abide`,
+            file,
+            reads,
+            !page,
+        )
+        modules[`${name}.ts`] = server
+        modules[`${name}.client.ts`] = client
     }
     const dir = temporaryModule(modules)
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -107,6 +114,28 @@ test("an inline component reads its file's script by name, live — 32.42, 31.2"
     expect(work.elementsMoved).toBe(0)
     // One binding per invocation, and nothing else reads `count`.
     expect(work.wakes).toBe(2)
+})
+
+// 10.5, 32.46 — EACH INVOCATION IS AN INSTANCE, AND OPENS ITS OWN SHARE SCOPE, as two file
+// components side by side do: `reactive.share` in one creates where no ancestor holds the key
+// (10.6), and the sibling cannot see it. THE REVERT: drop `shareScope` from `clientComponent` and
+// `serverComponent` — both counters are one value, so a click on the first moves the second too.
+test('two inline instances each share their own value — 10.5, 32.46', async () => {
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+</script>
+
+{#component Counter({ name })}<script>
+let count = reactive.share('count', () => reactive(0))
+</script><button id={name} onclick={() => { count = count + 1 }}>{count}</button>{/component}
+
+<Counter name="first"/><Counter name="second"/>`)
+    expect(html).toContain('>0</button>')
+    mount()
+    click('#first')
+    click('#first')
+    expect(document.querySelector('#first')?.textContent).toBe('2')
+    expect(document.querySelector('#second')?.textContent).toBe('0')
 })
 
 // 32.41, 32.42 — DECLARED IN A ROW, IT CLOSES OVER THE ROW: each invocation reads its own row's
@@ -230,7 +259,7 @@ const label = 'level ' + depth
 {/component}
 <Nest depth={2}/>`)
     expect(html).toContain(
-        '<i>level 2<!--[--><!--[--><i>level 1<!--[--><!--]--></i><!--]--><!--]--></i>',
+        '<i>level 2<!--[0--><!--[--><i>level 1<!--[--><!--]--></i><!--]--><!--]--></i>',
     )
 })
 
@@ -244,14 +273,13 @@ test('a hover inside an inline component is answered — 38.40', async () => {
 <Price amount={3}/>`
     const path = `${ROOT}src/Hover.abide`
     const file = parseAbide(page)
-    const { reads } = await session.readsFor([{ path, text: page, file }])
-    expect(
-        await session.diagnose(
-            [{ path, text: page, file, reads: reads[0] ?? [] }],
-            ROOT,
-            false,
-        ),
-    ).toEqual([])
+    const { answers } = await session.readsFor([{ path, text: page, file }])
+    const { diagnoses } = await session.diagnose(
+        [{ path, text: page, file, answer: answers[0] ?? UNCHECKED }],
+        ROOT,
+        false,
+    )
+    expect(diagnoses).toEqual([])
     const hover = await session.inspect(path, page, page.indexOf('toFixed'))
     expect(hover?.signature).toContain('(method) toFixed(')
 })

@@ -1,3 +1,5 @@
+import { spawned } from './spawned.ts'
+
 const DEFAULT_TIMEOUT_MILLISECONDS = 30_000
 
 /**
@@ -17,30 +19,24 @@ const DEFAULT_TIMEOUT_MILLISECONDS = 30_000
  *
  * It is also the only place a HANG can be gated. `bun test`'s own per-test timeout is a timer, so
  * a body that starves the event loop outruns it and the suite reports nothing at all — no failed
- * test, no summary. A child with a `timeout` is killed by the OS rather than by a timer inside
- * the process it is measuring.
+ * test, no summary. A child is killed by a timer in THIS process rather than by one inside the
+ * process it is measuring — and `spawned` is how, awaited rather than synchronous, its throw at
+ * the deadline being the failed test.
  */
-export function inAFreshProcess(
+export async function inAFreshProcess(
     source: string,
     workerId?: string,
     timeoutMilliseconds = DEFAULT_TIMEOUT_MILLISECONDS,
-): { ok: boolean; output: string; timedOut: boolean } {
+): Promise<{ ok: boolean; output: string }> {
     const environment: Record<string, string> = {}
     for (const [key, value] of Object.entries(process.env))
         if (value !== undefined && key !== 'BUN_TEST_WORKER_ID')
             environment[key] = value
     if (workerId !== undefined) environment.BUN_TEST_WORKER_ID = workerId
-    const run = Bun.spawnSync({
-        cmd: ['bun', '-e', source],
+    const run = await spawned(['bun', '-e', source], {
         cwd: new URL('../../../../', import.meta.url).pathname,
         env: environment,
-        stderr: 'pipe',
-        stdout: 'pipe',
-        timeout: timeoutMilliseconds,
+        deadline: timeoutMilliseconds,
     })
-    return {
-        ok: run.exitCode === 0,
-        output: run.stdout.toString() + run.stderr.toString(),
-        timedOut: run.exitCode === null,
-    }
+    return { ok: run.exitCode === 0, output: run.stdout + run.stderr }
 }

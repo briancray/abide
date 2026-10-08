@@ -27,7 +27,7 @@ export type DocsApp = {
  */
 export async function serveDocsApp(): Promise<DocsApp> {
     await buildPages()
-    const built = buildApp(`${DOGFOOD}src`, `${DOGFOOD}.abide`)
+    const built = await buildApp(`${DOGFOOD}src`, `${DOGFOOD}.abide`)
     if (built.exitCode !== 0)
         throw new Error(`abide build failed: ${built.stderr}`)
     const { base, stop } = await startApp(

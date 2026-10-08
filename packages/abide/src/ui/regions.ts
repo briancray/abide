@@ -1,30 +1,39 @@
-import { leave } from './leave.ts'
+import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
 import { LAYER_FILL } from './LAYER_NAMES.ts'
+import { leave } from './leave.ts'
 import { Mismatch } from './Mismatch.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
-import { REGION_CAUGHT, REGION_CLOSE, REGION_OPEN, ROW_OPEN } from './REGION.ts'
 
 export type Region = { open: Comment; close: Comment }
 
 /**
- * The anchor that ends the run `open` starts, or null where it is not closed in this parent.
+ * Whether a comment's data opens a region: `REGION_OPEN`, or an open naming the arm the server
+ * painted (41.24, `armAnchor`).
  *
- * WHAT ENDS THE RUN THAT `open` STARTS: the `REGION_CLOSE` at depth zero, or — where `atRow` — a
- * `ROW_OPEN` at depth zero too, which is where an anchored row ends. Walked by DEPTH because a
- * region nested inside carries its own pair, and a `{#for}` inside one its own row anchors, so
- * neither is mistaken for this run's end.
+ * BY THE FIRST CHARACTER, so a walk counting depth reads every spelling of an open as one. No other
+ * comment a document carries starts with it: an author's comment is dropped at compile, and a
+ * run's and a row's anchors are spelled apart (`RAW_OPEN`, `ROW_OPEN`).
  */
-export function closeOf(open: Node, atRow: boolean): Comment | null {
+export function opensRegion(data: string): boolean {
+    return data[0] === REGION_OPEN
+}
+
+/**
+ * The `REGION_CLOSE` that ends the region `open` starts, or null where it is not closed in this
+ * parent.
+ *
+ * Walked by DEPTH because a region nested inside carries its own pair.
+ */
+export function closeOf(open: Node): Comment | null {
     let depth = 0
     for (let node = open.nextSibling; node !== null; node = node.nextSibling) {
         if (node.nodeType !== 8) continue
         const data = (node as Comment).data
-        if (data === REGION_OPEN || data === REGION_CAUGHT) depth += 1
+        if (opensRegion(data)) depth += 1
         else if (data === REGION_CLOSE) {
             if (depth === 0) return node as Comment
             depth -= 1
-        } else if (atRow && depth === 0 && data === ROW_OPEN)
-            return node as Comment
+        }
     }
     return null
 }
@@ -41,7 +50,7 @@ export function pageRegion(host: Node): Region {
     for (let node = host.firstChild; node !== null; node = node.nextSibling) {
         if (node.nodeType !== 8 || (node as Comment).data !== REGION_OPEN)
             continue
-        const close = closeOf(node, false)
+        const close = closeOf(node)
         if (close !== null) return { open: node as Comment, close }
     }
     throw new Mismatch(
@@ -73,7 +82,7 @@ export function isEmptyRegion(region: Region): boolean {
  * insert, which is the whole of what filling a region costs.
  *
  * 14.1 — A BUILD EVALUATES EVERY VALUE IT WRITES, so it must not run tracked: an arm's swap runs
- * untracked (`emitBlock`) and so do a list's rows (`updateList`).
+ * untracked (`ArmRegion`) and so do a list's rows (`updateList`).
  */
 export function fillRegion(
     region: Region,
@@ -97,6 +106,24 @@ export function fillRegion(
     } finally {
         endLayer(LAYER_FILL)
     }
+}
+
+/**
+ * Fills a region nobody painted; answers whether it did.
+ *
+ * 32.17, 41.4, 30.7 — THE FIRST ENTRY OF A REGION THAT FILLS ITSELF: a component the server
+ * rendered, a page it served, a slot it wrote, arrives with its markup and is hydrated; one the
+ * browser grew, navigated to, or the server left behind a subject in flight arrives as the pair
+ * alone and is built here. What every emitted component asks once, as one call rather than the
+ * `isEmptyRegion` guard written out at each.
+ */
+export function fillEmpty(
+    region: Region,
+    build?: (document: Document) => Node[],
+): boolean {
+    if (!isEmptyRegion(region)) return false
+    fillRegion(region, build)
+    return true
 }
 
 /** Removes `from` and every sibling after it, up to and not including `end`. */

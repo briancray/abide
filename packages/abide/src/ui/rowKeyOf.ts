@@ -2,23 +2,15 @@
 // to `positional` (32.13) on anything else. Resolved ONCE, when the block is built, so a row pays
 // one call and no lookup.
 //
-// THROUGH THE LEAVES, NOT `Reactive.ts`. This is on the `abide/runtime` barrel every compiled
-// client module resolves through, and `isReactive` records what reaching the core from there
-// costs every page.
-import { CELL } from '#shared/reactive/CELL.ts'
-import { isReactive } from '#shared/reactive/isReactive.ts'
+// THROUGH A LEAF, NOT `Reactive.ts` — `byOf` says why.
+import { byOf } from '#shared/reactive/byOf.ts'
 
 /** The row-key function for an unkeyed `{#for}`: the `Reactive`'s `by`, else `positional`. */
 export function rowKeyOf(
     subject: unknown,
     positional: (item: unknown, at: number) => unknown,
 ): (item: unknown, at: number) => unknown {
-    if (!isReactive(subject)) return positional
-    const by = (
-        subject as unknown as {
-            [CELL]: { by: string | ((element: unknown) => unknown) | null }
-        }
-    )[CELL].by
+    const by = byOf(subject)
     if (by === null) return positional
     // THE ELEMENT ALONE: an app's function declared `(element) => unknown`, and the index a row
     // key is handed would reach a second parameter it never agreed to.

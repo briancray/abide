@@ -23,21 +23,20 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8"></head><body></b
 // 34.6 and 38.24: the stylesheet is a dependency of the page, and the document links what the
 // build made of it. The page never names an address — that is the whole of the clause.
 //
-// `#ui/…` AND NOT `./home.css`, WHICH IS THE SPELLING REGISTRY DOCUMENTS. A relative specifier is
-// left exactly as written (`componentImports`) and the emitted module lives in the build tree, so
-// `./home.css` resolves beside the OUTPUT and misses the source — for a `.ts` helper as much as
-// for a stylesheet. An import-map specifier resolves the same from either tree, which is why the
-// dogfood app uses one too.
+// 34.14 — RELATIVE, THE SPELLING REGISTRY DOCUMENTS, for a stylesheet and a `.ts` helper alike. The
+// emitted module lives in the build tree, which holds no `home.css` and no `greeting.ts`, so either
+// left as written fails the build this whole file is served from.
 const HOME = `<script>
 import { reactive } from 'abide'
 import Badge from '#ui/components/Badge.abide'
-import '#ui/home.css'
+import '../home.css'
+import { greeting } from './greeting.ts'
 
 let count = reactive(0)
 </script>
 
 <head><title>Home</title></head>
-<main id="home"><h1>Home</h1><p id="n">{count}</p><Badge label="live"/></main>`
+<main id="home"><h1>Home</h1><p id="n">{count}</p><p id="greeting">{greeting}</p><Badge label="live"/></main>`
 
 // 32.17 THROUGH A BUILD, which is the one arm that can say a component import RESOLVES. Left as
 // written with its extension swapped, the specifier the emitted page carries is
@@ -81,6 +80,15 @@ import '#ui/broken.ts'
 
 <main id="broken"><h1>Broken</h1></main>`
 
+const LEDGER = `import { GET } from 'abide/server'
+
+export const listRows = GET(() =>
+    Array.from({ length: 120 }, (_, at) => ({ id: \`row_\${at}\`, status: at % 2 === 0 ? 'open' : 'paid' })),
+)
+
+export const oneRow = GET(() => ({ id: 'row_0', status: 'open' }))
+`
+
 let stop: (() => void) | undefined
 let base = ''
 
@@ -88,6 +96,7 @@ beforeAll(async () => {
     const app = temporaryModule({
         'ui/app.html': SHELL,
         'ui/pages/page.abide': HOME,
+        'ui/pages/greeting.ts': `export const greeting = 'beside the page'\n`,
         'ui/components/Badge.abide': BADGE,
         // A SELECTOR RATHER THAN A DECLARATION, as the thing asserted on: the bundler normalises
         // a colour (`rgb(1, 2, 3)` came back `#010203`) and a class name it cannot touch.
@@ -104,6 +113,8 @@ beforeAll(async () => {
         'ui/pages/slow/page.abide': SLOW,
         'ui/slow.ts': `await new Promise((settle) => setTimeout(settle, ${SLOW_MS}))\nexport {}\n`,
         'ui/pages/broken/page.abide': BROKEN,
+        // 38.30, 38.69 — one answer over the floor and one under it.
+        'server/rpc/ledger.ts': LEDGER,
         // ON THE SERVER ONLY, so the build still bundles it: the browser never evaluates it here.
         'ui/broken.ts': `if (typeof window === 'undefined') throw new Error('broken on purpose')\nexport {}\n`,
         // 36.11 — TWO DEPTHS, because "its path below that directory" is the clause and a flat
@@ -126,18 +137,18 @@ beforeAll(async () => {
                 allowImportingTsExtensions: true,
                 types: [],
             },
-            include: ['ui'],
+            include: ['ui', 'server'],
         }),
     })
 
-    const built = buildApp(app)
+    const built = await buildApp(app)
     if (built.exitCode !== 0)
         throw new Error(`abide build failed: ${built.stderr}`)
 
         // `--port 0` and the address read back off stdout, rather than a number picked here: this
         // file runs under `--parallel` beside every other one, and a fixed port is the one way a
         // suite that passes alone fails in a batch.
-    ;({ base, stop } = await startApp(app))
+    ;({ base, stop } = await startApp(app, { ...process.env, ABIDE_MCP: '1' }))
 }, 30_000)
 
 afterAll(() => {
@@ -165,6 +176,13 @@ test('an address a page matches is painted into the shell — 38.6', async () =>
 // THE REVERT: hand the emitters no `componentGraph` imports in `compileApp` and the build this
 // file serves fails before any address answers — `Could not resolve: "#ui/components/Badge.client.ts"`,
 // the module the page imports being in the source tree, where the compiler wrote nothing.
+// THE REVERT: leave `splitImports` to rewrite `.abide` specifiers alone and the build this file
+// serves fails before any address answers — `Could not resolve: "./greeting.ts"`, beside the output.
+test('a relative import in a page resolves from the page — 34.14', async () => {
+    const html = await (await Bun.fetch(`${base}/`)).text()
+    expect(html).toContain('<p id="greeting">beside the page</p>')
+})
+
 test('a page invoking a component is painted with it — 32.17, 38.6', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     expect(html).toContain('<span id="badge">live</span>')
@@ -373,6 +391,65 @@ test('the document is compressed in the encoding the request takes — 38.30', a
     }
 })
 
+// 38.30, 38.69 — A JSON ANSWER IS COMPRESSED IN THE ENCODING THE REQUEST TAKES, AND ONLY FROM THE FLOOR
+// UP, with `vary` named either way. THE REVERTS: answer `answerJson`'s text without negotiating, and
+// the list reads no `content-encoding` for either; drop the floor, and the one row reads `br`.
+test('a JSON answer from the floor up is compressed in the encoding asked, and under it is not — 38.30, 38.69', async () => {
+    const ask = (name: string, encoding: string) =>
+        Bun.fetch(`${base}/__abide/rpc/ledger/${name}`, {
+            headers: { 'accept-encoding': encoding },
+            decompress: false,
+        })
+    const plain = await ask('listRows', 'identity')
+    expect(plain.headers.get('content-encoding')).toBeNull()
+    const identity = await plain.text()
+    expect(identity.length).toBeGreaterThan(1024)
+    for (const [encoding, decode] of [
+        ['br', brotliDecompressSync],
+        ['gzip', Bun.gunzipSync],
+    ] as const) {
+        const response = await ask('listRows', encoding)
+        expect(response.headers.get('content-encoding')).toBe(encoding)
+        expect(response.headers.get('vary')).toContain('accept-encoding')
+        const bytes = new Uint8Array(await response.arrayBuffer())
+        expect(new TextDecoder().decode(decode(bytes))).toBe(identity)
+    }
+    const small = await ask('oneRow', 'gzip, deflate, br')
+    expect(small.headers.get('content-encoding')).toBeNull()
+    expect(small.headers.get('vary')).toContain('accept-encoding')
+    expect(await small.json()).toEqual({ id: 'row_0', status: 'open' })
+})
+
+// 38.69, 20.9 — AN MCP READ IS MADE IN PROCESS WITH THE CALLER'S HEADERS, and the handler's answer is
+// read there rather than sent on: a client asking for brotli still has the resource's JSON read
+// whole, and only the reply is encoded. THE REVERT: keep `accept-encoding` in `callOf`; the list is
+// read as brotli bytes, and the resource's text is not the rows.
+test('an MCP read takes its handler answer uncompressed, whatever the client accepts — 38.69, 20.9', async () => {
+    const answer = await Bun.fetch(`${base}/__abide/mcp`, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            'accept-encoding': 'br',
+        },
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'resources/read',
+            params: { uri: 'abide:/__abide/rpc/ledger/listRows' },
+        }),
+        decompress: false,
+    })
+    expect(answer.headers.get('content-encoding')).toBe('br')
+    const reply = JSON.parse(
+        new TextDecoder().decode(
+            brotliDecompressSync(new Uint8Array(await answer.arrayBuffer())),
+        ),
+    ) as { result?: { contents: { text: string }[] } }
+    expect(JSON.parse(reply.result?.contents[0]?.text ?? 'null')).toHaveLength(
+        120,
+    )
+})
+
 test('an address no route matches is 404 — 38.22', async () => {
     expect((await Bun.fetch(`${base}/nope`)).status).toBe(404)
     // A file the build never produced, asked for under the client address.
@@ -551,7 +628,7 @@ beforeAll(async () => {
             include: ['ui'],
         }),
     })
-    const built = buildApp(app)
+    const built = await buildApp(app)
     if (built.exitCode !== 0)
         throw new Error(`abide build failed: ${built.stderr}`)
 
@@ -588,12 +665,12 @@ test('an app with no public directory still boots and serves — 38.19', async (
 // `abide dev` ASKS THE SAME QUESTION — see the test beside this one. It did not, and that is
 // what moved this out of `copyPublic`: the dev lane has no build step, so the clause bound in
 // one of the two lanes that serve.
-test('a public file claiming a page address is a build error naming both — 36.13', () => {
+test('a public file claiming a page address is a build error naming both — 36.13', async () => {
     const app = temporaryModule({
         'ui/pages/about/page.abide': '<main>About</main>',
         'ui/public/about': 'the file that shadows the page',
     })
-    const built = buildApp(app)
+    const built = await buildApp(app)
 
     expect(built.exitCode).not.toBe(0)
     const said = built.stderr

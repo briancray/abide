@@ -2,6 +2,7 @@
 // holds across the real process boundary: a browser's call, a cookie, a response streamed off
 // `abide start`. The app is a temporary module, so `removeTemporaryModules` takes it away.
 
+import { spawned } from 'harness/gate'
 import { temporaryModule } from './temporaryModule.ts'
 
 export const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
@@ -23,17 +24,8 @@ export function appFixture(files: Record<string, string>): string {
 export function buildApp(
     app: string,
     out = `${app}/.abide`,
-): { exitCode: number; stderr: string } {
-    const built = Bun.spawnSync([
-        'bun',
-        BIN,
-        'build',
-        '--root',
-        app,
-        '--out',
-        out,
-    ])
-    return { exitCode: built.exitCode, stderr: built.stderr.toString() }
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    return spawned(['bun', BIN, 'build', '--root', app, '--out', out])
 }
 
 // `abide start` on a built app, on a port the OS picks — answered once it has printed where.
@@ -75,7 +67,7 @@ export async function serveApp(
     files: Record<string, string>,
 ): Promise<{ app: string; base: string; stop: () => void }> {
     const app = appFixture(files)
-    const built = buildApp(app)
+    const built = await buildApp(app)
     if (built.exitCode !== 0)
         throw new Error(`abide build failed: ${built.stderr}`)
     return { app, ...(await startApp(app)) }

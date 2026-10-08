@@ -17,7 +17,8 @@ import { WORK } from '#shared/WORK.ts'
  * `bun test` can tell the two apart. Pricing it needs `RecalcStyleCount` off the engine lane.
  *
  * THE VALUE IS A CONDITION, not a string: `class:overdue={days > 0}` is the shape 32.10 names, so
- * the coercion is the whole of the value handling and there is nothing to escape. The NAME is the
+ * the coercion is the whole of the value handling and there is nothing to escape. It is the one
+ * ToBoolean the server's `?:` makes (`classValue`), so the two read every value alike. The NAME is the
  * author's own markup, fixed where the module was emitted.
  */
 export function setClass(element: Element, name: string, on: unknown): void {

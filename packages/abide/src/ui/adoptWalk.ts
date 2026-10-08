@@ -1,8 +1,7 @@
-import { RAW_CLOSE, RAW_OPEN } from '#shared/RAW_RUN.ts'
+import { RAW_CLOSE, RAW_OPEN } from '#shared/ANCHORS.ts'
 import { Mismatch } from './Mismatch.ts'
 import { type RawRun, rawCloseOf, rawRunEndingAt } from './RawRun.ts'
-import { REGION_CAUGHT, REGION_OPEN } from './REGION.ts'
-import { closeOf, type Region } from './regions.ts'
+import { closeOf, opensRegion, type Region } from './regions.ts'
 
 // WHERE A NODE IS WHEN THE SERVER ALREADY WROTE IT — the adopt half of every region's mount: the
 // page, an arm, a slot, a caller's children and every row. The compiler emits it from the walk that
@@ -83,7 +82,7 @@ export function textHere(node: Node | null | undefined): Text | RawRun {
  * the one that disagreed.
  *
  * A node put back at the TOP of a row needs nothing more: a row with several top-level nodes is the
- * RANGE from its anchor to `closeOf(anchor, true)`, and the node is put back inside it.
+ * RANGE from its anchor to the next (`rows.ts`), and the node is put back inside it.
  */
 export function runHere(
     node: Node | null | undefined,
@@ -112,9 +111,8 @@ export function runHere(
  */
 export function regionHere(node: Node | null | undefined): Region | undefined {
     if (node == null || node.nodeType !== 8) return undefined
-    const data = (node as Comment).data
-    if (data !== REGION_OPEN && data !== REGION_CAUGHT) return undefined
-    const close = closeOf(node, false)
+    if (!opensRegion((node as Comment).data)) return undefined
+    const close = closeOf(node)
     return close === null ? undefined : { open: node as Comment, close }
 }
 

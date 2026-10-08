@@ -8,6 +8,7 @@
 // test here reports a build that succeeded over eighty-five pages whose imports cannot resolve.
 
 import { afterAll, expect, test } from 'bun:test'
+import { spawned } from 'harness/gate'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
@@ -34,8 +35,8 @@ function scaffolded(): string {
 
 test('an app is found at src/ where the command is run — 38.26, 38.28', async () => {
     const app = scaffolded()
-    const built = Bun.spawnSync(['bun', BIN, 'build'], { cwd: app })
-    expect(built.stderr.toString()).toBe('')
+    const built = await spawned(['bun', BIN, 'build'], { cwd: app })
+    expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
 
     // BESIDE THE APP, which is the other half of saying nothing: a build whose output lands
@@ -52,33 +53,33 @@ test('an app is found at src/ where the command is run — 38.26, 38.28', async 
 
 test('an app is found where the command is run, when ui/ is right there — 38.26', async () => {
     const app = scaffolded()
-    const built = Bun.spawnSync(['bun', BIN, 'build'], { cwd: `${app}/src` })
+    const built = await spawned(['bun', BIN, 'build'], { cwd: `${app}/src` })
     expect(built.exitCode).toBe(0)
     // `dirname(root)` again, and the root here IS `src` — so the build goes beside it rather
     // than inside the tree it compiled.
     expect(await Bun.file(`${app}/.abide/server.ts`).exists()).toBe(true)
 })
 
-test('a directory with no app is a refusal naming where it looked — 38.27', () => {
+test('a directory with no app is a refusal naming where it looked — 38.27', async () => {
     const nowhere = temporaryModule({ 'readme.md': 'nothing to build here\n' })
-    const built = Bun.spawnSync(['bun', BIN, 'build'], { cwd: nowhere })
+    const built = await spawned(['bun', BIN, 'build'], { cwd: nowhere })
     expect(built.exitCode).toBe(1)
-    const said = built.stderr.toString()
+    const said = built.stderr
     expect(said).toContain('no app here')
     expect(said).toContain(nowhere)
     expect(said).toContain('--root')
 })
 
-test('asking for help is a success and an unknown command is not — 38.13', () => {
-    for (const asked of [[], ['help'], ['-h'], ['--help']]) {
-        const helped = Bun.spawnSync(['bun', BIN, ...asked])
+test('asking for help is a success and an unknown command is not — 38.13', async () => {
+    for (const asked of [['help'], ['-h'], ['--help']]) {
+        const helped = await spawned(['bun', BIN, ...asked])
         expect(helped.exitCode).toBe(0)
-        expect(helped.stdout.toString()).toContain('abide <command>')
+        expect(helped.stdout).toContain('abide <command>')
     }
     // GENERATED FROM THE COMMAND LIST the dispatch reads, so every command the registry names is in
     // the help — and a command the dispatch reaches, rather than 'unknown'. THE REVERT: drop a row
     // from `COMMANDS`; its registry name goes missing from the help.
-    const said = Bun.spawnSync(['bun', BIN, '--help']).stdout.toString()
+    const said = (await spawned(['bun', BIN, '--help'])).stdout
     const registry = require('node:fs').readFileSync(
         new URL('../../../docs/REGISTRY.md', import.meta.url),
         'utf8',
@@ -89,7 +90,7 @@ test('asking for help is a success and an unknown command is not — 38.13', () 
     expect(named.length).toBeGreaterThan(10)
     for (const command of named) expect(said).toContain(`  ${command}`)
 
-    const unknown = Bun.spawnSync(['bun', BIN, 'frobnicate'])
+    const unknown = await spawned(['bun', BIN, 'frobnicate'])
     expect(unknown.exitCode).toBe(1)
-    expect(unknown.stderr.toString()).toContain("unknown command 'frobnicate'")
+    expect(unknown.stderr).toContain("unknown command 'frobnicate'")
 })

@@ -8,16 +8,15 @@ import { cookies } from '#shared/cookies.ts'
 import { isFailed } from '#shared/Failed.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { namedLogger } from '#shared/log.ts'
-import { mounted } from '#shared/mount.ts'
 import {
-    PRINCIPAL,
+    type PRINCIPAL,
     type Principal,
     principalMembers,
 } from '#shared/principal.ts'
 import { refuse } from '#shared/refuse.ts'
 import { declare } from '#shared/rpc.ts'
-import type { Mounted } from './answerRpc.ts'
-import { callerOf, mintCaller } from './callerOf.ts'
+import { mountedOwn } from './answerRpc.ts'
+import { callerOrMint, mintCaller } from './callerOf.ts'
 import { config, positiveSetting } from './config.ts'
 import { HOOKS } from './hooks.ts'
 import { within } from './requestScope.ts'
@@ -172,16 +171,6 @@ export function resolvePrincipal(): Promise<Principal> {
 }
 
 /**
- * This request's caller, minting one where the request has none.
- *
- * 26.5, 26.6 — READ OFF ITS OWN COOKIE OR MINTED, and untouched by a sign-in.
- */
-export function callerOrMint(): string {
-    const scope = within('principal.caller')
-    return callerOf() ?? mintCaller(scope)
-}
-
-/**
  * Signs this caller in with `claims`, sealing them into the cookie.
  *
  * 26.8, 26.21 — AUTHENTICATES THIS CALLER, before the headers are out, leaving `caller` where it
@@ -226,36 +215,18 @@ const principalDocument = declare('GET')(resolvePrincipal, {
     clients: { ui: false, mcp: false, cli: false, openapi: false },
 })
 
-// 16.11 — READ WHEN IT IS REPORTED, where a mounted handler's is stamped at boot: the mount is the
-// configuration's, and nothing boots this handler.
-Object.defineProperty(principalDocument, 'address', {
-    get: () => mounted(PRINCIPAL_ADDRESS),
-})
+/** The handler `/__abide/principal` is answered by. */
+export const PRINCIPAL_MOUNT = mountedOwn(
+    PRINCIPAL_ADDRESS,
+    'principal',
+    principalDocument,
+)
 
-/** The handler `/__abide/principal` is answered by, keyed as `answerRpc` looks one up. */
-export const PRINCIPAL_HANDLERS = new Map<string, Mounted>([
-    [
-        PRINCIPAL_ADDRESS,
-        {
-            address: PRINCIPAL_ADDRESS,
-            method: 'GET',
-            source: '',
-            name: 'principal',
-            ui: false,
-            description: undefined,
-            copy: undefined,
-            defaults: undefined,
-            args: undefined,
-            handler: principalDocument as Mounted['handler'],
-            argsDocument: undefined,
-            wireArgs: undefined,
-        },
-    ],
-])
-
-// 21.4 — the answer is about this caller alone, and is never cached. 1.4 — the call's `Reactive` is
+// 21.3 — the answer is about this caller alone, and is never cached. 1.4 — the call's `Reactive` is
 // thenable, and a promise of it is the document.
-PRINCIPAL.document = () => Promise.resolve(principalDocument())
-PRINCIPAL.caller = callerOrMint
-PRINCIPAL.set = set
-PRINCIPAL.clear = clear
+export const SERVER_PRINCIPAL: typeof PRINCIPAL = {
+    document: () => Promise.resolve(principalDocument()),
+    caller: callerOrMint,
+    set,
+    clear,
+}

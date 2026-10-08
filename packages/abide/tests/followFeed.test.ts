@@ -5,13 +5,9 @@
 // value per write against 1.
 
 import { expect, test } from 'bun:test'
+import { Mux, type MuxConnection } from '#server/answerSocket.ts'
 import { flushSync, invalidate, reactive, refresh } from '#shared'
 import { GET } from '#shared/rpc.ts'
-import {
-    connectionOf,
-    type MuxSocket,
-    socketHandlers,
-} from '#server/answerSocket.ts'
 
 const FOLLOWERS = 20
 
@@ -27,9 +23,10 @@ test('a change is serialized once for every follower of a value, and each is sen
     const value = reactive(shelf(['dune']), { global: true })
     const rpc = GET(value as never) as unknown as { address: string }
     rpc.address = '/__abide/rpc/shelf'
-    const handlers = socketHandlers(
+    const mux = new Mux(
         new Map(),
         new Map([[rpc.address, { handler: rpc, ui: true } as never]]),
+        undefined,
     )
     const sent: {
         op: string
@@ -37,7 +34,7 @@ test('a change is serialized once for every follower of a value, and each is sen
         version?: number
         value?: unknown
     }[][] = []
-    const sockets: MuxSocket[] = []
+    const connections: MuxConnection[] = []
     for (let at = 0; at < FOLLOWERS; at++) {
         const frames: {
             op: string
@@ -46,15 +43,17 @@ test('a change is serialized once for every follower of a value, and each is sen
             value?: unknown
         }[] = []
         sent.push(frames)
-        const ws = {
-            data: connectionOf(new Request('http://app.test/__abide/socket')),
-            send(text: string) {
-                frames.push(JSON.parse(text))
+        const connection = mux.connect(
+            new Request('http://app.test/__abide/socket'),
+            {
+                send(text: string) {
+                    frames.push(JSON.parse(text))
+                },
+                close() {},
             },
-        } satisfies MuxSocket
-        sockets.push(ws)
-        await handlers.message(
-            ws,
+        )
+        connections.push(connection)
+        await connection.message(
             JSON.stringify({ op: 'sub', id: at + 1, address: rpc.address }),
         )
     }
@@ -78,7 +77,7 @@ test('a change is serialized once for every follower of a value, and each is sen
             id: at + 1,
             value: { titles: ['dune', 'emma'] },
         })
-    for (const ws of sockets) handlers.close(ws)
+    for (const connection of connections) connection.close()
     value.set(shelf(['gone']))
     flushSync()
     expect(sent[0]?.length).toBe(2)
@@ -95,19 +94,22 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
     })
     const rpc = GET(value as never) as unknown as { address: string }
     rpc.address = '/__abide/rpc/stock'
-    const handlers = socketHandlers(
+    const mux = new Mux(
         new Map(),
         new Map([[rpc.address, { handler: rpc, ui: true } as never]]),
+        undefined,
     )
     const frames: { op: string; value?: unknown }[] = []
-    const ws = {
-        data: connectionOf(new Request('http://app.test/__abide/socket')),
-        send(text: string) {
-            frames.push(JSON.parse(text))
+    const connection = mux.connect(
+        new Request('http://app.test/__abide/socket'),
+        {
+            send(text: string) {
+                frames.push(JSON.parse(text))
+            },
+            close() {},
         },
-    } satisfies MuxSocket
-    await handlers.message(
-        ws,
+    )
+    await connection.message(
         JSON.stringify({ op: 'sub', id: 1, address: rpc.address }),
     )
     flushSync()
@@ -121,5 +123,5 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
         'invalidate',
         'value',
     ])
-    handlers.close(ws)
+    connection.close()
 })

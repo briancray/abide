@@ -9,10 +9,9 @@
 
 import { isComponentTag, isSlot } from './classifyTemplate.ts'
 import {
-    childListsOf,
-    componentsOf,
     type InlineComponent,
     type TemplateNode,
+    visitBodies,
 } from './TemplateNode.ts'
 import { skipQuoted } from './tokenise.ts'
 
@@ -54,43 +53,31 @@ export function markScoped(
     token: string,
     tokens: string[] = [token],
     bodies: { css: string; token: string }[] = [],
-    components: readonly InlineComponent[] = [],
+    components: InlineComponent[] = [],
 ): { css: string; token: string }[] {
-    for (const component of components) {
-        const own = bodyTokens(component.style, token, tokens, bodies)
-        markScoped(component.children, token, own, bodies, component.components)
-    }
-    for (const node of nodes) {
-        if (node.kind === 'block') {
-            const arms = node.block === 'for' ? [node] : node.branches
-            for (const arm of arms)
-                markScoped(
-                    arm.children,
-                    token,
-                    bodyTokens(arm.style, token, tokens, bodies),
-                    bodies,
-                    arm.components,
-                )
-            continue
-        }
-        for (const children of childListsOf(node))
-            markScoped(children, token, tokens, bodies, componentsOf(node))
-        if (node.kind !== 'element') continue
-        // A child's own elements are the child's; what the caller passes between its tags is the
-        // caller's, and is marked as the caller's.
-        const own =
-            !isComponentTag(node.tag) &&
-            !isSlot(node) &&
-            !UNSCOPED.has(node.lowerTag)
-        if (own)
-            for (const each of tokens)
+    const file = { children: nodes, setup: null, style: null, components }
+    visitBodies(file, tokens, (body, around) => {
+        const own = bodyTokens(body.style, token, around, bodies)
+        for (const node of body.children) {
+            // A child's own elements are the child's; what the caller passes between its tags is
+            // the caller's, and is marked as the caller's.
+            if (
+                node.kind !== 'element' ||
+                isComponentTag(node.tag) ||
+                isSlot(node) ||
+                UNSCOPED.has(node.lowerTag)
+            )
+                continue
+            for (const each of own)
                 node.attributes.push({
                     name: each,
                     lowerName: each,
                     value: '',
                     expression: false,
                 })
-    }
+        }
+        return own
+    })
     return bodies
 }
 

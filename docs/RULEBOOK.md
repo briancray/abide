@@ -422,8 +422,9 @@ subscriber MUST NOT renumber it.
 9.19 A `Reactive`'s history epoch MUST be minted when that `Reactive` is constructed, and MUST NOT
 change while it lives.
 
-9.20 A `reactive` body declared as an async generator function MUST be a streaming producer, and
-the declaration MUST be read once, at construction.
+9.20 A `reactive` body declared as an async generator function MUST be a streaming producer from
+construction, and a body whose run hands back an async generator, or a promise resolving to one,
+MUST be one from that run on.
 
 9.21 `s.refresh` on a streaming producer MUST serve the held accumulation until the new stream's
 first chunk, and that stream's accumulation from then on.
@@ -626,6 +627,9 @@ declaration and never from what a write outside every request left.
 
 11.69 A keyed value's body MUST be handed what its `args` gate returned.
 
+11.70 A `Keyed` entry whose load is in flight MUST NOT be evicted by its `ttl`, and its life MUST
+start again when the load ends.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.
@@ -660,6 +664,10 @@ woke have run.
 12.13 A `watch` registered inside a `{#if}` arm or a `{#for}` row MUST stop when the region
 holding that arm or row is removed.
 
+12.14 A `reactive` over a body that is not a stream, built where 12.4, 12.5 or 12.13 would own a
+`watch`, MUST stop reading its sources once that owner stops and nothing else reads it, and MUST
+answer a later read with what its body computes then.
+
 # 13. Selections
 
 13.1 A `Selection` MUST be one `Reactive`, one `Keyed`, one `Rpc`, or a set of `tags`.
@@ -690,8 +698,8 @@ in the process.
 
 13.11 `ready` over a `Selection` MUST answer whether EVERY entry in it is ready.
 
-13.12 A pattern given beside a `Selection` MUST narrow it to the entries whose `Args` match the
-pattern.
+13.12 A pattern given beside a `Keyed` or an `Rpc` MUST narrow it to the entries whose `Args`
+match the pattern.
 
 13.13 A `Selection` made in any scope MUST reach every `global` `reactive` it matches, and every
 entry of a `global` `Keyed` it matches.
@@ -789,6 +797,12 @@ being built.
 15.18 A refusal declared through `refuse.named` MUST carry data only where it is given a `schema`,
 and its data's type MUST be inferred from that `schema`; a `message` function MUST be accepted only
 beside one.
+
+15.19 A `Keyed` entry or an `Rpc` whose last answer was a refusal at status 500 or above, or a throw,
+MUST run its body again for the next reach rather than serve that answer.
+
+15.20 A refusal below status 500 MUST be held for the next reach as a production is, until its
+`ttl` ends.
 
 # 16. Handlers and transports
 
@@ -964,8 +978,10 @@ included, and MUST report `s.busy` false.
 16.66 A call reaching a value whose last load ended under 16.52 MUST start a new load, under the `signal`
 that call passed.
 
-16.67 A throw answered once its request's signal has aborted — a handler's, or a page render's —
-MUST answer `aborted` at 499, and MUST NOT report the throw as unexpected.
+16.67 A throw answered once its request's signal has aborted — a handler's, a page render's, or a
+`SocketEvent` rung's — MUST answer `aborted` at 499, and MUST NOT report the throw as unexpected.
+
+16.68 An `Rpc` over a plain function MUST NOT run that function before the first call reaches it.
 
 # 17. Response helpers
 
@@ -990,6 +1006,12 @@ framing of a streaming answer.
 17.8 An answer at a failure status (400-599) MUST carry that status's registered reason phrase as
 its `statusText` when nothing wrote one, and `refuse` given no `message` MUST take the same phrase,
 falling back to `HttpError` for a status with none.
+
+17.9 `json` MUST be defined as a write through `response` fixing the answer as `application/json`,
+serialized as a bare return is.
+
+17.10 `json` given `undefined` MUST answer `null` at the status written through `response`, and MUST
+NOT answer 204.
 
 # 18. Sockets
 
@@ -1065,6 +1087,13 @@ the value again.
 18.30 The build MUST warn where a `GET`'s `Reactive` declares `by`, `tags` or `history` by a value
 that is not a function and whose type is not the one 18.19 carries.
 
+18.31 Every frame on one connection to the socket mux MUST be answered in one request scope, whose
+`request` is the upgrade's.
+
+18.32 A connection's request scope MUST be torn down when the connection closes.
+
+18.33 The signal of a connection's `request` MUST abort when the connection closes.
+
 # 19. Mount paths and schemas
 
 19.1 A handler declared with `socket` MUST be mounted as 16.2 mounts one declared over http.
@@ -1121,6 +1150,9 @@ names.
 19.20 A request for the path `APP_URL` names, without its trailing `/`, MUST be redirected 308 to
 that path with one, by path alone.
 
+19.21 A `Schema` derived per 19.10 MUST refuse a member its type does not declare, wherever the type
+carries no index signature.
+
 # 20. Generated surfaces
 
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored
@@ -1164,8 +1196,8 @@ the body.
 
 21.3 A page, an rpc answer and a refusal MUST default to `cache-control: private, no-store`.
 
-21.4 `/__abide/health`, `/__abide/principal`, `/__abide/openapi.json` and `/__abide/mcp` MUST answer
-`cache-control: no-store`.
+21.4 `/__abide/openapi.json` and `/__abide/mcp` MUST answer `cache-control: no-store`. `/__abide/health`
+and `/__abide/principal` are answered as handlers (25.3) and carry 21.3's `private, no-store`.
 
 21.5 The built bundle MUST answer `cache-control: public, max-age=31536000, immutable`.
 
@@ -1229,6 +1261,10 @@ of that name.
 22.9 A write through `response` MUST be collected onto the response being built for the request
 being served.
 
+22.10 A write through `cookies` or `response` MUST throw once the response headers are out, and on
+a connection to the socket mux, whose headers went out with the upgrade. A caller minted there MUST
+be that scope's alone.
+
 # 23. Route and connectivity
 
 23.1 Each member of `route` MUST be its own `Reactive`, and `route` MUST NOT be one `Reactive` over a
@@ -1251,6 +1287,14 @@ composite.
 23.9 In a page or a layout, `route.params()` MUST be typed by that file's own route: a required
 segment as text, an optional one as text that may be absent, a rest as a list, and in a layout any
 segment a page below it adds.
+
+23.10 `reachable` MUST be true where the host answered a request, whatever the status it answered.
+
+23.11 `reachable` MUST be false where the host has not answered within 5 seconds.
+
+23.12 `reachable` MUST hold each host's answer for 60 seconds, as a `global` value's `ttl` holds one.
+
+23.13 `reachable` MUST ask a host that names no scheme over https, and an origin as written.
 
 # 24. Tracing
 
@@ -1276,6 +1320,8 @@ name, where it closed before the head was sent.
 25.2 An app's own `onHealth` fields MUST win every collision.
 
 25.3 `health` MUST be seeded per 41.5.
+
+25.4 `Health` MUST admit a field an app declares on it for what its `onHealth` adds.
 
 # 26. Principal
 
@@ -1326,6 +1372,9 @@ naming the byte count.
 
 26.22 `principal.caller` MUST throw in a browser.
 
+26.23 Where a browser's load of the `principal` document is refused, `principal` MUST report an
+unauthenticated caller carrying that refusal as `principal.error`.
+
 # 27. Configuration
 
 27.1 `config` MUST throw what `onConfig` threw.
@@ -1351,6 +1400,10 @@ will not coerce MUST keep that default.
 
 27.10 Filing or unfiling `onConfig` MUST invalidate `config`, so a read taken before the app's
 module ran is not the one served after it.
+
+27.11 `ConfigDefaults` MUST be handed the environment over what 27.3 derives.
+
+27.12 `Config` MUST admit a field an app declares on it, of any type.
 
 # 28. Logging
 
@@ -1479,6 +1532,9 @@ fragment it carries names.
 
 30.26 `abide check` MUST refuse a `url` literal that no page of the app is filed under.
 
+30.27 A `navigate` whose request fails, or whose route's chunks fail to load, MUST leave the address
+to the document.
+
 # 31. Reading and writing by name
 
 31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
@@ -1521,6 +1577,9 @@ type parameter constrained by one.
 31.15 A write through a member path that reaches a value which is not plain data — an array, or an
 object whose prototype is `Object.prototype` or `null` — MUST assign on that value itself, MUST NOT
 copy it or any level above it, and MUST NOT wake a reader.
+
+31.16 `route.url`, `route.params`, `route.name` and `route.navigating` MUST each be read and written
+as a name bound to a `Reactive` is, per 31.1 to 31.7.
 
 # 32. Templating
 
@@ -1582,7 +1641,10 @@ MUST NOT be built as a string.
 
 32.24 `raw` MUST hand back a value branded as raw markup.
 
-32.25 `{raw(...)}` MUST lower to a call to `raw`.
+32.25 A bare `raw(...)` call MUST lower to a call to `raw` wherever a template expression whose
+value reaches markup holds it: a slot, an attribute value, a `{#if}` condition, a `{#for}` subject,
+and a value handed to a component. In a listener, a `bind:` operand and a `{#for}` key it MUST call
+what the file binds.
 
 32.26 A slot MUST render a value branded by `raw` without escaping it.
 
@@ -1677,6 +1739,13 @@ component's `props` call declares for that prop, and MUST report a mismatch on t
 32.55 A `{#component Name(pattern)}` at the template's top level whose name an import, a `<script>`
 declaration or a `<script module>` declaration of its file also binds MUST be a build error.
 
+32.56 A `{:catch}` or a `{:finally}` anywhere but directly inside a `{#try}` MUST be a build
+error.
+
+32.57 An `await` in a template expression — a slot, an attribute value, a listener, a `bind:`
+operand, a `{#if}` condition, a `{#for}` subject or key, or a value handed to a component — outside
+any function that expression declares, MUST be a compile error.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
@@ -1732,6 +1801,24 @@ decoded on its own.
 33.20 A `props` default MUST answer wherever the caller's expression reads `undefined`, the key
 left out included, and its binding MUST be typed without `undefined`.
 
+33.21 A prop a `<Name/>` passes as a bare attribute, a name with no value, MUST reach the child as
+`true`.
+
+33.22 A `props` rest element handed on whole MUST carry each key's value, read where it is read,
+and MUST NOT carry the accessor.
+
+33.23 `Attributes<Tag>` MUST type each attribute `Tag` takes under its HTML name, by every value
+that writes that attribute per 32.37.
+
+33.24 `Attributes<Tag>` MUST type an `on<event>` member's event as the one `Tag` dispatches, with
+that element as its `currentTarget`.
+
+33.25 A `props` rest element MUST NOT hold `children`.
+
+33.26 `Attributes<Tag>` over an SVG element MUST type the SVG attributes, presentation attributes
+included, under the names SVG spells them, and a tag both HTML and SVG name MUST be typed as the HTML
+element.
+
 # 34. Script and style blocks
 
 34.1 A `<script>` block MUST be per-instance component setup.
@@ -1761,6 +1848,18 @@ no other.
 
 34.11 A `<style>` written in a `{#for}` row or an `{#if}` arm MUST apply to the elements that body holds,
 and to no other element the component writes.
+
+34.12 A `<script>` carrying `lang="ts"` MUST be read as it would be without it.
+
+34.13 `generics` on a component's `<script>` MUST declare that component's type parameters: its
+blocks and template MUST be checked for every type they admit, and a `<Name/>` MUST infer them from
+the props it passes.
+
+34.14 A relative specifier a `<script>` or a `<script module>` imports from MUST resolve against the
+`.abide` file it is written in.
+
+34.15 A `.abide` file a `<script>` or a `<script module>` names in an `import()` MUST resolve to the
+module that file compiles to, as a static import of it does.
 
 # 35. Pages, rendering and sinks
 
@@ -1843,7 +1942,9 @@ answered per 41.12.
 37.2 The `default` export MUST be the app's own route, answering where it returns a `Response`.
 
 37.3 `middleware` MUST run pre-routing, over the request and the response, and over the upgrade to the
-socket mux, which MUST NOT open where a rung answered in the lane's place.
+socket mux, which MUST open only at its own address below the mount, only in an app with a socket or a
+handler to carry, and MUST NOT open where a rung answered in the lane's place — under `abide dev` as
+under `abide start`.
 
 37.4 `onStart` MUST wrap `createApp` and `onStop` MUST wrap `App.stop`.
 
@@ -1882,14 +1983,14 @@ through `App.stop`, and the process MUST then exit with 0.
 
 38.6 `abide start` MUST boot what `abide build` produced.
 
-38.7 `abide connect` MUST boot nothing.
+38.7 `abide` given `--url` and no command MUST boot nothing.
 
 38.8 `abide call` MUST be the one spelling for calling a handler, in argv and in the shell alike.
 
 38.9 `abide openapi` and `abide mcp` MUST derive from the same route table the served surfaces do,
 per 20.1.
 
-38.10 `abide logs` MUST be a live subscription to `log.records`, as `abide connect` makes one.
+38.10 `abide logs` MUST be a live subscription to `log.records`, as 38.7's shell makes one.
 
 38.11 `abide compile` and `abide bundle` MUST produce a standalone artifact.
 
@@ -1939,8 +2040,8 @@ where that holds a `ui`.
 38.29 The document `abide start` or `abide dev` serves MUST preload, from the head, every chunk its
 route imports statically, and MUST NOT preload a chunk reached only through a dynamic import.
 
-38.30 `abide start` MUST answer the document and the bundle in an encoding the request accepts
-where it has one, and MUST name `accept-encoding` in `vary`.
+38.30 `abide start` MUST answer the document, the bundle and an `Rpc`'s JSON answer in an
+encoding the request accepts where it has one, and MUST name `accept-encoding` in `vary`.
 
 38.31 `abide build` and `abide dev` MUST type an app with no `tsconfig.json` against a default
 project, and MUST NOT compile it untyped.
@@ -2004,29 +2105,47 @@ the `abide` command that runs it.
 38.53 The usage the executable `abide compile` writes prints MUST NOT list a command it refuses, nor a
 flag only such a command reads.
 
-38.54 `abide start` and the executable's `start` MUST open 38.7's shell on the app they serve.
+38.54 `abide` and the executable given no command and no running app to talk to MUST serve the app
+and open 38.7's shell on it.
 
 38.55 Leaving the shell 38.54 opens with `exit` MUST stop the app.
 
-38.56 Input to the shell `start` opens that ends MUST NOT stop the app.
+38.56 Input that ends MUST NOT stop the app `abide` serves under 38.54.
 
 38.57 A script the executable's `run` imports MUST resolve `abide`'s entries and the app's handler
 modules to the ones the executable holds.
 
 38.58 `abide run` and the executable's `run` MUST resolve the configuration under the app's identity.
 
-38.59 `abide dev` and `abide start` MUST print every address the app answers at, the local one first.
+38.59 `abide dev`, `abide start` and the app 38.54 serves MUST print every address the app answers at,
+the local one first.
 
 38.60 38.7's shell MUST answer `help` with every word it takes.
 
 38.61 A line the app logs while 38.7's shell is open on a terminal MUST NOT move the shell's prompt,
 nor the line being typed — `log` or the console alike.
 
-38.62 `abide call`'s args MUST be `name=value` words, each value coerced as 19.8 coerces a query's
-and a name given twice a list, or one JSON object where the first word opens one.
+38.62 `abide call`'s args MUST be `name=value` words, each value coerced by the app it reaches as
+19.8 coerces a query's and a name given twice a list, or one JSON object where the first word opens
+one.
 
-38.63 38.7's shell MUST list each handler `call` reaches with its args, and with its `description`
-where the declaration writes one as a literal.
+38.63 38.7's shell MUST list and complete each handler `call` reaches that `clients.cli` does not
+withhold, with its args, and with its `description` where the declaration writes one as a literal.
+
+38.64 `abide dev` given neither `--port` nor `PORT` MUST listen on the first free port from 3000
+through 3099.
+
+38.65 `abide dev` given a port by `--port` or `PORT` MUST NOT listen on any other.
+
+38.66 Each compile `abide dev` makes MUST compile the tree as it stands: what an earlier compile in
+the same process found MUST NOT change what a later one emits.
+
+38.67 Each file `abide build` writes MUST replace its predecessor whole, and a build MUST remove from
+its output only a file it did not produce that was written before it began.
+
+38.68 `abide start` and the executable's `start` MUST NOT read their input.
+
+38.69 An `Rpc`'s JSON answer under 1024 bytes MUST be answered in the identity encoding.
 
 # 39. Head and view transitions
 
@@ -2214,6 +2333,21 @@ markup, starting each `Rpc` call the setup made as the request the browser's `Rp
 41.22 An `Rpc` call for args a seed buffer entry already answered MUST NOT warn on
 `abide:hydrate`.
 
+41.23 On the client, a `src/ui/pages/**/layout.abide` MUST NOT hydrate or build its markup before
+the page under it is set up.
+
+41.24 Where hydration's setup chooses an arm of an `{#if cond}` other than the one the server painted,
+or no component for a `<Name/>` under 32.34 the server painted one for, the region MUST be filled
+from the choice rather than adopted, warning on `abide:hydrate`.
+
+41.25 Hydration MUST NOT set up a page until every `Rpc` call `render` built its markup from settled
+has answered or failed.
+
+41.26 An `Rpc` call answering a stream MUST NOT be waited for under 41.25.
+
+41.27 An `Rpc` call `render` built the page's markup from in flight MUST be in flight as hydration
+adopts the page, however early its answer arrived.
+
 # 42. The app object
 
 42.1 `createApp` MUST build the route table and compose every onion, per 16.15.
@@ -2253,6 +2387,10 @@ client of its own for one.
 
 42.15 `App.stop` asked again while the app is stopping MUST answer with the stop under way, and
 `onStop` MUST run once.
+
+42.16 Under `bun test`, `createApp` MUST build the app at most once per state of its sources and
+the framework's, MUST NOT boot a build that state did not make, and MUST NOT require a prior
+`abide build`.
 
 # 44. The measurement harness
 
@@ -2337,7 +2475,7 @@ each one.
 above the last.
 
 45.6 With `mcp`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
-lists, and MUST call each through the `/__abide/mcp` of the app answering the request.
+lists, and MUST call each as a request through the app answering the request.
 
 45.7 A `Toolbox` call MUST carry the asking request's `cookie` and `authorization` headers, and MUST
 NOT carry any other header of it.

@@ -4,6 +4,7 @@
 // `WebSocket` is not bun's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { spawned } from 'harness/gate'
 import { addressOf, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -54,6 +55,9 @@ export const count = GET(
 export const howFar = GET(() => counted)
 
 export const patient = GET(() => 1, { timeout: 40_000 })
+
+// Answers anything, an upgrade included, with the status the lane admits the mux with.
+export const nothing = GET(() => new Response(null, { status: 204 }))
 `
 
 let server: Bun.Subprocess | undefined
@@ -93,8 +97,8 @@ test('a GET is followed over the mux under abide dev', async () => {
 }, 20_000)
 
 // 16.11 — THE MUX STANDS UNDER THE MOUNT, which only the worker's configuration knows. THE REVERT:
-// take only `SOCKET_ADDRESS` itself for the mux in `serveDev`'s `fetch`; the worker answers the
-// upgrade 204, the client never opens, and it prints no frames.
+// compare the pathname itself rather than `unmounted`'s in `admitsMux`; the worker says the upgrade
+// is not the mux's, the client never opens, and it prints no frames.
 test('a GET is followed over the mux under abide dev on a sub-path', async () => {
     mountedServer = Bun.spawn(
         ['bun', BIN, 'dev', '--root', app, '--port', '0'],
@@ -109,6 +113,65 @@ test('a GET is followed over the mux under abide dev on a sub-path', async () =>
     expect(frames.map((frame) => frame.op)).toEqual(['value'])
     expect((frames[0] as { value: string[] }).value).toEqual(['dune', 'emma'])
 }, 30_000)
+
+// 37.3 — THE MUX OPENS ONLY AT ITS OWN ADDRESS, whatever status some other address answered an upgrade
+// with: the listener cannot read the mount, so the worker says whether an answer `admitsMux`. THE
+// REVERT: upgrade in `serveDev`'s `fetch` on `answered.status === 204`; the handler's 204
+// opens a mux connection at its address, and this reads ['open', 'open'].
+test('an upgrade some other address answers 204 opens nothing under abide dev — 37.3', async () => {
+    expect(await upgrades(base)).toEqual(['open', 'refused'])
+}, 20_000)
+
+// 37.3 — AN APP WITH NO SOCKET AND NO HANDLER HAS NO MUX, whatever a rung answers its upgrade with,
+// under `abide dev` as under `abide start`. THE REVERT: drop the tables from `admitsMux`; the rung's
+// 204 at the mux's own address opens a mux over nothing, and this reads ['open'].
+test('a rung answering 204 opens no mux where the app carries nothing under abide dev — 37.3', async () => {
+    const bare = temporaryModule({
+        'ui/pages/page.abide': '<main>home</main>',
+        'server/app.ts': `import { middleware } from 'abide/server'
+
+middleware(async (next, { request }) =>
+    request.headers.get('upgrade') === 'websocket' ? new Response(null, { status: 204 }) : next(),
+)
+`,
+        'package.json': JSON.stringify({
+            name: 'dev-bare-fixture',
+            type: 'module',
+            imports: { '#server/*': './server/*', '#ui/*': './ui/*' },
+        }),
+    })
+    const bareServer = Bun.spawn(
+        ['bun', BIN, 'dev', '--root', bare, '--port', '0'],
+        {
+            stdout: 'pipe',
+            stderr: 'pipe',
+        },
+    )
+    try {
+        expect(
+            await upgrades(await addressOf(bareServer), ['/__abide/socket']),
+        ).toEqual(['refused'])
+    } finally {
+        bareServer.kill()
+    }
+}, 30_000)
+
+// 21.1, 21.3 — THE LISTENER'S OWN ANSWERS carry what every answer does, though no app stamps them.
+// THE REVERT: build `serveDev`'s 400 as a bare `Response`; this reads null for both headers.
+test('the dev listener refuses a bad upgrade with nosniff and private, no-store — 21.1, 21.3', async () => {
+    const dir = temporaryModule({
+        'bad.ts': `await fetch(process.argv[2])
+const answer = await fetch(process.argv[2] + '/__abide/socket', { headers: { upgrade: 'websocket', connection: 'upgrade' } })
+console.log(JSON.stringify([answer.status, answer.headers.get('x-content-type-options'), answer.headers.get('cache-control')]))
+`,
+    })
+    const ran = await spawned(['bun', `${dir}/bad.ts`, base])
+    expect(JSON.parse(ran.stdout.trim().split('\n').at(-1) as string)).toEqual([
+        400,
+        'nosniff',
+        'private, no-store',
+    ])
+}, 20_000)
 
 async function followed(
     at: string,
@@ -230,3 +293,36 @@ process.exit(0)
         raised: [40],
     })
 }, 30_000)
+
+// Opens a web socket at each address in turn, and says which opened.
+async function upgrades(
+    at: string,
+    addresses = ['/__abide/socket', '/__abide/rpc/library/nothing'],
+): Promise<string[]> {
+    const dir = temporaryModule({
+        'upgrade.ts': `// A page first: the listener holds it until the worker is ready, where an upgrade would be refused
+// as still rebuilding and read the same as one the mux turned away.
+await fetch(process.argv[2])
+const base = process.argv[2].replace('http', 'ws')
+const opened = async (address: string) => {
+    const ws = new WebSocket(base + address)
+    const outcome = await new Promise<string>((done) => {
+        ws.onopen = () => done('open')
+        ws.onerror = () => done('refused')
+    })
+    ws.close()
+    return outcome
+}
+const outcomes = []
+for (const address of JSON.parse(process.argv[3])) outcomes.push(await opened(address))
+console.log(JSON.stringify(outcomes))
+`,
+    })
+    const ran = await spawned([
+        'bun',
+        `${dir}/upgrade.ts`,
+        at,
+        JSON.stringify(addresses),
+    ])
+    return JSON.parse(ran.stdout.trim().split('\n').at(-1) as string)
+}

@@ -2,14 +2,14 @@
 // for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { gate } from 'harness/gate'
+import { gate, spawned } from 'harness/gate'
 import { reactive } from '#shared'
-import { chunksOfStream } from '../src/server/answerValue.ts'
+import { chunksOfStream } from '#shared/reactive/index.ts'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HANDLERS = `import { reactive, refuse } from 'abide'
-import { GET, page, POST, redirect, request, sse } from 'abide/server'
+import { GET, json, page, POST, redirect, request, response, sse } from 'abide/server'
 import { reported } from '../reported.ts'
 
 export const shared = GET(reactive(() => ({ n: 1 }), { global: true, ttl: 90_500 }))
@@ -61,6 +61,13 @@ export const doc = GET(() => page('<h1>hello</h1>'))
 export const moved = POST(() => redirect('/there', 303))
 
 export const nothing = POST(() => undefined)
+
+export const nothingAsJson = POST(() => json(undefined))
+
+export const partial = GET(() => {
+    response().status = 206
+    return json([1, 2])
+})
 
 export const raw = GET(() => new Response('teapot', { status: 418 }))
 
@@ -131,8 +138,8 @@ test('a HEAD is answered by the GET handler at its address — 16.54', async () 
 
 // 16.33, 16.45 — A STREAMING HANDLER IS ANSWERED AS IT PRODUCES, jsonl by default, one line a chunk:
 // the first line is read while the handler is still waiting to produce the second. THE REVERT:
-// drop the `isStreaming` check in `outcomeOf`; the stream settles to one snapshot, and the first read
-// waits the 300 ms out and arrives as one JSON array.
+// settle `reached` itself in `outcomeOf` in place of `streamingOrSettled`; the stream settles to one
+// snapshot, and the first read waits the 300 ms out and arrives as one JSON array.
 test('a streaming handler is framed as jsonl, a chunk per line, as it produces — 16.33, 16.45', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/feed`)
     expect(answer.headers.get('content-type')).toBe('application/jsonl')
@@ -268,6 +275,23 @@ test('page answers a document and redirect a navigation — 17.2, 17.3', async (
     expect(moved.headers.get('location')).toBe('/there')
 })
 
+// 17.9, 17.10 — `json` is a bare return's JSON with somewhere to put a status, and `undefined` sent
+// as `null`. THE REVERT: drop the `json` arm from `answerValue`; the framing it fixed reads as a
+// stream's, and `[1, 2]` is answered as `text/event-stream` where `application/json` is due.
+test('json answers its value as JSON, and undefined as null — 17.9, 17.10', async () => {
+    const partial = await Bun.fetch(`${base}${RPC}/partial`)
+    expect(partial.status).toBe(206)
+    expect(partial.headers.get('content-type')).toBe('application/json')
+    expect(await partial.json()).toEqual([1, 2])
+    const empty = await Bun.fetch(`${base}${RPC}/nothingAsJson`, {
+        method: 'POST',
+        headers: { accept: 'application/json' },
+    })
+    expect(empty.status).toBe(200)
+    expect(empty.headers.get('content-type')).toBe('application/json')
+    expect(await empty.text()).toBe('null')
+})
+
 // 16.36 — A FILE ON DISK IS ANSWERED WITHOUT READING IT INTO MEMORY: its etag is a stat, and the body
 // the file or a slice of it. A slice of a file, and a blob in memory, are still named by their bytes.
 // Run in a script of its own, for `serve.test.ts`'s reason, counting what `Blob.prototype.bytes`
@@ -312,9 +336,9 @@ console.log(JSON.stringify({
 }))
 `,
     })
-    const ran = Bun.spawnSync(['bun', `${dir}/probe.ts`], { cwd: dir })
-    expect(ran.stderr.toString()).toBe('')
-    expect(JSON.parse(ran.stdout.toString().trim())).toEqual({
+    const ran = await spawned(['bun', `${dir}/probe.ts`], { cwd: dir })
+    expect(ran.stderr).toBe('')
+    expect(JSON.parse(ran.stdout.trim())).toEqual({
         readServing: 0,
         wholeSize: 65536,
         same: 304,

@@ -7,7 +7,8 @@
 // actually depends on is asserted through a region that LEAVES.
 
 import { afterAll, expect, test } from 'bun:test'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { parseAbide } from '#compiler'
+import { emitSource } from '#compiler/emitSource.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -17,18 +18,21 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
 async function mountPage(source: string): Promise<string> {
     const file = parseAbide(source)
     const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': compileFile(source, names),
-        'Page.client.ts': emitClient(file, names) || 'export default () => {}',
-    })
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        names,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
     html += new TextDecoder().decode(

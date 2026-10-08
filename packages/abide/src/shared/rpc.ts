@@ -11,38 +11,42 @@
 //
 // A HANDLER DECLARING `middleware` IS REACHED THROUGH ITS RUNGS (16.12), in process as over the wire:
 // the call hands back a value whose body runs the onion once per args, per request, over the
-// handler's own. NOT HERE YET: 16.8's publish into a value with no producer; 16.7's `ttl` default on
-// a `reactive` built before it reached a mutation; and an app's own streaming `Reactive` behind
-// rungs, whose chunks the onion collects rather than forwards (a generator handler's it forwards).
+// handler's own. NOT HERE YET: 16.8's publish into a value with no producer, and 16.7's `ttl` default
+// on a `reactive` built before it reached a mutation.
 
-import { isFailed, isFailedNamed } from './Failed.ts'
+import { isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
-import { LOAD_SIGNAL } from './LOAD_SIGNAL.ts'
 import { compose, type Middleware } from './Middleware.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
-import { ARGS_GATE } from './reactive/ARGS_GATE.ts'
-import { canonicalKey } from './reactive/canonicalKey.ts'
-import { PARAMETER_DEFAULTS } from './reactive/PARAMETER_DEFAULTS.ts'
-import { withDefaults } from './reactive/parameterDefaults.ts'
+import {
+    contractOf,
+    type Gated,
+    gateOf,
+    keyOf,
+    normalised,
+} from './reactive/argsContract.ts'
+import { callLoad } from './reactive/callLoad.ts'
 import {
     type AdoptedFailures,
     type AdoptedProduced,
-    abandonLoad,
+    type ChunkOf,
+    chunksOfStream,
+    handlerValue,
     isKeyed,
     isReactive,
-    isStreamBody,
-    isStreaming,
-    loadOf,
     type Kept,
     type Keyed,
+    type OptionalParameter,
     type Reactive,
     type Refused,
     reactive,
+    STREAMING,
+    type Streams,
+    streamingOrSettled,
 } from './reactive/index.ts'
-import type { Gated } from './reactive/Keyed.ts'
 import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { isForwarder } from './reactive/scoped.ts'
-import { aborted, checkArgs, refuse } from './refuse.ts'
+import { checkArgs } from './refuse.ts'
 import { rpcRequest } from './rpcRequest.ts'
 import type { Schema } from './Schema.ts'
 
@@ -144,14 +148,31 @@ type Declare = {
         handler: Reactive<Stored, Accepted, Failures, Produced>,
         options?: RpcOptions<undefined>,
     ): Rpc<Stored, undefined, Failures, Produced>
+    // 11.2 — a stream whose parameter is optional is keyed, for `reactive`'s reason.
+    <Body extends (args?: never) => unknown>(
+        handler: Body & OptionalParameter<Body> & Streams<Body>,
+        options?: RpcOptions<Parameters<Body>[0]>,
+    ): Rpc<ChunkOf<Body>[], Parameters<Body>[0], never, ChunkOf<Body>>
     <Chunk>(
-        handler: () => AsyncGenerator<Chunk>,
+        handler: () => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>,
         options?: RpcOptions<undefined>,
     ): Rpc<Chunk[], undefined, never, Chunk>
     <Chunk, Args>(
-        handler: (args: Args) => AsyncGenerator<Chunk>,
+        handler: (
+            args: Args,
+        ) => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>,
         options?: RpcOptions<Args>,
     ): Rpc<Chunk[], Args, never, Chunk>
+    // 11.2 — an optional parameter is keyed, and ahead of the arm below for `reactive`'s reason.
+    <Body extends (args?: never) => unknown>(
+        handler: Body & OptionalParameter<Body>,
+        options?: RpcOptions<Parameters<Body>[0]>,
+    ): Rpc<
+        Kept<Awaited<ReturnType<Body>>>,
+        Parameters<Body>[0],
+        AdoptedFailures<ReturnType<Body>> | Refused<Awaited<ReturnType<Body>>>,
+        AdoptedProduced<ReturnType<Body>, Kept<Awaited<ReturnType<Body>>>>
+    >
     <Computed>(
         handler: () => Computed,
         options?: RpcOptions<undefined>,
@@ -183,13 +204,13 @@ export function declare(method: Method): Declare {
         const value =
             isReactive(handler) || isKeyed(handler)
                 ? handler
-                : reactive(handler as (args: never) => unknown, cacheOptions)
+                : handlerValue(handler, cacheOptions)
         const keyed = isKeyed(value)
-        const gate = keyed ? value[ARGS_GATE] : undefined
-        // 11.27, 11.29 — THE HANDLER'S PARAMETER DEFAULTS, applied at the call rather than left to the
-        // value's own reach: a value behind rungs is keyed ahead of the handler's, and the seed
-        // buffer files the call by the args it was handed.
-        const defaults = keyed ? value[PARAMETER_DEFAULTS] : null
+        // 19.8 — the handler's `args` gate and its parameter defaults, on the `Rpc` too, for the
+        // wire to coerce and key by. 11.27, 11.29 — THE DEFAULTS ARE APPLIED AT THE CALL rather than
+        // left to the value's own reach: a value behind rungs is keyed ahead of the handler's, and
+        // the seed buffer files the call by the args it was handed.
+        const contract = contractOf(keyed ? value : undefined)
         const reach = (args?: unknown): unknown =>
             keyed ? (value as (args: unknown) => unknown)(args) : value
         // 16.12, 16.13 — THE RUNGS, IN REGISTRATION ORDER, around the reach. Built once, at the
@@ -202,34 +223,27 @@ export function declare(method: Method): Declare {
         const contextOf = (args: unknown): RpcContext =>
             ({
                 request: RPC_SERVER.request(),
-                args: argsOnce(gate, args),
+                args: argsOnce(gateOf(contract), args),
                 [SENT]: args,
             }) as RpcContext
-        // 16.33 BEHIND RUNGS — A STREAMING HANDLER'S CHUNKS ARE FORWARDED, not collected. The centre
-        // of the onion is an async function, and a `Reactive` is thenable (1.4), so handing the
-        // reached value out through it settled it — waited out the whole stream and answered the
-        // accumulation once it closed. A generator is not thenable: the centre hands back the
-        // handler's own, the rungs decide whether it runs, and the value the call reaches is a
-        // streaming producer of its own that yields what that generator does. A refusal a rung
-        // answers with is thrown, which is how a stream refuses.
-        //
-        // AN APP'S OWN STREAMING `Reactive` BEHIND RUNGS IS STILL COLLECTED: there the handler is
-        // the value rather than the generator, and nothing reaches its chunks as they land.
-        const streams =
-            !isReactive(handler) &&
-            !isKeyed(handler) &&
-            isStreamBody(handler as (args: never) => unknown)
+        // 16.33 BEHIND RUNGS — A STREAM'S CHUNKS ARE FORWARDED, not collected. The centre of the
+        // onion is an async function, and a `Reactive` is thenable (1.4), so handing a streaming value
+        // out through it would wait out the whole run and answer the accumulation once it closed. So
+        // the centre waits only until the value settles or turns out to stream (9.20), and hands a
+        // stream on as its chunks — a generator, which is not thenable. The value the call reaches
+        // resolves to it and is a stream of its own from then (9.20), so a second call joining it
+        // (1.8) reads the same accumulation. A refusal a rung answers with is the value's refusal.
         const onion =
             rungs.length === 0
                 ? null
                 : compose(rungs, async (ctx: RpcContext) => {
-                      if (streams)
-                          return (handler as (args: unknown) => unknown)(
-                              argsOf(ctx),
-                          )
+                      const reached = reach(argsOf(ctx))
                       const started = performance.now()
                       try {
-                          return await reach(argsOf(ctx))
+                          const settled = await streamingOrSettled(reached)
+                          return settled === STREAMING
+                              ? chunksOfStream(reached)
+                              : settled
                       } finally {
                           RPC_SERVER.handled?.(rpc, performance.now() - started)
                       }
@@ -237,16 +251,12 @@ export function declare(method: Method): Declare {
         const wrapped =
             onion === null
                 ? null
-                : streams
-                  ? reactive(async function* (args: unknown) {
-                        const reached = await onion(contextOf(args))
-                        if (isFailed(reached)) throw reached
-                        yield* reached as AsyncIterable<unknown>
-                    }, cacheOptions)
-                  : reactive(
-                        (args: unknown) => onion(contextOf(args)),
-                        cacheOptions,
-                    )
+                : reactive(
+                      (args: unknown) => onion(contextOf(args)),
+                      cacheOptions,
+                  )
+        const reachThrough =
+            wrapped === null ? reach : (wrapped as (args: unknown) => unknown)
         // 16.3 — the handler's own `Reactive`. A `Keyed` reaches its entry, which is 1.7's start
         // and 1.8's join; an unkeyed value has one entry and the call is the reach of it.
         //
@@ -255,31 +265,13 @@ export function declare(method: Method): Declare {
         // running the handler again. In a browser nothing fills the slot, so the report is one load
         // of a `null`.
         const call = (given?: unknown, options?: CallOptions): unknown => {
-            const args =
-                defaults === null ? given : withDefaults(given, defaults)
-            const signal = options?.signal
-            // A load this call starts may be ended by it, so its transport is handed a signal of
-            // the load's own to end the request with (16.53) — the caller's is only one vote.
-            const ending =
-                signal === undefined ? undefined : new AbortController()
-            LOAD_SIGNAL.current = ending?.signal
-            let reached: unknown
-            try {
-                reached =
-                    wrapped === null
-                        ? reach(args)
-                        : (wrapped as (args: unknown) => unknown)(args)
-                // 16.66 — the callers of an aborted load stopped waiting, and this one has not.
-                if (
-                    ABANDONED.delete(reached as object) &&
-                    loadOf(reached) === undefined
-                )
-                    (reached as { refresh(): void }).refresh()
-            } finally {
-                LOAD_SIGNAL.current = undefined
-            }
-            holdLoad(reached, signal, ending)
-            timeLoad(reached, rpc.timeout ?? RPC_SERVER.timeout())
+            const args = normalised(contract, given)
+            const reached = callLoad(
+                reachThrough,
+                args,
+                options?.signal,
+                rpc.timeout ?? RPC_SERVER.timeout(),
+            )
             RPC_SERVER.reached?.(rpc, args, reached)
             return reached
         }
@@ -289,7 +281,7 @@ export function declare(method: Method): Declare {
             (typeof SELECTION_MEMBERS)[number],
             (pattern?: unknown) => unknown
         >
-        const rpc = Object.assign(call, {
+        const rpc = Object.assign(call, contract, {
             method,
             description: options?.description,
             address: undefined as string | undefined,
@@ -300,9 +292,6 @@ export function declare(method: Method): Declare {
             maxBodySize: options?.maxBodySize,
             clients: options?.clients ?? {},
             guarded: rungs.length > 0,
-            // 19.8 — the handler's `args` gate, on the `Rpc` too, for the wire to coerce by.
-            [ARGS_GATE]: gate,
-            [PARAMETER_DEFAULTS]: defaults,
             isError: isFailedNamed,
             url(args?: Record<string, unknown>): string {
                 return rpcRequest(method, addressOf(rpc), args).url
@@ -351,11 +340,7 @@ export function declare(method: Method): Declare {
             GLOBAL_GETS.set(rpc, (args: unknown): unknown =>
                 keyed
                     ? (value as { entries: Map<string, unknown> }).entries.get(
-                          canonicalKey(
-                              defaults === null
-                                  ? args
-                                  : withDefaults(args, defaults),
-                          ),
+                          keyOf(contract, args),
                       )
                     : value,
             )
@@ -376,143 +361,6 @@ function addressOf(rpc: { address: string | undefined }): string {
             'abide: this handler has no address yet. A handler is given one where it is mounted, under src/server/rpc (16.2).',
         )
     return rpc.address
-}
-
-/**
- * Who is waiting on one load: pinned by a call with no signal, else ended when every signal aborts.
- *
- * 16.52 — WHO IS WAITING ON A LOAD. Calls with the same args join one load (1.8), so one caller's
- * signal is not the load's to end: a call with no signal pins it, and a load no call pinned ends
- * once every signal handed to it has aborted. Per value and replaced per load, so a refresh starts
- * the count again.
- */
-type Hold = {
-    load: number
-    pinned: boolean
-    signals: Set<AbortSignal>
-    ending: AbortController | undefined
-    release: () => void
-}
-
-const HOLDS = new WeakMap<object, Hold>()
-
-/** The values whose last load 16.52 ended, until a call reaches one again. */
-const ABANDONED = new WeakSet<object>()
-
-/** Files a call's signal, or its pin, against the load it reached (16.52). */
-function holdLoad(
-    reached: unknown,
-    signal: AbortSignal | undefined,
-    ending: AbortController | undefined,
-): void {
-    if (!isReactive(reached)) return
-    const load = loadOf(reached)
-    // Landed as it was reached, or nothing in flight: there is no load to end.
-    if (load === undefined) return
-    let hold = HOLDS.get(reached)
-    if (hold === undefined || hold.load !== load) {
-        // The first call to reach this load is the one that started it, where one started it at
-        // all — a refresh starts a load no call handed a signal to, and `ending` is then inert.
-        const fresh: Hold = {
-            load,
-            pinned: false,
-            signals: new Set(),
-            ending,
-            release: () => {
-                if (HOLDS.get(reached) !== fresh || loadOf(reached) !== load)
-                    return
-                if (fresh.pinned) return
-                for (const each of fresh.signals) if (!each.aborted) return
-                HOLDS.delete(reached)
-                fresh.ending?.abort()
-                abandonLoad(reached, aborted())
-                ABANDONED.add(reached)
-            },
-        }
-        hold = fresh
-        HOLDS.set(reached, hold)
-    }
-    if (signal === undefined) {
-        hold.pinned = true
-        return
-    }
-    if (hold.signals.has(signal)) return
-    const held = hold
-    if (held.signals.size === 0)
-        // A SIGNAL OUTLIVES THE LOADS HANDED IT — a page's own controller — so its listener goes
-        // when the load settles, or it pins every value it was ever handed until it aborts.
-        void Promise.resolve(reached).then(
-            () => forget(held),
-            () => forget(held),
-        )
-    held.signals.add(signal)
-    if (signal.aborted) held.release()
-    else signal.addEventListener('abort', held.release, { once: true })
-}
-
-function forget(hold: Hold): void {
-    for (const signal of hold.signals)
-        signal.removeEventListener('abort', hold.release)
-}
-
-/** The load each value's timeout clock was started for, so a join starts none. */
-const TIMED = new WeakMap<object, number>()
-
-/**
- * Ends a load that goes `milliseconds` without progress, refusing it 504.
- *
- * 16.13, 16.62, 16.63 — `timeout` ON EVERY CALL: a load that goes that long without progress — its
- * answer, or a stream's next chunk — is ended where it stands, as 16.53 ends one, and refuses 504.
- * ONE CLOCK PER LOAD: a call joining a load (1.8) is not a reason to give it longer, and the first
- * clock would end the load at its own time whatever a second one did — so a join starts none.
- */
-function timeLoad(reached: unknown, milliseconds: number | undefined): void {
-    if (
-        milliseconds === undefined ||
-        !Number.isFinite(milliseconds) ||
-        !isReactive(reached)
-    )
-        return
-    const load = loadOf(reached)
-    if (load === undefined || TIMED.get(reached) === load) return
-    TIMED.set(reached, load)
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const arm = (): void => {
-        clearTimeout(timer)
-        timer = setTimeout(() => {
-            if (loadOf(reached) === load) abandonLoad(reached, refuse(504))
-        }, milliseconds)
-    }
-    let settled = false
-    let wake = (): void => {}
-    const end = (): void => {
-        settled = true
-        clearTimeout(timer)
-        wake()
-    }
-    arm()
-    void Promise.resolve(reached).then(end, end)
-    if (!isStreaming(reached)) return
-    // A CHUNK IS PROGRESS. The live cursor wakes on each, and outlives the run — it waits on the next
-    // one — so the run settling is a wake of its own, and is what lets the cursor go.
-    const cursor = (reached as AsyncIterable<unknown>)[Symbol.asyncIterator]()
-    void (async () => {
-        try {
-            while (!settled) {
-                await new Promise<void>((resolve) => {
-                    wake = resolve
-                    cursor.next().then(
-                        () => resolve(),
-                        () => resolve(),
-                    )
-                })
-                if (settled || loadOf(reached) !== load) return
-                arm()
-            }
-        } finally {
-            void cursor.return?.(undefined)
-        }
-    })()
 }
 
 /**

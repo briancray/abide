@@ -24,8 +24,8 @@ test('retained() throws in a process with a DOM', async () => {
 // `objectTypeCounts.Scope` reads 0 with the mechanism in AND out. The diff is
 // returned whole for the same reason a seven-type filter was refused: `Object` is
 // where a plain class instance lands, and a filter is a second way to read 0 forever.
-test('a class instance is bucketed as Object, and Scope is never a key', () => {
-    const run = inAFreshProcess(`
+test('a class instance is bucketed as Object, and Scope is never a key', async () => {
+    const run = await inAFreshProcess(`
 import { retained } from '${SERVER}'
 class Rung { constructor(public next) {} }
 const diff = retained(() => {
@@ -44,8 +44,8 @@ console.log('Object=' + diff.Object)`)
 // confirmed under bun 1.4.2, five closures move it by exactly +5/+5 after a `fullGC`.
 // Reverted to counting `Function` alone, a closure that captured nothing and one that
 // captured its whole enclosing scope report the same number.
-test('closures() reports the pair, and five closures move it by five', () => {
-    const run = inAFreshProcess(`
+test('closures() reports the pair, and five closures move it by five', async () => {
+    const run = await inAFreshProcess(`
 import { closures } from '${SERVER}'
 const held = []
 const pair = closures(() => {
@@ -65,8 +65,8 @@ console.log(JSON.stringify(pair))`)
 // A batch mean can never be compared with an exact integer, and the tag is what makes
 // that structural rather than a convention. Reverted — return the record bare — the
 // fractional `Object:3.09` reads as a count and gets `toBe(3)`d.
-test('allocated() comes back tagged, with its rep count and its growth', () => {
-    const run = inAFreshProcess(`
+test('allocated() comes back tagged, with its rep count and its growth', async () => {
+    const run = await inAFreshProcess(`
 import { allocated } from '${SERVER}'
 const answer = allocated(() => new URL('https://example.test/a'), 400)
 if (answer.tagged !== 'batch mean') throw new Error('untagged')
@@ -92,12 +92,12 @@ test('ticks() counts the microtask turns an op took to settle', async () => {
 // AND IT TERMINATES ON A BODY THAT SETTLES ON A MACROTASK. The microtask queue is
 // drained to exhaustion before a timer runs, so a probe that only re-queues a
 // microtask starves the timer the body is waiting on. Reverted — drop the yield —
-// this child never exits and `timedOut` comes back true: measured that way first,
+// this child never exits and the run throws at its deadline: measured that way first,
 // and `bun test`'s own 5s per-test timeout did not fire either, because the timeout
 // is a timer too. A hung suite reports nothing at all, which is why the gate has to
 // be taken in a child the OS can kill.
-test('ticks() terminates on a body that settles on a macrotask', () => {
-    const run = inAFreshProcess(
+test('ticks() terminates on a body that settles on a macrotask', async () => {
+    const run = await inAFreshProcess(
         `
 import { ticks } from '${SERVER}'
 const turns = await ticks(() => new Promise((resolve) => setTimeout(resolve, 10)))
@@ -106,7 +106,6 @@ console.log('turns=' + turns)`,
         undefined,
         5000,
     )
-    expect(run.timedOut).toBe(false)
     expect(run.ok).toBe(true)
     expect(run.output).toMatch(/turns=\d+/)
 })

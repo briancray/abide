@@ -64,7 +64,7 @@ async function render(path: string): Promise<{ cookie: string; html: string }> {
 
 // A RENDER THAT LEFT `page` TO THE DEFAULT is answered to the browser's call that wrote it — which is
 // the call the browser's copy makes, its early call in the head included. THE REVERT: drop
-// `withDefaults` from `call` in `rpc.ts`; the render's run is filed under `{}`, the head starts
+// `normalised` from `call` in `rpc.ts`; the render's run is filed under `{}`, the head starts
 // `list` with no query, and the call is answered by a run of its own — 2 past the anchor where 1 is
 // due.
 test("a render's call leaving a member to the default answers the browser's call writing it — 11.29", async () => {
@@ -75,7 +75,7 @@ test("a render's call leaving a member to the default answers the browser's call
 })
 
 // AND THE OTHER WAY: a call arriving with no args is keyed by the defaults before its seed is looked
-// up. THE REVERT: drop `withDefaults` after `coerceArgs` in `answerRpc`; the call is looked up under
+// up. THE REVERT: drop `normalised` after `coerceArgs` in `answerRpc`; the call is looked up under
 // no args and runs again — 2 past the anchor where 1 is due.
 test('a call arriving with no args is answered from a render that wrote the default — 11.27', async () => {
     const anchor = await call('?page=1')

@@ -19,7 +19,6 @@ import {
     listAt,
     REGION_CLOSE,
     REGION_OPEN,
-    reconcile,
     Scope,
     updateList,
 } from 'abide/runtime'
@@ -158,7 +157,7 @@ function listCase(
                 abide: (): void => {
                     const at = side
                     side = 1 - side
-                    reconcile(list, orders[at] as Datum[])
+                    updateList(list, orders[at] as Datum[])
                 },
                 // THE FLOOR: the fewest `insertBefore` calls the edit needs, given the
                 // permutation up front. Nothing derives it — knowing the answer is the

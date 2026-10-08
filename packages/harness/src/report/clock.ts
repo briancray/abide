@@ -6,6 +6,8 @@
 // everywhere is 100 µs — assuming the browser number over-batches by ~2400x, and a
 // cross-origin-isolated page at 5 µs is a 20x error the other way.
 
+import { underBun } from './environment.ts'
+
 // PROBED AGAINST A DEADLINE, NOT A COUNT, and the count is what got this wrong. A
 // fixed 20,000 pairs sees a step on bun (41 ns) and on chromium (100 µs) and sees
 // NOTHING in webkit, which clamps `performance.now()` harder — 20,000 pairs is about
@@ -20,19 +22,13 @@ const PROBES_AFTER_FIRST_STEP = 2_000
 
 // `Bun.nanoseconds()` is the bun-side clock and it is already integer nanoseconds.
 // `performance.now()` is milliseconds and is what a browser has.
-//
-// PROBED BY THE MEMBER, NOT BY THE GLOBAL. A docs example frame defines a `Bun.serve`
-// shim so a hand-written arm's `server.ts` can run in the page, so `globalThis.Bun`
-// is truthy in a browser that has no `nanoseconds` — and this called it. The same
-// mistake is in three places and all three are now member probes.
-const BUN = (globalThis as { Bun?: { nanoseconds?(): number } }).Bun
-const BUN_CLOCK = typeof BUN?.nanoseconds === 'function' ? BUN : null
+const BUN_CLOCK = underBun()
+    ? (globalThis as unknown as { Bun: { nanoseconds(): number } }).Bun
+    : null
 
 /** The current time in nanoseconds, from `Bun.nanoseconds()` or `performance.now()`. */
 export function nanoseconds(): number {
-    return BUN_CLOCK
-        ? (BUN_CLOCK.nanoseconds as () => number)()
-        : performance.now() * 1e6
+    return BUN_CLOCK ? BUN_CLOCK.nanoseconds() : performance.now() * 1e6
 }
 
 let measured = 0

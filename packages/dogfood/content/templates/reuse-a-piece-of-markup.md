@@ -4,6 +4,7 @@ nav: Components
 intent: A component in the same file or its own, the children a caller passes into it, and markup it fills in.
 covers:
   - `props`
+  - `Attributes<Tag>`
   - `children`
   - `{#component Name(pattern)}`
   - `<Name/>`
@@ -183,6 +184,34 @@ order, so a default set and one override read the same either way round. Two spr
 each other resolve in source order, there being nothing else to separate them.
 
 Read on: [Expressions](put-a-value-in-the-markup.md)
+
+## `Attributes<Tag>` types what you pass on to an element
+
+A component that wraps a `<button>` usually declares the few props it reads itself and spreads
+the rest onto the element. `Attributes<'button'>` types that rest as what a `<button>` takes, so
+a caller is held to the element's own attributes and its `onclick` is handed a `MouseEvent`:
+
+```abide #ui/components/Button.abide
+<script>
+import { props, type Attributes } from 'abide'
+
+const SIZES = { sm: 'px-2 py-1', md: 'px-3 py-2' }
+
+type Props = { size?: keyof typeof SIZES } & Attributes<'button'>
+
+const { size = 'md', ...attributes } = props<Props>()
+</script>
+
+<button class={SIZES[size]} {...attributes}><slot/></button>
+```
+
+`<Button type="submit" disabled>` checks, and `<Button type="banana">` does not. The types come
+from the DOM types TypeScript ships, so there is no list of attributes to keep up to date, and a
+value is typed by what writes the attribute rather than by the DOM property behind it:
+`tabindex="-1"` and `aria-disabled={true}` are both fine.
+
+An SVG element works the same way: `Attributes<'svg'>` or `Attributes<'path'>` types `viewBox`,
+`d`, `stroke-width` and the rest of SVG's attributes, so an icon component can pass them through.
 
 ## Next
 

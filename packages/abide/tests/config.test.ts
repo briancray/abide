@@ -17,3 +17,27 @@ test('a read after filing or unfiling onConfig resolves under what is filed now 
     unfile()
     expect(config().PROBE_DEFAULT).toBeUndefined()
 })
+
+declare module '#server/config.ts' {
+    interface Config {
+        PROBE_LIMIT: number
+    }
+}
+
+// 27.11, 27.12 — A DEFAULT IS BUILT ON WHAT ABIDE DERIVES, and lands as the type the app declared.
+// THE REVERT: hand `defaults` the environment alone; the path is built on `undefined`. Type
+// `Config` as `extends Env` again and `bun run typecheck` refuses the `number` field (TS2411).
+test('onConfig sees what abide derives, and a declared field keeps its type — 27.11, 27.12', () => {
+    const unfile = onConfig((env) => ({
+        PROBE_CACHE: `${env.APP_DATA_DIR}/cache`,
+        PROBE_LIMIT: 25,
+    }))
+    try {
+        const resolved = config()
+        const limit: number = resolved.PROBE_LIMIT
+        expect(limit).toBe(25)
+        expect(resolved.PROBE_CACHE).toBe(`${resolved.APP_DATA_DIR}/cache`)
+    } finally {
+        unfile()
+    }
+})

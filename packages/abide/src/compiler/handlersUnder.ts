@@ -11,6 +11,7 @@
 import type { Mount } from '#server/answerRpc.ts'
 import { namesUnder } from '#server/namesUnder.ts'
 import { RPC_ADDRESS, SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import { declaredExports } from './declaredExports.ts'
 import type { Diagnosis, TypeSession } from './TypeSession.ts'
 
 const HANDLER_DIRECTORY = 'server/rpc'
@@ -59,7 +60,11 @@ export async function handlersUnder(
     const modules = modulesUnder(root)
     const paths: string[] = []
     for (const { source } of modules) paths.push(`${root}/${source}`)
-    const declared = await session.handlersIn(paths)
+    const project = await session.project()
+    const declared =
+        project === undefined
+            ? []
+            : await declaredExports(project, session.tsconfig, paths)
     const mounts: Mount[] = []
     const warnings: Diagnosis[] = []
     const owners = new Map<string, string>()
@@ -69,6 +74,7 @@ export async function handlersUnder(
             name: exported,
             method,
             ui,
+            cli,
             description,
             copy,
             defaults,
@@ -94,6 +100,7 @@ export async function handlersUnder(
                 source,
                 name: exported,
                 ui,
+                cli,
                 description,
                 copy,
                 defaults,

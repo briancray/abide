@@ -50,7 +50,7 @@ Read on: [Tail a deployed app](watch-a-running-app.md)
 
 ## Calling the app from your terminal
 
-`abide start` opens an interactive shell where a person is watching, and `abide call` is one
+`abide` alone opens an interactive shell where a person is watching, and `abide call` is one
 handler called once — the same route table your pages read, framed for a terminal.
 
 Read on: [Call a handler](call-a-handler-from-the-terminal.md) ·

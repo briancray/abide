@@ -4,7 +4,7 @@
 // not, and it is not the same work — `benchRender.ts` says what an arm like it once claimed.
 
 import { escapeText, reactive } from 'abide'
-import { batch, type Sample } from 'harness/report'
+import { batch, emulatedDom, type Sample } from 'harness/report'
 import { cards, vanillaMarkup } from './renderCases.ts'
 
 const N = 1000
@@ -113,7 +113,7 @@ const measured = batch({
             void asAppend()
         },
     },
-    emulated: null,
+    emulated: emulatedDom(),
 })
 
 console.log('\nWHERE THE TIME GOES — 1000 cards, 3000 slots\n')

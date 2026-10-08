@@ -10,7 +10,6 @@ import { namedLogger } from '#shared/log.ts'
 import type { Middleware } from '#shared/Middleware.ts'
 import { aborted, refuse } from '#shared/refuse.ts'
 import type { Schema } from '#shared/Schema.ts'
-import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 import { config } from './config.ts'
 import { currentRequestScope } from './requestScope.ts'
 
@@ -163,7 +162,7 @@ export function reportUnexpected(error: unknown): void {
  *
  * 12.6 — the half of 37.5 a failure already warned on its own namespace is owed.
  */
-function handOnError(error: unknown): void {
+export function handOnError(error: unknown): void {
     for (const hook of HOOKS.errors)
         try {
             hook(error)
@@ -172,8 +171,6 @@ function handOnError(error: unknown): void {
         }
 }
 
-UNEXPECTED.report = handOnError
-
 /**
  * The `Failed` a thrown error answers with: a refusal as it is, anything else a reported 500.
  *
@@ -181,8 +178,8 @@ UNEXPECTED.report = handOnError
  * nothing about itself to the caller: the log and `onError` get it (37.5).
  *
  * 16.67 — A CLIENT THAT LEFT IS NOT A FAULT: once the request's signal has aborted, what was thrown
- * is the cancellation arriving, so it answers `aborted` and is not reported — a handler's throw and
- * a page render's alike, because both answer here.
+ * is the cancellation arriving, so it answers `aborted` and is not reported — a handler's throw, a
+ * page render's and a socket rung's alike, because all three answer here.
  */
 export function failureOf(error: unknown): Failed<string, unknown> {
     if (isFailed(error)) return error

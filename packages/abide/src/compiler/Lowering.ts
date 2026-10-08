@@ -1,4 +1,5 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
+import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Read } from './classifyRead.ts'
 import { holdsSlot } from './classifyTemplate.ts'
 import type { AbideFile } from './parseAbide.ts'
@@ -43,8 +44,7 @@ const SHORT_CIRCUIT: ReadonlySet<string> = new Set(['||', '&&', '??'])
 export class Lowering {
     readonly projection: Projection
     readonly used = new Set<string>()
-    /** Ascending by `start`, so a span with none in it is one binary search. */
-    readonly reads: readonly Read[]
+    readonly answer: CheckerAnswer
     /**
      * 32.18 — whether the template holds a `<slot/>`, walked ONCE here.
      *
@@ -56,10 +56,9 @@ export class Lowering {
     /**
      * 38.3 — lowering for the checker rather than for a module that runs (`checkedShadow`).
      *
-     * Three spellings differ, each because the emitted one is right at run time and untyped: the
-     * props record, which the checker needs typed as the accessors it is; a member referenced
-     * rather than called, whose forwarding arrow takes an untyped rest; and a slot's `raw`, which
-     * is the framework's own in every position.
+     * Two spellings differ, each because the emitted one is right at run time and untyped: the
+     * props record, which the checker needs typed as the accessors it is; and a member referenced
+     * rather than called, whose forwarding arrow takes an untyped rest.
      */
     readonly checking: boolean
     /**
@@ -78,9 +77,9 @@ export class Lowering {
      */
     readonly refusals: { at: number; message: string }[] = []
 
-    constructor(file: AbideFile, reads: readonly Read[], checking = false) {
+    constructor(file: AbideFile, answer: CheckerAnswer, checking = false) {
         this.projection = projectShadow(file)
-        this.reads = reads
+        this.answer = answer
         this.holdsSlot = holdsSlot(file.template)
         this.checking = checking
     }
@@ -97,12 +96,21 @@ export class Lowering {
      * in two files.
      */
     takesProps(): boolean {
-        if (this.holdsSlot) return true
-        // The file's own call, in its `<script>`: an inline component's takes its own (32.40).
+        return this.holdsSlot || this.ownPropsRead() !== undefined
+    }
+
+    /**
+     * The file's own `props` call, or `undefined` where it makes none.
+     *
+     * In its `<script>`: an inline component's takes its own (32.40). What a caller is held to
+     * is read off the same call (`checkedShadow`'s `propsOf`), so the record the emitted function
+     * takes and the type the checker holds a caller to are one finding.
+     */
+    ownPropsRead(): Read | undefined {
         const scriptsEnd = this.projection.scripts.end
-        for (const read of this.reads)
-            if (read.shape === 'props' && read.start < scriptsEnd) return true
-        return false
+        for (const read of this.answer.reads)
+            if (read.shape === 'props' && read.start < scriptsEnd) return read
+        return undefined
     }
 
     /**
@@ -151,28 +159,17 @@ export class Lowering {
 
     /** The `<script module>` blocks, joined as the file wrote them and lowered. */
     modules(): string {
-        return this.lower(this.projection.modules, false)
+        return this.lower(this.projection.modules)
     }
 
     /** The `<script>` blocks, joined as the file wrote them and lowered. */
     scripts(): string {
-        return this.lower(this.projection.scripts, false)
+        return this.lower(this.projection.scripts)
     }
 
-    /**
-     * A markup-writing template expression, lowered with its `raw(x)` as the framework's.
-     *
-     * 32.25 — a SLOT's `raw(x)` lowers to the framework's own `raw`, which is why the
-     * markup-writing holders (an expression, an attribute value) ask for it and a subject, a key
-     * and a listener do not.
-     */
-    slot(holder: object): string {
-        return grouped(this.lower(this.spanOf(holder), true))
-    }
-
-    /** A template expression, lowered with `raw` left as the file bound it. */
+    /** A template expression, lowered. */
     expression(holder: object): string {
-        return grouped(this.lower(this.spanOf(holder), false))
+        return grouped(this.lower(this.spanOf(holder)))
     }
 
     /**
@@ -182,7 +179,7 @@ export class Lowering {
      * lowers to its own record as a file's does to the file's.
      */
     setup(holder: Setup | InlineComponent): string {
-        return this.lower(this.spanOf(holder), false)
+        return this.lower(this.spanOf(holder))
     }
 
     /**
@@ -198,7 +195,7 @@ export class Lowering {
      * passed through.
      */
     reference(holder: object): string {
-        return grouped(this.lower(this.spanOf(holder), false, true))
+        return grouped(this.lower(this.spanOf(holder), true))
     }
 
     /**
@@ -210,14 +207,8 @@ export class Lowering {
      */
     chosenTag(node: object): string | undefined {
         const span = this.projection.tags.get(node)
-        if (span === undefined) return undefined
-        const read = this.firstRead(span.start)
-        if (
-            read === this.reads.length ||
-            (this.reads[read] as Read).start >= span.end
-        )
-            return undefined
-        return this.lower(span, false)
+        if (span === undefined || !this.answer.holdsRead(span)) return undefined
+        return this.lower(span)
     }
 
     /** A `{#for}` block's key expression, lowered. */
@@ -225,7 +216,7 @@ export class Lowering {
         const span = this.projection.keys.get(block)
         if (span === undefined)
             throw new Error('abide: a {#for} key was never projected.')
-        return grouped(this.lower(span, false))
+        return grouped(this.lower(span))
     }
 
     /**
@@ -233,12 +224,33 @@ export class Lowering {
      *
      * 14.2 — bound unless the checker PROVED it reads nothing reactive (`proveSlots`) — not whether
      * it NAMES a `Reactive`, which writes `{big()}` once where `big` reads `n` in its body.
-     *
-     * ABSENCE IS LIVE: a file lowered with no checker answers binds every position, which is the
-     * safe side of a question nobody asked.
      */
     isLive(holder: object): boolean {
-        return !this.holds(this.spanOf(holder), 'static')
+        return !this.answer.isStatic(this.spanOf(holder))
+    }
+
+    /**
+     * Whether any expression in a text run is live (`isLive`).
+     *
+     * A run of static parts and expressions the checker proved static is written once by the
+     * server and never again; opening a binding for it is one waking reader per run for nothing.
+     */
+    isLiveRun(run: readonly TemplateNode[]): boolean {
+        for (const piece of run)
+            if (piece.kind === 'expression' && this.isLive(piece)) return true
+        return false
+    }
+
+    /**
+     * Whether any subject of an `{#if}` chain is live (`isLive`); `{:else}` has none.
+     *
+     * 14.2 — a chain whose every subject is proven static takes one arm for good, so nothing can
+     * leave it unlanded on the server (41.4) or wake it on the client.
+     */
+    isLiveChain(branches: readonly { subject: string }[]): boolean {
+        for (const branch of branches)
+            if (branch.subject !== '' && this.isLive(branch)) return true
+        return false
     }
 
     /**
@@ -252,10 +264,15 @@ export class Lowering {
     holdsMarkup(run: readonly TemplateNode[]): boolean {
         for (const piece of run) {
             if (piece.kind !== 'expression') continue
-            if (this.isLive(piece) || this.holds(this.spanOf(piece), 'raw'))
+            if (this.isLive(piece) || this.holdsRead(piece, isRawCallee))
                 return true
         }
         return false
+    }
+
+    /** Whether a read starts inside a template position — one `matches`, where given. */
+    holdsRead(holder: object, matches?: (read: Read) => boolean): boolean {
+        return this.answer.holdsRead(this.spanOf(holder), matches)
     }
 
     private spanOf(holder: object): Span {
@@ -266,37 +283,8 @@ export class Lowering {
     }
 
     /**
-     * Whether a read of that shape starts inside the span.
-     *
-     * Positions do not nest, so a `static` mark in one is at its start.
-     */
-    private holds(span: Span, shape: Read['shape']): boolean {
-        for (
-            let at = this.firstRead(span.start);
-            at < this.reads.length;
-            at += 1
-        ) {
-            const read = this.reads[at] as Read
-            if (read.start >= span.end) return false
-            if (read.shape === shape) return true
-        }
-        return false
-    }
-
-    /** The index of the first read starting at or after `offset`. */
-    private firstRead(offset: number): number {
-        let low = 0
-        let high = this.reads.length
-        while (low < high) {
-            const middle = (low + high) >>> 1
-            if ((this.reads[middle] as Read).start < offset) low = middle + 1
-            else high = middle
-        }
-        return low
-    }
-
-    /**
-     * A span lowered as a slot is, with each run recorded in `origins` against where it came from.
+     * A span lowered as `expression` lowers one, with each run recorded in `origins` against where
+     * it came from.
      *
      * 38.3 — the same splice as `lower`, each run it copies recorded against where the projection
      * held it, so a checker's position in the output is a position in the file.
@@ -307,7 +295,7 @@ export class Lowering {
         origins: Origin[],
         base: number,
     ): string {
-        return this.lower(span, true, holds, origins, base)
+        return this.lower(span, holds, origins, base)
     }
 
     /**
@@ -322,7 +310,6 @@ export class Lowering {
      */
     private lower(
         span: Span,
-        raw: boolean,
         holds = false,
         origins?: Origin[],
         base = 0,
@@ -335,11 +322,9 @@ export class Lowering {
         const text = source.slice(from, to)
         const wholeFrom = from + (text.length - text.trimStart().length)
         const wholeTo = from + text.trimEnd().length
-        let read = this.firstRead(from)
-        if (
-            read === this.reads.length ||
-            (this.reads[read] as Read).start >= to
-        ) {
+        const reads = this.answer.reads
+        let read = this.answer.firstRead(from)
+        if (read === reads.length || (reads[read] as Read).start >= to) {
             origins?.push({ at: base, source: from, length: to - from })
             return source.slice(from, to)
         }
@@ -358,8 +343,8 @@ export class Lowering {
         const pin = (origin: number): void => {
             origins?.push({ at: base + out.length, source: origin, length: 0 })
         }
-        for (; read < this.reads.length; read += 1) {
-            const current = this.reads[read] as Read
+        for (; read < reads.length; read += 1) {
+            const current = reads[read] as Read
             if (current.start >= to) break
             if (current.start < at) continue
             // 31.3 — the operand's own read is the one that does not lower — save that a written
@@ -389,7 +374,6 @@ export class Lowering {
                 out += open
                 out += this.lower(
                     current.value as Span,
-                    raw,
                     false,
                     origins,
                     base + out.length,
@@ -399,7 +383,7 @@ export class Lowering {
                 at = current.to
                 continue
             }
-            const rewritten = this.rewrite(current, raw)
+            const rewritten = this.rewrite(current)
             if (rewritten === undefined) continue
             copy(current.from)
             pin(current.from)
@@ -417,11 +401,15 @@ export class Lowering {
      */
     private nameOf(read: Read): string {
         const spelled = this.projection.text.slice(read.start, read.end)
+        // 23.9 — WHAT THIS PAGE'S OWN ROUTE PROMISES, for the checker alone: the running module
+        // reads the one `route` every page shares.
+        if (this.checking && read.routeParams !== undefined)
+            return `(${spelled} as unknown as () => __RouteParams<${JSON.stringify(read.routeParams[0])}, ${JSON.stringify(read.routeParams[1])}>)`
         return read.through ? `${spelled}()` : spelled
     }
 
     /** What one read lowers to, or `undefined` where it stays exactly as written. */
-    private rewrite(read: Read, raw: boolean): string | undefined {
+    private rewrite(read: Read): string | undefined {
         const spelled = this.projection.text.slice(read.start, read.end)
         const name = this.nameOf(read)
         switch (read.shape) {
@@ -441,10 +429,13 @@ export class Lowering {
                     if (!this.checking) throw new Error(message)
                     this.refusals.push({ at: read.start, message })
                 }
-                return read.through ? name : undefined
+                return name === spelled ? undefined : name
             // 33.15 — a props rest element's member: the key's accessor, called.
             case 'restMember':
                 return `${spelled}?.()`
+            // 33.22 — the rest element handed on whole: the values its accessors read.
+            case 'restWhole':
+                return `${read.keys.length === 0 ? '' : `${spelled}: `}${this.use('restValues')}(${spelled})`
             // 31.1 — a read. A member that is not the `Reactive`'s own reaches the value (31.5,
             // 31.6), so `regions.join(', ')` reads first and `n?.x` reads `n()?.x`.
             case 'value':
@@ -506,22 +497,16 @@ export class Lowering {
                 return read.through
                     ? ` = ${this.use('propCell')}(() => undefined)`
                     : ' = () => undefined'
-            case 'static':
-                return undefined
-            // 32.25, 32.2 — THE SLOT SPELLING `raw(x)` IS A CALL TO THE FRAMEWORK'S `raw`, the
-            // export an app imports, so a value branded in a `<script>` and one branded in a slot
-            // are the same object.
+            // 32.25, 32.2 — THE TEMPLATE SPELLING `raw(x)` IS A CALL TO THE FRAMEWORK'S `raw`, the
+            // export an app imports, so a value branded in a `<script>` and one branded in a
+            // template are the same object. The read exists only where a template expression held
+            // the call (`expressionFacts`), so a `<script>`'s `raw` stays the file's.
             case 'raw':
-                return raw ? this.use('raw') : undefined
-            // 23.9 — WHAT THIS PAGE'S OWN ROUTE PROMISES, for the checker alone: the running module
-            // reads the one `route` every page shares.
-            case 'routeParams':
-                if (!this.checking) return undefined
-                return `(${this.projection.text.slice(read.from, read.to)} as unknown as () => __RouteParams<${JSON.stringify(read.keys[0])}, ${JSON.stringify(read.keys[1])}>)`
+                return this.use('raw')
         }
         const value =
-            read.value === undefined ? '1' : this.lower(read.value, raw).trim()
-        if (read.path.length > 0) return this.pathWrite(read, name, value, raw)
+            read.value === undefined ? '1' : this.lower(read.value).trim()
+        if (read.path.length > 0) return this.pathWrite(read, name, value)
         // 31.4 — `n++`, `--n`. A statement discards the value and takes the short form — which is
         // not a saving but a requirement: the value-preserving form begins with `(`, and after a
         // line break JavaScript refuses to insert the semicolon in front of it, so `f()\nn++` would
@@ -578,17 +563,12 @@ export class Lowering {
      * wakes. A SEGMENT IS EMITTED SOURCE RATHER THAN A NAME, because a computed one is an
      * expression and may itself be a read: `rows[i] = v` carries `i()`.
      */
-    private pathWrite(
-        read: Read,
-        name: string,
-        value: string,
-        raw: boolean,
-    ): string {
+    private pathWrite(read: Read, name: string, value: string): string {
         const segments: string[] = []
         for (const segment of read.path)
             segments.push(
                 segment.name === undefined
-                    ? this.lower(segment, raw)
+                    ? this.lower(segment)
                     : JSON.stringify(segment.name),
             )
         // An op-assign or an update through a path READS the path first, the same way `n += 1`
@@ -608,6 +588,10 @@ export class Lowering {
             : `((${STORED}) => (${name}.set(${writePath}${STORED})), ${STORED}))(${stored})`
         return short ? `${current} ${op} ${write}` : write
     }
+}
+
+function isRawCallee(read: Read): boolean {
+    return read.shape === 'raw'
 }
 
 /**

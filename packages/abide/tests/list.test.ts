@@ -7,13 +7,12 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync, reactive } from '#shared'
-import { List, updateList } from '#ui/List.ts'
-import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
-import { type Row, reconcile } from '#ui/reconcile.ts'
+import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
+import { List, listAt, updateList } from '#ui/List.ts'
 import { pageRegion } from '#ui/regions.ts'
 import { EMPTY_SCOPE, Scope } from '#ui/Scope.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
@@ -23,8 +22,8 @@ afterAll(closeTyped)
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -56,7 +55,7 @@ async function mountPage() {
     const file = parseAbide(PAGE)
     const names = await session.reads(`${ROOT}src/page.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(PAGE, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -176,7 +175,7 @@ async function mountPairs() {
     const file = parseAbide(PAIRS)
     const names = await session.reads(`${ROOT}src/pairs.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(PAIRS, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -270,7 +269,7 @@ test('a binding below a row’s first child is reached, in both row shapes', asy
     const file = parseAbide(NESTED)
     const names = await session.reads(`${ROOT}src/nested.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(NESTED, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -333,7 +332,7 @@ test('a row that left stops reading', async () => {
     const file = parseAbide(LEAVING)
     const names = await session.reads(`${ROOT}src/leaving.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(LEAVING, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -432,7 +431,7 @@ async function mountRefetch() {
     const file = parseAbide(REFETCH)
     const names = await session.reads(`${ROOT}src/refetch.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(REFETCH, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -515,7 +514,7 @@ test('a row whose value is NaN is not remade', async () => {
     const file = parseAbide(NUMBERS)
     const names = await session.reads(`${ROOT}src/numbers.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(NUMBERS, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -576,7 +575,7 @@ test('a for over an async iterable appends each item as it arrives', async () =>
     const file = parseAbide(ASYNC_PAGE)
     const names = await session.reads(`${ROOT}src/page.abide`, file)
     const dir = temporaryModule({
-        'Async.ts': compileFile(ASYNC_PAGE, names),
+        'Async.ts': emitComponent(file, names),
         'Async.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Async.ts`)
@@ -647,7 +646,7 @@ test('a repeated {#for} key keeps the last row, drops what it shadows, and warns
     const file = parseAbide(REPEATED)
     const names = await session.reads(`${ROOT}src/repeated.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(REPEATED, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -748,7 +747,7 @@ test('a second call with the same source does not restart the pump', async () =>
         [...host.querySelectorAll('li')].map((node) => node.textContent ?? '')
 
     const builders = { make, mount }
-    const list = new List(region, [], key, () => builders)
+    const list = listAt(region, false, key, () => builders)
     updateList(list, source)
     await new Promise((settle) => setTimeout(settle, 0))
     expect(text()).toEqual(['a', 'b'])
@@ -774,9 +773,10 @@ test('a second call with the same source does not restart the pump', async () =>
 // swap two rows (30.4 µs) than to reverse the whole list (29.2 µs).
 const REORDERS = 200
 
+// SEEDED AS A SERVED PAGE'S LIST IS: the rows are painted markup, and the first update hydrates
+// them, so the reorder below is the second update — the reconcile — and nothing hand-builds a row.
 function seeded(): {
     region: { open: Comment; close: Comment }
-    rows: Row[]
     data: { id: number }[]
 } {
     const data: { id: number }[] = []
@@ -786,44 +786,36 @@ function seeded(): {
     const open = document.createComment(REGION_OPEN)
     const close = document.createComment(REGION_CLOSE)
     list.append(open)
-    const rows: Row[] = []
     for (let at = 0; at < REORDERS; at += 1) {
         const item = document.createElement('li')
         item.setAttribute('data-id', String(at))
         list.append(item)
-        rows.push({
-            key: at,
-            data: data[at] as object,
-            node: item,
-            scope: new Scope(),
-            at,
-            seen: 0,
-        })
     }
     list.append(close)
-    return { region: { open, close }, rows, data }
+    return { region: { open, close }, data }
 }
 
 function reorder(permute: (order: number[]) => number[]): {
     moved: number
     order: string[]
 } {
-    const { region, rows, data } = seeded()
+    const { region, data } = seeded()
     const order: number[] = []
     for (let at = 0; at < REORDERS; at += 1) order.push(at)
     const wantedOrder = permute(order)
     const wanted = wantedOrder.map((at) => data[at] as object)
-    const list = new List(
-        region as never,
-        rows,
+    const list = listAt(
+        region,
+        false,
         (item) => (item as { id: number }).id,
         () => ({
             make: () => [document.createElement('li')],
             mount: () => new Scope(),
         }),
     )
+    updateList(list, data)
     const work = measure(() => {
-        reconcile(list, wanted)
+        updateList(list, wanted)
     })
     return {
         moved: work.elementsMoved ?? -1,
@@ -889,9 +881,9 @@ test('a list arriving in place of a stream stops the stream', async () => {
         row.textContent = String(item)
         return [row]
     }
-    const list = new List(
+    const list = listAt(
         { open, close },
-        [],
+        false,
         (item) => item,
         () => ({ make, mount: () => new Scope() }),
     )
@@ -906,6 +898,53 @@ test('a list arriving in place of a stream stops the stream', async () => {
     release()
     await new Promise((settle) => setTimeout(settle, 0))
     expect(text()).toEqual(['x'])
+})
+
+// 12.13 — A STOPPED LIST LETS GO OF ITS SOURCE NOW, not at the source's next item. A feed that has
+// gone quiet produces none, and the cursor the pump was parked on held its subscription — and the
+// list and its region — for as long as the feed stayed silent. THE REVERT: drop the
+// `iterator.return` from `stopPump`; `returned` reads false where true is due.
+test('a list stopped while its source is quiet returns the source at once — 12.13', async () => {
+    document.body.replaceChildren()
+    const host = document.createElement('ul')
+    const open = document.createComment(REGION_OPEN)
+    const close = document.createComment(REGION_CLOSE)
+    host.append(open, close)
+    document.body.append(host)
+
+    let returned = false
+    let handed = false
+    // One item, then silence: the next `next()` never settles.
+    const quiet: AsyncIterable<string> = {
+        [Symbol.asyncIterator]: () => ({
+            next: () => {
+                if (handed) return new Promise<IteratorResult<string>>(() => {})
+                handed = true
+                return Promise.resolve({ value: 'a', done: false })
+            },
+            return: () => {
+                returned = true
+                return Promise.resolve({ value: undefined, done: true })
+            },
+        }),
+    }
+    const make = (made: Document, item: unknown): Node[] => {
+        const row = made.createElement('li')
+        row.textContent = String(item)
+        return [row]
+    }
+    const list = listAt(
+        { open, close },
+        false,
+        (item) => item,
+        () => ({ make, mount: () => new Scope() }),
+    )
+    updateList(list, quiet)
+    await new Promise((settle) => setTimeout(settle, 0))
+    expect(host.querySelectorAll('li')).toHaveLength(1)
+
+    list.stop()
+    expect(returned).toBe(true)
 })
 
 // A ROW'S BUILD IS NOT THE LIST'S READ. `make` evaluates a row's attributes as it builds them, and
@@ -927,9 +966,9 @@ test('a value a row read while it was built does not re-run the list', () => {
         row.className = selected() === item ? 'danger' : ''
         return [row]
     }
-    const list = new List(
+    const list = listAt(
         { open, close },
-        [],
+        false,
         (item) => item,
         () => ({ make, mount: () => new Scope() }),
     )
@@ -964,7 +1003,7 @@ test('a subject building fresh items keeps the rows the server sent', async () =
     const file = parseAbide(FRESH)
     const names = await session.reads(`${ROOT}src/fresh.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(FRESH, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -1014,7 +1053,7 @@ test('a document holding fewer rows than the client computes reconciles — 41.1
     const file = parseAbide(FIVE)
     const names = await session.reads(`${ROOT}src/five.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(FIVE, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -1078,7 +1117,7 @@ test('a document holding more rows than the client computes warns and rebuilds �
     const file = parseAbide(THREE)
     const names = await session.reads(`${ROOT}src/three.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(THREE, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -1159,7 +1198,7 @@ async function mountSource(source: string): Promise<void> {
     const file = parseAbide(source)
     const names = await session.reads(`${ROOT}src/by.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(source, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -1374,7 +1413,7 @@ test('a row that binds nothing allocates no scope, hydrated or made', async () =
     const file = parseAbide(STATIC_ROWS)
     const names = await session.reads(`${ROOT}src/staticRows.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(STATIC_ROWS, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -1401,4 +1440,37 @@ test('a row that binds nothing allocates no scope, hydrated or made', async () =
     expect(`${owned.length} of ${list.rows.length} rows own a scope`).toBe(
         `0 of 5 rows own a scope`,
     )
+})
+
+// A ROW THAT THROWS WHILE IT IS MADE leaves the list as the document has it. The walk places rows
+// from the end, so the rows after the one that threw are already standing when it does.
+// THE REVERT, run: without `reconcile`'s catch, `list.rows` kept the dropped `b` and never recorded
+// `c` and `d`, so the next reconcile made them again — the document read a, c, d, c, d.
+test('a row that throws while made leaves no row unrecorded — 41.14', () => {
+    const host = document.createElement('ul')
+    const open = document.createComment(REGION_OPEN)
+    const close = document.createComment(REGION_CLOSE)
+    host.append(open, close)
+    document.body.append(host)
+    const make = (made: Document, item: unknown): Node[] => {
+        if (item === 'boom') throw new Error('boom')
+        const row = made.createElement('li')
+        row.textContent = String(item)
+        return [row]
+    }
+    const builders = { make, mount: (): Scope => new Scope() }
+    const list = listAt(
+        { open, close },
+        false,
+        (item: unknown) => item,
+        () => builders,
+    )
+    const text = (): string[] =>
+        [...host.querySelectorAll('li')].map((node) => node.textContent ?? '')
+
+    updateList(list, ['a', 'b'])
+    expect(() => updateList(list, ['a', 'boom', 'c', 'd'])).toThrow('boom')
+    updateList(list, ['a', 'c', 'd'])
+    expect(text()).toEqual(['a', 'c', 'd'])
+    host.remove()
 })

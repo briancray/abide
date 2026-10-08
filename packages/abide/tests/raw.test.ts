@@ -10,7 +10,8 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { parseAbide } from '#compiler'
+import { emitSource } from '#compiler/emitSource.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -19,8 +20,8 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -33,10 +34,13 @@ async function mountPage(
 ): Promise<{ html: string; said: string[]; work: Work }> {
     const file = parseAbide(source)
     const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': compileFile(source, names),
-        'Page.client.ts': emitClient(file, names) || 'export default () => {}',
-    })
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        names,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
     html += new TextDecoder().decode(
@@ -208,17 +212,17 @@ let on = reactive(true)
 <button id="flip" onclick={() => { on = !on }}>flip</button>`)
     expect(said).toEqual([])
     expect(shapeOf(out())).toBe(
-        '<!--{-->,b(one),em(two),<!--}-->,<!--[-->,span(true),<!--]-->',
+        '<!--{-->,b(one),em(two),<!--}-->,<!--[0-->,span(true),<!--]-->',
     )
     const painted = out().querySelector('b')
     click('#flip')
     expect(shapeOf(out())).toBe(
-        '<!--{-->,b(one),em(two),<!--}-->,<!--[-->,<!--]-->',
+        '<!--{-->,b(one),em(two),<!--}-->,<!--[0-->,<!--]-->',
     )
     click('#flip')
     expect(out().querySelector('b') === painted).toBe(true)
     expect(shapeOf(out())).toBe(
-        '<!--{-->,b(one),em(two),<!--}-->,<!--[-->,span(true),<!--]-->',
+        '<!--{-->,b(one),em(two),<!--}-->,<!--[0-->,span(true),<!--]-->',
     )
 })
 

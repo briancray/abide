@@ -3,6 +3,7 @@
 // `serve.test.ts`'s reason: happy-dom's preload clobbers `Response`.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { spawned } from 'harness/gate'
 import { appFixture, buildApp, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -109,7 +110,8 @@ const WHERE = `<script>
 import { online, route } from 'abide'
 </script>
 
-<main><p id="where">{route.name()}|{route.params().id}|{route.url().pathname}|{route.navigating()}|{online()}</p></main>`
+<main><p id="where">{route.name()}|{route.params().id}|{route.url().pathname}|{route.navigating()}|{online()}</p>
+<p id="named">{route.name.toUpperCase()}|{route.params.id}|{route.url.pathname}|{route.navigating ? 'moving' : 'still'}</p></main>`
 
 let base = ''
 let stop = (): void => {}
@@ -194,6 +196,75 @@ test('an unexpected throw is answered 500 — 37.5', async () => {
     expect((await Bun.fetch(`${base}/explode`)).status).toBe(500)
 })
 
+// 42.16 — UNDER `bun test`, `createApp` BUILDS THE APP ITSELF. An app no `abide build` has touched is
+// booted and answers, from a build of its sources as they stand, beside it. THE REVERT: drop the
+// `NODE_ENV` test from `createApp`; it reads `.abide`, finds no build, and throws `Run \`abide
+// build\` first`.
+test('createApp under bun test builds an app that was never built — 42.16', async () => {
+    const fresh = appFixture({
+        'ui/pages/page.abide': '<main><p id="fresh">never built</p></main>',
+        'host.test.ts': `import { expect, test } from 'bun:test'
+import { createApp } from 'abide/server'
+
+test('boots', async () => {
+    const app = await createApp()
+    const page = await (await app.fetch(new Request('http://app.test/'))).text()
+    await app.stop()
+    expect(page).toContain('never built')
+}, 60_000)
+`,
+    })
+    const ran = await spawned(['bun', 'test', './host.test.ts'], { cwd: fresh })
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`).toBe('0 true')
+}, 90_000)
+
+// 12.5 — A RENDER'S WATCHES STOP WHEN ITS REQUEST IS ANSWERED. The page's setup opens a watch over
+// a global value; two requests render it, and a write after both wakes nothing. Left running, every
+// render's watch stayed subscribed for the life of the process. THE REVERT: drop the
+// `releaseScope` in `App.fetch` — the write wakes the dead renders, `runs` 3 where 2 are due.
+test("a page's watch stops when the request that rendered it is answered — 12.5", async () => {
+    const fresh = appFixture({
+        'ui/pages/page.abide': `<script module>
+import { reactive } from 'abide'
+
+const level = reactive(0, { global: true })
+;(globalThis as { bump?: () => void }).bump = () => level.set(level.peek() + 1)
+</script>
+
+<script>
+import { watch } from 'abide'
+
+const tally = ((globalThis as { tally?: { runs: number; disposed: number } }).tally ??= { runs: 0, disposed: 0 })
+watch(() => {
+    level()
+    tally.runs += 1
+    return () => {
+        tally.disposed += 1
+    }
+})
+</script>
+
+<main>page</main>`,
+        'host.test.ts': `import { expect, test } from 'bun:test'
+import { flushSync } from 'abide'
+import { createApp } from 'abide/server'
+
+test('renders twice', async () => {
+    const app = await createApp()
+    for (const _ of [1, 2]) await (await app.fetch(new Request('http://app.test/'))).text()
+    ;(globalThis as { bump?: () => void }).bump?.()
+    flushSync()
+    await app.stop()
+    expect((globalThis as { tally?: unknown }).tally).toEqual({ runs: 2, disposed: 2 })
+}, 60_000)
+`,
+    })
+    const ran = await spawned(['bun', 'test', './host.test.ts'], { cwd: fresh })
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
+
 // 42.5, 42.7, 42.8, 37.4, 37.5 — `createApp` IN PROCESS, with no socket. The script is the host.
 //
 // 17.8 — IN PROCESS IS WHERE A REASON PHRASE IS OURS TO GIVE: over a socket bun writes one into the
@@ -219,8 +290,8 @@ await app.stop()
 console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.status} \${exploded.statusText}\`, inRequest, outside, marks }))
 `,
     )
-    const ran = Bun.spawnSync(['bun', `${app}/host.ts`], { cwd: app })
-    const printed = ran.stdout.toString().trim().split('\n').at(-1) as string
+    const ran = await spawned(['bun', `${app}/host.ts`], { cwd: app })
+    const printed = ran.stdout.trim().split('\n').at(-1) as string
     expect(ran.exitCode).toBe(0)
     expect(JSON.parse(printed)).toEqual({
         own: 'own route for POST',
@@ -252,8 +323,8 @@ import { marks } from './server/app.ts'
 console.log(JSON.stringify(marks))
 `,
     )
-    const ran = Bun.spawnSync(['bun', `${app}/disposed.ts`], { cwd: app })
-    const printed = ran.stdout.toString().trim().split('\n').at(-1) as string
+    const ran = await spawned(['bun', `${app}/disposed.ts`], { cwd: app })
+    const printed = ran.stdout.trim().split('\n').at(-1) as string
     expect(ran.exitCode).toBe(0)
     expect(JSON.parse(printed)).toEqual([
         'before start',
@@ -270,8 +341,8 @@ test('a throwing onStart stops the server starting — 37.6', async () => {
         'ui/pages/page.abide': PAGE,
         'server/app.ts': `import { onStart } from 'abide/server'\n\nonStart(async () => {\n    throw new Error('no database')\n})\n`,
     })
-    expect(buildApp(broken).exitCode).toBe(0)
-    const started = Bun.spawnSync([
+    expect((await buildApp(broken)).exitCode).toBe(0)
+    const started = await spawned([
         'bun',
         new URL('../bin/abide.ts', import.meta.url).pathname,
         'start',
@@ -283,8 +354,8 @@ test('a throwing onStart stops the server starting — 37.6', async () => {
         '0',
     ])
     expect(started.exitCode).not.toBe(0)
-    expect(started.stderr.toString()).toContain('no database')
-    expect(started.stdout.toString()).not.toContain('http://')
+    expect(started.stderr).toContain('no database')
+    expect(started.stdout).not.toContain('http://')
 }, 30_000)
 
 const CALLER_TRACE = '4bf92f3577b34da6a3ce929d0e0e4736'
@@ -388,6 +459,14 @@ test('a server-rendered page reads route and online — 23.1, 23.8', async () =>
     expect(second).toContain('/invoices/[id]|7|/invoices/7|false|true')
 })
 
+// 31.16 — `route`'s FOUR VALUES ARE READ BY NAME, each as a name bound to a `Reactive` is: a member
+// after one reaches the value. THE REVERT: drop `routeReads` from the classify pass; `route.name`
+// is handed on as the `Reactive`, `toUpperCase` is not a member of one, and the page answers 500.
+test('route.name, params, url and navigating are read by name — 31.16', async () => {
+    const page = await (await Bun.fetch(`${base}/invoices/42`)).text()
+    expect(page).toContain('/INVOICES/[ID]|42|/invoices/42|still')
+})
+
 // 22.2, 22.3 — THE REQUEST'S COOKIES, READ AND WRITTEN, the writes collected onto the answer as one
 // `set-cookie` each. THE REVERT: merge the written headers with `set` rather than `append` in
 // `applyWritten`; the answer carries 1 cookie of the 2 the handler wrote.
@@ -426,10 +505,13 @@ test('config layers derived, onConfig and the environment — 27.2, 27.3, 27.8',
     })
 })
 
-// 25.1, 25.2, 21.4 — THE ACCOUNT, with the app's own fields winning each collision, never cached.
-test('/__abide/health answers the account, the app winning collisions — 25.1, 25.2, 21.4', async () => {
+// 25.1, 25.2, 21.3 — THE ACCOUNT, with the app's own fields winning each collision, never cached.
+test('/__abide/health answers the account, the app winning collisions — 25.1, 25.2, 21.3', async () => {
     const answer = await Bun.fetch(`${base}/__abide/health`)
-    expect(answer.headers.get('cache-control')).toBe('no-store')
+    // Answered as a handler's is (25.3), so with a handler's spelling of it.
+    expect(answer.headers.get('cache-control')).toBe('private, no-store')
+    // A load balancer is no caller: the check hands it no cookie to keep.
+    expect(answer.headers.get('set-cookie')).toBeNull()
     const account = (await answer.json()) as Record<string, string>
     expect(account.version).toBe('the app wins')
     expect(account.db).toBe('up')

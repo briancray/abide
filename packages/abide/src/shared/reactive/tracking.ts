@@ -153,6 +153,27 @@ export function newSubscriber(
  */
 export function dropReader(source: Tracked, reader: Subscriber): void {
     removeFrom(source.readers, reader)
+    if (source.readers.length === 0) unread(source)
+}
+
+/**
+ * What lets go of a value whose owner has stopped, once nothing reads it — `Reactive.ts`'s, set
+ * there because this module cannot import it.
+ */
+export const RELEASING: { unread: ((source: Tracked) => void) | null } = {
+    unread: null,
+}
+
+/**
+ * Hands a value that has just lost its last reader on to `RELEASING`, where its owner has stopped.
+ *
+ * 12.14 — see `orphan` in `Reactive.ts`. Only a `Cell` carries `orphaned`, so
+ * every other source answers `undefined` and stops here.
+ */
+function unread(source: Tracked): void {
+    if ((source as { orphaned?: boolean }).orphaned !== true) return
+    if (source.readers.length !== 0 || source.probeReaders.length !== 0) return
+    RELEASING.unread?.(source)
 }
 
 /**
@@ -183,6 +204,7 @@ export function untracked<First, Second, Result>(
  */
 export function dropProbeReader(source: Tracked, reader: Subscriber): void {
     removeFrom(source.probeReaders, reader)
+    if (source.probeReaders.length === 0) unread(source)
 }
 
 function removeFrom(readers: Subscriber[], reader: Subscriber): void {
@@ -213,7 +235,7 @@ export function trackProbe(source: Tracked, reader: Subscriber): void {
 export function detachProbes(reader: Subscriber): void {
     const asked = reader.probeSources
     for (let index = 0; index < asked.length; index += 1)
-        removeFrom((asked[index] as Tracked).probeReaders, reader)
+        dropProbeReader(asked[index] as Tracked, reader)
     asked.length = 0
 }
 

@@ -1,5 +1,6 @@
 import {
     type BinaryExpression,
+    type CallExpression,
     type Node,
     type PostfixUnaryExpression,
     type PrefixUnaryExpression,
@@ -26,13 +27,9 @@ import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
  * statement ends and whether `{ n }` is a literal are TypeScript's answers rather than a token
  * walk's guess at them. Every offset is into the file's projection (`projectShadow`).
  *
- * ONE SHAPE IS NOT A NAME: `static` is a zero-width mark at the start of a template position the
- * checker PROVED reads nothing reactive (`proveStatic`), and it lowers to nothing. It rides this
- * channel rather than a second one because it is the same kind of answer — the checker's, about
- * this projection, at an offset — and every emitter already takes exactly this list.
- *
- * AND `raw` IS NOT ONE EITHER: the callee of a slot's bare `raw(…)` (32.25), which a markup-writing
- * position lowers to the framework's own `raw` and every other position leaves as written.
+ * ONE SHAPE IS NOT A REACTIVE NAME: `raw` is the callee of a template expression's bare `raw(…)`
+ * (32.25), which lowers to the framework's own `raw`; a `<script>`'s is left as written. It rides this list because it is a rewrite at an occurrence, which is what the splice
+ * walks; what the checker proved about a whole position is `CheckerAnswer`'s.
  *
  * THE SHAPE IS FIXED: every field on every read, so `Lowering`'s splice sees one hidden class.
  */
@@ -51,7 +48,8 @@ export type Read = {
      * 33's five: the `props<Props>()` call, which lowers to the record the caller passed; the pair
      * that brackets a binding element's initializer, which together make a default an accessor;
      * `absent`, which gives a binding with no default an accessor of `undefined` (33.4); and
-     * `restMember`, a member of the rest element, which calls that key's accessor (33.15). The
+     * `restMember`, a member of the rest element, which calls that key's accessor (33.15), beside
+     * `restWhole`, the rest element handed on as one value (33.22). The
      * pair and `absent` are INSERTIONS — zero-width, so what stands between the pair goes on being
      * lowered by the same walk, and a default reading a `Reactive` still reads it.
      */
@@ -68,9 +66,8 @@ export type Read = {
         | 'defaultClose'
         | 'absent'
         | 'restMember'
-        | 'static'
+        | 'restWhole'
         | 'raw'
-        | 'routeParams'
     /** What the rewrite replaces: the name, or a whole write or update from its first token. */
     from: number
     to: number
@@ -99,11 +96,13 @@ export type Read = {
     byValue: boolean
     /** 14.8 — the name is declared by a branch-local `<script>`, inside the body it scopes. */
     local: boolean
-    /**
-     * 33.20 — on the `props` call, the keys its pattern defaults; on a default's opening, its key.
-     * 23.9 — on `route.params`, the route literal and whether the file is its page or its layout.
-     */
+    /** 33.20 — on the `props` call, the keys its pattern defaults; on a default's opening, its key. */
     keys: string[]
+    /**
+     * 23.9 — on `route.params` in a page or a layout, the route literal and which of the two the
+     * file is.
+     */
+    routeParams: [pattern: string, kind: string] | undefined
 }
 
 /**
@@ -134,6 +133,7 @@ export function newRead(
         byValue: false,
         local: false,
         keys: [],
+        routeParams: undefined,
     }
 }
 
@@ -348,7 +348,7 @@ export function classifyRead(node: Node): Read | undefined {
  *
  * A POSITION'S OWN VALUE IS DEMANDED PRIMITIVE, because every position this is asked of converts it
  * to a string or tests it, and an object's `toString` is code. THE ONE OBJECT EXEMPT is 32.25's
- * `raw(x)`: a slot's bare `raw(` is always the framework's (`slotFacts`), which converts its
+ * `raw(x)`: a template's bare `raw(` is always the framework's (`expressionFacts`), which converts its
  * argument and whose result the escaper reads a field of. It is also the one value a LIVE text
  * binding cannot write (`setText` writes text, never markup), so leaving it unproven is not only a
  * binding too many — it put `<b>hi</b>` on the screen where the server had painted an element.
@@ -364,51 +364,68 @@ export function provePosition(
     return proveStatic(value, primitives, members)
 }
 
-/** The argument of a bare `raw(x)` call, parentheses aside, or `undefined` where `node` is none. */
+/**
+ * `node` as a bare `raw(…)` call, or `undefined` where it is none.
+ *
+ * 32.25 — THE SPELLING THE TEMPLATE LOWERS TO THE FRAMEWORK'S `raw`, whatever it is handed: a
+ * member (`markdown.raw(x)`) is that object's method, and a `raw` that is not called is whatever
+ * the file bound.
+ */
+export function rawCall(node: Node): CallExpression | undefined {
+    if (!isCallExpression(node)) return undefined
+    const callee = node.expression
+    return callee.kind === SyntaxKind.Identifier &&
+        (callee as unknown as { text: string }).text === 'raw'
+        ? node
+        : undefined
+}
+
+/**
+ * The one value a bare `raw(x)` converts, `TRANSPARENT` wrappers aside, or `undefined` where `node`
+ * is none.
+ *
+ * A call handed a spread, or other than one argument, is still the framework's `raw` (`rawCall`),
+ * and is not exempt: what it converts is no one node, and a spread runs an iterator.
+ */
 function rawArgument(node: Node): Node | undefined {
     let inner = node
-    while (inner.kind === SyntaxKind.ParenthesizedExpression)
+    while (TRANSPARENT.has(inner.kind))
         inner = (inner as unknown as { expression: Node }).expression
-    if (!isCallExpression(inner)) return undefined
-    const callee = inner.expression
-    if (callee.kind !== SyntaxKind.Identifier) return undefined
-    if ((callee as unknown as { text: string }).text !== 'raw') return undefined
-    const only = inner.arguments[0]
-    if (inner.arguments.length !== 1 || only === undefined) return undefined
+    const call = rawCall(inner)
+    if (call === undefined || call.arguments.length !== 1) return undefined
+    const only = call.arguments[0] as Node
     return only.kind === SyntaxKind.SpreadElement ? undefined : only
 }
 
 /**
- * Collects a slot's bare `raw(…)` callees into `rawCallees`, and throws where the slot awaits.
+ * Collects a template expression's bare `raw(…)` callees into `rawCallees` where it is handed one,
+ * and throws where it awaits.
  *
- * WHAT A SLOT'S OWN TREE SAYS WITHOUT A TYPE: every bare `raw(…)` callee, lowered to the
- * framework's `raw` (32.25) — a member (`markdown.raw(x)`) is that object's method, and a `raw`
- * that is not called is whatever the file bound — and whether the slot AWAITS.
+ * WHAT A TEMPLATE EXPRESSION'S OWN TREE SAYS WITHOUT A TYPE: every bare `raw(…)` callee
+ * (`rawCall`), lowered to the framework's `raw` (32.25), and whether it AWAITS (32.57).
  *
- * A TEMPLATE POSITION CANNOT `await`: every slot, subject and attribute value is lowered into an
- * ordinary arrow inside the markup concatenation, so `{await rows}` emitted a module that does not
- * parse, reported by bun against the emitted file rather than the page. UNLESS THE SLOT MAKES ITS
- * OWN FUNCTION — `onclick={async () => await save()}` is an ordinary handler — so the walk stops
- * looking for an `await` at the first function it enters, and keeps looking for `raw` inside it.
+ * A TEMPLATE EXPRESSION CANNOT `await`: each is lowered into an ordinary arrow, an argument or an
+ * initializer inside a function that is not `async`, so `{await rows}` emitted a module that does
+ * not parse, reported by bun against the emitted file rather than the page. UNLESS THE EXPRESSION
+ * MAKES ITS OWN FUNCTION — `onclick={async () => await save()}` is an ordinary handler — so the
+ * walk stops looking for an `await` at the first function it enters, and keeps looking for `raw`.
  */
-export function slotFacts(
+export function expressionFacts(
     node: Node,
-    rawCallees: Node[],
+    rawCallees: Node[] | undefined,
     inFunction = false,
 ): void {
     if (!inFunction && node.kind === SyntaxKind.AwaitExpression)
         throw new Error(
-            `abide: a template position cannot await, and \`${node.getText()}\` does. A slot is lowered into an ordinary function, so there is nothing here to await in — await inside a handler or a reactive body, or read the value and let the position fill. RULEBOOK 34.3.`,
+            `abide: a template position cannot await, and \`${node.getText()}\` does. A template expression is lowered into an ordinary function, so there is nothing here to await in — await inside a handler or a reactive body, or read the value and let the position fill. RULEBOOK 32.57.`,
         )
-    if (
-        isCallExpression(node) &&
-        node.expression.kind === SyntaxKind.Identifier &&
-        (node.expression as unknown as { text: string }).text === 'raw'
-    )
-        rawCallees.push(node.expression)
+    if (rawCallees !== undefined) {
+        const call = rawCall(node)
+        if (call !== undefined) rawCallees.push(call.expression)
+    }
     const nested = inFunction || FUNCTIONS.has(node.kind)
     node.forEachChild((child) => {
-        slotFacts(child, rawCallees, nested)
+        expressionFacts(child, rawCallees, nested)
     })
 }
 
@@ -422,6 +439,18 @@ export const FUNCTIONS: ReadonlySet<SyntaxKind> = new Set([
     SyntaxKind.SetAccessor,
     SyntaxKind.Constructor,
     SyntaxKind.ClassStaticBlockDeclaration,
+])
+
+/**
+ * The wrappers whose value is the expression they wrap: parentheses, and the ones that only say
+ * what type it is. `typeof` and `void` are not among them — each makes a value of its own.
+ */
+export const TRANSPARENT: ReadonlySet<SyntaxKind> = new Set([
+    SyntaxKind.ParenthesizedExpression,
+    SyntaxKind.AsExpression,
+    SyntaxKind.SatisfiesExpression,
+    SyntaxKind.NonNullExpression,
+    SyntaxKind.TypeAssertionExpression,
 ])
 
 /** Whether syntax proves `node` runs no author code, queuing what the checker must confirm. */
@@ -440,6 +469,8 @@ function proveStatic(node: Node, primitives: Node[], members: Node[]): boolean {
         case SyntaxKind.AsExpression:
         case SyntaxKind.SatisfiesExpression:
         case SyntaxKind.NonNullExpression:
+        case SyntaxKind.TypeAssertionExpression:
+        // Not `TRANSPARENT`, and runs no code but its operand's: its value is a primitive.
         case SyntaxKind.TypeOfExpression:
         case SyntaxKind.VoidExpression:
             return proveStatic(

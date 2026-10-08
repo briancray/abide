@@ -12,25 +12,29 @@
 // while it adopts (`ADOPTING_PROTOTYPE`), and one callable shared by every request would be moved
 // for all of them by the first.
 
+import { contractOf, type Gated } from './argsContract.ts'
 import { CELL } from './CELL.ts'
-import { ARGS_GATE } from './ARGS_GATE.ts'
-import type { Gated } from './Keyed.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
-import { PARAMETER_DEFAULTS } from './PARAMETER_DEFAULTS.ts'
 import { brandedPrototype, MEMBER_KEYS } from './Reactive.ts'
 import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
 import { currentScope, SCOPING } from './scoping.ts'
 
+const UNBUILT: unique symbol = Symbol('abide.unbuilt')
+
 /**
  * What a forwarder resolves through: the home, and how to build the same value again in a scope.
+ *
+ * 16.68 — A HANDLER'S HOME IS BUILT WHERE IT IS FIRST REACHED, and every other value's where it is
+ * declared. Building a value with a body starts the body (1.7), and at import that ran the handler
+ * — a mutation fired at boot, for a request nobody had made.
  */
 class Filed {
     home: unknown
     make: () => unknown
 
-    constructor(make: () => unknown) {
+    constructor(make: () => unknown, lazy: boolean) {
         this.make = make
-        this.home = make()
+        this.home = lazy ? UNBUILT : make()
     }
 }
 
@@ -45,7 +49,10 @@ type Forwarder = { [FILED]: Filed }
  */
 function instanceOf(filed: Filed): Record<PropertyKey, unknown> {
     const scope = currentScope()
-    if (scope === undefined) return filed.home as Record<PropertyKey, unknown>
+    if (scope === undefined) {
+        if (filed.home === UNBUILT) filed.home = filed.make()
+        return filed.home as Record<PropertyKey, unknown>
+    }
     let instance = scope.instances.get(filed)
     if (instance === undefined) {
         instance = filed.make()
@@ -88,14 +95,20 @@ export function outsideScope(global: boolean): boolean {
     return !global && provider !== null && provider.current() === undefined
 }
 
-/** A forwarder over `make`'s value: the home outside a request, one instance per request inside. */
-export function scoped(make: () => unknown): unknown {
-    const filed = new Filed(make)
+/**
+ * A forwarder over `make`'s value: the home outside a request, one instance per request inside.
+ *
+ * `lazy` leaves the home unbuilt until something outside every request reaches it. Only an unkeyed
+ * value can be: a keyed face carries its home's gate and defaults, and building one runs no body
+ * (11.4).
+ */
+export function scoped(make: () => unknown, lazy = false): unknown {
+    const filed = new Filed(make, lazy)
     // A keyed value, carrying both, or any other value, carrying neither.
     const home = filed.home as { [KEYED_BRAND]?: true } & Partial<
         Gated<unknown>
     >
-    if (home[KEYED_BRAND] === true) {
+    if (!lazy && home[KEYED_BRAND] === true) {
         // THE KEYED FACE: a reach, the four statics and the entries, each the current instance's —
         // and the `args` gate and the parameter's defaults, which every instance was declared with.
         const keyed = Object.assign(
@@ -103,14 +116,8 @@ export function scoped(make: () => unknown): unknown {
                 (instanceOf(filed) as unknown as (args: unknown) => unknown)(
                     args,
                 ),
-            {
-                [KEYED_BRAND]: true,
-                [ARGS_GATE]: home[ARGS_GATE],
-                [PARAMETER_DEFAULTS]: (home as Gated<unknown>)[
-                    PARAMETER_DEFAULTS
-                ],
-                [FILED]: filed,
-            },
+            contractOf(home),
+            { [KEYED_BRAND]: true, [FILED]: filed },
         ) satisfies Gated<unknown>
         const members = keyed as unknown as Record<string, unknown>
         for (const name of SELECTION_MEMBERS)

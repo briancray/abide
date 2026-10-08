@@ -158,9 +158,9 @@ Read on: [Local state](show-a-value-that-changes.md)
 
 ## A channel is not a stream
 
-Both produce more than once, and what the producer declared separates them — not something a runtime
-sniffs. A channel is written by `publish`, so **every production is a whole message** (9.6). A
-body declared `async function*` declares a stream, and no chunk it yields is a whole anything (9.20).
+Both produce more than once, and how the producer produces separates them. A channel is written by
+`publish`, so **every production is a whole message** (9.6). A body that is or returns an async
+generator is a stream, and no chunk it yields is a whole anything (9.20).
 
 | | each production is | `busy()` | a bare read | `await` resolves at |
 | --- | --- | --- | --- | --- |

@@ -84,7 +84,7 @@ reached it, and there is no moment at which one request's is visible to another'
 | Name | Signature | Meaning |
 | --- | --- | --- |
 | `config` | `Reactive<Config>` | The resolved configuration document. |
-| `Config` | `interface Config { …Env }` | Every field of `Env`, plus what `onConfig` defaulted and the schema normalised. |
+| `Config` | `interface Config { [field: string]: unknown; APP_NAME: string; APP_VERSION: string; APP_DATA_DIR: string; ABIDE_LOGS: boolean; ABIDE_OPENAPI: boolean; ABIDE_MCP: boolean; ABIDE_BRIDGE: boolean }` | The resolved document, which an app widens with fields of its own by declaration merging. |
 | `Env` | `Record<string, string \| undefined>` | The process environment as read, before coercion. |
 | `config.invalidate` | `() => void` | Re-reads the environment and re-runs `onConfig`. |
 | `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's defaults and its schema. |
@@ -110,12 +110,15 @@ reached it, and there is no moment at which one request's is visible to another'
 
 | Name | Signature | Meaning |
 | --- | --- | --- |
-| `health` | `Reactive<Health>` | The account of the app this call is in. |
-| `Health` | `{ version: string; abide: string; startedAt: string }` | The account itself. |
+| `health` | `Rpc<Health, undefined>` | The account of the app this call is in. |
+| `Health` | `interface Health { version: string; abide: string; startedAt: string }` | The account itself, which an app widens with what its `onHealth` adds. |
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's reporter, merged over the baseline. |
 | `version` | `string` | The app's version. |
 | `abide` | `string` | The framework's version. |
 | `startedAt` | `string` | When the process started, ISO-8601. |
+
+`health` is the one name here that is called rather than read: `health()` on either side, and
+the call is what asks. Nothing loads the account for a page that never calls it.
 
 
 ## Description

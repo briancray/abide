@@ -54,10 +54,10 @@ async function appTree(session: TypeSession): Promise<Record<string, string>> {
     // 32.17 — which components another one invokes decides whether a module carries its own
     // markup for a row built in the browser.
     const graph = componentGraph(files, Bun.resolveSync)
-    const { reads } = await session.readsFor(files)
+    const { answers } = await session.readsFor(files)
     for (let at = 0; at < files.length; at += 1) {
         const { path: absolute, file } = files[at] as (typeof files)[number]
-        const names = reads[at] as Awaited<ReturnType<TypeSession['reads']>>
+        const names = answers[at]
         const components = graph.imports.get(absolute)
         const stem = absolute.slice(APP.length, -'.abide'.length)
         tree[`${stem}.ts`] = emitComponent(file, names, false, components)
@@ -123,7 +123,9 @@ test('every example renders on the server and mounts on the client', async () =>
                 // IN A REQUEST, as a page is always rendered: `principal` reads the request's
                 // cookie and throws outside one (22.1).
                 await inScope(new Request('http://example.test/'), async () => {
-                    html = new TextDecoder().decode(await render(Component, SHELL))
+                    html = new TextDecoder().decode(
+                        await render(Component, SHELL),
+                    )
                 })
 
                 // EACH EXAMPLE GETS ITS OWN ROOT, AND THAT IS NOT DECORATION. Overwriting one

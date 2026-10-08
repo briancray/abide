@@ -4,6 +4,7 @@
 // `invoices_whoami`, and a turn that says what it answered.
 
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
+import { spawned } from 'harness/gate'
 import { BRIDGE_PATH } from '../../bridge/src/bridge.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
 import { BRIDGE_ADDRESS } from '../src/shared/ADDRESSES.ts'
@@ -204,7 +205,7 @@ test('the bridge status turns ready the moment the bridge connects — 45.20', a
             let newline = buffered.indexOf('\n')
             while (newline !== -1) {
                 yield JSON.parse(buffered.slice(0, newline)) as {
-                    ready: boolean
+                    paired: boolean
                     command?: string
                 }
                 buffered = buffered.slice(newline + 1)
@@ -213,15 +214,15 @@ test('the bridge status turns ready the moment the bridge connects — 45.20', a
         }
     })()
     const first = (await lines.next()).value as {
-        ready: boolean
+        paired: boolean
         command: string
     }
-    expect(first.ready).toBe(false)
+    expect(first.paired).toBe(false)
     expect(first.command).toStartWith(
         `bunx abide-bridge@${BRIDGE_VERSION} ${base} `,
     )
     await pairBridge('two', first.command.split(' ').at(-1))
-    expect((await lines.next()).value).toEqual({ ready: true })
+    expect((await lines.next()).value).toEqual({ paired: true })
     await lines.return(undefined)
 }, 30_000)
 
@@ -232,7 +233,7 @@ test('nothing paired refuses 409, and a pairing code pairs only once — 45.13, 
     await unpaired.text()
     const code = await pairingCode('three')
     await pairBridge('three', code)
-    const again = Bun.spawnSync(
+    const again = await spawned(
         [
             'bun',
             `${BRIDGE}bin/abideBridge.ts`,
@@ -241,10 +242,10 @@ test('nothing paired refuses 409, and a pairing code pairs only once — 45.13, 
             '--claude',
             FAKE_CLAUDE,
         ],
-        { env: process.env, timeout: 10_000 },
+        { deadline: 10_000 },
     )
     expect(again.exitCode).toBe(1)
-    expect(again.stderr.toString()).toContain('403')
+    expect(again.stderr).toContain('403')
 }, 30_000)
 
 // 45.5, 45.15, 45.16 — CLAUDE CODE RUNS ALONE on the visitor's machine: its own tools off, no settings read,
@@ -312,9 +313,9 @@ test('a transcript that does not end on a user turn is refused — 45.3', async 
 
 // 45.6, 42.12 — A TOOL IS CALLED THROUGH THE APP ANSWERING THE CONVERSATION, not whichever `App` the
 // process built last: two held in one process, the second stopped, and the first still lists and
-// calls its tools. THE REVERT: set `RPC_SERVER.raw` to the app's own `fetch` alone in `createApp`, not
-// the scope's app first; the stopped app answers the tool call, and its result reads "the app is
-// stopping".
+// calls its tools. THE REVERT: build the `McpSurface` in `bootApp` over `RPC_SERVER.raw` rather than
+// the app's own `fetch`, and set that to `fetch` alone; the stopped app answers the tool call, and its
+// result reads "the app is stopping".
 test('a tool is called through the app answering the conversation — 45.6, 42.12', async () => {
     await Bun.write(
         `${app}/host.ts`,
@@ -333,13 +334,13 @@ const answer = await first.fetch(new Request('http://app.test/__abide/rpc/ask/as
 console.log(JSON.stringify({ status: answer.status, text: await answer.text() }))
 `,
     )
-    const ran = Bun.spawnSync(['bun', `${app}/host.ts`], {
+    const ran = await spawned(['bun', `${app}/host.ts`], {
         cwd: app,
         env: process.env,
     })
-    if (ran.exitCode !== 0) console.log(ran.stderr.toString())
+    if (ran.exitCode !== 0) console.log(ran.stderr)
     const printed = JSON.parse(
-        ran.stdout.toString().trim().split('\n').at(-1) as string,
+        ran.stdout.trim().split('\n').at(-1) as string,
     ) as { status: number; text: string }
     expect(printed.status).toBe(200)
     expect(printed.text).toContain('"text":"saw \\"ada\\""')

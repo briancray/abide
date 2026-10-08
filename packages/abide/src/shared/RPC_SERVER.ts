@@ -1,9 +1,8 @@
 /**
  * What an `Rpc` asks of the server it runs on, as slots the server fills.
  *
- * Filled by `#server/requestScope.ts`, `#server/createApp.ts`, `#server/answerRequest.ts`,
- * `#server/answerRpc.ts` and `#server/answerSocket.ts`: the request a rung is handed (16.12), the
- * app a `raw` call is answered by in process (16.43), and where a call reports the value it
+ * Filled by `#server/installServer.ts`, and `raw` by `bootApp`: the request a rung is handed (16.12),
+ * the app a `raw` call is answered by in process (16.43), and where a call reports the value it
  * reached, so a page's render can leave it for the browser's own call (41.13). A leaf, for
  * `CURRENT_ROUTER`'s reason: the isomorphic `Rpc` reads these and a browser bundle must not reach
  * what fills them.

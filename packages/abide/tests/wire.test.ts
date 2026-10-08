@@ -5,6 +5,7 @@
 // is. Spawned for `serve.test.ts`'s reason: happy-dom's preload clobbers `Response`.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 import { wire } from '#ui/wire.ts'
 import { appFixture, buildApp, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -45,6 +46,22 @@ export const whoAsked = GET(() => request().headers.get('x-caller'))
 export const lines = GET(async function* () {
     yield 1
 })
+
+export const postLines = POST(async function* () {
+    yield 1
+})
+
+async function* pairings(): AsyncGenerator<{ ready: boolean }> {
+    yield { ready: true }
+}
+
+const provider: (() => void) & { pairings: typeof pairings } = Object.assign(() => {}, { pairings })
+
+export const pairing = GET(provider.pairings)
+
+export const arrowLines = GET(() => pairings())
+
+export const awaitedLines = GET(async () => pairings())
 `
 
 const PAGE = `<script>
@@ -180,37 +197,37 @@ test('the browser bundle carries the address and none of the server module — 1
 // 16.30 — ANYTHING ELSE UNDER `server/` IS A BUILD ERROR from the client graph, never a module the
 // browser silently receives. THE REVERT: return `undefined` from the fence's `onLoad` for a path
 // with no wrapper; the build succeeds and the database module is in the bundle.
-test('a page importing server code that is not a handler does not build — 16.30', () => {
+test('a page importing server code that is not a handler does not build — 16.30', async () => {
     const leaking = appFixture({
         'ui/pages/page.abide': `<script>\nimport { SECRET } from '#server/database.ts'\n</script>\n\n<p>{SECRET}</p>`,
         'server/database.ts': `export const SECRET = '${SECRET}'\n`,
     })
-    const built = buildApp(leaking)
+    const built = await buildApp(leaking)
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain('RULEBOOK 16.30')
 })
 
 // 19.16 — an export under `server/rpc` that is not declared as a handler is refused by name, rather
 // than being an address that never answers.
-test('an rpc module exporting something that is not a handler does not build — 19.16', () => {
+test('an rpc module exporting something that is not a handler does not build — 19.16', async () => {
     const stray = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
         'server/rpc/invoices.ts': `import { GET } from 'abide/server'\n\nexport const getInvoice = GET(() => 1)\nexport const TAX_RATE = 0.2\n`,
     })
-    const built = buildApp(stray)
+    const built = await buildApp(stray)
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain('`TAX_RATE`')
     expect(built.stderr).toContain('RULEBOOK 19.16')
 })
 
 // 19.2 — two modules declaring one address is a build error naming both.
-test('two handlers at one address do not build, and both files are named — 19.2', () => {
+test('two handlers at one address do not build, and both files are named — 19.2', async () => {
     const twice = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
         'server/rpc/admin.ts': `import { GET } from 'abide/server'\n\nexport const audit = GET(() => 1)\n`,
         'server/rpc/admin/audit.ts': `import { GET } from 'abide/server'\n\nexport default GET(() => 2)\n`,
     })
-    const built = buildApp(twice)
+    const built = await buildApp(twice)
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain('server/rpc/admin.ts')
     expect(built.stderr).toContain('server/rpc/admin/audit.ts')
@@ -232,7 +249,7 @@ test('a handler declared any way the language allows is mounted with its method 
         'server/rpc/passed.ts': `export { touch } from '#server/shared.ts'\n`,
         'server/rpc/named.ts': `import { DELETE } from 'abide/server'\n\nconst drop = DELETE(() => 1)\nexport default drop\nexport type Dropped = { id: string }\n`,
     })
-    const built = buildApp(app)
+    const built = await buildApp(app)
     expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
     const { handlers } = (await import(`${app}/.abide/rpc.ts`)) as {
@@ -250,14 +267,37 @@ test('a handler declared any way the language allows is mounted with its method 
     })
 })
 
+// 20.3, 38.63 — `clients: { cli: false }` IS READ OFF THE DECLARATION INTO THE TABLE THE BUILD WRITES,
+// the only thing the shell holds of an app it may never have booted (38.7). THE REVERT: read
+// `withheldFrom(call, 'ui')` for `cli` in `declaringMethod`; `internal` reads `cli: true`, and the shell
+// lists it.
+test('a handler with clients.cli false is written to the table withheld from the shell — 20.3, 38.63', async () => {
+    const app = appFixture({
+        'ui/pages/page.abide': '<p>home</p>',
+        'server/rpc/staff.ts': `import { GET } from 'abide/server'\n\nexport const internal = GET(() => 'staff only', { clients: { cli: false } })\n\nexport const open = GET(() => 'anyone')\n`,
+    })
+    const built = await buildApp(app)
+    expect(built.stderr).toBe('')
+    expect(built.exitCode).toBe(0)
+    const { handlers } = (await import(`${app}/.abide/rpc.ts`)) as {
+        handlers: { address: string; cli: boolean }[]
+    }
+    const listed: Record<string, boolean> = {}
+    for (const handler of handlers) listed[handler.address] = handler.cli
+    expect(listed).toEqual({
+        '/__abide/rpc/staff/internal': false,
+        '/__abide/rpc/staff/open': true,
+    })
+})
+
 // 19.16 — AND A CALL NAMED `GET` THAT IS NOT abide's IS NOT A HANDLER. THE REVERT: accept the
 // export by the callee's spelling; this builds, and mounts a plain number as a handler.
-test('an export calling a GET that is not abide’s does not build — 19.16', () => {
+test('an export calling a GET that is not abide’s does not build — 19.16', async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
         'server/rpc/fake.ts': `const GET = (value: () => number) => value()\n\nexport const count = GET(() => 1)\n`,
     })
-    const built = buildApp(app)
+    const built = await buildApp(app)
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain('`count`')
     expect(built.stderr).toContain('RULEBOOK 19.16')
@@ -320,7 +360,7 @@ test('the wire is the same Rpc: coalesced, narrowable, and a mutation calls agai
 // 41.21 — A CALL THE PAGE ALREADY STARTED IS TAKEN, ONCE. Asserted by what reached `fetch`, because a
 // wire that fetched again would answer the same invoice. THE REVERT: skip the `EARLY_CALLS` lookup
 // in `wire`; the first reach fetches — one call where none is due — and lands a turn later.
-test('the wire takes a call the page already started, and fetches after that — 41.21', async () => {
+test('the wire takes a call the page already started, and fetches after that — 41.21, 41.27', async () => {
     const fetched: string[] = []
     const window = globalThis as unknown as Record<string, unknown>
     const previous = window.fetch
@@ -344,12 +384,21 @@ test('the wire takes a call the page already started, and fetches after that —
         failed: false,
     }
     window.__abideCalls = {
-        // Answered before the bundle ran.
+        // Answered before the bundle ran, and painted settled (41.25).
         'GET /rpc/getInvoice?id=7 ': {
             promise: Promise.resolve(),
             status: 200,
             statusText: 'OK',
             text: '{"id":"7"}',
+            failed: false,
+            painted: 1,
+        },
+        // Answered before the bundle ran, and painted in flight.
+        'GET /rpc/getInvoice?id=9 ': {
+            promise: Promise.resolve(),
+            status: 200,
+            statusText: 'OK',
+            text: '{"id":"9"}',
             failed: false,
         },
         // Still on its way.
@@ -366,6 +415,13 @@ test('the wire takes a call the page already started, and fetches after that —
         const arrived = getInvoice({ id: '7' })
         expect(arrived.ready()).toBe(true)
         expect(arrived()).toEqual({ id: '7' })
+
+        // 41.25 — painted in flight: in flight at adopt, however early its answer arrived, and
+        // landed from what arrived. THE REVERT: settle every arrived answer at once; this reads
+        // `ready()` true here.
+        const painted = getInvoice({ id: '9' })
+        expect(painted.ready()).toBe(false)
+        expect(await painted).toEqual({ id: '9' })
 
         // In flight: waited on, not sent twice.
         const waiting = getInvoice({ id: '8' })
@@ -470,10 +526,58 @@ test('a copy the build marked as streaming holds each chunk as it lands — 16.3
     }
 })
 
-// 16.33 — AND THE BUILD IS WHAT MARKS IT: a handler declared as an async generator is written into the
-// browser's wrapper as a stream, and one that is not is left a value. THE REVERT: drop `declaresStream`
-// from `declaringMethod`; the wrapper carries no `stream` and the copy collects.
-test('the build marks an async generator handler as a stream in its wrapper — 16.33', async () => {
+// 16.7 AND 1.8 — A MUTATION'S STREAM COALESCES UNTIL IT IS DONE. A call while the stream is open joins
+// it — the same value, no second request — and one after the close is a new write. THE REVERT: hand
+// `declare` a `reactive` of a marked mutation's body in `wire`, as a `GET`'s is; it carries no `ttl`
+// of 0, and the call after the close is served the first stream's chunks without a request.
+test('a streaming mutation coalesces until its stream closes, then calls again — 16.7, 1.8', async () => {
+    const window = globalThis as unknown as Record<string, unknown>
+    const previous = window.fetch
+    let fetches = 0
+    let close = (): void => {}
+    window.fetch = (async () => {
+        fetches += 1
+        return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            headers: new Headers({ 'content-type': 'application/jsonl' }),
+            body: new ReadableStream<Uint8Array>({
+                start(controller) {
+                    controller.enqueue(new TextEncoder().encode('{"n":1}\n'))
+                    close = () => controller.close()
+                },
+            }),
+        }
+    }) as unknown
+    try {
+        const send = wire('POST', '/rpc/send', {
+            stream: true,
+        }) as () => PromiseLike<unknown> & { busy(): boolean }
+        const first = send()
+        await new Promise((done) => setTimeout(done, 0))
+        expect(first.busy()).toBe(true)
+        expect(send()).toBe(first)
+        expect(fetches).toBe(1)
+        close()
+        expect(await first).toEqual([{ n: 1 }])
+        await new Promise((done) => setTimeout(done, 0))
+        const second = send()
+        close()
+        expect(await second).toEqual([{ n: 1 }])
+        expect(fetches).toBe(2)
+    } finally {
+        window.fetch = previous
+    }
+})
+
+// 16.33 — AND THE BUILD IS WHAT MARKS IT: a handler returning an async generator is written into the
+// browser's wrapper as a stream, and one that does not is left a value — a mutation's as much as a
+// read's, and an arrow handing one back or a promise of one, or a member naming one
+// (`claudeCode.bridge`), as much as one declared `async function*`. THE REVERT: return false from
+// `returnsGenerator`; no wrapper carries `stream` and every copy collects. Put back
+// `method.name === 'GET'` and `postLines` loses it; drop its `Promise` unwrap and `awaitedLines` does.
+test('the build marks a handler returning an async generator as a stream in its wrapper — 16.33', async () => {
     const wrapper = await Bun.file(
         `${app}/.abide/wire/server/rpc/invoices.ts`,
     ).text()
@@ -481,6 +585,10 @@ test('the build marks an async generator handler as a stream in its wrapper — 
         wrapper.split('\n').find((line) => line.includes(`const ${name} =`)) ??
         ''
     expect(lineOf('lines')).toContain('{"stream":true}')
+    expect(lineOf('postLines')).toContain('{"stream":true}')
+    expect(lineOf('pairing')).toContain('{"stream":true}')
+    expect(lineOf('arrowLines')).toContain('{"stream":true}')
+    expect(lineOf('awaitedLines')).toContain('{"stream":true}')
     expect(lineOf('getInvoice')).not.toContain('stream')
 })
 
@@ -506,7 +614,7 @@ const value = reactive(() => internal())
 <p>{value()}</p>`,
         'server/rpc/staff.ts': HANDLERS,
     })
-    const built = buildApp(refused)
+    const built = await buildApp(refused)
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain('internal')
 
@@ -521,5 +629,47 @@ const value = reactive(() => open())
 <p>{value()}</p>`,
         'server/rpc/staff.ts': HANDLERS,
     })
-    expect(buildApp(allowed).exitCode).toBe(0)
+    expect((await buildApp(allowed)).exitCode).toBe(0)
+})
+
+// 41.25 — HYDRATION WAITS ON A CALL PAINTED SETTLED THAT HAS NOT ANSWERED, and on nothing else: not
+// one painted in flight, and not one already answered. A call whose request FAILED settles the
+// early-call script's promise with no text, and that ends the wait as an answer does. THE REVERT:
+// drop the `painted` test in `paintedCallsLanded`; the call painted in flight is waited on
+// too, and this reports the wait still open after the failure.
+test('hydration waits on the calls painted settled, and a failed one ends the wait — 41.25', async () => {
+    const window = globalThis as unknown as Record<string, unknown>
+    const pending = () => {
+        let settle = (): void => {}
+        const promise = new Promise<void>((done) => {
+            settle = done
+        })
+        return { promise, settle }
+    }
+    const painted = pending()
+    const inFlight = pending()
+    window.__abideCalls = {
+        painted: { promise: painted.promise, text: undefined, painted: 1 },
+        'in flight': { promise: inFlight.promise, text: undefined },
+        answered: { promise: Promise.resolve(), text: '{}', painted: 1 },
+    }
+    try {
+        let ended = false
+        paintedCallsLanded()?.then(() => {
+            ended = true
+        })
+        await new Promise((done) => setTimeout(done, 0))
+        expect(ended).toBe(false)
+        // The request failed: the promise settles and no text was ever set.
+        painted.settle()
+        await new Promise((done) => setTimeout(done, 0))
+        expect(ended).toBe(true)
+
+        window.__abideCalls = {
+            'in flight': { promise: inFlight.promise, text: undefined },
+        }
+        expect(paintedCallsLanded()).toBeUndefined()
+    } finally {
+        delete window.__abideCalls
+    }
 })

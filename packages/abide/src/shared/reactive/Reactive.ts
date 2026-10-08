@@ -42,14 +42,17 @@ import { NotLanded } from './NotLanded.ts'
 import { PATCH_SINKS } from './PATCH_SINKS.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
+import { STREAMING } from './STREAMING.ts'
 import { currentScope, runInScope, type Scope } from './scoping.ts'
 import {
     CHECK,
     CLEAN,
     DIRTY,
+    detach,
     detachProbes,
     dropProbeReader,
     newSubscriber,
+    RELEASING,
     type Subscriber,
     TRACKING,
     type Tracked,
@@ -58,7 +61,7 @@ import {
     truncate,
     untracked,
 } from './tracking.ts'
-import { watchOver } from './watch.ts'
+import { owned, owning, watchOver } from './watch.ts'
 
 /**
  * The shape of a `transform`: the accepted value in, the stored value or a refusal out.
@@ -529,6 +532,17 @@ function newStream(source: Cell | null): Stream {
     }
 }
 
+/** Turns `cell` into a streaming producer, forwarding `source`'s stream when it has one. */
+function becomeStream(cell: Cell, source: Cell | null): Stream {
+    const stream = newStream(source)
+    cell.stream = stream
+    cell.plain = false
+    cell.bareWrite = false
+    simpleShape(cell)
+    cell.direct = false
+    return stream
+}
+
 /**
  * The `Retained` over a stream's closed runs, made the first time something asks for it.
  *
@@ -611,16 +625,25 @@ function retainRun(cell: Cell, stream: Stream): void {
 }
 
 /**
- * The prototype every `async function*` has, and so the declaration 9.20 reads — once, at
- * construction. Taken from a literal because the constructor has no global name.
+ * The prototype every `async function*` has, and so the declaration 9.20 reads at construction.
+ * Taken from a literal because the constructor has no global name.
  */
 const ASYNC_GENERATOR_FUNCTION = Object.getPrototypeOf(async function* () {})
+
+/** The prototype of every async generator function's own `prototype`, which its generators have. */
+const ASYNC_GENERATOR = ASYNC_GENERATOR_FUNCTION.prototype
+
+/** Whether a run handed back an async generator, which 9.20 makes the run's stream. */
+function isAsyncGenerator(value: unknown): value is AsyncGenerator {
+    if (typeof value !== 'object' || value === null) return false
+    const own = Object.getPrototypeOf(value)
+    return own !== null && Object.getPrototypeOf(own) === ASYNC_GENERATOR
+}
 
 /**
  * Whether a body is an async generator function, and so a streaming producer.
  *
- * Exported for what wraps a body and has to keep its kind — `args` in `Keyed.ts` — and for
- * `rpc.ts`, which tells a streaming handler from a plain one.
+ * Exported for what wraps a body and has to keep its kind — `args` in `Keyed.ts`.
  */
 export function isStreamBody(body: (args: never) => unknown): boolean {
     return Object.getPrototypeOf(body) === ASYNC_GENERATOR_FUNCTION
@@ -860,6 +883,13 @@ class Cell {
      * out, and this staying set is what keeps its next load from filing it again.
      */
     declare filed: boolean
+    /**
+     * Whether what this value was built in has stopped — the setup or the request that owned it.
+     *
+     * 12.14. Set by `orphan`; the value lets go of its sources once nothing
+     * reads it (`releaseOrphan`), which may be at once or when the last reader outside its owner leaves.
+     */
+    declare orphaned: boolean
 
     constructor(
         label: string,
@@ -954,6 +984,7 @@ class Cell {
         this.global = options?.global === true
         this.ref = null
         this.filed = false
+        this.orphaned = false
         simpleShape(this)
     }
 
@@ -2010,7 +2041,12 @@ function absorb(
         (settled) => {
             if (cell.generation !== generation) return
             if (answered && isFailed(settled)) refused(cell, settled)
-            else accept(cell, settled, gated)
+            // 9.20 — a run's promise resolving to an async generator hands one back too. Its
+            // probes move so `streamingOrSettled` hears the value turn.
+            else if (isAsyncGenerator(settled)) {
+                promoteToStream(cell, settled)
+                probesMoved(cell)
+            } else accept(cell, settled, gated)
         },
         (failed) => {
             if (cell.generation !== generation) return
@@ -2208,13 +2244,8 @@ function dropAdoption(cell: Cell): void {
 function forwardStream(cell: Cell, inner: Cell, adopted: Stream): void {
     let stream = cell.stream
     if (stream === null) {
-        stream = newStream(inner)
+        stream = becomeStream(cell, inner)
         stream.ordinalOffset = cell.ordinal - inner.ringBase
-        cell.stream = stream
-        cell.plain = false
-        cell.bareWrite = false
-        simpleShape(cell)
-        cell.direct = false
     }
     // The adopted version is this one's: a chunk or a patch of the stream moves both, and a write
     // made on this value is made on the stream (11.60).
@@ -2365,6 +2396,11 @@ function run(cell: Cell): void {
         refused(cell, produced)
         return
     }
+    // 9.20 — ON ANY RUN: `() => flag() ? rows() : 0` hands its generator back once the flag turns.
+    if (!primitive && isAsyncGenerator(produced)) {
+        promoteToStream(cell, produced)
+        return
+    }
     if (
         cell.bareWrite &&
         typeof (produced as PromiseLike<unknown>).then !== 'function'
@@ -2439,9 +2475,6 @@ function stopStream(stream: Stream): void {
 }
 
 function startStream(cell: Cell, stream: Stream): void {
-    stopStream(stream)
-    const run = stream.run
-    beginLoad(cell)
     // UNTRACKED. Calling an async generator function runs none of its body — every read in
     // it happens after an `await`, where 14.13 has it register against nothing — so the
     // reader standing on this stack is not one this body could ever be attributed to.
@@ -2450,6 +2483,31 @@ function startStream(cell: Cell, stream: Stream): void {
         cell.body as (args: unknown) => AsyncIterable<unknown>,
         cell.args,
     )
+    pumpRun(cell, stream, iterator)
+}
+
+/**
+ * 9.20 — a value whose run handed back an async generator: a streaming producer from that run on,
+ * the generator being the run's stream, and every start after it the body's next one.
+ */
+function promoteToStream(cell: Cell, generator: AsyncIterable<unknown>): void {
+    let stream = cell.stream
+    if (stream === null) {
+        stream = becomeStream(cell, null)
+        Object.setPrototypeOf(cell.callable as object, STREAM_PROTOTYPE)
+    }
+    pumpRun(cell, stream, generator[Symbol.asyncIterator]())
+}
+
+/** Supersedes the run in flight with one reading `iterator`. */
+function pumpRun(
+    cell: Cell,
+    stream: Stream,
+    iterator: AsyncIterator<unknown>,
+): void {
+    stopStream(stream)
+    const run = stream.run
+    beginLoad(cell)
     stream.iterator = iterator
     // 11.32 — a generator's body runs inside each `next()`, so the pump is what carries the scope.
     void runInScope(
@@ -3078,8 +3136,11 @@ function readyNow(cell: Cell): boolean {
  * it, through what the value read and what it adopted. Resolving on `servable` alone handed a
  * caller awaiting a refresh the value the refresh was replacing, and a caller awaiting a stream
  * its first chunk; reading the value's own `loading` alone did the same through an adoption.
+ *
+ * `untilStreaming` answers `STREAMING` the moment the value is a stream instead (9.20), for a
+ * reader that forwards its chunks rather than waiting out the run.
  */
-function settled(cell: Cell): Promise<unknown> {
+function settled(cell: Cell, untilStreaming = false): Promise<unknown> {
     // 1.7: awaiting a value is reaching it, so what a read would pull is pulled here too — a reload
     // an invalidate owed, a recompute a write left marked, and a reload a `ttl` drop owes (6.12):
     // with nothing served and nothing loading, the await would wait on a probe nothing moves.
@@ -3090,6 +3151,8 @@ function settled(cell: Cell): Promise<unknown> {
     if (cell.owes !== OWES_NOTHING) settleOwed(cell)
     if (cell.state !== CLEAN) resolve(cell)
     if (cell.expiry?.dropped) expire(cell)
+    if (untilStreaming && cell.stream !== null)
+        return Promise.resolve(STREAMING)
     if (cell.servable && !busyNow(cell)) return Promise.resolve(heldValue(cell))
     if (!cell.landed && !busyNow(cell)) {
         const failure = failureOf(cell)
@@ -3105,6 +3168,12 @@ function settled(cell: Cell): Promise<unknown> {
             // not yet re-run — nothing else reads it — so asking whether it is busy before
             // pulling it answers from the run that aborted, and the await never settles.
             if (cell.state !== CLEAN) resolve(cell)
+            if (untilStreaming && cell.stream !== null) {
+                waiter.alive = false
+                dropProbeReader(cell, waiter)
+                settle(STREAMING)
+                return
+            }
             if (busyNow(cell)) return
             if (cell.servable) {
                 waiter.alive = false
@@ -3146,12 +3215,14 @@ function watchCell(
     // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
     effect: (value: unknown) => void | (() => void),
 ): () => void {
-    return watchOver([cell], null, () => {
-        // 2.2 holds here as a SKIP rather than a throw: an effect has nothing to be handed
-        // until something has landed, and its turn comes when it does.
-        if (!cell.servable) return undefined
-        return effect(heldValue(cell))
-    })
+    return owned(
+        watchOver([cell], null, () => {
+            // 2.2 holds here as a SKIP rather than a throw: an effect has nothing to be handed
+            // until something has landed, and its turn comes when it does.
+            if (!cell.servable) return undefined
+            return effect(heldValue(cell))
+        }),
+    )
 }
 
 function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
@@ -3998,7 +4069,8 @@ const MEMBERS = {
         return watchCell(this[CELL], effect)
     },
     history(this: Callable, replay?: number): History<unknown> {
-        const cell = pastOf(this)
+        // The core's own reader is handed the whole cell; the server sees only its `Retained`.
+        const cell = pastOf(this) as Cell
         // 6.17: a streaming producer's past is its CLOSED runs, which is a different ring from
         // the chunk buffer `cell` carries — see `historyView`. Everything below is the same
         // arithmetic over whichever of the two the value has.
@@ -4064,7 +4136,7 @@ const MEMBERS = {
  * and this is the backstop for a fire that came late. Before any cursor exists, so 6.7 is untouched:
  * what must not observe an expiry is a LIVE cursor.
  */
-export function pastOf(value: unknown): Cell {
+export function pastOf(value: unknown): Retained {
     const cell = adoptedCellOf(value)
     if (cell.expiry !== null && cell.ringDepth > 0)
         dropExpired(cell.expiry, ringedOf(cell), standingKept(cell))
@@ -4098,6 +4170,30 @@ export function loadOf(value: unknown): number | undefined {
 }
 
 /**
+ * The generation `value`'s past stands at, or `undefined` while a load is in flight.
+ *
+ * What 21.15's `Cached` compares across a call, read through adoption as `pastOf` is.
+ */
+export function heldGenerationOf(value: unknown): number | undefined {
+    const cell = adoptedCellOf(value)
+    return cell.loading ? undefined : cell.generation
+}
+
+/**
+ * Whether `value` stands on a failure the next reach runs again rather than serves.
+ *
+ * 15.19, 15.20 — A REFUSAL BELOW 500 IS AN ANSWER, held as a production is: the caller asked for
+ * something that is not there, and asking again changes nothing. One at 500 or above, and a throw,
+ * is the server's own trouble, and holding it for a `ttl` replays an outage after it has passed.
+ */
+export function failedTransiently(value: unknown): boolean {
+    const cell = (value as Callable)[CELL]
+    const failure = cell.failure
+    if (cell.loading || failure === undefined) return false
+    return !isFailed(failure) || failure.status >= 500
+}
+
+/**
  * Ends `value`'s load in flight, refusing it with `failure`.
  *
  * 16.53 — THE LOAD IN FLIGHT, ENDED WHERE IT STANDS. The generation moves so a settle arriving after
@@ -4113,9 +4209,21 @@ export function abandonLoad(value: unknown, failure: unknown): void {
 }
 
 /**
+ * `value` settled (1.4), or `STREAMING` once it turns out to stream (9.20) — whichever comes first.
+ *
+ * A body whose promise resolves to a generator is not a stream until it does, so a reader deciding
+ * between framing chunks and answering one value has to wait for the first of the two — and is
+ * answered which it was, rather than asking `isStreaming` after and reading a later turn's state.
+ */
+export function streamingOrSettled(value: unknown): Promise<unknown> {
+    return settled((value as Callable)[CELL], true)
+}
+
+/**
  * Whether `value` is a streaming producer's `Reactive`.
  *
- * A streaming producer's own `Reactive` — a handler declared as an async generator (9.20).
+ * A streaming producer's own `Reactive` — a body declared as an async generator, or one whose run
+ * handed one back (9.20).
  */
 export function isStreaming(value: unknown): boolean {
     if (!isReactive(value)) return false
@@ -4329,6 +4437,43 @@ const SIMPLE_PROTOTYPE = brandedPrototype({
     },
 })
 
+/**
+ * Marks `cell`'s owner as stopped, and releases it where nothing reads it.
+ *
+ * 12.14 — what a component's setup or a request built a derived value in has ended. A value
+ * still read from outside it — handed to something that outlives it — stays wired until that last
+ * reader leaves (`RELEASING`), so nothing that reads it is left with a stale value.
+ */
+function orphan(cell: Cell): void {
+    cell.orphaned = true
+    if (cell.readers.length === 0 && cell.probeReaders.length === 0)
+        releaseOrphan(cell)
+}
+
+/**
+ * Lets go of everything an orphaned value reads, and leaves it owing a run.
+ *
+ * Left subscribed, a value a dropped row built stayed on its sources' reader lists for the life of
+ * the page, and an adopting one's mirror ran on every write to what it adopted. Released, it holds
+ * what it last served; a read that reaches it later — it escaped its owner — runs the body again
+ * and subscribes afresh, so it is never stale, and from then on it is nobody's to release. A
+ * stream is stopped rather than owed: it is never recomputed (14.13), only started.
+ */
+function releaseOrphan(cell: Cell): void {
+    cell.orphaned = false
+    const stream = cell.stream
+    if (stream !== null && stream.source === null) stopStream(stream)
+    dropAdoption(cell)
+    detach(cell as unknown as Subscriber)
+    cell.aborted = false
+    if (cell.body !== null && stream === null) {
+        cell.state = DIRTY
+        cell.direct = false
+    }
+}
+
+RELEASING.unread = (source: Tracked): void => releaseOrphan(source as Cell)
+
 /** Builds a `Reactive` over a new `Cell` and starts the work it is for (1.7). */
 export function createReactive<
     Stored,
@@ -4353,7 +4498,7 @@ export function createReactive<
         throw new Error(
             `${label} declares args with no parameter to gate. args belongs to a keyed reactive, whose body declares one.`,
         )
-    // 9.20, READ ONCE: the declaration is the function's kind, and nothing after this asks.
+    // 9.20 AT CONSTRUCTION for a declared stream; a body handing one back is promoted by its run.
     const streaming = body !== null && isStreamBody(body)
     const cell = new Cell(
         label,
@@ -4404,6 +4549,10 @@ export function createReactive<
     cell.callable = self as unknown as Reactive<unknown>
     if (cell.tags !== null) tagCell(cell)
     if (cell.store !== null) fileProducer(cell)
+    // 12.14 — A DERIVED VALUE IS ITS OWNER'S, as a watch is: built in a setup or a request, it
+    // lets go of what it reads once that ends and nothing else reads it. A plain value reads
+    // nothing, so it has nothing to let go of.
+    if (body !== null && owning()) owned(() => orphan(cell))
 
     // 1.7: reaching an instance starts the work it is for. For the value form that is
     // the initial write; for a body it is the first run, which 11.4 has happening once

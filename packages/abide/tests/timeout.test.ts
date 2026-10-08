@@ -27,7 +27,7 @@ afterEach(() => {
     RPC_SERVER.timeout = () => undefined
 })
 
-// THE REVERT: drop the `timeLoad` call from `call` in `#shared/rpc.ts`; the load never settles and
+// THE REVERT: drop the `timeLoad` call from `callLoad` in `#shared/reactive/callLoad.ts`; the load never settles and
 // `busy` still reads true.
 test('a load that goes its timeout without settling refuses 504 — 16.63', async () => {
     const never = GET(() => new Promise<string>(() => {}), {
@@ -56,6 +56,30 @@ test('a stream that keeps producing outlives its timeout — 16.63', async () =>
     await settled(value)
     expect(value.error()).toBeUndefined()
     expect(value.peek()).toEqual([0, 1, 2, 3])
+})
+
+// AND BEHIND A RUNG, where the value only turns out to stream once the onion resolves (9.20). THE
+// REVERT: ask `isStreaming` once, synchronously, in `timeLoad`; the run is ended 504 at 60 ms.
+test('a stream behind a rung that keeps producing outlives its timeout — 16.63, 9.20', async () => {
+    const outside = RPC_SERVER.request
+    RPC_SERVER.request = () => new Request('http://timeout.example/')
+    try {
+        const rows = GET(
+            async function* () {
+                for (let row = 0; row < 4; row += 1) {
+                    await Bun.sleep(25)
+                    yield row
+                }
+            },
+            { timeout: 60, middleware: [(next) => next()] },
+        ) as unknown as () => Loading
+        const value = rows()
+        await settled(value)
+        expect(value.error()).toBeUndefined()
+        expect(value.peek()).toEqual([0, 1, 2, 3])
+    } finally {
+        RPC_SERVER.request = outside
+    }
 })
 
 // 16.64 — WHAT THE RUN HAD SAID STAYS, and the generator is stopped. THE REVERT: drop `timeLoad`; the
@@ -106,7 +130,8 @@ test('a reload that times out keeps serving what the value held — 16.64', asyn
 
 // 16.65 — ONE CLOCK PER LOAD. A call joining at 150 ms does not start the 200 ms over: the refusal
 // lands at 200, where a joined call's own clock would have held it to 350. THE REVERT: have a call
-// that finds its load already timed re-arm that load's clock in `timeLoad`; the load runs to 350.
+// that finds its load already timed re-arm that load's clock (drop the `timed` test in `callLoad`);
+// the load runs to 350.
 test('a call joining a load does not extend its timeout — 16.65', async () => {
     const never = GET(() => new Promise<string>(() => {}), {
         timeout: 200,

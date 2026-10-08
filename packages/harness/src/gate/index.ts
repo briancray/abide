@@ -28,6 +28,7 @@
 import { test } from 'bun:test'
 
 export { inAFreshProcess } from './inAFreshProcess.ts'
+export { spawned } from './spawned.ts'
 
 /** A gate's runnable revert and the numbers the broken arm reports. */
 export type GateSpec = {

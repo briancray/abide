@@ -3,6 +3,7 @@
 // wait bounded, so a revert fails here rather than hanging the suite.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { spawned } from 'harness/gate'
 import { addressOf, appFixture, BIN, buildApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -31,13 +32,13 @@ export const fault = POST((args: { reason: string }) => {
 
 let app = ''
 
-beforeAll(() => {
+beforeAll(async () => {
     app = appFixture({
         'ui/pages/page.abide': '<main>home</main>',
         'server/app.ts': HOOKS,
         'server/rpc/probe.ts': HANDLERS,
     })
-    const built = buildApp(app)
+    const built = await buildApp(app)
     if (built.exitCode !== 0)
         throw new Error(`abide build failed: ${built.stderr}`)
 }, 30_000)
@@ -142,10 +143,10 @@ await Promise.all([first, second])
 console.log(first === second)
 `,
     )
-    const ran = Bun.spawnSync(['bun', `${app}/twice.ts`], {
+    const ran = await spawned(['bun', `${app}/twice.ts`], {
         cwd: app,
         env: { ...process.env, MARK: mark },
     })
-    expect(ran.stdout.toString().trim()).toBe('true')
+    expect(ran.stdout.trim()).toBe('true')
     expect(await Bun.file(mark).text()).toBe('stopped;')
 }, 30_000)

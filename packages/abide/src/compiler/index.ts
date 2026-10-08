@@ -7,7 +7,6 @@
 // reached only by something already doing a build. Nothing here is in any client bundle, and
 // `compiler.test.ts` holds the two apart by asserting what `abide/server` exports.
 
-export { compileFile } from './compileFile.ts'
 export { componentGraph } from './componentGraph.ts'
 export { emitClient, type SelfFill } from './emitClient.ts'
 export { emitComponent } from './emitComponent.ts'

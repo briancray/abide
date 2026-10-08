@@ -316,7 +316,8 @@ test('a hover and a jump answer about the document as the editor holds it — 38
 
     // AND WITH THE COMPONENT OPEN, its checked module is lowered rather than stood in for, and the
     // stand-in is scaffolding after the author's last line. THE REVERT: map a span of it back as a
-    // copied one (`mapBack` for `copiedFrom`); the jump lands at the end of `Card`'s markup.
+    // copied one (`ShadowMap.spanToSource` skipping its `copiedFrom`); the jump lands at the end of
+    // `Card`'s markup.
     const card = Bun.pathToFileURL(`${app}/ui/components/Card.abide`).href
     send({
         method: 'textDocument/didOpen',

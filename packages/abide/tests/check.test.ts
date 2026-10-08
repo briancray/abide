@@ -4,6 +4,7 @@
 // 14.14 to 14.17 and 31.13 — each where the read is, and nowhere a near miss stands.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { spawned } from 'harness/gate'
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
 import type { Diagnosis } from '#compiler/TypeSession.ts'
@@ -49,9 +50,11 @@ import { route } from 'abide'
 const id: string = route.params().id
 const rest: string[] = route.params().rest
 const wrong: number = route.params().id
+const named: string = route.params.id
+const listed: boolean = route.name.startsWith('/routed') && !route.navigating
 </script>
 
-<p>{id} {rest.join('/')} {wrong}</p>`
+<p>{id} {rest.join('/')} {wrong} {named} {listed} {route.url.pathname}</p>`
 
 const LINKED = `<script>
 import { url } from 'abide'
@@ -296,7 +299,7 @@ test('a tag is held to the props its component declares, on the attribute — 38
     expect(reported).toEqual([
         // Nothing on the `{ get, set }` pair: `set`'s parameter is typed by what `get` answers
         // (32.6), and no 14.16 warning on either member (14.18). THE REVERTS: drop `__bound`'s
-        // pair overload, or the `__bound` arm of `runsSynchronously`; a finding lands on its line.
+        // pair overload, or the `componentBind` arm of `runsSynchronously`; a finding lands on its line.
         // A value of the wrong type — a name read by name is its value (31.1).
         { ...at('<Card title={count}', 13), code: 2322 },
         // A prop the component does not declare.
@@ -360,7 +363,7 @@ test('a write after a line with no semicolon checks as its own statement — 38.
 })
 
 // 23.9 — A PAGE READS WHAT ITS OWN ROUTE PROMISES: `id` is text, a rest is a list, and nothing else
-// is there. THE REVERT: drop `routeParamsReads` from the classify pass; `params` is the shared
+// is there. THE REVERT: drop the `routeParams` a read of it carries; `params` is the shared
 // `Record<string, string | string[]>`, and `id` and `rest` are refused (TS2322) as well as `wrong`,
 // three findings where the one is due.
 test('route.params in a page is typed by its own route — 23.9', () => {
@@ -472,6 +475,177 @@ test('an unkeyed loop over a body holding state warns at its subject — 32.14',
     ])
 })
 
+// 33.11 — AN INDEX SIGNATURE BESIDE TYPED PROPS LEAVES THEM TYPED. `size` indexes a record by its
+// declared keys and `onclick` is a declared function, under `strict` and `noUncheckedIndexedAccess`
+// as an app's own project sets them. THE REVERT: map `__accessors` over `Exclude<keyof Record, …>`
+// again; over an index signature that is `string | number`, the named keys go, and `size` and
+// `color` are indexes the records refuse (TS7053, 4) and accessors that may be `undefined` (TS2344).
+test('an index signature beside typed props leaves them typed — 33.11', async () => {
+    const indexed = appFixture({
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                strict: true,
+                target: 'esnext',
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                noEmit: true,
+                skipLibCheck: true,
+                noUncheckedIndexedAccess: true,
+            },
+            include: ['.'],
+        }),
+        'ui/components/Button.abide': `<script>
+import { props } from 'abide'
+
+const SIZES = { sm: 'p-1', md: 'p-2' }
+const COLORS = { stone: 'bg-stone-700', lime: 'bg-lime-700' }
+
+const { size, color, ...attributes } = props<{
+    size?: keyof typeof SIZES
+    color?: keyof typeof COLORS
+    onclick?: (event: MouseEvent) => void
+    [attribute: string]: unknown
+}>()
+</script>
+
+{#if attributes.href}
+    <a class="{color ? COLORS[color] : ''} {size ? SIZES[size] : ''}" {...attributes}><slot/></a>
+{:else}
+    <button class="{color ? COLORS[color] : ''} {size ? SIZES[size] : ''}" {...attributes}><slot/></button>
+{/if}`,
+        'ui/pages/page.abide': `<script>
+import Button from '#ui/components/Button.abide'
+</script>
+<Button size="sm" color="lime" onclick={(event) => console.log(event.clientX)}>go</Button>`,
+    })
+    expect(await checkApp(indexed)).toEqual([])
+}, 60_000)
+
+// 4.15 WITHOUT `strictNullChecks`, as an app ported from untyped code may run. `undefined` is then
+// assignable to a body, so the value opening at it has to be resolved ahead of every body. THE
+// REVERT: drop the `initial: undefined` overload at the head of `reactive`'s; `reactive<Thing |
+// undefined>(undefined)` is a stream of `Thing`, and `go` is a member `Thing[]` lacks (TS2339, 1).
+test('a value opening at undefined is a value with strict off — 4.15', async () => {
+    const loose = appFixture({
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                strict: false,
+                target: 'esnext',
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                noEmit: true,
+                skipLibCheck: true,
+            },
+            include: ['.'],
+        }),
+        'ui/pages/page.abide': `<script>
+import { reactive } from 'abide'
+
+type Thing = { go: () => void }
+let thing = reactive<Thing | undefined>(undefined)
+const run = () => thing?.go()
+</script>
+<button onclick={run}>go</button>`,
+    })
+    expect(await checkApp(loose)).toEqual([])
+}, 60_000)
+
+// 33.23 THROUGH `abide check` — a component typed `& Attributes<'button'>` that spreads its rest onto a
+// `<button>`: a caller's static text, a bare attribute, microdata and a typed listener are each held
+// to what a button takes, and a `type` it does not take is refused. THE REVERT: drop `Written` from
+// `Attributes`; `tabindex="-1"` is text where a number is due and is refused beside `type="banana"`.
+test('a component typed by Attributes holds its callers to the element — 33.23', async () => {
+    const attributed = appFixture({
+        'ui/components/Button.abide': `<script>
+import { props, type Attributes } from 'abide'
+
+const SIZES = { sm: 'p-1', md: 'p-2' }
+
+const { size = 'md', ...attributes } = props<{ size?: keyof typeof SIZES } & Attributes<'button'>>()
+</script>
+
+<button class={SIZES[size]} {...attributes}><slot/></button>`,
+        'ui/pages/page.abide': `<script>
+import Button from '#ui/components/Button.abide'
+</script>
+<Button size="sm" type="submit" tabindex="-1" disabled itemprop="action" aria-disabled={true} data-id="7" onclick={(event) => console.log(event.currentTarget.form, event.clientX)}>go</Button>
+<Button type="banana">no</Button>`,
+    })
+    expect(
+        (await checkApp(attributed)).map(({ path, line, code }) => ({
+            file: path.split('/ui/')[1],
+            line,
+            code,
+        })),
+    ).toEqual([{ file: 'pages/page.abide', line: 5, code: 2322 }])
+}, 60_000)
+
+// 33.26 THROUGH `abide check` — an icon typed `Attributes<'svg'>`: `viewBox` keeps its case on the
+// component tag and is typed, and an attribute SVG does not have is refused. THE REVERT: type an SVG
+// tag by the HTML derivation; the first icon's `viewBox` is refused beside the second's `radius`.
+test('a component typed by Attributes over an SVG element holds its callers to it — 33.26', async () => {
+    const icon = appFixture({
+        'ui/components/Icon.abide': `<script>
+import { props, type Attributes } from 'abide'
+
+const { class: className = '', ...attributes } = props<Attributes<'svg'>>()
+</script>
+
+<svg class="size-6 {className}" fill="none" stroke="currentColor" {...attributes}><slot/></svg>`,
+        'ui/pages/page.abide': `<script>
+import Icon from '#ui/components/Icon.abide'
+</script>
+<Icon viewBox="0 0 24 24" stroke-width={1.5} aria-hidden="true"><path d="M0 0"/></Icon>
+<Icon radius="4"/>`,
+    })
+    expect(
+        (await checkApp(icon)).map(({ path, line, code }) => ({
+            file: path.split('/ui/')[1],
+            line,
+            code,
+        })),
+    ).toEqual([{ file: 'pages/page.abide', line: 5, code: 2353 }])
+}, 60_000)
+
+// 34.12, 34.13 — A GENERIC COMPONENT: its body is checked for every `Item` at once, and a caller's
+// props infer it. The first caller is right and its handler reads a field only its own type has;
+// the second hands a handler for another type, and the third a list the constraint refuses. THE
+// REVERT: drop `genericDeclarations` from the projection; `Item` is a name nothing declares and the
+// component's own lines are refused (TS2304) beside the two callers.
+test('a generic component is checked in its body and inferred at its callers — 34.13', async () => {
+    const generic = appFixture({
+        'ui/components/Select.abide': `<script lang="ts" generics="Item extends { id: string; label: string }">
+import { props } from 'abide'
+const { items, onpick } = props<{ items: Item[]; onpick: (item: Item) => void }>()
+const label: string = items[0]?.label ?? ''
+</script>
+<ul>{#for item of items by item.id}<li onclick={() => onpick(item)}>{item.label}</li>{/for}</ul><p>{label}</p>`,
+        'ui/pages/page.abide': `<script>
+import Select from '#ui/components/Select.abide'
+type Film = { id: string; label: string; year: number }
+const films: Film[] = [{ id: 'a', label: 'Alien', year: 1979 }]
+function picked(film: Film) { const year: number = film.year; void year }
+function other(film: { id: string; label: string; year: string }) { void film }
+</script>
+<Select items={films} onpick={picked}/>
+<Select items={films} onpick={other}/>
+<Select items={[{ id: 1 }]} onpick={() => {}}/>`,
+    })
+    const found = await checkApp(generic)
+    expect(
+        found.map(({ path, line, code }) => ({
+            file: path.split('/ui/')[1],
+            line,
+            code,
+        })),
+    ).toEqual([
+        { file: 'pages/page.abide', line: 9, code: 2322 },
+        { file: 'pages/page.abide', line: 10, code: 2322 },
+    ])
+}, 60_000)
+
 // 32.32 — A VALUE DECLARED IN ANOTHER MODULE KEYS BY ITS `by` TOO, imported under its own name or
 // another. THE REVERT: read `by` off the page's own setup text rather than the checker's
 // declaration; both imported loops warn (3 against 1).
@@ -512,7 +686,7 @@ test('a check reports what only building the whole app refuses — 19.16', async
 
 // 16.40 — A `Reactive` NESTED IN WHAT A HANDLER RETURNS is refused, by the handler and the path to
 // it; one returned whole is adopted (11.12) and is not — `getUser` is declared first, so a refusal
-// of it would be the one read. THE REVERT: skip `nestedReactiveIn` in `handlersIn`; the check reads
+// of it would be the one read. THE REVERT: skip `nestedReactiveIn` in `declaredExports`; the check reads
 // 0 refusals where 1 is due, in each app.
 test('a handler returning a Reactive nested in its value is refused by path — 16.40', async () => {
     const refusals = async (handlers: string) => {
@@ -581,19 +755,19 @@ test('a compile carries the warnings a check reports — 14.14, 32.14', async ()
 // A FAILURE WHERE ANY FINDING IS AN ERROR, and a success where they are warnings alone — which is
 // what `abide check && abide build` in CI rests on. THE REVERT: return 0 from `check` whatever it
 // found; the first spawn exits 0 over four errors.
-test('abide check fails on an error and passes on warnings alone — 38.3', () => {
-    const all = Bun.spawnSync(['bun', BIN, 'check', '--root', app], {
+test('abide check fails on an error and passes on warnings alone — 38.3', async () => {
+    const all = await spawned(['bun', BIN, 'check', '--root', app], {
         cwd: app,
     })
     expect(all.exitCode).toBe(1)
-    const said = all.stdout.toString()
+    const said = all.stdout
     expect(said).toContain(
         `ui/pages/broken/page.abide:${place(BROKEN, 'toUpperCase').line}:`,
     )
-    const warned = Bun.spawnSync(
+    const warned = await spawned(
         ['bun', BIN, 'check', '--root', app, 'ui/pages/warned'],
         { cwd: app },
     )
     expect(warned.exitCode).toBe(0)
-    expect(warned.stdout.toString()).toContain('0 errors, 8 warnings')
+    expect(warned.stdout).toContain('0 errors, 8 warnings')
 }, 60_000)

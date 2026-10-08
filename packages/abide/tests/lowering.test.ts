@@ -226,7 +226,7 @@ test('a parameter is not a read', async () => {
 
 // 31.3 — A NAME HOLDS THE `Reactive` ONLY WHERE THE DECLARED TYPE OF ITS POSITION IS ONE, and a
 // name re-bound by a function, a block, a loop or a catch is a different position. THE REVERT:
-// take reads by SPELLING — every identifier whose text is a reactive name — rather than the references `TypeSession.readsFor` asks the checker for; every body below lowers its own binding as a read — 11 wrong rewrites where 0 are
+// take reads by SPELLING — every identifier whose text is a reactive name — rather than the references `readsIn` asks the checker for; every body below lowers its own binding as a read — 11 wrong rewrites where 0 are
 // due, each of them `n is not a function` on the first run.
 test('a binding shadows the page value for the body it is bound in — 31.3', async () => {
     expect(await lower('function f(n) { return n }', N)).toBe(
@@ -278,7 +278,7 @@ test('a binding shadows the page value for the body it is bound in — 31.3', as
 // `T` that would INFER to a `Reactive` from this very argument is not one — `structuredClone(n)`
 // snapshots. And a union is `Reactive`-typed only where every member is: `s.set` also takes a
 // plain value, so `m.set(n)` still reads. THE REVERT: drop the `holding` pass in
-// `TypeSession.readsFor`; the first five lower to a read — 5 wrong rewrites, and `watch` is
+// `readsIn`; the first five lower to a read — 5 wrong rewrites, and `watch` is
 // handed a string where it walks a source's readers.
 test('a position declared as a Reactive holds the Reactive — 31.3', async () => {
     const NM = new Set(['n', 'm'])
@@ -325,7 +325,7 @@ test('a position typed as a Selection holds the Reactive — 31.14', async () =>
 // default export a `Reactive`. A binding is an import's or a declaration's and the clause does not
 // tell them apart, so the page reads, writes (31.4) and holds (31.3) an imported one exactly as it
 // does its own, and the explicit spelling keeps compiling (31.7). THE REVERT: collect only the
-// top-level `const`/`let`/`var` names in `TypeSession.readsFor`; the four reads and the write are
+// top-level `const`/`let`/`var` names in `readsIn`; the four reads and the write are
 // then left as written — 5 wrong where 0 are due, and `onboarding.text` reads a field of the
 // `Reactive` object, which is `undefined` on a page with nothing to say so.
 test('an imported Reactive is read and written by name — 31.1', async () => {
@@ -385,7 +385,7 @@ test('a value lowered by recursion keeps the shadow it stands in', async () => {
     )
 })
 
-// A NAME CAN STAND WHERE NO VALUE IS READ AT ALL. THE REVERT: take reads by SPELLING — every identifier whose text is a reactive name — rather than the references `TypeSession.readsFor` asks the checker for; the label and the
+// A NAME CAN STAND WHERE NO VALUE IS READ AT ALL. THE REVERT: take reads by SPELLING — every identifier whose text is a reactive name — rather than the references `readsIn` asks the checker for; the label and the
 // class field lower to `n(): while … break n()` and `class C { n.set(1) }` — 2 modules that do
 // not parse.
 test('a label, a class member and a declared name are not reads', async () => {
@@ -758,7 +758,7 @@ test('a postfix update is worth the value it read', async () => {
 // token before its brace is a `(` — while at the head of a SCRIPT the same brace is a block.
 test('an object literal opening a fragment expands its shorthand', async () => {
     const page = await typed('<p data-x={{n}}></p>', N)
-    expect(emitComponent(page.file, page.reads)).toContain('{n: n()}')
+    expect(emitComponent(page.file, page.answer)).toContain('{n: n()}')
     expect(await lower('{n}', N)).toBe('{n()}')
     expect(await lower('x = { n }', N)).toBe('x = { n: n() }')
     expect(await lower('n = { n }', N)).toBe('n.set({ n: n() })')
@@ -934,7 +934,7 @@ test('an optional chain is a member reach on both guards', async () => {
 
 // 19.12 — the shapes a scan of the tokens answered wrong, each of which emitted a module that does
 // not parse or read the wrapper where its value was due. The checker answers every one of them;
-// THE REVERT for all of them is to take reads by SPELLING — every identifier whose text is a reactive name — rather than the references `TypeSession.readsFor` asks the checker for.
+// THE REVERT for all of them is to take reads by SPELLING — every identifier whose text is a reactive name — rather than the references `readsIn` asks the checker for.
 test('a scope that is not a function body is not a var boundary', async () => {
     // `var` inside a catch hoists to the enclosing FUNCTION.
     expect(

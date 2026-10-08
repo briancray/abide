@@ -1,0 +1,623 @@
+import type { Node } from 'typescript/unstable/ast'
+import { SyntaxKind } from 'typescript/unstable/ast'
+import {
+    isArrayLiteralExpression,
+    isCallExpression,
+    isExportAssignment,
+    isFunctionDeclaration,
+    isIdentifier,
+    isNoSubstitutionTemplateLiteral,
+    isObjectLiteralExpression,
+    isPropertyAccessExpression,
+    isPropertyAssignment,
+    isStringLiteral,
+    isVariableDeclaration,
+} from 'typescript/unstable/ast/is'
+import {
+    type Symbol as CheckedSymbol,
+    type Checker,
+    ObjectFlags,
+    type ObjectType,
+    type Project,
+    SignatureKind,
+    SymbolFlags,
+    type Type,
+    TypeFlags,
+    type TypeReference,
+    type UnionOrIntersectionType,
+} from 'typescript/unstable/async'
+import type { Mount } from '#server/answerRpc.ts'
+import type { CopyOptions } from '#shared/CopyOptions.ts'
+import {
+    type Defaults,
+    defaultsInSource,
+} from '#shared/reactive/parameterDefaults.ts'
+import type { Method } from '#shared/rpc.ts'
+import { aliasedSymbol } from './aliasedSymbol.ts'
+import { defaultedMembers, parameterPattern } from './argsDefaultsIn.ts'
+import { argsSchemaOf } from './argsSchemaOf.ts'
+import { diagnosisAt } from './lineOf.ts'
+import { isReactiveCall, optionNamed } from './reactiveOptions.ts'
+import {
+    abideIn,
+    boundInitializer,
+    isReactiveMember,
+    valueTypeOf,
+} from './reactiveTypes.ts'
+import type { Diagnosis } from './TypeSession.ts'
+
+/**
+ * Every value each module exports, with the abide method that declares it.
+ *
+ * 19.16 — EVERY VALUE EACH MODULE EXPORTS, and the method of the abide call that declares it, or
+ * `undefined` where it is not one. The checker's own export table, so a name exported apart from
+ * its declaration, under another name or from another module is the same export it is to an
+ * importer; and the callee's own symbol, so `GET` imported under another name or through a
+ * namespace is abide's, and an app's own function of that spelling is not. A type is not an
+ * export here: it is erased, and has no address to answer at.
+ *
+ * `projectName` is the tsconfig the project was opened on, which a module outside it is refused by.
+ */
+export async function declaredExports(
+    project: Project,
+    projectName: string,
+    paths: readonly string[],
+): Promise<DeclaredExport[][]> {
+    const checker = project.checker
+    // ABIDE'S FILE AS THE CHECKER NAMES IT, not as this module does: it canonicalises a path to
+    // the disk's case rules, so on a case-insensitive disk `/Users/…/Code` comes back
+    // `/users/…/code` and a string compared against `import.meta.url` never matched.
+    const methodsPath = (await project.program.getSourceFile(METHODS_SOURCE))
+        ?.path
+    const socketPath = (await project.program.getSourceFile(SOCKET_SOURCE))
+        ?.path
+    const abide = await abideIn(project)
+    return allSettled(
+        paths.map(async (path) => {
+            const sourceFile = await project.program.getSourceFile(path)
+            if (sourceFile === undefined)
+                throw new Error(
+                    `abide: ${path} is not inside the project ${projectName}, so what it exports cannot be read (19.16). Give the app a tsconfig whose include reaches it.`,
+                )
+            const module = await checker.getSymbolAtLocation(sourceFile)
+            if (module === undefined) return []
+            const exports = await checker.getExportsOfModule(module)
+            const found = await allSettled(
+                exports.map(async (exported) => {
+                    const target = await aliasedSymbol(checker, exported)
+                    if ((target.flags & SymbolFlags.Value) === 0)
+                        return undefined
+                    const declared = await declaringMethod(
+                        checker,
+                        target,
+                        methodsPath,
+                        socketPath,
+                    )
+                    const unread: Diagnosis[] = []
+                    for (const value of declared?.unread ?? []) {
+                        const file = value.getSourceFile()
+                        unread.push(
+                            diagnosisAt(
+                                file.fileName === sourceFile.fileName
+                                    ? path
+                                    : file.fileName,
+                                file.text,
+                                value.getStart(),
+                                'warning',
+                                `abide: \`${value.parent.getText()}\` is not a value the build can read, so \`${exported.name}\`'s browser copy is built without it. Write it as a literal, or as a \`const\` whose type is one. RULEBOOK 18.30.`,
+                            ),
+                        )
+                    }
+                    // 19.10 — a handler's args, as its annotation types them.
+                    const handlerType =
+                        declared === undefined || declared.method === 'SOCKET'
+                            ? undefined
+                            : await checker.getTypeOfSymbol(target)
+                    if (handlerType !== undefined && abide.reactive) {
+                        const at = await nestedReactiveIn(
+                            checker,
+                            abide.reactive,
+                            await valueOfRpc(checker, handlerType),
+                            '',
+                            { seen: new Set(), depth: 0 },
+                        )
+                        if (at !== undefined)
+                            throw new Error(
+                                `abide: ${path} — \`${exported.name}\` returns a \`Reactive\` at \`${at}\`, which the wire would carry as the function it is rather than the value it holds. Read it there, or return the \`Reactive\` itself to have it adopted (11.12). RULEBOOK 16.40.`,
+                            )
+                    }
+                    return {
+                        name: exported.name,
+                        method: declared?.method,
+                        ui: declared?.ui ?? true,
+                        cli: declared?.cli ?? true,
+                        description: declared?.description,
+                        copy: declared?.copy,
+                        defaults: declared?.defaults,
+                        args:
+                            handlerType === undefined
+                                ? undefined
+                                : await argsSchemaOf(
+                                      checker,
+                                      handlerType,
+                                      declared?.defaulted ?? [],
+                                  ),
+                        unread,
+                    }
+                }),
+            )
+            const handlers: DeclaredExport[] = []
+            for (const entry of found)
+                if (entry !== undefined) handlers.push(entry)
+            return handlers
+        }),
+    )
+}
+
+/** Where abide declares the five methods: `GET` is `declare('GET')` there and nowhere else. */
+const METHODS_SOURCE = new URL('../shared/rpc.ts', import.meta.url).pathname
+/** And where it declares `socket` (18.1), which a module under `server/sockets` exports. */
+const SOCKET_SOURCE = new URL('../shared/socket.ts', import.meta.url).pathname
+
+/** What declared an export: one of the five methods, or `socket`. */
+type Declared = Mount['method']
+type DeclaredExport = Pick<
+    Mount,
+    'name' | 'ui' | 'cli' | 'copy' | 'defaults' | 'args' | 'description'
+> & {
+    method: Declared | undefined
+    /** 18.30 — what its copy's options declare and the build could not read. */
+    unread: Diagnosis[]
+}
+const METHODS = new Set<string>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+
+/**
+ * The method of the abide call a value is declared by — `const x = GET(…)` or `export default
+ * GET(…)` — or `undefined` where it is declared any other way.
+ */
+async function declaringMethod(
+    checker: Checker,
+    symbol: CheckedSymbol,
+    methodsPath: string | undefined,
+    socketPath: string | undefined,
+): Promise<
+    | {
+          method: Declared
+          ui: boolean
+          cli: boolean
+          description: string | undefined
+          copy: CopyOptions | undefined
+          unread: Node[]
+          defaulted?: string[]
+          defaults?: Defaults | undefined
+      }
+    | undefined
+> {
+    const declaration = await symbol.valueDeclaration?.resolve()
+    const call =
+        declaration === undefined
+            ? undefined
+            : isVariableDeclaration(declaration)
+              ? declaration.initializer
+              : isExportAssignment(declaration)
+                ? declaration.expression
+                : undefined
+    if (call === undefined || !isCallExpression(call)) return undefined
+    const callee = isPropertyAccessExpression(call.expression)
+        ? call.expression.name
+        : call.expression
+    const named = await checker.getSymbolAtLocation(callee)
+    if (named === undefined) return undefined
+    const method = await aliasedSymbol(checker, named)
+    const ui = !withheldFrom(call, 'ui')
+    const cli = !withheldFrom(call, 'cli')
+    const description = describedAs(call)
+    if (
+        method.name === 'socket' &&
+        socketPath !== undefined &&
+        method.valueDeclaration?.path === socketPath
+    )
+        return {
+            method: 'SOCKET',
+            ui,
+            cli,
+            description,
+            copy: undefined,
+            unread: [],
+        }
+    if (
+        !METHODS.has(method.name) ||
+        methodsPath === undefined ||
+        method.valueDeclaration?.path !== methodsPath
+    )
+        return undefined
+    const declared =
+        method.name === 'GET'
+            ? await declaredCopy(checker, call.arguments[0])
+            : { copy: undefined, unread: [] }
+    const body = await handlerBodyOf(checker, call.arguments[0])
+    // 16.33 — A HANDLER RETURNING AN ASYNC GENERATOR ANSWERS A STREAM, and the browser's copy has to
+    // read it as one rather than wait out the whole response: the one thing about it the build can
+    // tell from its type and the wire cannot tell from its first byte in time. A mutation's stream is
+    // read the same way.
+    if (await returnsGenerator(checker, body))
+        declared.copy = { ...declared.copy, stream: true }
+    return {
+        method: method.name as Method,
+        ui,
+        cli,
+        description,
+        ...declared,
+        defaulted: defaultedMembers(body),
+        defaults: literalDefaults(body) ?? undefined,
+    }
+}
+
+/**
+ * The function a handler call is handed, followed through names and `reactive(…)`.
+ *
+ * What a handler call is handed, followed to its function — written inline, bound to a name,
+ * declared as a function, or handed to `reactive` first — or what it is where it is no function.
+ */
+async function handlerBodyOf(
+    checker: Checker,
+    handed: Node | undefined,
+): Promise<Node | undefined> {
+    const node = await declarationOf(checker, handed)
+    return node !== undefined && isCallExpression(node) && isReactiveCall(node)
+        ? await declarationOf(checker, node.arguments[0])
+        : node
+}
+
+const TRANSPILER = new Bun.Transpiler({ loader: 'ts' })
+
+/**
+ * The literal defaults a handler's parameter pattern writes, read as the runtime reads them.
+ *
+ * 11.29 — THE PATTERN'S OWN TEXT, TRANSPILED, through the reader the runtime uses on a body's
+ * `toString()`: the server keys by what that reader makes of the handler, so the browser's copy is
+ * handed the same answer rather than a second opinion of it. A default it cannot read is the
+ * refusal the server would raise at import, raised here first.
+ */
+function literalDefaults(node: Node | undefined): Defaults | null {
+    const pattern = parameterPattern(node)
+    if (pattern === undefined) return null
+    try {
+        return defaultsInSource(
+            TRANSPILER.transformSync(
+                `export default (${pattern.getText()}) => 0`,
+            ),
+        )
+    } catch (thrown) {
+        throw new Error(
+            `abide: ${pattern.getSourceFile().fileName}: ${(thrown as Error).message}`,
+        )
+    }
+}
+
+/**
+ * The browser-copy options a `GET` declares, read statically, and the values that could not be.
+ *
+ * 18.19 — WHAT A `GET`'s VALUE DECLARES THAT ITS BROWSER COPY BEHAVES BY, read off its declaration for
+ * 20.4's reason: what the build can read without running it. The `reactive(…)` the `GET` is handed,
+ * and the options object it is handed, each written inline or bound to a name first. A value is
+ * read off its TYPE, so `history: SIZE` over a `const SIZE = 3` carries 3 as `history: 3` does: a
+ * string `by`, string `tags`, a number `history`, and an `identity` of abide's `structural`. A
+ * function form has no serialisation and stays the server's. 18.30 — anything else of `by`, `tags`
+ * or `history` is handed back UNREAD, for the build to warn on.
+ */
+async function declaredCopy(
+    checker: Checker,
+    handed: Node | undefined,
+): Promise<{ copy: CopyOptions | undefined; unread: Node[] }> {
+    const unread: Node[] = []
+    const call = await boundValue(checker, handed)
+    if (call === undefined || !isCallExpression(call) || !isReactiveCall(call))
+        return { copy: undefined, unread }
+    const options = await boundValue(checker, call.arguments[1])
+    if (options === undefined || !isObjectLiteralExpression(options))
+        return { copy: undefined, unread }
+    const copy: CopyOptions = {}
+    for (const property of options.properties) {
+        if (!isPropertyAssignment(property) || !isIdentifier(property.name))
+            continue
+        const value = property.initializer
+        const name = property.name.text
+        if (name === 'identity') {
+            if (
+                isIdentifier(value) &&
+                (await isAbideStructural(checker, value))
+            )
+                copy.identity = 'structural'
+        } else if (name === 'by' || name === 'history' || name === 'tags') {
+            const type = await checker.getTypeAtLocation(value)
+            if (type === undefined) continue
+            if (
+                (await checker.getSignaturesOfType(type, SignatureKind.Call))
+                    .length > 0
+            )
+                continue
+            if (name === 'by' && type.isStringLiteralType())
+                copy.by = type.value
+            else if (name === 'history' && type.isNumberLiteralType())
+                copy.history = type.value
+            else if (name === 'tags') {
+                const tags = await stringLiteralsOf(checker, value, type)
+                if (tags === undefined) unread.push(value)
+                else copy.tags = tags
+            } else unread.push(value)
+        }
+    }
+    return {
+        copy: Object.keys(copy).length > 0 ? copy : undefined,
+        unread,
+    }
+}
+
+/**
+ * `Promise.all`, rejecting only once every promise has settled.
+ *
+ * A refusal thrown for one export ends the build, which closes the checker: a sibling's request
+ * still in flight then writes to a closed pipe, and that throws from outside the build.
+ */
+async function allSettled<T>(promises: Promise<T>[]): Promise<T[]> {
+    const settled = await Promise.allSettled(promises)
+    const values: T[] = []
+    for (const outcome of settled) {
+        if (outcome.status === 'rejected') throw outcome.reason
+        values.push(outcome.value)
+    }
+    return values
+}
+
+/**
+ * Whether a handler's function returns an async generator, and so streams (9.20): declared
+ * `async function*`, an arrow handing one back or a promise of one, or a member naming one
+ * (`claudeCode.bridge`).
+ */
+async function returnsGenerator(
+    checker: Checker,
+    body: Node | undefined,
+): Promise<boolean> {
+    if (body === undefined) return false
+    let returned = await valueTypeOf(
+        checker,
+        isFunctionDeclaration(body) && body.name !== undefined
+            ? body.name
+            : body,
+    )
+    if (
+        returned !== undefined &&
+        ((returned as ObjectType).objectFlags & ObjectFlags.Reference) !== 0 &&
+        (await returned.getSymbol())?.name === 'Promise'
+    )
+        [returned] = await checker.getTypeArguments(returned as TypeReference)
+    if (returned === undefined) return false
+    // An async generator's own members: `sse(…)`'s `Values` and a `ReadableStream` are iterated
+    // too, and neither is typed as a stream.
+    let iterates = false
+    let throws = false
+    for (const member of await checker.getPropertiesOfType(returned)) {
+        if (member.name.startsWith('__@asyncIterator@')) iterates = true
+        else if (member.name === 'throw') throws = true
+    }
+    return iterates && throws
+}
+
+/** `boundValue`, and a function declaration where the name is one. */
+async function declarationOf(
+    checker: Checker,
+    node: Node | undefined,
+): Promise<Node | undefined> {
+    if (node === undefined || !isIdentifier(node)) return node
+    const named = await checker.getSymbolAtLocation(node)
+    if (named === undefined) return undefined
+    const declared = await (
+        await aliasedSymbol(checker, named)
+    ).valueDeclaration?.resolve()
+    if (declared !== undefined && isFunctionDeclaration(declared))
+        return declared
+    return boundInitializer(checker, named)
+}
+
+/** A node, or where it is a name, what the name was initialised with. */
+async function boundValue(
+    checker: Checker,
+    node: Node | undefined,
+): Promise<Node | undefined> {
+    if (node === undefined || !isIdentifier(node)) return node
+    const named = await checker.getSymbolAtLocation(node)
+    return named === undefined ? undefined : boundInitializer(checker, named)
+}
+
+/**
+ * A list of names: an array literal of string-literal-typed elements, or a tuple type of string
+ * literals (`as const`). `undefined` where it is anything else.
+ */
+async function stringLiteralsOf(
+    checker: Checker,
+    value: Node,
+    type: Type,
+): Promise<string[] | undefined> {
+    const names: string[] = []
+    if (isArrayLiteralExpression(value)) {
+        for (const element of value.elements) {
+            const each = await checker.getTypeAtLocation(element)
+            if (each === undefined || !each.isStringLiteralType())
+                return undefined
+            names.push(each.value)
+        }
+        return names
+    }
+    if (!(await checker.isTupleType(type))) return undefined
+    for (const each of await checker.getTypeArguments(type as TypeReference)) {
+        if (!each.isStringLiteralType()) return undefined
+        names.push(each.value)
+    }
+    return names
+}
+
+/**
+ * Whether a name resolves to abide's own `structural` comparator.
+ *
+ * Abide's own comparator, by its symbol rather than its spelling: an app's function of the same name
+ * is not the one the browser's copy would be handed.
+ */
+async function isAbideStructural(
+    checker: Checker,
+    named: Node,
+): Promise<boolean> {
+    const symbol = await checker.getSymbolAtLocation(named)
+    if (symbol === undefined) return false
+    const target = await aliasedSymbol(checker, symbol)
+    return (
+        target.name === 'structural' &&
+        (target.valueDeclaration?.path ?? '').endsWith(
+            '/shared/reactive/structural.ts',
+        )
+    )
+}
+
+/**
+ * The `description` a handler call declares inline, where it is written as a literal.
+ *
+ * What the build can read without running the handler, as `withheldFrom` reads `clients` — for
+ * the shell, which lists the table the build wrote. A description built at run time still reaches
+ * OpenAPI and MCP off the handler itself, and is not in the table.
+ */
+function describedAs(
+    call: Node & { arguments?: readonly Node[] },
+): string | undefined {
+    const options = call.arguments?.[1]
+    if (options === undefined || !isObjectLiteralExpression(options))
+        return undefined
+    const description = optionNamed(options, 'description')
+    return description !== undefined &&
+        (isStringLiteral(description) ||
+            isNoSubstitutionTemplateLiteral(description))
+        ? description.text
+        : undefined
+}
+
+/**
+ * Whether a handler call declares `clients: { [surface]: false }` inline.
+ *
+ * 20.4, 38.63 — written on the declaration, which is what the build can read without running it:
+ * `ui: false` hands a browser no wrapper, and importing the handler from `#ui` is 16.30's compile
+ * error; `cli: false` keeps it off the shell's listing, which reads the table the build wrote (38.7).
+ * An options object built elsewhere is not read, and leaves the surface in place.
+ */
+function withheldFrom(
+    call: Node & { arguments?: readonly Node[] },
+    surface: 'ui' | 'cli',
+): boolean {
+    const options = call.arguments?.[1]
+    if (options === undefined || !isObjectLiteralExpression(options))
+        return false
+    const clients = optionNamed(options, 'clients')
+    return (
+        clients !== undefined &&
+        isObjectLiteralExpression(clients) &&
+        optionNamed(clients, surface)?.kind === SyntaxKind.FalseKeyword
+    )
+}
+
+/**
+ * What a handler's value is, as its `Rpc` hands it back: the `Reactive` its call returns, read.
+ *
+ * `Kept<Awaited<…>>` has already adopted a `Reactive` returned whole (11.12), so what is left of
+ * one here is nested.
+ */
+async function valueOfRpc(
+    checker: Checker,
+    rpc: Type,
+): Promise<Type | undefined> {
+    const [call] = await checker.getSignaturesOfType(rpc, SignatureKind.Call)
+    const returned =
+        call === undefined
+            ? undefined
+            : await checker.getReturnTypeOfSignature(call)
+    if (returned === undefined) return undefined
+    const [read] = await checker.getSignaturesOfType(
+        returned,
+        SignatureKind.Call,
+    )
+    return read === undefined
+        ? undefined
+        : checker.getReturnTypeOfSignature(read)
+}
+
+/**
+ * 16.40 — the path to the first `Reactive` nested in a handler's value, or `undefined`.
+ *
+ * `.name` for a member, `[]` for an array's items and `[n]` for a tuple's. A callable that is not
+ * a `Reactive` is not walked — it cannot be JSON, and a lib type's methods are most of what it is —
+ * and nor is anything deeper than `argsSchemaOf`'s depth, for its reason.
+ */
+async function nestedReactiveIn(
+    checker: Checker,
+    reactive: CheckedSymbol,
+    type: Type | undefined,
+    path: string,
+    walk: { seen: Set<number>; depth: number },
+): Promise<string | undefined> {
+    if (type === undefined || walk.depth > 8) return undefined
+    if (type.flags & TypeFlags.Union) {
+        for (const member of await (
+            type as UnionOrIntersectionType
+        ).getTypes()) {
+            const found = await nestedReactiveIn(
+                checker,
+                reactive,
+                member,
+                path,
+                walk,
+            )
+            if (found !== undefined) return found
+        }
+        return undefined
+    }
+    if (!(type.flags & (TypeFlags.Object | TypeFlags.Intersection)))
+        return undefined
+    if (
+        walk.depth > 0 &&
+        (await isReactiveMember(checker, reactive, type, false))
+    )
+        return path
+    if (walk.seen.has(type.id)) return undefined
+    walk.seen.add(type.id)
+    const inner = { seen: walk.seen, depth: walk.depth + 1 }
+    const [array, tuple, calls] = await Promise.all([
+        checker.isArrayType(type),
+        checker.isTupleType(type),
+        checker.getSignaturesOfType(type, SignatureKind.Call),
+    ])
+    if (array || tuple) {
+        const items = await checker.getTypeArguments(type as TypeReference)
+        for (let at = 0; at < items.length; at += 1) {
+            const found = await nestedReactiveIn(
+                checker,
+                reactive,
+                items[at],
+                `${path}${array ? '[]' : `[${at}]`}`,
+                inner,
+            )
+            if (found !== undefined) return found
+        }
+        return undefined
+    }
+    if (calls.length > 0) return undefined
+    const members = await checker.getPropertiesOfType(type)
+    const types = await checker.getTypeOfSymbol(members)
+    for (let at = 0; at < members.length; at += 1) {
+        const found = await nestedReactiveIn(
+            checker,
+            reactive,
+            types[at],
+            `${path}.${(members[at] as CheckedSymbol).name}`,
+            inner,
+        )
+        if (found !== undefined) return found
+    }
+    return undefined
+}

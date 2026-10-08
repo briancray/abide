@@ -7,7 +7,7 @@ import { importedNames } from './splitImports.ts'
 import {
     type Attribute,
     type Branch,
-    childListsOf,
+    bodiesOf,
     type InlineComponent,
     type Setup,
     type TemplateNode,
@@ -50,6 +50,11 @@ export type AbideFile = {
     template: TemplateNode[]
     /** 32.43 — the inline components the template's own body declares, in source order. */
     components: InlineComponent[]
+    /**
+     * 34.13 — the type parameters the component's `<script generics="…">` declares, as written, or
+     * `undefined` where it declares none.
+     */
+    generics: string | undefined
     /**
      * Where each piece the projection copies starts in the source.
      *
@@ -107,6 +112,7 @@ export function parseAbide(source: string): AbideFile {
     const scripts: string[] = []
     const modules: string[] = []
     const styles: string[] = []
+    let generics: string | undefined
     const origins: Origins = {
         modules: [],
         scripts: [],
@@ -209,6 +215,23 @@ export function parseAbide(source: string): AbideFile {
                     : lowerTag === 'script'
                       ? scriptBlock(tag.attributes, scripts, modules)
                       : undefined
+            const declared =
+                block === undefined || block === styles
+                    ? undefined
+                    : genericsOf(source.slice(at, tag.end))
+            if (declared !== undefined) {
+                // 34.13 — the component's own type parameters, which a module block and a body's
+                // setup have no call to be generic over.
+                if (block !== scripts || blocks.length > 0)
+                    throw new Error(
+                        'abide: generics="…" belongs on the component\'s own <script>, and this one is a <script module> or a block body\'s. RULEBOOK 34.13.',
+                    )
+                if (generics !== undefined)
+                    throw new Error(
+                        'abide: two <script> blocks declare generics="…". A component declares its type parameters once. RULEBOOK 34.13.',
+                    )
+                generics = declared
+            }
             if (lowerTag === 'script' || lowerTag === 'style') {
                 const raw = rawBody(source, lowerTag, tag)
                 // 14.8 — A `<script>` INSIDE A BLOCK IS THAT BODY'S, set up once each time the body is
@@ -393,22 +416,24 @@ export function parseAbide(source: string): AbideFile {
             }
             if (inner.startsWith(':catch') || inner === ':finally') {
                 const block = blocks[blocks.length - 1]
+                // 32.56 — ONLY A `{#try}` HAS THESE ARMS. Anywhere else the tag was dropped and what
+                // followed it read as the body it stood in: a `{#for}`'s catch rendered in every row.
                 if (
-                    block !== undefined &&
-                    block.kind === 'block' &&
-                    block.block === 'try'
-                ) {
-                    unwindTo(armLevel(open), open, stack)
-                    // The finally arm is a third branch until `{/try}` folds it into the other two.
-                    if (inner.startsWith(':catch'))
-                        block.error = inner.slice(6).trim()
-                    const branch = newBranch(
-                        inner === ':finally' ? FINALLY : '',
+                    block === undefined ||
+                    block.kind !== 'block' ||
+                    block.block !== 'try'
+                )
+                    throw new Error(
+                        `abide: {${inner}} stands outside a {#try}, and only a {#try} has a catch or a finally arm. RULEBOOK 32.56.`,
                     )
-                    block.branches.push(branch)
-                    stack.push(branch.children)
-                    open.push(ARM)
-                }
+                unwindTo(armLevel(open), open, stack)
+                // The finally arm is a third branch until `{/try}` folds it into the other two.
+                if (inner.startsWith(':catch'))
+                    block.error = inner.slice(6).trim()
+                const branch = newBranch(inner === ':finally' ? FINALLY : '')
+                block.branches.push(branch)
+                stack.push(branch.children)
+                open.push(ARM)
                 at = end + 1
                 continue
             }
@@ -503,6 +528,7 @@ export function parseAbide(source: string): AbideFile {
         head,
         template,
         components,
+        generics,
         origins,
     }
 }
@@ -616,11 +642,8 @@ function fileComponents(
                 } else collect(node.children, scope, true)
                 continue
             }
-            if (node.kind !== 'block') continue
-            if (node.block === 'for') open(node.children, node.components, true)
-            else
-                for (const branch of node.branches)
-                    open(branch.children, branch.components, true)
+            for (const body of bodiesOf(node))
+                open(body.children, body.components, true)
         }
     }
     // A body: what it declares, each of those walked in turn.
@@ -692,11 +715,11 @@ function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
         const label =
             node.kind === 'element'
                 ? `<${node.tag}>`
-                : node.kind === 'block' && node.block === 'for'
-                  ? '{#for}'
-                  : '{#if}'
-        for (const children of childListsOf(node))
-            assertNoNestedHead(children, label)
+                : node.kind === 'block'
+                  ? `{#${node.block}}`
+                  : ''
+        for (const body of bodiesOf(node))
+            assertNoNestedHead(body.children, label)
     }
 }
 
@@ -765,18 +788,36 @@ function sameTag(left: string, right: string): boolean {
  * 34.2 is the bare `module` attribute; anything else on the tag — `src`, `type`, `defer`, `nonce` —
  * is a `<script>` the author wrote for the DOCUMENT, and lifting it into component setup moves it
  * out of the markup and throws its attributes away.
+ *
+ * 34.12, 34.13 — BUT `lang="ts"` AND `generics="…"` ARE THE COMPONENT'S. Every block is TypeScript,
+ * so `lang="ts"` says nothing, and an editor's convention read as markup took the author's whole
+ * setup out of the component without a word.
  */
 function scriptBlock(
     attributes: Attribute[],
     scripts: string[],
     modules: string[],
 ): string[] | undefined {
-    if (attributes.length === 0) return scripts
-    if (attributes.length > 1) return undefined
-    const only = attributes[0] as Attribute
-    // `<script module>` carries the marker and no value. `module="x"` names something else.
-    if (only.lowerName !== 'module' || only.value !== '') return undefined
-    return modules
+    let module = false
+    for (const attribute of attributes) {
+        // `<script module>` carries the marker and no value. `module="x"` names something else.
+        if (attribute.lowerName === 'module' && attribute.value === '')
+            module = true
+        else if (attribute.lowerName === 'lang' && attribute.value === 'ts')
+            continue
+        else if (attribute.lowerName !== 'generics') return undefined
+    }
+    return module ? modules : scripts
+}
+
+/**
+ * 34.13 — what a component `<script>`'s `generics` attribute declares, or `undefined`.
+ *
+ * READ OFF THE TAG'S OWN TEXT rather than its parsed attribute: `T extends { id: string }` holds a
+ * brace, and an attribute value with one in it is parsed as an interpolation.
+ */
+function genericsOf(tag: string): string | undefined {
+    return /\sgenerics\s*=\s*(["'])([\s\S]*?)\1/i.exec(tag)?.[2]
 }
 
 /**
@@ -1041,7 +1082,13 @@ function readTag(
         const attrName = source.slice(attrStart, at)
 
         if (source[at] !== '=') {
-            attributes.push(attribute(attrName, '', false))
+            // 33.21 — A BARE PROP IS `true`. Handed over as the expression rather than given a
+            // shape of its own, so the build and the checker read `<Name enable>` as they read
+            // `enable={true}`. A bare `bind:` names no `Reactive` and stays the literal it was.
+            const flag =
+                isComponentTag(name) &&
+                !attrName.toLowerCase().startsWith('bind:')
+            attributes.push(attribute(attrName, flag ? 'true' : '', flag))
             place(attributes.length - 1, attrStart, attrStart)
             continue
         }
@@ -1112,7 +1159,7 @@ function readTag(
  * attribute's static text as written, escaped with its slots the way `{expr}` is.
  *
  * 33.19 — A COMPONENT'S PROP IS DECODED WHEN IT IS STATIC TOO, because it is never markup: an element's
- * static value is served as the author's bytes (`staticAttributeBytes`), and a prop is handed over
+ * static value is served as the author's bytes (`classifyAttributes`), and a prop is handed over
  * as a string, so `<Card title="AT&amp;T">` hands the child `AT&T`.
  *
  * 32.19 — AN INTERPOLATED `style` TAKES THE OTHER ROAD and lowers to one `style:prop` per
@@ -1277,7 +1324,7 @@ function topLevelAt(source: string, target: string, from: number): number {
 function collapseWhitespace(children: TemplateNode[]): void {
     for (let i = children.length - 1; i >= 0; i -= 1) {
         const node = children[i] as TemplateNode
-        for (const inner of childListsOf(node)) collapseWhitespace(inner)
+        for (const body of bodiesOf(node)) collapseWhitespace(body.children)
         if (node.kind !== 'text' || node.text.trim() !== '') continue
         if (!node.text.includes('\n')) continue
         const indented = /[ \t]/.test(node.text)

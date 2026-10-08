@@ -47,34 +47,20 @@ export function declareDefaults(body: object, defaults: Defaults): void {
 }
 
 /**
- * `args` with every member the parameter defaults filled where it is `undefined`.
+ * Whether `fn` declares a parameter, defaulted and rest ones included.
  *
- * `args` itself where nothing was missing, so a caller that passed every member allocates nothing
- * and a second application is free. ABSENT ARGS ARE `{}`: a wire writes the two alike (an empty
- * query), so read apart they are one call keyed two ways by the side it was made on — and a
- * pattern with a default is a record by its own spelling.
+ * 11.2 — `length` counts a parameter only up to the first with a default and never a rest one, so
+ * `(args = {}) => …` and `(...args) => …` read as declaring none. The text says what was written.
  */
-export function withDefaults<Args>(args: Args, defaults: Defaults): Args {
-    if (args !== undefined && (typeof args !== 'object' || args === null))
-        return args
-    const given = (args ?? {}) as Record<string, unknown>
-    const { names, values } = defaults
-    let filled: Record<string, unknown> | null = null
-    for (let index = 0; index < names.length; index += 1) {
-        const name = names[index] as string
-        if (given[name] !== undefined) continue
-        filled ??= { ...given }
-        const value = values[index]
-        // A fresh copy of an object default, as the body's own evaluation makes one per call.
-        putOwn(
-            filled,
-            name,
-            typeof value === 'object' && value !== null
-                ? structuredClone(value)
-                : value,
-        )
-    }
-    return (filled ?? given) as Args
+export function declaresParameter(fn: (...given: never[]) => unknown): boolean {
+    if (fn.length >= 1) return true
+    const text = Function.prototype.toString.call(fn)
+    const open = text.indexOf('(')
+    // `args => …` has a `length` of one, and a function with no `(` declares nothing.
+    if (open === -1) return false
+    const reader: Reader = { text, at: open + 1 }
+    space(reader)
+    return text[reader.at] !== ')'
 }
 
 /** Where a reader stands in a function's source text. */

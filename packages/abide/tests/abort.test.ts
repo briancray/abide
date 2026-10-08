@@ -33,8 +33,9 @@ function held() {
     return { rpc, releases }
 }
 
-// THE REVERT: end the load on the FIRST abort in `holdLoad` (drop the loop over `signals`); the
-// shared load ends while the second caller is still waiting, and `busy` reports false here.
+// THE REVERT: end the load on the FIRST abort in `Attended.handleEvent` (drop the loop over
+// `signals`, `#shared/reactive/callLoad.ts`); the shared load ends while the second caller is still
+// waiting, and `busy` reports false here.
 test('a load two signalled calls share ends when both abort, not the first — 16.52', async () => {
     const { rpc, releases } = held()
     const first = new AbortController()
@@ -61,7 +62,7 @@ test('a load two signalled calls share ends when both abort, not the first — 1
     expect(releases.length).toBe(1)
 })
 
-// THE REVERT: drop the `pinned` check in `holdLoad`; the load ends under a caller that never
+// THE REVERT: drop the `pinned` check in `Attended.handleEvent`; the load ends under a caller that never
 // handed a signal and is still waiting on it.
 test('a call with no signal keeps the load going whatever the others abort — 16.52', async () => {
     const { rpc, releases } = held()
@@ -97,7 +98,7 @@ test('an aborted reload keeps serving what the value held — 16.53', async () =
 
 // 16.66 — THE CALLERS STOPPED WAITING, NOT THE VALUE: a component unmounted before its first answer
 // and mounted again asks for the value, not for the `Aborted` its last visit left. THE REVERT: drop
-// the `ABANDONED` check from `call`; the second call joins the ended load and reads `Aborted` for
+// the `abandoned` read from `callLoad`; the second call joins the ended load and reads `Aborted` for
 // good, with 1 load started rather than 2.
 test('a call after an aborted first load starts another — 16.66', async () => {
     const { rpc, releases } = held()

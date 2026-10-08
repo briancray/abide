@@ -10,15 +10,16 @@ import type { Mount } from './answerRpc.ts'
 import { banner } from './banner.ts'
 import { APP_PACKAGE, type AppPackage, config } from './config.ts'
 import type { App } from './createApp.ts'
+import { installServer } from './installServer.ts'
 import {
     appUrl,
     callHandler,
     followLogs,
     remoteHeaders,
     remoteUrl,
-    shell,
 } from './remote.ts'
 import { inScope, LISTENING } from './requestScope.ts'
+import { shell } from './shell.ts'
 
 /** What a command is handed: the words after the flags, the command's own first, and the flags. */
 export type Given = ReturnType<typeof parsed>
@@ -66,10 +67,11 @@ export async function runCommands(
         argv[0] === 'run' ? { positionals: argv, values: {} } : parsed(argv)
     const command = given.positionals[0]
     const commands = commandsOf(host)
-    if (command === undefined || command === 'help' || given.values.help) {
+    if (command === 'help' || given.values.help) {
         console.log(usage(host, commands))
         return 0
     }
+    if (command === undefined) return await shellOn(host, given)
     for (const [name, , body] of commands)
         if (name.split(' ')[0] === command) return await body(given)
     console.error(
@@ -110,18 +112,7 @@ function commandsOf(host: Host): Row[] {
             'compile every .abide under the app into .abide/',
             'build',
         ),
-        [
-            'start',
-            'serve the app, and a shell on it',
-            (given) => start(host, given),
-            false,
-        ],
-        [
-            'connect [url]',
-            'an interactive shell against a running app',
-            (given) => connect(host, given),
-            false,
-        ],
+        ['start', 'serve the app', (given) => start(host, given), false],
         [
             'call <address> [args]',
             'one call to one handler',
@@ -188,14 +179,14 @@ function usage(host: Host, commands: Row[]): string {
     let width = 0
     for (const [command, , , needs] of commands)
         if (sourced || !needs) width = Math.max(width, command.length)
-    let text = `${host.name} <command>\n\n`
+    let text = `${host.name} <command>\n${host.name} [--url <origin>]  a shell on the app — served here, or the running one --url names\n\n`
     for (const [command, meaning, , needs] of commands)
         if (sourced || !needs)
             text += `  ${command.padEnd(width)}  ${meaning}\n`
     if (!sourced)
         return `${text}
-  --port  the listen port for start
-  --url   the running app connect, call, logs, openapi and mcp talk to
+  --port  the listen port the app is served on
+  --url   the running app the shell, call, logs, openapi and mcp talk to
   --out   the file openapi writes
 `
     text += `
@@ -203,8 +194,8 @@ function usage(host: Host, commands: Row[]): string {
                src/ where you stand, or where you stand, whichever has one
   --out        where the build goes, beside the app by default; the file openapi and
                compile write — compile's is the app's name, where you stand
-  --port       the listen port for dev and start
-  --url        the running app connect, call, logs, openapi and mcp talk to
+  --port       the listen port for dev, start and the shell's app
+  --url        the running app the shell, call, logs, openapi and mcp talk to
   --target     the platform compile builds for — linux-x64, darwin-arm64, windows-x64…
   --platforms  several of them, comma-separated, one executable each
 `
@@ -221,8 +212,8 @@ function parsed(argv: string[]) {
             root: { type: 'string' },
             out: { type: 'string' },
             // NO DEFAULT, which is not an omission: `Bun.serve` given no port already reads
-            // `PORT` and then falls back to 3000, and a default written here would take that
-            // away from every host that sets it.
+            // `PORT` and then falls back to 3000 — `abide dev` scanning on from there, 38.64 — and
+            // a default written here would take that away from every host that sets it.
             port: { type: 'string' },
             url: { type: 'string' },
             method: { type: 'string' },
@@ -234,28 +225,68 @@ function parsed(argv: string[]) {
     })
 }
 
-/**
- * `start`: serves the app and opens the shell on it.
- *
- * 38.6, 38.54 — THE APP SERVED, AND 38.7's SHELL ON IT, over http as `connect`'s is. 38.55 —
- * `exit` stops the app. 38.56 — input that ends (no terminal, a container started without one)
- * leaves it serving, and hands back no code for the process to exit on.
- */
-async function start(host: Host, given: Given): Promise<number | undefined> {
+/** The app served, with the address it answers at and the banner it is announced by. 38.6. */
+async function served(
+    host: Host,
+    given: Given,
+): Promise<{ app: App; url: string; heading: string } | number> {
     // 36.3 — `dev`, `build` and `start` each name the environment where the process was started with
     // none, and leave one it was started with exactly as given.
     process.env.NODE_ENV ??= 'production'
     const app = await host.serve(given)
     if (typeof app === 'number') return app
     const server = LISTENING.server as Bun.Server<unknown>
-    const ended = await shell({
+    return {
+        app,
         url: server.url.href.replace(/\/$/, ''),
-        handlers: await host.handlers(given),
         heading: banner(host.name, 'start', host.appPackage(), server),
+    }
+}
+
+/**
+ * `start`: serves the app.
+ *
+ * 38.68 — READS NO INPUT, and hands back no code for the process to exit on: the process is the
+ * server, for a container or a supervisor to stop.
+ */
+async function start(host: Host, given: Given): Promise<number | undefined> {
+    const serving = await served(host, given)
+    if (typeof serving === 'number') return serving
+    console.log(serving.heading)
+    return undefined
+}
+
+/**
+ * The command line with no command: 38.7's shell, on the running app `--url` names or on the app
+ * served here.
+ *
+ * 38.7 — WITH `--url`, BOOTS NOTHING. 38.54 — without, the app served and the shell on it, over http
+ * as a remote one's is. 38.55 — `exit` stops the app. 38.56 — input that ends leaves it serving, and
+ * hands back no code for the process to exit on.
+ */
+async function shellOn(host: Host, given: Given): Promise<number | undefined> {
+    const handlers = await host.handlers(given)
+    const remote = remoteUrl(given.values.url)
+    if (remote !== undefined) {
+        const url = appUrl(remote)
+        await shell({
+            url,
+            handlers,
+            heading: `${host.name}: ${url}`,
+            local: false,
+        })
+        return 0
+    }
+    const serving = await served(host, given)
+    if (typeof serving === 'number') return serving
+    const ended = await shell({
+        url: serving.url,
+        handlers,
+        heading: serving.heading,
         local: true,
     })
     if (ended === 'ended') return undefined
-    await app.stop()
+    await serving.app.stop()
     return 0
 }
 
@@ -284,6 +315,7 @@ async function run(
     process.argv = [process.argv[0] as string, path, ...rest]
     // 38.58 — RE-RESOLVED, as `bootApp` does: a module this process loaded before the script may already have
     // read the configuration, under no identity.
+    installServer()
     APP_PACKAGE.current = host.appPackage()
     config.invalidate()
     await inScope(undefined, () => import(Bun.pathToFileURL(path).href))
@@ -312,18 +344,6 @@ async function call(host: Host, given: Given): Promise<number> {
     if (answered.text !== '')
         (answered.code === 0 ? console.log : console.error)(answered.text)
     return answered.code
-}
-
-/** `connect`: the shell against a running app, booting nothing. 38.7. */
-async function connect(host: Host, given: Given): Promise<number> {
-    const url = appUrl(given.positionals[1] ?? given.values.url)
-    await shell({
-        url,
-        handlers: await host.handlers(given),
-        heading: `${host.name} connect: ${url}`,
-        local: false,
-    })
-    return 0
 }
 
 /**

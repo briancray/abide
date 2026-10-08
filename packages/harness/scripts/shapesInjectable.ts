@@ -2,7 +2,7 @@
 // ranking need not survive the crossing: a function carrying ~34 own properties is a
 // dictionary-mode candidate in V8 and is merely large in JSC, so the shape that wins on
 // retained bytes may lose on every property access.
-import { batch, type Sample } from 'harness/report'
+import { batch, emulatedDom, type Sample } from 'harness/report'
 
 type Any = Record<string, unknown> & (() => unknown)
 
@@ -126,13 +126,13 @@ function rows(): { shape: string; read: number; write: number }[] {
     const read = batch({
         case: 'read',
         arms: readArms,
-        emulated: null,
+        emulated: emulatedDom(),
         budgetNanoseconds: 20_000_000_000,
     })
     const write = batch({
         case: 'write',
         arms: writeArms,
-        emulated: null,
+        emulated: emulatedDom(),
         budgetNanoseconds: 20_000_000_000,
     })
     for (const [name] of made)

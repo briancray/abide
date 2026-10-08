@@ -7,7 +7,13 @@
 // `harness/report` is a FOURTH entry and is not a fourth lane: a lane is a DEPENDENCY
 // partition, and the leaf depends on nothing.
 
-import { type Batched, type BatchSpec, batch } from '../report/index.ts'
+import {
+    type Batched,
+    type BatchSpec,
+    batch,
+    emulatedDom,
+    underBun,
+} from '../report/index.ts'
 import { install, isArmed } from './install.ts'
 
 export { armCase, disarmCase, measure } from './case.ts'
@@ -37,20 +43,9 @@ export function time(spec: Omit<BatchSpec, 'emulated'>): Batched {
         throw new Error(
             'time() was called while the counters are armed. Counting and timing are mutually exclusive passes over the same case body — the counter runs inside the path it counts.',
         )
-    // By the member — an example frame's `Bun.serve` shim is not bun.
-    const underBun =
-        typeof (globalThis as { Bun?: { nanoseconds?: unknown } }).Bun
-            ?.nanoseconds === 'function'
-    return batch({
-        ...spec,
-        emulated: underBun && typeof document !== 'undefined' ? 'dom' : null,
-    })
+    return batch({ ...spec, emulated: emulatedDom() })
 }
 
-// Installed at import in the browser injectable. Under bun the preload does it, next
-// to `GlobalRegistrator.register`.
-if (
-    typeof document !== 'undefined' &&
-    (globalThis as { Bun?: unknown }).Bun === undefined
-)
-    install()
+// Installed at import in the browser injectable — a docs example frame's included, whose
+// `Bun.serve` shim is not bun. Under bun the preload does it, next to `GlobalRegistrator.register`.
+if (typeof document !== 'undefined' && !underBun()) install()

@@ -19,43 +19,35 @@ import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
 import { type Failed, isFailed, wireFailure } from '#shared/Failed.ts'
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { namedLogger } from '#shared/log.ts'
-import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { FOLLOWED } from '#shared/reactive/FOLLOWED.ts'
 import { pastOf } from '#shared/reactive/index.ts'
 import { matchesPattern } from '#shared/reactive/matchesPattern.ts'
 import { PATCH_SINKS } from '#shared/reactive/PATCH_SINKS.ts'
+import { unowned } from '#shared/reactive/watch.ts'
 import { refuse } from '#shared/refuse.ts'
 import type { BrowserFrame, ServerFrame, Socket } from '#shared/socket.ts'
-import { allows, crossingOrigin, type Mounted } from './answerRpc.ts'
+import type { Mounted } from './answerRpc.ts'
+import { argsFor } from './argsFor.ts'
+import { closedTo, crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
 import { failureOf } from './hooks.ts'
+import {
+    inOpenScope,
+    type RequestScope,
+    releaseScope,
+    scopeFor,
+} from './requestScope.ts'
 import { resumeProductions } from './resumeProductions.ts'
 import { patchesOf, versionOf } from './versionOf.ts'
 
-export type Connection = {
-    request: Request
-    subscriptions: Map<number, () => void>
-    /**
-     * The origin a connection from another origin came from, and `null` for the app's own.
-     *
-     * 18.5 — read once at the upgrade, since every frame on the connection shares it.
-     */
-    crossing: string | null
-}
-
 /**
- * What the mux writes to.
+ * The far end of one connection to the mux, which its frames are written to.
  *
  * Bun's socket under `abide start`, and under `abide dev` a stand-in that posts each frame to the
  * listener holding the real one (38.15).
  */
-export type MuxSocket = { data: Connection; send(text: string): unknown }
-
-export function connectionOf(request: Request): Connection {
-    return {
-        request,
-        subscriptions: new Map(),
-        crossing: crossingOrigin(request.headers.get('origin'), request.url),
-    }
+export type Peer = {
+    send(text: string): unknown
+    close(code: number, reason: string): unknown
 }
 
 const SOCKET_LOG = namedLogger('abide:socket')
@@ -64,7 +56,7 @@ const SOCKET_LOG = namedLogger('abide:socket')
 // PROCESS-WIDE because a trigger is: `rpc.invalidate({ id })` inside one request reaches every browser
 // holding that key, whichever connection it came over.
 type Follower = {
-    ws: MuxSocket
+    peer: Peer
     id: number
     args: unknown
     // The `global` entry its productions are pushed from, which is what a refresh would otherwise
@@ -77,7 +69,11 @@ type Follower = {
 const FOLLOWERS = new Map<object, Set<Follower>>()
 
 // 13.12 — narrowed by the pattern the trigger was handed, as the handler's own entries are.
-RPC_SERVER.broadcast = (rpc, member, pattern) => {
+export function broadcast(
+    rpc: object,
+    member: 'invalidate' | 'refresh',
+    pattern: unknown,
+): void {
     const followers = FOLLOWERS.get(rpc)
     if (followers === undefined) return
     for (const follower of followers) {
@@ -86,14 +82,14 @@ RPC_SERVER.broadcast = (rpc, member, pattern) => {
         // the cell it is fed from (`FOLLOWED`), whichever trigger reached it — where the entry it is
         // fed from is still the one standing.
         if (attach(rpc as Mounted['handler'], follower) !== undefined) continue
-        send(follower.ws, { op: member, id: follower.id })
+        send(follower.peer, { op: member, id: follower.id })
     }
 }
 
 // 18.23 — AN ENTRY ANSWERED THAT NOBODY IS FED FROM: one made after a follower subscribed for its
 // args, or rebuilt after the one it was fed from was evicted. An entry already fed is the common
 // answer, and asks nothing more.
-RPC_SERVER.served = (rpc, serving) => {
+export function feedFromServed(rpc: object, serving: unknown): void {
     if (FEEDS.has(serving as object)) return
     const followers = FOLLOWERS.get(rpc)
     if (followers === undefined) return
@@ -120,126 +116,205 @@ function attach(rpc: Mounted['handler'], follower: Follower): unknown {
     return serving
 }
 
-function send(ws: MuxSocket, frame: ServerFrame): void {
-    ws.send(JSON.stringify(frame))
+function send(peer: Peer, frame: ServerFrame): void {
+    peer.send(JSON.stringify(frame))
 }
 
 function failure(error: unknown): Failed<string, unknown> {
     return wireFailure(failureOf(error))
 }
 
-/** The mux's websocket handlers, over the app's sockets and the handlers a browser may follow. */
-export function socketHandlers(
-    sockets: Map<string, Socket<unknown, unknown>>,
-    handlers: Map<string, Mounted>,
-): {
-    open(ws: MuxSocket): void
-    message(ws: MuxSocket, raw: string | Buffer): Promise<void>
-    close(ws: MuxSocket): void
-} {
-    return {
-        open(ws) {
-            if (SOCKET_LOG.enabled())
-                SOCKET_LOG.debug('open', new URL(ws.data.request.url).pathname)
-        },
-        async message(ws, raw) {
-            // Partial: it is whatever the browser sent.
-            let frame: Partial<BrowserFrame>
-            try {
-                frame = JSON.parse(String(raw))
-            } catch {
-                return
-            }
-            const id = frame.id ?? 0
-            // THE ADDRESS FROM `/__abide` ON, which is what both tables are keyed by: a browser names
-            // it as its wrapper resolved it, which is a whole URL, or a path under the app's mount.
-            const address = addressIn(frame.address ?? '')
-            if (frame.op === 'unsub') {
-                ws.data.subscriptions.get(id)?.()
-                ws.data.subscriptions.delete(id)
-                return
-            }
-            const handler =
-                frame.op === 'sub' ? handlers.get(address) : undefined
-            const followed = handler?.ui ? handler : undefined
-            const carried =
-                followed === undefined ? sockets.get(address) : undefined
-            const gated = followed?.handler ?? carried
-            if (gated === undefined) {
-                send(ws, {
-                    op: 'error',
-                    id,
-                    error: failure(
-                        refuse(404, `No socket answers at ${address}.`),
+/**
+ * The socket mux over the app's sockets and the handlers a browser may follow: what a listener hands
+ * each connection it upgraded, and what closes them all when the app stops (42.11).
+ */
+export class Mux {
+    readonly sockets: Map<string, Socket<unknown, unknown>>
+    readonly handlers: Map<string, Mounted>
+    // 42.12 — the app a frame's scope answers `rpc.raw` and the MCP surface through.
+    readonly app: RequestScope['app']
+    readonly connections = new Set<MuxConnection>()
+
+    constructor(
+        sockets: Map<string, Socket<unknown, unknown>>,
+        handlers: Map<string, Mounted>,
+        app: RequestScope['app'],
+    ) {
+        this.sockets = sockets
+        this.handlers = handlers
+        this.app = app
+    }
+
+    /** One connection, upgraded from `request`, whose frames go to `peer`. */
+    connect(request: Request, peer: Peer): MuxConnection {
+        if (SOCKET_LOG.enabled())
+            SOCKET_LOG.debug('open', new URL(request.url).pathname)
+        const connection = new MuxConnection(this, request, peer)
+        this.connections.add(connection)
+        return connection
+    }
+
+    closeAll(code: number, reason: string): void {
+        for (const connection of this.connections) {
+            connection.close()
+            connection.peer.close(code, reason)
+        }
+    }
+}
+
+/** One browser's connection to the mux: its subscriptions, and the scope its frames are answered in. */
+export class MuxConnection {
+    readonly mux: Mux
+    readonly peer: Peer
+    readonly subscriptions = new Map<number, () => void>()
+    /**
+     * The origin a connection from another origin came from, and `null` for the app's own.
+     *
+     * 18.5 — read once at the upgrade, since every frame on the connection shares it.
+     */
+    readonly crossing: string | null
+    // 18.33 — what aborts the upgrade's signal, for 16.67 to read a hang-up off.
+    readonly hangUp = new AbortController()
+    // 18.31 — every frame is answered in this one scope; 18.32 — torn down at the close.
+    readonly scope: RequestScope
+
+    constructor(mux: Mux, upgrade: Request, peer: Peer) {
+        this.mux = mux
+        this.peer = peer
+        this.crossing = crossingOrigin(
+            upgrade.headers.get('origin'),
+            upgrade.url,
+        )
+        // NO `received`: an upgraded connection has no http idle timeout for 16.23 to raise.
+        this.scope = scopeFor(
+            new Request(upgrade, { signal: this.hangUp.signal }),
+            undefined,
+            mux.app,
+        )
+        // 22.10 — the headers went out with the upgrade, so nothing a frame writes is carried.
+        this.scope.applied = true
+    }
+
+    message(raw: string | Buffer): Promise<void> {
+        return inOpenScope(this.scope, () => this.answerFrame(raw))
+    }
+
+    /** Stops every subscription and tears the scope down; a second close does nothing. */
+    close(): void {
+        if (!this.mux.connections.delete(this)) return
+        this.hangUp.abort()
+        for (const stop of this.subscriptions.values()) stop()
+        this.subscriptions.clear()
+        releaseScope(this.scope)
+    }
+
+    private async answerFrame(raw: string | Buffer): Promise<void> {
+        // Partial: it is whatever the browser sent.
+        let frame: Partial<BrowserFrame>
+        try {
+            frame = JSON.parse(String(raw))
+        } catch {
+            return
+        }
+        const id = frame.id ?? 0
+        // THE ADDRESS FROM `/__abide` ON, which is what both tables are keyed by: a browser names
+        // it as its wrapper resolved it, which is a whole URL, or a path under the app's mount.
+        const address = addressIn(frame.address ?? '')
+        const subscriptions = this.subscriptions
+        if (frame.op === 'unsub') {
+            subscriptions.get(id)?.()
+            subscriptions.delete(id)
+            return
+        }
+        const handler =
+            frame.op === 'sub' ? this.mux.handlers.get(address) : undefined
+        const followed = handler?.ui ? handler : undefined
+        const carried =
+            followed === undefined ? this.mux.sockets.get(address) : undefined
+        const gated = followed?.handler ?? carried
+        if (gated === undefined) {
+            send(this.peer, {
+                op: 'error',
+                id,
+                error: failure(refuse(404, `No socket answers at ${address}.`)),
+            })
+            return
+        }
+        // 18.5 — ANOTHER ORIGIN IS CLOSED OUT unless the socket declared it: the same gate, and
+        // the same own origin, as a handler's (16.14, 16.25, 36.2).
+        if (closedTo(gated.crossOrigin, this.crossing)) {
+            send(this.peer, {
+                op: 'error',
+                id,
+                error: failure(
+                    crossingRefusal(
+                        this.crossing,
+                        frame.op === 'pub' ? 'publish' : 'subscription',
                     ),
-                })
-                return
-            }
-            // 18.5 — ANOTHER ORIGIN IS CLOSED OUT unless the socket declared it: the same gate, and
-            // the same own origin, as a handler's (16.14, 16.25, 36.2).
-            const { request, crossing } = ws.data
-            if (crossing !== null && !allows(gated.crossOrigin, crossing)) {
-                send(ws, { op: 'error', id, error: failure(refuse(403)) })
-                return
-            }
+                ),
+            })
+            return
+        }
+        const request = this.scope.request as Request
+        // A SUBSCRIPTION IS HELD FROM THE FRAME ON, not from when its rungs let it through: an
+        // `unsub` or the connection's close that lands while a rung is pending stops this
+        // placeholder, and the rungs resolving to find another in its place install nothing.
+        const pending = (): void => {}
+        try {
             if (followed !== undefined) {
-                follow(ws, id, followed, frame.args, frame.version)
+                // 18.17 — the args a `GET` over http is answered with, sent as JSON.
+                follow(
+                    this,
+                    id,
+                    followed,
+                    argsFor(followed, frame.args, undefined),
+                    frame.version,
+                )
                 return
             }
             if (carried === undefined) return
             const onion = carried.onion
-            // A SUBSCRIPTION IS HELD FROM THE FRAME ON, not from when its rungs let it through: an
-            // `unsub` or the connection's close that lands while a rung is pending stops this
-            // placeholder, and the rungs resolving to find another in its place install nothing.
-            const pending = (): void => {}
-            try {
-                if (frame.op === 'sub') {
-                    ws.data.subscriptions.get(id)?.()
-                    ws.data.subscriptions.set(id, pending)
-                    // 18.3, 18.4 — the lane's rungs, and a rung refuses by throwing.
-                    if (onion !== null)
-                        await onion({
-                            kind: 'subscribe',
-                            args: frame.args,
-                            request,
-                        })
-                    if (ws.data.subscriptions.get(id) !== pending) return
-                    subscribe(
-                        ws,
-                        id,
-                        carried(frame.args as never),
-                        frame.seq,
-                        frame.epoch,
-                    )
-                } else if (frame.op === 'pub') {
-                    // 18.6, 18.7 — a frame from outside the process publishes only where admitted.
-                    if (!carried.clientPublish)
-                        throw refuse(403, 'This socket takes no publish.')
-                    if (onion !== null)
-                        await onion({
-                            kind: 'publish',
-                            args: frame.args,
-                            message: frame.message,
-                            request,
-                        })
-                    // 18.8 — through the value's own `publish`, so its `transform` runs.
-                    const minted = (
-                        carried(frame.args as never) as unknown as {
-                            publish(value: unknown): unknown
-                        }
-                    ).publish(frame.message)
-                    if (isFailed(minted)) throw minted
-                }
-            } catch (thrown) {
-                if (ws.data.subscriptions.get(id) === pending)
-                    ws.data.subscriptions.delete(id)
-                send(ws, { op: 'error', id, error: failure(thrown) })
+            if (frame.op === 'sub') {
+                subscriptions.get(id)?.()
+                subscriptions.set(id, pending)
+                // 18.3, 18.4 — the lane's rungs, and a rung refuses by throwing.
+                if (onion !== null)
+                    await onion({
+                        kind: 'subscribe',
+                        args: frame.args,
+                        request,
+                    })
+                if (subscriptions.get(id) !== pending) return
+                subscribe(
+                    this,
+                    id,
+                    carried(frame.args as never),
+                    frame.seq,
+                    frame.epoch,
+                )
+            } else if (frame.op === 'pub') {
+                // 18.6, 18.7 — a frame from outside the process publishes only where admitted.
+                if (!carried.clientPublish)
+                    throw refuse(403, 'This socket takes no publish.')
+                if (onion !== null)
+                    await onion({
+                        kind: 'publish',
+                        args: frame.args,
+                        message: frame.message,
+                        request,
+                    })
+                // 18.8 — through the value's own `publish`, so its `transform` runs.
+                const minted = (
+                    carried(frame.args as never) as unknown as {
+                        publish(value: unknown): unknown
+                    }
+                ).publish(frame.message)
+                if (isFailed(minted)) throw minted
             }
-        },
-        close(ws) {
-            for (const stop of ws.data.subscriptions.values()) stop()
-            ws.data.subscriptions.clear()
-        },
+        } catch (thrown) {
+            if (subscriptions.get(id) === pending) subscriptions.delete(id)
+            send(this.peer, { op: 'error', id, error: failure(thrown) })
+        }
     }
 }
 
@@ -251,7 +326,7 @@ export function socketHandlers(
  * production after it, live.
  */
 function subscribe(
-    ws: MuxSocket,
+    connection: MuxConnection,
     id: number,
     value: unknown,
     seq: number | undefined,
@@ -263,10 +338,11 @@ function subscribe(
         ring,
         cursor,
     } = resumeProductions(value, seq, epoch)
-    if (moved) send(ws, { op: 'reset', id, epoch: current, ring })
+    const peer = connection.peer
+    if (moved) send(peer, { op: 'reset', id, epoch: current, ring })
     else
         for (const [number, item] of ring)
-            send(ws, {
+            send(peer, {
                 op: 'prod',
                 id,
                 seq: number,
@@ -274,7 +350,7 @@ function subscribe(
                 value: item,
             })
     let stopped = false
-    ws.data.subscriptions.set(id, () => {
+    connection.subscriptions.set(id, () => {
         stopped = true
         void cursor.return?.(undefined)
     })
@@ -282,7 +358,7 @@ function subscribe(
         for (;;) {
             const next = await cursor.next()
             if (stopped || next.done === true) return
-            send(ws, {
+            send(peer, {
                 op: 'prod',
                 id,
                 seq: cursor.at,
@@ -301,16 +377,16 @@ function subscribe(
  * turn going out as the value it left.
  */
 function follow(
-    ws: MuxSocket,
+    connection: MuxConnection,
     id: number,
     mounted: Mounted,
     args: unknown,
     held: number | undefined,
 ): void {
     const rpc = mounted.handler
-    ws.data.subscriptions.get(id)?.()
+    connection.subscriptions.get(id)?.()
     const follower: Follower = {
-        ws,
+        peer: connection.peer,
         id,
         args,
         serving: undefined,
@@ -324,7 +400,7 @@ function follow(
         FOLLOWERS.set(rpc, followers)
     }
     followers.add(follower)
-    ws.data.subscriptions.set(id, () => {
+    connection.subscriptions.set(id, () => {
         follower.stopFeed?.()
         followers.delete(follower)
     })
@@ -356,7 +432,7 @@ function startFeed(serving: unknown): Feed {
     const fed = new Set<Follower>()
     // 7.10 — an invalidate of the value, however it was spelled, reaches every copy it feeds.
     const invalidated = (): void => {
-        for (const one of fed) send(one.ws, { op: 'invalidate', id: one.id })
+        for (const one of fed) send(one.peer, { op: 'invalidate', id: one.id })
     }
     let followed = FOLLOWED.get(past)
     if (followed === undefined) {
@@ -376,12 +452,14 @@ function startFeed(serving: unknown): Feed {
         },
     }
     FEEDS.set(serving as object, shared)
-    const stopWatch = (
-        serving as { watch(effect: () => void): () => void }
-    ).watch(() => {
-        shared.landed = true
-        sendAll(serving, fed)
-    })
+    // UNOWNED: the feed is stopped when its last follower leaves, and the request it may have been
+    // started in is answered long before that (12.5).
+    const stopWatch = unowned(() =>
+        (serving as { watch(effect: () => void): () => void }).watch(() => {
+            shared.landed = true
+            sendAll(serving, fed)
+        }),
+    )
     return shared
 }
 
@@ -401,10 +479,10 @@ function sendAll(serving: unknown, fed: Iterable<Follower>): void {
                         ? `,"version":${version}}`
                         : `,"version":${version},"value":${JSON.stringify(held)}}`
             }
-            one.ws.send(`{"op":"value","id":${one.id}${valueTail}`)
+            one.peer.send(`{"op":"value","id":${one.id}${valueTail}`)
         } else {
             patchTail ??= `,"base":${one.sent},"version":${version},"ops":${JSON.stringify(patches.ops)}}`
-            one.ws.send(`{"op":"patch","id":${one.id}${patchTail}`)
+            one.peer.send(`{"op":"patch","id":${one.id}${patchTail}`)
         }
         one.sent = version
     }

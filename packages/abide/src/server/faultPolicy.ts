@@ -1,5 +1,21 @@
+// 37.8 TO 37.12 — WHAT A SERVING PROCESS DOES WITH A FAULT NOBODY AWAITED, and with a signal: one policy
+// per command that serves. `createApp` installs neither, so a test or a script keeps bun's default of
+// failing loudly.
+
 import type { App } from './createApp.ts'
 import { reportUnexpected } from './hooks.ts'
+
+/**
+ * Reports a fault nobody awaited instead of letting it end the `abide dev` process.
+ *
+ * 37.9 — `abide dev` OUTLIVES WHAT NOBODY AWAITED. A promise rejected with nothing attached, or a
+ * throw out of a timer, belongs to no request, and bun's default for either is to end the process —
+ * the author's session with it.
+ */
+export function keepServing(): void {
+    process.on('unhandledRejection', reportUnexpected)
+    process.on('uncaughtException', reportUnexpected)
+}
 
 /**
  * Stops the app through `App.stop` and exits on `SIGTERM`, `SIGINT` or a fault nobody awaited.

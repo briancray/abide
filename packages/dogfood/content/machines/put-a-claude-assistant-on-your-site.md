@@ -156,7 +156,7 @@ runs there with its own tools off, no settings read, and no MCP server but yours
 
 ## `claudeCode.bridge`: showing the command until it connects
 
-`claudeCode.bridge()` streams this browser's pairing: not ready with the command to run, then ready
+`claudeCode.bridge()` streams this browser's pairing: unpaired with the command to run, then paired
 the moment the visitor's bridge connects.
 
 ```ts #server/rpc/support.ts — excerpt
@@ -168,15 +168,17 @@ export const bridge = GET(() => claudeCode.bridge(), { timeout: Infinity })
 import { reactive } from 'abide'
 import { bridge } from '#server/rpc/support'
 
-const status = reactive(() => bridge().at(-1))
+const pairing = reactive(() => bridge())
 </script>
 
-{#if status?.ready}
+{#if pairing.at(-1)?.paired}
     <Chat/>
 {:else}
-    <pre>{status?.command}</pre>
+    <pre>{pairing.at(-1)?.command}</pre>
 {/if}
 ```
+
+`pairing` holds every status the stream has sent, and the last is the one that stands.
 
 The command reads `bunx abide-bridge@<version> <your site> <code>`. The code pairs once, with this
 browser, and expires unused after ten minutes; `claudeCode.bridgeCommand()` mints one on its own

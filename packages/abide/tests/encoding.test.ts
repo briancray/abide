@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 import { brotliDecompressSync } from 'node:zlib' // bun decompresses gzip and zstd of its own, and no brotli
-import { compressDocument } from '#server/compressDocument.ts'
+import { compressAnswer } from '#server/compressAnswer.ts'
 import { ENCODINGS, negotiateEncoding } from '#server/negotiateEncoding.ts'
 import { prefers } from '#server/prefers.ts'
 
@@ -60,16 +60,78 @@ test('an accept header prefers by quality, then by order, and q=0 refuses', () =
     expect(html('text/html;q=0.5, application/json')).toBe(false)
 })
 
-// A DOCUMENT IS COMPRESSED WHOLE and reads back byte for byte, in each encoding a request can take.
-test('a document compresses in either encoding and reads back whole — 38.30', () => {
+// A DOCUMENT IS COMPRESSED WHOLE and reads back byte for byte, in each encoding a request can take,
+// with the length of what was sent declared. THE REVERT: set `content-length` off the bytes before
+// they are compressed; the brotli answer declares 2031 bytes and sends 40.
+test('a document compresses in either encoding, says its length and reads back whole — 38.30', async () => {
     const document = new TextEncoder().encode(
         `<!doctype html><title>x</title>${'<p>row</p>'.repeat(200)}`,
     )
     const decoded = new TextDecoder()
-    expect(
-        decoded.decode(brotliDecompressSync(compressDocument(document, 'br'))),
-    ).toBe(decoded.decode(document))
-    expect(
-        decoded.decode(Bun.gunzipSync(compressDocument(document, 'gzip'))),
-    ).toBe(decoded.decode(document))
+    for (const [encoding, decode] of [
+        ['br', brotliDecompressSync],
+        ['gzip', Bun.gunzipSync],
+    ] as const) {
+        const answer = compressAnswer(
+            document,
+            asking(encoding),
+            new Headers(),
+            200,
+        )
+        const bytes = new Uint8Array(await answer.arrayBuffer())
+        expect(answer.headers.get('content-encoding')).toBe(encoding)
+        expect(answer.headers.get('content-length')).toBe(
+            String(bytes.byteLength),
+        )
+        expect(decoded.decode(decode(bytes))).toBe(decoded.decode(document))
+    }
+    const plain = compressAnswer(document, asking(null), new Headers(), 200)
+    expect(plain.headers.get('content-encoding')).toBeNull()
+    expect(plain.headers.get('content-length')).toBe(
+        String(document.byteLength),
+    )
 })
+
+// 38.30, 38.69 — A JSON ANSWER NAMES `accept-encoding` IN `vary` WHETHER OR NOT IT IS COMPRESSED, and
+// under the floor goes as it is whatever the request takes; a document's `vary` is its headers'.
+// Either way it says its length, as a document does. THE REVERT: drop the floor; the small answer is
+// sent as brotli. Drop the JSON lane's `content-length`; both answers declare none.
+test('a JSON answer varies on accept-encoding, says its length and is compressed only from the floor up — 38.30, 38.69', async () => {
+    const small = compressAnswer(
+        '{"id":1}',
+        asking('br'),
+        new Headers({ vary: 'origin' }),
+        200,
+    )
+    expect(small.headers.get('content-encoding')).toBeNull()
+    expect(small.headers.get('vary')).toBe('origin, accept-encoding')
+    expect(small.headers.get('content-length')).toBe('8')
+    expect(await small.text()).toBe('{"id":1}')
+    const text = JSON.stringify(
+        Array.from({ length: 200 }, (_, id) => ({ id })),
+    )
+    const large = compressAnswer(text, asking('gzip'), new Headers(), 201)
+    expect(large.status).toBe(201)
+    expect(large.headers.get('content-encoding')).toBe('gzip')
+    expect(large.headers.get('vary')).toBe('accept-encoding')
+    const sent = new Uint8Array(await large.arrayBuffer())
+    expect(large.headers.get('content-length')).toBe(String(sent.byteLength))
+    expect(new TextDecoder().decode(Bun.gunzipSync(sent))).toBe(text)
+    const page = compressAnswer(
+        new TextEncoder().encode(text),
+        asking('gzip'),
+        new Headers(),
+        200,
+    )
+    expect(page.headers.get('vary')).toBeNull()
+})
+
+/**
+ * A request taking `encoding`, or none — its headers alone, since the DOM preload's `Request` drops
+ * `accept-encoding` as a browser's does.
+ */
+function asking(encoding: string | null): Request {
+    const headers = new Headers()
+    if (encoding !== null) headers.set('accept-encoding', encoding)
+    return { headers } as Request
+}

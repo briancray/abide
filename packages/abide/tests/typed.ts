@@ -1,12 +1,9 @@
-import {
-    type AbideFile,
-    emitClient,
-    emitComponent,
-    parseAbide,
-} from '#compiler'
-import type { Read } from '#compiler/classifyRead.ts'
+import type { AbideFile } from '#compiler'
+import type { CheckerAnswer } from '#compiler/CheckerAnswer.ts'
+import { emitSource } from '#compiler/emitSource.ts'
 import { Lowering } from '#compiler/Lowering.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
+import { parseSources, readSources } from '#compiler/readSources.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { type Token, tokenise } from '#compiler/tokenise.ts'
 
@@ -22,7 +19,7 @@ const PAGE = `${ROOT}src/typed.abide`
 let session: TypeSession | undefined
 
 export async function closeTyped(): Promise<void> {
-    session?.close()
+    await session?.close()
     session = undefined
 }
 
@@ -85,16 +82,21 @@ export async function typed(
     source: string
     prelude: string
     file: AbideFile
-    reads: Read[]
+    answer: CheckerAnswer
 }> {
     const declared = declare(source, names)
-    const file = parseAbide(declared.source)
     session ??= await TypeSession.open(`${ROOT}tsconfig.json`)
+    // The pipeline a build runs, so a refusal throws here as it stops a build.
+    const { read } = await readSources(
+        session,
+        parseSources([{ path: PAGE, text: declared.source }]),
+    )
+    const [page] = read as [(typeof read)[number]]
     return {
         source: declared.source,
         prelude: declared.prelude,
-        file,
-        reads: await session.reads(PAGE, file),
+        file: page.file,
+        answer: page.answer,
     }
 }
 
@@ -104,11 +106,11 @@ export async function lower(
     names: Iterable<string> = [],
     used: Set<string> = new Set(),
 ): Promise<string> {
-    const { prelude, file, reads } = await typed(
+    const { prelude, file, answer } = await typed(
         `<script>${script}</script>`,
         names,
     )
-    const lowering = new Lowering(file, reads)
+    const lowering = new Lowering(file, answer)
     const lowered = lowering.scripts().slice(prelude.length)
     for (const name of lowering.used) used.add(name)
     return lowered
@@ -116,11 +118,10 @@ export async function lower(
 
 // The distinct names a set of reads lands on, sorted — what a test asserting WHICH names are
 // reactive compares against.
-export function namesRead(file: AbideFile, reads: readonly Read[]): string[] {
+export function namesRead(file: AbideFile, answer: CheckerAnswer): string[] {
     const text = projectShadow(file).text
     const names = new Set<string>()
-    for (const read of reads)
-        if (read.shape !== 'static') names.add(text.slice(read.start, read.end))
+    for (const read of answer.reads) names.add(text.slice(read.start, read.end))
     return [...names].sort()
 }
 
@@ -135,19 +136,20 @@ export async function refusal(pending: Promise<unknown>): Promise<string> {
     return ''
 }
 
-// The client and server modules for a source with `names` reactive.
+// The client and server modules for a source with `names` reactive, as the build compiles a
+// component nothing invokes at the fixture's path.
 export async function clientOf(
     source: string,
     names: Iterable<string> = [],
 ): Promise<string> {
-    const { file, reads } = await typed(source, names)
-    return emitClient(file, reads)
+    const { file, answer } = await typed(source, names)
+    return emitSource('typed.abide', file, answer, false).client
 }
 
 export async function serverOf(
     source: string,
     names: Iterable<string> = [],
 ): Promise<string> {
-    const { file, reads } = await typed(source, names)
-    return emitComponent(file, reads)
+    const { file, answer } = await typed(source, names)
+    return emitSource('typed.abide', file, answer, false).server
 }

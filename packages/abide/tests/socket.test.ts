@@ -2,6 +2,7 @@
 // over a real web socket: happy-dom's preload is in this process, and its `WebSocket` is not bun's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { spawned } from 'harness/gate'
 import { BIN, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -41,6 +42,9 @@ export const latest = GET(() => room()())
 export const post = POST(({ text }: { text: string }) => {
     board.publish(text)
 })
+
+// Answers anything, an upgrade included, with the status the lane admits the mux with.
+export const nothing = GET(() => new Response(null, { status: 204 }))
 `
 
 // 37.3 — an app rung that refuses a request it can tell by a header, the mux's upgrade included.
@@ -187,7 +191,7 @@ test('a client publish is refused where clientPublish is not declared — 18.6',
 
 // 18.5 — A CONNECTION FROM ANOTHER ORIGIN IS CLOSED OUT of a socket that did not declare it, and the
 // app's own origin is not. THE REVERT: read the connection as the app's own whatever its `Origin`
-// (`crossing: null` in `connectionOf`); the other origin is fed the room.
+// (`crossing: null` in `MuxConnection`); the other origin is fed the room.
 test('a connection from another origin is refused a socket that did not declare it — 18.5', async () => {
     const crossing = await client(
         `send({ op: 'sub', id: 1, address: '/__abide/socket/chat/room' })
@@ -254,6 +258,31 @@ console.log(JSON.stringify([await opened({}), await opened({ 'x-denied': '1' })]
     })
     const printed = await new Response(ran.stdout).text()
     expect(JSON.parse(printed.trim().split('\n').at(-1) as string)).toEqual([
+        'open',
+        'refused',
+    ])
+})
+
+// 37.3 — THE MUX OPENS ONLY AT ITS OWN ADDRESS, whatever status some other address answered an upgrade
+// with. THE REVERT: drop the address from `admitsMux`; the handler's 204 opens a mux connection at its
+// address, and this reads ['open', 'open'].
+test('an upgrade some other address answers 204 opens nothing — 37.3', async () => {
+    const dir = temporaryModule({
+        'upgrade.ts': `const base = process.argv[2].replace('http', 'ws')
+const opened = async (address: string) => {
+    const ws = new WebSocket(base + address)
+    const outcome = await new Promise<string>((done) => {
+        ws.onopen = () => done('open')
+        ws.onerror = () => done('refused')
+    })
+    ws.close()
+    return outcome
+}
+console.log(JSON.stringify([await opened('/__abide/socket'), await opened('/__abide/rpc/chat/nothing')]))
+`,
+    })
+    const ran = await spawned(['bun', `${dir}/upgrade.ts`, base])
+    expect(JSON.parse(ran.stdout.trim().split('\n').at(-1) as string)).toEqual([
         'open',
         'refused',
     ])

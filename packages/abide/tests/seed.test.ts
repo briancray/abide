@@ -41,12 +41,38 @@ middleware((next, { request }) => {
 })
 `
 
+// 41.25, 41.26 — ONE CALL OF EACH KIND A PAGE IS PAINTED FROM: answered within the render's turn,
+// refused within it, and a stream that has closed within it.
+const TOTALS = `import { GET, refuse } from 'abide/server'
+
+export const getTotal = GET(({ id }: { id: string }) => ({ id, total: 12 }))
+
+export const getMissing = GET(({ id }: { id: string }) => refuse(404, id))
+
+export const getLines = GET(async function* ({ id }: { id: string }) {
+    yield id
+})
+`
+
+const PAINTED = `<script>
+import { reactive } from 'abide'
+import { getLines, getMissing, getTotal } from '#server/rpc/totals.ts'
+
+const total = reactive(() => getTotal({ id: 't' }))
+const missing = reactive(() => getMissing({ id: 'm' }))
+const lines = reactive(() => getLines({ id: 'l' }))
+</script>
+
+<main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p></main>`
+
 let stop = (): void => {}
 let base = ''
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'ui/pages/page.abide': PAGE,
+        'ui/pages/painted/page.abide': PAINTED,
+        'server/rpc/totals.ts': TOTALS,
         'server/rpc/invoices.ts': INVOICES,
         'server/app.ts': SIGN_OUT,
     }))
@@ -189,6 +215,29 @@ test('the head starts every call the page made, before its markup — 41.20', as
     expect(script).not.toContain('"run"')
 })
 
+// 41.25 — A CALL THE MARKUP WAS BUILT FROM SETTLED IS MARKED for hydration to wait on, a refusal too,
+// and one still in flight (the slow invoice on `/`) is not. 41.26 — nor is a stream, though this one
+// closed before the markup was built. THE REVERTS: write every row unmarked, and `getTotal` and
+// `getMissing` read `false`; drop `!isStreaming` from the mark, and `getLines` reads `true`.
+test('the head marks the calls the markup was built from settled — 41.25, 41.26', async () => {
+    const rowsOf = async (address: string) =>
+        JSON.parse(
+            /<script type="application\/json">([\s\S]*?)<\/script>/.exec(
+                await (await Bun.fetch(`${base}${address}`)).text(),
+            )?.[1] ?? '[]',
+        ) as unknown[][]
+    const marked: Record<string, boolean> = {}
+    for (const row of [...(await rowsOf('/painted')), ...(await rowsOf('/'))])
+        marked[String(row[1]).split('?')[0]?.split('/').pop() ?? ''] =
+            row[3] === 1
+    expect(marked).toEqual({
+        getTotal: true,
+        getMissing: true,
+        getLines: false,
+        getInvoice: false,
+    })
+})
+
 // 21.15 — the handler's time on every answer, and the render's run named where it answered.
 test("an answer says how long its handler took, and whether the render's run answered it — 21.15", async () => {
     const cookie = await render()
@@ -228,7 +277,7 @@ async function hydrateWarnings(body: () => unknown): Promise<string[]> {
 // already answered is a refresh, and is quiet. THE REVERT: drop the `missed` call for args with no
 // list in `takeSeed`; 0 warnings where 1 is due. And keep `drop` deleting a key's emptied list; the
 // refresh warns too, 2 where 1 is due.
-test('a call the render made with other args runs the handler and warns on abide:hydrate, and a refresh is quiet — 41.12', async () => {
+test('a call the render made with other args runs the handler and warns on abide:hydrate, and a refresh is quiet — 41.12, 41.22', async () => {
     const handler = { address: '/__abide/rpc/invoices/getInvoice' }
     const seed = seedFor('caller-miss')
     seed(handler, { id: 1 }, Promise.resolve('one'))

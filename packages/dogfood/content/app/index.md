@@ -11,7 +11,7 @@ around.
 | --- | --- |
 | `config()` | typed settings, validated at start — and it throws in a browser |
 | `principal.authenticated` | whether this caller presented something the server accepted |
-| `health` | the account of the app this call is in, for whatever is watching it |
+| `health()` | the account of the app this call is in, for whatever is watching it |
 | `log.info(…)` | structured logs, under namespaces you turn on one at a time |
 
 ```abide abide

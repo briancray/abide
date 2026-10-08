@@ -1,16 +1,19 @@
-import { realpathSync } from 'node:fs' // bun exposes no realpath of its own
-import { dirname } from 'node:path' // bun exposes no path helpers of its own
-import type { Read } from './classifyRead.ts'
+import { relative } from 'node:path' // bun exposes no path helpers of its own
+import { buildDirectory } from '#server/buildDirectory.ts'
 import {
     type AppChecker,
     emitApp,
-    resolveFrom,
+    resolverIn,
     sourcesUnder,
     withChecker,
 } from './compileApp.ts'
-import { diagnosisAt } from './lineOf.ts'
-import { type AbideFile, parseAbide } from './parseAbide.ts'
-import { abideSpecifiers } from './splitImports.ts'
+import { abideImportsOf } from './componentGraph.ts'
+import {
+    parseSources,
+    type ReadSource,
+    readSources,
+    refusal,
+} from './readSources.ts'
 import type { Diagnosis } from './TypeSession.ts'
 
 /**
@@ -33,72 +36,33 @@ export async function checkApp(
     const { root, sources } = await sourcesUnder(appRoot)
     return withChecker(root, kept, async (session) => {
         const refused: Diagnosis[] = []
-        const parsed: { path: string; text: string; file: AbideFile }[] = []
-        for (const source of sources)
-            try {
-                parsed.push({ ...source, file: parseAbide(source.text) })
-            } catch (thrown) {
-                refused.push(refusal(source.path, thrown))
-            }
-        // ONE SNAPSHOT FOR THE LOT, and a file at a time only once that has refused — so which
-        // file it was is known, and the others still answer.
-        let reads: Read[][]
-        let warnings: Diagnosis[]
-        let readable = parsed
-        try {
-            ;({ reads, warnings } = await session.readsFor(parsed))
-        } catch {
-            reads = []
-            warnings = []
-            readable = []
-            for (const source of parsed)
-                try {
-                    const answered = await session.readsFor([source])
-                    reads.push(...answered.reads)
-                    warnings.push(...answered.warnings)
-                    readable.push(source)
-                } catch (thrown) {
-                    refused.push(refusal(source.path, thrown))
-                }
-        }
-        const typed = readable.map((source, at) => ({
-            ...source,
-            reads: reads[at] ?? [],
-        }))
-        const found = await session.diagnose(typed, root)
-        const ambient = await session.ambientReads(root)
-        const unkeyed = await session.argsDefaults(root)
+        const parsed = parseSources(sources, refused)
+        const { read, warnings } = await readSources(session, parsed, refused)
+        const { diagnoses: found, refused: loweringRefused } =
+            await session.diagnose(read, root)
+        const { ambient, unkeyed } = await session.lints(root, parsed)
         // A FILE WHOSE LOWERING REFUSED is `found` already, at its line — emitted too, it throws the
         // same refusal at the root and takes the rest of the app's findings with it.
-        const emittable: typeof readable = []
-        const emittableReads: Read[][] = []
-        for (let at = 0; at < readable.length; at += 1) {
-            const source = readable[at] as (typeof readable)[number]
-            if (session.lowerRefused(source.path)) continue
-            emittable.push(source)
-            emittableReads.push(reads[at] ?? [])
-        }
+        const emittable: ReadSource[] = []
+        for (const source of read)
+            if (!loweringRefused.has(source.path)) emittable.push(source)
         if (refused.length === 0 && ambient.length === 0)
             try {
                 warnings.push(
-                    ...(await emitApp(root, session, emittable, emittableReads))
-                        .warnings,
+                    ...(
+                        await emitApp(
+                            root,
+                            session,
+                            emittable,
+                            relative(root, buildDirectory(root)),
+                        )
+                    ).warnings,
                 )
             } catch (thrown) {
                 refused.push(refusal(root, thrown))
             }
         return [...refused, ...ambient, ...unkeyed, ...warnings, ...found]
     })
-}
-
-function refusal(path: string, thrown: unknown): Diagnosis {
-    return diagnosisAt(
-        path,
-        undefined,
-        0,
-        'error',
-        thrown instanceof Error ? thrown.message : String(thrown),
-    )
 }
 
 /**
@@ -120,65 +84,34 @@ export async function checkSource(
     held: (path: string) => string | undefined = () => undefined,
 ): Promise<Diagnosis[]> {
     const session = checker.session
-    let file: AbideFile
-    try {
-        file = parseAbide(text)
-    } catch (thrown) {
-        return [refusal(path, thrown)]
-    }
-    const sources: {
-        path: string
-        text: string
-        file: AbideFile
-        quiet?: boolean
-    }[] = [{ path, text, file }]
-    const from = dirname(path)
-    // THE RESOLVER FOLLOWS SYMLINKS AND THE PAGE'S PATH DOES NOT: under a linked root — `/tmp` is one
-    // on macOS — a component resolves outside the page's own spelling of the app, where neither the
-    // shadow the page's import is pointed at nor the editor's unsaved text is found.
-    const linkedRoot = realpathSync(root)
-    for (const specifier of abideSpecifiers(
-        [...file.modules, ...file.scripts].join('\n'),
-    )) {
-        let imported = resolveFrom(specifier, from)
-        if (imported === undefined) continue
-        if (linkedRoot !== root && imported.startsWith(`${linkedRoot}/`))
-            imported = `${root}${imported.slice(linkedRoot.length)}`
+    const refused: Diagnosis[] = []
+    const [page] = parseSources([{ path, text }], refused)
+    if (page === undefined) return refused
+    const imports: { path: string; text: string; quiet: boolean }[] = []
+    for (const imported of abideImportsOf(
+        path,
+        page.file,
+        resolverIn(root),
+    ).values())
         try {
-            const importedText =
-                held(imported) ?? (await Bun.file(imported).text())
-            sources.push({
+            imports.push({
                 path: imported,
-                text: importedText,
-                file: parseAbide(importedText),
+                text: held(imported) ?? (await Bun.file(imported).text()),
                 quiet: true,
             })
         } catch {
-            // A component that does not parse is its own file's finding, and takes anything here.
+            // A component that cannot be read takes anything here.
         }
-    }
-    let answered: Awaited<ReturnType<typeof session.readsFor>>
-    try {
-        answered = await session.readsFor(sources)
-    } catch {
-        // The page's own refusal, or a component's: asked alone, the page says which.
-        sources.length = 1
-        try {
-            answered = await session.readsFor(sources)
-        } catch (alone) {
-            return [refusal(path, alone)]
-        }
-    }
-    const warnings: Diagnosis[] = []
-    for (const warning of answered.warnings)
-        if (warning.path === path) warnings.push(warning)
-    const found = await session.diagnose(
-        sources.map((source, at) => ({
-            ...source,
-            reads: answered.reads[at] ?? [],
-        })),
-        root,
-        false,
+    // A component that does not parse, or that the checker refuses, is its own file's finding and
+    // takes anything here: a quiet source's refusal is reported by nobody.
+    const { read, warnings } = await readSources(
+        session,
+        [page, ...parseSources(imports, refused)],
+        refused,
     )
-    return [...warnings, ...found]
+    if (refused.length > 0) return refused
+    const own: Diagnosis[] = []
+    for (const warning of warnings) if (warning.path === path) own.push(warning)
+    const { diagnoses } = await session.diagnose(read, root, false)
+    return [...own, ...diagnoses]
 }

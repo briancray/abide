@@ -31,7 +31,7 @@ import {
 export type History<Produced> = Iterable<Produced> & AsyncIterable<Produced>
 
 /**
- * What a cursor reads.
+ * What a cursor reads, and all of a cell the server is handed (`pastOf`).
  *
  * `ringBase` is the count of productions that have fallen off the front, so `ring[index]` carries
  * ordinal `ringBase + index + 1` and a cursor holding an ordinal can find its place without the

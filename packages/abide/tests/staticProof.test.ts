@@ -11,7 +11,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -21,8 +21,8 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
 
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -31,7 +31,7 @@ async function mountPage(source: string) {
     const reads = await session.reads(`${ROOT}src/page.abide`, file)
     const client = emitClient(file, reads)
     const dir = temporaryModule({
-        'Page.ts': compileFile(source, reads),
+        'Page.ts': emitComponent(file, reads),
         'Page.client.ts': client || 'export default () => {}',
     })
     const { default: Component } = await import(`${dir}/Page.ts`)

@@ -13,14 +13,15 @@ of them takes a config file argument.
 ## Syntax
 
 ```
+abide [--url <origin>]
 abide <command> [options]
 abide --help
 ```
 
 ### Options
 
-* `--port <n>` — the listen port for `dev` and `start`. Defaults to `PORT`, then to the
-  platform default.
+* `--port <n>` — the listen port for `dev` and `start`. Defaults to `PORT`, then to 3000 — where
+  `dev` moves on to the first free port through 3099.
 * `--root <dir>` — the app's source directory, the one `ui/` sits under. Defaults to `src`
   where you are standing, and to where you are standing when `ui/` is right there — so
   `cd ledger && abide dev` and `abide dev --root ./src` are the same command. A directory with
@@ -28,7 +29,7 @@ abide --help
 * `--out <dir>` — where `build` writes, beside the app rather than beside you: building
   `packages/ledger/src` from anywhere leaves `packages/ledger/.abide`, which is where `start`
   looks. It is also the file `openapi` and `compile` write, rather than standard output.
-* `--url <origin>` — the running app `openapi`, `mcp`, `connect` and `call` talk to. Defaults
+* `--url <origin>` — the running app the shell, `openapi`, `mcp`, `call` and `logs` talk to. Defaults
   to `ABIDE_APP_URL`, then to the local app.
 * `--target`, `--platforms` — what `compile` builds for.
 
@@ -49,8 +50,8 @@ abide --help
 | `abide check [dir…]` | Type-checks `.abide`, on the `.abide` line. |
 | `abide dev [--port <n>]` | Watches the project and keeps the app up. |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. |
-| `abide start [--port <n>]` | Boots the built app, and a shell on it. |
-| `abide connect [url]` | The interactive shell against a running app. |
+| `abide start [--port <n>]` | Boots the built app. |
+| `abide [--url <origin>] [--port <n>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. |
 | `abide call <address> [args]` | One call to one handler. |
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. |
 | `abide mcp [--url <origin>]` | The app's MCP server over stdio. |
@@ -58,7 +59,7 @@ abide --help
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. |
 | `abide bundle` | A desktop launcher for the host platform. |
 | `abide lsp` | The `.abide` language server, over stdio. |
-| `abide` · `-h` · `--help` | Usage, generated from the command list. |
+| `--help` · `-h` · `abide help` | Usage, generated from the command list. |
 
 ## Description
 
@@ -71,7 +72,7 @@ under the abide runtime, which is what makes a one-off script able to import `#s
 
 ### The commands that need a running app
 
-`connect`, `call`, `logs`, `openapi` and `mcp` talk to an app over http. Which app is
+The shell, `call`, `logs`, `openapi` and `mcp` talk to an app over http. Which app is
 `--url`, then `ABIDE_APP_URL`, then the local one — and `ABIDE_APP_TOKEN` is the bearer they
 send, so a remote app is reachable without a second set of credentials to manage.
 

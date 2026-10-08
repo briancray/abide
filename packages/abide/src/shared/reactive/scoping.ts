@@ -15,6 +15,12 @@ export type Scope = {
      * request, and everything it holds goes with it.
      */
     instances: Map<object, unknown>
+    /**
+     * 12.5 — every `watch` opened in this scope, stopped at its teardown (`releaseScope` on a server).
+     * Left running, a render's watches stayed subscribed for the life of the process and woke at
+     * every write to anything they read, one dead request at a time.
+     */
+    stops: (() => void)[]
 }
 
 export type Scoping = {

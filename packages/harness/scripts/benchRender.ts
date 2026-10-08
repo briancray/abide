@@ -7,7 +7,7 @@
 // in a browser, for the same reason.
 
 import { render } from 'abide/server'
-import { batch, type Sample } from 'harness/report'
+import { batch, emulatedDom, type Sample } from 'harness/report'
 import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
 import {
     abideLoopSource,
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
                         void drain(Component)
                     },
                 },
-                emulated: null,
+                emulated: emulatedDom(),
             })
             report(size, measured)
         }

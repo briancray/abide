@@ -6,29 +6,37 @@
 // raising the request's idle timeout (16.23), and 19.8's coercion of the text a URL carried.
 
 import type { CopyOptions } from '#shared/CopyOptions.ts'
-import { type Failed, isFailed, wireFailure } from '#shared/Failed.ts'
+import { type Failed, isFailed } from '#shared/Failed.ts'
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
 import { mounted as underMount } from '#shared/mount.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
-import { deadlineOf, pastOf } from '#shared/reactive/index.ts'
-import type { Gated } from '#shared/reactive/Keyed.ts'
-import { PARAMETER_DEFAULTS } from '#shared/reactive/PARAMETER_DEFAULTS.ts'
-import {
-    type Defaults,
-    withDefaults,
-} from '#shared/reactive/parameterDefaults.ts'
-import { notFound, refuse, validationError } from '#shared/refuse.ts'
+import type { Gated } from '#shared/reactive/argsContract.ts'
+import { deadlineOf, heldGenerationOf } from '#shared/reactive/index.ts'
+import type { Defaults } from '#shared/reactive/parameterDefaults.ts'
+import { notFound, refuse } from '#shared/refuse.ts'
 import type { Method, Rpc } from '#shared/rpc.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'
 import type { Socket } from '#shared/socket.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
-import { validateJson } from '#shared/validateJson.ts'
+import {
+    answered,
+    answerFailure,
+    type ErrorPages,
+    handlerHeaders,
+} from './answerFailure.ts'
 import { answerValue } from './answerValue.ts'
+import { argsFor } from './argsFor.ts'
 import { callerOf } from './callerOf.ts'
-import { argsDocumentOf, coerceArgs, type Document } from './coerceArgs.ts'
-import { appOrigin, positiveSetting } from './config.ts'
+import { argsDocumentOf, collapsed, type Document } from './coerceArgs.ts'
+import { positiveSetting } from './config.ts'
+import {
+    allows,
+    closedTo,
+    crossingOrigin,
+    crossingRefusal,
+} from './crossingOrigin.ts'
 import { failureOf } from './hooks.ts'
 import { prefers } from './prefers.ts'
 import {
@@ -54,6 +62,8 @@ export type Mount = {
     name: string
     /** Whether a browser is handed a wrapper for it. 20.4. */
     ui: boolean
+    /** Whether the command line lists it — the shell's listing and completion, never whether `call` reaches it. 20.3, 38.63. */
+    cli: boolean
     /** Its `description`, where the declaration writes one as a literal the build can read. */
     description: string | undefined
     /**
@@ -91,8 +101,45 @@ export type Mounted = Mount & {
     wireArgs: JsonValue | undefined
 }
 
+/**
+ * The row of a handler abide mounts itself, keyed as `answerRpc` looks one up.
+ *
+ * Built on the core's `declare` with no generated surface (20.1) — the app's tree never names it.
+ */
+export function mountedOwn(
+    address: string,
+    name: string,
+    handler: object,
+): [string, Mounted] {
+    // 16.11 — READ WHEN IT IS REPORTED, where a mounted handler's is stamped at boot: the mount is
+    // the configuration's, and nothing boots this handler.
+    Object.defineProperty(handler, 'address', {
+        get: () => underMount(address),
+    })
+    return [
+        address,
+        {
+            address,
+            method: 'GET',
+            source: '',
+            name,
+            ui: false,
+            cli: false,
+            description: undefined,
+            copy: undefined,
+            defaults: undefined,
+            args: undefined,
+            handler: handler as Mounted['handler'],
+            argsDocument: undefined,
+            wireArgs: undefined,
+        },
+    ]
+}
+
 // 16.62 — the environment's `timeout`, for every call a handler that names none makes.
-RPC_SERVER.timeout = () => positiveSetting('ABIDE_RPC_TIMEOUT', undefined)
+export function environmentTimeout(): number | undefined {
+    return positiveSetting('ABIDE_RPC_TIMEOUT', undefined)
+}
 
 /**
  * The table's handlers and sockets, imported and keyed by address.
@@ -146,7 +193,7 @@ export async function answerRpc(
     url: URL,
     request: Request,
     // 16.39 — what paints a refusal for a request that came as a navigation.
-    failurePage: (failure: Failed<string, unknown>) => Promise<Response>,
+    pages: ErrorPages,
 ): Promise<Response> {
     const pathname = url.pathname
     const found = handlers.get(pathname)
@@ -168,19 +215,12 @@ export async function answerRpc(
     const inUrl = argsInURL(found.method)
     const form = isForm(request)
     const crossing = crossingOrigin(origin, url)
+    const closed = closedTo(handler.crossOrigin, crossing)
     // 21.19 — the origin the answer admits, where the handler declared it may read.
-    const admitted =
-        crossing !== null && allows(handler.crossOrigin, crossing)
-            ? crossing
-            : null
+    const admitted = closed ? null : crossing
     // 16.14 — A MUTATION FROM ANOTHER ORIGIN IS REFUSED unless the handler declared it may come.
-    if (crossing !== null && !inUrl && !allows(handler.crossOrigin, crossing))
-        return answered(
-            refuse(
-                403,
-                `A ${found.method} from ${crossing} is not allowed here.`,
-            ),
-        )
+    if (closed && !inUrl)
+        return answered(crossingRefusal(crossing, found.method))
     // 16.58 — THE BODY CEILING, none where neither the handler nor the environment names one; 16.59 —
     // read off the declared length before a byte of the body is.
     const ceiling =
@@ -190,25 +230,13 @@ export async function answerRpc(
         return answered(overCeiling(ceiling))
     const raw = await argsOf(request, url, inUrl, form, ceiling)
     if (isFailed(raw)) return answered(raw)
-    // 19.8 — the text a URL carried, as the types the handler's `args` declares — and a form's, which
-    // is text for the same reason.
-    const coerced =
-        inUrl || form
-            ? coerceArgs(
-                  raw as Record<string, string | string[]> | undefined,
-                  found.argsDocument,
-                  inUrl ? url.search : '',
-              )
-            : raw
-    // 11.27 — then the handler's parameter defaults, ahead of every key taken below: the seed a
-    // render filed and the `global` entry standing were both filed under them (11.29).
-    const defaults = handler[PARAMETER_DEFAULTS]
-    const args = defaults === null ? coerced : withDefaults(coerced, defaults)
-    // 19.10 — THE WIRE HELD TO THE ANNOTATION, where no `args` schema is declared to hold it. Args
-    // that did not come are the handler's to answer, as they were before.
-    if (found.wireArgs !== undefined && args !== undefined) {
-        const issues = validateJson(found.wireArgs, args)
-        if (issues !== null) return answered(validationError(issues))
+    let args: unknown
+    try {
+        // A URL's and a form's args are text, and the query tells a bare name from `name=` (19.8).
+        args = argsFor(found, raw, inUrl ? url.search : form ? '' : undefined)
+    } catch (refused) {
+        if (isFailed(refused)) return answered(refused)
+        throw refused
     }
     // 16.60 — where neither names one, nothing is raised and the server's own idle timeout stands.
     const timeout = handler.timeout ?? RPC_SERVER.timeout()
@@ -223,11 +251,7 @@ export async function answerRpc(
     // this call started moves the generation, and one it joined was loading when it came.
     const held =
         seeded === undefined ? GLOBAL_GETS.get(handler)?.(args) : undefined
-    const heldCell = held === undefined ? undefined : pastOf(held)
-    const heldAt =
-        heldCell === undefined || heldCell.loading
-            ? undefined
-            : heldCell.generation
+    const heldAt = held === undefined ? undefined : heldGenerationOf(held)
     const timing = currentRequestScope()?.timing
     if (timing !== undefined) timing.answering = handler
     const started = performance.now()
@@ -236,13 +260,13 @@ export async function answerRpc(
     const cached =
         heldAt !== undefined &&
         GLOBAL_GETS.get(handler)?.(args) === held &&
-        pastOf(held).generation === heldAt
+        heldGenerationOf(held) === heldAt
     // 16.39 — A MUTATION A DOCUMENT MADE — a form posted with no script — is answered as a navigation.
     if (!inUrl && prefers(request, 'text/html', 'application/json'))
-        return navigated(outcome, request, failurePage)
+        return navigated(outcome, request, pathname, pages)
     const answer = await answerOutcome(outcome, request, handler, args)
     // A `Response` the handler built is its own — but the origin answer below is laid over it, so it
-    // varies on `Origin` too (21.7), which `defaultHeaders` never reached.
+    // varies on `Origin` too (21.7), which `handlerHeaders` never reached.
     if (outcome.settled && outcome.value instanceof Response) {
         answer.headers.append('vary', 'origin')
         return admitting(answer, admitted)
@@ -283,7 +307,7 @@ async function answerOutcome(
     // The `global` value the answer came from, or `undefined` for one built per request.
     const serving = GLOBAL_GETS.get(handler)?.(args)
     // 21.3 — what the handler wrote through `response` is laid over it at the exit (21.10).
-    const headers = defaultHeaders()
+    const headers = handlerHeaders()
     // When the production answered stops being servable, or Infinity where nothing bounds it.
     const deadline =
         serving === undefined ? Number.POSITIVE_INFINITY : deadlineOf(serving)
@@ -315,49 +339,6 @@ async function answerOutcome(
         if (isFailed(error)) return answered(error)
         throw error
     }
-}
-
-/**
- * The headers a handler's answer starts from: JSON, never stored, varying on `Origin`.
- *
- * 21.7 — whether it is another origin's to read, and whether a mutation from one is refused, both
- * depend on `Origin`, however this one came.
- */
-function defaultHeaders(): Headers {
-    return new Headers({
-        'content-type': 'application/json',
-        'cache-control': 'private, no-store',
-        vary: 'origin',
-    })
-}
-
-/**
- * The `Response` a refusal is answered with.
- *
- * 15.1 — a refusal crosses the wire as the four fields it is, at its own status.
- */
-export function answered(failure: Failed<string, unknown>): Response {
-    return new Response(JSON.stringify(wireFailure(failure)), {
-        status: failure.status,
-        headers: defaultHeaders(),
-    })
-}
-
-/**
- * A query's or a form's entries as args: a member given more than once is a list.
- *
- * 16.19's first half: a `GET` or `DELETE` carries its args in the URL and a mutation in the body.
- * A query member given more than once is a list; one given once is its text (19.8 is the coercion).
- */
-function collapsed(
-    entries: URLSearchParams | FormData,
-): Record<string, unknown> {
-    const args: Record<string, unknown> = {}
-    for (const name of new Set(entries.keys())) {
-        const values = entries.getAll(name)
-        args[name] = values.length === 1 ? values[0] : values
-    }
-    return args
 }
 
 async function argsOf(
@@ -424,32 +405,6 @@ function overCeiling(ceiling: number): Failed<'HttpError', undefined> {
     return refuse(413, `The request body is over ${ceiling} bytes.`)
 }
 
-/**
- * The `Origin` a request came from when it is not the app's own, and `null` when it is.
- *
- * 36.2 — the app's own is `APP_URL`'s where the app declares one, and the request's where not.
- */
-export function crossingOrigin(
-    origin: string | null,
-    url: URL | string,
-): string | null {
-    if (origin === null) return null
-    const own =
-        appOrigin() ?? (typeof url === 'string' ? new URL(url) : url).origin
-    return origin === own ? null : origin
-}
-
-/** Whether a handler's or a socket's `crossOrigin` admits `origin`. */
-export function allows(
-    crossOrigin: boolean | string[],
-    origin: string,
-): boolean {
-    return (
-        crossOrigin === true ||
-        (Array.isArray(crossOrigin) && crossOrigin.includes(origin))
-    )
-}
-
 function preflight(found: Mounted, origin: string, request: Request): Response {
     const headers = new Headers({
         'access-control-allow-origin': origin,
@@ -504,11 +459,13 @@ function isForm(request: Request): boolean {
 async function navigated(
     outcome: Outcome,
     request: Request,
-    failurePage: (failure: Failed<string, unknown>) => Promise<Response>,
+    pathname: string,
+    pages: ErrorPages,
 ): Promise<Response> {
     if (!outcome.settled)
-        return failurePage(failureOf(outcome.error))
-    if (isFailed(outcome.value)) return failurePage(outcome.value)
+        return answerFailure(pages, pathname, failureOf(outcome.error))
+    if (isFailed(outcome.value))
+        return answerFailure(pages, pathname, outcome.value)
     const headers = new Headers({ 'cache-control': 'private, no-store' })
     const written = currentRequestScope()?.response
     const status = written?.status ?? 200

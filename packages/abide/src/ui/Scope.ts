@@ -1,5 +1,18 @@
-import { type Disposer, type Effect, watch } from '#shared/reactive/watch.ts'
-import { BOUNDARY, inBoundary, type TryBoundary } from './TryBoundary.ts'
+import {
+    type Disposer,
+    type Effect,
+    watchTracked,
+} from '#shared/reactive/watch.ts'
+
+/** What a scope built under a `{#try}` binds through — its `TryRegion` (32.16). */
+type Boundary = {
+    guard<T>(run: () => T, again: () => unknown): T | undefined
+}
+
+/** The boundary a scope built now falls under, or `undefined` outside every `{#try}` body. */
+export const BOUNDARY: { current: Boundary | undefined } = {
+    current: undefined,
+}
 
 /**
  * Anything a scope can stop below itself.
@@ -21,6 +34,10 @@ export type Stoppable = { stop(): void }
  * cost an array and three allocations a row — the collector, the stop and the stop it handed back.
  */
 export class Scope {
+    /**
+     * 12.4, 12.13 — a setup's watches land here as it opens them (`collectWatches`): the scope is
+     * made before the setup runs, so a watch has one owner from the moment it opens.
+     */
     stops: Disposer[] = []
     /**
      * The scopes opened beneath this one, or `undefined` until one is.
@@ -36,17 +53,17 @@ export class Scope {
      *
      * 32.16 — read once at construction.
      */
-    boundary: TryBoundary | undefined = BOUNDARY.current
+    boundary: Boundary | undefined = BOUNDARY.current
 
     watch(effect: Effect): void {
         const boundary = this.boundary
         if (boundary === undefined) {
-            this.stops.push(watch(effect))
+            this.stops.push(watchTracked(effect))
             return
         }
         // UNDER A BOUNDARY, a throw is the boundary's and the scopes a re-run builds are too, and a
         // failed binding is retried by running it again.
-        this.stops.push(watch(() => inBoundary(boundary, effect, effect)))
+        this.stops.push(watchTracked(() => boundary.guard(effect, effect)))
     }
 
     /**
@@ -73,11 +90,15 @@ export class Scope {
      * swap and again by the region above it when that region leaves, and 12.1 gives a `Disposer`
      * one run at teardown rather than one per path that reaches it. It is also what lets a block
      * hold ONE scope for its whole life and refill it on every swap.
+     *
+     * `from` KEEPS THE SETUP'S: a mount that refused (41.10) stops what IT opened and rebuilds, and
+     * the setup ahead of it — whose watches are the first `from` stops — does not run again.
      */
-    stop(): void {
+    stop(from = 0): void {
         const stops = this.stops
-        for (const stop of stops) stop()
-        stops.length = 0
+        for (let index = from; index < stops.length; index += 1)
+            (stops[index] as Disposer)()
+        stops.length = from
         const children = this.children
         if (children === undefined) return
         for (const child of children) child.stop()

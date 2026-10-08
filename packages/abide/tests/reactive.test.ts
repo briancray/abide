@@ -6,7 +6,7 @@
 
 import { expect, setSystemTime, test } from 'bun:test'
 import { gate } from 'harness/gate'
-import { onError } from '#server/hooks.ts'
+import { handOnError, onError } from '#server/hooks.ts'
 import {
     busy,
     flushSync,
@@ -24,8 +24,16 @@ import {
 } from '#shared'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
+import { isKeyed } from '#shared/reactive/index.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'
+import { collectWatches } from '#shared/reactive/watch.ts'
+import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
+import { WORK } from '#shared/WORK.ts'
+
+// 12.6 — the `onError` hooks these tests file are handed what the core reports once a server wires
+// them in (`installServer`), and this file is no server.
+UNEXPECTED.report = handOnError
 
 // THE RECORD A VALUE'S STATE LIVES ON. Every test that asserts a field rather than an
 // answer reaches it through here — read off the callable itself, a field is `undefined`,
@@ -327,6 +335,44 @@ test('a body declaring a parameter is keyed, and one declaring none is not', () 
 // THE REVERT: drop the prototype test and the finite test from `canonical`. This reports
 // `runs: 1` for two distinct `Set`s, and `served: null` for the `NaN` reach — one entry, one body
 // run, and the second caller handed the first caller's answer.
+// 15.19, 15.20 — A 5xx REFUSAL AND A THROW ARE RUN AGAIN BY THE NEXT REACH; ANYTHING BELOW 500 IS HELD.
+// A `global` entry with an hour's `ttl` is where holding one hurts: an outage the body reported
+// once would be replayed to every caller until the hour ran out. THE REVERT: drop the
+// `failedTransiently` test from `Keyed`'s reach; the 503 and the throw are each served again
+// without a run — 3 runs where 5 are due.
+test('a reach runs a body again after a 5xx refusal or a throw, and holds a 4xx — 15.19, 15.20', async () => {
+    const runs: string[] = []
+    const answers: Record<string, (() => unknown)[]> = {
+        down: [() => refuse(503), () => 'up'],
+        broken: [
+            () => {
+                throw new Error('boom')
+            },
+            () => 'fixed',
+        ],
+        missing: [() => refuse(404), () => 'found'],
+    }
+    const record = reactive(
+        async ({ path }: { path: string }) => {
+            runs.push(path)
+            const next = answers[path]?.shift() as () => unknown
+            return next()
+        },
+        { global: true, ttl: 3_600_000 },
+    )
+    const outcome = (path: string): Promise<unknown> =>
+        Promise.resolve(record({ path })).then(
+            (value) => value,
+            (failure: { status?: number; message?: string }) =>
+                failure.status ?? failure.message,
+        )
+    for (const path of ['down', 'broken', 'missing']) await outcome(path)
+    expect(await outcome('down')).toBe('up')
+    expect(await outcome('broken')).toBe('fixed')
+    expect(await outcome('missing')).toBe(404)
+    expect(runs).toEqual(['down', 'broken', 'missing', 'down', 'broken'])
+})
+
 test('an Args member the canonical key cannot carry is refused at the reach', () => {
     let runs = 0
     const bySet = reactive((args: { f: Set<string> }) => {
@@ -1290,6 +1336,26 @@ test('a watch given sources runs only when those sources change', () => {
     stop()
 })
 
+// THE SOURCES ARE ANY MIX OF VALUES, and that is a claim about the TYPE: with one `Stored` inferred
+// for the whole list, sources of a number, a string and a boolean do not compile. THE REVERT: type
+// `sources` as `Reactive<Stored>[]`; `bun run typecheck` refuses this file (TS2322) and the runtime
+// never moved.
+test('a watch over sources of different values runs for each of them', () => {
+    const count = reactive(1)
+    const label = reactive('one')
+    const open = reactive(false)
+    let runs = 0
+    const stop = watch([count, label, open], () => {
+        runs += 1
+    })
+    label.set('two')
+    flushSync()
+    open.set(true)
+    flushSync()
+    expect(runs).toBe(3)
+    stop()
+})
+
 // The array form, and that every source in it is live — not just the first.
 test('a watch over several sources runs for any of them', () => {
     const first = reactive(1)
@@ -1347,6 +1413,60 @@ test('a watch over sources runs its disposer before each rerun and at teardown',
     flushSync()
     stop()
     expect(order).toEqual(['run:1', 'dispose', 'run:2', 'dispose'])
+})
+
+// 14.10 — A DISPOSER DOES NOT TRACK, wherever its watch was stopped from. A stop called inside
+// another watch's effect ran the disposer under that effect's reader, so the effect subscribed to
+// what the disposer read and re-ran on a value it never read itself. THE REVERT: drop the
+// `TRACKING.reader = null` from `runDisposer` — `outer` reads 3 runs where 2 are due.
+test('a disposer run from inside another effect does not subscribe it — 14.10', () => {
+    const read = reactive(0)
+    const toggle = reactive(0)
+    const inner = watch(() => () => {
+        read()
+    })
+    let outer = 0
+    watch(() => {
+        toggle()
+        outer += 1
+        if (outer === 2) inner()
+    })
+    toggle.set(1)
+    flushSync()
+    read.set(1)
+    flushSync()
+    expect(outer).toBe(2)
+})
+
+// 12.14 FOR A DERIVED VALUE, AND FOR AN ADOPTION — what an owner built lets go of what it reads once
+// the owner stops. The owner here is the collector a component's setup opens. Left wired, the
+// derived value stayed on its source's reader list and the adopting one's mirror ran on every write
+// to what it adopted, for as long as the source lived. THE REVERT: drop the
+// `owned(() => orphan(cell))` in `createReactive` — the source keeps 2 readers where 0 are due.
+test('a derived and an adopting value stop reading when their owner stops — 12.14', () => {
+    const source = reactive(1)
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    const derived = reactive(() => source() + 1)
+    const adopting = reactive(() => source)
+    collectWatches(previous)
+    expect(derived()).toBe(2)
+    expect(adopting()).toBe(1)
+    const readers = (source as unknown as { [CELL]: { readers: unknown[] } })[
+        CELL
+    ].readers
+    expect(readers.length).toBe(2)
+
+    for (const stop of stops) stop()
+    expect(readers.length).toBe(0)
+    const wakes = WORK.wakes
+    source.set(2)
+    flushSync()
+    expect(WORK.wakes - wakes).toBe(0)
+
+    // Read again, each derives afresh and is current.
+    expect(derived()).toBe(3)
+    expect(adopting()).toBe(2)
 })
 
 // ── Adoption: RULEBOOK 11.12 to 11.19 ────────────────────────────────────────────
@@ -3149,6 +3269,53 @@ test('a keyed entry past its ttl is evicted whole, and the next reach starts aga
     expect(`runs: ${runs}`).toBe('runs: 2')
 })
 
+// 11.70 — A LOAD IN FLIGHT OUTLIVES ITS TTL, AND ITS END STARTS THE LIFE AGAIN, however it ends. A
+// reload that lands the value it already held makes no production, so only the probe edge hears it
+// end; a load that fails leaves nothing to serve. THE REVERTS: drop `trackProbe` in
+// `Lifetime.follow` and the equal landing reads `entries: 1` for good; drop the `!cell.loading`
+// arm of its `notify` and so does the failure.
+test('a keyed entry is kept while its load is in flight, and lives a ttl from its end — 11.70', async () => {
+    let finish = (_: number): void => {}
+    let loads = 0
+    const equal = reactive(
+        async (_args: { id: number }) => {
+            loads += 1
+            if (loads === 1) return 5
+            return new Promise<number>((done) => {
+                finish = done
+            })
+        },
+        { ttl: 30 },
+    )
+    const entry = equal({ id: 1 })
+    await entry
+    entry.refresh()
+    await Bun.sleep(60)
+    expect(`in flight: ${equal.entries.size}`).toBe('in flight: 1')
+    finish(5)
+    await Bun.sleep(10)
+    expect(`just landed: ${equal.entries.size}`).toBe('just landed: 1')
+    await Bun.sleep(60)
+    expect(`landed equal: ${equal.entries.size}`).toBe('landed equal: 0')
+
+    let fail = (_: Error): void => {}
+    const failing = reactive(
+        (_args: { id: number }) =>
+            new Promise<number>((_done, reject) => {
+                fail = reject
+            }),
+        { ttl: 30 },
+    )
+    failing({ id: 1 }).catch(() => {})
+    await Bun.sleep(60)
+    expect(`in flight: ${failing.entries.size}`).toBe('in flight: 1')
+    fail(new Error('down'))
+    await Bun.sleep(10)
+    expect(`just failed: ${failing.entries.size}`).toBe('just failed: 1')
+    await Bun.sleep(60)
+    expect(`failed: ${failing.entries.size}`).toBe('failed: 0')
+})
+
 // 11.50: A PRODUCTION MOVES AN ENTRY TO THE NEWEST POSITION, so a key that keeps producing
 // outlives one reached at the same moment and left alone. The margins are wide because
 // the deadlines are timers: `b` has been dead for 30 ms at the check and `a` has 30 ms left.
@@ -4157,6 +4324,66 @@ test('an async generator body streams: ready from its first chunk, busy until it
     await turns()
     expect(`busy: ${rows.busy()}`).toBe('busy: false')
     expect(rows()).toEqual([1, 2, 3])
+})
+
+// 9.20 BY WHAT THE RUN HANDS BACK. An arrow returning a generator types as a stream (the overload
+// reads the return), and runs as one: the same shape end to end, and a refresh opens the body's next
+// generator while the last accumulation stands (9.21). THE REVERT: drop the `isAsyncGenerator` arm in
+// `run`; the value holds the generator, and `rows()` is no array at all.
+test('a body handing back an async generator streams as one declared so — 9.20, 9.21', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(() => feed.body())
+    expect(`busy: ${rows.busy()}`).toBe('busy: true')
+    expect(`ready: ${rows.ready()}`).toBe('ready: false')
+
+    const first = feed.runs[0] as Run<number>
+    first.push(1)
+    await turns()
+    expect(rows()).toEqual([1])
+    expect(`busy: ${rows.busy()}`).toBe('busy: true')
+    first.close()
+    await turns()
+    expect(`busy: ${rows.busy()}`).toBe('busy: false')
+
+    rows.refresh()
+    expect(feed.runs.length).toBe(2)
+    expect(rows()).toEqual([1])
+    const second = feed.runs[1] as Run<number>
+    second.push(2)
+    await turns()
+    expect(rows()).toEqual([2])
+})
+
+// 9.20 FROM THAT RUN ON, whichever run it is: a body that lands a plain value first and a generator
+// once its input turns is a stream from the turn. THE REVERT: promote on a value's first run alone
+// (`!cell.landed`); the recompute stores the generator, and `rows()` is no array.
+test('a body that hands back a generator on a later run streams from that run — 9.20', async () => {
+    const feed = streamOf<number>()
+    const live = reactive(false)
+    const rows = reactive(() => (live() ? feed.body() : 0))
+    expect(rows()).toBe(0)
+    live.set(true)
+    rows()
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    expect(rows() as unknown).toEqual([1])
+})
+
+// 9.20 THROUGH A PROMISE: an async body resolving to a generator is a stream once it resolves, as a
+// handler behind rungs is (16.33). THE REVERT: drop the `isAsyncGenerator` arm of `absorb`'s settle;
+// the value holds the generator.
+test('a body whose promise resolves to an async generator streams — 9.20', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(async () => feed.body())
+    await turns()
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    expect(rows()).toEqual([1])
+    expect(`busy: ${rows.busy()}`).toBe('busy: true')
+    run.close()
+    expect(await rows).toEqual([1])
 })
 
 // 9.3 AND 9.22, ASSERTED AS THE WORK. The accumulation is pushed into per chunk and
@@ -6054,6 +6281,70 @@ test('a cursor is never handed undefined', async () => {
 // 4.14 AGAINST 4.15: NO ARGUMENT IS EMPTY, AND `undefined` IS A VALUE.
 //
 // THE REVERT is the factory passing `first` whatever the arity: `empty ready: true`.
+// AN OPENING VALUE THAT MAY BE `undefined` KEEPS IT IN ITS TYPE, which is 4.15 as the checker sees
+// it. THE REVERT: make `initial` optional on the value overload; `Accepted` is inferred as `string`,
+// and `bun run typecheck` refuses the `set(undefined)` below (TS2345).
+test('reactive(initial) accepts the undefined its initial value may be', () => {
+    const opening = ['ada'].find((name) => name.length > 9)
+    const held = reactive(opening)
+    expect(held()).toBe(undefined)
+    held.set('grace')
+    held.set(undefined)
+    expect(held()).toBe(undefined)
+})
+
+// 11.2 — A BODY WHOSE PARAMETER IS OPTIONAL IS KEYED, in its type as it is at run time: called with
+// the record or without it, and refused a record its parameter does not take. THE REVERT: drop the
+// optional-parameter overload; the checker types `tags` unkeyed, and `bun run typecheck` refuses the
+// call that passes a record (TS2554) — while at run time it was keyed all along.
+test('a body with an optional parameter is typed keyed — 11.2', async () => {
+    const tags = reactive(
+        async (args?: { type?: 'genre' | 'mood' }) => args?.type ?? 'all',
+    )
+    expect(isKeyed(tags)).toBe(true)
+    expect(await tags()).toBe('all')
+    expect(await tags({ type: 'mood' })).toBe('mood')
+    // @ts-expect-error — a type the parameter does not take.
+    void tags({ type: 'colour' })
+    const count = reactive(() => 1)
+    const counted: number = count()
+    const invoice = reactive(({ id }: { id: number }) => id)
+    // @ts-expect-error — a required parameter stays required.
+    void invoice()
+    expect({ counted, keyed: isKeyed(invoice) }).toEqual({
+        counted: 1,
+        keyed: true,
+    })
+})
+
+// 11.2 — AND WHATEVER DECLARES THE PARAMETER: a stream's optional one, a defaulted one and a rest
+// one, none of which `length` counts. THE REVERT: tell the forms apart by `length` in
+// `isKeyedBody`; the defaulted and the rest bodies are built unkeyed — `isKeyed` answers false for
+// both where true is due.
+test('a defaulted, a rest and a streaming optional parameter are all keyed — 11.2', async () => {
+    const paged = reactive(
+        (args: { page: number } = { page: 1 }) => `page ${args.page}`,
+    )
+    const forwarded = reactive(
+        (...given: [{ n: number }?]) => `rest ${given.length}`,
+    )
+    const streamed = reactive(async function* (args?: { from: number }) {
+        yield args?.from ?? 0
+    })
+    expect([isKeyed(paged), isKeyed(forwarded), isKeyed(streamed)]).toEqual([
+        true,
+        true,
+        true,
+    ])
+    expect([await paged({ page: 2 }), await forwarded({ n: 1 })]).toEqual([
+        'page 2',
+        'rest 1',
+    ])
+    const chunks: number[] = await streamed({ from: 3 })
+    expect(chunks).toEqual([3])
+    expect(await streamed()).toEqual([0])
+})
+
 test('reactive() is empty and reactive(undefined) is loaded', () => {
     const empty = reactive<string>()
     const loaded = reactive<string | undefined>(undefined)

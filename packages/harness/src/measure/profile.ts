@@ -10,6 +10,7 @@
 
 import { batch } from '../report/batch.ts'
 import { clockResolution } from '../report/clock.ts'
+import { emulatedDom } from '../report/environment.ts'
 import { type Ratio, ratio } from '../report/ratio.ts'
 import type { Sample } from '../report/Sample.ts'
 import { substrate } from '../report/substrate.ts'
@@ -108,10 +109,10 @@ export function profile(spec: {
         const run = batch({
             case: spec.op,
             arms: runs,
-            // A REAL BROWSER IS NOT AN EMULATOR. This is the one place the lane
-            // reports `null` rather than `'dom'`, and it is why the panel can carry
-            // a duration at all where `bun test` cannot.
-            emulated: null,
+            // A REAL BROWSER IS NOT AN EMULATOR, so the panel reads `null` here and can
+            // carry a duration at all where `bun test` cannot — and a run under bun's DOM
+            // reads `'dom'`, which `batch` refuses.
+            emulated: emulatedDom(),
             reps: PANEL_REPS,
             warmup: PANEL_WARMUP,
             budgetNanoseconds: PANEL_BUDGET_NANOSECONDS,

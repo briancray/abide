@@ -60,18 +60,27 @@ warning is where the problem goes.
 
 Read on: [Lifecycle](run-code-at-start-and-stop.md) · [Logging](record-what-happened.md)
 
-## `health` is a value, seeded like an rpc
+## `health` is an rpc that takes no args
 
-`health` is a `Reactive<Health>`, so a status page reads it by name and follows it. It is
-**seeded like an rpc**, which means the browser's own read on hydration is answered from the seed
-buffer rather than by the reporter running again (25.3, 41.5).
+`health` is an `Rpc`, imported from `abide` and called the same way on both sides: `health()` in
+a page, `await health()` in a handler. The call is what asks, so a page that never makes it
+loads no account.
 
 ```abide #ui/pages/status/page.abide — excerpt
+<script>
+import { health } from 'abide'
+
+const account = health()
+</script>
+
 <ul class="fields">
-    <li><span>version</span><strong>{health.version}</strong></li>
-    <li><span>up since</span><strong>{health.startedAt}</strong></li>
+    <li><span>version</span><strong>{account.version}</strong></li>
+    <li><span>up since</span><strong>{account.startedAt}</strong></li>
 </ul>
 ```
+
+It is **seeded like any rpc**, which means the browser's own call on hydration is answered from
+the seed buffer rather than by the reporter running again (25.3, 41.5).
 
 ## The endpoint is outside the onion
 

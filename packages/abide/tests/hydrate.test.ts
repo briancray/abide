@@ -8,7 +8,8 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { emitClient, parseAbide } from '#compiler'
+import { emitSource } from '#compiler/emitSource.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -21,8 +22,8 @@ afterAll(closeTyped)
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
 
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -40,10 +41,13 @@ async function mountPage(source: string) {
     const file = parseAbide(source)
     const reactive = await session.reads(`${ROOT}src/page.abide`, file)
 
-    const dir = temporaryModule({
-        'Page.ts': compileFile(source, reactive),
-        'Page.client.ts': emitClient(file, reactive),
-    })
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        reactive,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
 
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
@@ -87,7 +91,7 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
         flushSync()
     })
     // Two slots on this page, ONE of which reads a reactive value. THE REVERT: drop the
-    // `isLiveRun` check in `emitClient`; this reports `bindingRuns` 1 -> 2 and `wakes`
+    // `Lowering.isLiveRun` check in `emitClient`; this reports `bindingRuns` 1 -> 2 and `wakes`
     // 1 -> 2, and both grow with every static slot on the page.
     expect(mountWork.bindingRuns).toBe(1)
     expect(mountWork.wakes).toBe(1)
@@ -117,7 +121,7 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
 // A RUN reading nothing reactive is written once by the server and never again. The page below
 // has TWO runs — one static, one live — which is what makes the case distinguish: a page whose
 // only run is live reports one binding whether the check is there or not. THE REVERT: drop
-// `isLiveRun` in `emitClient` and bind every run; this reports 2 bindings where 1 is due, and
+// `Lowering.isLiveRun` in `emitClient` and bind every run; this reports 2 bindings where 1 is due, and
 // the mount gate below reports `bindingRuns` 2 where it reports 1.
 test('a run that reads nothing reactive opens no binding', async () => {
     const source = `<script>
@@ -147,9 +151,9 @@ const label = 'clicks'
     expect(client.match(/watch(Effect)?\(/g) ?? []).toHaveLength(1)
 })
 
-// A page with nothing to hydrate emits no client module at all, which is what makes "this page
-// ships no runtime" a fact about the build rather than a claim about the bundler.
-test('a static page emits no client module', async () => {
+// A component nothing invokes and with nothing to hydrate emits no client module at all. A page
+// always has one: a reader can navigate to it, and it fills its own region from that module (30.7).
+test('a static component nothing invokes emits no client module', async () => {
     expect(await clientOf('<h1>static</h1>', [])).toBe('')
 })
 
@@ -402,6 +406,79 @@ const shown = reactive(() => Promise.resolve(true))
     expect(document.querySelector('#off')).toBeNull()
 })
 
+// 41.24 — A REGION ADOPTS ONLY THE ARM THE SERVER PAINTED. The two sides disagree here for a reason no
+// wait can help with — a value that is one thing where the page rendered and another where it
+// hydrates — and both arms are one `<button>` apiece, so no walk refuses (41.10) and adopting would
+// bind the client's handler to the server's button in silence. The button's TEXT is static, so it
+// is whose nodes stand that this reads, apart from whose handler runs.
+//
+// THE REVERT: answer `false` from `ArmRegion.paintedOther`. This reports the button reading
+// `server` with the click running `client`, and no warning where one is due.
+test('an arm the client chose apart from the painted one is filled, not adopted — 41.24', async () => {
+    const side = globalThis as { armSide?: string | undefined }
+    side.armSide = 'server'
+    const { html, mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let pressed = reactive('')
+const side = (globalThis as { armSide?: string }).armSide
+</script>
+
+<main>{#if side === 'server'}<button id="act" onclick={() => { pressed = 'server' }}>server</button>{:else}<button id="act" onclick={() => { pressed = 'client' }}>client</button>{/if}<p id="pressed">{pressed}</p></main>`)
+    expect(html).toContain('<!--[0--><button id="act">server</button><!--]-->')
+
+    side.armSide = 'client'
+    const warned: string[] = []
+    const warn = console.warn
+    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
+    try {
+        mount(pageRegion(document.body))
+        flushSync()
+    } finally {
+        console.warn = warn
+        side.armSide = undefined
+    }
+    const button = document.querySelector('#act') as HTMLElement
+    button.click()
+    flushSync()
+    expect({
+        shown: button.textContent,
+        pressed: document.querySelector('#pressed')?.textContent,
+        warnings: warned.filter((line) => line.includes('abide:hydrate'))
+            .length,
+    }).toEqual({ shown: 'client', pressed: 'client', warnings: 1 })
+})
+
+// THE SAME ARM ON BOTH SIDES IS ADOPTED, not refilled: the check costs the hydrating page a compare
+// and nothing else. THE REVERT: answer `true` from `paintedOther`; this reports `nodesCreated` 2
+// where 0 is due.
+test('an arm the client chose as the server did is adopted — 41.24', async () => {
+    const { mount } = await mountPage(`<script>
+import { reactive } from 'abide'
+
+let on = reactive(false)
+</script>
+
+<main>{#if on}<b>on</b>{:else}<i>off</i>{/if}<button id="flip" onclick={() => { on = !on }}>flip</button></main>`)
+    const warned: string[] = []
+    const warn = console.warn
+    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
+    let work: ReturnType<typeof measure>
+    try {
+        work = measure(() => {
+            mount(pageRegion(document.body))
+            flushSync()
+        })
+    } finally {
+        console.warn = warn
+    }
+    expect(work.nodesCreated).toBe(0)
+    expect(warned.filter((line) => line.includes('abide:hydrate'))).toEqual([])
+    ;(document.querySelector('#flip') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('b')?.textContent).toBe('on')
+})
+
 // 32.3 — `name={expr}` IS REACTIVE, and the binding is what makes it so. The server writes the
 // value standing at render and, without this, nothing ever writes it again: a page whose `{tone}`
 // text moved while its `title={tone}` stayed behind is what shipped, and no assertion on the slot
@@ -563,12 +640,12 @@ const rows = await Promise.resolve(1)
     }
 })
 
-// A TEMPLATE POSITION CANNOT AWAIT EITHER, and for its own reason: every slot, subject and
-// attribute value is lowered into an ordinary arrow inside the markup concatenation, so there is
-// no function for an `await` to belong to at all. Apart from 34.3 because the refusal is the
-// checker's slot walk rather than the projection's, and a slot has no top level to speak of.
+// 32.57 — A TEMPLATE EXPRESSION CANNOT AWAIT EITHER, and for its own reason: each is lowered into
+// an ordinary arrow inside the markup concatenation, so there is no function for an `await` to
+// belong to at all. Apart from 34.3 because the refusal is the checker's walk of the template
+// expressions rather than the projection's, and an expression has no top level to speak of.
 //
-// THE REVERT: drop the `await` throw from `slotFacts`. The compile succeeds and the
+// THE REVERT: drop the `await` throw from `expressionFacts`. The compile succeeds and the
 // import of the emitted module reports the same bundler error, naming neither the page nor the
 // slot.
 test('a template position cannot await', async () => {
@@ -592,7 +669,7 @@ const rows = reactive(async () => 1)
 // ordinary handler and the `await` belongs to the arrow the author wrote; refused, a shape that
 // had always worked stopped compiling.
 //
-// THE REVERT: drop the `FUNCTIONS` arm of `slotFacts`. This reports
+// THE REVERT: drop the `FUNCTIONS` arm of `expressionFacts`. This reports
 // `a template position cannot await` against a page that is entirely correct.
 test('a slot that declares its own async may await in it', async () => {
     const { mount } = await mountPage(`<script>

@@ -3,7 +3,7 @@
 // wakes that name's readers alone (22.5): a version per name, bumped on a write, is what a read
 // subscribes to — the values themselves are a plain map.
 //
-// WHERE THE JAR COMES FROM IS A SLOT the server fills (`#server/requestScope.ts`), for `TRACE`'s
+// WHERE THE JAR COMES FROM IS A SLOT the server fills (`#server/installServer.ts`), for `TRACE`'s
 // reason: this seam cannot name the request scope, and a browser bundle must not reach it.
 
 import { decodedOrKept } from './decodedOrKept.ts'
@@ -68,9 +68,7 @@ export class Cookies implements Iterable<[string, string]> {
                 ? true
                 : init.expires !== undefined &&
                   new Date(init.expires).getTime() <= Date.now()
-        if (expired) this.held.delete(name)
-        else this.held.set(name, init.value ?? '')
-        this.write(name, init)
+        this.write(name, init, expired ? undefined : (init.value ?? ''))
     }
 
     delete(name: string): void
@@ -82,12 +80,11 @@ export class Cookies implements Iterable<[string, string]> {
     ): void {
         const given =
             typeof first === 'string' ? { ...options, name: first } : first
-        this.held.delete(given.name)
         const expired: CookieInit = { name: given.name, value: '', expires: 0 }
         if (given.path !== undefined) expired.path = given.path
         if (given.domain !== undefined && given.domain !== null)
             expired.domain = given.domain
-        this.write(given.name, expired)
+        this.write(given.name, expired, undefined)
     }
 
     get size(): number {
@@ -152,10 +149,13 @@ export class Cookies implements Iterable<[string, string]> {
         this.every.set((this.every.peek() ?? 0) + 1)
     }
 
-    write(name: string, init: CookieInit): void {
+    // The sink FIRST: a write it refuses (22.10) leaves the jar as it was.
+    write(name: string, init: CookieInit, value: string | undefined): void {
         const serialized = serializeCookie(init, this.inBrowser)
-        if (!this.inBrowser) this.writes.push(serialized)
         this.sink(serialized)
+        if (!this.inBrowser) this.writes.push(serialized)
+        if (value === undefined) this.held.delete(name)
+        else this.held.set(name, value)
         this.changed(name)
     }
 }
@@ -214,7 +214,7 @@ function parseCookies(header: string): Map<string, string> {
 
 /**
  * The slot `cookies()` reads its jar through: the document's by default, the request's once the
- * server fills it (`#server/requestScope.ts`).
+ * server fills it (`#server/installServer.ts`).
  */
 export const COOKIES: { current: () => Cookies } = {
     current: browserCookies,

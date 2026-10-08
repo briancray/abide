@@ -16,7 +16,8 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { parseAbide } from '#compiler'
+import { emitSource } from '#compiler/emitSource.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -29,8 +30,8 @@ afterAll(closeTyped)
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -42,10 +43,13 @@ let mounted: Scope | undefined
 async function mountPage(source: string): Promise<string> {
     const file = parseAbide(source)
     const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': compileFile(source, names),
-        'Page.client.ts': emitClient(file, names) || 'export default () => {}',
-    })
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        names,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
     html += new TextDecoder().decode(
@@ -338,10 +342,13 @@ let name = reactive('ada')
 
     const file = parseAbide(source)
     const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': compileFile(source, names),
-        'Page.client.ts': emitClient(file, names),
-    })
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        names,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
     html += new TextDecoder().decode(
@@ -407,10 +414,13 @@ const boom = (): string => {
 
     const file = parseAbide(source)
     const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': compileFile(source, names),
-        'Page.client.ts': emitClient(file, names),
-    })
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        names,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
     document.body.innerHTML = '<!--[--><p id="out">0</p><!--]-->'
     const { default: mount } = await import(`${dir}/Page.client.ts`)
 
@@ -544,10 +554,13 @@ let prefix = reactive('p')
 
     const file = parseAbide(source)
     const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': compileFile(source, names),
-        'Page.client.ts': emitClient(file, names),
-    })
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        names,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
     html += new TextDecoder().decode(
@@ -680,6 +693,271 @@ let inner = reactive(['x'])
     })
     expect(work.bindingRuns).toBe(1)
     expect(document.querySelector('b')?.textContent).toBe('onex!')
+})
+
+// 12.13 — AND THE WATCHES A BRANCH-LOCAL `<script>` OPENED (14.8). The arm's or the row's scope is
+// made before the script runs and collects its watches (`scopedSetup`); left where nothing held them, a closed arm's or a dropped row's watch went on
+// waking at every write. COUNTED PER INSTANCE, because the server's render ran these scripts too,
+// in this process. THE REVERT for both: drop `owned` from `watch` — the closed arm's and the
+// dropped row's disposers run 0 times where 1 is due, and their watches wake again at the bump.
+type Instance = { name: string; runs: number; disposed: number }
+const COUNTED = `const instance = { name: NAME, runs: 0, disposed: 0 }
+;((globalThis as { instances?: { name: string; runs: number; disposed: number }[] }).instances ??= []).push(instance)
+watch(() => {
+    mark
+    instance.runs += 1
+    return () => {
+        instance.disposed += 1
+    }
+})`
+
+function lastInstance(name: string): Instance {
+    const instances = (globalThis as { instances?: Instance[] }).instances ?? []
+    return instances.findLast((one) => one.name === name) as Instance
+}
+
+test('an arm that closes stops the watch its <script> opened — 12.13', async () => {
+    await mountPage(`<script>
+import { reactive, watch } from 'abide'
+
+let mark = reactive('')
+let on = reactive(true)
+</script>
+
+{#if on}<script>
+${COUNTED.replace('NAME', "'arm'")}
+</script><b>arm</b>{/if}
+<button id="close" onclick={() => { on = false }}>close</button>
+<button id="bump" onclick={() => { mark = '!' }}>bump</button>`)
+    flushSync()
+    const arm = lastInstance('arm')
+    expect(arm.runs).toBe(1)
+
+    click('#close')
+    expect(arm.disposed).toBe(1)
+    click('#bump')
+    expect(arm).toEqual({ name: 'arm', runs: 1, disposed: 1 })
+})
+
+test('a row that leaves stops the watch its <script> opened — 12.13', async () => {
+    await mountPage(`<script>
+import { reactive, watch } from 'abide'
+
+let rows = reactive(['one', 'two'])
+let mark = reactive('')
+</script>
+
+<ul>{#for row of rows by row}<script>
+${COUNTED.replace('NAME', 'row')}
+</script><li>{row}</li>{/for}</ul>
+<button id="drop" onclick={() => { rows = ['one'] }}>drop</button>
+<button id="bump" onclick={() => { mark = '!' }}>bump</button>`)
+    flushSync()
+    const one = lastInstance('one')
+    const two = lastInstance('two')
+
+    click('#drop')
+    expect(two.disposed).toBe(1)
+    click('#bump')
+    expect(two).toEqual({ name: 'two', runs: 1, disposed: 1 })
+    expect(one).toEqual({ name: 'one', runs: 2, disposed: 1 })
+})
+
+// A SCRIPT THAT THROWS answers no scope for anything to hold, so its own scope is stopped there.
+// Under a `{#try}` each retry runs the script again, and every run's watch was left awake behind
+// the catch. THE REVERT: drop the `catch` from `scopedSetup` — every instance is disposed 0 times
+// where 1 is due, and each wakes again at the bump.
+test('a <script> that throws stops the watch it opened first — 12.13', async () => {
+    await mountPage(`<script>
+import { reactive, watch } from 'abide'
+
+let mark = reactive('')
+let on = reactive(false)
+</script>
+
+{#try}{#if on}<script>
+${COUNTED.replace('NAME', "'thrower'")}
+throw new Error('arm')
+</script><b>arm</b>{/if}{:catch failure}<p id="caught">caught</p>{/try}
+<button id="open" onclick={() => { on = true }}>open</button>
+<button id="bump" onclick={() => { mark = '!' }}>bump</button>`)
+    flushSync()
+    click('#open')
+    expect(document.querySelector('#caught')).not.toBeNull()
+    const thrown = (
+        (globalThis as { instances?: Instance[] }).instances ?? []
+    ).filter((one) => one.name === 'thrower')
+    expect(thrown.length).toBeGreaterThan(0)
+    click('#bump')
+    for (const one of thrown)
+        expect(one).toEqual({ name: 'thrower', runs: 1, disposed: 1 })
+})
+
+// 32.16 — A COMPONENT WHOSE SETUP THROWS, IN AN ARM, UNDER A `{#try}`, SHOWS THE CATCH AND STOPS
+// THERE. The swap recorded its arm before mounting it, so the retry — this arm's watch run again —
+// found nothing to do, the boundary read that as recovered, and the body was remounted to throw
+// again: no turn between, so the tab froze. THE REVERT: move `${name}_at = next` back above the
+// arm in `emitBlock`'s swap — `kidRuns` reaches 26, where the guard stops the setup throwing, and the
+// catch never shows.
+test('a component that throws in an arm under {#try} shows the catch, once — 32.16', async () => {
+    const counted = globalThis as { kidRuns?: number }
+    counted.kidRuns = 0
+    await mountPage(`<script>
+import { reactive } from 'abide'
+
+let on = reactive(false)
+</script>
+
+{#component Kid()}<script>
+const counted = globalThis as { kidRuns?: number }
+counted.kidRuns = (counted.kidRuns ?? 0) + 1
+// The guard that lets the revert end: past 25 runs the setup stops throwing and the kid mounts.
+if (counted.kidRuns <= 25) throw new Error('kid')
+</script><i>kid</i>{/component}
+{#try}{#if on}<Kid/>{/if}{:catch failure}<p id="caught">{failure.message}</p>{/try}
+<button id="open" onclick={() => { on = true }}>open</button>`)
+    flushSync()
+    click('#open')
+    expect(document.querySelector('#caught')?.textContent).toBe('kid')
+    expect(counted.kidRuns).toBeLessThan(5)
+})
+
+// 10.5 — A BRANCH-LOCAL `<script>` IS INSIDE ITS INSTANCE'S SHARE SCOPE ON EVERY RUN, not just the
+// hydrating one. A later swap or a grown row runs it from a `watch` effect with no scope current,
+// so `reactive.share` threw "outside a component instance", the watch stopped (12.8) and the arm or
+// row never rendered. THE REVERT: drop `resumes` from `emitArms`' and `rowSetUp`'s `scopedSetup`
+// — the reopened arm is missing and the grown row is too.
+test('an arm reopened and a row grown read the share their page holds — 10.5', async () => {
+    await mountPage(`<script>
+import { reactive } from 'abide'
+
+reactive.share('theme', () => reactive('dark'))
+let on = reactive(true)
+let rows = reactive(['one'])
+</script>
+
+{#if on}<script>
+const theme = reactive.share('theme', () => reactive('arm-own'))
+</script><b>{theme}</b>{/if}
+<ul>{#for row of rows by row}<script>
+const theme = reactive.share('theme', () => reactive('row-own'))
+</script><li>{row} {theme}</li>{/for}</ul>
+<button id="flip" onclick={() => { on = !on }}>flip</button>
+<button id="grow" onclick={() => { rows = [...rows, 'two'] }}>grow</button>`)
+    flushSync()
+    click('#flip')
+    click('#flip')
+    expect(document.querySelector('b')?.textContent).toBe('dark')
+    click('#grow')
+    expect(
+        [...document.querySelectorAll('li')].map((row) => row.textContent),
+    ).toEqual(['one dark', 'two dark'])
+})
+
+// 12.14 — A ROW THAT LEAVES LETS GO OF WHAT ITS VALUES READ. A `reactive` a row's
+// `<script>` built stayed on the reader list of what it read for the life of the page, so the work
+// a write does grows with every row ever dropped, and nothing on the page shows it. An adoption's
+// mirror is the same leak with an effect on it, gated in `reactive.test.ts`. THE REVERT: drop the
+// `owned(() => orphan(cell))` in `createReactive` — the write visits 4 dead values (two a row)
+// where 0 are due.
+test('a row that leaves releases the values its <script> derived — 12.14', async () => {
+    await mountPage(`<script>
+import { reactive } from 'abide'
+
+let rows = reactive(['one', 'two'])
+let level = reactive(0)
+</script>
+
+<ul>{#for row of rows by row}<script>
+const plus = reactive(() => level + 1)
+const twice = reactive(() => level * 2)
+</script><li>{row} {plus} {twice}</li>{/for}</ul>
+<button id="drop" onclick={() => { rows = [] }}>drop</button>
+<button id="bump" onclick={() => { level = level + 1 }}>bump</button>`)
+    flushSync()
+    expect(document.querySelectorAll('li')).toHaveLength(2)
+    click('#drop')
+    expect(document.querySelectorAll('li')).toHaveLength(0)
+
+    const work = measure(() => {
+        click('#bump')
+    })
+    expect({ descents: work.descents, wakes: work.wakes }).toEqual({
+        descents: 0,
+        wakes: 0,
+    })
+})
+
+// AND A VALUE THAT ESCAPED ITS OWNER IS NEVER LEFT STALE. One a reader outside its owner still
+// follows stays wired until that reader leaves; one read after it was released runs its body
+// again. The follower is opened from a click, which no setup owns. THE REVERT: release an orphan
+// whatever still reads it (drop the reader test from `orphan`) — the follower reads 1 where 2 is
+// due.
+test('a derived value its owner left behind is current, followed or read — 12.14', async () => {
+    await mountPage(`<script>
+import { reactive, watch } from 'abide'
+
+let on = reactive(true)
+let level = reactive(0)
+const seen = ((globalThis as { escaped?: Record<string, unknown> }).escaped = {})
+function follow() {
+    seen.stop = watch(() => {
+        seen.last = (seen.take as () => unknown)()
+    })
+}
+</script>
+
+{#if on}<script>
+const plus = reactive(() => level + 1)
+seen.take = () => plus
+</script><b>{plus}</b>{/if}
+<button id="follow" onclick={follow}>follow</button>
+<button id="close" onclick={() => { on = false }}>close</button>
+<button id="bump" onclick={() => { level = level + 1 }}>bump</button>`)
+    flushSync()
+    const seen = (globalThis as { escaped?: Record<string, unknown> })
+        .escaped as {
+        last: unknown
+        take: () => unknown
+        stop: () => void
+    }
+    click('#follow')
+    expect(seen.last).toBe(1)
+    click('#close')
+    click('#bump')
+    expect(seen.last).toBe(2)
+
+    seen.stop()
+    click('#bump')
+    expect(seen.take()).toBe(3)
+})
+
+// 41.6 — A COMPONENT WITH NOTHING LIVE STILL RUNS ITS `<script>` ON HYDRATION, and 12.4 — what
+// that script opened is stopped with it. A static page was "no module" at all, so a watch there
+// never ran in the browser. THE REVERT: drop `&& setup.body === ''` from `emitClient`'s
+// nothing-live check — the browser's instance is never made, so the one found is the server's,
+// which the stop disposes 0 times where 1 is due.
+test('a component with nothing live runs its <script>, and stops what it opened — 41.6, 12.4', async () => {
+    await mountPage(`<script>
+import { reactive, watch } from 'abide'
+
+let mark = reactive('')
+;(globalThis as { bumpStatic?: (to: string) => void }).bumpStatic = (to) => {
+    mark = to
+}
+${COUNTED.replace('NAME', "'static'")}
+</script>
+
+<p>static</p>`)
+    flushSync()
+    const page = lastInstance('static')
+    expect(page.runs).toBe(1)
+
+    mounted?.stop()
+    expect(page.disposed).toBe(1)
+    ;(globalThis as { bumpStatic?: (to: string) => void }).bumpStatic?.('!')
+    flushSync()
+    expect(page).toEqual({ name: 'static', runs: 1, disposed: 1 })
 })
 
 // A TOGGLE DOES NOT ACCUMULATE. The block holds ONE scope for its whole life and REFILLS it on
@@ -921,7 +1199,7 @@ function add() {
 // `corpusRuns.test.ts` checks that a row the SERVER painted can be adopted by the client's
 // addressing. Nothing checked the other direction: that a row the BROWSER built is the same
 // document the server would have written. The build and the markup now read ONE description —
-// the positions the markup walk places, and the attributes `writtenAttributes` lists — but what
+// the positions the markup walk places, and the attributes `classifyAttributes` lists — but what
 // each writes is still two spellings of one answer (a `createTextNode` against bytes the parser
 // reads), and their agreement is a property nothing else enforces.
 //
@@ -1003,7 +1281,10 @@ function shapeOf(node: Node | undefined): string {
     if (node === undefined) return '(missing)'
     if (node.nodeType === 3)
         return `#text${JSON.stringify((node as Text).data)}`
-    if (node.nodeType === 8) return `#comment(${(node as Comment).data})`
+    // 41.24 — AN OPEN THE SERVER WROTE NAMES ITS ARM and one the browser wrote does not; what the
+    // two must agree on is that it is an open, at this position.
+    if (node.nodeType === 8)
+        return `#comment(${(node as Comment).data.replace(/^\[\d+$/, '[')})`
     const element = node as Element
     const attributes = [...element.attributes]
         .map(
@@ -1315,4 +1596,57 @@ function swap() {
         before[1] as HTMLSpanElement,
         before[0] as HTMLSpanElement,
     ])
+})
+
+// 12.13, 41.10 — AN ARM THAT REFUSES ITS DOCUMENT REBUILDS ITS BINDINGS AND KEEPS ITS `<script>`'S
+// WATCHES. The script ran once, into the arm's scope, ahead of the mount; the rebuild re-runs the
+// mount and not the script, so the refusal stops only what the mount opened. THE REVERT: stop the
+// whole scope on a refusal (`stop()` for `stop(__mark)` in `mountFunction`) — the script's watch is
+// disposed at the rebuild and wakes 0 times at the bump where once is due.
+test('an arm rebuilt by a mismatch keeps the watch its <script> opened — 12.13, 41.10', async () => {
+    const source = `<script>
+import { reactive, watch } from 'abide'
+
+let mark = reactive('')
+let on = reactive(true)
+</script>
+
+{#if on}<script>
+${COUNTED.replace('NAME', "'rebuilt'")}
+</script><p id="armp">arm {mark}</p>{/if}
+<button id="bump" onclick={() => { mark = '!' }}>bump</button>`
+    const file = parseAbide(source)
+    const names = await session.reads(`${ROOT}src/page.abide`, file)
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        names,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
+    const { default: Component } = await import(`${dir}/Page.ts`)
+    let html = ''
+    html += new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    ;(document.querySelector('#armp') as HTMLElement).replaceWith(
+        document.createElement('b'),
+    )
+    const { default: mount } = await import(`${dir}/Page.client.ts`)
+    const said = await warningsWhile(async () => {
+        mounted = mount(pageRegion(document.body)) as Scope
+    })
+    expect(said.filter((line) => line.includes('41.10'))).toHaveLength(1)
+    const arm = lastInstance('rebuilt')
+    expect(arm).toEqual({ name: 'rebuilt', runs: 1, disposed: 0 })
+    click('#bump')
+    expect(document.querySelector('#armp')?.textContent).toBe('arm !')
+    expect(arm).toEqual({ name: 'rebuilt', runs: 2, disposed: 1 })
 })

@@ -9,7 +9,7 @@ import { inScope } from '#server/requestScope.ts'
 import { reactive } from '#shared'
 import { defaultsInSource } from '#shared/reactive/parameterDefaults.ts'
 
-// THE REVERT: key `reach` on `given` rather than on `withDefaults(given, defaults)` in `Keyed.ts`;
+// THE REVERT: key `reach` on `given` rather than on `normalised(self, given)` in `Keyed.ts`;
 // this reports `runs: 2`, with `{}`, `{"page":1}` and no args three entries where one is due.
 test('a call leaving a member to its parameter default reaches the entry of one that wrote it — 11.29', () => {
     let runs = 0
@@ -48,7 +48,7 @@ test('a trigger naming the default reaches the entry a call left to it — 11.29
 })
 
 // 11.27 BEHIND RUNGS: the value the onion runs in is keyed ahead of the handler's own, so the
-// defaults are applied at the call. THE REVERT: drop `withDefaults` from `call` in `rpc.ts`; the rung
+// defaults are applied at the call. THE REVERT: drop `normalised` from `call` in `rpc.ts`; the rung
 // runs for `{}` and again for `{ page: 1 }` — `rung runs: 2`.
 test("an Rpc's rungs run once for a call that left a member to the handler's default — 11.27", async () => {
     let rungRuns = 0

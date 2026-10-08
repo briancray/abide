@@ -5,8 +5,6 @@
 // and a throw out of `onConfig` is the value's standing error, which a read throws (27.1).
 
 import { homedir } from 'node:os' // bun exposes no home directory of its own
-import { APP_NAME } from '#shared/log.ts'
-import { MOUNT } from '#shared/mount.ts'
 import { numberFromText } from '#shared/numberFromText.ts'
 import { reactive } from '#shared/reactive/index.ts'
 import { validationError } from '#shared/refuse.ts'
@@ -35,7 +33,23 @@ export function packageUnder(root: string): AppPackage {
     return {}
 }
 
-export interface Config extends Env {}
+/**
+ * The resolved document, which an app widens by declaration merging.
+ *
+ * `unknown` UNDER THE NAMED FIELDS rather than `Env`'s text: a default an app declares is coerced to
+ * its own type (27.8) and a schema may make anything of the document (27.7), so a field an app
+ * merges in as a `number` has to be one the index admits.
+ */
+export interface Config {
+    [field: string]: unknown
+    APP_NAME: string
+    APP_VERSION: string
+    APP_DATA_DIR: string
+    ABIDE_LOGS: boolean
+    ABIDE_OPENAPI: boolean
+    ABIDE_MCP: boolean
+    ABIDE_BRIDGE: boolean
+}
 
 /** The resolved configuration: abide's derived values, then `onConfig`'s defaults, then the env. */
 export const config = reactive(resolve, { global: true })
@@ -44,7 +58,10 @@ function resolve(): Config {
     const env: Env = { ...process.env }
     const hooked = HOOKS.config
     // 27.4 — SYNCHRONOUS BY CONTRACT; a promise handed back is a contract broken, not a value.
-    const defaults = hooked?.defaults?.(env) ?? {}
+    // 27.11 — handed what 27.3 derives under the environment, so a default can be built on
+    // `APP_DATA_DIR` without deriving it a second time.
+    const derivedValues = derived()
+    const defaults = hooked?.defaults?.({ ...derivedValues, ...env }) ?? {}
     if (defaults instanceof Promise)
         throw new Error(
             'abide: onConfig returned a promise. ConfigDefaults is synchronous; read what the defaults need before registering them. RULEBOOK 27.4.',
@@ -55,7 +72,7 @@ function resolve(): Config {
         ABIDE_OPENAPI: false,
         ABIDE_MCP: false,
         ABIDE_BRIDGE: false,
-        ...derived(),
+        ...derivedValues,
         ...(defaults as Record<string, unknown>),
     }
     // 27.8 — THE ENVIRONMENT, COERCED TO THE DEFAULT IT OVERRIDES; a value that will not coerce leaves
@@ -112,7 +129,7 @@ function dataDirectory(name: string): string {
 
 // 28.4 — THE APP'S NAME IS `log`'s ROOT NAMESPACE, and the config is where the name is decided.
 // PEEKED, so a log line written inside an effect does not subscribe it to the configuration.
-APP_NAME.derived = (): string | undefined => {
+export function derivedAppName(): string | undefined {
     const resolved = config.peek()
     return typeof resolved?.APP_NAME === 'string'
         ? resolved.APP_NAME
@@ -167,7 +184,7 @@ export function appOrigin(): string | undefined {
 
 // 36.2, 16.11 — THE MOUNT IS `APP_URL`'s PATH, trailing slash dropped, and the root where there is
 // none.
-MOUNT.current = (): string => {
+export function configuredMount(): string {
     appUrl()
     return mountIs
 }

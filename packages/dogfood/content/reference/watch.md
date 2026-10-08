@@ -31,7 +31,7 @@ A function that stops the watch.
 | Name | Signature | Description |
 | --- | --- | --- |
 | `watch` | `(effect: Effect) => () => void` | Watches whatever the effect reads. |
-| `watch` | `<Stored>(sources: Reactive<Stored> \| Reactive<Stored>[], effect: Effect) => () => void` | The narrowed form, over named sources. |
+| `watch` | `(sources: Reactive<unknown, never, unknown, unknown> \| Reactive<unknown, never, unknown, unknown>[], effect: Effect) => () => void` | The narrowed form, over named sources. |
 | `Effect` | `() => void \| Disposer` | What runs on change. |
 | `Disposer` | `() => void` | What tears down the previous run: before each rerun, and once at teardown. |
 | `flushSync` | `() => void` | Ends the turn: every effect a write woke runs now. |

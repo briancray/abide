@@ -11,6 +11,7 @@
 
 import { propKeyOf } from './classifyTemplate.ts'
 import type { Lowering } from './Lowering.ts'
+import { holdsReactive } from './PositionTable.ts'
 import type { InlineComponent, TemplateNode } from './TemplateNode.ts'
 
 /** The props-record entries a component tag hands its child: spreads first, then each prop. */
@@ -34,7 +35,7 @@ export function invocationProps(
             )
         // A STATIC PROP IS STILL AN ACCESSOR. One shape per prop whatever the call site spelled
         // (33.10), so the child reads every key the same way and a literal is not a second case.
-        if (attribute.lowerName.startsWith('bind:')) {
+        if (holdsReactive(lowering.projection.slots.get(attribute))) {
             explicit.push(
                 `${JSON.stringify(key)}: ${lowering.use('boundProp')}(() => (${lowering.reference(attribute)}))`,
             )

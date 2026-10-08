@@ -93,8 +93,10 @@ up rather than failing at the first request that reads a setting.
 `onStart` hooks wrap the boot, so work that must happen before the first request happens before
 `await start()` and the server does not accept anything until it has.
 
-Once it is serving, `abide start` opens a shell on the app — the one `abide connect` opens from
-elsewhere. `exit` stops the app. Where nothing is typing, as in a container, it keeps serving.
+`abide start` only serves, and reads no input — what a container or a process manager wants.
+`abide` with no command serves the same build and opens a shell on it — the one
+`abide --url` opens on an app running elsewhere. `exit` stops the app, and input that ends leaves
+it serving.
 
 Read on: [Lifecycle](../app/run-code-at-start-and-stop.md) ·
 [Config](../app/configure-the-app.md)

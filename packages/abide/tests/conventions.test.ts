@@ -46,6 +46,27 @@ test('framework code imports by seam, never through its own public specifier', a
     expect(offenders).toEqual([])
 })
 
+// CLAUDE.md, "checks": A TEST NEVER WAITS ON A CHILD SYNCHRONOUSLY. A `bun test --parallel` worker can
+// lose a child's exit, and a synchronous wait then spins for good where no timeout can reach it —
+// the gate hangs and reports nothing. `spawned` from `harness/gate` awaits with a deadline instead.
+// THE REVERT: write one `Bun.spawn[S]ync(` into any test; it is named here.
+test('no test waits on a child process synchronously', async () => {
+    const offenders: string[] = []
+    const PACKAGES = new URL('../../', import.meta.url)
+    for (const pattern of [
+        'abide/tests/**/*.ts',
+        'harness/tests/**/*.ts',
+        'harness/src/**/*.ts',
+        'harness/scripts/**/*.ts',
+        'dogfood/tests/**/*.ts',
+    ])
+        for (const { path, text } of await sources(PACKAGES, pattern))
+            for (const line of text.split('\n'))
+                if (/\bspawn[S]ync\(/.test(line) && !/^\s*(\/\/|\*)/.test(line))
+                    offenders.push(`${path}: ${line.trim()}`)
+    expect(offenders).toEqual([])
+})
+
 // CLAUDE.md, "writing code": a `node:` import names the bun api it stands in for, in the comment.
 // The rule is not "never" — it is that the reason is written down where the next reader meets it,
 // so a stand-in cannot quietly become the house pattern.

@@ -31,6 +31,8 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     // 33.20 — a default answering where the caller's accessor reads `undefined`.
     'propOr',
     'withoutKeys',
+    // 33.22 — a rest element handed on whole, as the values its accessors read.
+    'restValues',
     // 32.11 — a spread's props, which an invocation passes on both sides, and its markup.
     'spreadProps',
     'spreadAttributes',

@@ -3,8 +3,8 @@
 // and the compiler, which a compiled app's executable does not hold.
 
 import { existsSync, realpathSync } from 'node:fs' // bun exposes no sync existence check or realpath of its own
-import { rm } from 'node:fs/promises' // bun exposes no recursive directory removal of its own
-import { resolve } from 'node:path' // bun exposes no path helpers of its own
+import { mkdir, rename, rm } from 'node:fs/promises' // bun exposes no directory creation, rename or recursive directory removal of its own
+import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { brotliCompress, constants } from 'node:zlib' // bun has gzip and zstd of its own, and no brotli
 
 import { checkApp } from '#compiler/checkApp.ts'
@@ -26,10 +26,10 @@ import {
     stylesheetUnderMount,
 } from '#server/clientBuildOptions.ts'
 import { type Given, type Host, runCommands } from '#server/commands.ts'
+import { buildDirectory } from '#server/buildDirectory.ts'
 import { packageUnder } from '#server/config.ts'
 import {
     appRoot,
-    buildDirectory,
     createApp,
     hooksModuleUnder,
     originUnder,
@@ -90,9 +90,11 @@ async function build(directories: AppDirectories): Promise<number> {
 /** `build`'s work; answers whether there was anything under `root` to build. */
 async function writeBuild({ root, out }: AppDirectories): Promise<boolean> {
     process.env.NODE_ENV ??= 'production'
+    // 38.67 — what this build may remove is only what was written before it began.
+    const began = Date.now()
     // `--out` is a real flag rather than a constant because two test files each building into
     // one `.abide/` is the contention CLAUDE.md's "checks" section already records once.
-    const app = await compileApp(root)
+    const app = await compileApp(root, out)
     for (const warning of app.warnings)
         console.warn(formatDiagnosis(warning, process.cwd()))
     if (app.modules.size === 0) {
@@ -102,22 +104,19 @@ async function writeBuild({ root, out }: AppDirectories): Promise<boolean> {
     // WRITTEN TOGETHER. 175 modules for the docs app, each independent of the others, and one
     // `await` a time made the emit a queue — the same reason `publicFilesAt` and the dev
     // worker's own reads are one `Promise.all` each.
-    const writes: Promise<number>[] = []
+    const writes: Promise<void>[] = []
     for (const [name, text] of app.modules)
-        writes.push(Bun.write(`${out}/${name}`, text))
+        writes.push(writeWhole(`${out}/${name}`, text))
     await Promise.all(writes)
 
     // A MODULE WHOSE SOURCE IS GONE IS REMOVED, not left standing, or the output is the union of
     // every build and a grep over it answers about code no build produces — the same class as the
-    // orphan chunks `bundleClient` empties, one level up.
+    // orphan chunks `bundleClient` prunes, one level up.
     //
     // PRUNED AGAINST WHAT WAS JUST WRITTEN rather than by emptying `out`: the directory is named
     // by `--out` and a flag that deletes a tree is a different kind of thing from one that writes
-    // into it. `client/` holds `.js` and is emptied where it is built.
-    const stale: Promise<void>[] = []
-    for (const path of new Bun.Glob('**/*.ts').scanSync({ cwd: out }))
-        if (!app.modules.has(path)) stale.push(rm(`${out}/${path}`))
-    await Promise.all(stale)
+    // into it. `client/` holds `.js` and is pruned where it is built.
+    await pruneStale(out, '**/*.ts', app.modules, began)
     // 36.11 — the path below the directory IS the address. `favicon.ico` answers at
     // `/favicon.ico`, and nothing declares that anywhere.
     const publicNames = namesUnder(`${root}/ui/${PUBLIC_DIRECTORY}`)
@@ -131,6 +130,7 @@ async function writeBuild({ root, out }: AppDirectories): Promise<boolean> {
         [fenceServer(root, app.modules), ...(await appPlugins(root))],
         publicAddresses,
         app.routes.length > 0,
+        began,
     )
     // An app's static files are its own whether or not it has a page yet.
     const published = await copyPublic(root, out, publicNames)
@@ -260,11 +260,11 @@ async function copyPublic(
 ): Promise<number> {
     const from = `${root}/ui/${PUBLIC_DIRECTORY}`
 
-    const copies: Promise<number>[] = []
+    const copies: Promise<void>[] = []
     // 36.12 — the bytes as authored. `Bun.write` of a `BunFile` is a copy and not a re-encode.
     for (const name of names)
         copies.push(
-            Bun.write(
+            writeWhole(
                 `${out}/${PUBLIC_DIRECTORY}/${name}`,
                 Bun.file(`${from}/${name}`),
             ),
@@ -291,55 +291,113 @@ async function bundleClient(
     plugins: Bun.BunPlugin[],
     publicAddresses: string[],
     paged: boolean,
+    began: number,
 ): Promise<void> {
-    // EMPTIED FIRST. `Bun.build` writes its chunks in and removes nothing, so a chunk whose content
-    // hash changed leaves the old one behind and the directory is the union of every build ever run
-    // into it — and the cost is not disk: a grep over the built output answers about code no page
-    // loads.
-    await rm(`${out}/${CLIENT_DIRECTORY}`, { recursive: true, force: true })
+    const client = `${out}/${CLIENT_DIRECTORY}`
     // AN APP OF HANDLERS ALONE has no page to boot, and is served with no client — the manifest
     // written anyway, so `abide start` reads one shape whatever the app holds.
     if (!paged) {
-        await Bun.write(`${out}/${MANIFEST}`, JSON.stringify(NO_MANIFEST))
+        await pruneStale(client, '**/*', new Set(), began)
+        await writeWhole(`${out}/${MANIFEST}`, JSON.stringify(NO_MANIFEST))
         return
     }
-    const built = await Bun.build({
-        ...clientBuildOptions(out, plugins, publicAddresses),
-        outdir: `${out}/${CLIENT_DIRECTORY}`,
-        // 38.5 — MINIFIED, and EVERY NAME HASHED, the entry's included: chunks and assets are
-        // already `[name]-[hash]` by default and the entry is not, which left the one file every
-        // page loads served for a year under a name the next deploy writes different bytes to.
-        // The manifest is how the document learns what the entry was called this time.
-        //
-        // NAMES KEPT, because a class's name is what an error reads to say what it was handed
-        // (`canonicalKey`), and a production error naming `a e` is one nobody can act on. It is
-        // free where it is paid: the JS the docs app's `/values` sends is 25.6 KB brotli with
-        // the names and without, against 31.9 unminified.
-        minify: {
-            whitespace: true,
-            syntax: true,
-            identifiers: true,
-            keepNames: true,
-        },
-        naming: { entry: '[name]-[hash].[ext]' },
-    })
-    // THROWN RATHER THAN LOGGED. A build that emitted server modules and no bundle is an app that
-    // serves every page dead — the markup is right and nothing is wired — which is the one failure
-    // a reader cannot see, so it stops the command instead.
-    if (!built.success)
-        throw new AggregateError(
-            built.logs,
-            'abide build: the client bundle failed',
+    // 38.67 — STAGED, THEN MOVED IN FILE BY FILE. `Bun.build` writes in place, so a second build
+    // into the same `out` — or `abide start` serving it — read a chunk half written, and emptying
+    // `client/` first took the one it was serving away. Every name but the manifest's is a hash of
+    // what it holds, so two builds of one tree move in the same bytes under the same names.
+    const staging = `${out}/.staging-${crypto.randomUUID()}`
+    try {
+        const built = await Bun.build({
+            ...clientBuildOptions(out, plugins, publicAddresses),
+            outdir: staging,
+            // 38.5 — MINIFIED, and EVERY NAME HASHED, the entry's included: chunks and assets are
+            // already `[name]-[hash]` by default and the entry is not, which left the one file every
+            // page loads served for a year under a name the next deploy writes different bytes to.
+            // The manifest is how the document learns what the entry was called this time.
+            //
+            // NAMES KEPT, because a class's name is what an error reads to say what it was handed
+            // (`canonicalKey`), and a production error naming `a e` is one nobody can act on. It is
+            // free where it is paid: the JS the docs app's `/values` sends is 25.6 KB brotli with
+            // the names and without, against 31.9 unminified.
+            minify: {
+                whitespace: true,
+                syntax: true,
+                identifiers: true,
+                keepNames: true,
+            },
+            naming: { entry: '[name]-[hash].[ext]' },
+        })
+        // THROWN RATHER THAN LOGGED. A build that emitted server modules and no bundle is an app that
+        // serves every page dead — the markup is right and nothing is wired — which is the one failure
+        // a reader cannot see, so it stops the command instead.
+        if (!built.success)
+            throw new AggregateError(
+                built.logs,
+                'abide build: the client bundle failed',
+            )
+        await Promise.all(built.outputs.map(precompressOne))
+        const produced = new Set<string>()
+        const moves: Promise<void>[] = []
+        for (const name of namesUnder(staging)) {
+            produced.add(name)
+            moves.push(
+                mkdir(dirname(`${client}/${name}`), { recursive: true }).then(
+                    () => rename(`${staging}/${name}`, `${client}/${name}`),
+                ),
+            )
+        }
+        await Promise.all(moves)
+        await pruneStale(client, '**/*', produced, began)
+        // THE REAL PATH, because the metafile names a file on disk with its symlinks resolved — and an
+        // `--out` under `/tmp` is `/private/tmp` to the bundler, which would key nothing at all.
+        await writeWhole(
+            `${out}/${MANIFEST}`,
+            JSON.stringify(
+                manifestOf(
+                    built.metafile as Bun.BuildMetafile,
+                    realpathSync(out),
+                ),
+            ),
         )
-    // THE REAL PATH, because the metafile names a file on disk with its symlinks resolved — and an
-    // `--out` under `/tmp` is `/private/tmp` to the bundler, which would key nothing at all.
-    await Bun.write(
-        `${out}/${MANIFEST}`,
-        JSON.stringify(
-            manifestOf(built.metafile as Bun.BuildMetafile, realpathSync(out)),
-        ),
-    )
-    await Promise.all(built.outputs.map(precompressOne))
+    } finally {
+        await rm(staging, { recursive: true, force: true })
+    }
+}
+
+/**
+ * Removes from `directory` what this build did not produce.
+ *
+ * A CHUNK WHOSE HASH CHANGED leaves the old one behind otherwise, and the directory is the union of
+ * every build ever run into it — and the cost is not disk: a grep over the built output answers about
+ * code no page loads. 38.67 — only what was written before this build began: anything newer is a
+ * concurrent build's, and its manifest may name it.
+ */
+async function pruneStale(
+    directory: string,
+    pattern: string,
+    produced: { has(name: string): boolean },
+    began: number,
+): Promise<void> {
+    const stale: Promise<void>[] = []
+    // A file gone since the scan reads as last written in the far future, and is left alone.
+    for (const name of namesUnder(directory, pattern))
+        if (
+            !produced.has(name) &&
+            Bun.file(`${directory}/${name}`).lastModified < began
+        )
+            stale.push(rm(`${directory}/${name}`, { force: true }))
+    await Promise.all(stale)
+}
+
+/**
+ * Writes `path` whole: to a name of its own beside it, then renamed over it.
+ *
+ * 38.67 — a reader, or a second build, finds the last complete file there and never a partial one.
+ */
+async function writeWhole(path: string, content: string | Blob): Promise<void> {
+    const partial = `${path}.${crypto.randomUUID()}.partial`
+    await Bun.write(partial, content)
+    await rename(partial, path)
 }
 
 /**

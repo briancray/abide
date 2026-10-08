@@ -26,8 +26,8 @@ reactive(initial, { history }) // a channel: live state the system publishes
 
 * `body` — the function producing the value. Declaring **no** parameter makes an unkeyed, tracked
   value. Declaring **one** makes a keyed, untracked one, and that parameter is the cache key.
-  Declaring it `async function*` makes it a stream. A body answering `undefined` lands
-  `undefined`.
+  Declaring it `async function*` makes it a stream, and so does handing back an async generator,
+  or a promise of one, from any run. A body answering `undefined` lands `undefined`.
 * `initial` (optional) — a settled value or a load. Leaving it out is an empty value, `reactive<T>()`,
   where `reactive<T>(undefined)` has landed `undefined`.
 * `options` (optional) — the `ReactiveOptions` below.
@@ -42,11 +42,15 @@ factory.
 
 | Name | Signature | Description |
 | --- | --- | --- |
-| `reactive` | `<Chunk, Shaped = Chunk[]>(body: () => AsyncGenerator<Chunk>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never> & { transform?: (value: Chunk[]) => Shaped }) => Reactive<Kept<Shaped>, Chunk[], Refused<Shaped>, Chunk>` | A stream. The value is the chunks so far, materialised on the read. |
-| `reactive` | `<Chunk, Args, Shaped = Chunk[]>(body: (args: Args) => AsyncGenerator<Chunk>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never, Args> & { transform?: (value: Chunk[]) => Shaped }) => Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped>, Chunk>` | A stream per args key. |
+| `reactive` | `<Chunk, Shaped = Chunk[]>(body: () => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never> & { transform?: (value: Chunk[]) => Shaped }) => Reactive<Kept<Shaped>, Chunk[], Refused<Shaped>, Chunk>` | A stream. The value is the chunks so far, materialised on the read. |
+| `reactive` | `<Chunk, Args, Shaped = Chunk[]>(body: (args: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never, Args> & { transform?: (value: Chunk[]) => Shaped }) => Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped>, Chunk>` | A stream per args key. |
+| `reactive` | `<Chunk, Args, Shaped = Chunk[]>(body: (args?: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never, Args \| undefined> & { transform?: (value: Chunk[]) => Shaped }) => Keyed<Kept<Shaped>, Args \| undefined, Chunk[], Refused<Shaped>, Chunk>` | A keyed stream whose parameter is optional: called with its record or without one. |
 | `reactive` | `<Computed, Shaped = Awaited<Computed>>(body: () => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never> & { transform?: (value: Awaited<Computed>) => Shaped }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | Unkeyed. Recomputes when a value its body read changes. |
 | `reactive` | `<Computed, Args, Shaped = Awaited<Computed>>(body: (args: Args) => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args> & { transform?: (value: Awaited<Computed>) => Shaped }) => Keyed<Kept<Shaped>, Args, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | Keyed. One entry per args key, computed when that key is reached and held. |
-| `reactive` | `<Accepted, Shaped = Accepted>(initial?: Accepted \| Promise<Accepted>, options?: ReactiveOptions<Accepted, Kept<Shaped>, never> & { transform?: (value: Accepted) => Shaped }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped>>` | A value the scope owns, from a settled value or a load. |
+| `reactive` | `<Computed, Args, Shaped = Awaited<Computed>>(body: (args?: Args) => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args \| undefined> & { transform?: (value: Awaited<Computed>) => Shaped }) => Keyed<Kept<Shaped>, Args \| undefined, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | A keyed value whose parameter is optional: called with its record or without one. |
+| `reactive` | `<Accepted, Shaped = Accepted>(initial: Accepted \| Promise<Accepted>, options?: ReactiveOptions<Accepted, Kept<Shaped>, never> & { transform?: (value: Accepted) => Shaped }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped>>` | A value the scope owns, from a settled value or a load. |
+| `reactive` | `<Accepted = undefined, Shaped = Accepted>(initial: undefined, options?: ReactiveOptions<Accepted, Kept<Shaped>, never> & { transform?: (value: Accepted) => Shaped }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped>>` | A value opening at `undefined`. Loaded, and ready to read. |
+| `reactive` | `<Accepted>() => Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | A value nothing has written yet. Not ready until the first `set`. |
 | `reactive.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create in the component's scope by key, so two components reach one value without a prop between them. |
 | `Keyed` | `Keyed<Stored, Args, Accepted = Stored, Failures = never, Produced = Stored>` | What a keyed body hands back: a callable carrying the probes and the triggers, the factory being what has an args space to narrow over. Each key reaches a `Reactive`. |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key. Serializable by contract, the key being the wire form. |

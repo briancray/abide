@@ -82,7 +82,7 @@ test('a static page does not carry the runtime into its bundle', async () => {
     // `emitClient` answers nothing — the table holds a row either way, so the bundle is the honest
     // place to ask what that row costs.
     const moduleOf = (source: string): string =>
-        emitClient(parseAbide(source), [], 'none') ||
+        emitClient(parseAbide(source), undefined, 'none') ||
         'export default () => {}\n'
 
     const dir = temporaryModule({

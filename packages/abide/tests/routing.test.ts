@@ -1,6 +1,6 @@
 // 30.7 — NAVIGATION THAT DOES NOT RELOAD THE DOCUMENT, end to end. The destination's markup is
 // not fetched — the server is asked only whether the navigation may happen (30.15): a page the reader navigated to is handed the empty anchor pair and fills it from
-// the template its own module carries, which is `emitClient`'s `isEmptyRegion` guard doing for a
+// the template its own module carries, which is `emitClient`'s `fillEmpty` doing for a
 // PAGE exactly what it already did for an invoked component (32.17).
 //
 // THE SAME MODULE BOTH WAYS IN is the claim worth holding: the page the server painted hydrates
@@ -13,6 +13,7 @@ import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { composePage } from '#server/render.ts'
 import { flushSync, navigate, route } from '#shared'
+import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
 import { CURRENT_ROUTER } from '#shared/CURRENT_ROUTER.ts'
 import {
     coversPrefix,
@@ -27,7 +28,6 @@ import {
     type Segment,
 } from '#shared/routePattern.ts'
 import { applyHead } from '#ui/applyHead.ts'
-import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
 import { listenForRoutes, type PageMount, startRouter } from '#ui/routing.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -52,8 +52,8 @@ afterEach(() => {
     answering = goAhead
     asked.length = 0
 })
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
     CURRENT_ROUTER.current = null
     globalThis.fetch = unstubbed
@@ -79,10 +79,11 @@ let rows = reactive(['one', 'two'])
 
 async function pages(
     shell = '<!doctype html><html><head></head><body></body></html>',
+    homeSource = HOME,
 ): Promise<Record<string, PageMount>> {
     const modules: Record<string, string> = {}
     for (const [name, source] of Object.entries({
-        Home: HOME,
+        Home: homeSource,
         Invoice: INVOICE,
     })) {
         const file = parseAbide(source)
@@ -203,6 +204,58 @@ test('a navigation the server refuses is left to the document — 30.18', async 
     expect(left).toEndWith('/invoices/42')
     expect(history.length).toBe(entries)
     expect(document.querySelector('#invoice')).toBeNull()
+    expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+})
+
+// 30.27 — A SERVER THAT CANNOT BE REACHED: the request throws and so does the page's chunk. THE
+// REVERT: call `load` in place of `loadOrMiss` in `Router.go`; the rejection escapes a click's
+// `void`, the address is never handed over and `left` stays ''.
+test('a navigation whose chunks fail to load is left to the document — 30.27', async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages()
+    const r = startRouter(
+        [
+            {
+                pattern: '/invoices/[id]',
+                load: () => Promise.reject(new TypeError('Failed to fetch')),
+                layouts: [],
+            },
+            {
+                pattern: '/',
+                load: async () => ({ default: mounts.home as PageMount }),
+                layouts: [],
+            },
+        ],
+        document.body,
+        false,
+    )
+    await r.hydrate()
+    const entries = history.length
+    let left = ''
+    answering = () => {
+        throw new TypeError('Failed to fetch')
+    }
+    const assign = Object.getOwnPropertyDescriptor(location, 'href')
+    Object.defineProperty(location, 'href', {
+        configurable: true,
+        get: () => 'http://localhost/',
+        set: (to: string) => {
+            left = to
+        },
+    })
+    try {
+        await navigate('/invoices/42')
+    } catch {
+        // the revert's rejection; `left` reports it
+    } finally {
+        if (assign !== undefined)
+            Object.defineProperty(location, 'href', assign)
+        else delete (location as { href?: string }).href
+    }
+    flushSync()
+    expect(left).toEndWith('/invoices/42')
+    expect(history.length).toBe(entries)
+    expect(route.navigating()).toBe(false)
     expect(document.querySelector('#home h1')?.textContent).toBe('Home')
 })
 
@@ -342,6 +395,52 @@ test('the page a navigation replaced stops its bindings — 12.13', async () => 
     expect(scope?.stops.length).toBe(0)
 })
 
+// 12.4 — A WATCH THE PAGE'S SETUP OPENED IS THE PAGE'S, and stops with it. The setup runs before
+// the markup that makes the page's scope — a routed level's markup later still (41.19) — so the
+// watch's disposer is collected and handed over. Left where nothing held it, the watch went on
+// waking at every navigation for the rest of the session, writing whatever it wrote over the page
+// that replaced it. COUNTED PER INSTANCE: the server's render ran this setup too, in this process.
+// THE REVERT: drop `owned` from `watch` — the navigation leaves the browser's watch run twice and
+// disposed once, still alive.
+test("a watch the page's setup opened stops when a navigation replaces the page — 12.4", async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages(
+        undefined,
+        `<script>
+import { route, watch } from 'abide'
+
+const instances = ((globalThis as { instances?: { runs: number; disposed: number }[] }).instances ??= [])
+const counts = { runs: 0, disposed: 0 }
+instances.push(counts)
+watch(() => {
+    route.params()
+    counts.runs += 1
+    return () => {
+        counts.disposed += 1
+    }
+})
+</script>
+
+<main id="home"><h1>Home</h1></main>`,
+    )
+    const r = router(mounts)
+    await r.hydrate()
+    flushSync()
+    const counts = (
+        globalThis as { instances?: { runs: number; disposed: number }[] }
+    ).instances?.at(-1) as { runs: number; disposed: number }
+    expect(counts.runs).toBeGreaterThan(0)
+
+    await navigate('/invoices/42')
+    flushSync()
+    const settled = counts.runs
+    expect(counts.disposed).toBe(settled)
+
+    await navigate('/invoices/7')
+    flushSync()
+    expect(counts).toEqual({ runs: settled, disposed: settled })
+})
+
 test('a click on a routed link navigates and does not reload — 30.7', async () => {
     history.replaceState(null, '', '/')
     const mounts = await pages()
@@ -365,6 +464,49 @@ test('a click on a routed link navigates and does not reload — 30.7', async ()
     flushSync()
     expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
     stop()
+})
+
+// 30.13 — A PLAIN CLICK IS THE APP'S, AND ANY OTHER IS THE BROWSER'S: a modifier, a `target` or a
+// `download` asks for a tab, a window or a file, and a router that took one navigated in place
+// instead. THE REVERT: have `isPlainClick` answer true and `sameOriginLink` skip its `download` and
+// `target` tests — all seven are taken, `defaultPrevented` true where false is due.
+test('a modified click, a target or a download is left to the browser — 30.13', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    flushSync()
+    const stop = listenForRoutes(r)
+    const link = document.querySelector('#to-invoice') as HTMLAnchorElement
+    const taken = (init: MouseEventInit): boolean => {
+        const event = new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            ...init,
+        })
+        link.dispatchEvent(event)
+        return event.defaultPrevented
+    }
+    const refused: Record<string, boolean> = {}
+    for (const key of ['metaKey', 'ctrlKey', 'shiftKey', 'altKey'] as const)
+        refused[key] = taken({ [key]: true })
+    refused.middle = taken({ button: 1 })
+    link.setAttribute('target', '_blank')
+    refused.target = taken({})
+    link.removeAttribute('target')
+    link.setAttribute('download', '')
+    refused.download = taken({})
+    link.removeAttribute('download')
+    stop()
+    expect(refused).toEqual({
+        metaKey: false,
+        ctrlKey: false,
+        shiftKey: false,
+        altKey: false,
+        middle: false,
+        target: false,
+        download: false,
+    })
 })
 
 // 30.14 — INTENT LOADS THE CODE AND NOTHING ELSE. A pointer over a routed link asks for the route's
@@ -835,6 +977,92 @@ async function chained(): Promise<{
     }
 }
 
+// 10.5 — A PAGE IS A DESCENDANT OF ITS LAYOUT in the browser as on the server. The router mounts
+// each level itself rather than inside the one above, so a page under a layout opened a share
+// chain of its own: the server painted the layout's value, hydration overwrote it with the page's,
+// and a write in the layout never reached the page. THE REVERT: drop the `resumeShare` around
+// `module.default` in `Router.setUp` — the page reads `page-own` where `dark` is due.
+test("a page under a layout reads the layout's share, hydrated and navigated to — 10.5", async () => {
+    history.replaceState(null, '', '/')
+    const sources = {
+        Themed: `<script>
+import { reactive } from 'abide'
+
+let theme = reactive.share('theme', () => reactive('dark'))
+</script>
+
+<div id="themed"><button id="lighten" onclick={() => { theme = 'light' }}>{theme}</button><slot/></div>`,
+        First: `<script>
+import { reactive } from 'abide'
+
+const theme = reactive.share('theme', () => reactive('page-own'))
+</script>
+
+<p id="first">{theme}</p>`,
+        Second: `<script>
+import { reactive } from 'abide'
+
+const theme = reactive.share('theme', () => reactive('page-own'))
+</script>
+
+<p id="second">{theme}</p>`,
+    }
+    const modules: Record<string, string> = {}
+    for (const [name, source] of Object.entries(sources)) {
+        const file = parseAbide(source)
+        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
+        modules[`${name}.ts`] = emitComponent(file, reads, true)
+        modules[`${name}.client.ts`] = emitClient(file, reads, 'routed')
+    }
+    const dir = temporaryModule(modules)
+    const client = async (name: string): Promise<PageMount> =>
+        (await import(`${dir}/${name}.client.ts`)).default as PageMount
+    const html = new TextDecoder().decode(
+        await render(
+            async () =>
+                composePage(
+                    [(await import(`${dir}/Themed.ts`)).default],
+                    (await import(`${dir}/First.ts`)).default,
+                    { params: () => ({}) },
+                ),
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    expect(document.querySelector('#first')?.textContent).toBe('dark')
+    const layout = await client('Themed')
+    const first = await client('First')
+    const second = await client('Second')
+    const themed = async (): Promise<{ default: PageMount }> => ({
+        default: layout,
+    })
+    const r = startRouter([
+        {
+            pattern: '/second',
+            load: async () => ({ default: second }),
+            layouts: [themed],
+        },
+        {
+            pattern: '/',
+            load: async () => ({ default: first }),
+            layouts: [themed],
+        },
+    ])
+    await r.hydrate()
+    flushSync()
+    expect(document.querySelector('#first')?.textContent).toBe('dark')
+    ;(document.querySelector('#lighten') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#first')?.textContent).toBe('light')
+
+    await navigate('/second')
+    flushSync()
+    expect(document.querySelector('#second')?.textContent).toBe('light')
+})
+
 test('a page hydrates inside the layout the server painted — 35.1', async () => {
     history.replaceState(null, '', '/')
     const parts = await chained()
@@ -896,6 +1124,82 @@ test('a page hydrates inside the layout the server painted — 35.1', async () =
     flushSync()
     expect(document.querySelector('#settings h1')?.textContent).toBe('Settings')
     expect(document.querySelector('#chrome')).toBeNull()
+})
+
+// 41.23 — ON THE CLIENT EVERY LEVEL IS SET UP BEFORE ANY IS HYDRATED, as 41.19 has the server set
+// every level up before it builds any. A page's setup writes the crumbs its layout's `{#for}` reads: the server
+// painted the layout with the crumb, so a client that hydrated the layout before the page's setup
+// ran computed none where the document holds one. THE REVERT: have the emitted mount run its markup
+// at once rather than leave it on the level (`deferredMarkup`); the layout hydrates inside its own
+// setup call, and its list warns `holds 1 rows where this {#for} computes 0` and rebuilds.
+test('a layout reads what its page set up, hydrating without a mismatch — 41.23', async () => {
+    history.replaceState(null, '', '/')
+    const files: Record<string, string> = {
+        'crumbs.ts': `import { reactive } from 'abide'\n\nexport const crumbs = reactive<string[]>([])\n`,
+    }
+    const sources = {
+        Crumbed: `<script>
+import { crumbs } from './crumbs.ts'
+</script>
+
+<div id="crumbed"><nav id="crumbs">{#for crumb of crumbs() by crumb}<a>{crumb}</a>{/for}</nav><slot/></div>`,
+        Leaf: `<script>
+import { crumbs } from './crumbs.ts'
+
+crumbs.set(['Home'])
+</script>
+
+<main id="leaf">leaf</main>`,
+    }
+    for (const [name, source] of Object.entries(sources)) {
+        const file = parseAbide(source)
+        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
+        files[`${name}.ts`] = emitComponent(file, reads, true)
+        files[`${name}.client.ts`] = emitClient(file, reads, 'routed')
+    }
+    const dir = temporaryModule(files)
+    const Layout = (await import(`${dir}/Crumbed.ts`)).default
+    const Leaf = (await import(`${dir}/Leaf.ts`)).default
+    let html = ''
+    html += new TextDecoder().decode(
+        await render(
+            () => composePage([Layout], Leaf, { params: () => ({}) }),
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    expect(document.querySelector('#crumbs')?.textContent).toBe('Home')
+    // A browser arrives with nothing written, whatever this process's server half left behind.
+    const { crumbs } = await import(`${dir}/crumbs.ts`)
+    crumbs.set([])
+    const painted = document.querySelector('#crumbs a')
+    const layout = (await import(`${dir}/Crumbed.client.ts`))
+        .default as PageMount
+    const leaf = (await import(`${dir}/Leaf.client.ts`)).default as PageMount
+    const r = startRouter([
+        {
+            pattern: '/',
+            load: async () => ({ default: leaf }),
+            layouts: [async () => ({ default: layout })],
+        },
+    ])
+    const said: string[] = []
+    const warn = console.warn
+    console.warn = (...parts: unknown[]): void => {
+        said.push(parts.map(String).join(' '))
+    }
+    try {
+        await r.hydrate()
+        flushSync()
+    } finally {
+        console.warn = warn
+    }
+    expect(said.filter((line) => line.includes('41.10'))).toEqual([])
+    // HYDRATED WHERE IT STANDS, not rebuilt.
+    expect(document.querySelector('#crumbs a')).toBe(painted)
 })
 
 // 39.9, 39.10 — A STAND-IN FOR THE BROWSER'S `startViewTransition`: the callback runs when the test
@@ -1482,4 +1786,75 @@ test("the route table carries the shell's keyed head entries — 39.14", async (
     expect(built.modules.get('routes.ts')).toContain(
         `startRouter(routes, host, false, ${JSON.stringify(SHELL_HEAD)})`,
     )
+})
+
+// 12.4, 41.19 — A ROUTED LEVEL'S SETUP RUNS BEFORE ITS MARKUP, AND ITS WATCHES ARE STOPPED WITH THE
+// LEVEL EVEN WHERE THAT MARKUP NEVER RUNS. A layout whose `<slot/>` stands in a closed `{#if}` never
+// mounts the page below it, so the page's markup is never run — and the page's setup has run. THE
+// REVERT: have a deferred level answer nothing (`return` in `deferredMarkup`) — the page's watch is
+// disposed 0 times where 1 is due when the reader leaves, and wakes again at the next write.
+test("a page's setup watch stops with its level when its layout's slot never opened — 12.4", async () => {
+    history.replaceState(null, '', '/')
+    const mounts = await pages()
+    const counted = globalThis as { innerRuns?: number; innerDisposed?: number }
+    counted.innerRuns = 0
+    counted.innerDisposed = 0
+    const sources = {
+        Shut: `<script>
+import { reactive } from 'abide'
+
+const open = reactive(false)
+</script>
+<div id="shut">{#if open}<slot/>{/if}</div>`,
+        Inner: `<script>
+import { watch } from 'abide'
+import { tick } from './tick.ts'
+
+watch(() => {
+    tick()
+    ;(globalThis as { innerRuns: number }).innerRuns += 1
+    return () => {
+        ;(globalThis as { innerDisposed: number }).innerDisposed += 1
+    }
+})
+</script>
+<main id="inner">inner</main>`,
+    }
+    const files: Record<string, string> = {
+        'tick.ts': `import { reactive } from 'abide'\n\nexport const tick = reactive(0)\n`,
+    }
+    for (const [name, source] of Object.entries(sources)) {
+        const file = parseAbide(source)
+        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
+        files[`${name}.client.ts`] = emitClient(file, reads, 'routed')
+    }
+    const dir = temporaryModule(files)
+    const r = startRouter(
+        [
+            {
+                pattern: '/inner',
+                load: () => import(`${dir}/Inner.client.ts`),
+                layouts: [() => import(`${dir}/Shut.client.ts`)],
+            },
+            {
+                pattern: '/',
+                load: async () => ({ default: mounts.home as PageMount }),
+                layouts: [],
+            },
+        ],
+        document.body,
+    )
+    await r.hydrate()
+    await r.go('/inner')
+    flushSync()
+    expect(document.querySelector('#shut')).not.toBeNull()
+    expect(document.querySelector('#inner')).toBeNull()
+    expect(counted.innerRuns).toBe(1)
+    await r.go('/')
+    flushSync()
+    expect(counted.innerDisposed).toBe(1)
+    const { tick } = await import(`${dir}/tick.ts`)
+    tick.set(1)
+    flushSync()
+    expect(counted.innerRuns).toBe(1)
 })

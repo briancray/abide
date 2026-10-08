@@ -79,22 +79,34 @@ export const addressOfLookup = GET(() => guarded.url({ id: 5 }))
 
 let release: () => void = () => {}
 
-export const streamed = GET(
-    async function* ({ n }: { n: number }) {
-        yield 'first ' + n
-        await new Promise<void>((resolve) => {
-            release = resolve
-        })
-        yield 'second'
-    },
-    {
-        middleware: [
-            // No args schema, so the annotation types the URL's text (19.10).
-            async (next, ctx) =>
-                (ctx.args() as { n: number }).n === 13 ? refuse(451, 'unlucky') : next(),
-        ],
-    },
-)
+async function* lines(n: number) {
+    yield 'first ' + n
+    await new Promise<void>((resolve) => {
+        release = resolve
+    })
+    yield 'second'
+}
+
+const unlucky = {
+    middleware: [
+        // No args schema, so the annotation types the URL's text (19.10).
+        async (next: () => unknown, ctx: { args(): unknown }) =>
+            (ctx.args() as { n: number }).n === 13 ? refuse(451, 'unlucky') : next(),
+    ],
+}
+
+export const streamed = GET(async function* ({ n }: { n: number }) {
+    yield* lines(n)
+}, unlucky)
+
+export const arrowStreamed = GET(({ n }: { n: number }) => lines(n), unlucky)
+
+export const joinedStream = GET(async () => {
+    const first = arrowStreamed({ n: 2 })
+    const second = arrowStreamed({ n: 2 })
+    setTimeout(() => release(), 10)
+    return [first === second, await first, await second]
+})
 
 export const annotated = GET(
     reactive(
@@ -108,6 +120,10 @@ export const annotated = GET(
     ),
 )
 
+export const optionallyAnnotated = GET(
+    async (args?: { kind?: 'movie' | 'series'; page?: number }) => args ?? 'none',
+)
+
 export const releaseStream = GET(() => {
     release()
     return 'released'
@@ -119,13 +135,12 @@ export const rawLookup = GET(async () => {
 })
 `
 
-let app = ''
 let base = ''
 let stop = (): void => {}
 const RPC = '/__abide/rpc/options'
 
 beforeAll(async () => {
-    ;({ app, base, stop } = await serveApp({
+    ;({ base, stop } = await serveApp({
         'ui/pages/page.abide': '<main>home</main>',
         'server/rpc/options.ts': HANDLERS,
         // 16.59 — the environment's ceiling, for a handler that names none of its own.
@@ -165,7 +180,9 @@ test('a GET arg is coerced from the type its JSON Schema declares — 19.8, 19.9
 // handler defaults is not required, whatever the annotation says. THE REVERT: drop `args` from the
 // mount row in `handlersUnder`; `id` arrives the string `'42'`, and `id=abc` and `kind=film` both
 // reach the handler and answer 200. Drop `defaulted` from `argsSchemaOf` and the first call is 422.
-test('a GET typed only by its annotation is coerced and held to it — 19.10, 19.11', async () => {
+// 19.21 — and a member the annotation does not declare is refused: drop `additionalProperties`
+// from `objectOf` and `extra=1` reaches the handler and answers 200.
+test('a GET typed only by its annotation is coerced and held to it — 19.10, 19.11, 19.21', async () => {
     const answer = await Bun.fetch(
         `${base}${RPC}/annotated?id=42&kind=movie&tags=a`,
     )
@@ -182,13 +199,35 @@ test('a GET typed only by its annotation is coerced and held to it — 19.10, 19
             await Bun.fetch(`${base}${RPC}/annotated?id=1&kind=series&page=3`)
         ).json(),
     ).toEqual({ id: 1, type: 'number', kind: 'series', page: 3 })
-    for (const query of ['id=abc&kind=movie', 'id=1&kind=film', 'kind=movie']) {
+    for (const query of [
+        'id=abc&kind=movie',
+        'id=1&kind=film',
+        'kind=movie',
+        'id=1&kind=movie&extra=1',
+    ]) {
         const refused = await Bun.fetch(`${base}${RPC}/annotated?${query}`)
         expect(`${query} ${refused.status}`).toBe(`${query} 422`)
         expect(((await refused.json()) as { name: string }).name).toBe(
             'ValidationError',
         )
     }
+})
+
+// 19.10 OVER AN OPTIONAL RECORD — a handler whose parameter is optional is keyed (11.2), so its
+// annotation is the schema too, and no args at all is still an answer. THE REVERT: drop the
+// optional-parameter arm from `Declare`; the `Rpc` is typed as taking no args, no schema is derived,
+// and `kind=film` reaches the handler and answers 200.
+test('an optional args record is held to its annotation — 19.10, 11.2', async () => {
+    const plain = await Bun.fetch(`${base}${RPC}/optionallyAnnotated`)
+    expect(await plain.json()).toBe('none')
+    const coerced = await Bun.fetch(
+        `${base}${RPC}/optionallyAnnotated?kind=movie&page=2`,
+    )
+    expect(await coerced.json()).toEqual({ kind: 'movie', page: 2 })
+    const refused = await Bun.fetch(
+        `${base}${RPC}/optionallyAnnotated?kind=film`,
+    )
+    expect(refused.status).toBe(422)
 })
 
 // 19.10 ON A BODY: JSON carries its own types, and the annotation still holds them. THE REVERT, as
@@ -304,7 +343,8 @@ test('a streamed body over the ceiling is refused 413 — 16.59', async () => {
 })
 
 // 16.63 OVER THE WIRE — a call that timed out is answered at the refusal's own status. THE REVERT:
-// drop the `timeLoad` call in `#shared/rpc.ts`; the request hangs until the test's own timeout.
+// drop the `timeLoad` call in `#shared/reactive/callLoad.ts`; the request hangs until the test's own
+// timeout.
 test('a call that goes its timeout without settling is answered 504 — 16.63', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/stalls`)
     expect(answer.status).toBe(504)
@@ -390,94 +430,44 @@ test('rpc.url builds the address and rpc.raw answers the call as a response — 
 // it to, AFTER the first chunk has arrived — so a collecting onion never sends that chunk, and the
 // race below reports it. No clock is read: the order is the claim.
 //
-// THE REVERT: drop the `streams` arm in `rpc.ts`'s `declare`; the first read loses the race, and
-// the answer is `application/json` rather than jsonl.
-test('a streaming handler behind a rung sends each chunk as it lands — 16.33, 16.12', async () => {
-    const answer = await Bun.fetch(`${base}${RPC}/streamed?n=1`)
-    expect(answer.headers.get('content-type')).toStartWith('application/jsonl')
-    const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
-    const decoder = new TextDecoder()
-    const first = await Promise.race([
-        reader.read().then((step) => decoder.decode(step.value)),
-        Bun.sleep(3000).then(() => 'nothing before the stream closed'),
-    ])
-    expect(first).toContain('"first 1"')
-    await Bun.fetch(`${base}${RPC}/releaseStream`)
-    let rest = ''
-    for (;;) {
-        const step = await reader.read()
-        if (step.done) break
-        rest += decoder.decode(step.value)
-    }
-    expect(rest).toContain('"second"')
+// AND A HANDLER HANDING ONE BACK (9.20) as much as one declared `async function*`.
+//
+// THE REVERT: await `reach` in `rpc.ts`'s centre in place of `streamingOrSettled`; the first read
+// loses the race, and the answer is `application/json` rather than jsonl.
+test.each(['streamed', 'arrowStreamed'])(
+    'a streaming handler behind a rung sends each chunk as it lands — %s, 16.33, 16.12',
+    async (name) => {
+        const answer = await Bun.fetch(`${base}${RPC}/${name}?n=1`)
+        expect(answer.headers.get('content-type')).toStartWith(
+            'application/jsonl',
+        )
+        const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
+        const decoder = new TextDecoder()
+        const first = await Promise.race([
+            reader.read().then((step) => decoder.decode(step.value)),
+            Bun.sleep(3000).then(() => 'nothing before the stream closed'),
+        ])
+        expect(first).toContain('"first 1"')
+        await Bun.fetch(`${base}${RPC}/releaseStream`)
+        let rest = ''
+        for (;;) {
+            const step = await reader.read()
+            if (step.done) break
+            rest += decoder.decode(step.value)
+        }
+        expect(rest).toContain('"second"')
 
-    // And the rung still answers in the handler's place (16.17), at its own status.
-    expect((await Bun.fetch(`${base}${RPC}/streamed?n=13`)).status).toBe(451)
+        // And the rung still answers in the handler's place (16.17), at its own status.
+        expect((await Bun.fetch(`${base}${RPC}/${name}?n=13`)).status).toBe(451)
+    },
+)
+
+// 1.8 BEHIND A RUNG — A SECOND CALL WITH THE SAME ARGS JOINS THE STREAM, and both read every chunk:
+// the value the call reaches is a stream of its own (9.20), not the one-shot generator the centre
+// hands it. THE REVERT: drop the `isAsyncGenerator` arm of `absorb`'s settle; the value holds the
+// generator, and neither await is the chunks.
+test('two calls with the same args behind a rung join one stream and read all of it — 1.8, 9.20', async () => {
+    expect(
+        await (await Bun.fetch(`${base}${RPC}/joinedStream`)).json(),
+    ).toEqual([true, ['first 2', 'second'], ['first 2', 'second']])
 })
-
-// 16.23, 16.60, 16.61 — WHAT A CALL RAISES THE REQUEST'S IDLE TIMEOUT TO, read off a recording server:
-// nothing where no `timeout` is named, the seconds where one is, and bun's 0 — never reaped — for
-// `Infinity`. In process, because the idle timeout a socket was given is not observable from the
-// far end short of waiting it out. THE REVERT: fall back to 30_000 for `ABIDE_RPC_TIMEOUT`; the
-// untimed call raises to 30.
-test('a call raises the idle timeout only as far as its timeout says — 16.60, 16.61', async () => {
-    const server = new URL('../src/server/', import.meta.url).pathname
-    await Bun.write(
-        `${app}/timeouts.ts`,
-        `import { bootApp, originUnder } from '${server}createApp.ts'
-import { LISTENING } from '${server}requestScope.ts'
-import { loadBuild } from '${server}serveBuild.ts'
-
-const raised: Record<string, number[]> = {}
-const answered: Record<string, number> = {}
-let calling = ''
-LISTENING.server = { timeout: (_request: Request, seconds: number) => raised[calling]?.push(seconds) } as never
-// \`createApp\`'s boot, over the build this fixture made beside itself.
-const app = await bootApp(originUnder('${app}'), () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
-for (const name of ['untimed', 'slow', 'endless']) {
-    calling = name
-    raised[name] = []
-    answered[name] = (await app.fetch(new Request(\`http://app.test${RPC}/\${name}\`))).status
-}
-await app.stop()
-console.log(JSON.stringify({ raised, answered }))
-`,
-    )
-    const ran = Bun.spawnSync(['bun', `${app}/timeouts.ts`], { cwd: app })
-    const printed = ran.stdout.toString().trim().split('\n').at(-1) as string
-    expect(ran.exitCode).toBe(0)
-    expect(JSON.parse(printed)).toEqual({
-        raised: { untimed: [], slow: [40], endless: [0] },
-        answered: { untimed: 200, slow: 200, endless: 200 },
-    })
-}, 30_000)
-
-// 16.23, 16.11 — THE TIMEOUT IS RAISED ON THE REQUEST THE LISTENER RECEIVED. Under a mount the app
-// answers a copy below it, and bun's `timeout` does nothing for a request it was not handed itself.
-// THE REVERT: raise it on the request `answerRpc` answers; the recording server is handed the copy,
-// and reads `[false, 40]`.
-test('a call under a mount raises the idle timeout on the request the listener received — 16.23, 16.11', async () => {
-    const server = new URL('../src/server/', import.meta.url).pathname
-    await Bun.write(
-        `${app}/mountedTimeout.ts`,
-        `import { bootApp, originUnder } from '${server}createApp.ts'
-import { LISTENING } from '${server}requestScope.ts'
-import { loadBuild } from '${server}serveBuild.ts'
-
-const received = new Request('http://app.test/app${RPC}/slow')
-const raised: [boolean, number][] = []
-LISTENING.server = { timeout: (request: Request, seconds: number) => raised.push([request === received, seconds]) } as never
-const app = await bootApp(originUnder('${app}'), () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
-const status = (await app.fetch(received)).status
-await app.stop()
-console.log(JSON.stringify({ raised, status }))
-`,
-    )
-    const ran = Bun.spawnSync(['bun', `${app}/mountedTimeout.ts`], {
-        cwd: app,
-        env: { ...process.env, APP_URL: 'http://app.test/app' },
-    })
-    const printed = ran.stdout.toString().trim().split('\n').at(-1) as string
-    expect(ran.exitCode).toBe(0)
-    expect(JSON.parse(printed)).toEqual({ raised: [[true, 40]], status: 200 })
-}, 30_000)

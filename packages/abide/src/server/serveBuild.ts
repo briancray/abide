@@ -10,10 +10,10 @@ import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
 import {
     appSources,
     type LoadedSources,
-    publicFilesAt,
     type ServerTable,
+    type SourceParts,
 } from './answerRequest.ts'
-import { type Mount, mountHandlers } from './answerRpc.ts'
+import type { Mount } from './answerRpc.ts'
 import {
     CLIENT_DIRECTORY,
     ENCODING_SUFFIX,
@@ -21,6 +21,7 @@ import {
     PUBLIC_DIRECTORY,
 } from './CLIENT_BUILD.ts'
 import { type App, type AppOrigin, bootApp } from './createApp.ts'
+import { stopOnSignalOrFault } from './faultPolicy.ts'
 import type { Manifest } from './manifestOf.ts'
 import { namesUnder } from './namesUnder.ts'
 import {
@@ -29,7 +30,6 @@ import {
     negotiateEncoding,
 } from './negotiateEncoding.ts'
 import { shellUnder } from './render.ts'
-import { stopOnSignalOrFault } from './stopOnSignalOrFault.ts'
 
 /**
  * What `abide build` produced, as the parts an `App` is booted over.
@@ -39,17 +39,10 @@ import { stopOnSignalOrFault } from './stopOnSignalOrFault.ts'
  * from — a file is a PATH in both, and `Bun.file` reads the executable's own the same way it reads
  * the disk's.
  */
-export type BuildParts = {
-    table: ServerTable
-    handlers: Mount[]
-    /** A handler's module, by the source path its row names. 16.2. */
-    handlerModule: (source: string) => Promise<Record<string, unknown>>
-    shell: string
+export type BuildParts = Omit<SourceParts, 'client' | 'explained'> & {
     manifest: Manifest
     /** Every file under `client/`, the precompressed copies among them, by name to its path. */
     client: Map<string, string>
-    /** Every public file, by name to its path. 38.19. */
-    published: Map<string, string>
 }
 
 /**
@@ -74,26 +67,6 @@ export function sourceModuleLoader(
     root: string,
 ): (source: string) => Promise<Record<string, unknown>> {
     return (source) => import(Bun.pathToFileURL(`${root}/${source}`).href)
-}
-
-/**
- * The route table and the mounted handlers, out of the dev worker's virtual directory.
- *
- * 38.17. 16.2 — the handlers answered out of the app's own source, and 18.2's sockets among them,
- * mounted as soon as they load.
- */
-export function loadTables(
-    directory: string,
-    root: string,
-): Promise<[ServerTable, Awaited<ReturnType<typeof mountHandlers>>]> {
-    return Promise.all([
-        import(
-            Bun.pathToFileURL(`${directory}/server.ts`).href
-        ) as Promise<ServerTable>,
-        handlersIn(directory).then((handlers) =>
-            mountHandlers(handlers, sourceModuleLoader(root)),
-        ),
-    ])
 }
 
 /** The handler table a build wrote into `directory`. */
@@ -155,12 +128,7 @@ export function pathsUnder(directory: string): Map<string, string> {
 }
 
 /** The sources an `App` is booted over, out of the parts `abide build` produced. */
-export async function builtSources(parts: BuildParts): Promise<LoadedSources> {
-    const [mountedHandlers, published] = await Promise.all([
-        mountHandlers(parts.handlers, parts.handlerModule),
-        publicFilesAt(parts.published),
-    ])
-
+export function builtSources(parts: BuildParts): Promise<LoadedSources> {
     // THE BUNDLE, ENUMERATED RATHER THAN RESOLVED. A request names a file in this set or it names
     // nothing — there is no path to normalise, so `..` is not a case that has to be got right,
     // and what is servable is exactly what the build produced.
@@ -178,45 +146,45 @@ export async function builtSources(parts: BuildParts): Promise<LoadedSources> {
         assets.set(name, encodings)
     }
 
-    return appSources(parts.table, parts.shell, parts.manifest, '', {
+    const framework = (
+        pathname: string,
+        request: Request,
+    ): Response | undefined => {
+        if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return undefined
+        const name = pathname.slice(CLIENT_ADDRESS.length + 1)
+        const encodings = assets.get(name)
+        if (encodings === undefined) return undefined
+        // THE TYPE IS THE NAME'S, not the path's: a compiled app's path carries a hash the
+        // bundler put before the extension, and a `.br`'s extension names nothing.
+        const type = Bun.file(name).type
+        // 21.5 — EVERY NAME IN THE BUNDLE CARRIES A HASH OF ITS BYTES, the entry's too (38.5),
+        // so a name never answers two different files and a year is safe for all of them. A
+        // deploy is new names in a new document, never new bytes at an old address.
+        const headers: Record<string, string> = {
+            'cache-control': 'public, max-age=31536000, immutable',
+            'content-type': type,
+            vary: 'accept-encoding',
+        }
+        // 38.30 — the precompressed copy where the request takes its encoding.
+        const encoding = negotiateEncoding(
+            request.headers.get('accept-encoding'),
+            encodings,
+        )
+        if (encoding === undefined)
+            return new Response(Bun.file(parts.client.get(name) as string), {
+                headers,
+            })
+        headers['content-encoding'] = encoding
+        return new Response(
+            Bun.file(
+                parts.client.get(name + ENCODING_SUFFIX[encoding]) as string,
+            ),
+            { headers },
+        )
+    }
+    return appSources({
+        ...parts,
         explained: undefined,
-        framework: (pathname, request) => {
-            if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return undefined
-            const name = pathname.slice(CLIENT_ADDRESS.length + 1)
-            const encodings = assets.get(name)
-            if (encodings === undefined) return undefined
-            // THE TYPE IS THE NAME'S, not the path's: a compiled app's path carries a hash the
-            // bundler put before the extension, and a `.br`'s extension names nothing.
-            const type = Bun.file(name).type
-            // 21.5 — EVERY NAME IN THE BUNDLE CARRIES A HASH OF ITS BYTES, the entry's too (38.5),
-            // so a name never answers two different files and a year is safe for all of them. A
-            // deploy is new names in a new document, never new bytes at an old address.
-            const headers: Record<string, string> = {
-                'cache-control': 'public, max-age=31536000, immutable',
-                'content-type': type,
-                vary: 'accept-encoding',
-            }
-            // 38.30 — the precompressed copy where the request takes its encoding.
-            const encoding = negotiateEncoding(
-                request.headers.get('accept-encoding'),
-                encodings,
-            )
-            if (encoding === undefined)
-                return new Response(
-                    Bun.file(parts.client.get(name) as string),
-                    { headers },
-                )
-            headers['content-encoding'] = encoding
-            return new Response(
-                Bun.file(
-                    parts.client.get(
-                        name + ENCODING_SUFFIX[encoding],
-                    ) as string,
-                ),
-                { headers },
-            )
-        },
-        published,
-        ...mountedHandlers,
+        client: { manifest: parts.manifest, head: '', framework },
     })
 }

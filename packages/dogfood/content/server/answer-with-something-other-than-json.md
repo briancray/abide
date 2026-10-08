@@ -4,6 +4,7 @@ nav: Response types
 intent: A document, a redirect, a file — and the caching headers each one gets.
 covers:
   - `page`
+  - `json`
   - `redirect`
   - `RedirectStatus`
   - `x-content-type-options: nosniff`
@@ -17,22 +18,21 @@ Most handlers return a value and never think about a `Response`. Some have to: a
 sets a cookie and sends the browser somewhere, an export that is a CSV, a preview that is a
 whole document.
 
-Return a `Response` instead of a value. The helpers build one, each taking a `ResponseInit` your
-own headers ride in, so a cookie and the navigation that follows it are the same return and
-there is no response middleware between them.
+Return what a helper hands back. Each one writes through `response`, the response being built for
+this request, and hands its argument back. A status, a header or a `set-cookie` is written there
+too, so a cookie and the navigation after it are one return, with no response middleware between.
 
 ## The response helpers
 
 | You return | The caller gets |
 | --- | --- |
-| `page(values, init?)` | `text/html`, streamed as the render yields it |
-| `json(data, init?)` | the same serialization a bare return gets, with a status |
-| `redirect(to, status?, init?)` | a navigation, at one of five statuses |
-| `jsonl(values, init?)` / `sse(values, init?)` | a stream, framed two ways |
+| `page(body)` | `text/html`, streamed as the render yields it |
+| `json(value)` | the same serialization a bare return gets, fixed |
+| `redirect(to, status?)` | a navigation, at one of five statuses |
+| `jsonl(values)` / `sse(values)` | a stream, framed two ways |
 
-All five take a `ResponseInit`, which is where a header or a `set-cookie` goes, and none of them
-does the work of producing what it sends — `page` takes what a render produced rather than
-rendering. Every signature is in the [Transports](../reference/transports.md) reference.
+None of them does the work of producing what it sends — `page` takes what a render produced
+rather than rendering. Every signature is in the [Transports](../reference/transports.md) reference.
 
 ## The return type already decides a content type
 
@@ -73,17 +73,17 @@ back on where the body is JSON you wanted a header on.
 
 Read on: [Reading data](read-data-without-writing-an-api.md) · [Streaming data](send-data-as-it-arrives.md)
 
-## `json` adds a status or a header to JSON
+## `json` fixes an answer as JSON
 
 ```ts server
-return json(rows, {
-    status: 206,
-    headers: { 'cache-control': 'public, max-age=60' },
-})
+response().status = 206
+response().headers.set('cache-control', 'public, max-age=60')
+return json(rows)
 ```
 
-The same serialization a bare return gets, with somewhere to put the rest of the response.
-`undefined` sends `null`, not the text `undefined`.
+The same serialization a bare return gets, and nothing a caller's `Accept` asks for moves it off
+JSON. `undefined` sends `null` at the status you wrote, where a bare `undefined` is a 204 with no
+body.
 
 ## `page` sends what a render produced
 

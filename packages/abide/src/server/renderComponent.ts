@@ -1,4 +1,4 @@
-import { REGION_CLOSE, REGION_OPEN } from '#ui/REGION.ts'
+import { regionMarkup } from '#shared/anchorMarkup.ts'
 import type { Component, Rendered } from './render.ts'
 
 /**
@@ -24,10 +24,10 @@ export function renderComponent(
     props: Record<string, () => unknown>,
     heads: string[],
 ): string {
-    if (component == null) return `<!--${REGION_OPEN}--><!--${REGION_CLOSE}-->`
+    if (component == null) return regionMarkup('')
     const rendered = (
         component as (props: Record<string, () => unknown>) => Rendered
     )(props)
     if (rendered.head !== '') heads.push(rendered.head)
-    return `<!--${REGION_OPEN}-->${rendered.body}<!--${REGION_CLOSE}-->`
+    return regionMarkup(rendered.body)
 }

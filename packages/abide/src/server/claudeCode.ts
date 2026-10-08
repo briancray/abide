@@ -25,6 +25,7 @@ import {
 } from './bridgeRelay.ts'
 import { callerOf } from './callerOf.ts'
 import { appOrigin } from './config.ts'
+import { mcpFailure } from './generatedSurfaces.ts'
 import { Inbox } from './Inbox.ts'
 import { request } from './requestScope.ts'
 
@@ -38,7 +39,7 @@ export type ClaudeCodeConfig = {
 }
 
 /** Whether this browser's bridge is connected, and the command that pairs one where it is not. */
-export type BridgeStatus = { ready: boolean; command: string | undefined }
+export type BridgeStatus = { paired: boolean; command: string | undefined }
 
 /** The visitor's own Claude Code, reached through the bridge paired to their browser. */
 function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
@@ -71,12 +72,9 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
                     else if (item.kind === 'mcp')
                         // 45.17 — answered by the app's own MCP surface, through the turn's `Toolbox`.
                         void forwardOf(tools)(item.method, item.params)
-                            .catch((thrown: unknown) => ({
-                                error: {
-                                    code: -32603,
-                                    message: String(thrown),
-                                },
-                            }))
+                            .catch((thrown: unknown) =>
+                                mcpFailure(-32603, String(thrown)),
+                            )
                             .then((reply) => {
                                 bridge.frames.push({
                                     type: 'reply',
@@ -137,8 +135,8 @@ function bridgeCommand(): { command: string; expires: number } {
 }
 
 /**
- * This browser's pairing as it changes: not ready with the command to run, then ready the moment a
- * bridge connects, and not ready again if it goes. 45.20.
+ * This browser's pairing as it changes: unpaired with the command to run, then paired the moment a
+ * bridge connects, and unpaired again if it goes. 45.20.
  */
 async function* bridge(): AsyncGenerator<BridgeStatus> {
     const caller = askingCaller()
@@ -154,23 +152,23 @@ async function* bridge(): AsyncGenerator<BridgeStatus> {
     let said = ''
     try {
         while (!signal.aborted) {
-            const ready = pairedBridge(caller) !== undefined
+            const paired = pairedBridge(caller) !== undefined
             if (
-                !ready &&
+                !paired &&
                 (pairing === undefined || pairing.expires <= Date.now())
             )
                 pairing = bridgeCommand()
             const status: BridgeStatus = {
-                ready,
-                command: ready ? undefined : pairing?.command,
+                paired,
+                command: paired ? undefined : pairing?.command,
             }
-            const saying = `${status.ready} ${status.command}`
+            const saying = `${status.paired} ${status.command}`
             if (saying !== said) {
                 said = saying
                 yield status
             }
             // A code that expires while nothing is paired is replaced with a fresh one.
-            const renew = ready
+            const renew = paired
                 ? undefined
                 : setTimeout(rouse, (pairing?.expires ?? 0) - Date.now())
             await waiting.next()

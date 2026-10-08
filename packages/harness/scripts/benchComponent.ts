@@ -9,7 +9,7 @@
 // SERVER ONLY, for `benchRender`'s reason: no DOM is touched, so a bun clock is a real number
 // rather than a fact about happy-dom (44.18).
 
-import { batch, type Sample } from 'harness/report'
+import { batch, emulatedDom, type Sample } from 'harness/report'
 import { allocated, closures } from 'harness/server'
 import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
 import {
@@ -77,7 +77,7 @@ async function main(): Promise<void> {
                         void invoked.render().body
                     },
                 },
-                emulated: null,
+                emulated: emulatedDom(),
             })
             const vanilla = measured.samples.vanilla as Sample
             const flat = measured.samples.inline as Sample

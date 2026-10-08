@@ -4,10 +4,22 @@
 // these reads the right-looking value with the scoping taken out — the first request's.
 
 import { expect, test } from 'bun:test'
-import { inScope, request, response } from '#server/requestScope.ts'
+import { installServer } from '#server/installServer.ts'
+import {
+    currentRequestScope,
+    holdScope,
+    inScope,
+    type RequestScope,
+    releaseScope,
+    request,
+    response,
+} from '#server/requestScope.ts'
 import { flushSync, invalidate, reactive, refresh, watch } from '#shared'
+import { CELL } from '#shared/reactive/CELL.ts'
 import { GET } from '#shared/rpc.ts'
 import { socket } from '#shared/socket.ts'
+
+installServer()
 
 const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0))
 
@@ -33,6 +45,76 @@ test('a value built outside every request is one value per request — 11.32', a
     expect(runs).toBe(3)
     // Outside a request it is the value built at import, which neither request wrote.
     expect(visits()).toBe(0)
+})
+
+// 12.5 — A REQUEST'S WATCHES STOP AT ITS TEARDOWN, AND A STREAMED BODY HOLDS IT OPEN. `App.fetch`
+// releases the scope once it has answered; a body still streaming has taken a hold of its own and
+// the watches it reads through stay up until it closes. THE REVERT: have `releaseScope` tear down
+// whatever `holds` reads — the watch is stopped while the body still holds, `disposed` 1 where 0
+// is due.
+test("a watch stops at its request's teardown, which a held body defers — 12.5", async () => {
+    const level = reactive(0, { global: true })
+    let runs = 0
+    let disposed = 0
+    let release = (): void => {}
+    await inScope(new Request('http://app/a'), async () => {
+        watch(() => {
+            level()
+            runs += 1
+            return () => {
+                disposed += 1
+            }
+        })
+        release = holdScope()
+        releaseScope(currentRequestScope() as RequestScope)
+    })
+    expect(disposed).toBe(0)
+    level.set(1)
+    flushSync()
+    expect(runs).toBe(2)
+
+    release()
+    level.set(2)
+    flushSync()
+    expect({ runs, disposed }).toEqual({ runs: 2, disposed: 2 })
+})
+
+// 12.14 — A VALUE DERIVED IN A REQUEST lets go of a global it read at the request's
+// teardown, as its watches do. Left wired, every render left its derived values on the global's
+// reader list for the life of the process. THE REVERT: drop the `owned(() => orphan(cell))` in
+// `createReactive` — the global keeps 1 reader per request, 2 where 0 are due.
+test("a value derived in a request lets go of a global at the request's teardown — 12.14", async () => {
+    const level = reactive(0, { global: true })
+    for (const path of ['a', 'b'])
+        await inScope(new Request(`http://app/${path}`), async () => {
+            const plus = reactive(() => level() + 1)
+            expect(plus()).toBe(1)
+            releaseScope(currentRequestScope() as RequestScope)
+        })
+    const readers = (level as unknown as { [CELL]: { readers: unknown[] } })[
+        CELL
+    ].readers
+    expect(readers.length).toBe(0)
+})
+
+// 16.68 — A HANDLER DECLARING NO PARAMETER IS NOT RUN WHERE IT IS DECLARED. Its value is unkeyed, and
+// building one starts its body (1.7), so the home is left unbuilt until a call outside every
+// request reaches it. THE REVERT: have `declare` build its value with `reactive`; the body has run
+// 1 time before anything called it, where 0 are due.
+test('a handler declaring no parameter does not run at its declaration — 16.68', async () => {
+    let runs = 0
+    const visit = GET(() => {
+        runs += 1
+        return runs
+    })
+    await tick()
+    expect(runs).toBe(0)
+    await inScope(new Request('http://app/a'), async () => {
+        expect(await visit()).toBe(1)
+    })
+    expect(runs).toBe(1)
+    // Outside a request the call builds the home, which no request reached.
+    expect(await visit()).toBe(2)
 })
 
 // 11.38 — COALESCED WITHIN A SCOPE: two reaches of one key in one request share one load, and two

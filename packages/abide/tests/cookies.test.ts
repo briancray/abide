@@ -97,10 +97,10 @@ test('secure defaults from NODE_ENV — 22.3', () => {
 })
 
 // 22.8 — outside a request on a server, the jar is refused. The server's slot is what throws; the
-// browser's is the stand-in until `requestScope.ts` is loaded.
+// browser's is the stand-in until a server installs its own.
 test('cookies throws outside a request on a server — 22.8', async () => {
     const browser = COOKIES.current
-    await import('#server/requestScope.ts')
+    COOKIES.current = (await import('#server/requestScope.ts')).requestCookies
     try {
         expect(() => cookies()).toThrow('outside a request')
     } finally {

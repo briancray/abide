@@ -7,6 +7,7 @@
 // `Bun.serve` refuses one it did not define.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { spawned } from 'harness/gate'
 import { addressOf, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -66,9 +67,9 @@ const { params } = props<{ params: { id: string } }>()
         }),
     })
 
-    const built = Bun.spawnSync(['bun', BIN, 'build'], { cwd: app })
+    const built = await spawned(['bun', BIN, 'build'], { cwd: app })
     if (built.exitCode !== 0)
-        throw new Error(`abide build failed: ${built.stderr.toString()}`)
+        throw new Error(`abide build failed: ${built.stderr}`)
 
     server = Bun.spawn(['bun', BIN, 'start', '--port', '0'], {
         cwd: app,

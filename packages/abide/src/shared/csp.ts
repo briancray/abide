@@ -1,5 +1,5 @@
 // SECTION 29 — THE CONTENT SECURITY POLICY, by one name on both sides. The rung and the nonce a
-// response carries are the server's (`#server/csp.ts` fills `CSP`); a browser has no response to
+// response carries are the server's (`#server/csp.ts`, which `installServer` fills `CSP` with); a browser has no response to
 // mint one for, so `csp.nonce` answers the one its document was served with, which is what a
 // binding that wrote it on the server hydrates to.
 
@@ -8,7 +8,8 @@ import type { Middleware } from './Middleware.ts'
 type Rung = Middleware<{ request: Request }, Response>
 
 /**
- * The server's content-security-policy half, as slots `#server/csp.ts` fills.
+ * The server's content-security-policy half, as slots `#server/installServer.ts` fills from
+ * `#server/csp.ts`.
  *
  * Until it does, `rung` refuses and `nonce` reads the document's.
  */

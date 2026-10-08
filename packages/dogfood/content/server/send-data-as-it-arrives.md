@@ -84,9 +84,6 @@ included (16.3). `rows` adopts it, so to a cursor, a guard and an await `rows` *
 Nothing copies the accumulation per chunk (9.3), and a reader is woken at most once per task
 however many chunks landed in it (9.23).
 
-`{:catch}` on that `{#for}` renders **after** the rows already painted rather than in place of
-them — what the run produced before it failed is still what it produced.
-
 Read on: [Loading states](../values/show-a-value-that-isnt-there-yet.md) ·
 [Lists](../templates/repeat-markup-over-a-list.md)
 
@@ -102,10 +99,9 @@ Read on: [History](../values/keep-the-last-few-values.md)
 
 ## A stream is not a channel
 
-Both produce more than once, and what the producer declared separates them — not something
-a runtime sniffs. A channel is written by `publish`, and every publish is a whole message (9.6). A
-body declared `async function*` is a stream, yielding chunks of one value (9.20), and no chunk is a
-whole anything. That is why a stream is `busy()` until it closes (3.7), where a channel is never
+Both produce more than once, and how the producer produces separates them. A channel is written by
+`publish`, and every publish is a whole message (9.6). A body that is or returns an async generator
+is a stream, yielding chunks of one value (9.20), and no chunk is a whole anything. That is why a stream is `busy()` until it closes (3.7), where a channel is never
 busy where it is published (3.9).
 
 The practical consequence is keying: every production of a wired channel carries a sequence number

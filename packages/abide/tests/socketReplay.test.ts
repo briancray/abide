@@ -7,33 +7,41 @@
 // sweep, and '1:c' against '3:c' on the collapsed live tail.
 
 import { expect, setSystemTime, test } from 'bun:test'
+import { Mux, type MuxConnection } from '#server/answerSocket.ts'
 import { reactive } from '#shared'
 import { socket } from '#shared/socket.ts'
-import {
-    connectionOf,
-    type MuxSocket,
-    socketHandlers,
-} from '#server/answerSocket.ts'
+
+/** A connection to a mux over `/room` alone, recording every frame it is sent. */
+function connected(
+    room: unknown,
+    sent: unknown[] = [],
+): { connection: MuxConnection; sent: unknown[] } {
+    const mux = new Mux(
+        new Map([['/room', room]]) as never,
+        new Map(),
+        undefined,
+    )
+    const connection = mux.connect(
+        new Request('http://app.test/__abide/socket'),
+        {
+            send(text: string) {
+                sent.push(JSON.parse(text))
+            },
+            close() {},
+        },
+    )
+    return { connection, sent }
+}
 
 async function frames(
     value: unknown,
 ): Promise<{ op: string; seq?: number; value?: unknown }[]> {
     const sent: { op: string; seq?: number; value?: unknown }[] = []
-    const ws = {
-        data: connectionOf(new Request('http://app.test/__abide/socket')),
-        send(text: string) {
-            sent.push(JSON.parse(text))
-        },
-    } satisfies MuxSocket
-    const handlers = socketHandlers(
-        new Map([['/room', socket(value as never)]]) as never,
-        new Map(),
-    )
-    await handlers.message(
-        ws,
+    const { connection } = connected(socket(value as never), sent)
+    await connection.message(
         JSON.stringify({ op: 'sub', id: 1, address: '/room' }),
     )
-    handlers.close(ws)
+    connection.close()
     return sent
 }
 
@@ -95,25 +103,15 @@ test('a replay after an expiry numbers each production with its own ordinal — 
 test('a live production carries its own ordinal where the cursor collapsed a burst — 18.10', async () => {
     const room = reactive<string>(undefined, { global: true })
     const sent: { op: string; seq?: number; value?: unknown }[] = []
-    const ws = {
-        data: connectionOf(new Request('http://app.test/__abide/socket')),
-        send(text: string) {
-            sent.push(JSON.parse(text))
-        },
-    } satisfies MuxSocket
-    const handlers = socketHandlers(
-        new Map([['/room', socket(room as never)]]) as never,
-        new Map(),
-    )
-    await handlers.message(
-        ws,
+    const { connection } = connected(socket(room as never), sent)
+    await connection.message(
         JSON.stringify({ op: 'sub', id: 1, address: '/room' }),
     )
     room.publish('a')
     room.publish('b')
     room.publish('c')
     for (let turn = 0; turn < 10; turn++) await Promise.resolve()
-    handlers.close(ws)
+    connection.close()
     const numbered: string[] = []
     for (const frame of sent)
         if (frame.op === 'prod') numbered.push(`${frame.seq}:${frame.value}`)
@@ -135,33 +133,16 @@ test('a subscription whose rung resolves after the close or the unsub is not ins
             },
         ],
     })
-    const handlers = socketHandlers(
-        new Map([['/room', gated]]) as never,
-        new Map(),
-    )
-    const connected = () => {
-        const sent: { op: string }[] = []
-        const ws = {
-            data: connectionOf(new Request('http://app.test/__abide/socket')),
-            send(text: string) {
-                sent.push(JSON.parse(text))
-            },
-        } satisfies MuxSocket
-        return { ws, sent }
-    }
-    const closed = connected()
-    const closing = handlers.message(
-        closed.ws,
+    const closed = connected(gated)
+    const closing = closed.connection.message(
         JSON.stringify({ op: 'sub', id: 1, address: '/room' }),
     )
-    handlers.close(closed.ws)
-    const unsubbed = connected()
-    const unsubbing = handlers.message(
-        unsubbed.ws,
+    closed.connection.close()
+    const unsubbed = connected(gated)
+    const unsubbing = unsubbed.connection.message(
         JSON.stringify({ op: 'sub', id: 1, address: '/room' }),
     )
-    await handlers.message(
-        unsubbed.ws,
+    await unsubbed.connection.message(
         JSON.stringify({ op: 'unsub', id: 1, address: '/room' }),
     )
     for (const release of released) release()
@@ -170,9 +151,9 @@ test('a subscription whose rung resolves after the close or the unsub is not ins
     room.publish('after')
     for (let turn = 0; turn < 10; turn++) await Promise.resolve()
     expect([
-        closed.ws.data.subscriptions.size,
-        unsubbed.ws.data.subscriptions.size,
+        closed.connection.subscriptions.size,
+        unsubbed.connection.subscriptions.size,
     ]).toEqual([0, 0])
     expect([...closed.sent, ...unsubbed.sent]).toEqual([])
-    handlers.close(unsubbed.ws)
+    unsubbed.connection.close()
 })

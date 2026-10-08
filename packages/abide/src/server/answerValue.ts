@@ -4,62 +4,13 @@
 // `Values` a handler returned — framed one chunk per pull (16.33, 16.45–16.48), and a value declaring
 // `history` framed one production per pull where the reader asks for frames (16.49–16.51).
 
-import { chunksFrom, isReactive } from '#shared/reactive/index.ts'
+import { isReactive } from '#shared/reactive/index.ts'
+import { compressAnswer } from './compressAnswer.ts'
 import { prefers } from './prefers.ts'
-import { currentRequestScope, type Framing } from './requestScope.ts'
+import { currentRequestScope, type Framing, holdScope } from './requestScope.ts'
 import { resumeProductions } from './resumeProductions.ts'
 
 const ENCODER = new TextEncoder()
-
-/**
- * The chunks of a streaming value, as they land, ending when its run closes.
- *
- * The live cursor is the wake and not the source: a cursor outlives the run (it waits on the next
- * one), and a chunk landing in the same turn as the close could be lost to whichever settled first
- * — so each wake sends what the accumulation holds past what has already gone, and the close sends
- * the rest.
- */
-export async function* chunksOfStream(value: unknown): AsyncGenerator<unknown> {
-    const stream = value as PromiseLike<unknown> & AsyncIterable<unknown>
-    let closed = false
-    let failure: unknown
-    // ONE REACTION ON THE CLOSE FOR THE WHOLE STREAM, which wakes whichever wait is current. A
-    // `Promise.race` against the close per chunk left one reaction per chunk on it, held until the
-    // stream ended.
-    let wake: () => void = () => {}
-    void Promise.resolve(stream).then(
-        () => {
-            closed = true
-            wake()
-        },
-        (error: unknown) => {
-            closed = true
-            failure = error
-            wake()
-        },
-    )
-    const cursor = stream[Symbol.asyncIterator]()
-    let sent = 0
-    let woken = cursor.next()
-    try {
-        for (;;) {
-            if (!closed)
-                await new Promise<void>((resolve, reject) => {
-                    wake = resolve
-                    woken.then(() => resolve(), reject)
-                })
-            for (const chunk of chunksFrom(value, sent)) {
-                sent += 1
-                yield chunk
-            }
-            if (closed) break
-            woken = cursor.next()
-        }
-    } finally {
-        void cursor.return?.(undefined)
-    }
-    if (failure !== undefined) throw failure
-}
 
 function isValues(
     value: unknown,
@@ -80,10 +31,23 @@ export async function answerValue(
     status: number,
 ): Promise<Response> {
     if (value instanceof Response) return value
+    const framing = currentRequestScope()?.framing
+    // 17.9, 17.10 — what `json` fixed: the standing value, whatever it is, and `null` for nothing.
+    if (framing === 'json') {
+        const settled = isReactive(value)
+            ? (value as { peek(): unknown }).peek()
+            : value
+        headers.set('content-type', 'application/json')
+        return compressAnswer(
+            JSON.stringify(settled ?? null),
+            request,
+            headers,
+            status,
+        )
+    }
     // A `Reactive` is what `outcomeOf` hands on for a value declaring `history`, and for nothing else.
     if (isReactive(value))
         return answerProductions(value, request, headers, status)
-    const framing = currentRequestScope()?.framing
     // 16.32 — nothing to say is 204, where the handler wrote no status of its own, and 16.56 — a
     // type for no content is noise.
     if (value === undefined) {
@@ -119,7 +83,7 @@ export async function answerValue(
     if (isValues(value) || (framing !== undefined && isIterable(value)))
         return answerStream(chunksOf(value), framing, request, headers, status)
     // 16.31.
-    return new Response(JSON.stringify(value), { status, headers })
+    return compressAnswer(JSON.stringify(value), request, headers, status)
 }
 
 function isIterable(value: unknown): value is Iterable<unknown> {
@@ -172,6 +136,8 @@ function answerProductions(
                 ? `id: ${at}:${epoch}\ndata: ${JSON.stringify(item)}\n\n`
                 : `${JSON.stringify({ op: 'prod', seq: at, epoch, value: item })}\n`,
         )
+    // 12.5 — the request's scope stays open while the feed is read in it.
+    const release = holdScope()
     const body = new ReadableStream<Uint8Array>({
         start(controller) {
             if (sse) controller.enqueue(ENCODER.encode(':\n\n'))
@@ -191,11 +157,14 @@ function answerProductions(
         },
         async pull(controller) {
             const next = await cursor.next()
-            if (next.done === true) controller.close()
-            else controller.enqueue(production(cursor.at, next.value))
+            if (next.done === true) {
+                controller.close()
+                release()
+            } else controller.enqueue(production(cursor.at, next.value))
         },
         cancel() {
             void cursor.return?.(undefined)
+            release()
         },
     })
     headers.set('content-type', sse ? 'text/event-stream' : 'application/jsonl')
@@ -293,6 +262,8 @@ export function bodyOf(
     first?: IteratorResult<unknown>,
 ): ReadableStream<Uint8Array> {
     let pulled = first
+    // 12.5 — the request's scope stays open while the body is read in it.
+    const release = holdScope()
     return new ReadableStream<Uint8Array>({
         start(controller) {
             if (framing === 'sse') controller.enqueue(ENCODER.encode(':\n\n'))
@@ -307,10 +278,12 @@ export function bodyOf(
                     next = await chunks.next()
                 } catch (thrown) {
                     controller.error(thrown)
+                    release()
                     return
                 }
             if (next.done === true) {
                 controller.close()
+                release()
                 return
             }
             const chunk = next.value
@@ -329,6 +302,7 @@ export function bodyOf(
         },
         cancel() {
             void chunks.return?.(undefined)
+            release()
         },
     })
 }

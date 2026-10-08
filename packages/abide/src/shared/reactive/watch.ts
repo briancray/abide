@@ -26,6 +26,7 @@ import {
     TRACKING,
     type Tracked,
     truncate,
+    untracked,
 } from './tracking.ts'
 
 export type Disposer = () => void
@@ -59,24 +60,102 @@ function effectThrew(thrown: unknown): void {
     if (typeof document !== 'undefined') throw thrown
 }
 
-/** Runs a disposer, reporting a throw from it rather than letting it stop the effect's rerun. */
+/**
+ * Runs a disposer untracked, reporting a throw from it rather than letting it stop the effect's
+ * rerun.
+ *
+ * 14.10 — UNTRACKED, because a teardown runs wherever the stop was called from: a watch stopped
+ * inside another's effect subscribed that effect to whatever the disposer read.
+ */
 function runDisposer(dispose: Disposer): void {
     try {
-        dispose()
+        untracked(dispose, undefined, undefined)
     } catch (thrown) {
         reportThrow(thrown, 'a disposer threw. RULEBOOK 12.6.')
+    }
+}
+
+/**
+ * Where the watches a component's setup opens are collected, or `undefined` outside a setup.
+ *
+ * 12.4 — A SETUP'S WATCHES ARE ITS SCOPE'S: the scope is made before the setup runs and its `stops`
+ * is the collector, so what the setup opens has its owner from the start — a routed level's
+ * included, whose markup is deferred (41.19). The setup's code is the author's and calls `watch`
+ * with no scope in hand, which is why this is ambient rather than an argument.
+ */
+const OWNING: { stops: Disposer[] | undefined; free: boolean } = {
+    stops: undefined,
+    free: false,
+}
+
+/** Collects every watch opened from here into `stops`; answers the collector it replaced. */
+export function collectWatches(
+    stops: Disposer[] | undefined,
+): Disposer[] | undefined {
+    const previous = OWNING.stops
+    OWNING.stops = stops
+    return previous
+}
+
+/**
+ * Hands `dispose` to the setup being collected, if one is, and to the scope it was opened in, if
+ * there is one; answers it.
+ *
+ * 12.5 — the scope is a server's request (`currentScope`), which a browser never has.
+ */
+export function owned(dispose: Disposer): Disposer {
+    if (OWNING.free) return dispose
+    const stops = OWNING.stops
+    if (stops !== undefined) stops.push(dispose)
+    currentScope()?.stops.push(dispose)
+    return dispose
+}
+
+/**
+ * Whether something opened now has an owner to be handed to — a setup being collected, or a scope.
+ *
+ * Asked before allocating the stop a value built here would hand over, so a value built anywhere
+ * else allocates nothing for it.
+ */
+export function owning(): boolean {
+    return (
+        !OWNING.free &&
+        (OWNING.stops !== undefined || currentScope() !== undefined)
+    )
+}
+
+/**
+ * Runs `open`, and answers what it answers, with every watch it opens owned by its caller alone.
+ *
+ * FOR A WATCH OR A VALUE WHOSE LIFE IS ALREADY HELD — a socket's feed, stopped when its last
+ * follower leaves, or a keyed entry, which its value's cache holds — and which a request or a setup
+ * it happened to start in would otherwise stop when that one ends.
+ */
+export function unowned<Result>(open: () => Result): Result {
+    const previous = OWNING.free
+    OWNING.free = true
+    try {
+        return open()
+    } finally {
+        OWNING.free = previous
     }
 }
 
 /** Runs `effect` now, and again whenever a reactive value it read changes. */
 export function watch(effect: Effect): Disposer
 /** Runs `effect` now and whenever one of `sources` changes; its own reads subscribe to nothing. */
-export function watch<Stored>(
-    sources: Reactive<Stored> | Reactive<Stored>[],
+export function watch(
+    // `never` for what a source accepts: it is subscribed to and never written, and a list of
+    // sources holding different values has no one `Stored` to be inferred as.
+    // SPELLED OUT RATHER THAN ALIASED: the compiler tells a position that holds the `Reactive` by
+    // the type's own symbol (31.3), and behind an alias `watch([n], …)` lowered to `watch([n()], …)`.
+    sources:
+        | Reactive<unknown, never, unknown, unknown>
+        | Reactive<unknown, never, unknown, unknown>[],
     effect: Effect,
 ): Disposer
 export function watch(first: unknown, second?: Effect): Disposer {
-    if (second === undefined) return watchTracked(first as Effect)
+    if (second === undefined) return owned(watchTracked(first as Effect))
     // An app hands over the VALUES; the reader list lives on each one's record. Copied
     // rather than aliased, because the reader keeps this array for its whole life and the
     // app's own array is the app's to mutate.
@@ -86,7 +165,7 @@ export function watch(first: unknown, second?: Effect): Disposer {
     const sources: Tracked[] = []
     for (let index = 0; index < given.length; index += 1)
         sources.push((given[index] as { [CELL]: Tracked })[CELL])
-    return watchOver(sources, null, second)
+    return owned(watchOver(sources, null, second))
 }
 
 /**
@@ -152,7 +231,10 @@ export function watchOver(
     for (let index = 0; index < sources.length; index += 1)
         (sources[index] as Tracked).readers.push(reader)
     reader.notify()
+    // ONCE, however many owners stop it — a setup's scope and a request's both can — since 12.1
+    // gives the disposer one run at teardown.
     return (): void => {
+        if (!reader.alive) return
         reader.alive = false
         detach(reader)
         if (typeof dispose === 'function') runDisposer(dispose)
@@ -161,6 +243,9 @@ export function watchOver(
 
 /**
  * The bare form: runs `effect` as a tracked context, re-running when anything it read changes.
+ *
+ * UNOWNED — the caller holds the stop. `watch` is this handed to its owners (`owned`); a template
+ * binding's `Scope` and a `{#try}`'s retry hold their own, and call this direct.
  *
  * A SECOND BODY BESIDE `watchOver` ON PURPOSE, and it reads as the duplication it is: the two
  * differ by the cursor reset, the probe rebuild and the tail trim, and the rest is the same lines.
@@ -171,7 +256,7 @@ export function watchOver(
  * feedback, so the template binding's `effect()` call became every `s.watch` effect's and every
  * adoption mirror's too. Two literals keep that call site to the effects a template makes.
  */
-function watchTracked(effect: Effect): Disposer {
+export function watchTracked(effect: Effect): Disposer {
     // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
     let dispose: Disposer | void
     const reader: Subscriber = newSubscriber([], null)
@@ -217,6 +302,7 @@ function watchTracked(effect: Effect): Disposer {
     }
     reader.notify()
     return (): void => {
+        if (!reader.alive) return
         reader.alive = false
         detach(reader)
         if (typeof dispose === 'function') runDisposer(dispose)

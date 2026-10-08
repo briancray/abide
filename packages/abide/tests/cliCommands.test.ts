@@ -2,12 +2,13 @@
 // against a scaffolded tree or a served app.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { spawned } from 'harness/gate'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
-const HANDLERS = `import { GET, POST, refuse } from 'abide/server'
+const HANDLERS = `import { GET, jsonSchema, POST, reactive, refuse } from 'abide/server'
 
 export const echo = GET((args: { id: string }) => ({ id: args.id }))
 
@@ -18,6 +19,13 @@ export const refused = POST(() => refuse(409, 'taken'))
 export const faulted = GET((): string => {
     throw new Error('the database is on fire')
 })
+
+// A gate whose schema declares what the annotation leaves open.
+export const kindOf = POST(
+    reactive((args: { n: unknown }) => typeof args.n, {
+        args: jsonSchema({ type: 'object', properties: { n: { type: 'number' } } }),
+    }),
+)
 `
 
 let base = ''
@@ -39,9 +47,9 @@ afterAll(() => {
 
 // 38.1 — THE LAYOUT, WRITTEN, and a step already done is skipped rather than overwritten. The
 // scaffolded app then builds, which is what "a starter project" has to mean.
-test('scaffold writes a starter project, skips what is there, and builds — 38.1, 38.43', () => {
+test('scaffold writes a starter project, skips what is there, and builds — 38.1, 38.43', async () => {
     const into = temporaryModule({ 'readme.md': 'here\n' })
-    const first = Bun.spawnSync(['bun', BIN, 'scaffold', 'ledger'], {
+    const first = await spawned(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
     })
     expect(first.exitCode).toBe(0)
@@ -76,11 +84,11 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
 
     const edited = 'edited by the author\n'
     Bun.write(`${app}/src/ui/app.html`, edited)
-    const again = Bun.spawnSync(['bun', BIN, 'scaffold', 'ledger'], {
+    const again = await spawned(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
     })
     expect(again.exitCode).toBe(0)
-    expect(again.stdout.toString()).toContain('kept    src/ui/app.html')
+    expect(again.stdout).toContain('kept    src/ui/app.html')
     expect(
         require('node:fs').readFileSync(`${app}/src/ui/app.html`, 'utf8'),
     ).toBe(edited)
@@ -89,15 +97,15 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
         `${app}/src/ui/app.html`,
         '<!doctype html><html><head></head><body></body></html>',
     )
-    const built = Bun.spawnSync(['bun', BIN, 'build'], { cwd: app })
-    expect(built.stderr.toString()).toBe('')
+    const built = await spawned(['bun', BIN, 'build'], { cwd: app })
+    expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
 })
 
 // 38.44 — THE APP'S BUNDLER PLUGINS, where bun has an app declare them. A local plugin stands in for
 // `bun-plugin-tailwind`, which is the same shape and a network install. THE REVERT: drop
 // `appPlugins` from `bundleClient`; the stylesheet is built without the stamp.
-test('build runs the plugins bunfig.toml declares over the client — 38.44', () => {
+test('build runs the plugins bunfig.toml declares over the client — 38.44', async () => {
     const app = temporaryModule({
         'package.json': JSON.stringify({
             name: 'stamped',
@@ -121,8 +129,8 @@ test('build runs the plugins bunfig.toml declares over the client — 38.44', ()
         'src/ui/pages/page.abide':
             "<script>\nimport '#ui/app.css'\n</script>\n<main>hi</main>",
     })
-    const built = Bun.spawnSync(['bun', BIN, 'build'], { cwd: app })
-    expect(built.stderr.toString()).toBe('')
+    const built = await spawned(['bun', BIN, 'build'], { cwd: app })
+    expect(built.stderr).toBe('')
     const sheets = [...new Bun.Glob('*.css').scanSync(`${app}/.abide/client`)]
     expect(sheets.length).toBe(1)
     expect(
@@ -136,7 +144,7 @@ test('build runs the plugins bunfig.toml declares over the client — 38.44', ()
 // 38.2 — EVERYTHING AFTER THE FILE IS THE SCRIPT'S, its own flags included, and the script runs in a
 // scope of the runtime's. THE REVERT: parse the arguments before `run` takes them; `--verbose` is
 // refused as an option the CLI does not know.
-test('run passes everything after the file to the script — 38.2', () => {
+test('run passes everything after the file to the script — 38.2', async () => {
     const dir = temporaryModule({
         'script.ts': `import { request } from 'abide/server'
 let scoped = 'no'
@@ -144,12 +152,12 @@ try { request() } catch (thrown) { scoped = (thrown as Error).message.includes('
 console.log(JSON.stringify({ args: process.argv.slice(2), scoped }))
 `,
     })
-    const ran = Bun.spawnSync(
+    const ran = await spawned(
         ['bun', BIN, 'run', 'script.ts', 'one', '--verbose', '-x'],
         { cwd: dir },
     )
     expect(ran.exitCode).toBe(0)
-    expect(JSON.parse(ran.stdout.toString().trim())).toEqual({
+    expect(JSON.parse(ran.stdout.trim())).toEqual({
         args: ['one', '--verbose', '-x'],
         scoped: 'scope with no request',
     })
@@ -158,38 +166,58 @@ console.log(JSON.stringify({ args: process.argv.slice(2), scoped }))
 // 38.2 — THE SCRIPT ENDS WHEN IT ENDS, not when its top level settles: a timer it left pending
 // still fires, and the `process.exitCode` it set is the process's. THE REVERT: return `0` from
 // `run` after the import; the timer's line is never printed and this exits 0 where 3 is due.
-test('run lets the script end on its own, keeping its exit code — 38.2', () => {
+test('run lets the script end on its own, keeping its exit code — 38.2', async () => {
     const dir = temporaryModule({
         'script.ts': `setTimeout(() => console.log('timer fired'), 50)
 process.exitCode = 3
 console.log('top level done')
 `,
     })
-    const ran = Bun.spawnSync(['bun', BIN, 'run', 'script.ts'], { cwd: dir })
-    expect(ran.stdout.toString()).toBe('top level done\ntimer fired\n')
+    const ran = await spawned(['bun', BIN, 'run', 'script.ts'], { cwd: dir })
+    expect(ran.stdout).toBe('top level done\ntimer fired\n')
     expect(ran.exitCode).toBe(3)
 })
 
 // 38.8 — ONE CALL, AND ITS EXIT CODE SAYS HOW IT WENT: 0 answered, 7 refused, 8 faulted.
-test('call answers with the value, and exits 7 on a refusal and 8 on a fault — 38.8', () => {
+test('call answers with the value, and exits 7 on a refusal and 8 on a fault — 38.8', async () => {
     const call = (...args: string[]) =>
-        Bun.spawnSync(['bun', BIN, 'call', '--url', base, ...args])
-    const echoed = call('things/echo', '{"id":"4310"}', '--method', 'GET')
+        spawned(['bun', BIN, 'call', '--url', base, ...args])
+    const echoed = await call('things/echo', '{"id":"4310"}', '--method', 'GET')
     expect(echoed.exitCode).toBe(0)
-    expect(JSON.parse(echoed.stdout.toString())).toEqual({ id: '4310' })
-    const added = call('things/add', '{"a":2,"b":3}')
+    expect(JSON.parse(echoed.stdout)).toEqual({ id: '4310' })
+    const added = await call('things/add', '{"a":2,"b":3}')
     expect(added.exitCode).toBe(0)
-    expect(added.stdout.toString().trim()).toBe('5')
-    const refused = call('things/refused', '{}')
+    expect(added.stdout.trim()).toBe('5')
+    const refused = await call('things/refused', '{}')
     expect(refused.exitCode).toBe(7)
-    expect(refused.stderr.toString()).toContain('taken')
-    expect(call('things/faulted', '', '--method', 'GET').exitCode).toBe(8)
+    expect(refused.stderr).toContain('taken')
+    expect((await call('things/faulted', '', '--method', 'GET')).exitCode).toBe(
+        8,
+    )
+})
+
+// 38.62 — A WORD IS COERCED BY THE APP IT REACHES, against the schema the app holds the call to: the
+// handler's `args` gate where it declares one, not the annotation the build read. THE REVERT: coerce
+// in the CLI against the build's annotation schema and send JSON; `n` stays text and the gate answers
+// 422, "must be number, was string".
+test('call coerces a word against the schema the app holds the call to — 38.62', async () => {
+    const answered = await spawned([
+        'bun',
+        BIN,
+        'call',
+        '--url',
+        base,
+        'things/kindOf',
+        'n=2',
+    ])
+    expect(answered.stderr).toBe('')
+    expect(answered.stdout.trim()).toBe('"number"')
 })
 
 // 38.9 — the document from the running app, written rather than served.
 test('openapi writes the document the app serves — 38.9', async () => {
     const out = `${temporaryModule({ 'keep.txt': '' })}/openapi.json`
-    const written = Bun.spawnSync([
+    const written = await spawned([
         'bun',
         BIN,
         'openapi',

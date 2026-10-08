@@ -5,7 +5,6 @@
 // THE NONCE IS MINTED BY WHICHEVER ASKS FIRST — a page reading `csp.nonce` while it renders, or this
 // rung writing a document's header — so the two agree, and an answer that is not a document mints none.
 
-import { CSP } from '#shared/csp.ts'
 import type { Middleware } from '#shared/Middleware.ts'
 import { randomToken } from './randomToken.ts'
 import { EARLY_CALL_HASH } from './render.ts'
@@ -31,7 +30,7 @@ const BASELINE: Record<string, string[]> = {
  *
  * 29.3, 29.4 — readable in a request scope alone.
  */
-function nonce(): string {
+export function nonce(): string {
     const scope = within('csp.nonce')
     scope.nonce ??= randomToken(16, 'base64')
     return scope.nonce
@@ -62,7 +61,9 @@ function policy(
     }
 }
 
-CSP.rung = (sources): Middleware<{ request: Request }, Response> => {
+export function cspRung(
+    sources: Record<string, string[]> | undefined,
+): Middleware<{ request: Request }, Response> {
     const written = policy(sources)
     return async (next) => {
         const answer = await next()
@@ -74,4 +75,3 @@ CSP.rung = (sources): Middleware<{ request: Request }, Response> => {
         return answer
     }
 }
-CSP.nonce = nonce

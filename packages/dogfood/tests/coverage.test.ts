@@ -603,6 +603,14 @@ async function declaredTypes(): Promise<Set<string>> {
         // this test would stop testing.
         for (const part of binder(signature ?? '').split(','))
             declared.add(/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ?? '')
+        // A GENERIC TYPE spelled as its own name over its parameters — `Keyed<Stored, Args, …>` —
+        // declares them as a leading `<…>` would. Read as one, or a parameter no other row
+        // happened to name reads as a type nothing declares.
+        if (own !== undefined && signature?.startsWith(`\`${own}<`))
+            for (const part of binder(
+                `\`${signature.slice(own.length + 1)}`,
+            ).split(','))
+                declared.add(/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ?? '')
         // A MAPPED TYPE binds its key where it uses it — `[K in RequiredNames<P>]` is the
         // same declaration a leading `<…>` makes, in the other syntax. `ParamsOf<P>` is
         // three of them, and without this the key reads as a type nothing declares.

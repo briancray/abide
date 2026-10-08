@@ -8,7 +8,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -20,8 +20,8 @@ afterAll(closeTyped)
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -42,7 +42,7 @@ async function mountPage(source: string) {
     const file = parseAbide(source)
     const names = await session.reads(`${ROOT}src/page.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(source, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)

@@ -7,6 +7,7 @@ import {
     type Batched,
     batch,
     claimOf,
+    emulatedDom,
     ratio,
     type Sample,
 } from 'harness/report'
@@ -69,7 +70,7 @@ for (const kase of CASES) {
     const measured = batch({
         case: kase.name,
         arms: { vanilla: kase.vanilla, abide: kase.abide },
-        emulated: null,
+        emulated: emulatedDom(),
     })
     report(measured, kase.work)
     console.log('')
@@ -107,7 +108,7 @@ function writeIsConstantInHistory(): void {
                 deep.publish(at++)
             },
         },
-        emulated: null,
+        emulated: emulatedDom(),
     })
     const small = measured.samples['history 16'] as Sample
     const large = measured.samples['history 4096'] as Sample
@@ -215,7 +216,7 @@ function mountingIsLinear(): void {
             [`mount ${NARROW}`]: mount(NARROW),
             [`mount ${WIDE}`]: mount(WIDE),
         },
-        emulated: null,
+        emulated: emulatedDom(),
     })
     const narrow = measured.samples[`mount ${NARROW}`] as Sample
     const wide = measured.samples[`mount ${WIDE}`] as Sample

@@ -25,8 +25,13 @@
 import { isFailed } from '#shared/Failed.ts'
 import { namedLogger } from '#shared/log.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
-import { isReactive, isStreaming, pastOf } from '#shared/reactive/index.ts'
-import { chunksOfStream } from './answerValue.ts'
+import {
+    chunksOfStream,
+    isReactive,
+    pastOf,
+    STREAMING,
+    streamingOrSettled,
+} from '#shared/reactive/index.ts'
 import { positiveSetting } from './config.ts'
 import type { PageRender } from './requestScope.ts'
 
@@ -102,7 +107,7 @@ export function seedFor(caller: string): PageRender['seed'] {
             'ABIDE_MAX_STREAM_BUFFER_SIZE',
             Number.POSITIVE_INFINITY,
         )
-        if (Number.isFinite(bound) && isStreaming(reached))
+        if (Number.isFinite(bound) && isReactive(reached))
             entry.release = boundTranscript(reached, bound, () => {
                 entry.outcome = undefined
                 entry.release = NOTHING_HELD
@@ -147,6 +152,9 @@ function boundTranscript(
     void (async () => {
         let bytes = 0
         try {
+            // 9.20 — a value may only turn out to stream once its load resolves.
+            const settled = await streamingOrSettled(reached)
+            if (!counting || settled !== STREAMING) return
             for await (const chunk of chunksOfStream(reached)) {
                 if (!counting) return
                 bytes +=
@@ -254,27 +262,34 @@ function drop(caller: string, entry: Entry): void {
  */
 export function outcomeOf(reached: unknown): Promise<Outcome> {
     const started = performance.now()
-    if (isStreaming(reached))
-        return Promise.resolve({
-            settled: true,
-            value: chunksOfStream(reached),
-            duration: undefined,
-        })
-    return Promise.resolve(reached).then(
-        (value): Outcome => ({
-            settled: true,
-            // 16.49 — A VALUE DECLARING `history` IS HANDED ON AS ITSELF, settled, for the answer to
-            // frame per production where the reader asks — so a seeded answer is framed as a run
-            // one is. A refusal and nothing at all are answered as they are.
-            value:
-                value !== undefined &&
-                !isFailed(value) &&
-                isReactive(reached) &&
-                pastOf(reached).ringDepth > 0
-                    ? reached
-                    : value,
-            duration: performance.now() - started,
-        }),
+    // 9.20 — AND ONE THAT TURNS INTO A STREAM when its load resolves to a generator, as a handler
+    // behind rungs does: waited for as far as the turn, and never out to the run's close.
+    return (
+        isReactive(reached)
+            ? streamingOrSettled(reached)
+            : Promise.resolve(reached)
+    ).then(
+        (value): Outcome =>
+            value === STREAMING
+                ? {
+                      settled: true,
+                      value: chunksOfStream(reached),
+                      duration: undefined,
+                  }
+                : {
+                      settled: true,
+                      // 16.49 — A VALUE DECLARING `history` IS HANDED ON AS ITSELF, settled, for the answer to
+                      // frame per production where the reader asks — so a seeded answer is framed as a run
+                      // one is. A refusal and nothing at all are answered as they are.
+                      value:
+                          value !== undefined &&
+                          !isFailed(value) &&
+                          isReactive(reached) &&
+                          pastOf(reached).ringDepth > 0
+                              ? reached
+                              : value,
+                      duration: performance.now() - started,
+                  },
         (error: unknown): Outcome => ({
             settled: false,
             error,

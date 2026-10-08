@@ -518,3 +518,57 @@ test('a public file claiming a page address is refused by dev too — 36.13', as
     // The address is NOT the file, which is the whole of what went wrong.
     expect(failed).not.toContain('the file that shadows the page')
 }, 30_000)
+
+// 3000 TAKEN, by this file where nothing else has it — a machine running something there already
+// is the case the clauses are for, so either way the port is held while the command boots.
+function holdPort(port: number): (() => void) | undefined {
+    try {
+        const held = Bun.listen({ hostname: '::', port, socket: { data() {} } })
+        return () => held.stop(true)
+    } catch {
+        return undefined
+    }
+}
+
+function withoutPort(): Record<string, string | undefined> {
+    const env = { ...process.env }
+    delete env.PORT
+    return env
+}
+
+// THE REVERT: listen once on `options.port` as before; the command dies on EADDRINUSE and prints no
+// address.
+test('a dev server given no port takes the next free one from 3000 — 38.64', async () => {
+    const release = holdPort(3000)
+    const scanning = Bun.spawn(['bun', BIN, 'dev', '--root', app], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: withoutPort(),
+    })
+    try {
+        const port = Number(new URL(await addressOf(scanning)).port)
+        expect(port).toBeGreaterThan(3000)
+        expect(port).toBeLessThanOrEqual(3099)
+    } finally {
+        scanning.kill()
+        release?.()
+    }
+}, 30_000)
+
+// THE REVERT: drop the guard ahead of the scan; the command moves off the port it was given and
+// prints an address.
+test('a dev server given a taken port does not move off it — 38.65', async () => {
+    const release = holdPort(3000)
+    const pinned = Bun.spawn(['bun', BIN, 'dev', '--root', app], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: { ...withoutPort(), PORT: '3000' },
+    })
+    try {
+        expect(await pinned.exited).not.toBe(0)
+        expect(await new Response(pinned.stderr).text()).toContain('EADDRINUSE')
+    } finally {
+        pinned.kill()
+        release?.()
+    }
+}, 30_000)

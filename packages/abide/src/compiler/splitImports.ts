@@ -10,8 +10,15 @@ import { isContextualKeyword, type Token, tokenise } from './tokenise.ts'
  *
  * WHERE AN IMPORT BEGINS AND ENDS IS READ OFF the one tokeniser, which carries the template
  * re-scan a bare `` ` `` needs, so an import after a template literal is still found.
+ *
+ * With `landed`, every specifier the build moved is rewritten where it stands, a static import's
+ * and an `import('…')`'s alike (`landedSpecifier`) — so the two cannot land in different places.
  */
-export function splitImports(script: string): {
+export function splitImports(
+    script: string,
+    lane: '' | '.client' = '',
+    landed?: ReadonlyMap<string, string>,
+): {
     imports: string
     body: string
 } {
@@ -22,7 +29,22 @@ export function splitImports(script: string): {
     let body = ''
     let at = 0
     for (const span of spans) {
-        imports += `${script.slice(span.start, span.end)}\n`
+        if (span.dynamic) {
+            if (landed === undefined) continue
+            const moved = landedSpecifier(span.specifier, lane, landed)
+            if (moved === undefined) continue
+            body += `${script.slice(at, span.literal + 1)}${moved}`
+            at = span.end - 1
+            continue
+        }
+        const moved =
+            landed === undefined
+                ? undefined
+                : landedSpecifier(span.specifier, lane, landed)
+        imports +=
+            moved === undefined
+                ? `${script.slice(span.start, span.end)}\n`
+                : `${script.slice(span.start, span.literal + 1)}${moved}${script.slice(span.literalEnd - 1, span.end)}\n`
         // AN IMPORT IS A STATEMENT AND EXCISING IT REMOVES A SEPARATOR. `const x = f()` with an
         // import under it and `[1, 2].forEach(g)` under that becomes `const x = f()` followed by
         // a `[` that automatic semicolon insertion does NOT break — it reads as `f()[2]`, a
@@ -58,29 +80,59 @@ function inImportClause(kind: SyntaxKind): boolean {
     return IMPORT_CLAUSE.has(kind) || isContextualKeyword(kind)
 }
 
+/** One module specifier a script names, and where it stands. */
+type ImportSpan = {
+    /** Where the statement begins — or, for an `import('…')`, the literal does. */
+    start: number
+    /** Where the statement ends — or, for an `import('…')`, the literal does. */
+    end: number
+    /** Where the specifier's literal begins and ends, quotes included. */
+    literal: number
+    literalEnd: number
+    specifier: string
+    /** An `import('…')` with a literal specifier: an expression, left where it is written. */
+    dynamic: boolean
+}
+
 /**
- * Where each module-specifier statement begins and ends, with its specifier.
+ * Where each module-specifier statement begins and ends, with its specifier — and each
+ * `import('…')` that names its specifier as a literal.
  *
  * `import … from '…'`, a bare `import '…'`, and `export … from '…'` — what `splitImports` lifts
  * out of the component body, because an import is only legal at the top of a module.
  *
  * AN `import` KEYWORD IS NOT ALWAYS A DECLARATION. `import(…)` is an expression and so is
- * `import.meta`, and neither is a case here: the scan runs only over the tokens an import CLAUSE
- * can hold (`IMPORT_CLAUSE`), so a `(` or a `.` ends it with no specifier found and the keyword is
- * left alone. The scan that special-cased `(` and ran on otherwise read `import.meta.url` as a
+ * `import.meta`: the clause scan runs only over the tokens an import CLAUSE can hold
+ * (`IMPORT_CLAUSE`), so a `(` or a `.` ends it with no specifier found and the keyword is left
+ * alone. The scan that special-cased `(` and ran on otherwise read `import.meta.url` as a
  * declaration looking for its specifier and swallowed every statement up to the next string
  * literal in the file — a write silently destroying a `Reactive` on one side, and a real
- * statement hoisted into the import block on the other.
+ * statement hoisted into the import block on the other. `import(` followed by a literal is the
+ * one expression read here, as `dynamic`: it names a module as a declaration does (34.15).
  */
-function importSpans(
-    source: string,
-): { start: number; end: number; specifier: string }[] {
+function importSpans(source: string): ImportSpan[] {
     const tokens = tokenise(source)
-    const spans: { start: number; end: number; specifier: string }[] = []
+    const spans: ImportSpan[] = []
     for (let i = 0; i < tokens.length; i += 1) {
         const keyword = tokens[i] as Token
         let at = i + 1
         if (keyword.kind === SyntaxKind.ImportKeyword) {
+            if (
+                (tokens[at] as Token | undefined)?.kind ===
+                SyntaxKind.OpenParenToken
+            ) {
+                const literal = tokens[at + 1]
+                if (literal?.kind === SyntaxKind.StringLiteral)
+                    spans.push({
+                        start: literal.start,
+                        end: literal.end,
+                        literal: literal.start,
+                        literalEnd: literal.end,
+                        specifier: literal.text.slice(1, -1),
+                        dynamic: true,
+                    })
+                continue
+            }
             while (
                 at < tokens.length &&
                 inImportClause((tokens[at] as Token).kind)
@@ -100,7 +152,10 @@ function importSpans(
             // attribute and left ` with { type: 'json' }` behind as a `with` statement, which is
             // illegal in a module and takes the whole file with it.
             end: endOfAttributes(tokens, at + 1, specifier.end, source),
+            literal: specifier.start,
+            literalEnd: specifier.end,
             specifier: specifier.text.slice(1, -1),
+            dynamic: false,
         })
         i = at
     }
@@ -185,16 +240,42 @@ function endOfAttributes(
 }
 
 /**
- * Every `.abide` specifier a script imports or re-exports, as written.
+ * Every `.abide` specifier a script imports, re-exports or `import('…')`s, as written, with the
+ * offset of its closing quote.
  *
- * Read off the same spans the split lifts, so the build's import graph and the emitted imports are
- * one reading of the file.
+ * Read off the same spans the split lifts, so the build's import graph, the emitted imports and
+ * the checker's pointing at checked modules are one reading of the file.
  */
-export function abideSpecifiers(script: string): string[] {
-    const specifiers: string[] = []
-    if (!script.includes('.abide')) return specifiers
+export function abideImports(
+    script: string,
+): { specifier: string; closingQuote: number }[] {
+    const found: { specifier: string; closingQuote: number }[] = []
+    if (!script.includes('.abide')) return found
     for (const span of importSpans(script))
-        if (span.specifier.endsWith('.abide')) specifiers.push(span.specifier)
+        if (span.specifier.endsWith('.abide'))
+            found.push({
+                specifier: span.specifier,
+                closingQuote: span.literalEnd - 1,
+            })
+    return found
+}
+
+/**
+ * Every relative specifier a script imports, re-exports or `import('…')`s, as written, other than
+ * a `.abide` one.
+ *
+ * 34.14 — what the build rewrites to the path from the compiled module back to the source.
+ */
+export function relativeSpecifiers(script: string): string[] {
+    const specifiers: string[] = []
+    if (!script.includes('./')) return specifiers
+    for (const span of importSpans(script))
+        if (
+            (span.specifier.startsWith('./') ||
+                span.specifier.startsWith('../')) &&
+            !span.specifier.endsWith('.abide')
+        )
+            specifiers.push(span.specifier)
     return specifiers
 }
 
@@ -207,7 +288,7 @@ function importDeclarations(script: string): { text: string; start: number }[] {
     const declarations: { text: string; start: number }[] = []
     if (!script.includes('import')) return declarations
     for (const span of importSpans(script))
-        if (script.startsWith('import', span.start))
+        if (!span.dynamic && script.startsWith('import', span.start))
             declarations.push({
                 text: script.slice(span.start, span.end),
                 start: span.start,
@@ -258,27 +339,26 @@ export function importedNames(
 }
 
 /**
- * Rewrites each `.abide` specifier in `imports` to the lane's compiled module for it.
+ * Where the build moved `specifier`: a `.abide` one to the lane's compiled module for it, and a
+ * relative one to its source — or `undefined` where it stays as written.
  *
  * 32.17 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two
  * it is is the LANE's business: the server module renders the child, the client module mounts it.
- * WHERE that module is, is the build's: `components` maps a specifier to the path, relative and
- * without an extension, the build resolved it to (`componentGraph`) — and a specifier it does not
- * map keeps the path as written, which is where a relative one lands anyway because the output
- * tree mirrors the source tree.
+ * WHERE that module is, is the build's: `landed` maps a specifier to the path, relative and
+ * without an extension, the build resolved it to (`componentGraph`) — and a `.abide` specifier it
+ * does not map keeps the path as written.
+ *
+ * 34.14 — `landed` maps any other relative specifier to the path from the module, in the output
+ * tree, back to the file the author meant, which the output tree does not hold.
  */
-export function componentImports(
-    imports: string,
+function landedSpecifier(
+    specifier: string,
     lane: '' | '.client',
-    components: ReadonlyMap<string, string>,
-): string {
-    return imports.includes('.abide')
-        ? imports.replace(
-              /(['"])([^'"\n]*)\.abide\1/g,
-              (_whole, quote: string, stem: string) =>
-                  `${quote}${components.get(`${stem}.abide`) ?? stem}${lane}.ts${quote}`,
-          )
-        : imports
+    landed: ReadonlyMap<string, string>,
+): string | undefined {
+    if (specifier.endsWith('.abide'))
+        return `${landed.get(specifier) ?? specifier.slice(0, -'.abide'.length)}${lane}.ts`
+    return landed.get(specifier)
 }
 
 /**

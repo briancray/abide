@@ -3,12 +3,11 @@ import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { firstMatch, type Params, partsOf } from '#shared/matchRoute.ts'
 import { unmounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
+import type { ShareScope } from '#shared/reactive/share.ts'
 import { arrive, route } from '#shared/route.ts'
-import {
-    parseRoutePattern,
-    rankBySpecificity,
-    type Segment,
-} from '#shared/routePattern.ts'
+import { rankRoutes, type Segment } from '#shared/routePattern.ts'
+import { setUpLevels } from '#shared/setUpLevels.ts'
+import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 import { withdrawHead } from './applyHead.ts'
 import { LAYER_MOUNT, LAYER_NAVIGATE } from './LAYER_NAMES.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
@@ -73,6 +72,17 @@ type Level = {
      * wrote and the first navigation away from it withdraws that head like any other.
      */
     head: (() => string) | undefined
+    /**
+     * 41.19 — this level's markup, left by its mount once its setup has run, for the router to run
+     * once every level below has been set up too; `undefined` once it has run, or where the module
+     * has none.
+     */
+    markup: ((region: Region) => Scope | undefined) | undefined
+    /**
+     * 10.5 — the share scope this level's setup ran in, left by its mount, for `setUpLevels` to
+     * set the level below up inside. `null` where the module left none.
+     */
+    share: ShareScope | null
 }
 
 /**
@@ -179,7 +189,7 @@ export class Router {
      * are asked for on intent, so the click finds them in the module cache and setup — and with it
      * every call the page makes — starts at once. Only the CODE: a call run on a hover would be a
      * call nobody asked for, and for anything but a `GET` one with an effect. A failed load is left
-     * for the click, which reports it, and the next intent asks again.
+     * for the click, which hands the address to the document (30.27), and the next intent asks again.
      */
     prefetch(pathname: string): void {
         const route = this.match(pathname)?.route
@@ -196,8 +206,8 @@ export class Router {
      *
      * THE MARKUP COMES FROM THE PAGE'S OWN MODULE. A page the server painted arrives with its
      * markup between the anchors and hydrates; a page navigated TO arrives as the empty pair and
-     * fills itself from the template it carries. One module, both ways in — the `isEmptyRegion`
-     * guard the emitter already writes is the whole of the difference.
+     * fills itself from the template it carries. One module, both ways in — the `fillEmpty`
+     * the emitter already writes is the whole of the difference.
      */
     async go(url: URL | string, options: NavigateOptions = {}): Promise<void> {
         const target =
@@ -233,7 +243,7 @@ export class Router {
             // navigation for the price of the one round trip the chunks already cost.
             const [answer, loaded] = await Promise.all([
                 ask(target),
-                load(found.route),
+                loadOrMiss(found.route),
             ])
             // SUPERSEDED, so this navigation is over. Nothing has been touched yet, which is the
             // whole reason the ticket is checked here rather than after the mount — and
@@ -243,7 +253,9 @@ export class Router {
             // document asks again and paints whatever the server says. A fetch that failed —
             // offline, or a redirect to another origin that CORS will not let it follow — goes to
             // the address it was sent to.
-            if (answer?.status !== 204) {
+            // 30.27 — AND CHUNKS THAT WOULD NOT LOAD, with the server down or a deploy that removed
+            // them: a rejection here was dropped by the click's `void`, and the link did nothing.
+            if (answer?.status !== 204 || loaded === undefined) {
                 location.href = answer?.url ?? target.href
                 return
             }
@@ -265,8 +277,12 @@ export class Router {
                 return
             }
             const arriving =
-                landing === found ? loaded : await load(landing.route)
+                landing === found ? loaded : await loadOrMiss(landing.route)
             if (this.navigation !== ticket) return
+            if (arriving === undefined) {
+                location.href = landed.href
+                return
+            }
             await this.write(ticket, () =>
                 this.commit(landed, landing, arriving, options),
             )
@@ -439,14 +455,34 @@ export class Router {
      * opens again mounts the page the address resolves to now.
      */
     private mountFrom(at: number, region: Region): void {
+        setUpLevels(
+            at,
+            this.chain.length,
+            this.levels[at - 1]?.share,
+            ROUTE_PROPS,
+            (below, props) => this.setUp(below, region, props),
+        )
+        this.markUp(at, region)
+    }
+
+    /**
+     * Runs level `at`'s setup over `props`, leaving its markup on the level for `markUp`, and
+     * answers the share scope the setup left.
+     */
+    private setUp(
+        at: number,
+        region: Region,
+        props: Record<string, (() => unknown) | undefined>,
+    ): ShareScope | null {
         const module = this.chain[at] as PageModule
         const level: Level = {
             scope: undefined,
             slot: undefined,
             head: undefined,
+            markup: undefined,
+            share: null,
         }
         this.levels[at] = level
-        const props = routeProps()
         if (at < this.chain.length - 1)
             props.children = () => ({
                 // NO BUILD, because the level below carries its own (32.17): a module a route
@@ -454,13 +490,31 @@ export class Router {
                 // the build and the mount are one call rather than two.
                 build: undefined,
                 mount: (slot: Region): Stoppable => {
-                    this.release(level, at)
+                    // The level below as `mountFrom` set it up, the first time its slot opens; a
+                    // slot opening again sets it up afresh.
+                    const pending = this.levels[at + 1]?.markup !== undefined
+                    if (!pending) this.release(level, at)
                     level.slot = slot
-                    this.mountFrom(at + 1, slot)
+                    if (pending) this.markUp(at + 1, slot)
+                    else this.mountFrom(at + 1, slot)
                     return { stop: () => this.release(level, at) }
                 },
             })
+        // The region a level's markup lands in is its slot above, known only once that markup
+        // runs; a module mounted by the router leaves its markup rather than using this one.
+        // A deferred level answers the scope its setup made, so the watches that setup opened are
+        // stopped with the level even where its markup never runs — a slot that never opens.
         level.scope = module.default(region, props, level)
+        return level.share
+    }
+
+    /** Runs the markup level `at`'s setup left, into `region`. */
+    private markUp(at: number, region: Region): void {
+        const level = this.levels[at] as Level
+        const markup = level.markup
+        if (markup === undefined) return
+        level.markup = undefined
+        level.scope = markup(region)
     }
 
     /**
@@ -494,7 +548,11 @@ export class Router {
         // rather than fills, and the head is the one the server wrote. Re-applying would replace
         // each contribution with an identical copy — a `<link rel=stylesheet>` refetched and a
         // flash of unstyled document on every load.
+        // 41.25 — AND THE CALLS THE SERVER PAINTED SETTLED ARE WAITED FOR, so setup reads each one
+        // answered, as the markup was built from it, and picks the arm the server painted.
+        const landing = paintedCallsLanded()
         const standing = await load(found.route)
+        if (landing !== undefined) await landing
         if (this.navigation !== ticket) return
         // THE HYDRATE SHARE. Same name as the navigation's mount because it is the same work on the
         // same chain — what differs is the op it is a fraction of.
@@ -543,6 +601,11 @@ async function load(route: Compiled): Promise<PageModule[]> {
     ])
 }
 
+/** A route's chain as `load` gives it; `undefined` where a chunk failed to load. */
+function loadOrMiss(route: Compiled): Promise<PageModule[] | undefined> {
+    return load(route).catch(() => undefined)
+}
+
 /**
  * Asks the server's `middleware` about an address; `undefined` where the fetch failed.
  *
@@ -562,7 +625,7 @@ async function ask(target: URL): Promise<Response | undefined> {
 }
 
 /**
- * A fresh props record for a routed page or layout: `params` as a live accessor, `children` unset.
+ * The props a routed page or layout is set up over, `children` aside: `params` as a live accessor.
  *
  * 33.4 — A PROP IS AN ACCESSOR. A page is mounted as any other component is, so its one prop is
  * passed the way `renderComponent` passes a child's and the way `answerRequest` paints one: a
@@ -573,17 +636,8 @@ async function ask(target: URL): Promise<Response | undefined> {
  * 33.5 — AND A LIVE ONE: `params` reads `route.params`, which every navigation writes. A layout
  * kept across `/users/1` -> `/users/2` is not mounted again, so an accessor over the params it was
  * mounted with went on answering user 1.
- *
- * THE SHAPE IS FIXED HERE, `children` included: every compiled page and layout loads its props
- * off this record, and a field added on a later path is a second hidden class for all of them.
- * A level with nothing below it leaves the key present and undefined, which is what both
- * emitted readers already test for.
  */
-function routeProps(): Record<string, (() => unknown) | undefined> {
-    return { params: readParams, children: undefined }
-}
-
-const readParams = (): Params => route.params()
+const ROUTE_PROPS = { params: (): Params => route.params() }
 
 function writeAddress(target: URL, replace: boolean): void {
     const full = `${target.pathname}${target.search}${target.hash}`
@@ -627,12 +681,9 @@ export function startRouter(
     transitions = false,
     shellHead = '',
 ): Router {
-    const compiled: Compiled[] = []
-    for (const route of routes)
-        compiled.push({ ...route, segments: parseRoutePattern(route.pattern) })
     const router = new Router(
         pageRegion(host),
-        rankBySpecificity(compiled),
+        rankRoutes(routes),
         transitions,
         shellHead,
     )

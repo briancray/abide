@@ -8,8 +8,10 @@
 // buys is one binding run in the child and no node created anywhere, and that is what is counted.
 
 import { afterAll, expect, test } from 'bun:test'
+import { spawned } from 'harness/gate'
 import { measure } from 'harness/measure'
-import { emitClient, emitComponent, parseAbide } from '#compiler'
+import { emitComponent, parseAbide } from '#compiler'
+import { emitSource } from '#compiler/emitSource.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -19,8 +21,8 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
 
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -55,10 +57,15 @@ async function mountPage(
     })) {
         const file = parseAbide(source)
         const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
-        modules[`${name}.ts`] = emitComponent(file, reads)
-        modules[`${name}.client.ts`] =
-            emitClient(file, reads, name !== 'Page' ? 'invoked' : 'none') ||
-            'export default () => {}'
+        const page = name === 'Page'
+        const { server, client } = emitSource(
+            page ? 'ui/pages/page.abide' : `${name}.abide`,
+            file,
+            reads,
+            !page,
+        )
+        modules[`${name}.ts`] = server
+        modules[`${name}.client.ts`] = client
     }
     const dir = temporaryModule(modules)
 
@@ -269,6 +276,101 @@ const { title, ...rest } = props<{ title: string; note: string; count?: number }
     expect(work.wakes).toBe(1)
 })
 
+// 33.25 — A REST ELEMENT NEVER HOLDS `children`. Every caller's record carries it, so a rest spread
+// onto the element around the `<slot/>` wrote the caller's content a second time, escaped, as an
+// attribute — and rendered it outside the slot, ahead of the data it waits on. THE REVERT: drop the
+// `CHILDREN` test from `restValues`; the button carries `children="…"` and the content is in the
+// document twice.
+test('a rest element spread around a slot carries no children — 33.25', async () => {
+    const { html } = await mountPage(
+        `<script>
+import Card from './Card.abide'
+</script>
+<Card data-kind="note"><b>inside</b></Card>`,
+        {
+            Card: `<script>
+import { type Attributes, props } from 'abide'
+
+const { class: className = '', ...attributes } = props<Attributes<'section'>>()
+</script>
+
+<section class="{className} p-4" {...attributes}><slot/></section>`,
+        },
+    )
+    expect(html).toContain('<section class=" p-4" data-kind="note">')
+    expect(html).not.toContain('children=')
+    expect(html.split('inside').length - 1).toBe(1)
+})
+
+// 34.12, 34.13 — `lang="ts"` AND `generics` LEAVE A `<script>` THE COMPONENT'S SETUP, where any
+// other attribute makes it markup. THE REVERT: drop the two from `scriptBlock`; the setup is
+// written into the document as an inline script, `items` is never declared, and the render throws.
+test('a script carrying lang="ts" and generics is component setup — 34.12, 34.13', async () => {
+    const { html } = await mountPage(
+        `<script>
+import List from './List.abide'
+</script>
+<List items={['a', 'b']}/>`,
+        {
+            List: `<script lang="ts" generics="Item extends string">
+import { props } from 'abide'
+
+const { items } = props<{ items: Item[] }>()
+</script>
+
+<b>{items.join(',')}</b>`,
+        },
+    )
+    expect(html).toContain('<b>a,b</b>')
+    expect(html).not.toContain('<script')
+})
+
+// 33.22 — A REST ELEMENT HANDED ON WHOLE IS ITS VALUES, on an element and on a component alike:
+// the attributes are written, the listener is bound, the inner child reads a value, and each is
+// re-read when the caller's expression moves. THE REVERT: drop the `restWhole` read from
+// `restReads`; the spread is handed the accessors, the server writes `<button>` with no attribute
+// at all, and the inner child renders the accessor's source where `first` is due.
+test('a props rest element spreads its values onto an element and a component — 33.22', async () => {
+    const { html, mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Outer from './Outer.abide'
+
+let note = reactive('first')
+let clicks = reactive(0)
+</script>
+<Outer title="t" data-note={note} aria-label="go" onclick={() => { clicks += 1; note = 'second' }}/><i>{clicks}</i>`,
+        {
+            Outer: `<script>
+import { props } from 'abide'
+import Inner from './Inner.abide'
+
+const { title, ...rest } = props<{ title: string; 'data-note': string; 'aria-label': string; onclick: () => void }>()
+</script>
+
+<button {...rest}>{title}</button><Inner {...rest}/>`,
+            Inner: `<script>
+import { props } from 'abide'
+
+const { 'data-note': note } = props<{ 'data-note': string }>()
+</script>
+
+<b>{note}</b>`,
+        },
+    )
+    expect(html).toContain('<button data-note="first" aria-label="go">')
+    expect(html).toContain('<b>first</b>')
+    mount(pageRegion(document.body))
+    flushSync()
+    document.querySelector('button')?.click()
+    flushSync()
+    expect(document.querySelector('i')?.textContent).toBe('1')
+    expect(document.querySelector('button')?.getAttribute('data-note')).toBe(
+        'second',
+    )
+    expect(document.querySelector('b')?.textContent).toBe('second')
+})
+
 // 32.17 THROUGH THE BUILD — A CHILD WITH NOTHING TO HYDRATE STILL SHIPS A MODULE, because the
 // caller's client module imports one by name. "A static page ships no client" is the rule this is
 // the exception to, and the import is what forces it: the child is static, the page is not, and
@@ -293,7 +395,7 @@ let count = reactive(0)
 <p>{count}</p><Static/>`,
     })
     const out = `${source}/.abide`
-    const built = Bun.spawnSync([
+    const built = await spawned([
         'bun',
         new URL('../bin/abide.ts', import.meta.url).pathname,
         'build',
@@ -633,6 +735,63 @@ let mark = reactive('')
     expect(document.querySelector('li')?.textContent).toBe('one!')
 })
 
+// 12.4 — AND THE WATCHES ITS SETUP OPENED. A component's `<script>` runs before the markup that
+// makes its scope, so a `watch` there had nothing to hand its disposer to: a dropped row's watch
+// went on waking at every write. THE REVERT: drop `owned` from `watch` — the dropped row's
+// disposer runs 0 times where 1 is due, and its watch wakes again at the bump.
+test("a row that leaves stops the watch its component's setup opened — 12.4", async () => {
+    const row = `<script>
+import { props, watch } from 'abide'
+
+const { label, tick } = props<{ label: string; tick: string }>()
+const counts = ((globalThis as { rows?: Record<string, { wakes: number; disposed: number }> }).rows ??= {})
+const mine = { wakes: 0, disposed: 0 }
+counts[label] = mine
+watch(() => {
+    tick
+    mine.wakes += 1
+    return () => {
+        mine.disposed += 1
+    }
+})
+</script>
+
+<li>{label}</li>`
+    const { mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Row from './Row.abide'
+
+let rows = reactive(['one', 'two'])
+let mark = reactive('')
+</script>
+
+<ul>{#for row of rows by row}<Row label={row} tick={mark}/>{/for}</ul>
+<button id="drop" onclick={() => { rows = ['one'] }}>drop</button>
+<button id="bump" onclick={() => { mark = '!' }}>bump</button>`,
+        { Row: row },
+    )
+    mount(pageRegion(document.body))
+    flushSync()
+    const rows = (
+        globalThis as {
+            rows?: Record<string, { wakes: number; disposed: number }>
+        }
+    ).rows
+    const one = rows?.one as { wakes: number; disposed: number }
+    const two = rows?.two as { wakes: number; disposed: number }
+
+    ;(document.querySelector('#drop') as HTMLElement).click()
+    flushSync()
+    expect(two.disposed).toBe(two.wakes)
+
+    const before = { one: one.wakes, two: two.wakes }
+    ;(document.querySelector('#bump') as HTMLElement).click()
+    flushSync()
+    expect(one.wakes).toBe(before.one + 1)
+    expect(two.wakes).toBe(before.two)
+})
+
 // A COMPONENT'S LIST GROWS A ROW. A component is mounted on the `Region` its caller wrote, not on a
 // node, so a build that asked `root` for its document was handed the region record — and the first
 // row a component's list grew threw `createElement is not a function`. Nothing had grown one: every
@@ -760,4 +919,39 @@ const amp = 'amp;'
     const cards = document.querySelectorAll('.card')
     expect(cards[0]?.textContent).toBe('AT+T|AT+T 1|+amp;')
     expect(cards[1]?.textContent).toBe('AT+T|AT+T 1|+amp;')
+})
+
+// 33.21 — A BARE PROP IS `true`, on the server and on a child the browser builds, and `enable=""`
+// beside it is still the empty string it reads as.
+//
+// THE REVERT: push a bare attribute as the literal `''` on a component tag as on an element, in
+// `readTag` — both lanes write `string:|string:` where `boolean:true|string:` is due.
+test('a bare prop is true — 33.21', async () => {
+    const FLAG = `<script>
+import { props } from 'abide'
+
+const { enable, label } = props<{ enable?: boolean; label?: string }>()
+</script>
+
+<b class="flag">{typeof enable}:{enable}|{typeof label}:{label}</b>`
+    const { html, mount } = await mountPage(
+        `<script>
+import { reactive } from 'abide'
+import Flag from './Flag.abide'
+
+let show = reactive(false)
+</script>
+
+<Flag enable label=""/>
+<button onclick={() => { show = true }}>go</button>
+<div>{#if show}<Flag enable label=""/>{/if}</div>`,
+        { Flag: FLAG },
+    )
+    expect(html).toContain('<b class="flag">boolean:true|string:</b>')
+    mount(pageRegion(document.body))
+    flushSync()
+    ;(document.querySelector('button') as HTMLElement).click()
+    flushSync()
+    const flags = document.querySelectorAll('.flag')
+    expect(flags[1]?.textContent).toBe('boolean:true|string:')
 })

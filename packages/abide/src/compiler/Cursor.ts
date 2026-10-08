@@ -1,4 +1,5 @@
 import {
+    holdsSetup,
     isBlankRun,
     isComponentTag,
     isParserOwned,
@@ -12,8 +13,7 @@ import type { InlineComponent, TemplateNode } from './TemplateNode.ts'
 // in document order and as a tree. `placeTemplate` is the one walk over the template nodes, and
 // three things are RENDERED from what it places rather than each walking the template again:
 //
-// - the markup (`emitComponent`'s `renderMarkup`) — what the server writes, and what a region
-//   made once fills from;
+// - the markup (`renderMarkup`) — what the server writes, and what a region made once fills from;
 // - the build (`emitClient`'s `emitBuild`) — what a region made once a row is constructed by;
 // - the adopt walk (`emitRegion`) — how a mount finds each node the server or the build made.
 //
@@ -143,13 +143,14 @@ export class Cursor {
      */
     readonly repeated: boolean
     /**
-     * Whether a component is invoked anywhere in this region, at any depth.
+     * Whether a setup runs anywhere in this region after its caller's has returned, at any depth.
      *
-     * WHETHER A COMPONENT IS INVOKED ANYWHERE IN THIS REGION, at any depth — what decides whether a
-     * deferred mount has to resume its instance's share scope (10.5). Set from the invocation up
-     * through every sink it stands inside, so a component three regions down marks all three.
+     * A COMPONENT INVOKED HERE, OR A BLOCK WHOSE ARM OR ROW CARRIES A `<script>` (14.8) — each runs
+     * a setup from a `watch` effect on a later swap or a grown row, and what decides is whether that
+     * setup has to resume its instance's share scope (10.5). Set from the region up through every
+     * sink it stands inside, so a component three regions down marks all three.
      */
-    holdsComponent = false
+    defersSetup = false
     /**
      * 32.43 — the inline components this region's body declares, which both lanes declare at its
      * head. What an invocation in it is passed (32.50) is on the invocation.
@@ -215,13 +216,16 @@ export class Cursor {
      * ported. How many nodes stand between the anchors depends on a value, and a cursor never asks.
      */
     region(holder: TemplateNode): Position {
-        if (holder.kind === 'element' && !isSlot(holder))
+        if (
+            (holder.kind === 'element' && !isSlot(holder)) ||
+            holdsSetup(holder)
+        )
             for (
                 let sink: Cursor | null = this;
-                sink !== null && !sink.holdsComponent;
+                sink !== null && !sink.defersSetup;
                 sink = sink.outer
             )
-                sink.holdsComponent = true
+                sink.defersSetup = true
         return this.record('region', holder, '', false, [])
     }
 

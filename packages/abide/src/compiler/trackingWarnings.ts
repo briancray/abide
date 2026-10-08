@@ -6,19 +6,16 @@ import {
     isCallExpression,
     isConditionalExpression,
     isDoStatement,
-    isExpressionStatement,
     isForOfStatement,
     isForStatement,
     isFunctionExpression,
     isIdentifier,
     isIfStatement,
-    isParenthesizedExpression,
     isPropertyAccessExpression,
-    isVariableStatement,
     isWhileStatement,
 } from 'typescript/unstable/ast/is'
-import { FUNCTIONS } from './classifyRead.ts'
-import { SUBJECT } from './projectShadow.ts'
+import { FUNCTIONS, TRANSPARENT } from './classifyRead.ts'
+import type { PositionKind, PositionTable } from './PositionTable.ts'
 
 // 14.14, 14.15, 14.16 — WHERE A READ STANDS IN A BODY THAT TRACKS, and the three ways it can stand
 // there and not do what it looks like doing. Read off the checker's own tree of the projection, so a
@@ -26,9 +23,7 @@ import { SUBJECT } from './projectShadow.ts'
 // valid, and a read that is not tracked is sometimes what was meant.
 //
 // A TRACKED BODY is an unkeyed `reactive` body (14.3), a `watch` effect (14.6), or a template
-// position (14.2) — the parenthesised statement the projection wraps a slot in. A listener is not
-// one (14.9), and the projection hands it to `__on` rather than wrapping it, which is what tells
-// the two apart here.
+// position (14.2) of a kind in `TRACKED`.
 
 /** A warning at a projection offset. */
 export type Warning = { at: number; message: string }
@@ -58,10 +53,27 @@ const SYNCHRONOUS = new Set([
 
 type Body = { node: Node; kind: 'reactive' | 'watch' | 'template' }
 
-/** `node` past any parentheses around it, and what holds it. */
+/**
+ * 14.2 — the template positions that track: what the template renders, tests or iterates, and what
+ * a component is handed, which the child reads where it tracks. Not a listener or an element's
+ * `bind:` (14.9), a branch-local `<script>` (14.8), an inline component's head (14.7), or a value
+ * the shadow types as `any`.
+ */
+const TRACKED: ReadonlySet<PositionKind> = new Set([
+    'slot',
+    'attribute',
+    'condition',
+    'subject',
+    'key',
+    'prop',
+    'componentBind',
+    'tag',
+])
+
+/** `node` past any `TRANSPARENT` wrapper around it, and what holds it. */
 function holderOf(node: Node): { child: Node; parent: Node } {
     let child = node
-    while (isParenthesizedExpression(child.parent)) child = child.parent
+    while (TRANSPARENT.has(child.parent.kind)) child = child.parent
     return { child, parent: child.parent }
 }
 
@@ -89,16 +101,15 @@ function trackedKind(fn: Node): Body['kind'] | undefined {
 }
 
 /** Whether a function a tracked body creates runs before the body returns. */
-function runsSynchronously(fn: Node): boolean {
+function runsSynchronously(fn: Node, positions: PositionTable): boolean {
     const { child, parent } = holderOf(fn)
     // 14.18 — A COMPONENT'S `bind:` PAIR (32.6) is not kept for later: the child calls `get` inside a body
-    // that tracks, and `set` where it writes, so a read in either is where it should be. The
-    // projection hands the pair to `__bound`, which is what tells it from any other prop.
+    // that tracks, and `set` where it writes, so a read in either is where it should be.
     const member =
         parent.kind === SyntaxKind.PropertyAssignment ? parent : child
     if (
         member.parent.kind === SyntaxKind.ObjectLiteralExpression &&
-        calleeName(holderOf(member.parent).parent) === '__bound'
+        positions.of(holderOf(member.parent).child)?.kind === 'componentBind'
     )
         return true
     if (!isCallExpression(parent)) return false
@@ -127,36 +138,6 @@ function isCondition(child: Node, parent: Node): boolean {
         )
     }
     return false
-}
-
-/**
- * The template position `child` is, as held by `parent`, or `undefined` where it is none.
- *
- * The template's positions start at `templateStart`; a statement there wrapped in parentheses is a
- * slot, a subject or a key, and one that is a call is a listener or a prop handed to a component.
- * An `{#if}`'s subject is the parenthesised condition of the `if` it is projected as.
- */
-function templateBody(
-    child: Node,
-    parent: Node,
-    templateStart: number,
-): Node | undefined {
-    if (child.getStart() < templateStart) return undefined
-    if (isIfStatement(parent))
-        return parent.expression === child && isParenthesizedExpression(child)
-            ? child
-            : undefined
-    if (isExpressionStatement(child))
-        return isParenthesizedExpression(child.expression) ? child : undefined
-    // `const __subjectN = (…)`, the `{#for}` subject — and no declaration an arm's `<script>` makes,
-    // which tracks nothing (14.8).
-    if (!isVariableStatement(child)) return undefined
-    const declared = child.declarationList.declarations[0]?.name
-    return declared !== undefined &&
-        isIdentifier(declared) &&
-        declared.text.startsWith(SUBJECT)
-        ? child
-        : undefined
 }
 
 // Every `await` a body runs itself, a nested function's aside. Asked once per body.
@@ -191,18 +172,22 @@ function awaitsIn(body: Node): number[] {
 export function trackingWarnings(
     read: Node,
     name: string,
-    templateStart: number,
+    positions: PositionTable,
     reads: readonly { start: number; name: string }[],
 ): Warning[] {
     const created: Node[] = []
     let decides: { condition: Node; within: Node } | undefined
     let body: Body | undefined
     let child: Node = read
-    // THE NEAREST TEMPLATE POSITION with no function between it and the file. An arm and a row are
-    // projected inside the `if` and the `for` they are, so a position is not only found at the top —
-    // and one under a created function is that function's statement rather than a position.
-    let position: Node | undefined
+    // THE TEMPLATE POSITION the read stands in, wherever the projection put it: an arm, a row and
+    // an inline component's body are projected inside the `if`, the `for` and the function they are.
     for (let node = read.parent; node !== undefined; node = node.parent) {
+        const position = positions.of(child)
+        if (position !== undefined) {
+            if (TRACKED.has(position.kind))
+                body = { node: child, kind: 'template' }
+            break
+        }
         if (
             created.length === 0 &&
             decides === undefined &&
@@ -216,13 +201,7 @@ export function trackingWarnings(
                 break
             }
             created.push(node)
-            position = undefined
-        } else if (node.kind === SyntaxKind.SourceFile) {
-            if (position !== undefined)
-                body = { node: position, kind: 'template' }
-            break
-        } else if (position === undefined)
-            position = templateBody(child, node, templateStart)
+        }
         child = node
     }
     if (body === undefined) return []
@@ -230,7 +209,7 @@ export function trackingWarnings(
     const at = read.getStart()
     // 14.16 — a function the body creates and hands to something that runs it later.
     for (const fn of created)
-        if (!runsSynchronously(fn)) {
+        if (!runsSynchronously(fn, positions)) {
             warnings.push({
                 at,
                 message: `abide: \`${name}\` is read inside a function this tracked body creates and does not call as it runs, so nothing tracks the read and a change to \`${name}\` will not rerun the body. Read it in the body and close over the value. RULEBOOK 14.16.`,

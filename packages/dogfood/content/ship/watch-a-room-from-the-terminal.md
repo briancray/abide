@@ -5,10 +5,10 @@ intent: Subscribe to a channel from a shell and watch what it produces.
 ---
 
 A channel is live state anything may publish and anything may read, and a terminal is one of the
-things that may read it. `abide connect` subscribes to one and prints what arrives.
+things that may read it. The shell `abide` opens subscribes to one and prints what arrives.
 
 ```
-abide connect
+abide
 > thread({ id: 'onboarding' }).history(20)
 ```
 

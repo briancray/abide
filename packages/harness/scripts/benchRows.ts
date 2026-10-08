@@ -14,6 +14,7 @@ import {
     type Batched,
     batch,
     claimOf,
+    emulatedDom,
     ratio,
     type Sample,
 } from 'harness/report'
@@ -96,7 +97,7 @@ function reactiveItems(): BenchItem[] {
                 const measured = batch({
                     case: kase.name,
                     arms: { vanilla: kase.vanilla, abide: kase.abide },
-                    emulated: null,
+                    emulated: emulatedDom(),
                 })
                 const counted = kase.work()
                 const abide = {
@@ -156,7 +157,7 @@ function renderItems(): BenchItem[] {
                             void (rendered.head + rendered.body)
                         },
                     },
-                    emulated: null,
+                    emulated: emulatedDom(),
                 })
                 return timed(measured, 'abide', 1000, 'µs')
             },
@@ -188,7 +189,7 @@ function renderItems(): BenchItem[] {
                             void page.render().body
                         },
                     },
-                    emulated: null,
+                    emulated: emulatedDom(),
                 })
                 return timed(measured, 'abide', 1000, 'µs')
             },

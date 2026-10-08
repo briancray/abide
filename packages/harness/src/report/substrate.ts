@@ -1,3 +1,5 @@
+import { underBun } from './environment.ts'
+
 /**
  * Which JS engine this is, read off the user agent rather than probed.
  *
@@ -13,12 +15,8 @@
  * Safari would let `ratio()` compare two of them.
  */
 export function substrate(): 'jsc' | 'v8' | 'spidermonkey' | 'unknown' {
-    // Bun IS JSC, and it is the one case with no user agent worth reading. Probed by
-    // the MEMBER: a docs example frame defines a `Bun.serve` shim so a hand-written
-    // arm's `server.ts` can run in the page, and a bare `globalThis.Bun` check called
-    // headless chromium JavaScriptCore.
-    const bun = (globalThis as { Bun?: { nanoseconds?: unknown } }).Bun
-    if (typeof bun?.nanoseconds === 'function') return 'jsc'
+    // Bun IS JSC, and it is the one case with no user agent worth reading.
+    if (underBun()) return 'jsc'
     const agent = globalThis.navigator?.userAgent ?? ''
     if (/Firefox\//.test(agent)) return 'spidermonkey'
     // Chromium's agent carries `Safari/` too, so this order is the whole check.

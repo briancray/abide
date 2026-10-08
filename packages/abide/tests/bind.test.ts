@@ -2,7 +2,8 @@
 // value standing at render into the tag, and the client binds the property where the server left it.
 
 import { afterAll, expect, test } from 'bun:test'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { parseAbide } from '#compiler'
+import { emitSource } from '#compiler/emitSource.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -12,8 +13,8 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
 
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -41,10 +42,13 @@ let open = reactive(false)
 async function mounted(): Promise<string> {
     const file = parseAbide(PAGE)
     const reads = await session.reads(`${ROOT}src/page.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': compileFile(PAGE, reads),
-        'Page.client.ts': emitClient(file, reads),
-    })
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        reads,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
     html += new TextDecoder().decode(
@@ -68,7 +72,7 @@ const out = () => document.getElementById('out')?.textContent
 
 // 32.5, 32.7, 32.8 — THE SERVER WRITES WHAT STANDS AT RENDER, as the attribute each property
 // reflects, and writes no `bind:` attribute at all. THE REVERT: drop the `bound` arm from
-// `writtenAttributes`; the tag carries `bind:value="ada"` and no `value`.
+// `classifyAttributes`; the tag carries `bind:value="ada"` and no `value`.
 test('the server writes a bind as the attribute its property reflects — 32.5, 32.7', async () => {
     const html = await mounted()
     expect(html).toContain('<input id="name" value="ada">')
@@ -142,10 +146,13 @@ let attrs = reactive<Record<string, unknown>>({ title: 'first', 'data-kind': 'ca
 test('a spread writes attributes, and keeps them in step with the value — 32.11', async () => {
     const file = parseAbide(SPREAD)
     const reads = await session.reads(`${ROOT}src/spread.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': compileFile(SPREAD, reads),
-        'Page.client.ts': emitClient(file, reads),
-    })
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        reads,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
     html += new TextDecoder().decode(
@@ -196,10 +203,13 @@ test('a spread binds its on<event> functions as listeners, and keeps them in ste
     ;(globalThis as unknown as { heard: string[] }).heard = heard
     const file = parseAbide(SPREAD_LISTENERS)
     const reads = await session.reads(`${ROOT}src/spread.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': compileFile(SPREAD_LISTENERS, reads),
-        'Page.client.ts': emitClient(file, reads),
-    })
+    const { server, client } = emitSource(
+        'ui/pages/page.abide',
+        file,
+        reads,
+        false,
+    )
+    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
     const { default: Component } = await import(`${dir}/Page.ts`)
     let html = ''
     html += new TextDecoder().decode(

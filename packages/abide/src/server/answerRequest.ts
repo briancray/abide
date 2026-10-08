@@ -14,47 +14,54 @@ import {
     LOGS_ADDRESS,
     MCP_ADDRESS,
     OPENAPI_ADDRESS,
-    PRINCIPAL_ADDRESS,
     RPC_ADDRESS,
-    SOCKET_ADDRESS,
 } from '#shared/ADDRESSES.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
-import { type Failed, isFailed } from '#shared/Failed.ts'
-import { RENDER_LOG } from '#shared/log.ts'
+import { isFailed } from '#shared/Failed.ts'
+import { health } from '#shared/health.ts'
 import { MOUNT_META } from '#shared/MOUNT_META.ts'
-import { coversPrefix, firstMatch, partsOf } from '#shared/matchRoute.ts'
+import { firstMatch, partsOf } from '#shared/matchRoute.ts'
 import { MOUNT, mounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
-import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { refuse, notFound as refusedNotFound } from '#shared/refuse.ts'
 import { arrive } from '#shared/route.ts'
 import {
     parseRoutePattern,
-    rankBySpecificity,
+    rankRoutes,
     type Segment,
 } from '#shared/routePattern.ts'
 import type { Rpc } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import type { Socket } from '#shared/socket.ts'
-import { answerRpc, type Mounted } from './answerRpc.ts'
+import { answerFailure } from './answerFailure.ts'
+import {
+    answerRpc,
+    type Mount,
+    type Mounted,
+    mountedOwn,
+    mountHandlers,
+} from './answerRpc.ts'
 import { answerBlobTagged, answerValue, contentEtag } from './answerValue.ts'
 import { answerBridge } from './bridgeRelay.ts'
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
-import { compressDocument } from './compressDocument.ts'
+import { callerOrMint } from './callerOf.ts'
+import { compressAnswer } from './compressAnswer.ts'
+import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
 import { answerLogs, answerMcp, openApi } from './generatedSurfaces.ts'
-import { reportHealth } from './health.ts'
 import { failureOf } from './hooks.ts'
-import { MUX_ADMITTED } from './MUX_ADMITTED.ts'
 import { chunksOf, type Manifest } from './manifestOf.ts'
-import { ENCODINGS, negotiateEncoding } from './negotiateEncoding.ts'
-import { callerOrMint, PRINCIPAL_HANDLERS } from './principal.ts'
-import { type Component, composePage, headAnchor, render } from './render.ts'
+import { muxAdmission } from './muxUpgrade.ts'
+import { plainAnswer } from './plainAnswer.ts'
+import { PRINCIPAL_MOUNT } from './principal.ts'
+import { boundPage, type Component, headAnchor, render } from './render.ts'
 import {
+    type AnsweringApp,
     adoptRequest,
     beginRender,
     currentRequestScope,
+    within,
     writtenStatus,
 } from './requestScope.ts'
 import { seedFor } from './seedBuffer.ts'
@@ -85,7 +92,7 @@ type Ranked = RankedError & {
 }
 
 /** A public file, read once at boot: where the bytes are, the etag off them, and its type. */
-export type PublicFile = { path: string; etag: string; type: string }
+type PublicFile = { path: string; etag: string; type: string }
 
 /** Everything `answerRequest` answers from: the ranked routes, the lanes and the handlers. */
 export type AppSources = {
@@ -147,21 +154,18 @@ export async function answerRequest(
     const asked = url.pathname
 
     if (asked.startsWith(`${RPC_ADDRESS}/`))
-        return answerRpc(app.handlers, url, request, (failure) =>
-            answerFailure(app, asked, failure),
-        )
-    // 26.17 — the principal is a handler abide mounts, answered as the app's are.
-    if (asked === PRINCIPAL_ADDRESS)
-        return answerRpc(PRINCIPAL_HANDLERS, url, request, (failure) =>
-            answerFailure(app, asked, failure),
-        )
-    // 25.1, 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where its `ABIDE_*` has not
+        return answerRpc(app.handlers, url, request, app)
+    // 25.1, 25.3, 26.17 — the principal and the account of the app are handlers abide mounts,
+    // answered as the app's are.
+    if (OWN_HANDLERS.has(asked))
+        return answerRpc(OWN_HANDLERS, url, request, app)
+    // 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where its `ABIDE_*` has not
     // opened it.
     const surface = SURFACES.get(asked)
     if (surface !== undefined) {
         const answer = await surface(app, request)
         if (answer === undefined) return notFound()
-        // 21.4 — an answer about this process, or its surfaces, is never cached.
+        // 21.4 — an answer about the app's surfaces is never cached.
         return answerValue(
             answer,
             request,
@@ -172,15 +176,9 @@ export async function answerRequest(
             200,
         )
     }
-    // 37.3 — THE MUX'S UPGRADE PASSES THE APP LANE as every request does, and arriving here is the
-    // lane having let it through: `MUX_ADMITTED` is what the listener upgrades on, and whatever a rung
-    // answered instead is sent as it was answered.
-    if (
-        asked === SOCKET_ADDRESS &&
-        request.headers.get('upgrade') === 'websocket' &&
-        (app.sockets.size > 0 || app.handlers.size > 0)
-    )
-        return new Response(null, { status: MUX_ADMITTED })
+    // 37.3 — THE MUX'S UPGRADE PASSES THE APP LANE as every request does (`muxUpgrade`).
+    const admitted = muxAdmission(asked, request, app)
+    if (admitted !== undefined) return admitted
     if (asked.startsWith(`${ABIDE_ADDRESS}/`)) {
         const answer = app.framework(asked, request)
         if (answer === undefined) return notFound()
@@ -276,55 +274,17 @@ export async function answerRequest(
     }
     // 21.10, 22.9 — WHAT WAS WRITTEN THROUGH `response` BEFORE THE HEAD WENT OUT: a `middleware`
     // rung's, and the page's own setup's, the head going out with the built page.
-    const status = writtenStatus()
-    const encoding = negotiateEncoding(
-        request.headers.get('accept-encoding'),
-        ENCODINGS,
-    )
-    // THE LENGTH IS SAID, not left to the server to find: `abide dev` relays the body chunk by chunk
-    // from its worker (38.36), and a relayed body with no declared length goes out chunked.
-    let answered = document
-    if (encoding !== undefined) {
-        headers.set('content-encoding', encoding)
-        answered = compressDocument(document, encoding)
-    }
-    headers.set('content-length', String(answered.byteLength))
-    return new Response(answered, { status, headers })
+    return compressAnswer(document, request, headers, writtenStatus())
 }
 
-/**
- * A page or error page bound to its props: imports it and its layouts, then composes them.
- *
- * THE IMPORTS ARE THE COMPONENT'S, so a page nobody asks for is never loaded, and the first
- * request for one after boot pays its import before the document goes out (41.1).
- *
- * THE PAGE AND ITS CHAIN, IN ONE ROUND OF WAITING. A nested `Promise.all` rather than one
- * flat array with the page spliced onto the head: the two settle together either way, and the
- * flat form's element type is the union of the two, so reading a head and a tail back off it
- * took an `as` per read. This is the same concurrency with the types carrying it.
- *
- * STARTED WHEN `render` ASKS, not here. The page is bound before the `HEAD` answer returns, and
- * started here that answer would import the page for a body nobody is sent — and a failed import
- * would reject with nothing awaiting it, where `render`'s is awaited inside the `try` that turns
- * it into a status.
- *
- * 35.3 — BOUND HERE, because `render` takes a component that already has its props. An error page
- * is bound the same way, with the failure where a page has its params.
- */
-function boundPage(
-    page: Pick<Ranked, 'load' | 'layouts'>,
-    props: Record<string, () => unknown>,
-): () => Promise<unknown> {
-    return async () => {
-        const [loadedPage, loadedLayouts] = await Promise.all([
-            page.load(),
-            Promise.all(page.layouts.map((layout) => layout())),
-        ])
-        const layouts: Component[] = []
-        for (const module of loadedLayouts) layouts.push(module.default)
-        return composePage(layouts, loadedPage.default, props)
-    }
-}
+// 25.3 — `health` IS A `GET` LIKE ANY OTHER, as the principal's document is: a render's call is left
+// in the seed buffer and started from the head, and the browser's own call takes that answer.
+
+// 25.1, 26.17 — THE HANDLERS ABIDE MOUNTS ITSELF, answered as the app's are.
+const OWN_HANDLERS = new Map([
+    PRINCIPAL_MOUNT,
+    mountedOwn(HEALTH_ADDRESS, 'health', health),
+])
 
 // THE ADDRESSES ABIDE ANSWERS ITSELF, looked up once rather than asked in turn: each to its value,
 // a `Response` of its own, or `undefined` where its `ABIDE_*` has not opened it.
@@ -332,9 +292,13 @@ const SURFACES = new Map<
     string,
     (app: AppSources, request: Request) => unknown
 >([
-    [HEALTH_ADDRESS, reportHealth],
     [OPENAPI_ADDRESS, (app) => openApi(app.handlers)],
-    [MCP_ADDRESS, (app, request) => answerMcp(app.handlers, request)],
+    // Filled by the app answering this request, so never `undefined` here.
+    [
+        MCP_ADDRESS,
+        (_app, request) =>
+            answerMcp((within('mcp').app as AnsweringApp).mcp, request),
+    ],
     [LOGS_ADDRESS, (_app, request) => answerLogs(request)],
     [BRIDGE_ADDRESS, (_app, request) => answerBridge(request)],
 ])
@@ -342,29 +306,25 @@ const SURFACES = new Map<
 // What a call made in a page's render reports into: the seed buffer (41.13), and — where the handler
 // is mounted — the request the browser will make for it, for the early-call script (41.20). Once per
 // render, as the browser's `Rpc` makes it once, and the seed buffer is what says which is the once.
-RPC_SERVER.reached = (rpc, args, reached) => {
+export function reachedInRender(
+    rpc: object,
+    args: unknown,
+    reached: unknown,
+): void {
     const page = currentRequestScope()?.page
     if (page === undefined || !page.seed(rpc, args, reached)) return
     // 16.11 — the address the browser's own call is made at, stamped under the mount by
     // `mountHandlers` — and `undefined` on a handler nothing mounted.
     const { address, method } = rpc as Rpc<unknown, unknown>
     if (address === undefined) return
-    page.calls.push(
-        rpcRequest(
+    page.calls.push({
+        request: rpcRequest(
             method,
             address,
             args as Record<string, unknown> | undefined,
         ),
-    )
-}
-
-// 21.3, 21.6, 21.18.
-const DOCUMENT_HEADERS = {
-    'content-type': 'text/html; charset=utf-8',
-    'cache-control': 'private, no-store',
-    'referrer-policy': 'strict-origin-when-cross-origin',
-    'content-security-policy': "frame-ancestors 'none'",
-    vary: 'accept-encoding',
+        reached,
+    })
 }
 
 /**
@@ -375,47 +335,74 @@ const DOCUMENT_HEADERS = {
 export type ServerTable = { routes: ServerRoute[]; errors: ServerError[] }
 
 /**
- * The sources both commands build alike, off the table, the shell and the bundle's manifest.
+ * What a command hands `appSources`: the parts it read, built or compiled, and the client lane.
  *
- * What differs between them is passed in: the `framework` lane, and `head` — `abide dev`'s reload
- * client (38.18), after the app's own tags.
+ * ONE SHAPE FOR EVERY SUPPLIER — `abide start` off disk, a compiled app out of itself, `abide dev` out
+ * of memory, and a test handing over modules it already holds — so what differs between them is
+ * where a part came from and never how the app is assembled from it.
+ */
+export type SourceParts = {
+    table: ServerTable
+    shell: string
+    /** The handler table the build wrote, and where each row's module is loaded from. 16.2. */
+    handlers: Mount[]
+    handlerModule: (source: string) => Promise<Record<string, unknown>>
+    /** Every public file, by its name below the directory to its path. 38.19, 38.20. */
+    published: Map<string, string>
+    /**
+     * The bundle's manifest, its lane, and `head` — `abide dev`'s reload client (38.18), after the
+     * app's own tags.
+     *
+     * A PROMISE WHERE THE BUNDLE IS STILL BUILDING: `abide dev`'s handlers mount and its public files
+     * hash while the bundler runs, rather than after it — ~40 ms of a docs-app reload.
+     */
+    client: ClientLane | Promise<ClientLane>
+    explained: AppSources['explained']
+}
+
+type ClientLane = {
+    manifest: Manifest
+    framework: AppSources['framework']
+    head: string
+}
+
+/**
+ * The sources an `App` is booted over, off the parts a command supplies.
  *
  * 30.9 — MOST SPECIFIC FIRST, ranked off the table rather than in it. The ordering IS the client
- * router's own: both seams sort through `rankBySpecificity` and resolve through `firstMatch`, so
+ * router's own: both seams compile through `rankRoutes` and resolve through `firstMatch`, so
  * "the two cannot resolve one address differently" is a grep rather than a promise. 35.2 — the
  * error pages deepest directory first, so the nearest answers.
  */
-export function appSources(
-    table: ServerTable,
-    shell: string,
-    manifest: Manifest,
-    head: string,
-    parts: Pick<
-        AppSources,
-        'framework' | 'published' | 'handlers' | 'sockets' | 'explained'
-    >,
-): LoadedSources {
-    const underMount = shellUnderMount(shell)
+export async function appSources(parts: SourceParts): Promise<LoadedSources> {
+    const [mounted, published, client] = await Promise.all([
+        mountHandlers(parts.handlers, parts.handlerModule),
+        publicFilesAt(parts.published),
+        parts.client,
+    ])
+    const underMount = shellUnderMount(parts.shell)
     const documentOf = (modules: string[]): string =>
-        intoHead(underMount, clientTags(manifest, modules) + head)
-    const routes: Ranked[] = []
-    for (const route of table.routes)
+        intoHead(underMount, clientTags(client.manifest, modules) + client.head)
+    const routes: Omit<Ranked, 'segments'>[] = []
+    for (const route of parts.table.routes)
         routes.push({
             pattern: route.pattern,
-            segments: parseRoutePattern(route.pattern),
             load: route.load,
             layouts: route.layouts,
             document: documentOf(route.clientModules),
         })
     const errors: RankedError[] = []
-    for (const error of table.errors)
+    for (const error of parts.table.errors)
         errors.push({ ...error, segments: parseRoutePattern(error.pattern) })
     errors.sort((a, b) => b.segments.length - a.segments.length)
     return {
-        routes: rankBySpecificity(routes),
+        routes: rankRoutes(routes),
         errors,
         errorDocument: documentOf([]),
-        ...parts,
+        framework: client.framework,
+        published,
+        explained: parts.explained,
+        ...mounted,
     }
 }
 
@@ -505,7 +492,7 @@ function intoHead(shell: string, tags: string): string {
  * anyway. The bytes are hashed and dropped — `Bun.file` streams the body when somebody asks, so a
  * large file is not held in memory for the life of the process.
  */
-export async function publicFilesAt(
+async function publicFilesAt(
     paths: Map<string, string>,
 ): Promise<Map<string, PublicFile>> {
     const files = new Map<string, PublicFile>()
@@ -540,22 +527,6 @@ function publicType(name: string): string {
     return type.startsWith('text/') && !type.includes('charset')
         ? `${type}; charset=utf-8`
         : type
-}
-
-/**
- * A plain-text answer at `status`, never stored.
- *
- * 21.3 — A REFUSAL ABIDE ANSWERS AS TEXT, typed. `stamp` rebuilds an answer to give it a reason
- * phrase (17.8), and a string body rebuilt goes out as `application/octet-stream`.
- */
-export function plainAnswer(message: string, status: number): Response {
-    return new Response(message, {
-        status,
-        headers: {
-            'content-type': 'text/plain; charset=utf-8',
-            'cache-control': 'private, no-store',
-        },
-    })
 }
 
 function notFound(): Response {
@@ -593,50 +564,4 @@ function publicResponse(request: Request, file: PublicFile): Response {
         new Headers({ 'cache-control': 'public, max-age=0, must-revalidate' }),
         200,
     )
-}
-
-/**
- * The error pages for `pathname`, nearest first.
- *
- * 35.2 — every one whose directory is a prefix of the address, each segment meaning what it means
- * in a route.
- */
-function errorsFor(errors: RankedError[], pathname: string): RankedError[] {
-    // 15.16's address has no parts to be nearest to, so the root's page paints it.
-    const parts = partsOf(pathname) ?? []
-    const found: RankedError[] = []
-    for (const error of errors)
-        if (coversPrefix(error.segments, parts)) found.push(error)
-    return found
-}
-
-/**
- * A refusal, painted by the nearest error page at the refusal's own status.
- *
- * 35.2, 35.3 — the page is rendered whole before a byte is answered, so one that fails is not
- * half-sent: it escalates to the next ancestor, and says so on `abide:render`. With none left,
- * the refusal is answered as text.
- */
-async function answerFailure(
-    app: AppSources,
-    pathname: string,
-    failure: Failed<string, unknown>,
-): Promise<Response> {
-    const headers = new Headers(DOCUMENT_HEADERS)
-    const status = failure.status
-    for (const error of errorsFor(app.errors, pathname)) {
-        try {
-            const bound = boundPage(error, { failure: () => failure })
-            beginRender(undefined)
-            const document = await render(bound, app.errorDocument)
-            return new Response(document, { status, headers })
-        } catch (thrown) {
-            RENDER_LOG.warning(
-                `the error page for ${error.pattern} failed, so the next one answers`,
-                thrown,
-            )
-        }
-    }
-    headers.set('content-type', 'text/plain; charset=utf-8')
-    return new Response(failure.message, { status, headers })
 }

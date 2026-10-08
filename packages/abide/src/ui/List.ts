@@ -1,15 +1,9 @@
 import { listOf } from '#shared/listOf.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
 import { HYDRATE_LOG, Mismatch, warnMismatch } from './Mismatch.ts'
-import {
-    dropRow,
-    makeRow,
-    type Row,
-    reconcile,
-    rowOf,
-    rowsIn,
-} from './reconcile.ts'
+import { dropRow, makeRow, type Row, reconcile, rowOf } from './reconcile.ts'
 import { isEmptyRegion, type Region, removeUntil } from './regions.ts'
+import { rowsIn } from './rows.ts'
 import type { Scope } from './Scope.ts'
 
 /**
@@ -24,12 +18,18 @@ export class List {
     region: Region
     rows: Row[]
     /**
-     * The async iterable being pumped, or null.
-     *
-     * The newest source wins and the pump it replaced stops at its next item, and a list arriving
-     * in its place stops it the same way.
+     * The async iterable last started, or null — so a re-run with the same iterable is not a new
+     * source.
      */
     pumping: unknown
+    /**
+     * The iterator the pump is parked on, or null.
+     *
+     * 12.13 — RETURNED WHEN THE PUMP IS, rather than left to notice at its next item: a feed that
+     * has gone quiet produces no next item, and a cursor parked on it held its subscription, and
+     * the list and the region with it, for as long as the source stayed silent.
+     */
+    iterator: AsyncIterator<unknown> | null
     /**
      * Whether the repeated-key warning has fired.
      *
@@ -63,6 +63,7 @@ export class List {
         this.region = region
         this.rows = rows
         this.pumping = null
+        this.iterator = null
         this.warned = false
         this.hydrating = false
         this.anchored = false
@@ -82,8 +83,18 @@ export class List {
         const rows = this.rows
         for (const row of rows) row.scope.stop()
         rows.length = 0
-        this.pumping = null
+        stopPump(this)
     }
+}
+
+/** Stops whatever the list is pumping, returning the iterator it is parked on. */
+function stopPump(list: List): void {
+    list.pumping = null
+    const iterator = list.iterator
+    if (iterator === null) return
+    list.iterator = null
+    // The return is the source's to answer, and an answer that fails is the stream ending anyway.
+    void iterator.return?.()?.catch(() => {})
 }
 
 /**
@@ -135,8 +146,8 @@ export function listAt(
  * builds whatever the document was short.
  */
 function hydrate(list: List, items: unknown[]): boolean {
+    if (isEmptyRegion(list.region)) return false
     const found = rowsIn(list.region, list.anchored)
-    if (found.length === 0 && isEmptyRegion(list.region)) return false
     const agreed = found.length === items.length
     if (!agreed) {
         warnMismatch(
@@ -190,7 +201,7 @@ function settleList(
         return
     }
     if (hydrating && hydrate(list, items)) return
-    list.pumping = null
+    stopPump(list)
     reconcile(list, items)
 }
 
@@ -209,6 +220,7 @@ function appendRows(list: List, source: AsyncIterable<unknown>): void {
     // readers wake for the life of the page writing into nodes the next source appends after.
     for (const row of list.rows) dropRow(row)
     list.rows = []
+    stopPump(list)
     list.pumping = source
     // A FLOATING PROMISE IS THE ONE FAILURE THIS SEAM CANNOT WARN ABOUT. `pump` awaits the app's
     // own iterable and calls `make`/`mount`, so a stream that aborts and a row that cannot be
@@ -224,13 +236,25 @@ function appendRows(list: List, source: AsyncIterable<unknown>): void {
 
 async function pump(list: List, source: AsyncIterable<unknown>): Promise<void> {
     const region = list.region
+    const iterator = source[Symbol.asyncIterator]()
+    list.iterator = iterator
     let at = 0
-    for await (const item of source) {
+    for (;;) {
+        const next = await iterator.next()
+        if (list.iterator !== iterator) return
+        if (next.done === true) {
+            list.iterator = null
+            return
+        }
+        const item = next.value
         // READ PER ITEM, not once before the loop: the region's parent is read again because the
         // document may have moved on between two arrivals, and a detached region is where this
         // stops rather than where it throws.
         const parent = region.close.parentNode
-        if (parent === null || list.pumping !== source) return
+        if (parent === null) {
+            stopPump(list)
+            return
+        }
         // Appended, so its position IS the index it arrived at.
         list.rows.push(
             makeRow(list, parent, region.close, list.key(item, at), item, at),

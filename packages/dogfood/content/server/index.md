@@ -74,6 +74,12 @@ Read on: [CORS](let-another-origin-call-you.md)
 
 Read on: [Limits](put-a-ceiling-on-a-request.md)
 
+## Reachable hosts
+
+{% lead server/check-a-host-before-you-call-it %}
+
+Read on: [Reachable hosts](check-a-host-before-you-call-it.md)
+
 ## Response types
 
 {% lead server/answer-with-something-other-than-json %}

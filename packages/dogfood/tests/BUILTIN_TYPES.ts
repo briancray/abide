@@ -28,6 +28,8 @@ export const BUILTIN_TYPES = new Set([
     'AbortSignal',
     'Element',
     'HTMLButtonElement',
+    'HTMLElementTagNameMap',
+    'SVGElementTagNameMap',
     'ReadableStream',
     'Request',
     'RequestInit',

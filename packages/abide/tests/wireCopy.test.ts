@@ -74,7 +74,7 @@ test('the build writes what a GET declares for its copy into the wrapper, and no
         'ui/pages/page.abide': '<main>home</main>',
         'server/rpc/library.ts': LIBRARY,
     })
-    const built = buildApp(app)
+    const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
     const wrapper = await Bun.file(
         `${app}/.abide/wire/server/rpc/library.ts`,
@@ -114,7 +114,7 @@ export const handed = GET(reactive(() => [{ isbn: '1' }], OPTIONS))
 export const unread = GET(reactive(() => [{ isbn: '1' }], { history: grown }))
 `,
     })
-    const built = buildApp(app)
+    const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
     const wrapper = await Bun.file(
         `${app}/.abide/wire/server/rpc/named.ts`,
@@ -255,7 +255,7 @@ export const save = POST(async ({ draft = true }: { draft?: boolean }) => draft)
 export const plain = GET(async ({ id }: { id: string }) => id)
 `,
     })
-    const built = buildApp(app)
+    const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
     const wrapper = await Bun.file(
         `${app}/.abide/wire/server/rpc/paged.ts`,
@@ -280,7 +280,7 @@ const PAGE_SIZE = 20
 export const list = GET(async ({ size = PAGE_SIZE }: { size?: number }) => size)
 `,
     })
-    const stopped = buildApp(refused)
+    const stopped = await buildApp(refused)
     expect(stopped.exitCode).not.toBe(0)
     expect(stopped.stderr).toContain('defaults `size` to `PAGE_SIZE`')
     expect(stopped.stderr).toContain('RULEBOOK 11.29')

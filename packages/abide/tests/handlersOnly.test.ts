@@ -18,7 +18,7 @@ afterAll(removeTemporaryModules)
 
 test('abide start answers an app of handlers alone — 16.2', async () => {
     const app = appFixture({ 'server/rpc/health.ts': HANDLER })
-    const built = buildApp(app)
+    const built = await buildApp(app)
     expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
     const { base, stop } = await startApp(app)

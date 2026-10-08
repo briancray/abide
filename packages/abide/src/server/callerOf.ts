@@ -1,6 +1,10 @@
 import { cookies } from '#shared/cookies.ts'
 import { randomToken } from './randomToken.ts'
-import { currentRequestScope, type RequestScope } from './requestScope.ts'
+import {
+    currentRequestScope,
+    type RequestScope,
+    within,
+} from './requestScope.ts'
 
 // 26.5 AND 26.19 — WHICH BROWSER, as against who is using it: read off the `abide-caller` cookie, or
 // minted where there is none. What the seed buffer is keyed by (41.18), and what `principal.caller`
@@ -32,6 +36,16 @@ export function callerOf(): string | undefined {
 }
 
 /**
+ * This request's caller, minting one where the request has none.
+ *
+ * 26.5, 26.6 — READ OFF ITS OWN COOKIE OR MINTED, and untouched by a sign-in.
+ */
+export function callerOrMint(): string {
+    const scope = within('principal.caller')
+    return callerOf() ?? mintCaller(scope)
+}
+
+/**
  * Mints a fresh caller for this request, sets its cookie, and returns it.
  *
  * Written through the request's jar as 26.12 writes the principal cookie: out of reach of the
@@ -39,7 +53,8 @@ export function callerOf(): string | undefined {
  */
 export function mintCaller(scope: RequestScope): string {
     const caller = randomToken(16, 'base64url')
-    cookies().set(CALLER_COOKIE, caller, { httpOnly: true })
+    // 22.10 — minted once the headers are out, it is this scope's alone: there is no answer to set it on.
+    if (!scope.applied) cookies().set(CALLER_COOKIE, caller, { httpOnly: true })
     scope.caller = caller
     return caller
 }

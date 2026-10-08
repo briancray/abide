@@ -100,7 +100,7 @@ URL-typed attribute, where the encoding is what stops an entity forming a scheme
 | Spelling | Branches | Meaning |
 | --- | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. |
-| `{#for item, index of list by key}` | `{:catch}` | Repeats markup over a list, or over a cursor as it produces. |
+| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. |
 | `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. |
 
 ### Components
@@ -119,6 +119,7 @@ URL-typed attribute, where the encoding is what stops an entity forming a scheme
 | Name | Signature | Meaning |
 | --- | --- | --- |
 | `props` | `<Props>() => { [K in keyof Props]: Props[K] }` | One live accessor per prop the component declares. |
+| `Attributes<Tag>` | `Attributes<Tag extends keyof HTMLElementTagNameMap \| keyof SVGElementTagNameMap>` | The attributes an HTML or SVG element takes, typed as a component's props. |
 | `children` | always accepted | What a caller passes between the tags. |
 
 

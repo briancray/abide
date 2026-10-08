@@ -48,6 +48,7 @@ export const NAV = [
             'server/decide-who-may-call-what',
             'server/let-another-origin-call-you',
             'server/put-a-ceiling-on-a-request',
+            'server/check-a-host-before-you-call-it',
             'server/answer-with-something-other-than-json',
             'server/find-the-url-a-handler-answers-on',
         ],

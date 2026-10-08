@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from 'bun:test'
 import { rmSync, symlinkSync } from 'node:fs' // bun has no sync symlink/rm of its own
-import { compileFile, parseAbide } from '#compiler'
+import { emitComponent, parseAbide } from '#compiler'
+import type { CheckerAnswer } from '#compiler/CheckerAnswer.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
@@ -51,7 +52,7 @@ afterAll(removeTemporaryModules)
 
 // The whole of stage 2 in one case: the checker decides which names are reactive, the lowering
 // rewrites reads and writes by name, the imports hoist, and the document that comes out carries
-// the value the write produced. THE REVERT: pass an empty set to `compileFile`; the emitted
+// the value the write produced. THE REVERT: hand `emitComponent` `UNCHECKED`; the emitted
 // module then has `count` where `count()` is due and renders `[object Object]` twice rather than
 // `5` and `10` — 2 wrong slots, and the write silently rebinds the name instead of setting it.
 test('a page reads and writes a reactive name and renders the result', async () => {
@@ -71,7 +72,7 @@ count = count + step
     const names = await session.reads(PAGE, file)
     expect(namesRead(file, names)).toEqual(['count'])
 
-    const module = `${temporaryModule({ 'Page.ts': compileFile(source, names) })}/Page.ts`
+    const module = `${temporaryModule({ 'Page.ts': emitComponent(file, names) })}/Page.ts`
 
     const { default: Page } = await import(module)
     let out = ''
@@ -103,7 +104,7 @@ import { onboarding } from '${ROOT}src/conversations.ts'
     const names = await session.reads(PAGE, file)
     expect(namesRead(file, names)).toEqual(['onboarding'])
 
-    const module = `${temporaryModule({ 'Page.ts': compileFile(source, names) })}/Page.ts`
+    const module = `${temporaryModule({ 'Page.ts': emitComponent(file, names) })}/Page.ts`
     const { default: Page } = await import(module)
     let out = ''
     out += new TextDecoder().decode(
@@ -139,7 +140,7 @@ const held: import('abide').Reactive<number> = a
     const names = await session.reads(PAGE, file)
     expect(namesRead(file, names)).toEqual(['a', 'held', 'onboarding'])
 
-    const module = `${temporaryModule({ 'Page.ts': compileFile(source, names) })}/Page.ts`
+    const module = `${temporaryModule({ 'Page.ts': emitComponent(file, names) })}/Page.ts`
     const { default: Page } = await import(module)
     let out = ''
     out += new TextDecoder().decode(
@@ -185,7 +186,7 @@ test('a whole build takes ONE snapshot, not one per file', async () => {
                 ),
             })
 
-        const answers = (await batch.readsFor(sources)).reads
+        const answers = (await batch.readsFor(sources)).answers
         expect(batch.snapshots).toBe(1)
         expect(answers).toHaveLength(12)
         // And every answer is the one the per-file path would have given.
@@ -193,11 +194,11 @@ test('a whole build takes ONE snapshot, not one per file', async () => {
             expect(
                 namesRead(
                     (sources[at] as (typeof sources)[number]).file,
-                    answers[at] ?? [],
+                    answers[at] as CheckerAnswer,
                 ),
             ).toEqual([`v${at}`])
     } finally {
-        batch.close()
+        await batch.close()
     }
 })
 
@@ -234,7 +235,7 @@ test('a dangling symlink beside a page does not take the build down', async () =
         const names = await local.reads(`${dir}/page.abide`, probe)
         expect(namesRead(probe, names)).toEqual(['rows'])
     } finally {
-        local.close()
+        await local.close()
         rmSync(`${dir}/.#page.abide`, { force: true })
     }
 })
@@ -305,9 +306,9 @@ const { label } = props()
 <p>{label}</p>`
     const file = parseAbide(source)
     const reads = await session.reads(PAGE, file)
-    expect(reads.filter((read) => read.shape === 'props')).toEqual([])
+    expect(reads.reads.filter((read) => read.shape === 'props')).toEqual([])
 
-    const module = `${temporaryModule({ 'Page.ts': compileFile(source, reads) })}/Page.ts`
+    const module = `${temporaryModule({ 'Page.ts': emitComponent(file, reads) })}/Page.ts`
     const { default: Page } = await import(module)
     let out = ''
     out += new TextDecoder().decode(
@@ -317,4 +318,23 @@ const { label } = props()
         ),
     )
     expect(out).toContain('<p>mine</p>')
+})
+
+// THE CHECKER'S PROCESS IS KILLED WITH THE SESSION, not left to notice its stdin ended: one that does
+// not notice holds the stderr it inherited, and whatever reads that to its end waits with it. The
+// process is on a private field of the API's — so this is also what says the field has moved, where
+// `close` would otherwise find nothing there and kill nothing. THE REVERT: drop `child?.kill()` from
+// `TypeSession.close`; `killed` reads false.
+test('closing a session kills its checker process', async () => {
+    const opened = await TypeSession.open(TSCONFIG)
+    // The API starts its process at the first request it is asked.
+    await opened.reads(PAGE, parseAbide(PROBE))
+    const child = (
+        opened as unknown as {
+            api: { client: { process?: { pid: number; killed: boolean } } }
+        }
+    ).api.client.process
+    expect(`pid: ${typeof child?.pid}`).toBe('pid: number')
+    await opened.close()
+    expect(`killed: ${child?.killed}`).toBe('killed: true')
 })

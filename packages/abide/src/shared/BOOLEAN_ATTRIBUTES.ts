@@ -7,7 +7,7 @@
  * and `spellcheck="false"` mean something their absence does not. A leaf, because the compiler's
  * markup and the client's bindings both read it.
  */
-export const BOOLEAN_ATTRIBUTES: ReadonlySet<string> = new Set([
+const NAMES = [
     'allowfullscreen',
     'async',
     'autofocus',
@@ -33,4 +33,9 @@ export const BOOLEAN_ATTRIBUTES: ReadonlySet<string> = new Set([
     'required',
     'reversed',
     'selected',
-])
+] as const
+
+/** 33.23 — one of them, for `Attributes` to type by presence. */
+export type BooleanAttribute = (typeof NAMES)[number]
+
+export const BOOLEAN_ATTRIBUTES: ReadonlySet<string> = new Set(NAMES)

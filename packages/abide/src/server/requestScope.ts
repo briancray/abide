@@ -10,19 +10,27 @@
 // values forwarders rather than process-wide.
 
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
-import { COOKIES, Cookies } from '#shared/cookies.ts'
+import { Cookies } from '#shared/cookies.ts'
 import type { Principal } from '#shared/principal.ts'
-import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { SCOPING, type Scope } from '#shared/reactive/scoping.ts'
 import type { RpcRequest } from '#shared/rpcRequest.ts'
+import type { McpSurface } from './generatedSurfaces.ts'
 
 /** The three framings a stream is answered in. 17.6. */
 export type Framing = 'jsonl' | 'sse' | 'bytes'
 
 /** What one request, or one `App.run`, carries across every `await` its work makes. */
 export type RequestScope = Scope & {
+    /**
+     * What still answers this request: the opener, and a streamed body for as long as it streams.
+     *
+     * 12.5 — the scope is torn down when this reaches zero (`releaseScope`). A page is rendered
+     * whole before its answer goes out, but a stream goes on reading in the scope after `fetch`
+     * has returned, so it holds the scope until it closes.
+     */
+    holds: number
     /** The framing a helper fixed for a streaming answer, or `undefined` to negotiate it. 17.6. */
-    framing: Framing | 'html' | undefined
+    framing: Framing | 'html' | 'json' | undefined
     /** Which browser is calling, once read or minted in this request. 26.5. */
     caller: string | undefined
     /** This request's one resolve of the principal. 26.14. */
@@ -44,11 +52,12 @@ export type RequestScope = Scope & {
     /** `undefined` where the scope was opened without one — 42.8's scope, which 22.1 throws in. */
     request: Request | undefined
     /**
-     * The `App.fetch` of the app that opened this scope, which `RPC_SERVER.raw` answers through.
+     * The app that opened this scope: the `App.fetch` `RPC_SERVER.raw` answers through, and its MCP
+     * surface.
      *
      * 42.12 — ITS OWN APP, where two are held in one process: not whichever was built last.
      */
-    answer: ((request: Request) => Promise<Response>) | undefined
+    app: AnsweringApp | undefined
     /**
      * The request the listener was handed, before a mount or a rung made another.
      *
@@ -90,26 +99,50 @@ export type RequestScope = Scope & {
  */
 export type PageRender = {
     seed: (rpc: object, args: unknown, reached: unknown) => boolean
-    calls: RpcRequest[]
+    calls: PageCall[]
 }
+
+/** An app as the scopes it opens hold it: what answers a request in it, and its MCP surface. */
+export type AnsweringApp = {
+    answer: (request: Request) => Promise<Response>
+    mcp: McpSurface
+}
+
+/**
+ * One call a page's render made: the request the browser will make for it, and what it reached —
+ * read once the markup is built, for whether it was painted settled (41.25).
+ */
+export type PageCall = { request: RpcRequest; reached: unknown }
 
 // `undefined` IS A STORE, not the absence of one: a value built outside every request runs its body
 // under it (`Cell.scope`), rather than under whichever request scheduled the drain.
 const STORAGE = new AsyncLocalStorage<RequestScope | undefined>()
 
+// AT IMPORT, unlike every slot `installServer` fills: `reactive` decides at CONSTRUCTION whether a
+// value is filed per request (11.32), and a server module builds values as it loads — the
+// principal's document here, an app's handlers ahead of `bootApp` in a compiled entry. Anything
+// that can enter a scope imports this module, so none is built before the provider is in.
 SCOPING.provider = {
     current: (): Scope | undefined => STORAGE.getStore(),
     run: (scope, body, given) =>
         STORAGE.run(scope as RequestScope | undefined, body, given),
 }
 
-function scopeFor(
+/**
+ * A fresh request scope, for an opener that enters it more than once (`inOpenScope`).
+ *
+ * 18.31 — a connection to the socket mux, whose every frame is answered in the scope its upgrade
+ * opened; the opener releases it (`releaseScope`) when the connection closes, 18.32.
+ */
+export function scopeFor(
     given: Request | undefined,
     received: Request | undefined,
-    answer: RequestScope['answer'],
+    app: RequestScope['app'],
 ): RequestScope {
     return {
         instances: new Map(),
+        stops: [],
+        holds: 1,
         page: undefined,
         trace: undefined,
         cookies: undefined,
@@ -121,7 +154,7 @@ function scopeFor(
         applied: false,
         request: given,
         received,
-        answer,
+        app,
         response: { status: 200, headers: new Headers() },
         timing: {
             entries: [],
@@ -136,10 +169,74 @@ function scopeFor(
 export function inScope<Result>(
     given: Request | undefined,
     body: () => Result,
-    answer: RequestScope['answer'] = undefined,
+    app: RequestScope['app'] = undefined,
     received: Request | undefined = given,
 ): Result {
-    return STORAGE.run(scopeFor(given, received, answer), body)
+    return STORAGE.run(scopeFor(given, received, app), body)
+}
+
+/** Runs `body` in `scope`, which `scopeFor` opened, and returns what it returned. */
+export function inOpenScope<Result>(
+    scope: RequestScope,
+    body: () => Result,
+): Result {
+    return STORAGE.run(scope, body)
+}
+
+/**
+ * `inScope`, releasing the scope once `body` has settled.
+ *
+ * 12.5 — the watches `body` opened stop once it is done; a body still streaming holds the scope
+ * until that closes (`holdScope`).
+ */
+export function inReleasedScope<Result>(
+    given: Request | undefined,
+    body: () => Promise<Result>,
+    app: RequestScope['app'] = undefined,
+    received: Request | undefined = given,
+): Promise<Result> {
+    const scope = scopeFor(given, received, app)
+    return STORAGE.run(scope, async () => {
+        try {
+            return await body()
+        } finally {
+            releaseScope(scope)
+        }
+    })
+}
+
+/**
+ * Holds the current request's scope open for an answer that outlives `fetch`; answers the release.
+ *
+ * 12.5 — A STREAMED BODY. Released once, when it closes, errors or its reader hangs up. Outside
+ * every scope there is nothing to hold, and the release does nothing.
+ */
+export function holdScope(): () => void {
+    const scope = STORAGE.getStore()
+    if (scope === undefined) return () => {}
+    scope.holds += 1
+    let released = false
+    return () => {
+        if (released) return
+        released = true
+        releaseScope(scope)
+    }
+}
+
+/**
+ * Lets go of one hold on `scope`; the last one tears it down.
+ *
+ * 12.5 — TEARDOWN STOPS EVERY `watch` OPENED IN IT, and their disposers run. Called by whatever
+ * opened the scope to answer something — a request (`App.fetch`) or `App.run` — once that is
+ * answered. A scope nothing releases lives as long as its process: the one `abide run` imports a
+ * script in, whose watches are the script's to keep.
+ */
+export function releaseScope(scope: RequestScope): void {
+    scope.holds -= 1
+    if (scope.holds > 0) return
+    const stops = scope.stops
+    for (let at = 0; at < stops.length; at += 1) (stops[at] as () => void)()
+    stops.length = 0
 }
 
 /**
@@ -193,14 +290,30 @@ export function within(name: string): RequestScope {
 }
 
 // 22.2, 22.8 — THE REQUEST'S JAR, whose writes are collected onto the response being built.
-COOKIES.current = (): Cookies => {
+export function requestCookies(): Cookies {
     const scope = within('cookies')
     scope.cookies ??= new Cookies(
         scope.request?.headers.get('cookie') ?? '',
-        (serialized) => scope.response.headers.append('set-cookie', serialized),
+        (serialized) => {
+            refuseUnanswered(scope, 'cookies().set')
+            scope.response.headers.append('set-cookie', serialized)
+        },
         false,
     )
     return scope.cookies
+}
+
+/**
+ * Throws where nothing written now can reach an answer.
+ *
+ * 22.10 — ONCE THE HEADERS ARE OUT (`applyWritten`), and from the start on a connection to the
+ * socket mux, whose headers went out with the upgrade: a write collected there is never sent.
+ */
+function refuseUnanswered(scope: RequestScope, name: string): void {
+    if (scope.applied)
+        throw new Error(
+            `abide: ${name} was called after the response headers went out — or on a socket connection, whose headers went out with the upgrade — so what it writes cannot reach the browser. RULEBOOK 22.10.`,
+        )
 }
 
 /**
@@ -235,11 +348,8 @@ export function request(): Request {
     return within('request').request as Request
 }
 
-// 16.12 — the request a handler's rung is handed.
-RPC_SERVER.request = request
-
 // 21.20 — only the handler being answered: one it calls in process reports into the same scope.
-RPC_SERVER.handled = (rpc, duration) => {
+export function handlerTook(rpc: object, duration: number): void {
     const timing = STORAGE.getStore()?.timing
     if (timing?.answering === rpc && timing.handled === undefined)
         timing.handled = duration
@@ -286,7 +396,9 @@ export function serverTiming(): string | undefined {
 
 /** The response being built for the request being served. 22.1, 22.9. */
 export function response(): { status: number; headers: Headers } {
-    return within('response').response
+    const scope = within('response')
+    refuseUnanswered(scope, 'response()')
+    return scope.response
 }
 
 /**

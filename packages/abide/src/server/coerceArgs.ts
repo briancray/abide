@@ -7,8 +7,7 @@
 // has declared no types, and its args stay the text they arrived as.
 
 import { numberFromText } from '#shared/numberFromText.ts'
-import { ARGS_GATE } from '#shared/reactive/ARGS_GATE.ts'
-import type { Gated } from '#shared/reactive/Keyed.ts'
+import { type Gated, gateOf } from '#shared/reactive/argsContract.ts'
 import { bareName } from '#shared/rpcRequest.ts'
 
 export type Document = {
@@ -19,13 +18,29 @@ export type Document = {
 
 /** The document a handler's `args` schema declares, or `undefined`. */
 export function argsDocumentOf(handler: Gated<unknown>): Document | undefined {
-    const gate = handler[ARGS_GATE] as
+    const gate = gateOf(handler) as
         | { '~standard'?: { jsonSchema?: { input?: () => unknown } } }
         | undefined
     const document = gate?.['~standard']?.jsonSchema?.input?.()
     return document !== null && typeof document === 'object'
         ? (document as Document)
         : undefined
+}
+
+/**
+ * Name and value pairs as args: a name given more than once is a list, one given once its text.
+ *
+ * 16.19 — a query's and a form's members, and 38.62 — `abide call`'s `name=value` words, alike.
+ */
+export function collapsed(
+    entries: URLSearchParams | FormData,
+): Record<string, string | string[]> {
+    const args: Record<string, string | string[]> = {}
+    for (const name of new Set(entries.keys())) {
+        const values = entries.getAll(name) as string[]
+        args[name] = values.length === 1 ? (values[0] as string) : values
+    }
+    return args
 }
 
 /**

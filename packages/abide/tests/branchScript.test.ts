@@ -3,7 +3,7 @@
 // hydrated and then driven on the client, because each side builds a body its own way.
 
 import { afterAll, expect, test } from 'bun:test'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { render } from '#server'
 import { flushSync } from '#shared'
@@ -15,8 +15,8 @@ afterAll(closeTyped)
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(() => {
-    session.close()
+afterAll(async () => {
+    await session.close()
     removeTemporaryModules()
 })
 
@@ -29,7 +29,7 @@ async function mountSource(source: string): Promise<string> {
     const file = parseAbide(source)
     const names = await session.reads(`${ROOT}src/branch.abide`, file)
     const dir = temporaryModule({
-        'Page.ts': compileFile(source, names),
+        'Page.ts': emitComponent(file, names),
         'Page.client.ts': emitClient(file, names),
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
@@ -249,12 +249,13 @@ const inner = reactive('s')
     const path = `${ROOT}src/branch.abide`
     const diagnosed = async (source: string) => {
         const file = parseAbide(source)
-        const reads = await session.reads(path, file)
-        return session.diagnose(
-            [{ path, text: source, file, reads }],
+        const answer = await session.reads(path, file)
+        const { diagnoses } = await session.diagnose(
+            [{ path, text: source, file, answer }],
             `${ROOT}src`,
             false,
         )
+        return diagnoses
     }
     expect(await diagnosed(arms('inner.toUpperCase()'))).toEqual([])
     const wrong = await diagnosed(arms('inner.toFixed()'))

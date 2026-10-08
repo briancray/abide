@@ -2,18 +2,14 @@
 // the app winning each collision (25.2). A report that throws or answers something that is not an
 // object is left out and said so, rather than taking the account down with it.
 //
-// SERVER-ONLY FOR NOW. A body runs when its value is built, so a `health` in the isomorphic barrel
-// would fetch `/__abide/health` on every page load whether anything read it or not; the browser's
-// half is 25.3's seeding, and waits on it.
+// What `health` reports through on a server: `answerRequest` fills `HEALTH` with it.
 
+import type { Health } from '#shared/health.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { namedLogger } from '#shared/log.ts'
-import { reactive } from '#shared/reactive/index.ts'
 import abidePackage from '../../package.json' with { type: 'json' }
 import { appIdentity, config } from './config.ts'
 import { HOOKS } from './hooks.ts'
-
-export type Health = { version: string; abide: string; startedAt: string }
 
 const HEALTH_LOG = namedLogger('abide:health')
 
@@ -44,12 +40,7 @@ export async function reportHealth(): Promise<Health> {
         }
         Object.assign(account, answered)
     }
-    return account as Health
+    // Through `unknown`: the fields an app merges into `Health` (25.4) are its reports' to supply,
+    // and a record the checker can see none of them in is not one it will narrow to the account.
+    return account as unknown as Health
 }
-
-/**
- * The account of the app, as a reactive value.
- *
- * A `ttl` of 0, so a read is the account as it stands rather than the one the first reader got.
- */
-export const health = reactive(reportHealth, { global: true, ttl: 0 })

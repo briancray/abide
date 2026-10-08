@@ -1,5 +1,7 @@
 import { afterAll, expect, spyOn, test } from 'bun:test'
-import { compileFile, emitClient, parseAbide } from '#compiler'
+import { emitClient, parseAbide } from '#compiler'
+import { projectShadow } from '#compiler/projectShadow.ts'
+import type { TemplateNode } from '#compiler/TemplateNode.ts'
 import { attributeText, escapeStyleValue, escapeText, render } from '#server'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import {
@@ -15,10 +17,10 @@ afterAll(closeTyped)
 
 // Which of `names` the checker found bound to a `Reactive` at the top of `script`.
 const declared = async (script: string, names: string[]): Promise<string[]> => {
-    const { file, reads } = await typed(
+    const { file, answer } = await typed(
         `<script>${script}</script>${names.map((name) => `{${name}}`).join('')}`,
     )
-    return namesRead(file, reads)
+    return namesRead(file, answer)
 }
 
 const PAGE = `<head>
@@ -75,12 +77,12 @@ test('formatting whitespace is dropped and a real space is kept', () => {
 // rendered document then carries 1 live `<script>` span where 0 is due, and this test reports
 // `<script>alert(1)</script>` against the escaped form. Not installable — the call is written
 // into the emitted source — so the number lives here, per `harness/gate`'s own provision.
-test('an expression slot is escaped', () => {
-    const emitted = compileFile(
+test('an expression slot is escaped', async () => {
+    const emitted = await serverOf(
         `<script>const t = '<img src=x onerror=alert(1)>'</script><h1>{t}</h1>`,
     )
-    // No checker answered, so nothing is proven static and the slot is guarded (14.2).
-    expect(emitted).toContain('escapeText(__slotValue(() => t))')
+    // The checker proves `t` a string, so the slot is escaped as it stands (14.2).
+    expect(emitted).toContain('__escapeText(t)')
     expect(emitted).not.toContain('String(t)')
 })
 
@@ -98,14 +100,14 @@ test('escapeText rewrites only what a parse would read', () => {
 // 32.20 — a scheme outside http:, https:, mailto: or tel: is dropped. THE REVERT: return the
 // value unconditionally from `safeUrl`; the emitted markup then carries 1 `javascript:` href where
 // 0 is due, and this test reports it.
-test('an unsafe url scheme is dropped and a relative reference is kept', () => {
-    expect(compileFile(`<a href="javascript:alert(1)">x</a>`)).not.toContain(
+test('an unsafe url scheme is dropped and a relative reference is kept', async () => {
+    expect(await serverOf(`<a href="javascript:alert(1)">x</a>`)).not.toContain(
         'javascript:',
     )
-    expect(compileFile(`<a href="/docs">x</a>`)).toContain(
+    expect(await serverOf(`<a href="/docs">x</a>`)).toContain(
         JSON.stringify('<a href="/docs">'),
     )
-    expect(compileFile(`<a href="https://example.com">x</a>`)).toContain(
+    expect(await serverOf(`<a href="https://example.com">x</a>`)).toContain(
         JSON.stringify('<a href="https://example.com">'),
     )
 })
@@ -113,13 +115,13 @@ test('an unsafe url scheme is dropped and a relative reference is kept', () => {
 // The client bundle is the point of this stage: a static page ships no runtime. THE REVERT: emit
 // an unconditional `import 'abide/runtime'` in `emitComponent`; this test then reports 1 runtime
 // import where 0 is due, and the byte count of the runtime lands on every static page.
-test('a static page emits no client runtime import', () => {
-    const emitted = compileFile(PAGE)
+test('a static page emits no client runtime import', async () => {
+    const emitted = await serverOf(PAGE)
     expect(emitted).not.toContain('abide/runtime')
     expect(emitted).toContain("from 'abide/server'")
     // And a page with no slot at all imports nothing: an emitted module carrying an import
     // nothing calls is a name an app's own tooling reports as unused, in a file nobody wrote.
-    expect(compileFile('<h1>static</h1>')).not.toContain('import')
+    expect(await serverOf('<h1>static</h1>')).not.toContain('import')
 })
 
 // CLAUDE.md, "seams and imports", and the comment in `src/server/index.ts`: the compiler is not
@@ -130,8 +132,8 @@ test('the compiler is not reachable from the server seam', async () => {
     // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
     // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's,
     // `request`, `response` and `server` are 22.1's, `createApp` is 42's, the seven hooks are 37's,
-    // `trace` is 24's, `health` is 25's and `config` is 27's; the five response helpers are 17's,
-    // `socket` is 18's, and `assistant`, `claudeApi` and `claudeCode` are 45's.
+    // `trace` is 24's and `config` is 27's; the six response helpers are 17's,
+    // `socket` is 18's, `reachable` is 23's, and `assistant`, `claudeApi` and `claudeCode` are 45's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
         [
@@ -147,7 +149,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'bytes',
             'config',
             'createApp',
-            'health',
+            'json',
             'jsonl',
             'middleware',
             'onConfig',
@@ -157,6 +159,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'onStart',
             'onStop',
             'page',
+            'reachable',
             'redirect',
             'render',
             'renderComponent',
@@ -173,7 +176,7 @@ test('the compiler is not reachable from the server seam', async () => {
 afterAll(removeTemporaryModules)
 
 test('a compiled page renders as bytes into a shell', async () => {
-    const module = `${temporaryModule({ 'Page.ts': compileFile(PAGE) })}/Page.ts`
+    const module = `${temporaryModule({ 'Page.ts': await serverOf(PAGE) })}/Page.ts`
 
     const { default: Page } = await import(module)
     const shell =
@@ -207,10 +210,10 @@ test('a compiled page renders as bytes into a shell', async () => {
 })
 
 // 39.2 — a nested `<head>` would render inside the body, which is the silent wrong answer.
-test('a head below the top level is refused', () => {
-    expect(() =>
-        compileFile('<div><head><title>x</title></head></div>'),
-    ).toThrow('39.2')
+test('a head below the top level is refused', async () => {
+    expect(
+        await refusal(serverOf('<div><head><title>x</title></head></div>')),
+    ).toContain('39.2')
 })
 
 // A DECLARATOR LIST BINDS MORE THAN ONE NAME. Only the first was read, so the second never
@@ -270,11 +273,11 @@ test('a destructuring loop item survives the head split', () => {
 // THE REVERT: `if (stack.length > 1) stack.pop()` on any close tag, and `blocks.pop()` plus a pop
 // on any `{/if}`. The first case below then renders `<p><br></p>tail` and the second
 // `<div></div><b>x</b>`.
-test('a close tag closes what it names, and nothing else', () => {
-    const stray = compileFile('<p><br></br>tail</p>')
+test('a close tag closes what it names, and nothing else', async () => {
+    const stray = await serverOf('<p><br></br>tail</p>')
     expect(stray).toContain('"<p>" + "<br>" + "tail" + "</p>"')
 
-    const orphan = compileFile('<div>{/if}<b>x</b></div>')
+    const orphan = await serverOf('<div>{/if}<b>x</b></div>')
     expect(orphan).toContain('"<div>" + "<b>" + "x" + "</b>" + "</div>"')
 })
 
@@ -310,14 +313,14 @@ test('a script tag inside an expression or an attribute is not a script block', 
 // THE REVERT: drop the `<!--` and `<!` cases and step over the `<` `readTag` refused; the comment
 // below renders as the VISIBLE text `!-- todo -->`, the doctype as `!DOCTYPE html>`, and
 // `<p>a < b</p>` silently loses its `<`.
-test('a comment, a doctype and a bare < are not tags', () => {
-    expect(compileFile('<div><!-- todo --><p>a</p></div>')).toContain(
+test('a comment, a doctype and a bare < are not tags', async () => {
+    expect(await serverOf('<div><!-- todo --><p>a</p></div>')).toContain(
         '"<div>" + "<p>" + "a" + "</p>" + "</div>"',
     )
-    expect(compileFile('<!DOCTYPE html><p>a</p>')).toContain(
+    expect(await serverOf('<!DOCTYPE html><p>a</p>')).toContain(
         '"<p>" + "a" + "</p>"',
     )
-    expect(compileFile('<p>a < b</p>')).toContain('"<p>" + "a < b" + "</p>"')
+    expect(await serverOf('<p>a < b</p>')).toContain('"<p>" + "a < b" + "</p>"')
     // One text node, not two: a browser merges adjacent text on parse and the markup walk places
     // what the browser will see.
     const run = parseAbide('<p>a < b</p>').template[0] as {
@@ -330,21 +333,23 @@ test('a comment, a doctype and a bare < are not tags', () => {
 // the output is a document that parses. THE REVERT: hand back `end: source.length` from `readTag`
 // where the closing quote is missing; this test then reports a `<div>` with 0 children and the
 // whole remainder of the page dropped, with nothing thrown.
-test('an attribute quote that never closes is refused', () => {
-    expect(() =>
-        compileFile('<div class="card>\n<p>the rest of the page</p>\n</div>'),
-    ).toThrow('never closed')
+test('an attribute quote that never closes is refused', async () => {
+    expect(
+        await refusal(
+            serverOf('<div class="card>\n<p>the rest of the page</p>\n</div>'),
+        ),
+    ).toContain('never closed')
 })
 
 // A DIRECTIVE ENDS AT A WORD BOUNDARY. `startsWith` has none. THE REVERT: read the arm with
 // `rest.startsWith('if')`; `{:elseif b}` is then silently accepted as `{:else if b}` and
 // `{:else ifValid}` renders under the subject `Valid` — a condition the author never wrote,
 // deciding which of two arms a reader sees.
-test('an else arm is told from a name that starts with if', () => {
-    expect(() => compileFile('{#if a}x{:elseif b}y{/if}')).toThrow(
+test('an else arm is told from a name that starts with if', async () => {
+    expect(await refusal(serverOf('{#if a}x{:elseif b}y{/if}'))).toContain(
         'not a control block',
     )
-    expect(() => compileFile('{#if a}x{:else ifValid}y{/if}')).toThrow(
+    expect(await refusal(serverOf('{#if a}x{:else ifValid}y{/if}'))).toContain(
         'not a control block',
     )
     const arms = (
@@ -358,7 +363,7 @@ test('an else arm is told from a name that starts with if', () => {
 // THE `{#for}` HEAD SPLITS AT DEPTH ZERO AND OUTSIDE A STRING. THE REVERT: split on `/ of /` and
 // `/ by /` with a plain regex; the subject below ends mid-quote at `names.filter(n => n !== "run`
 // and the key becomes `me")`, which the emitters write straight into the row function.
-test('a for head splits outside its string literals', () => {
+test('a for head splits outside its string literals', async () => {
     const block = parseAbide(
         '{#for x of names.filter(n => n !== "run by me")}y{/for}',
     ).template[0] as { item: string; subject: string; key: string }
@@ -368,10 +373,12 @@ test('a for head splits outside its string literals', () => {
 
     // A `{#for}` with nothing to iterate rendered zero rows forever and said nothing. 32.22 is an
     // ABSENT subject, which is a value; this is a missing one, which is a mistake.
-    expect(() => compileFile('{#for rows}y{/for}')).toThrow('has no ` of `')
+    expect(await refusal(serverOf('{#for rows}y{/for}'))).toContain(
+        'has no ` of `',
+    )
     // And one with no item has no binding for the row. THE REVERT is the `item === ''` refusal in
     // `forBlock`: both emitters then write `for (const  of …)`, a module that does not parse.
-    expect(() => compileFile('{#for , i of rows}y{/for}')).toThrow(
+    expect(await refusal(serverOf('{#for , i of rows}y{/for}'))).toContain(
         'names no item',
     )
 })
@@ -380,7 +387,7 @@ test('a for head splits outside its string literals', () => {
 // `readExpression`; the first slot below ends at the `}` INSIDE the comment, so `x }` is emitted
 // as markup, and the second opens a string at the apostrophe and swallows the rest of the
 // document into one expression node — 1 page rendered as one slot.
-test('a comment or a regular expression inside a slot does not end it', () => {
+test('a comment or a regular expression inside a slot does not end it', async () => {
     expect(
         (
             parseAbide('<p>{ /* } */ x }</p>').template[0] as {
@@ -398,7 +405,7 @@ test('a comment or a regular expression inside a slot does not end it', () => {
         ).children[0]?.source,
     ).toBe('xs.filter(s => /}/.test(s)).length')
     // And `{/for}` is the template's own grammar, not a regular expression opening.
-    expect(compileFile('{#for r of rs}<li>x</li>{/for}')).toContain('</li>')
+    expect(await serverOf('{#for r of rs}<li>x</li>{/for}')).toContain('</li>')
 })
 
 // 32.20 NAMES THE INTERPOLATION, and the check ran on the path the clause does not name: a literal
@@ -412,9 +419,9 @@ const u = 'javascript:alert(1)'
 const ok = '/docs'
 </script>
 <a id="bad" href={u}>x</a><a id="good" href={ok}>y</a>`
-    expect(compileFile(page)).toContain('attributeMarkup("href", ')
+    expect(await serverOf(page)).toContain('attributeMarkup("href", ')
 
-    const dir = temporaryModule({ 'Page.ts': compileFile(page) })
+    const dir = temporaryModule({ 'Page.ts': await serverOf(page) })
     const { default: Page } = await import(`${dir}/Page.ts`)
     let out = ''
     out += new TextDecoder().decode(
@@ -453,22 +460,24 @@ test('a dropped url is warned on abide:render — 32.20', () => {
 // and decodes entities BEFORE it looks for a scheme, so all three of these navigate. THE REVERT:
 // match the scheme against the raw value in `safeUrl` and escape only `"` on the static attribute
 // path; this test then reports 3 live `javascript:` hrefs where 0 are due.
-test('a url is checked against what the browser will read', () => {
+test('a url is checked against what the browser will read', async () => {
     for (const href of [
         ' javascript:alert(1)',
         'java\tscript:alert(1)',
         'java\nscript:alert(1)',
         'JaVaScRiPt:alert(1)',
     ])
-        expect(compileFile(`<a href="${href}">x</a>`)).not.toContain('alert(1)')
+        expect(await serverOf(`<a href="${href}">x</a>`)).not.toContain(
+            'alert(1)',
+        )
 
     // The entity takes a different road and is stopped one layer up: ONE escaping rule for one
     // context means the `&` is encoded, so `&#106;` never becomes a `j`.
-    const entity = compileFile(`<a href="&#106;avascript:alert(1)">x</a>`)
+    const entity = await serverOf(`<a href="&#106;avascript:alert(1)">x</a>`)
     expect(entity).toContain('&amp;#106;avascript:alert(1)')
     expect(entity).not.toContain('"&#106;')
     // And an ordinary query string is escaped the same way, by the same function.
-    expect(compileFile(`<a href="/a?x=1&y=2">z</a>`)).toContain(
+    expect(await serverOf(`<a href="/a?x=1&y=2">z</a>`)).toContain(
         '/a?x=1&amp;y=2',
     )
 })
@@ -476,34 +485,46 @@ test('a url is checked against what the browser will read', () => {
 // AN HTML ATTRIBUTE NAME IS CASE-INSENSITIVE. THE REVERT: pass `attribute.name` to `isEventName`;
 // `ONCLICK={h}` is then emitted into the markup as a live attribute, in a document that never
 // hydrated — 1 handler a browser will run where 0 are due, and `onClick` is dropped beside it.
-test('an event name is matched case-insensitively', () => {
+test('an event name is matched case-insensitively', async () => {
     for (const name of ['onclick', 'onClick', 'ONCLICK', 'OnClick']) {
-        const emitted = compileFile(
+        const emitted = await serverOf(
             `<script>const h = () => {}</script><button ${name}={h}>x</button>`,
         )
         expect(emitted.toLowerCase()).not.toContain('onclick=')
     }
     // An attribute that is not `on<event>` is still an attribute, whatever its case.
-    expect(compileFile(`<div DATA-X={x}>a</div>`)).toContain('DATA-X')
+    expect(await serverOf(`<div DATA-X={x}>a</div>`)).toContain('DATA-X')
 })
 
 // 39.2 HAS TWO HALVES and only the first was checked: the walk returned on anything that was not
 // an element, so a control block was a floor it never went through. THE REVERT: return early from
 // `assertNoNestedHead` on a non-element node; the first case below then emits `<head>` markup into
 // the BODY, and the second emits a second `<head>` inside the document head.
-test('a head inside a control block or inside a head is refused', () => {
-    expect(() =>
-        compileFile('{#if a}<head><title>t</title></head>{/if}'),
-    ).toThrow('39.2')
-    expect(() =>
-        compileFile('{#for r of rs}<head><title>t</title></head>{/for}'),
-    ).toThrow('39.2')
-    expect(() =>
-        compileFile('<head><head><title>t</title></head></head>'),
-    ).toThrow('39.2')
-    expect(() =>
-        compileFile('<div>{#if a}<head><title>t</title></head>{/if}</div>'),
-    ).toThrow('39.2')
+test('a head inside a control block or inside a head is refused', async () => {
+    expect(
+        await refusal(serverOf('{#if a}<head><title>t</title></head>{/if}')),
+    ).toContain('39.2')
+    expect(
+        await refusal(
+            serverOf('{#for r of rs}<head><title>t</title></head>{/for}'),
+        ),
+    ).toContain('39.2')
+    expect(
+        await refusal(serverOf('<head><head><title>t</title></head></head>')),
+    ).toContain('39.2')
+    expect(
+        await refusal(
+            serverOf('<div>{#if a}<head><title>t</title></head>{/if}</div>'),
+        ),
+    ).toContain('39.2')
+})
+
+// THE REFUSAL NAMES THE BLOCK IT IS IN. THE REVERT: label every block that is not a `{#for}` as
+// `{#if}`, as the walk once did; a `{#try}`'s refusal names `{#if}`.
+test('a head inside a {#try} is refused as inside a {#try} — 39.2', async () => {
+    expect(
+        await refusal(serverOf('{#try}<head><title>t</title></head>{/try}')),
+    ).toContain('inside {#try}')
 })
 
 // AN HTML ATTRIBUTE NAME IS ASCII CASE-INSENSITIVE, so the parser answers `href` for every
@@ -513,13 +534,13 @@ test('a head inside a control block or inside a head is refused', () => {
 //
 // THE REVERT: compare `name` against the lowercase literals without lowering it first. This test
 // then reports 4 live `javascript:` hrefs where 0 are due, and a real browser navigates all four.
-test('a url attribute is recognised however it is capitalised', () => {
+test('a url attribute is recognised however it is capitalised', async () => {
     for (const name of ['HREF', 'Href', 'SRC', 'FormAction']) {
         expect(
-            compileFile(`<a ${name}="javascript:alert(1)">x</a>`),
+            await serverOf(`<a ${name}="javascript:alert(1)">x</a>`),
         ).not.toContain('alert(1)')
         expect(
-            compileFile(
+            await serverOf(
                 `<script>\nconst u = '/ok'\n</script>\n<a ${name}={u}>x</a>`,
             ),
         ).toContain(`attributeMarkup("${name}", `)
@@ -535,7 +556,7 @@ test('a url attribute is recognised however it is capitalised', () => {
 // THE REVERT: restore the `bodyAt === -1` and `headAt === -1` early returns in `render`. This test
 // then reports 0 of 4 shells carrying the title where 4 are due.
 test('a shell missing either end tag still receives the head', async () => {
-    const module = `${temporaryModule({ 'Page.ts': compileFile(PAGE) })}/Page.ts`
+    const module = `${temporaryModule({ 'Page.ts': await serverOf(PAGE) })}/Page.ts`
     const { default: Page } = await import(module)
     const shells = [
         '<!doctype html><html><head></head><body></body></html>',
@@ -702,19 +723,19 @@ test('an interpolated quoted attribute is one expression', async () => {
     )
     expect(emitted).not.toContain('badge {tone}')
     // Several slots and the text between them.
-    expect(compileFile('<div title="a{b}c{d}e">x</div>')).toContain(
+    expect(await serverOf('<div title="a{b}c{d}e">x</div>')).toContain(
         '__attributeMarkup("title", __slotValue(() => `a${b}c${d}e`))',
     )
     // 32.20 — an interpolated URL-typed attribute is scheme-checked where the value arrives.
-    expect(compileFile('<a href="/x/{id}">x</a>')).toContain(
+    expect(await serverOf('<a href="/x/{id}">x</a>')).toContain(
         '__attributeMarkup("href", __slotValue(() => `/x/${id}`))',
     )
     // A value with NO slot is still a literal, and its braces are text.
-    expect(compileFile('<div class="badge">x</div>')).toContain(
+    expect(await serverOf('<div class="badge">x</div>')).toContain(
         '<div class=\\"badge\\">',
     )
     // AN UNCLOSED `{` IS TEXT, not a slot that swallows the rest of the value.
-    expect(compileFile('<div class="a { b">x</div>')).toContain(
+    expect(await serverOf('<div class="a { b">x</div>')).toContain(
         '<div class=\\"a { b\\">',
     )
 })
@@ -746,21 +767,25 @@ test('an interpolated style lowers to one attribute per property', async () => {
 
     // The combined attribute stands where the FIRST style contribution did.
     expect(
-        compileFile('<div class="a" style="--Brand: {c}" id="z">x</div>'),
+        await serverOf('<div class="a" style="--Brand: {c}" id="z">x</div>'),
     ).toContain('<div class=\\"a\\" style=\\"')
 
     // A STATIC `style` IS NOT INTERPOLATED and keeps the literal path; a WHOLE `style={expr}` is
     // 32.3's and keeps the computed one.
-    expect(compileFile('<div style="color: red">x</div>')).toContain(
+    expect(await serverOf('<div style="color: red">x</div>')).toContain(
         '<div style=\\"color: red\\">',
     )
-    expect(compileFile('<div style={s}>x</div>')).toContain(
+    expect(await serverOf('<div style={s}>x</div>')).toContain(
         '__attributeMarkup("style", __slotValue(() => s))',
     )
 
     // A PROPERTY NAME THAT IS NOT STATIC has no property to bind and is refused.
-    expect(() => compileFile('<div style="{p}: red">x</div>')).toThrow('32.19')
-    expect(() => compileFile('<div style="red {c}">x</div>')).toThrow('32.19')
+    expect(await refusal(serverOf('<div style="{p}: red">x</div>'))).toContain(
+        '32.19',
+    )
+    expect(await refusal(serverOf('<div style="red {c}">x</div>'))).toContain(
+        '32.19',
+    )
 })
 // biome-ignore-end lint/suspicious/noTemplateCurlyInString: the emitted template literal IS the
 // subject.
@@ -819,7 +844,7 @@ test('a script the author wrote for the document stays in the markup', async () 
         children: [{ kind: 'text', text: '{"@type":"Thing"}' }],
     })
 
-    const emitted = compileFile(
+    const emitted = await serverOf(
         '<script src="/a.js"></script><script type="application/ld+json">{"@type":"Thing"}</script>',
     )
     expect(emitted).toContain('<script src=\\"/a.js\\">')
@@ -831,7 +856,7 @@ test('a script the author wrote for the document stays in the markup', async () 
 })
 
 // One document out of one page, for the three gates below — typed, because 32.25's lowering is
-// the checker's answer (`slotFacts`).
+// the checker's answer (`expressionFacts`).
 async function renderPage(source: string): Promise<string> {
     const module = `${temporaryModule({ 'Page.ts': await serverOf(source) })}/Page.ts`
     const { default: Page } = await import(module)
@@ -915,6 +940,35 @@ test('the raw spelling lowers to the framework’s own name, on both sides', asy
         ),
     )
     expect(client).toContain('const __v1_0 = __raw(snippet())')
+})
+
+// 32.25 — ONE RECOGNIZER FOR THE SPELLING (`rawCall`): a bare `raw` handed a spread is the
+// framework's `raw` as `raw(x)` is, and is NOT exempt from 14.2's proof — what it converts is no
+// one node, and the spread runs an iterator — so it stays a live position. A type assertion is a
+// wrapper the proof reads through, as it reads through `as`.
+//
+// THE REVERTS: require one plain argument in `rawCall`, and the spread is left as the author's
+// `raw` (no `__raw(` in the module). Exempt a spread by what it spreads in `rawArgument`, and
+// `raw(...title)` is proven static (true against false). Drop `TypeAssertionExpression` from
+// `proveStatic`, and `<string>title` is unproven (false against true).
+test('a raw call handed a spread is the framework’s raw and stays live — 32.25, 14.2', async () => {
+    const script = `<script>\nconst title = 'a'\n</script>\n`
+    expect(await serverOf(`${script}<p>{raw(...title)}</p>`)).toContain(
+        '__raw(...title)',
+    )
+    const proven = async (slot: string): Promise<boolean> => {
+        const { file, answer } = await typed(`${script}<p>{${slot}}</p>`)
+        const paragraph = file.template.find(
+            (node) => node.kind === 'element',
+        ) as Extract<TemplateNode, { kind: 'element' }>
+        const span = projectShadow(file).slots.get(
+            paragraph.children[0] as TemplateNode,
+        )
+        return span !== undefined && answer.isStatic(span)
+    }
+    expect(await proven('raw(...title)')).toBe(false)
+    expect(await proven('raw(title)')).toBe(true)
+    expect(await proven('<string>title')).toBe(true)
 })
 
 // 39.11, 39.12 — THE MERGE KEY, and the last contribution for one wins. Two `<title>` elements in
@@ -1106,21 +1160,25 @@ test('a close directive unwinds an element left open inside it', () => {
 })
 
 // 32.20's scheme check is keyed on the attribute NAME, and four names was not the set.
-test('a URL-typed attribute is scheme-checked under every spelling of one', () => {
-    const svg = compileFile(
+test('a URL-typed attribute is scheme-checked under every spelling of one', async () => {
+    const svg = await serverOf(
         '<svg><a xlink:href="javascript:alert(1)">x</a></svg>',
     )
     expect(svg).not.toContain('javascript:')
-    const poster = compileFile('<video poster="javascript:alert(1)"></video>')
+    const poster = await serverOf(
+        '<video poster="javascript:alert(1)"></video>',
+    )
     expect(poster).not.toContain('javascript:')
     // A relative URL under the same names is untouched.
-    expect(compileFile('<svg><a xlink:href="/x">y</a></svg>')).toContain('/x')
+    expect(await serverOf('<svg><a xlink:href="/x">y</a></svg>')).toContain(
+        '/x',
+    )
 })
 
 // A plain `style` and a `style:prop` are ONE attribute. Written apart, HTML keeps the first and
 // the reactive declaration is dropped in silence.
-test('a static style merges with its style: directives', () => {
-    const server = compileFile(
+test('a static style merges with its style: directives', async () => {
+    const server = await serverOf(
         '<div style="color: red" style:width="3px">x</div>',
     )
     expect(server.split('style=').length - 1).toBe(1)
@@ -1165,12 +1223,12 @@ test('every class: directive on a tag is one class attribute', async () => {
 // is what the author's own `class` attribute already is — so it renders as one rather than being
 // refused. A BARE `class:` names nothing and stays an ordinary attribute, which is the same floor
 // `style:` has.
-test('a class: directive with no condition is a plain class', () => {
-    const always = compileFile('<p class="a" class:b>t</p>')
+test('a class: directive with no condition is a plain class', async () => {
+    const always = await serverOf('<p class="a" class:b>t</p>')
     expect(always.split('class=').length - 1).toBe(1)
     expect(always).toContain('"a"')
     expect(always).toContain('" b"')
-    expect(compileFile('<p class:>t</p>')).toContain('class:')
+    expect(await serverOf('<p class:>t</p>')).toContain('class:')
 })
 
 // 32.10 ON THE CLIENT — the binding goes through `classList`, not through the merged attribute.
@@ -1186,8 +1244,8 @@ test('a class: directive binds one class and not the attribute', async () => {
 })
 
 // An HTML tag name is case-insensitive, and `<HEAD>` was never hoisted.
-test('a head contributes under any casing', () => {
-    const out = compileFile('<HEAD><title>T</title></HEAD><p>x</p>')
+test('a head contributes under any casing', async () => {
+    const out = await serverOf('<HEAD><title>T</title></HEAD><p>x</p>')
     expect(out).toContain('<title>')
     expect(out.indexOf('<title>')).toBeLessThan(out.indexOf('body:'))
 })
@@ -1231,7 +1289,9 @@ test('a slot in an unquoted attribute value is an expression', async () => {
         '__attributeMarkup("class", __slotValue(() => `badge-${tone()}`))',
     )
     // A value with no slot in it stays a literal.
-    expect(compileFile('<a href=/plain>y</a>')).toContain('href=\\"/plain\\"')
+    expect(await serverOf('<a href=/plain>y</a>')).toContain(
+        'href=\\"/plain\\"',
+    )
 })
 
 // 32.10 — a `style:prop` sets ONE property, and `escapeAttribute` cannot see the character that
@@ -1258,6 +1318,53 @@ test('a raw call lowers in an attribute value too', async () => {
         '__attributeMarkup("href", __slotValue(() => __raw(u())))',
     )
     expect(emitted).toContain('raw as __raw')
+})
+
+// 32.25, 32.57 — EVERY TEMPLATE EXPRESSION REFUSES `await`, AND `raw` LOWERS WHERE THE VALUE REACHES
+// MARKUP. Both rode the proof's walk, which visits slots, attributes, conditions and subjects; a
+// `{#for}` key, a prop and a listener were never walked, so `by await k` reached bun as a module
+// that does not parse and a prop's `raw(html)` called whatever the file bound. A listener's and a
+// key's `raw` never renders, so there it stays the file's — a markdown library's, say.
+//
+// THE REVERT: set `TEMPLATE_EXPRESSIONS` in `readsIn` to `PROVABLE` alone; the key's `await` is then
+// not refused (`''` where the message is due). Set `RAW_LOWERED` to `PROVABLE`; the prop keeps the
+// author's `raw(`. Set it to `TEMPLATE_EXPRESSIONS`; the listener and the key take `__raw(`.
+const RAW_EVERYWHERE = `<script>
+import Card from './Card.abide'
+
+const html = '<b>x</b>'
+const xs = [1]
+</script>
+
+<Card body={raw(html)}/>
+{#for x of xs by raw(String(x))}<i>{x}</i>{/for}
+<button onclick={() => raw(html)}>b</button>`
+
+test('a key, a prop and a listener refuse await as a slot does, and only the prop lowers raw — 32.25, 32.57', async () => {
+    expect(
+        await refusal(
+            serverOf(`<script>
+const xs = [1]
+const k = Promise.resolve(1)
+</script>
+
+{#for x of xs by await k}<i>{x}</i>{/for}`),
+        ),
+    ).toContain('a template position cannot await')
+    // A listener that makes its own function may await in it, as a slot's may.
+    expect(
+        await refusal(
+            serverOf('<button onclick={async () => await save()}>b</button>'),
+        ),
+    ).toBe('')
+
+    const client = await clientOf(RAW_EVERYWHERE)
+    expect(client).toContain('{ "body": () => (__raw(html)) }')
+    expect(client).toContain('= (x, __at) => raw(String(x))')
+    expect(client).toContain('addEventListener("click", () => raw(html))')
+    expect(await serverOf(RAW_EVERYWHERE)).toContain(
+        '{ "body": () => (__raw(html)) }',
+    )
 })
 
 // A PREFIX `!` DOES NOT END AN OPERAND and a keyword after a `.` is a property name. Read the
@@ -1330,7 +1437,7 @@ test('a declarator list ends at the statement, not at the next semicolon', async
 // `<div id="app">`.
 test('a shell with no closing head tag still gets its head content', async () => {
     const { default: Page } = await import(
-        `${temporaryModule({ 'Page2.ts': compileFile(PAGE) })}/Page2.ts`
+        `${temporaryModule({ 'Page2.ts': await serverOf(PAGE) })}/Page2.ts`
     )
     const shell =
         '<!doctype html><html><body><div id="app"></div></body></html>'
@@ -1368,7 +1475,8 @@ test("an author's module-scope name cannot collide with a runtime import", async
 // …)` replaces the whole token list and takes the directive's name with it — the two bindings
 // would then overwrite each other in whichever order they re-ran. No clause spells `class`'s road
 // out of it the way 32.19 does `style`'s, so the two share this answer rather than each getting
-// its own. THE REVERT: drop the `class` arm of `isMergedPlain`; `__setAttribute` appears here.
+// its own. THE REVERT: make `isBound` answer `one.live` for every `merged` member;
+// `__setAttribute` appears here.
 test('a class beside a class: directive compiles and is left unbound', async () => {
     const both = await clientOf('<div class={c} class:on={x}>t</div>', [
         'c',
@@ -1403,8 +1511,8 @@ test('a style beside a style: property compiles and is left unbound \u2014 32.19
     // The merged half gets NO whole-attribute write \u2014 that is the exception.
     expect(both).not.toContain('__setAttribute')
     // ALONE IT IS AN ORDINARY BINDING, which is what makes the case above an exception rather
-    // than the rule. THE REVERT: drop the `lowerName === 'style'` skip in `isMergedPlain`; the
-    // first assertion below is unchanged and `__setAttribute` appears in `both` too.
+    // than the rule. THE REVERT: make `isBound` answer `one.live` for every `merged` member;
+    // the first assertion below is unchanged and `__setAttribute` appears in `both` too.
     expect(await clientOf('<div style={s}>x</div>', ['s'])).toContain(
         '__setAttribute',
     )
@@ -1440,8 +1548,8 @@ test('a region made once is parsed, and one made once a row is built', async () 
     const source =
         '<script>let rows = reactive([1])\nlet on = reactive(true)</script>' +
         '{#if on}<p>page</p>{/if}<ul>{#for row of rows}<li>{#if on}<b>row</b>{/if}</li>{/for}</ul>'
-    const { file, reads } = await typed(source, ['rows', 'on'])
-    const once = emitClient(file, reads, 'routed')
+    const { file, answer } = await typed(source, ['rows', 'on'])
+    const once = emitClient(file, answer, 'routed')
     const page = once.slice(
         once.indexOf('const rg0_a0_build'),
         once.indexOf('const rg0_a0_build') + 200,
@@ -1451,7 +1559,7 @@ test('a region made once is parsed, and one made once a row is built', async () 
     // The arm inside the row: built.
     expect(once).toContain('__document.createElement("b")')
     // A component's own arm: built, because the component can stand in a row.
-    const invoked = emitClient(file, reads, 'invoked')
+    const invoked = emitClient(file, answer, 'invoked')
     expect(invoked).toContain('__document.createElement("p")')
 })
 
@@ -1463,10 +1571,10 @@ test('a region made once is parsed, and one made once a row is built', async () 
 // `ReferenceError: __heads is not defined` where the child's `<meta>` is due in the head.
 test('a component invoked inside the head contributes to it', async () => {
     const dir = temporaryModule({
-        'Seo.ts': compileFile(
+        'Seo.ts': await serverOf(
             '<head><meta name="description" content="d"/></head><span>s</span>',
         ),
-        'Page.ts': compileFile(
+        'Page.ts': await serverOf(
             `<script>\nimport Seo from './Seo.abide'\n</script>\n<head><Seo/></head><p>x</p>`,
         ),
     })
@@ -1495,7 +1603,7 @@ test('a slot holding a comma or a trailing comment is one expression', async () 
     const transpiler = new Bun.Transpiler({ loader: 'ts' })
     for (const slot of ['a, b', 'b // the second\n']) {
         const source = `<script>\nconst a = 'first'\nconst b = 'second'\n</script>\n<p>{${slot}}</p>`
-        const dir = temporaryModule({ 'Page.ts': compileFile(source) })
+        const dir = temporaryModule({ 'Page.ts': await serverOf(source) })
         try {
             // The client half splices the same text into a `const`, where a bare comma is a
             // second declarator with no initializer.

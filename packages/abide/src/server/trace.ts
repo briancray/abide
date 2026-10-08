@@ -7,7 +7,7 @@
 // (24.5) while a sibling running concurrently names its own.
 
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
-import { TRACE, writeSpan } from '#shared/log.ts'
+import { writeSpan } from '#shared/log.ts'
 import { randomToken } from './randomToken.ts'
 import {
     currentRequestScope,
@@ -149,6 +149,3 @@ export function traceResponse(): string | undefined {
     const current = traceOf(scope)
     return `00-${current.id}-${current.span}-${current.flags}`
 }
-
-// Every log line written inside a scope carries its trace id.
-TRACE.current = trace

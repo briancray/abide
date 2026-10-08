@@ -1,16 +1,18 @@
 ---
 title: Helpers
 nav: Helpers
-intent: log, csp, url, navigate.
+intent: log, csp, url, navigate, reachable.
 enumerates:
   - log
   - csp
   - url
   - navigate
+  - reachable
 ---
 
-Four names that are not producers and not transports. `log` records what happened, `csp`
-declares what a page may load, `url` builds an address, and `navigate` goes to one.
+Five names that are not producers and not transports. `log` records what happened, `csp`
+declares what a page may load, `url` builds an address, `navigate` goes to one, and `reachable`
+says whether a host is there to call.
 
 ## `log`
 
@@ -40,7 +42,7 @@ declares what a page may load, `url` builds an address, and `navigate` goes to o
 `log` publishes into a **channel** underneath, which is what makes its records readable the way
 any channel is readable. `log.records` is an ordinary `reactive` declaring `history`, so a page
 showing the last hundred lines reads `log.records.history(100)` and subscribes rather than polls.
-`abide logs` is a live subscription to that same channel, as `abide connect` makes one: a client
+`abide logs` is a live subscription to that same channel, as the shell makes one: a client
 reading the `GET` over it is subscribed to every line.
 
 ### Namespaces and gating
@@ -106,6 +108,23 @@ It navigates and does **not reload the document**, so layouts stay, loaded value
 and the head's keyed contributions are replaced rather than rebuilt. An ordinary `<a href>` does
 the same thing; `navigate` is for the case where the decision is made in code.
 
+## `reachable`
+
+| Name | Signature | Meaning |
+| --- | --- | --- |
+| `reachable` | `(host: string) => Promise<boolean>` | Whether a host answers at all. |
+
+It is a server name, imported from `abide/server`, and it asks with one `HEAD`. Any answer counts
+— a 404 came from the host — so `false` means the request was refused, never resolved, or went 5
+seconds unanswered. The answer is held for 60 seconds per host in one cache the whole process
+shares, which is the point: while a host is down, every call queued behind it refuses at once
+rather than each waiting out a timeout of its own.
+
+### Parameters
+
+* `host` — a bare host such as `api.example.com`, asked over https, or an origin such as
+  `http://billing.internal:8080`, asked as written.
+
 ## Examples
 
 ### A log line with structure
@@ -122,6 +141,13 @@ import { csp, middleware } from 'abide'
 middleware(csp({ 'img-src': ["'self'", 'https://cdn.example'] }))
 ```
 
+### A refusal in place of a timeout
+
+```ts server
+if (!(await reachable('api.example.com')))
+    return refuse(503, 'The catalog is unreachable')
+```
+
 ### An address built from a literal
 
 ```abide abide
@@ -132,4 +158,5 @@ middleware(csp({ 'img-src': ["'self'", 'https://cdn.example'] }))
 
 * [Logging](../app/record-what-happened.md) — the guide to `log`
 * [CSP](../app/lock-down-what-the-page-may-load.md) — the guide to `csp`
+* [Reachable hosts](../server/check-a-host-before-you-call-it.md) — the guide to `reachable`
 * [Links & navigation](../pages/link-to-another-page.md) — `url` and `navigate` in use

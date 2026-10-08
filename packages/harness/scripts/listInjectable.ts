@@ -8,7 +8,7 @@
 // the `innerHTML` rebuild it says what it BUYS. A row carrying only the first is the
 // bill with no receipt, and a row carrying only the second is marketing.
 
-import { batch, claimOf, ratio, type Sample } from 'harness/report'
+import { batch, claimOf, emulatedDom, ratio, type Sample } from 'harness/report'
 import { listCases } from './listCases.ts'
 
 type Row = {
@@ -35,7 +35,7 @@ function run(): Row[] {
                 abide: arms.abide,
                 careless: arms.careless,
             },
-            emulated: null,
+            emulated: emulatedDom(),
             // A browser clock is ~2,400x coarser than bun's, and a 200-row reorder is
             // far dearer than a signal write, so the default ceiling is not enough.
             budgetNanoseconds: 20_000_000_000,

@@ -1,9 +1,8 @@
+import { escapeAttribute, escapeQuote } from '#shared/escapeText.ts'
 import { isEventName } from '#shared/isEventName.ts'
-import {
-    type Attribute,
-    childListsOf,
-    type TemplateNode,
-} from './TemplateNode.ts'
+import { safeUrl } from '#shared/safeUrl.ts'
+import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
+import { type Attribute, bodiesOf, type TemplateNode } from './TemplateNode.ts'
 
 // THE CLASSIFICATION both emitters share. Where a node STANDS is not decided here: `renderMarkup`
 // carries a `Cursor`, so the walk that writes a node is the walk that places it. What IS decided
@@ -11,8 +10,8 @@ import {
 // of it is the agreement.
 //
 // THE PREDICATES — `isComponentTag`, `isSingleRooted`, `isStyleProperty`, `isClassToggle`,
-// `isSlot`, and `#shared`'s `isEventName` — and `bindingsOf`. An `onclick` the server declines to
-// write and the client binds as a listener is one predicate answering twice.
+// `isSlot`, and `#shared`'s `isEventName` — and `classifyAttributes`. An `onclick` the server
+// declines to write and the client binds as a listener is one classification answering twice.
 //
 // A TEXT RUN IS THE UNIT, not a slot. Adjacent text nodes MERGE when a browser parses markup, so
 // `<p>{label}: {count}</p>` arrives as the single text node `clicks: 0` however it was written.
@@ -24,19 +23,6 @@ import {
 // change to one part rewrites the run, which costs the same single write it would have cost
 // anyway plus a string join, and leaves the document identical to the one the author wrote.
 // `isTextish` and `isBlankRun` are the run's two questions, asked by the markup walk.
-
-// 32.3 — `name={expr}` IS REACTIVE, which the server half alone cannot make it: it writes the
-// value standing at render and nothing ever writes it again.
-//
-// `write` NAMES WHICH OF THE THREE WRITES THE VALUE GOES TO and `name` what it goes under. One
-// binding site with three writes rather than three kinds, because what differs is only the call:
-// 32.10 sets one class or one style property, and everything else sets the whole attribute.
-type AttributeBinding = {
-    attribute: Attribute
-    write: 'attribute' | 'class' | 'style'
-    // The class, the style property, or the attribute's own name.
-    name: string
-}
 
 /** Whether a node belongs to a text run: static text or an expression slot. */
 export function isTextish(node: TemplateNode): boolean {
@@ -65,74 +51,260 @@ export function isBlankRun(nodes: TemplateNode[], from: number): boolean {
 }
 
 /**
- * What an element binds: its listeners, reactive attributes, `bind:` operands and spreads.
+ * One attribute of an element, as every way of making the element reads it.
  *
- * Its listeners, its 32.3 attributes, its 32.5 value binds, its 32.9 `bind:element` and its 32.11
- * spreads, read by `emitRegion` off the element a cursor placed.
+ * THE ONE CLASSIFICATION. The markup writes the tag from it, a row the browser BUILDS writes it
+ * through `setAttribute`, and the mount binds from it — so what an attribute IS, whether it moves
+ * (32.3) and whether a URL is written (32.20) are each answered once for all three. A second
+ * reading of the attributes is a second answer to "what does this tag say", and a build's copy
+ * drifted that way once: it wrote a static `AT&amp;T` as those seven characters where the parser
+ * reads the server's bytes as `AT&T`. Every attribute is ONE entry, in the author's order, so each
+ * reader writes in the order the tag carries.
+ *
+ * `live` IS `Lowering.isLive`, asked once: an expression the checker could not prove static.
  */
-export function bindingsOf(node: TemplateNode & { kind: 'element' }): {
-    handlers: { event: string; attribute: Attribute }[]
-    attributes: AttributeBinding[]
-    elements: Attribute[]
-    binds: { kind: ValueBind; attribute: Attribute }[]
-    spreads: { attribute: Attribute; explicit: string[] }[]
-} {
-    const bound: ReturnType<typeof bindingsOf> = {
-        handlers: [],
-        attributes: [],
-        elements: [],
-        binds: [],
-        spreads: [],
-    }
+export type ClassifiedAttribute = {
+    attribute: Attribute
+    live: boolean
+} & // `undefined` for a static URL 32.20 refuses — dropped here, where the value is known. An // The author's own bytes as the tag serves them between the quotes (32.27, 32.28), or
+// empty `href` is its own answer and is kept, which `=== ''` would have thrown away.
+(
+    | { kind: 'static'; bytes: string | undefined }
+    // 32.3, 32.37 — a whole value from an expression, which may be absent.
+    | { kind: 'dynamic' }
+    // 32.11 — a spread's attributes, less the ones the element names itself, kept written by a
+    // binding of its own.
+    | { kind: 'spread'; explicit: string[] }
+    // 32.5, 32.7, 32.8 — the property and the value, kept in step both ways. `reflects` is the
+    // attribute the property's value stands at in the tag, and `undefined` where it is not an
+    // attribute: a `<textarea>`'s or `<select>`'s value is the client's to set.
+    | {
+          kind: 'bound'
+          bind: ValueBind
+          reflects: 'value' | 'checked' | 'open' | undefined
+          /** 32.8 — a group member's own `value`, which the group is compared against. */
+          own: string
+      }
+    // 32.9 — the node itself, which a server has none of: written out it was `bind:element=""`,
+    // inert and a tell. The client does not set it either; what the value takes is the element.
+    | { kind: 'element' }
+    // 32.4 — a native listener on the element itself, reached by the same walk a text node is. The
+    // server writes nothing, so a handler cannot fire from a document that never hydrated.
+    | { kind: 'handler'; event: string }
+    // 32.10, 32.19 — a member of a `class` or `style` merge group (`MergeGroup`). `group` is set on
+    // the FIRST member only, where the whole group is written, which keeps the tag in the author's
+    // attribute order. `toggles` is the one class or style property a directive's binding writes,
+    // and `undefined` for the author's own plain attribute — see where that is decided.
+    | {
+          kind: 'merged'
+          group: MergeGroup | undefined
+          toggles: { write: 'class' | 'style'; name: string } | undefined
+      }
+)
+
+/**
+ * Every attribute of an element, classified, in the order the tag carries them.
+ *
+ * `lowering` answers `live` (`Lowering.isLive`).
+ */
+export function classifyAttributes(
+    node: TemplateNode & { kind: 'element' },
+    lowering: { isLive(holder: object): boolean },
+): ClassifiedAttribute[] {
+    const groups = mergeGroupsOf(node)
+    const written = new Set<MergeGroup>()
+    const classified: ClassifiedAttribute[] = []
     for (const attribute of node.attributes) {
-        if (!attribute.expression) continue
-        const bind = valueBindOf(attribute.lowerName)
-        if (bind !== undefined) {
-            // 32.5, 32.7, 32.8 — the property and the value, kept in step both ways.
-            bound.binds.push({ kind: bind, attribute })
-            continue
-        }
-        if (isElementBind(attribute.lowerName)) {
-            // 32.9 — the node itself. Not written into the tag by the server and not set by the
-            // client either: what the value takes is the element.
-            bound.elements.push(attribute)
-            continue
-        }
-        if (isEventName(attribute.lowerName)) {
-            // 32.4 — a native listener on the element itself, reached by the same walk a text
-            // node is, so nothing is added to the document to find it.
-            bound.handlers.push({
-                event: attribute.lowerName.slice(2),
+        const live = attribute.expression && lowering.isLive(attribute)
+        const group = groups.find((candidate) =>
+            candidate.members.has(attribute),
+        )
+        if (group !== undefined) {
+            const leads = !written.has(group)
+            written.add(group)
+            // 32.10, 32.19 — THE PLAIN `style={expr}` OR `class={expr}` BESIDE A DIRECTIVE IS LEFT
+            // UNBOUND. `setAttribute` replaces the whole merged value and takes the directives'
+            // halves with it, and the two bindings then overwrite each other in whichever order
+            // they re-ran.
+            //
+            // ALLOWED, rather than refused. The page still RENDERS right — the server writes both
+            // halves into the one merged attribute — so the only thing a build error would buy is
+            // breaking a page that works today for a clause that is not built. What it costs is
+            // the hole: this one attribute keeps the value standing at render where 32.3 says it
+            // moves, and nothing reports that.
+            //
+            // 32.19 IS WHAT CLOSES THE `style` HALF: an interpolated `style` lowers to `style:prop`
+            // under a static name and is never built as a string, and then there is no
+            // whole-attribute write left to clobber anything. No clause spells the same road for
+            // `class`, and until one does the two share this answer.
+            classified.push({
                 attribute,
+                live,
+                kind: 'merged',
+                group: leads ? group : undefined,
+                toggles:
+                    attribute === group.plain
+                        ? undefined
+                        : {
+                              write: group.name,
+                              name: attribute.name.slice(group.name.length + 1),
+                          },
             })
             continue
         }
-        // 32.11 — a spread, kept written by a binding of its own.
-        if (attribute.name === '...') {
-            bound.spreads.push({ attribute, explicit: explicitNames(node) })
+        if (!attribute.expression) {
+            classified.push({
+                attribute,
+                live,
+                kind: 'static',
+                bytes: staticBytes(attribute.lowerName, attribute.value),
+            })
             continue
         }
-        // 32.10, 32.19 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE and every
-        // `class:name` ONE `class`, merged by the server emitter. So a plain `style={expr}` or
-        // `class={expr}` standing beside one cannot be written back on its own: `setAttribute`
-        // replaces the whole value and takes the directives' halves with it, and the two bindings
-        // then overwrite each other in whichever order they re-ran.
-        //
-        // ALLOWED AND LEFT UNBOUND, rather than refused. The page still RENDERS right — the server
-        // writes both halves into the one merged attribute — so the only thing a build error would
-        // buy is breaking a page that works today for a clause that is not built. What it costs is
-        // the hole: this one attribute keeps the value standing at render where 32.3 says it
-        // moves, and nothing reports that.
-        //
-        // 32.19 IS WHAT CLOSES THE `style` HALF, not a binding here: an interpolated `style`
-        // lowers to `style:prop` under a static name and is never built as a string, and then
-        // there is no whole-attribute write left to clobber anything. No clause spells the same
-        // road for `class`, and until one does the two share this answer rather than each getting
-        // its own.
-        if (isMergedPlain(node, attribute)) continue
-        bound.attributes.push(writeOf(attribute))
+        if (attribute.name === '...') {
+            classified.push({
+                attribute,
+                live,
+                kind: 'spread',
+                explicit: explicitNames(node),
+            })
+            continue
+        }
+        const bind = valueBindOf(attribute.lowerName)
+        if (bind !== undefined)
+            classified.push({
+                attribute,
+                live,
+                kind: 'bound',
+                bind,
+                reflects:
+                    bind === 'value' && node.lowerTag !== 'input'
+                        ? undefined
+                        : bind === 'group'
+                          ? 'checked'
+                          : bind,
+                own: staticAttribute(node, 'value') ?? 'on',
+            })
+        else if (isElementBind(attribute.lowerName))
+            classified.push({ attribute, live, kind: 'element' })
+        else if (isEventName(attribute.lowerName))
+            classified.push({
+                attribute,
+                live,
+                kind: 'handler',
+                event: attribute.lowerName.slice(2),
+            })
+        else classified.push({ attribute, live, kind: 'dynamic' })
     }
-    return bound
+    return classified
+}
+
+/**
+ * Whether the mount installs a binding for an attribute.
+ *
+ * A listener, a bind, a spread and the node handed over always; a value only where it is `live`,
+ * because `data-kind={kind}` over a plain `const` is written once by the server and never moves,
+ * and a binding for it is a reader woken on every page for nothing.
+ */
+export function isBound(one: ClassifiedAttribute): boolean {
+    if (one.kind === 'static') return false
+    if (one.kind === 'dynamic') return one.live
+    if (one.kind === 'merged') return one.toggles !== undefined && one.live
+    return true
+}
+
+/**
+ * The bytes between the quotes a static attribute value is served as, or `undefined` for a URL
+ * 32.20 refuses.
+ *
+ * Which is also what a BUILT row decodes (`decodeCharacterReferences`), so the two cannot read one
+ * value two ways. 32.27 rewrites only the `"`, which would end the attribute: the value is the
+ * author's own source and never a place untrusted data arrives. 32.28 — AN ATTRIBUTE 32.20
+ * SCHEME-CHECKS KEEPS THE WHOLE REWRITE, and that one IS a boundary: `safeUrl` reads the bytes, and
+ * `&#106;avascript:` is not `javascript:` until a browser decodes the entity — so encoding the `&`
+ * is what stops the entity forming at all.
+ *
+ * `URL_ATTRIBUTES` is keyed by the FOLDED name: compared as written, `<a HREF={u}>` took the
+ * ordinary branch with no `safeUrl` around it. A LEAF OF NAMES RATHER THAN FOUR COMPARISONS, because
+ * four was not the set: `xlink:href` is how an `<a>` inside `<svg>` spells `href`, and `poster`,
+ * `cite`, `ping` and `object`'s `data` are URL-valued by the same HTML rule. The check is name-keyed
+ * and tag-blind, which is what makes an inert extra safe, and `srcset` stays OUT because its value is
+ * a LIST with descriptors, which the scheme scan would read as one URL and drop whole. `srcdoc` is
+ * markup rather than a URL and is guarded by the escaping instead.
+ */
+function staticBytes(lowerName: string, value: string): string | undefined {
+    if (!URL_ATTRIBUTES.has(lowerName)) return escapeQuote(value)
+    return safeUrl(value) === value ? escapeAttribute(value) : undefined
+}
+
+/**
+ * One `class` or `style` merge group on an element: the plain attribute and its directives.
+ *
+ * 32.10, 32.19 — EVERY `style:prop` ON ONE ELEMENT IS ONE `style` ATTRIBUTE, and every
+ * `class:name` is ONE `class`. Written apart they are two attributes of the same name on one tag,
+ * and a browser keeps the first: the second is dropped in silence, by the markup rather than by
+ * anything the compiler said.
+ *
+ * THE AUTHOR'S OWN PLAIN `style=` OR `class=` IS A MEMBER OF THE GROUP, not an attribute beside
+ * it. `isStyleProperty` answers only for the prefix, so `<div style="color: red"
+ * style:width={w}>` wrote TWO `style=` attributes and a browser kept the first — the reactive
+ * declaration dropped in silence, which is the loss the merge exists to stop, arriving by the one
+ * spelling it did not cover.
+ */
+export type MergeGroup = {
+    /** The attribute the group is written under. */
+    name: 'class' | 'style'
+    /** Every attribute the group swallows, the plain one included. */
+    members: Set<Attribute>
+    plain: Attribute | undefined
+    directives: Attribute[]
+}
+
+// TWO GROUPS, ONE FRAME. What differs between them is the value alone, so the finding and the
+// ordering are written once and each way of making an element renders the value its own way.
+const MERGED = [
+    { name: 'style', is: isStyleProperty },
+    { name: 'class', is: isClassToggle },
+] as const
+
+/** The element's `style` and `class` merge groups, each only where it has a directive. */
+function mergeGroupsOf(node: TemplateNode & { kind: 'element' }): MergeGroup[] {
+    const groups: MergeGroup[] = []
+    for (const kind of MERGED) {
+        const directives = node.attributes.filter(kind.is)
+        if (directives.length === 0) continue
+        const plain = attributeOf(node, kind.name)
+        groups.push({
+            name: kind.name,
+            members: new Set(
+                plain === undefined ? directives : [plain, ...directives],
+            ),
+            plain,
+            directives,
+        })
+    }
+    return groups
+}
+
+/** An element's attribute by its folded name, or `undefined`. */
+export function attributeOf(
+    node: TemplateNode & { kind: 'element' },
+    name: string,
+): Attribute | undefined {
+    for (const attribute of node.attributes)
+        if (attribute.lowerName === name) return attribute
+    return undefined
+}
+
+/** An attribute's static value, or `undefined` where it is absent or an expression. */
+function staticAttribute(
+    node: TemplateNode & { kind: 'element' },
+    name: string,
+): string | undefined {
+    const attribute = attributeOf(node, name)
+    return attribute === undefined || attribute.expression
+        ? undefined
+        : attribute.value
 }
 
 /**
@@ -170,9 +342,15 @@ export function isSlot(node: TemplateNode): boolean {
 export function holdsSlot(nodes: TemplateNode[]): boolean {
     for (const node of nodes) {
         if (isSlot(node)) return true
-        for (const children of childListsOf(node))
-            if (holdsSlot(children)) return true
+        for (const body of bodiesOf(node))
+            if (holdsSlot(body.children)) return true
     }
+    return false
+}
+
+/** Whether a block's row, or any of its arms, carries a branch-local `<script>` (14.8). */
+export function holdsSetup(node: TemplateNode): boolean {
+    for (const body of bodiesOf(node)) if (body.setup !== null) return true
     return false
 }
 
@@ -183,7 +361,7 @@ export function holdsSlot(nodes: TemplateNode[]): boolean {
  * node over. The server declining to write it and the client binding it are one predicate
  * answering twice.
  */
-export function isElementBind(lowerName: string): boolean {
+function isElementBind(lowerName: string): boolean {
     return lowerName === 'bind:element'
 }
 
@@ -193,10 +371,10 @@ export function isElementBind(lowerName: string): boolean {
  * 32.5, 32.7, 32.8 — both emitters ask: the server writes the value into the tag and the client
  * binds the property.
  */
-export type ValueBind = 'value' | 'checked' | 'open' | 'group'
+type ValueBind = 'value' | 'checked' | 'open' | 'group'
 
 /** The value bind a folded attribute name is, or `undefined` for any other attribute. */
-export function valueBindOf(lowerName: string): ValueBind | undefined {
+function valueBindOf(lowerName: string): ValueBind | undefined {
     if (lowerName === 'bind:value') return 'value'
     if (lowerName === 'bind:checked') return 'checked'
     if (lowerName === 'bind:open') return 'open'
@@ -216,7 +394,7 @@ export function valueBindOf(lowerName: string): ValueBind | undefined {
  * A BARE `style:` OR `class:` IS NOT ONE — the prefix with nothing after it names no property and
  * no class, so it stays an ordinary attribute and renders as the author wrote it.
  */
-export function isStyleProperty(attribute: Attribute): boolean {
+function isStyleProperty(attribute: Attribute): boolean {
     return (
         attribute.lowerName.length > 6 &&
         attribute.lowerName.startsWith('style:')
@@ -224,49 +402,11 @@ export function isStyleProperty(attribute: Attribute): boolean {
 }
 
 /** Whether an attribute is a `class:name` directive, toggling ONE class — see `isStyleProperty`. */
-export function isClassToggle(attribute: Attribute): boolean {
+function isClassToggle(attribute: Attribute): boolean {
     return (
         attribute.lowerName.length > 6 &&
         attribute.lowerName.startsWith('class:')
     )
-}
-
-/**
- * Which of the three writes an attribute's value goes to, and under what name.
- *
- * See `AttributeBinding`. One function rather than the two predicates plus a slice at each
- * emitter, because the prefix's length and the predicate that found it are the same fact twice.
- */
-function writeOf(attribute: Attribute): AttributeBinding {
-    if (isStyleProperty(attribute))
-        return {
-            attribute,
-            write: 'style',
-            name: attribute.name.slice('style:'.length),
-        }
-    if (isClassToggle(attribute))
-        return {
-            attribute,
-            write: 'class',
-            name: attribute.name.slice('class:'.length),
-        }
-    return { attribute, write: 'attribute', name: attribute.name }
-}
-
-/**
- * Whether an attribute is the plain `class` or `style` the server MERGED a directive group into.
- *
- * The one attribute on an element 32.3 does not move. See where it is asked.
- */
-function isMergedPlain(
-    node: TemplateNode & { kind: 'element' },
-    attribute: Attribute,
-): boolean {
-    if (attribute.lowerName === 'style')
-        return node.attributes.some(isStyleProperty)
-    if (attribute.lowerName === 'class')
-        return node.attributes.some(isClassToggle)
-    return false
 }
 
 /**
@@ -338,9 +478,7 @@ export function propKeyOf(attribute: Attribute): string | undefined {
  * 32.11 — each attribute as the tag carries it, `class:` and `style:` folded into the one attribute
  * they merge into and a bind into the property's own name.
  */
-export function explicitNames(
-    node: TemplateNode & { kind: 'element' },
-): string[] {
+function explicitNames(node: TemplateNode & { kind: 'element' }): string[] {
     const names: string[] = []
     for (const attribute of node.attributes) {
         if (attribute.name === '...') continue

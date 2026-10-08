@@ -25,7 +25,9 @@ That is worth insisting on. The alternative is a class of bug that exists in onl
 a value that hydrates in dev and not in prod, an import that resolves under the watcher and not
 in the bundle. Those are the expensive ones.
 
-`--port` overrides `PORT`. Everything else is `config()`.
+`--port` overrides `PORT`. With neither, the server takes the first free port from 3000 through
+3099, and prints the one it took. A port you name is the port, and the command fails if it is in
+use. Everything else is `config()`.
 
 Read on: [Config](../app/configure-the-app.md) ·
 [Build & start](build-and-serve-the-app.md)

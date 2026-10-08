@@ -12,7 +12,7 @@
 // function answers the question that is stable; `allocated()` answers the other one
 // and is tagged so it cannot be gated on.
 
-import { fullGC, heapStats } from 'bun:jsc'
+import { countsMoved, liveCounts } from './liveCounts.ts'
 
 // The keep-alive. What the body handed back stays reachable across the `after` read,
 // so the diff is what the op RETAINS rather than what the optimiser let survive.
@@ -30,33 +30,12 @@ const ROOTS: unknown[] = []
  * rather than a filter.
  */
 export function retained(body: () => unknown): Record<string, number> {
-    // happy-dom's own implementation objects land in the same untyped `Object` bucket
-    // as the framework's, so a total taken in a preloaded process is worthless for
-    // any op that touches the DOM. `bunfig.toml` preloads a DOM into every `bun test`
-    // process, so the allocation gates get their own preload-free invocation and this
-    // converts the silent contamination into a failure.
-    if (typeof document !== 'undefined')
-        throw new Error(
-            'retained() ran in a process with a DOM. happy-dom buckets as `Object` exactly where the framework does, so the totals would move with the emulator. Run the allocation gates in a preload-free process.',
-        )
-
-    fullGC()
-    const before = heapStats().objectTypeCounts as Record<string, number>
+    const before = liveCounts('retained')
     // ROOTED, not held in a local. A block-scoped local is what JSC's liveness
     // analysis collected before the `after` read on run 3 of 6; a write to a
     // module-level binding is an observable effect and cannot be reasoned away.
     ROOTS.push(body())
-    fullGC()
-    const after = heapStats().objectTypeCounts as Record<string, number>
+    const after = liveCounts('retained')
     ROOTS.length = 0
-
-    const diff: Record<string, number> = {}
-    for (const type of new Set([
-        ...Object.keys(before),
-        ...Object.keys(after),
-    ])) {
-        const moved = (after[type] ?? 0) - (before[type] ?? 0)
-        if (moved !== 0) diff[type] = moved
-    }
-    return diff
+    return countsMoved(before, after, 1)
 }

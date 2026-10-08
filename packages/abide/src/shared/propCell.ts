@@ -7,6 +7,7 @@
 // ONLY A WRITTEN PROP PAYS FOR ONE. A prop the child only reads stays the caller's accessor, so a
 // row component reading ten props builds no `reactive` at all.
 
+import { CHILDREN } from './CHILDREN.ts'
 import { reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 
@@ -46,6 +47,37 @@ export function withoutKeys(
     for (const key in record)
         if (!keys.includes(key)) rest[key] = record[key] as Accessor
     return rest
+}
+
+// One view per rest record: a component hands its rest on at every read of a prop spread from it.
+const REST_VALUES = new WeakMap<
+    Record<string, Accessor>,
+    Record<string, unknown>
+>()
+
+/**
+ * 33.22 — a `props` rest element handed on whole: each key a getter calling its accessor, so
+ * whatever enumerates it — a `{...rest}`, a function it is passed to — reads values, live.
+ *
+ * 33.25 — `children` LEFT OUT. Every caller's record carries it (33.16), and spread onto an element
+ * it rendered the caller's content a second time, as an attribute, outside the slot it is for.
+ */
+export function restValues(
+    record: Record<string, Accessor>,
+): Record<string, unknown> {
+    let values = REST_VALUES.get(record)
+    if (values === undefined) {
+        values = {}
+        for (const key in record) {
+            if (key === CHILDREN) continue
+            Object.defineProperty(values, key, {
+                enumerable: true,
+                get: () => (record[key] as Accessor)(),
+            })
+        }
+        REST_VALUES.set(record, values)
+    }
+    return values
 }
 
 /**

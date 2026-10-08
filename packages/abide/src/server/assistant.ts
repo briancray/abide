@@ -10,11 +10,8 @@
 // another request's scope — `claudeCode` answers one from the bridge's — and the call is still this
 // asker's.
 
-import { MCP_ADDRESS } from '#shared/ADDRESSES.ts'
-import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
-import { appIdentity } from './config.ts'
-import { MCP_PROTOCOL_VERSION } from './MCP_PROTOCOL_VERSION.ts'
+import { type McpReply, McpSurface } from './generatedSurfaces.ts'
 import { request, within } from './requestScope.ts'
 
 /** One turn of the transcript a caller sends. */
@@ -75,18 +72,18 @@ export async function* assistant(
             400,
             'The transcript has to end on a user turn for the assistant to answer it. RULEBOOK 45.3.',
         )
-    const tools = options.mcp === true ? await appTools() : NO_TOOLS
+    const tools = toolboxOver(
+        options.mcp === true ? appSurface() : NO_SURFACE,
+        askerOf(request()),
+    )
     yield* provider.run(messages, tools, {
         maxTurns: options.maxTurns ?? MAX_TURNS,
         signal: request().signal,
     })
 }
 
-/** An MCP request answered as JSON-RPC's `result` or `error`, without the envelope. */
-type McpForward = (
-    method: string,
-    params: unknown,
-) => Promise<Record<string, unknown>>
+/** Where an MCP request is answered, as JSON-RPC's `result` or `error`. */
+type McpForward = (method: string, params: unknown) => Promise<McpReply>
 
 // WHAT A `Toolbox` FORWARDS AN MCP REQUEST TO, for a provider that speaks MCP itself (`claudeCode`):
 // the app's own surface, verbatim, rather than a second server rebuilt over `list` and `call`. Beside
@@ -103,95 +100,47 @@ export function forwardOf(tools: Toolbox): McpForward {
     return forward
 }
 
-const NO_TOOLS: Toolbox = {
-    list: [],
-    call: async (name) => ({ text: `No tool named ${name}.`, failed: true }),
-}
-// Without `mcp` there is no surface to forward to, so this is one with nothing on it.
-FORWARDS.set(NO_TOOLS, async (method) => {
-    if (method === 'initialize')
-        return {
-            result: {
-                protocolVersion: MCP_PROTOCOL_VERSION,
-                capabilities: { tools: {} },
-                serverInfo: appIdentity(),
-            },
-        }
-    if (method === 'ping') return { result: {} }
-    if (method === 'tools/list') return { result: { tools: [] } }
-    return { error: { code: -32601, message: `No method ${method}.` } }
-})
+// Without `mcp` there is no surface to forward to, so this is the protocol over nothing — and
+// nothing is published, so nothing is ever called.
+const NO_SURFACE = new McpSurface(
+    new Map(),
+    async () => new Response(null, { status: 404 }),
+)
 
-type McpContent = { type: string; text?: string }
-
-/** The text of an MCP content list. */
-function textOf(content: McpContent[] | undefined): string {
-    let text = ''
-    for (const part of content ?? [])
-        if (part.text !== undefined) text += part.text
-    return text
-}
-
-/** The app's MCP surface as a `Toolbox`, bound to this request's app and asker. 45.6, 45.7. */
-async function appTools(): Promise<Toolbox> {
+/** The MCP surface of the app answering this request. 45.6, 45.8. */
+function appSurface(): McpSurface {
     // 42.12 — the app answering this request, captured: a later call may come from another's scope.
-    const answer = within('assistant').answer
-    if (answer === undefined)
+    const app = within('assistant').app
+    if (app === undefined)
         throw new Error(
             'abide: assistant tools are the app’s MCP surface, and no app is answering this request. RULEBOOK 45.6.',
         )
-    const asked = request()
-    const url = new URL(mounted(MCP_ADDRESS), asked.url).href
-    const carried: Record<string, string> = {
-        'content-type': 'application/json',
-    }
+    // 45.8, 20.7 — asking for tools over a closed surface is a mistake to name.
+    if (!app.mcp.opened)
+        throw new Error(
+            'abide: assistant was asked for tools, and ABIDE_MCP has not opened the MCP surface. RULEBOOK 45.8.',
+        )
+    return app.mcp
+}
+
+/** The asking request as a tool call is made: its credentials, and nothing else of it. 45.7. */
+function askerOf(asked: Request): Request {
+    const carried: Record<string, string> = {}
     for (const name of CARRIED_HEADERS) {
         const value = asked.headers.get(name)
         if (value !== null) carried[name] = value
     }
-    const forward: McpForward = async (method, params) => {
-        const answered = await answer(
-            new Request(url, {
-                method: 'POST',
-                headers: carried,
-                body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-            }),
-        )
-        // 45.8, 20.7 — a closed surface is a 404, and asking for tools over one is a mistake to name.
-        if (answered.status === 404)
-            throw new Error(
-                'abide: assistant was asked for tools, and ABIDE_MCP has not opened the MCP surface. RULEBOOK 45.8.',
-            )
-        const reply = (await answered.json().catch(() => undefined)) as
-            | { result?: unknown; error?: { message: string } }
-            | undefined
-        if (reply?.result === undefined && reply?.error === undefined)
-            throw new Error(`the MCP endpoint answered ${answered.status}`)
-        return { result: reply.result, error: reply.error }
-    }
-    const callMcp = async (
-        method: string,
-        params: Record<string, unknown>,
-    ): Promise<Record<string, unknown>> => {
-        const { result, error } = await forward(method, params)
-        if (result === undefined)
-            throw new Error((error as { message: string }).message)
-        return result as Record<string, unknown>
-    }
-    const list = (await callMcp('tools/list', {})).tools as ToolDefinition[]
+    return new Request(asked.url, { headers: carried })
+}
+
+/** `surface` as a `Toolbox`, every call made as `asker`. 45.6, 45.7. */
+function toolboxOver(surface: McpSurface, asker: Request): Toolbox {
     const tools: Toolbox = {
-        list,
+        list: surface.list(),
         async call(name, input) {
             // A refusal or a missing tool is a failed result the model reads, never a thrown one.
             try {
-                const result = await callMcp('tools/call', {
-                    name,
-                    arguments: input,
-                })
-                return {
-                    text: textOf(result.content as McpContent[]),
-                    failed: result.isError === true,
-                }
+                return await surface.call(name, input, asker)
             } catch (thrown) {
                 return {
                     text:
@@ -203,6 +152,12 @@ async function appTools(): Promise<Toolbox> {
             }
         },
     }
-    FORWARDS.set(tools, forward)
+    FORWARDS.set(tools, (method, params) =>
+        surface.answer(
+            method,
+            params as Record<string, unknown> | undefined,
+            asker,
+        ),
+    )
     return tools
 }
