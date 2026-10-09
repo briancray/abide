@@ -311,7 +311,8 @@ flight.
 
 7.7 `s.invalidate` MUST mark the held value stale.
 
-7.8 A load over a value marked stale MUST report `s.ready` false.
+7.8 A load over a value marked stale MUST report `s.ready` false, and a read over it MUST throw
+`NotLanded` until it lands.
 
 7.9 An accepted production MUST clear the stale mark.
 
@@ -503,7 +504,8 @@ delegation to whatever is currently adopted.
 
 11.16 On re-adoption a `reactive` MUST clear where the newly adopted `Reactive` has nothing to serve.
 
-11.17 Adoption MUST inherit the adopted `Reactive`'s `identity` where the outer declared none.
+11.17 Adoption MUST inherit the adopted `Reactive`'s `identity` where the outer declared none, for as
+long as it adopts it.
 
 11.18 A recompute landing on the same adopted `Reactive` MUST wake no reader.
 
@@ -629,6 +631,8 @@ declaration and never from what a write outside every request left.
 
 11.70 A `Keyed` entry whose load is in flight MUST NOT be evicted by its `ttl`, and its life MUST
 start again when the load ends.
+
+11.71 `s.set` MUST take only a `Reactive` whose `Failures` are this value's.
 
 # 12. Effects
 
@@ -825,8 +829,9 @@ from the shape.
 16.8 A mutation over a `Reactive` with no producer MUST publish into it, and declaring that handler
 MUST be the authorisation for it.
 
-16.9 `Failures` on an `Rpc` MUST be the union of what the handler declared and what its rungs
-declared.
+16.9 `Failures` on an `Rpc` MUST be the union of what the handler declared, what its rungs
+declared, and the undeclared `Failed` named `HttpError` per 17.4, with no data, which the transport
+may answer any call with.
 
 16.10 `rpc.url` MUST take the `Args` on a `GET` or a `DELETE`, and MUST take none on a mutation.
 
@@ -841,7 +846,7 @@ on every call.
 16.14 The `Origin` gate on a mutation, `maxBodySize`, the `crossOrigin` preflight, the framing, the
 `cache-control`, a status written through `response` and the seed buffer write MUST be wire-only.
 
-16.15 The `Middleware` onion MUST be composed once at route-table construction, and MUST NOT be folded per call.
+16.15 `Middleware` rungs MUST be composed once at route-table construction, and MUST NOT be folded per call.
 
 16.16 A composed `Middleware` chain MUST capture the rung and the next link, and MUST NOT capture anything
 per-request.
@@ -914,7 +919,8 @@ the handler and the path to it.
 
 16.43 `rpc.raw` MUST issue the call the `Rpc` issues, differing only in handing back the
 `Response`. On a server it MUST be answered in process by the `App` answering the request it is made
-in, and by the `App` built last only outside every request.
+in, and by the `App` built last only outside every request, until that `App` stops, after which
+such a call MUST NOT reach it.
 
 16.44 An `Rpc` call MUST evaluate its `Args` at the call, and MUST NOT re-evaluate them.
 
@@ -950,7 +956,8 @@ MUST refuse with `aborted` at status 499, and MUST abort the request carrying it
 
 16.55 A `HEAD` MUST NOT take from the seed buffer.
 
-16.56 An `Rpc` answered 204 MUST NOT carry `content-type`.
+16.56 An `Rpc` answer with no body — a 204, or a status `response` writes with nothing returned, a
+`redirect` included — MUST NOT carry `content-type`.
 
 16.57 The 303 16.39 answers MUST go to the mount's root where the referrer is absent or is not of
 `APP_URL`'s origin, per 36.2.
@@ -1106,7 +1113,7 @@ naming both files that declared a `GET` or a `socket` there.
 19.4 An implementation MUST NOT accept a predicate as a `Schema`.
 
 19.5 The plain-function `Schema` form MUST throw what it refuses, and that throw MUST be caught where
-the schema runs and become the `''` entry of `Issues<T>`.
+the schema runs and become the `''` entry of `Issues<T>`, or the whole of it per 19.22.
 
 19.6 `Paths<T>` MUST be dot-joined, MUST be depth-limited, and MUST widen to `string` past the limit.
 
@@ -1153,12 +1160,15 @@ that path with one, by path alone.
 19.21 A `Schema` derived per 19.10 MUST refuse a member its type does not declare, wherever the type
 carries no index signature.
 
+19.22 An `Issues<T>` over a value that is not an object MUST be the bare list of messages, not a
+record keyed by `''`.
+
 # 20. Generated surfaces
 
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored
 beside it.
 
-20.2 Every key of `Clients` MUST default to true.
+20.2 Every key of `Clients` MUST default to true, but where 16.38 defaults it to false.
 
 20.3 `Clients` MUST decide what is generated and listed, and MUST NOT decide who may call.
 
@@ -1374,6 +1384,12 @@ naming the byte count.
 
 26.23 Where a browser's load of the `principal` document is refused, `principal` MUST report an
 unauthenticated caller carrying that refusal as `principal.error`.
+
+26.24 Where a handler's `principal.set` or `principal.clear` ran, its answer MUST say so in an
+`abide-principal` header, and a browser that reads `principal` MUST reload the document on it,
+serving the one it holds until the new one lands per 7.4.
+
+26.25 `Principal` MUST admit a field an app declares on it, of any type.
 
 # 27. Configuration
 
@@ -1616,8 +1632,8 @@ string.
 32.14 `{#for}` without a key over a stateful body and a subject that reads a `Reactive` or calls a
 function MUST warn in development.
 
-32.15 `{#for}` over an async iterable MUST render each item as it arrives, and MUST append rather
-than reconcile.
+32.15 `{#for}` over an async iterable that is not also iterable MUST render each item as it
+arrives, and MUST append rather than reconcile.
 
 32.16 `{#try}` MUST be a render-time boundary over a region, and a failure MUST replace the whole
 body.
@@ -1860,6 +1876,9 @@ the props it passes.
 
 34.15 A `.abide` file a `<script>` or a `<script module>` names in an `import()` MUST resolve to the
 module that file compiles to, as a static import of it does.
+
+34.16 A `.abide` file a server module imports MUST resolve to a function that binds its props and
+answers a `Component`, under `abide dev`, `abide start` and `abide compile` alike.
 
 # 35. Pages, rendering and sinks
 
@@ -2350,7 +2369,7 @@ adopts the page, however early its answer arrived.
 
 # 42. The app object
 
-42.1 `createApp` MUST build the route table and compose every onion, per 16.15.
+42.1 `createApp` MUST build the route table and compose every `Middleware` rung, per 16.15.
 
 42.2 `createApp` MUST read `config` where it builds the app, and MUST NOT leave that read to the
 first request.
@@ -2373,8 +2392,8 @@ and 22.8 throw in.
 
 42.10 `App.stop` MUST stop accepting and drain what is in flight before `onStop` runs.
 
-42.11 `App.stop` MUST end every live stream, close every open socket, and clear every timer the app
-holds.
+42.11 `App.stop` MUST end every stream it is still answering, close every open socket, and drop every
+seed entry its renders left, with its timer.
 
 42.12 A second `App` in one process MUST share the first's socket-carried values, `config` and `global`
 entries, per 9.16, 27.9 and 11.34.

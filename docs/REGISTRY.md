@@ -58,28 +58,30 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `Shaped` | `unknown` | What a `transform` hands back: the value to store, or a refusal. | 4.6, 4.9 |
 | `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.2, 9.7 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.9, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.65, 19.17 |
-| `reactive` | `<Computed, Shaped = Awaited<Computed>>(body: () => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never> & { transform?: (value: Awaited<Computed>) => Shaped }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The unkeyed body overload. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.51, 11.52, 11.53, 11.54, 11.55, 11.58, 11.59, 41.6, 11.63, 11.64, 11.66, 11.67, 12.14 |
-| `reactive` | `<Chunk, Shaped = Chunk[]>(body: () => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never> & { transform?: (value: Chunk[]) => Shaped }) => Reactive<Kept<Shaped>, Chunk[], Refused<Shaped>, Chunk>` | The streaming body overload. | 3.7, 3.8, 4.8, 9.2, 9.3, 9.20, 9.21, 9.22, 9.23 |
-| `reactive` | `<Chunk, Args, Shaped = Chunk[]>(body: (args: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never, Args> & { transform?: (value: Chunk[]) => Shaped }) => Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped>, Chunk>` | The keyed streaming body overload. | 9.20, 9.23 |
-| `reactive` | `<Chunk, Args, Shaped = Chunk[]>(body: (args?: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: ReactiveOptions<Chunk[], Kept<Shaped>, never, Args \| undefined> & { transform?: (value: Chunk[]) => Shaped }) => Keyed<Kept<Shaped>, Args \| undefined, Chunk[], Refused<Shaped>, Chunk>` | The keyed streaming overload for a body whose parameter is optional. | 11.2 |
-| `reactive` | `<Computed, Args, Shaped = Awaited<Computed>>(body: (args: Args) => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args> & { transform?: (value: Awaited<Computed>) => Shaped }) => Keyed<Kept<Shaped>, Args, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed body overload. | 11.2, 11.3, 11.4, 11.6, 11.7, 11.23, 11.56, 11.63 |
-| `reactive` | `<Computed, Args, Shaped = Awaited<Computed>>(body: (args?: Args) => Computed, options?: ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args \| undefined> & { transform?: (value: Awaited<Computed>) => Shaped }) => Keyed<Kept<Shaped>, Args \| undefined, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed overload for a body whose parameter is optional. | 11.2 |
-| `reactive` | `<Accepted, Shaped = Accepted>(initial: Accepted \| Promise<Accepted>, options?: ReactiveOptions<Accepted, Kept<Shaped>, never> & { transform?: (value: Accepted) => Shaped }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped>>` | The value overload, for what the scope owns outright. | 4.1, 4.2, 4.14, 4.15, 4.16 |
-| `reactive` | `<Accepted = undefined, Shaped = Accepted>(initial: undefined, options?: ReactiveOptions<Accepted, Kept<Shaped>, never> & { transform?: (value: Accepted) => Shaped }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped>>` | The undefined overload, for a value opening at `undefined`. | 4.15, 4.16 |
+| `reactive` | `<Computed, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>>(body: () => Computed, options?: Omit<ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never>, 'schema'> & { transform?: (value: Awaited<Computed>) => Shaped; schema?: Gate & Schema<Awaited<Computed>> }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>>, AdoptedProduced<Computed, Kept<Shaped>>>` | The unkeyed body overload. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.51, 11.52, 11.53, 11.54, 11.55, 11.58, 11.59, 41.6, 11.63, 11.64, 11.66, 11.67, 12.14 |
+| `reactive` | `<Chunk, Shaped = Chunk[], Gate = Schema<Chunk[]>>(body: () => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Omit<ReactiveOptions<Chunk[], Kept<Shaped>, never>, 'schema'> & { transform?: (value: Chunk[]) => Shaped; schema?: Gate & Schema<Chunk[]> }) => Reactive<Kept<Shaped>, Chunk[], Refused<Shaped> \| Gated<Gate, Chunk[]>, Chunk>` | The streaming body overload. | 3.7, 3.8, 4.8, 9.2, 9.3, 9.20, 9.21, 9.22, 9.23 |
+| `reactive` | `<Chunk, Args, Shaped = Chunk[], Gate = Schema<Chunk[]>, ArgsGate = Schema<Args>>(body: (args: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Omit<ReactiveOptions<Chunk[], Kept<Shaped>, never, Args>, 'schema' \| 'args'> & { transform?: (value: Chunk[]) => Shaped; schema?: Gate & Schema<Chunk[]>; args?: ArgsGate & Schema<Args> }) => Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped> \| Gated<Gate, Chunk[]> \| Gated<ArgsGate, Args>, Chunk>` | The keyed streaming body overload. | 9.20, 9.23 |
+| `reactive` | `<Chunk, Args, Shaped = Chunk[], Gate = Schema<Chunk[]>, ArgsGate = Schema<Args \| undefined>>(body: (args?: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Omit<ReactiveOptions<Chunk[], Kept<Shaped>, never, Args \| undefined>, 'schema' \| 'args'> & { transform?: (value: Chunk[]) => Shaped; schema?: Gate & Schema<Chunk[]>; args?: ArgsGate & Schema<Args \| undefined> }) => Keyed<Kept<Shaped>, Args \| undefined, Chunk[], Refused<Shaped> \| Gated<Gate, Chunk[]> \| Gated<ArgsGate, Args \| undefined>, Chunk>` | The keyed streaming overload for a body whose parameter is optional. | 11.2 |
+| `reactive` | `<Computed, Args, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>, ArgsGate = Schema<Args>>(body: (args: Args) => Computed, options?: Omit<ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args>, 'schema' \| 'args'> & { transform?: (value: Awaited<Computed>) => Shaped; schema?: Gate & Schema<Awaited<Computed>>; args?: ArgsGate & Schema<Args> }) => Keyed<Kept<Shaped>, Args, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>> \| Gated<ArgsGate, Args>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed body overload. | 11.2, 11.3, 11.4, 11.6, 11.7, 11.23, 11.56, 11.63 |
+| `reactive` | `<Computed, Args, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>, ArgsGate = Schema<Args \| undefined>>(body: (args?: Args) => Computed, options?: Omit<ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args \| undefined>, 'schema' \| 'args'> & { transform?: (value: Awaited<Computed>) => Shaped; schema?: Gate & Schema<Awaited<Computed>>; args?: ArgsGate & Schema<Args \| undefined> }) => Keyed<Kept<Shaped>, Args \| undefined, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>> \| Gated<ArgsGate, Args \| undefined>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed overload for a body whose parameter is optional. | 11.2 |
+| `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Accepted \| Promise<Accepted>, options?: Omit<ReactiveOptions<Accepted, Kept<Shaped>, never>, 'schema'> & { transform?: (value: Accepted) => Shaped; schema?: Gate & Schema<Accepted> }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped> \| Gated<Gate, Accepted>>` | The value overload, for what the scope owns outright. | 4.1, 4.2, 4.14, 4.15, 4.16 |
+| `reactive` | `<Accepted = undefined, Shaped = Accepted, Gate = Schema<Accepted>>(initial: undefined, options?: Omit<ReactiveOptions<Accepted, Kept<Shaped>, never>, 'schema'> & { transform?: (value: Accepted) => Shaped; schema?: Gate & Schema<Accepted> }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped> \| Gated<Gate, Accepted>>` | The undefined overload, for a value opening at `undefined`. | 4.15, 4.16 |
 | `reactive` | `<Accepted>() => Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty overload, for a value nothing has written yet. | 4.14 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
 | `Store` | `{ get: () => Stored \| undefined \| Promise<Stored \| undefined>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void> }` | Where a value lives when this process does not. | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19 |
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
 | `reactive.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create a reactive value in the component's scope by key. | 10.1, 10.2, 10.4, 10.5, 10.6, 10.7 |
 
-The aliases the overloads split a transform's return and a body's return through are declared
-rather than listed, none of them being a name an app writes:
+The aliases the overloads split a transform's return and a body's return through, and the one that
+adds a declared `schema`'s refusal, are declared rather than listed, none of them being a name an app
+writes:
 
 ```ts
 type Kept<Shaped> = Exclude<Shaped, Failed<string, unknown>>
 type Refused<Shaped> = Extract<Shaped, Failed<string, unknown>>
 type AdoptedFailures<T> = T extends Reactive<unknown, never, infer Failures, unknown> ? Failures : never
 type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown, infer Produced> ? Produced : Otherwise
+type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<'ValidationError', Issues<Accepted>>
 ```
 ### `ReactiveOptions`
 
@@ -106,7 +108,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `s` | `() => Stored` | Read the current value. | 2.1, 2.2, 2.3, 2.4, 2.10 |
 | `s.peek` | `() => Stored \| undefined` | Read what is held without joining the flow. | 2.11, 2.12 |
-| `NotLanded` | `Error & { name: 'NotLanded'; source: object }` | What a read throws where nothing has landed yet. | 2.10, 2.13, 2.14, 2.15 |
+| `NotLanded` | `Error & { name: 'NotLanded'; source: object }` | What a read throws where nothing has landed yet. | 2.10, 2.13, 2.14, 2.15, 7.8 |
 | `History<Stored>` | `Iterable<Stored> & AsyncIterable<Stored>` | What `s.history` hands back. | — |
 | `s.history` | `(n?: number) => History<Stored>` | A cursor over the productions a value retains, replayed and then live. | 2.5, 2.6, 5.10, 6.3, 6.7, 6.19, 6.20, 6.21, 9.10, 9.15 |
 | `s.then` | `<Result>(onSettled?: (value: Stored) => Result \| PromiseLike<Result>, onFailed?: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Result>` | The settling, as a promise. | 1.4, 2.8, 2.9 |
@@ -119,7 +121,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `s.set` | `(value: Accepted \| Promise<Accepted> \| Reactive<Accepted>) => void \| Failures` | Write the current value here, gated by `identity`. | 3.6, 4.1, 4.2, 4.9, 4.13, 4.17, 5.6, 9.4, 9.9, 9.25, 9.26, 11.60, 11.62, 11.66, 11.67 |
+| `s.set` | `(value: Accepted \| Promise<Accepted> \| Reactive<Accepted, unknown, Failures, unknown>) => void \| Failures` | Write the current value here, gated by `identity`. | 3.6, 4.1, 4.2, 4.9, 4.13, 4.17, 5.6, 9.4, 9.9, 9.25, 9.26, 11.60, 11.62, 11.66, 11.67, 11.71 |
 | `s.publish` | `(value: Accepted \| Promise<Accepted>) => number \| Failures` | Mint a production whatever `identity` says, and send it to every subscriber. | 5.6, 9.1, 9.5, 9.6, 9.8, 9.12, 9.13, 9.14, 11.60 |
 | `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate in place and mint a production for it. | 5.7, 5.23, 9.27, 11.60, 18.26, 18.28, 32.33 |
 
@@ -129,7 +131,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `s.busy` | `() => boolean` | Work is in flight for this value. | 3.1, 3.2, 3.3, 3.4, 3.7, 3.9, 5.15, 7.5, 7.8, 11.19, 11.20, 11.21, 11.22, 11.51 |
 | `s.ready` | `() => boolean` | There is a value to serve. | 3.1, 3.2, 3.3, 3.5, 3.6, 3.8, 7.8, 9.14, 11.20, 11.55, 11.59 |
-| `s.error` | `() => unknown` | The standing refusal. | 3.1, 3.2, 3.3, 3.5, 4.10, 4.11, 4.12 |
+| `s.error` | `() => Failures \| undefined` | The standing refusal. | 3.1, 3.2, 3.3, 3.5, 4.10, 4.11, 4.12 |
 | `s.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. | 3.1 |
 
 ### Triggers
@@ -211,11 +213,11 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.26, 16.27, 16.28, 16.29, 16.30, 16.34, 16.44, 16.52, 16.53, 16.66, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27 |
+| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.9, 16.12, 16.26, 16.27, 16.28, 16.29, 16.30, 16.34, 16.44, 16.52, 16.53, 16.66, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.31 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.19, 19.17 |
-| `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of an onion. | 16.15, 16.16, 16.17, 16.22 |
+| `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of `middleware`. | 16.15, 16.16, 16.17, 16.22 |
 | `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced> \| ((args?: Args) => Value), options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.31, 16.32, 16.33, 16.35, 16.36, 16.37, 16.38, 16.40, 16.45, 16.46, 16.47, 16.48, 16.49, 16.50, 16.51, 16.54, 16.55, 16.56, 16.68, 18.17, 18.21, 18.23, 18.25, 18.27 |
 | `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. | 16.2, 16.7, 16.8, 16.33, 16.39, 16.57 |
 | `rpc.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to the handler's matching entries. | 13.2, 13.3, 13.12 |
@@ -235,7 +237,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `description` | `string` | The human description carried onto every generated surface. | 16.29 |
 | `middleware` | `Middleware<{ request: Request; args: () => Args }, Value \| Failures>[]` | The rungs run per call. | 16.12, 16.13, 16.17, 16.18, 16.19, 16.20, 16.21 |
 | `timeout` | `number` | How long the call may stay open, and the floor under the request's idle timeout. | 16.23, 16.24, 16.60, 16.61, 16.62, 16.63, 16.64, 16.65 |
-| `clients` | `Clients` | Which surfaces carry this handler. | 20.3 |
+| `clients` | `Clients` | Which surfaces carry this handler. | 16.38, 20.3 |
 | `crossOrigin` | `boolean \| string[]` | Whether other origins may call it. | 16.25, 21.19 |
 | `maxBodySize` | `number` | The largest request body a mutation will accept, in bytes. | 16.14, 16.58, 16.59 |
 
@@ -246,7 +248,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `Values<T>` | `Iterable<T> \| AsyncIterable<T> \| ReadableStream<T>` | What every body helper takes. | 17.1 |
 | `page` | `<Body extends string \| Uint8Array \| Values<Uint8Array \| string>>(body: Body) => Body` | A rendered document as `text/html`. | 17.2 |
 | `json` | `<T>(value: T) => T` | A value as JSON, fixed, with `undefined` sent as `null`. | 17.7, 17.9, 17.10 |
-| `redirect` | `(to: string, status?: RedirectStatus) => undefined` | A navigation. | 17.3 |
+| `redirect` | `(to: string, status?: RedirectStatus) => undefined` | A navigation. | 16.56, 17.3 |
 | `jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.45, 17.6, 17.7 |
 | `sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.46, 17.6, 17.7 |
 | `bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.35, 17.6, 17.7 |
@@ -267,7 +269,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `middleware` | `Middleware<SocketEvent, void>[]` | The rungs an upgrade and every frame pass. | 18.3, 18.4 |
-| `SocketEvent` | `{ kind: 'subscribe' \| 'publish'; args: Args; message?: Produced; request: Request }` | What the socket lane's onion carries. | 18.4, 18.31, 18.33, 22.10 |
+| `SocketEvent` | `{ kind: 'subscribe' \| 'publish'; args: Args; message?: Produced; request: Request }` | What a socket's `middleware` rung is handed. | 18.4, 18.31, 18.33, 22.10 |
 | `crossOrigin` | `boolean \| string[]` | Which origins may upgrade. | 18.5 |
 | `clientPublish` | `boolean` | Whether a frame from outside the process may publish. | 18.6, 18.7, 18.8 |
 | `clients` | `Clients` | Which surfaces carry this value. | 20.2, 20.3 |
@@ -288,7 +290,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | --- | --- | --- | --- |
 | `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. | 19.3, 19.4, 19.5, 19.7, 19.9, 19.10, 19.11, 19.21, 19.12, 19.13 |
 | `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. | — |
-| `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | — |
+| `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | 19.5, 19.22 |
 | `Paths<T>` | `string` | The dot-joined leaf paths of a type. | 19.6 |
 | `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.8, 19.15 |
 | `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.14, 19.15, 20.11 |
@@ -319,7 +321,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Clients` | `{ ui?: boolean; mcp?: boolean; cli?: boolean; openapi?: boolean }` | Which surfaces carry a handler. | 20.1, 20.2, 20.3, 20.4 |
-| `clients` | `Clients` | The option a handler withholds a surface with. | 20.3, 20.4 |
+| `clients` | `Clients` | The option a handler withholds a surface with. | 16.38, 20.3, 20.4 |
 
 ## OpenAPI
 
@@ -382,7 +384,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `response` | `() => { status: number; headers: Headers }` | The response being built for the request being served. | 16.14, 21.10, 22.1, 22.9, 22.10 |
+| `response` | `() => { status: number; headers: Headers }` | The response being built for the request being served. | 16.14, 16.56, 21.10, 22.1, 22.9, 22.10 |
 
 ## `route`
 
@@ -439,11 +441,11 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 | `principal.authenticated` | `Reactive<boolean>` | Whether this caller presented something the server accepted. | 26.1, 26.2 |
 | `principal.expiresAt` | `Reactive<string \| undefined>` | When the seal lapses. | 26.1, 26.2 |
 | `principal.error` | `Reactive<Failed<string, unknown> \| undefined>` | The app's resolver, or a browser's load of the document, having failed. | 26.1, 26.3, 26.23 |
-| `principal.resolved` | `Reactive<unknown>` | What `onPrincipal` returned, merged over the baseline. | 26.1, 26.4 |
+| `principal.resolved` | `Reactive<Principal>` | What `onPrincipal` returned, merged over the baseline. | 26.1, 26.4, 26.25 |
 | `principal.caller` | `Reactive<string>` | Which browser, as against who they are. | 22.10, 26.5, 26.6, 26.7, 26.19, 26.22 |
-| `principal.set` | `(claims: unknown) => Promise<void>` | Authenticates this caller. | 26.8, 26.12, 26.16, 26.17, 26.18, 26.20, 26.21 |
-| `principal.clear` | `() => void` | Signs this caller out. | 26.7, 26.9 |
-| `Principal` | `{ authenticated, expiresAt?, error?, …claims }` | The wire document. | 26.4, 26.10, 26.13, 26.14, 26.15 |
+| `principal.set` | `(claims: unknown) => Promise<void>` | Authenticates this caller. | 26.8, 26.12, 26.16, 26.17, 26.18, 26.20, 26.21, 26.24 |
+| `principal.clear` | `() => void` | Signs this caller out. | 26.7, 26.9, 26.24 |
+| `Principal` | `interface Principal { [claim: string]: unknown; authenticated: boolean; expiresAt?: string; error?: Failed<string, unknown> }` | The wire document. | 26.4, 26.10, 26.13, 26.14, 26.15, 26.25 |
 | `authenticated` | `boolean` | Whether this caller presented a seal the server accepted. | 26.10 |
 | `expiresAt` | `string \| undefined` | When the seal lapses. | 26.11 |
 | `error` | `Failed<string, unknown> \| undefined` | The app's resolver having failed. | 26.3 |
@@ -623,7 +625,7 @@ type AdoptedProduced<T, Otherwise> = T extends Reactive<unknown, never, unknown,
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 35.4 |
+| `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4 |
 | `render` | `(component: Component, shell?: Shell) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 35.11 |
 | `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.6, 19.19 |
 

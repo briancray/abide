@@ -320,7 +320,7 @@ three pages later.
   demonstrate it, name the API in one clause and point at the page that does — "`invoice.refresh()`
   reloads. See Loading states." Prose evidence is for costs, which makes them credible.
 * **Name the cost.** Every real trade gets said out loud — the seams are all-or-nothing, a
-  `GET` that writes is reachable cross-origin, `config()` throws in a browser. Naming costs is
+  `GET` that writes is reachable cross-origin, `config()` cannot be imported in a browser. Naming costs is
   what makes the claims believable.
 * **Stack concepts, never stack prerequisites.** A page introduces one new concept and depends
   only on concepts already introduced. `covers:` in the frontmatter is where a page declares
@@ -338,11 +338,11 @@ The full token set is `packages/dogfood/src/ui/app.css`; it is the source, not a
 
 | | |
 | --- | --- |
-| Ground | A deep green-black in dark, a cool paper in light. Calm and technical — never black-with-a-neon-accent — `--paper`, `--ink`, `--muted` |
-| Signal | Teal. Links, active nav, the BOTH-SIDES spine — `--signal` |
-| Headings | Terracotta. Warm against a cold palette, and deliberately NOT the amber below — `--heading` |
-| Amber | The SERVER side — the spine, and the response arrow beside it — `--warm` |
-| Blue | The BROWSER side, the same way — `--cool` |
+| Ground | A deep green-black in dark, a cool paper in light. Calm and technical — never black-with-a-neon-accent — `--color-paper`, `--color-ink`, `--color-muted` |
+| Signal | Teal. Links, active nav, the BOTH-SIDES spine — `--color-signal` |
+| Headings | Terracotta. Warm against a cold palette, and deliberately NOT the amber below — `--color-heading` |
+| Amber | The SERVER side — the spine, and the response arrow beside it — `--color-warm` |
+| Blue | The BROWSER side, the same way — `--color-cool` |
 | Type | Space Grotesk for headings, IBM Plex Sans for body, IBM Plex Mono for code, captions and status |
 
 A snippet renders in a 44rem column at 12px mono — about 81 characters before it scrolls. Past
@@ -372,9 +372,9 @@ code on screen, with nothing standing in for either half. Files is what a reader
 The thing an example is for is the thing that runs, and a reader who has to find a tab before
 seeing one has been handed source to read instead of something to try.
 
-A stub marker takes `--muted`. It marks an ABSENCE, so it takes the ground's own recessive tone
-rather than a reserved colour, and it goes when the framework is written — which is why it has no
-row here to inherit.
+A stub marker takes `--color-muted`. It marks an ABSENCE, so it takes the ground's own recessive
+tone rather than a reserved colour, and it goes when the framework is written — which is why it has
+no row here to inherit.
 
 **The signature is the code-block spine.** Every snippet of SOURCE carries a colored edge and a
 caption. THE EDGE IS THE SIDE AND THE CAPTION IS THE SYNTAX, and they are two facts rather than

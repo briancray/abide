@@ -22,7 +22,7 @@
         "e2e:failed": "playwright test --last-failed",
         "verify": "bun run lint && bun run typecheck && bun run test",
         "bench": "bun packages/harness/scripts/bench.ts",
-        "test:gates": "HARNESS_VERIFY_GATES=1 bun test packages/abide packages/harness/tests packages/dogfood/tests",
+        "test:gates": "bun run build && HARNESS_VERIFY_GATES=1 bun test packages/abide packages/harness/tests packages/dogfood/tests",
         "bench:reactive": "bun packages/harness/scripts/benchReactive.ts",
         "bench:compiler": "bun packages/harness/scripts/benchCompiler.ts",
         "bench:component": "bun packages/harness/scripts/benchComponent.ts",
