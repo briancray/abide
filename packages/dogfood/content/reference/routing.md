@@ -7,6 +7,8 @@ enumerates:
   - Mount paths
   - render
   - Sinks
+examples:
+  - packages/dogfood/examples/render-preview.json
 ---
 
 Every address an abide app answers on comes from a **file path**. A page is a `page.abide`
@@ -59,7 +61,7 @@ error naming both files rather than whichever won at the first request.
 ### Parameters
 
 * `component` — a `Component`, which is a component **already bound to its props**:
-  `Invoice({ invoice })`, not `Invoice` and a props object beside it.
+  `Document({ invoice })`, not `Document` and a props object beside it.
 * `shell` (optional) — a `Shell`. A `string` is a document inline, a `URL` is one to read, and
   omitting it uses `src/ui/app.html`.
 
@@ -116,11 +118,7 @@ const { id, tab = 'summary' } = route.params
 
 ### A document rendered outside the page pipeline
 
-```ts #server/rpc/previews.ts — excerpt
-export const previewInvoice = GET(async ({ id }: { id: string }) =>
-    page(await render(Invoice({ invoice: await database.invoice.find(id) }))),
-)
-```
+{% snippet render-preview src/server/rpc/renderPreviewInvoices.ts export const previewInvoice %}
 
 ## See also
 

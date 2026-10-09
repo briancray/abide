@@ -22,7 +22,7 @@ const BY_REGION: Record<string, Row[]> = {
     south: [{ name: 'week 1', total: '$2,140.00' }],
 }
 
-export const database = {
+export const timeoutPerChunkDatabase = {
     sales: {
         async *stream(region: string): AsyncGenerator<Row> {
             for (const row of BY_REGION[region] ?? []) yield row

@@ -8,7 +8,7 @@
 const SETTINGS = new Map<string, string>()
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const storeRestoreDatabase = {
     settings: {
         async read(name: string): Promise<string | null> {
             await Bun.sleep(450)

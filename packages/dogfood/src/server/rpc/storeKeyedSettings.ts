@@ -1,4 +1,6 @@
 import { GET } from 'abide/server'
-import { settings } from '#server/cache'
+import { storeKeyedCache } from '#server/storeKeyedCache'
 
-export const getSettings = GET(settings)
+export const getSettings = GET(storeKeyedCache, {
+    description: 'The settings of a profile.',
+})

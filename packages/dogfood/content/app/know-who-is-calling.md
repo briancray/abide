@@ -20,6 +20,8 @@ covers:
   - `ABIDE_PRINCIPAL_TTL`
 examples:
   - packages/dogfood/examples/principal-session.json
+  - packages/dogfood/examples/principal-resolve.json
+  - packages/dogfood/examples/cookies-density.json
 ---
 
 abide does not know how you authenticate somebody. It knows what to do **after** you have: seal
@@ -37,6 +39,10 @@ and a reader list, because the header the form never names has to be told.
 `ABIDE_PRINCIPAL_SECRET` into an `HttpOnly` cookie living `ABIDE_PRINCIPAL_TTL`, and
 `principal.clear()` signs them out. What you put in is yours — an id, a tenant, a role — and
 abide's part is that it comes back unforged.
+
+Both run in a handler, because the cookie is written on the answer. The answer also tells the
+browser the principal moved, and the browser loads the document again under the new cookie — so
+the header above the form reads the new name when `signIn` returns, with nothing passed to it.
 
 ## The five reads
 
@@ -59,18 +65,12 @@ prevent.
 
 ## `onPrincipal` turns claims into your app's user
 
-```ts #server/app.ts — excerpt
-import { onPrincipal } from 'abide'
+{% example principal-resolve %}
 
-onPrincipal(async (claims) => {
-    const user = await database.users.find(claims.id)
-    return { name: user.name, role: user.role }
-})
-```
-
-What it returns is merged over the baseline and read as `principal.resolved`. So the cookie
+What it returns is merged under the baseline and read as `principal.resolved`. So the cookie
 stays small — an id — and the page still reads a name, because the resolution happens on the
-server where the record is.
+server where the record is. The baseline's `authenticated`, `expiresAt` and `error` win a
+collision, so a resolver cannot sign a caller in by returning `authenticated: true`.
 
 A resolver that fails fills `principal.error` rather than throwing out of every read. A caller
 whose seal is valid and whose *record* could not be loaded is a distinguishable state, and it
@@ -92,9 +92,15 @@ in both, and neither branches on where it is.
 
 ## `cookies` is the seam underneath
 
-`cookies()` reads and writes the request's cookies, and the principal cookie is one it manages.
-Reaching for it directly is for the cookies that are yours — a theme, a consent flag, a
-last-viewed id.
+{% example cookies-density %}
+
+`cookies()` reads and writes the request's cookies on a server and the document's in a browser —
+one jar, the shape of Bun's `CookieMap`, under one name. A read by name tracks that name (22.4), so
+the tab follows the write, and the server render reads the same cookie off the request, so a reload
+paints the density you picked rather than flashing the default first.
+
+The principal cookie is one it manages. Reaching for it directly is for the cookies that are yours
+— a theme, a consent flag, a last-viewed id.
 
 The principal cookie is `HttpOnly`, so script cannot read it. That is the point: the claims
 reach the page through the `Principal` document the server rendered, and the *seal* never

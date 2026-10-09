@@ -2,9 +2,6 @@
     "title": "`applyOrderCount(byId, …)` — the same fold, reached without `patch`",
     "summary": "The same dashboard, and a helper handed the held table directly.",
     "app": "dashboard",
-    "files": [
-        "src/shared/patchUnseenRegions.ts",
-        "src/ui/components/PatchUnseenDashboard.abide"
-    ],
+    "files": ["src/ui/components/PatchUnseenDashboard.abide"],
     "render": "src/ui/components/PatchUnseenDashboard.abide"
 }

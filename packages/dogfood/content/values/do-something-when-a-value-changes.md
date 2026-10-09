@@ -15,6 +15,7 @@ examples:
   - packages/dogfood/examples/watch-tracked.json
   - packages/dogfood/examples/watch-disposer.json
   - packages/dogfood/examples/watch-sources.json
+  - packages/dogfood/examples/flush-sync-scroll.json
 ---
 
 Most of what looks like an effect is a value. A heading derived from a row, a filtered list, a count
@@ -153,16 +154,19 @@ A write marks the graph; a read walks it and computes what it finds marked. So a
 between two writes is already the new answer, and only the effects — the part that touches the
 page — are held.
 
-`flushSync()` ends the turn where you call it. Reach for it where something has to see the page as
-the writes left it: a test asserting on a node, a measurement, a render to a string.
-
-```ts browser
-count.set(2)
-flushSync()
-// every effect the write woke has now run
-```
-
 Read on: [Derived values](derive-a-value-from-other-values.md)
+
+## `flushSync()` ends the turn at the call
+
+{% example flush-sync-scroll %}
+
+The write to `notes` is held like any other, so the list on screen is still the old one when the
+handler's next line runs. `flushSync()` runs every effect the write woke before it returns, and the
+measurement after it reads the page as the write left it — the two tiles agree.
+
+Take it out and they part: the handler measures one row short and scrolls to the note before the
+one it just added. Reach for it where something has to see the page now — a measurement, a scroll,
+a test asserting on a node — and nowhere else, since every call ends a batch early.
 
 ## An effect that throws stops its watch
 

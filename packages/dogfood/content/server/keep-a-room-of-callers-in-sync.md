@@ -1,7 +1,7 @@
 ---
 title: Keep every caller in sync
 nav: Sockets
-intent: Serve a channel to callers outside the process — chat, presence, a live feed, pushed rather than polled.
+intent: Serve a channel to callers outside the process — chat, presence, live prices, pushed rather than polled.
 covers:
   - `Produced`
   - socket › `Args`
@@ -14,10 +14,12 @@ covers:
   - `server/sockets/chat.ts`
   - `server/sockets/feed.ts`
   - `src/server/sockets/**/*.ts`
+examples:
+  - packages/dogfood/examples/socket-room.json
 ---
 
 A channel is already live state anything in the process may publish and anything may read. A chat
-pane, a presence list and a price feed all want that same state reaching browsers — pushed, not
+pane, a presence list and a live price all want that same state reaching browsers — pushed, not
 polled every two seconds.
 
 `socket` gives a channel an address. Nothing about the channel changes, and nothing on the page
@@ -38,6 +40,22 @@ What the options gate is the **transport**: who may connect, who may publish inw
 which origin. Every signature is in the [Transports](../reference/transports.md) reference, and
 what a channel is before it has an address is [Channels](../values/let-anything-publish-and-anything-read.md).
 
+## A turn one tab sends reaches every tab
+
+{% example socket-room %}
+
+*1 option, 0 frames* — against the arm, which opens the socket, frames each turn, keeps a latest
+turn per room, fans each turn out to that room's tabs and reopens the connection when it drops.
+
+Each reader gets a room of their own. `rooms` is keyed, so `support({ id })` is one channel per
+id, and the id is a cookie — every tab of one browser sends it, and nobody else's does. A page
+everyone can post to would put a stranger's turn in front of you; keyed by an id only your browser
+holds, the room is yours and its tabs. A room nobody has posted to for an hour is let go (11.46).
+
+The tab that sends does not paint its own turn. `publish` on a browser's copy sends the message to
+the room on the server, and it comes back to every subscriber as a production, this tab included
+(18.6). So the transcript is the server's, in the order the server took it, in every tab at once.
+
 ## A channel over a socket is still a channel
 
 There is nothing about the shape that says which transport carried it: a bare read is the latest
@@ -49,9 +67,8 @@ A `publish` on the server's value is sent to every subscriber (9.1), and `invali
 on it reach every subscriber's copy (7.10, 7.18). A `GET` is carried the same way: a client reading
 one is subscribed over the same mux to that handler's productions for those `Args` (18.17).
 
-That is why the examples for all of it are on [Channels](../values/let-anything-publish-and-anything-read.md):
-a channel with an address behaves as a channel, so a demonstration here would be showing that the
-address changed nothing.
+What a channel does before it has an address is on
+[Channels](../values/let-anything-publish-and-anything-read.md), and none of it changes here.
 
 ## A socket's address is its file path and export name
 
@@ -76,7 +93,7 @@ publishes into it — the declaration is already the intent a second flag would 
 
 ```ts #server/rpc/threads.ts — excerpt
 export const say = POST(({ id, text }: { id: string; text: string }) =>
-    thread({ id }).publish({ text }),
+    thread({ id }).publish({ id: crypto.randomUUID(), text }),
 )
 ```
 
@@ -158,25 +175,28 @@ A `publish` appends, and there is no `revoke` and no `clear` over what a channel
 
 A moderator removing a message publishes a **tombstone** the block renders as removed:
 
-```ts #shared/threads.ts — excerpt
-type Line = { id: string; body?: string; removed?: true }
+```ts #shared/channels.ts — excerpt
+type Post = { id: string; text: string; removed?: true }
 
-export const chat = reactive<Line>(undefined, { history: 200, global: true })
+export const thread = reactive(
+    (_args: { id: string }): Post | undefined => undefined,
+    { history: 20, global: true },
+)
 ```
 
 ```abide #ui/pages/threads/[id]/page.abide — excerpt
-{#for m of chat.history(200) by m.id}
-    {#if m.removed}
+{#for post of thread({ id }).history(20) by post.id}
+    {#if post.removed}
         <li class="removed">removed</li>
     {:else}
-        <li>{m.body}</li>
+        <li>{post.text}</li>
     {/if}
 {/for}
 ```
 
-`by m.id` lands the tombstone on the row the original keyed to, so a live subscriber updates one
-row and a late one replays both messages and resolves them the same way. No epoch move, no reset
-frame, no repaint.
+`by post.id` lands the tombstone — `{ id, text: '', removed: true }` — on the row the original
+keyed to, so a live subscriber updates one row and a late one replays both messages and resolves
+them the same way. No epoch move, no reset frame, no repaint.
 
 **A ring edit could not have delivered what it promised.** Dropping the message from the retention
 would stop it being *served* again — but the ring is already bounded by `history` and `ttl`, and a

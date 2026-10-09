@@ -21,10 +21,10 @@ A **transport** gives a producer an address. `rpc` is a `reactive` value reachab
 
 | Name | Signature | Meaning |
 | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures, Produced>` | A handler reached over http, or in process on a server. |
+| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined>, Produced>` | A handler reached over http, or in process on a server. |
 | `Value` | `unknown` | What the addressed `Reactive` holds. |
 | `Produced` | `unknown` | What it yields, per the unit rule. |
-| `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of an onion. |
+| `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of `middleware`. |
 | `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced> \| ((args?: Args) => Value), options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. |
 | `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. |
 | `rpc.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to the handler's matching entries. |
@@ -91,7 +91,7 @@ that handler produces for those args.
 
 | Name | Signature | Meaning |
 | --- | --- | --- |
-| `SocketEvent` | `{ kind: 'subscribe' \| 'publish'; args: Args; message?: Produced; request: Request }` | What the socket lane's onion carries. |
+| `SocketEvent` | `{ kind: 'subscribe' \| 'publish'; args: Args; message?: Produced; request: Request }` | What a socket's `middleware` rung is handed. |
 | `clientPublish` | `boolean` | Whether a frame from outside the process may publish. |
 
 ### The options it shares with the other lane
@@ -189,18 +189,30 @@ the transport would skip itself every other way the handler is reached.
 ### A read any surface may call
 
 ```ts #server/rpc/invoices.ts — excerpt
-export const getInvoice = GET(({ id }: { id: string }) =>
-    database.invoices.find(id),
+export const getInvoice = GET(
+    ({ id }: { id: string }) => database.invoice.find(id),
+    { description: 'One invoice, by id.' },
 )
 ```
 
 ### A channel with an address
 
-```ts #server/sockets/chat.ts
-import { socket } from 'abide'
-import { threads } from '#shared/channels'
+```ts #server/sockets/chat.ts — excerpt
+import { socket } from 'abide/server'
+import { thread } from '#shared/channels'
 
-export default socket(threads, { clientPublish: true })
+export default socket(thread, {
+    clientPublish: true,
+    crossOrigin: ['https://partner.example'],
+    middleware: [
+        async (next, event) => {
+            const publishing = event.kind === 'publish'
+            if (publishing && !(await canPost(event.request, event.args)))
+                throw new Error('not a member')
+            return next(event)
+        },
+    ],
+})
 ```
 
 ## See also

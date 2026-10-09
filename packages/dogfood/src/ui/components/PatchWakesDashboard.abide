@@ -1,13 +1,8 @@
 <script>
 import { reactive } from 'abide'
-import {
-    applyOrderCount,
-    type OrderCount,
-    type Region,
-} from '#shared/patchWakesRegions'
 
 const byId = reactive(
-    new Map<string, Region>([
+    new Map<string, { id: string; name: string; orders: number }>([
         ['north', { id: 'north', name: 'North', orders: 120 }],
         ['south', { id: 'south', name: 'South', orders: 80 }],
         ['east', { id: 'east', name: 'East', orders: 64 }],
@@ -18,7 +13,7 @@ const byId = reactive(
 const rows = reactive(() => [...byId.values()])
 
 // Each frame names one region and one figure.
-const FEED: OrderCount[] = [
+const FEED = [
     { id: 'south', orders: 95 },
     { id: 'north', orders: 130 },
     { id: 'west', orders: 88 },
@@ -29,7 +24,10 @@ function applyNextFrame() {
     const frame = FEED.shift()
     if (!frame) return
     FEED.push(frame)
-    byId.patch((held) => applyOrderCount(held, frame))
+    byId.patch((held) => {
+        const region = held.get(frame.id)
+        if (region) region.orders = frame.orders
+    })
 }
 </script>
 

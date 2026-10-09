@@ -42,7 +42,7 @@ test.beforeAll(async ({}, testInfo) => {
     testInfo.skip(testInfo.project.name !== 'root', 'one dev server is enough')
     rmSync(COPY, { recursive: true, force: true })
     mkdirSync(COPY, { recursive: true })
-    for (const kept of ['package.json', 'tsconfig.json', 'src'])
+    for (const kept of ['package.json', 'tsconfig.json', 'bunfig.toml', 'src'])
         cpSync(`${APP}/${kept}`, `${COPY}/${kept}`, { recursive: true })
     original = readFileSync(BAR, 'utf8')
     dev = spawn('bun', [BIN, 'dev', '--root', ROOT, '--port', '0'], {

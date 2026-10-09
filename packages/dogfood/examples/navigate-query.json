@@ -1,0 +1,7 @@
+{
+    "title": "`navigate(url)` — a new address, the same page",
+    "summary": "Three invoices on one account, each with its own address. Type a note, then open another invoice — the address moves and the note is still there.",
+    "app": "crm",
+    "files": ["src/ui/components/NavigateQueryInvoice.abide"],
+    "render": "src/ui/components/NavigateQueryInvoice.abide"
+}

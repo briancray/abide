@@ -1,0 +1,12 @@
+{
+    "title": "`assistant(messages, provider, { mcp: true })` — your handlers as its tools",
+    "summary": "The support assistant, asked about one invoice. The model here is a recording and its lines are fixed; the tool call it makes runs this site's own handler, as you.",
+    "app": "chat",
+    "about": "server",
+    "files": [
+        "src/server/rpc/assistantToolsSupport.ts",
+        "src/server/rpc/assistantToolsInvoices.ts",
+        "src/ui/components/AssistantToolsChat.abide"
+    ],
+    "render": "src/ui/components/AssistantToolsChat.abide"
+}

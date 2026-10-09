@@ -10,6 +10,7 @@ covers:
 examples:
   - packages/dogfood/examples/cap-debounce.json
   - packages/dogfood/examples/cap-throttle.json
+  - packages/dogfood/examples/identity-structural.json
 ---
 
 A filter box is the case where "reading loads it" stops being free. Bind the input to a value,
@@ -65,7 +66,7 @@ Read on: [Loading states](show-a-value-that-isnt-there-yet.md) ·
 
 `throttle` is right where the value is being watched — a live count, a cursor position, anything
 where the first update should be immediate and the **rate** is the problem. The tile takes the
-first arrival at once, which is the half a debounce would have got wrong: a debounced feed that
+first arrival at once, which is the half a debounce would have got wrong: a debounced value that
 never goes quiet shows nothing at all.
 
 **Both figures are right at every moment a reader looks**, and only one of them cost a repaint per
@@ -124,10 +125,16 @@ Read on: [Caching](load-once-per-set-of-arguments.md) ·
 
 ## `identity` wakes readers only when the value moved
 
-The other half of "too fast" is a value that changes without changing, and no card on this page
-shows it — because there is nothing to show. `identity` decides what counts as the same value, and
-getting it wrong leaves the output right and the work wrong: nothing renders incorrectly, the page
-just re-renders on every recompute.
+{% example identity-structural %}
+
+The other half of "too fast" is a value that changes without changing. Every load hands back a new
+record, so by reference each Refresh is a change, and the chart redraws to show the numbers it was
+already showing. `identity: structural` compares what landed with what was held, and an equal
+record wakes nobody — the redraw count stands still. Record a sale first to see it move: the count
+is live, and the comparison is what holds it.
+
+`identity` decides what counts as the same value, and getting it wrong leaves the output right and
+the work wrong: nothing renders incorrectly, the page just re-renders on every recompute.
 
 **The reference is the default** (5.4), which is what JavaScript means by the same value. Declare
 `identity: structural` on the value whose producer rebuilds what it hands back — a reload that

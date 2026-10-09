@@ -9,7 +9,7 @@ let rows = reactive([
 
 function swapTop() {
     const [first, second, ...rest] = rows
-    rows = [second, first, ...rest]
+    if (first && second) rows = [second, first, ...rest]
 }
 
 function reverse() {

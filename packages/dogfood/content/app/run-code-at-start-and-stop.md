@@ -7,27 +7,16 @@ covers:
   - `onStart`
   - `onStop`
   - `src/server/app.ts`
+examples:
+  - packages/dogfood/examples/start-hook.json
 ---
 
 `src/server/app.ts` is the file that always runs at startup. It is where the app's own route
 goes, and where the hooks that wrap the boot are registered.
 
-```ts #server/app.ts
-import { onStart, onStop } from 'abide'
-import { database } from '#server/database'
+## `onStart` runs before the first request
 
-onStart(async (start) => {
-    await database.connect()
-    await start()
-})
-
-onStop(async (stop) => {
-    await stop()
-    await database.close()
-})
-```
-
-## A hook wraps, it does not listen
+{% example start-hook %}
 
 `onStart` takes the **next step** as an argument rather than being notified that a step
 happened. That is the whole difference: work before `await start()` is work the first request
@@ -45,8 +34,14 @@ question it raises has to be answered by a second mechanism.
 Failing hard is the only useful answer to a failed migration. An app that starts anyway is an
 app serving requests against a schema it did not get.
 
+## `onStop` closes what `onStart` opened, after the last request
+
+{% snippet start-hook src/server/app.ts onStop( %}
+
 `onStop` mirrors it. `await stop()` first, then tear down what you opened — so a connection is
-closed after the last request that could have used it, not during.
+closed after the last request that could have used it, not during. A running page cannot show
+you that, and a test can: the one on [Tests](../ship/call-your-app-from-a-test.md) stops the app
+and finds the pool closed.
 
 A served app runs it however the process is told to end: `exit` in its shell, a `SIGTERM` from
 `docker stop` or a deploy, `Ctrl-C`. A rejection nobody awaited or a throw nothing caught reaches
@@ -66,19 +61,15 @@ the right home for the app-wide ones only because that file always runs.
 
 Read on: [Config](configure-the-app.md) · [Authorization](../server/decide-who-may-call-what.md)
 
-## `default` is the app's own route
+## `default` answers what nothing else does
 
-The default export is a route asked **before the router** — one function, the same `Request` in
-and a `Response` or `undefined` out:
+The default export is the app's own route — one function, the same `Request` in and a `Response`
+or `undefined` out. It is asked once the pages, the handlers and the public files have all passed,
+so it answers an address only where nothing else would:
 
-```ts #server/app.ts — excerpt
-export default (request: Request) =>
-    new URL(request.url).pathname === '/robots.txt'
-        ? new Response('User-agent: *')
-        : undefined
-```
+{% snippet start-hook src/server/app.ts export default %}
 
-Returning `undefined` hands the request on to routing. It uses the same response helpers
+Returning `undefined` hands the request on to the 404. It uses the same response helpers
 everything else does, there being no second set.
 
 An object with a `fetch` is accepted too, which is the shape a `Bun.serve` handler already has —

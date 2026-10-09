@@ -10,7 +10,7 @@ let range = reactive('7d')
 const metrics = reactive(() => getMetrics({ range }))
 </script>
 
-<ul class="grid">
+<ul class="tiles">
     <li><span>range</span>
         <div class="tabs">
         {#for one of RANGES}

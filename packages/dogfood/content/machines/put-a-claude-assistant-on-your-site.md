@@ -19,6 +19,10 @@ covers:
   - `BridgeStatus`
   - `/__abide/bridge`
   - `ABIDE_BRIDGE`
+examples:
+  - packages/dogfood/examples/assistant-tools.json
+  - packages/dogfood/examples/claude-api.json
+  - packages/dogfood/examples/claude-code.json
 ---
 
 `assistant` streams a conversation with Claude out of a handler you write, with your own handlers as
@@ -46,7 +50,7 @@ for another model and `assistant` treats it the same.
 `assistant` has no address of its own. You yield it from a streaming handler, so the address, the
 middleware and the surfaces are yours to set, as they are for any other handler.
 
-```ts #server/rpc/support.ts
+```ts #server/rpc/support.ts — excerpt
 import {
     assistant,
     type AssistantMessage,
@@ -93,6 +97,11 @@ renders a visitor's Claude Code unchanged.
 
 ## The tools are your MCP surface
 
+{% example assistant-tools %}
+
+*1 option, 0 tool definitions* — against the arm's tool table, which spells each tool's name,
+description and input schema a second time and dispatches the call by name.
+
 `mcp: true` offers the model the tools `/__abide/mcp` lists, so which handlers it may call is
 decided where it already is — `clients: { mcp: false }` withholds one from the assistant as it does
 from every other model. `ABIDE_MCP` has to be open; asking for tools over a closed surface throws
@@ -115,20 +124,15 @@ tokens again. Claude Code takes it as one message, the earlier turns folded abov
 
 ## `claudeApi` takes the Messages API's own fields
 
+{% example claude-api %}
+
 `claudeApi` takes a Messages API request body as Anthropic documents it, snake_case, with the
 client's `apiKey` and `baseURL` beside it. abide writes `messages` and `stream`; every other field
 goes on the body as you wrote it, and the `tools` you list — a server tool like web search — are
 sent beside your own.
 
-```ts #server/rpc/support.ts — excerpt
-claudeApi({
-    apiKey: config().ANTHROPIC_API_KEY,
-    model: 'claude-opus-5',
-    max_tokens: 16000,
-    thinking: { type: 'adaptive' },
-    output_config: { effort: 'medium' },
-})
-```
+`baseURL` is the client's own option, and pointing it at a stand-in is how the card above shows the
+request without a key. Point it nowhere and the request goes to `https://api.anthropic.com`.
 
 It reads no key from the environment. Pass `apiKey` from wherever your app keeps secrets.
 
@@ -136,17 +140,12 @@ Read on: [Config](../app/configure-the-app.md)
 
 ## `claudeCode` runs on the visitor's own Claude Code
 
+{% example claude-code %}
+
 `claudeCode` sends the conversation to Claude Code on the machine of the person asking, on their
 own sign-in and their own plan. Its config is Claude Code's own option names — `model`,
 `fallbackModel`, `systemPrompt`, `appendSystemPrompt`, `effort` — and only those: its tools, its
 permissions and its directory are not the site's to set.
-
-```ts #server/rpc/support.ts — excerpt
-claudeCode({
-    model: 'sonnet',
-    systemPrompt: 'Answer questions about invoices.',
-})
-```
 
 The visitor connects their Claude Code once per visit by running a command in a terminal. It dials
 out to your site — a page cannot reach a program on its own machine from https — and Claude Code
@@ -159,26 +158,10 @@ runs there with its own tools off, no settings read, and no MCP server but yours
 `claudeCode.bridge()` streams this browser's pairing: unpaired with the command to run, then paired
 the moment the visitor's bridge connects.
 
-```ts #server/rpc/support.ts — excerpt
-export const bridge = GET(() => claudeCode.bridge(), { timeout: Infinity })
-```
+{% snippet claude-code src/server/rpc/claudeCodeSupport.ts export const bridge %}
 
-```abide #ui/components/Support.abide — excerpt
-<script>
-import { reactive } from 'abide'
-import { bridge } from '#server/rpc/support'
-
-const pairing = reactive(() => bridge())
-</script>
-
-{#if pairing.at(-1)?.paired}
-    <Chat/>
-{:else}
-    <pre>{pairing.at(-1)?.command}</pre>
-{/if}
-```
-
-`pairing` holds every status the stream has sent, and the last is the one that stands.
+The card above reads it as `pairing`, which holds every status the stream has sent, and the last
+is the one that stands.
 
 The command reads `bunx abide-bridge@<version> <your site> <code>`. The code pairs once, with this
 browser, and expires unused after ten minutes; `claudeCode.bridgeCommand()` mints one on its own

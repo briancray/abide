@@ -6,6 +6,8 @@ covers:
   - `request`
   - `response`
   - `server`
+examples:
+  - packages/dogfood/examples/response-created.json
 ---
 
 Three ambient values, all server-side, all **request-local**: the request being served, the
@@ -34,9 +36,10 @@ Read on: [Authorization](../server/decide-who-may-call-what.md) ·
 
 ## `response()` is the response being built
 
-```ts server
-response().headers.set('x-invoice-run', runId)
-```
+{% example response-created %}
+
+*0 response objects passed around* — the arm's route builds the status, the header and the body
+into one `Response`, so anything else wanting a header has to be handed it.
 
 It hands back the status and headers **as they stand**, before the body has been decided. That
 is what lets a rung deep in the stack contribute a header without becoming the thing that

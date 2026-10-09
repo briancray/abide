@@ -1,7 +1,10 @@
 import { GET } from 'abide/server'
-import { database } from '#server/rpcCallDatabase'
+import { rpcCallDatabase } from '#server/rpcCallDatabase'
 
 /** Address from the file path and export; schemas from the annotation. */
-export const getInvoice = GET(({ id }: { id: string }) => {
-    return database.invoices.find(id)
-})
+export const getInvoice = GET(
+    ({ id }: { id: string }) => {
+        return rpcCallDatabase.invoices.find(id)
+    },
+    { description: 'An invoice, by id.' },
+)

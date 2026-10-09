@@ -1,0 +1,24 @@
+<script>
+import { reactive } from 'abide'
+import { avatar } from '#server/rpc/redirectAvatarContacts'
+
+const TABS = [
+    { id: '4021', name: 'Ada' },
+    { id: '4022', name: 'Grace' },
+]
+
+let id = reactive('4021')
+</script>
+
+<div class="tabs">
+{#for tab of TABS}
+    <button aria-selected={id === tab.id}
+        onclick={() => { id = tab.id }}>{tab.name}</button>
+{/for}
+</div>
+
+<ul class="fields stacked">
+    <li><span>the page asks for</span><strong>{avatar.url({ id })}</strong></li>
+</ul>
+
+<img src={avatar.url({ id })} alt="" class="size-24 rounded-full" />

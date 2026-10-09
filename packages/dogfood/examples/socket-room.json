@@ -1,0 +1,10 @@
+{
+    "title": "`socket(rooms, { clientPublish: true })` — your room, every tab",
+    "summary": "A support room per browser, served over this site's own socket. Open this page in a second tab, send from either, and the last turn changes in both — and in nobody else's.",
+    "app": "chat",
+    "files": [
+        "src/server/sockets/socketRoomSupport.ts",
+        "src/ui/components/SocketRoomSupport.abide"
+    ],
+    "render": "src/ui/components/SocketRoomSupport.abide"
+}

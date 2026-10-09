@@ -1,0 +1,23 @@
+<script>
+import { reactive } from 'abide'
+import { ask } from '#server/rpc/claudeApiSupport'
+
+const QUESTION = 'Is invoice INV-4021 paid?'
+
+let asked = reactive(false)
+const events = reactive(() =>
+    asked ? ask({ messages: [{ role: 'user', content: QUESTION }] }) : [],
+)
+</script>
+
+<div class="row">
+    <button disabled={asked} onclick={() => { asked = true }}>Ask</button>
+    <span class="status">{QUESTION}</span>
+</div>
+
+{#for event of events}
+    {#if event.type === 'text'}
+        <pre class="rounded-md border border-rule bg-raised p-snug
+            text-chrome">{event.text}</pre>
+    {/if}
+{/for}

@@ -1,16 +1,23 @@
 <script>
 import { principal, reactive } from 'abide'
 import { searchInvoices } from '#server/rpc/rungOrderInvoices'
+import { signIn, signOut } from '#server/rpc/rungOrderSession'
 
 let limit = reactive('2')
 
 const found = reactive(() => searchInvoices({ limit: Number(limit) }))
+
+/** The refusal as the status line shows it: its status, then its message. */
+function refusal() {
+    const failed = found.error()
+    return failed ? `${failed.status} ${failed.message}` : ''
+}
 </script>
 
 <div class="row">
-    <button onclick={() => {
-        if (principal.authenticated()) principal.clear()
-        else principal.set({ id: 'ada' })
+    <button onclick={async () => {
+        await (principal.authenticated() ? signOut() : signIn())
+        searchInvoices.refresh()
     }}>{principal.authenticated() ? 'Sign out' : 'Sign in'}</button>
 </div>
 
@@ -18,9 +25,7 @@ const found = reactive(() => searchInvoices({ limit: Number(limit) }))
     <input bind:value={limit}>
 </label>
 
-<p class="status">
-    {found.error() ? `${found.error().status} ${found.error().message}` : ''}
-</p>
+<p class="status">{refusal()}</p>
 
 <ul class="fields">
     <li><span>invoices</span>

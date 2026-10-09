@@ -14,6 +14,7 @@ covers:
   - `s.finally`
 examples:
   - packages/dogfood/examples/probe-hole.json
+  - packages/dogfood/examples/not-landed-copy.json
   - packages/dogfood/examples/probe-refresh.json
   - packages/dogfood/examples/probe-derived.json
   - packages/dogfood/examples/probe-error.json
@@ -82,6 +83,18 @@ the shape a page takes while it loads.
 
 Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 [Expressions](../templates/put-a-value-in-the-markup.md)
+
+## A read before the value lands throws `NotLanded`
+
+{% example not-landed-copy %}
+
+Outside the render flow there is no hole to leave, so the throw reaches your code. A click handler
+reading `contact.email` before the address lands gets `NotLanded`, and catches it by brand — a
+`NotLanded` is "not yet" and a `Failed` is "no" (2.15), so the `instanceof` arm never swallows a
+refusal. Anything else is rethrown.
+
+`contact.busy()` is the probe the status line reads, and a probe never throws (3.1), which is why
+the line can say "loading…" in the same moment the read beside it cannot answer.
 
 ## The first load and every one after are `ready()` apart
 

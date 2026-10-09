@@ -9,10 +9,13 @@ const PEOPLE: Record<string, { name: string; role: string }> = {
 const OPENED = new Map<string, number>()
 
 /** Runs once per request that reaches it, so `opened` counts loads. */
-export const getProfile = GET(async (args: { id: string }) => {
-    // A slow service, so the wait is on screen.
-    await Bun.sleep(450)
-    const opened = (OPENED.get(args.id) ?? 0) + 1
-    OPENED.set(args.id, opened)
-    return { ...PEOPLE[args.id], opened }
-})
+export const getProfile = GET(
+    async (args: { id: string }) => {
+        // A slow service, so the wait is on screen.
+        await Bun.sleep(450)
+        const opened = (OPENED.get(args.id) ?? 0) + 1
+        OPENED.set(args.id, opened)
+        return { ...PEOPLE[args.id], opened }
+    },
+    { description: 'A profile, by id, and how often it was opened.' },
+)

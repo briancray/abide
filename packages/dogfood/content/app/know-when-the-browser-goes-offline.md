@@ -4,6 +4,8 @@ nav: Offline
 intent: Show it, queue around it, and recover when the connection comes back.
 covers:
   - `online`
+examples:
+  - packages/dogfood/examples/online-banner.json
 ---
 
 A laptop sleeps. A train goes into a tunnel. Your page still has last minute's data on
@@ -24,23 +26,13 @@ constructed, has no producer to reload and takes nothing to key on. What it is o
 
 ## `online` is a reactive value
 
-Read it by name, like any other.
+{% example online-banner %}
 
-```abide #ui/pages/orders/page.abide — excerpt
-<script>
-import { online } from 'abide'
-</script>
+*1 name, 0 listeners* — against `online` and `offline` handlers and a flag kept in step between
+them.
 
-{#if !online}
-    <p role="status">You are offline. Nothing is being saved.</p>
-{/if}
-```
-
-*1 name, 0 listeners* — against `online` and `offline` handlers, the teardown for both, and a
-flag between them.
-
-There is no listener to attach and no cleanup to remember. Reading it subscribes,
-and the paragraph mounts and unmounts as the answer moves.
+Read it by name, like any other. There is no listener to attach and no cleanup to remember.
+Reading it subscribes, and the paragraph mounts and unmounts as the answer moves.
 
 ## `online` answers whether the caller can reach the app
 

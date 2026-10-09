@@ -10,7 +10,7 @@ export type Level = { onHand: number; counted: number }
 let counted = 0
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const reloadTriggersDatabase = {
     stock: {
         async find(_warehouse: string, _sku: string): Promise<Level> {
             await Bun.sleep(600)

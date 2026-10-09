@@ -2,7 +2,7 @@
 import { reactive } from 'abide'
 
 let note = reactive('')
-let field = reactive()
+let field = reactive<HTMLInputElement>()
 let focused = reactive(false)
 </script>
 

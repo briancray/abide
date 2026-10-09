@@ -7,6 +7,7 @@ covers:
   - `server/rpc/admin/audit.ts`
 examples:
   - packages/dogfood/examples/write-coalesced.json
+  - packages/dogfood/examples/write-methods.json
 ---
 
 A read is safe to repeat. A write is not — and a browser repeats one for you: a double-click,
@@ -78,6 +79,17 @@ freshness rules. Under the second, a `POST` populating an entry the `GET`'s 60s 
 first click's response, and **the write never happens**.
 
 The shapes wanted the repair anyway. A read and a write have different `Args`.
+
+## `PUT`, `PATCH` and `DELETE` are called the way `POST` is
+
+{% example write-methods %}
+
+*0 method strings* — the arm names each verb twice, once as a route key and once in the `fetch`
+that has to match it, and builds the `DELETE`'s query by hand.
+
+The page calls each handler by name and the method rides on the declaration, so changing one is an
+edit to the handler file and nothing else. Each answers the record as it now stands, which the card
+writes straight back into `contact`.
 
 ## Arguments travel in the body
 

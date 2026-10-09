@@ -1,0 +1,10 @@
+{
+    "title": "`aborted` — what a load reads once every caller stopped waiting",
+    "summary": "A contact's year statement from a slow ledger. Load it and cancel before it lands.",
+    "app": "crm",
+    "files": [
+        "src/server/rpc/abortedSignalStatements.ts",
+        "src/ui/components/AbortedSignalStatement.abide"
+    ],
+    "render": "src/ui/components/AbortedSignalStatement.abide"
+}

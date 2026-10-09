@@ -61,7 +61,7 @@ function cellsOf(item: RowItem) {
             n: '—',
             floor: '—',
             claim: state.label,
-            figureTone: 'board-waiting',
+            figureTone: 'text-muted',
             claimTone: state.tone,
             note: row?.note ?? '',
         }
@@ -116,54 +116,54 @@ function figure(value: number | null, unit: string): string {
 function verdictOf(claim: string): string {
     const times = Number.parseFloat(claim)
     if (Number.isNaN(times)) return ''
-    return times <= 1 ? 'board-good' : times >= 2 ? 'board-bad' : ''
+    return times <= 1 ? 'text-good' : times >= 2 ? 'text-bad' : ''
 }
 </script>
 
 {#component Figure({ tone, value }: { tone: string; value: string })}
-    <td class={`board-figure ${tone}`}>{value}</td>
+    <td class={`text-right whitespace-nowrap font-mono tabular-nums ${tone}`}>{value}</td>
 {/component}
 
-<main id="content" class="board">
+<main id="content" class="col-span-full mx-auto w-full max-w-320 gap-section">
     <header>
         <h1>Bench</h1>
-        <p class="intent">Every bench with a hand-written arm, abide against vanilla in the same engine. Over 1.00x, abide is slower or larger.</p>
+        <p class="max-w-170 text-title/8 text-muted">Every bench with a hand-written arm, abide against vanilla in the same engine. Over 1.00x, abide is slower or larger.</p>
     </header>
 
-    <div class="board-bar">
-        <input type="search" placeholder="Filter benches" aria-label="Filter benches" bind:value={filter}>
+    <div class="sticky top-bar z-1 flex flex-wrap items-center gap-snug border-b border-rule bg-paper py-3">
+        <input type="search" class="min-w-60 flex-1" placeholder="Filter benches" aria-label="Filter benches" bind:value={filter}>
         {#if running}
             <button onclick={stop}>Stop</button>
         {:else}
             <button onclick={() => start('all')}>{filter.trim() === '' ? 'Run all' : `Run ${shown} shown`}</button>
         {/if}
-        <span class="board-summary" class:board-bad={failure !== ''}>{failure !== '' ? failure : running ? 'running — one bench at a time, so no two timings share the machine' : `${shown} benches`}</span>
+        <span class={`font-mono text-chrome/4 font-medium ${failure !== '' ? 'text-bad' : 'text-muted'}`}>{failure !== '' ? failure : running ? 'running — one bench at a time, so no two timings share the machine' : `${shown} benches`}</span>
     </div>
 
     {#if catalog.error()}
-        <p class="board-bad">{messageOf(catalog.error())}</p>
+        <p class="text-bad">{messageOf(catalog.error())}</p>
     {:else if catalog.ready()}
         {#for section of sections by section.name}
-            <section>
-                <div class="board-head">
-                    <h2>{section.name}</h2>
-                    <span class="board-count">{section.items.length}</span>
-                    <button class="board-run" onclick={() => start(`section:${section.name}`)} disabled={running}>Run section</button>
+            <section class="gap-snug">
+                <div class="flex items-baseline gap-snug">
+                    <h2 class="mr-auto">{section.name}</h2>
+                    <span class="font-mono text-chrome/4 font-medium text-muted">{section.items.length}</span>
+                    <button class="border border-rule bg-transparent px-2 py-1 font-mono text-chrome/4 font-medium text-muted enabled:hover:border-signal enabled:hover:text-signal" onclick={() => start(`section:${section.name}`)} disabled={running}>Run section</button>
                 </div>
-                <table>
+                <table class="[&_td]:py-2 [&_td]:pr-4 [&_td]:pl-0 [&_td]:align-baseline [&_td]:text-chrome/5 [&_th]:py-2 [&_th]:pr-4 [&_th]:pl-0 [&_th]:align-baseline">
                     <thead>
-                        <tr><th>Bench</th><th class="board-figure">abide</th><th class="board-figure">vanilla</th><th class="board-figure">abide / vanilla</th><th class="board-figure">n</th><th class="board-figure">A/A floor</th><th></th></tr>
+                        <tr><th>Bench</th><th class="text-right whitespace-nowrap font-mono tabular-nums">abide</th><th class="text-right whitespace-nowrap font-mono tabular-nums">vanilla</th><th class="text-right whitespace-nowrap font-mono tabular-nums">abide / vanilla</th><th class="text-right whitespace-nowrap font-mono tabular-nums">n</th><th class="text-right whitespace-nowrap font-mono tabular-nums">A/A floor</th><th></th></tr>
                     </thead>
                     <tbody>
                         {#for item of section.items by item.id}
-                            <tr>
-                                <td>{item.name}<span class="board-note" class:board-bad={landed.get(item.id)?.state === 'broken'}>{cellsOf(item).note}</span></td>
+                            <tr class="group">
+                                <td>{item.name}<span class={`block ${landed.get(item.id)?.state === 'broken' ? 'text-bad' : 'text-muted'}`}>{cellsOf(item).note}</span></td>
                                 <Figure tone={cellsOf(item).figureTone} value={cellsOf(item).abide}/>
                                 <Figure tone={cellsOf(item).figureTone} value={cellsOf(item).vanilla}/>
                                 <Figure tone={cellsOf(item).claimTone} value={cellsOf(item).claim}/>
                                 <Figure tone={cellsOf(item).figureTone} value={cellsOf(item).n}/>
                                 <Figure tone={cellsOf(item).figureTone} value={cellsOf(item).floor}/>
-                                <td class="board-figure"><button class="board-run" onclick={() => start(`item:${item.id}`)} disabled={running}>Run</button></td>
+                                <td class="text-right whitespace-nowrap font-mono tabular-nums"><button class="border border-rule bg-transparent px-2 py-1 font-mono text-chrome/4 font-medium text-muted enabled:hover:border-signal enabled:hover:text-signal opacity-50 transition-opacity duration-120 ease-[ease] group-hover:opacity-100 focus-visible:opacity-100" onclick={() => start(`item:${item.id}`)} disabled={running}>Run</button></td>
                             </tr>
                         {/for}
                     </tbody>
@@ -171,6 +171,6 @@ function verdictOf(claim: string): string {
             </section>
         {/for}
     {:else}
-        <p class="board-summary">Listing the benches…</p>
+        <p class="font-mono text-chrome/4 font-medium text-muted">Listing the benches…</p>
     {/if}
 </main>

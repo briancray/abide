@@ -17,6 +17,7 @@ covers:
 examples:
   - packages/dogfood/examples/refuse-narrowed.json
   - packages/dogfood/examples/refuse-write.json
+  - packages/dogfood/examples/aborted-signal.json
 ---
 
 "That invoice is not yours" and "the database is down" are different answers, and a caller
@@ -141,6 +142,19 @@ Three and no more. A name is public surface forever.
 
 Read on: [Schemas](check-what-callers-send-you.md)
 
+## `aborted` is what a cancelled load reads
+
+{% example aborted-signal %}
+
+A call handed a `signal` is one caller saying it can stop waiting. Where every call that reached
+the load passed one and every one of them aborted, the load ends (16.52): `busy()` goes false, the
+request to the server is aborted, and the value refuses with `aborted` at 499 rather than throwing
+(16.53). `aborted.is` narrows it like any other factory's refusal, so the page tells "you cancelled
+this" apart from "this failed".
+
+The next call starts a new load under its own signal (16.66), which is why Load works again after a
+cancel. See [Limits](put-a-ceiling-on-a-request.md) for the signal itself.
+
 ## A bare failure narrows through the factory's own `is`
 
 `error.abide` receives a bare failure as a prop, so there is no value to hang `s.isError` off.
@@ -152,6 +166,9 @@ Every factory carries its own `is` for exactly that:
     <p>Nothing answers {failure.data.method} {failure.data.path}.</p>
 {:else if notYours.is(failure)}
     <h1>Not yours</h1>
+{:else}
+    <h1>Something went wrong</h1>
+    <p>{failure.message}</p>
 {/if}
 ```
 

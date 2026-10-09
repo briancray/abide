@@ -16,6 +16,8 @@ covers:
   - `navigate`
   - `route.url`
   - `route.navigating`
+examples:
+  - packages/dogfood/examples/navigate-query.json
 ---
 
 `url` builds an address from a **route literal** — the pattern, not the address. So the thing
@@ -23,7 +25,7 @@ you write down is the thing the router already knows, and a route that moves tak
 with it.
 
 ```abide #ui/pages/invoices/page.abide — excerpt
-<a href={url('/invoices/[id]', { id: invoice.id })}>{invoice.reference}</a>
+<a href={url('/invoices/[id]', { id: invoice.id })}>{invoice.number}</a>
 ```
 
 ## The literal decides the arguments
@@ -69,9 +71,14 @@ literal is taken.
 
 ## `navigate` goes there without reloading
 
-```ts browser
-navigate(url('/invoices/[id]', { id: '4310' }))
-```
+{% example navigate-query %}
+
+`navigate` takes the address the page decided on — here a query on the page already shown, which
+moves `route.url` and leaves the page mounted (30.23). Another page is the same call,
+`navigate(url('/invoices/[id]', { id: '4310' }))`, and mounts that page in place.
+
+`replace: true` writes over the history entry rather than adding one, so Back leaves the page
+rather than stepping through every invoice opened on it.
 
 It navigates and **does not reload the document**, so the layouts stay, the values already
 loaded stay loaded, and the head's keyed contributions are replaced rather than rebuilt. An

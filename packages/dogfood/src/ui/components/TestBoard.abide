@@ -65,11 +65,11 @@ function cellsOf(item: RowItem) {
     const row = landed.get(item.id)
     if (row === undefined || row.state !== 'done') {
         const state = ROW_STATES[row?.state ?? 'none']
-        return { passing: state.label, passingTone: state.tone, skipped: '', time: '—', timeTone: 'board-waiting' }
+        return { passing: state.label, passingTone: state.tone, skipped: '', time: '—', timeTone: 'text-muted' }
     }
     return {
         passing: `${row.tests - row.failures - row.skipped}/${row.tests - row.skipped}`,
-        passingTone: row.failures > 0 ? 'board-bad' : 'board-good',
+        passingTone: row.failures > 0 ? 'text-bad' : 'text-good',
         skipped: row.skipped > 0 ? String(row.skipped) : '',
         time: seconds(row),
         timeTone: '',
@@ -102,9 +102,9 @@ function stop() {
 
 /** One test's line: a mark, and its tone, for how it came out. */
 function markOf(one: TestCase): { mark: string; tone: string } {
-    if (one.failure !== null) return { mark: '✗', tone: 'board-bad' }
-    if (one.skipped) return { mark: '–', tone: 'board-waiting' }
-    return { mark: '✓', tone: 'board-good' }
+    if (one.failure !== null) return { mark: '✗', tone: 'text-bad' }
+    if (one.skipped) return { mark: '–', tone: 'text-muted' }
+    return { mark: '✓', tone: 'text-good' }
 }
 
 function caseTime(one: TestCase): string {
@@ -116,54 +116,54 @@ function seconds(row: TestRow): string {
 }
 </script>
 
-<main id="content" class="board">
+<main id="content" class="col-span-full mx-auto w-full max-w-320 gap-section">
     <header>
         <h1>Tests</h1>
-        <p class="intent">Every test file in the repo, and every browser spec, one file to a process. Unit files run eight at a time; browser specs one at a time, because they share one app server.</p>
+        <p class="max-w-170 text-title/8 text-muted">Every test file in the repo, and every browser spec, one file to a process. Unit files run eight at a time; browser specs one at a time, because they share one app server.</p>
     </header>
 
-    <div class="board-bar">
-        <input type="search" placeholder="Filter test files" aria-label="Filter test files" bind:value={filter}>
-        <label><input type="checkbox" bind:checked={gates}> Run gate reverts</label>
+    <div class="sticky top-bar z-1 flex flex-wrap items-center gap-snug border-b border-rule bg-paper py-3">
+        <input type="search" class="min-w-60 flex-1" placeholder="Filter test files" aria-label="Filter test files" bind:value={filter}>
+        <label class="text-chrome/4 text-muted"><input type="checkbox" bind:checked={gates}> Run gate reverts</label>
         {#if running}
             <button onclick={stop}>Stop</button>
         {:else}
             <button onclick={() => start('all')}>{filter.trim() === '' ? 'Run all' : `Run ${tally.shown} shown`}</button>
         {/if}
-        <span class="board-summary" class:board-bad={failure !== '' || tally.failing > 0}>{failure !== '' ? failure : running ? 'running…' : tally.failing > 0 ? `${tally.failing} failing` : `${tally.shown} files`}</span>
+        <span class={`font-mono text-chrome/4 font-medium ${failure !== '' || tally.failing > 0 ? 'text-bad' : 'text-muted'}`}>{failure !== '' ? failure : running ? 'running…' : tally.failing > 0 ? `${tally.failing} failing` : `${tally.shown} files`}</span>
     </div>
 
     {#if catalog.error()}
-        <p class="board-bad">{messageOf(catalog.error())}</p>
+        <p class="text-bad">{messageOf(catalog.error())}</p>
     {:else if catalog.ready()}
         {#for section of sections by section.name}
-            <section>
-                <div class="board-head">
-                    <h2>{section.name}</h2>
-                    <span class="board-count" class:board-bad={failingIn(section.items) > 0}>{failingIn(section.items) > 0 ? `${failingIn(section.items)} of ${section.items.length} failing` : section.items.length}</span>
-                    <button class="board-run" onclick={() => start(`section:${section.name}`)} disabled={running}>Run section</button>
+            <section class="gap-snug">
+                <div class="flex items-baseline gap-snug">
+                    <h2 class="mr-auto">{section.name}</h2>
+                    <span class={`font-mono text-chrome/4 font-medium ${failingIn(section.items) > 0 ? 'text-bad' : 'text-muted'}`}>{failingIn(section.items) > 0 ? `${failingIn(section.items)} of ${section.items.length} failing` : section.items.length}</span>
+                    <button class="border border-rule bg-transparent px-2 py-1 font-mono text-chrome/4 font-medium text-muted enabled:hover:border-signal enabled:hover:text-signal" onclick={() => start(`section:${section.name}`)} disabled={running}>Run section</button>
                 </div>
-                <table>
+                <table class="[&_td]:py-2 [&_td]:pr-4 [&_td]:pl-0 [&_td]:align-baseline [&_td]:text-chrome/5 [&_th]:py-2 [&_th]:pr-4 [&_th]:pl-0 [&_th]:align-baseline">
                     <thead>
-                        <tr><th>File</th><th class="board-figure">Passing</th><th class="board-figure">Skipped</th><th class="board-figure">Time</th><th></th></tr>
+                        <tr><th>File</th><th class="text-right whitespace-nowrap font-mono tabular-nums">Passing</th><th class="text-right whitespace-nowrap font-mono tabular-nums">Skipped</th><th class="text-right whitespace-nowrap font-mono tabular-nums">Time</th><th></th></tr>
                     </thead>
                     <tbody>
                         {#for item of section.items by item.id}
-                            <tr>
+                            <tr class="group">
                                 <td>
                                     {#if landed.get(item.id)?.state === 'broken'}
                                         {item.name}
-                                        <span class="board-note board-bad">{landed.get(item.id)?.note}</span>
+                                        <span class="block text-bad">{landed.get(item.id)?.note}</span>
                                     {:else if (landed.get(item.id)?.cases.length ?? 0) > 0}
-                                        <details open={(landed.get(item.id)?.failures ?? 0) > 0}>
-                                            <summary class:board-bad={(landed.get(item.id)?.failures ?? 0) > 0}>{item.name}</summary>
-                                            <ul class="board-cases">
+                                        <details class="mt-1" open={(landed.get(item.id)?.failures ?? 0) > 0}>
+                                            <summary class="cursor-pointer" class:text-bad={(landed.get(item.id)?.failures ?? 0) > 0}>{item.name}</summary>
+                                            <ul class="mt-2 mb-1 grid list-none grid-cols-[1rem_minmax(0,1fr)_auto] gap-x-2 p-0">
                                                 {#for one of landed.get(item.id)?.cases ?? []}
-                                                    <li>
+                                                    <li class="contents">
                                                         <span class={markOf(one).tone}>{markOf(one).mark}</span>
-                                                        <span class:board-waiting={one.skipped}>{one.name}</span>
-                                                        <span class="board-figure">{caseTime(one)}</span>
-                                                        {#if one.failure !== null}<pre>{one.failure}</pre>{/if}
+                                                        <span class:text-muted={one.skipped}>{one.name}</span>
+                                                        <span class="text-right whitespace-nowrap font-mono tabular-nums">{caseTime(one)}</span>
+                                                        {#if one.failure !== null}<pre class="col-[2/-1] mt-1 mb-2 whitespace-pre-wrap text-bad">{one.failure}</pre>{/if}
                                                     </li>
                                                 {/for}
                                             </ul>
@@ -172,10 +172,10 @@ function seconds(row: TestRow): string {
                                         {item.name}
                                     {/if}
                                 </td>
-                                <td class={`board-figure ${cellsOf(item).passingTone}`}>{cellsOf(item).passing}</td>
-                                <td class="board-figure">{cellsOf(item).skipped}</td>
-                                <td class={`board-figure ${cellsOf(item).timeTone}`}>{cellsOf(item).time}</td>
-                                <td class="board-figure"><button class="board-run" onclick={() => start(`item:${item.id}`)} disabled={running}>Run</button></td>
+                                <td class={`text-right whitespace-nowrap font-mono tabular-nums ${cellsOf(item).passingTone}`}>{cellsOf(item).passing}</td>
+                                <td class="text-right whitespace-nowrap font-mono tabular-nums">{cellsOf(item).skipped}</td>
+                                <td class={`text-right whitespace-nowrap font-mono tabular-nums ${cellsOf(item).timeTone}`}>{cellsOf(item).time}</td>
+                                <td class="text-right whitespace-nowrap font-mono tabular-nums"><button class="border border-rule bg-transparent px-2 py-1 font-mono text-chrome/4 font-medium text-muted enabled:hover:border-signal enabled:hover:text-signal opacity-50 transition-opacity duration-120 ease-[ease] group-hover:opacity-100 focus-visible:opacity-100" onclick={() => start(`item:${item.id}`)} disabled={running}>Run</button></td>
                             </tr>
                         {/for}
                     </tbody>
@@ -183,6 +183,6 @@ function seconds(row: TestRow): string {
             </section>
         {/for}
     {:else}
-        <p class="board-summary">Listing the test files…</p>
+        <p class="font-mono text-chrome/4 font-medium text-muted">Listing the test files…</p>
     {/if}
 </main>

@@ -46,7 +46,7 @@ which is a distinction an empty string would quietly lose.
 that matched, not the address that arrived. So a log line, a metric and an `{#if}` over the
 current route all key on `invoices/[id]` for every invoice rather than on one address each.
 
-```abide #ui/pages/invoices/[id]/page.abide
+```abide #ui/pages/invoices/[id]/page.abide — excerpt
 <script>
 import { reactive, route } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'
@@ -54,8 +54,8 @@ import { getInvoice } from '#server/rpc/invoices'
 const invoice = reactive(() => getInvoice({ id: route.params.id }))
 </script>
 
-<h1>Invoice {route.params.id}</h1>
-<p>{invoice.error() ? 'Could not load it.' : invoice.total}</p>
+<h1>Invoice {invoice.number}</h1>
+<p>{invoice.total} due {invoice.dueOn}</p>
 ```
 
 Reading `route.params` is a live read like any other, so a navigation from one invoice to

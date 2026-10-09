@@ -1,9 +1,10 @@
 import { GET } from 'abide/server'
-import { database } from '#server/timeoutPerChunkDatabase'
+import { timeoutPerChunkDatabase } from '#server/timeoutPerChunkDatabase'
 
 export const salesByRegion = GET(
     async function* ({ region }: { region: string }) {
-        for await (const row of database.sales.stream(region)) yield row
+        for await (const row of timeoutPerChunkDatabase.sales.stream(region))
+            yield row
     },
-    { timeout: 2_000 },
+    { timeout: 2_000, description: 'Sales for a region, a row at a time.' },
 )

@@ -8,6 +8,8 @@ enumerates:
   - url
   - navigate
   - reachable
+examples:
+  - packages/dogfood/examples/csp-blocked.json
 ---
 
 Five names that are not producers and not transports. `log` records what happened, `csp`
@@ -135,11 +137,7 @@ log.info('invoice paid', { id: '4310', cents: 124000 })
 
 ### A policy in `app.ts`
 
-```ts #server/app.ts — excerpt
-import { csp, middleware } from 'abide'
-
-middleware(csp({ 'img-src': ["'self'", 'https://cdn.example'] }))
-```
+{% snippet csp-blocked src/server/app.ts middleware( %}
 
 ### A refusal in place of a timeout
 
@@ -151,7 +149,7 @@ if (!(await reachable('api.example.com')))
 ### An address built from a literal
 
 ```abide abide
-<a href={url('/invoices/[id]', { id: invoice.id })}>{invoice.reference}</a>
+<a href={url('/invoices/[id]', { id: invoice.id })}>{invoice.number}</a>
 ```
 
 ## See also

@@ -1,7 +1,7 @@
 ---
-title: Patch a list from a live feed
+title: Patch a list as updates arrive
 nav: Patching a list
-intent: A list fetched once and kept current by a feed, without refetching it and without copying it per frame.
+intent: A list fetched once and kept current as updates arrive, without refetching it and without copying it per frame.
 covers:
   - `s.patch`
   - `transform`
@@ -30,9 +30,6 @@ Both halves are the member. The mutation alone moves nothing on the page, and a 
 says nothing new — `patch` is the pair, which is why it is a member rather than something you
 assemble at the call site.
 
-The fold itself lives in `#shared`, not in the page. It takes the index and one frame and returns
-nothing, which makes it the thing a test can drive without a document.
-
 Read on: [Local state](show-a-value-that-changes.md) ·
 [Watching values](do-something-when-a-value-changes.md)
 
@@ -59,7 +56,7 @@ expensive to find later rather than merely wrong.
 Read on: [Channels](let-anything-publish-and-anything-read.md) ·
 [Watching values](do-something-when-a-value-changes.md)
 
-## A `Map` is the shape a per-row feed wants
+## A `Map` is the shape per-row updates want
 
 {% example patch-transform %}
 
@@ -100,6 +97,6 @@ Read on: [History](keep-the-last-few-values.md) ·
 ## Next
 
 * [History](keep-the-last-few-values.md) — what the ring keeps under a patch
-* [Channels](let-anything-publish-and-anything-read.md) — where the feed itself comes from
+* [Channels](let-anything-publish-and-anything-read.md) — where the updates themselves come from
 * [Throttle & debounce](slow-down-a-value-that-changes-too-fast.md) — when the frames arrive faster
   than a paint

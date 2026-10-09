@@ -7,7 +7,7 @@ const CONTACTS: Record<string, Contact> = {
 }
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const oneTypeDatabase = {
     contacts: {
         async find(id: string): Promise<Contact> {
             await Bun.sleep(900)

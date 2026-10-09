@@ -61,7 +61,7 @@ to *name*, and finding that out at build beats finding it out in review.
 
 ## The same option, on a socket
 
-`clients` on a `socket` decides which surfaces carry that channel, and reads the same way. A feed
+`clients` on a `socket` decides which surfaces carry that channel, and reads the same way. A channel
 served to browsers and withheld from the tool list is `{ mcp: false }` on the socket, and the
 channel itself is untouched — a transport option never reaches the producer.
 

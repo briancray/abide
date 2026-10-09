@@ -6,12 +6,14 @@ covers:
   - `src/ui/pages/**/error.abide`
   - `onError`
   - `allow: GET, HEAD`
+examples:
+  - packages/dogfood/examples/error-report.json
 ---
 
 An `error.abide` is the page a failure renders in. It is resolved **nearest-ancestor**, exactly
 as a layout is, so a section can answer for its own failures and the app answers for the rest.
 
-```abide #ui/pages/error.abide
+```abide #ui/pages/error.abide — excerpt
 <script>
 import { notFound, props } from 'abide'
 
@@ -57,15 +59,12 @@ silently renders nothing is an app that looks fine and shows nobody anything.
 
 ## `onError` is the app's hook, not the page's
 
+{% example error-report %}
+
 `onError` runs on an unexpected error in that scope. It is where reporting goes — a log line, a
 call to whatever watches the app — and it is not where rendering goes: the page is markup, and
-the hook is a function.
-
-```ts #server/app.ts — excerpt
-import { log, onError } from 'abide'
-
-onError((error) => log.error('unhandled', { error }))
-```
+the hook is a function. A throw that is not a refusal answers the caller with a bare 500 and
+nothing about itself, so the reason reaches the hook and never the browser.
 
 Read on: [Lifecycle](../app/run-code-at-start-and-stop.md) ·
 [Logging](../app/record-what-happened.md)

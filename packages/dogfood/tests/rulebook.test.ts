@@ -337,16 +337,36 @@ test('every clause the brand cites exists', async () => {
 test('every clause the working notes cite exists', async () => {
     const notes = await Bun.file(new URL('../CLAUDE.md', DOCS)).text()
     const ids = new Set(clauses().map((clause) => clause.id))
+    const groups = new Set(
+        [...body(rulebook).matchAll(/^# (\d+)\./gm)].map((group) => group[1]),
+    )
     const dangling: string[] = []
+    // A citation is a list of clauses, ranges (`40.6-40.10`, both ends read) and whole groups
+    // (`RULEBOOK 40`), joined by commas and `and`.
     for (const match of notes.matchAll(
-        /RULEBOOK ((?:\d+\.\d+(?:,? (?:and )?)?)+)/g,
+        /RULEBOOK ((?:\d+(?:\.\d+)?(?:-\d+\.\d+)?(?:,? (?:and )?)?)+)/g,
     )) {
-        for (const id of (match[1] ?? '').matchAll(/\d+\.\d+/g)) {
-            if (!ids.has(id[0])) dangling.push(id[0])
+        for (const id of (match[1] ?? '').matchAll(/\d+\.\d+|\d+/g)) {
+            const known = id[0].includes('.')
+                ? ids.has(id[0])
+                : groups.has(id[0])
+            if (!known) dangling.push(id[0])
         }
     }
     expect(dangling.length === 0 && ids.size > 0).toBe(true)
     expect([...new Set(dangling)]).toEqual([])
+})
+
+// The check above reads only what follows the word RULEBOOK, so a bare `(40.17, 40.18)` in the
+// notes resolves or dangles with nothing looking. A parenthesised clause number is a citation, and
+// one written without its document is one the check cannot see.
+test('every clause the working notes cite names its document', async () => {
+    const notes = await Bun.file(new URL('../CLAUDE.md', DOCS)).text()
+    const bare: string[] = []
+    for (const match of notes.matchAll(/\((\d+\.\d+)[,)-]/g)) {
+        bare.push(match[0])
+    }
+    expect(bare).toEqual([])
 })
 
 // And the routing itself: a session told to read a document that is not there has been sent

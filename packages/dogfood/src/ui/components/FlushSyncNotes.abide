@@ -1,0 +1,31 @@
+<script>
+import { flushSync, reactive } from 'abide'
+
+let notes = reactive(['Called about the renewal', 'Sent the new quote'])
+let list = reactive<HTMLOListElement>()
+let measured = reactive(0)
+
+function add() {
+    notes = [...notes, `Follow-up ${notes.length - 1}`]
+    flushSync()
+    // The list is the one the write left, so the bottom is the new note.
+    list.scrollTop = list.scrollHeight
+    measured = list.children.length
+}
+</script>
+
+<ol bind:element={list}
+    class="h-24 overflow-y-auto rounded-md border border-rule bg-raised pl-10">
+{#for note of notes}
+    <li>{note}</li>
+{/for}
+</ol>
+
+<div class="row">
+    <button onclick={add}>Add note</button>
+</div>
+
+<ul class="tiles">
+    <li><span>notes</span><strong>{notes.length}</strong></li>
+    <li><span>rows measured</span><strong>{measured}</strong></li>
+</ul>

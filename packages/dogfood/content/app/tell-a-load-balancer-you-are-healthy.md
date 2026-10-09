@@ -9,6 +9,8 @@ covers:
   - `version`
   - `abide`
   - `startedAt`
+examples:
+  - packages/dogfood/examples/health-merge.json
 ---
 
 `GET /__abide/health` answers without you declaring it. What it says by default is what a load
@@ -26,12 +28,12 @@ balancer actually asks — is this the build I expect, and how long has it been 
 
 | | |
 | --- | --- |
-| `version` | the app's version — **empty rather than absent** where there is none |
+| `version` | the app's version — **`0.0.0` rather than absent** where the package declares none |
 | `abide` | the framework's version |
 | `startedAt` | when this process came up, ISO-8601 |
 
-`version` being empty rather than absent is the useful choice: a consumer reads one shape
-always, and "no version declared" is a value rather than a key that sometimes is not there.
+`version` always being there is the useful choice: a consumer reads one shape always, and "no
+version declared" is a value rather than a key that sometimes is not there.
 
 `startedAt` is a timestamp rather than an uptime because a timestamp is stable. Two scrapes a
 minute apart of the same process report the same `startedAt` and different uptimes, and only
@@ -39,16 +41,11 @@ one of those tells you a restart happened.
 
 ## `onHealth` adds to it, and the app wins
 
-```ts #server/app.ts — excerpt
-import { onHealth } from 'abide'
+{% example health-merge %}
 
-onHealth(async () => ({
-    database: await database.ping(),
-    queueDepth: queue.size,
-}))
-```
-
-What it returns is merged over the baseline, and **the app's own fields win every collision**.
+The `database` line is `app.ts`'s `onHealth`, and the `declare module` block beside it is what
+lets a page read `account.database` as a string. What a reporter returns is merged over the
+baseline, and **the app's own fields win every collision**.
 That is the direction that keeps the endpoint useful: an app that has a better answer for
 `version` than the one abide derived should be able to give it, and a framework overriding an
 app's field would make the endpoint say something nobody wrote.
@@ -66,27 +63,17 @@ Read on: [Lifecycle](run-code-at-start-and-stop.md) · [Logging](record-what-hap
 a page, `await health()` in a handler. The call is what asks, so a page that never makes it
 loads no account.
 
-```abide #ui/pages/status/page.abide — excerpt
-<script>
-import { health } from 'abide'
-
-const account = health()
-</script>
-
-<ul class="fields">
-    <li><span>version</span><strong>{account.version}</strong></li>
-    <li><span>up since</span><strong>{account.startedAt}</strong></li>
-</ul>
-```
+{% snippet health-merge src/ui/components/HealthMergeAccount.abide const account %}
 
 It is **seeded like any rpc**, which means the browser's own call on hydration is answered from
 the seed buffer rather than by the reporter running again (25.3, 41.5).
 
-## The endpoint is outside the onion
+## The endpoint passes the app's rungs
 
-`/__abide/health` is answered **outside middleware**, for the same reason a CORS preflight is:
-it carries no credentials, so there is nothing for a rung to authorise. A health check that a
-401 rung can fail is a health check that reports the auth layer rather than the app.
+`/__abide/health` goes through `middleware` like every other address — the `x-served-by` rung in
+`app.ts` stamps it too. So an app-wide rung that refuses a caller with no credentials has to let
+this address through. A load balancer presents none, and a health check a 401 rung can fail
+reports the auth layer rather than the app.
 
 It answers `no-store`, because it describes this process at this moment. A cached health check
 is a load balancer being told a drained instance is fine.

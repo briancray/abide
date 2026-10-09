@@ -1,0 +1,24 @@
+<script>
+import { reactive, refresh, structural, watch } from 'abide'
+import { getSales, recordSale } from '#server/rpc/identityStructuralSales'
+
+const sales = reactive(() => getSales(), { identity: structural })
+let redraws = reactive(0)
+
+// Where the chart would redraw: once per production that wakes it.
+watch(() => {
+    if (sales.north > 0) redraws = (redraws.peek() ?? 0) + 1
+})
+</script>
+
+<ul class="tiles">
+    <li><span>north</span><strong>{sales.north}</strong></li>
+    <li><span>south</span><strong>{sales.south}</strong></li>
+    <li><span>chart redraws</span><strong>{redraws}</strong></li>
+</ul>
+
+<div class="row">
+    <button onclick={() => refresh(sales)}>Refresh</button>
+    <button onclick={async () => { await recordSale(); refresh(sales) }}>
+        Record a sale</button>
+</div>

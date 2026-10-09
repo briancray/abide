@@ -18,17 +18,25 @@
 // `route.url()` is where the app is served — below a mount, `/docs/values` for `/values` — and the
 // link is written through `url` for the same reason (16.11).
 import { raw, route, url } from 'abide'
+//
+// `-ml-2` IS NOT SPACING: it pulls the link's own padding back off the rail so the TEXT lines up
+// with the section name above it, hover surface and all. A stub's link recedes further than the
+// rest until it is pointed at. `sidebar` carries no rule — it is what `e2e/app.spec.ts` finds the
+// nav by.
 import { sidebarGroupsOf } from '#ui/siteSections.ts'
+
+const LINK =
+    '-ml-2 block flex-1 rounded-sm px-2 py-1 text-chrome no-underline transition-[opacity,background-color] duration-120 ease-[ease]'
 </script>
 
 {#if sidebarGroupsOf(route.name()).length > 0}
-<nav class="sidebar">
+<nav class="sidebar sticky top-bar flex h-[calc(100vh_-_var(--spacing-bar))] flex-col gap-section self-start overflow-y-auto border-r border-rule px-4 pt-7 pb-16 max-lg:static max-lg:h-auto max-lg:border-r-0 max-lg:border-b">
     {#for group of sidebarGroupsOf(route.name())}
-        <section>
-            <h2>{group.section}</h2>
-            <ul>
+        <section class="flex flex-col gap-snug">
+            <h2 class="font-mono text-micro/2 font-medium tracking-caps text-muted uppercase">{group.section}</h2>
+            <ul class="flex list-none flex-col gap-hair p-0">
                 {#for item of group.pages}
-                    <li>{#if item.href === route.name()}<a href={url(item.href)} aria-current="page">{raw(item.nav)}</a>{:else}<a href={url(item.href)}>{raw(item.nav)}</a>{/if}{#if item.stub}<span class="stub" title="Stub — not written yet"></span>{/if}</li>
+                    <li class="flex items-baseline gap-tight">{#if item.href === route.name()}<a class="{LINK} bg-signal/12 font-semibold text-signal" href={url(item.href)} aria-current="page">{raw(item.nav)}</a>{:else}<a class="{LINK} text-ink hover:bg-signal/10 hover:opacity-100 {item.stub ? 'opacity-52' : 'opacity-75'}" href={url(item.href)}>{raw(item.nav)}</a>{/if}{#if item.stub}<span class="size-1 flex-none self-center rounded-full bg-muted opacity-55" title="Stub — not written yet"></span>{/if}</li>
                 {/for}
             </ul>
         </section>

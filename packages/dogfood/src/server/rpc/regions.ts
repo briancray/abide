@@ -1,5 +1,6 @@
 import { GET } from 'abide/server'
-import type { Region } from '#shared/patchTransformRegions'
+
+type Region = { id: string; name: string; orders: number }
 
 const BOOKED: Region[] = [
     { id: 'north', name: 'North', orders: 120 },
@@ -8,8 +9,11 @@ const BOOKED: Region[] = [
     { id: 'west', name: 'West', orders: 91 },
 ]
 
-export const getRegions = GET(async (): Promise<Region[]> => {
-    // A slow service, so the wait is on screen.
-    await Bun.sleep(450)
-    return BOOKED
-})
+export const getRegions = GET(
+    async (): Promise<Region[]> => {
+        // A slow service, so the wait is on screen.
+        await Bun.sleep(450)
+        return BOOKED
+    },
+    { description: 'The orders booked in each region.' },
+)

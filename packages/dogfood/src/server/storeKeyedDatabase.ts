@@ -8,7 +8,7 @@ const BY_PROFILE: Record<string, Settings> = {
 }
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const storeKeyedDatabase = {
     settings: {
         async forProfile(profile: string): Promise<Settings> {
             await Bun.sleep(450)

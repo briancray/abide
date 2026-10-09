@@ -70,11 +70,11 @@ reached it, and there is no moment at which one request's is visible to another'
 | `principal.authenticated` | `Reactive<boolean>` | Whether this caller presented something the server accepted. |
 | `principal.expiresAt` | `Reactive<string \| undefined>` | When the seal lapses. |
 | `principal.error` | `Reactive<Failed<string, unknown> \| undefined>` | The app's resolver having failed. |
-| `principal.resolved` | `Reactive<unknown>` | What `onPrincipal` returned, merged over the baseline. |
+| `principal.resolved` | `Reactive<Principal>` | What `onPrincipal` returned, merged over the baseline. |
 | `principal.caller` | `Reactive<string>` | Which browser, as against who they are. |
 | `principal.set` | `(claims: unknown) => Promise<void>` | Authenticates this caller. |
 | `principal.clear` | `() => void` | Signs this caller out. |
-| `Principal` | `{ authenticated, expiresAt?, error?, …claims }` | The wire document. |
+| `Principal` | `interface Principal { [claim: string]: unknown; authenticated: boolean; expiresAt?: string; error?: Failed<string, unknown> }` | The wire document. |
 | `authenticated` | `boolean` | Whether this caller presented a seal the server accepted. |
 | `expiresAt` | `string \| undefined` | When the seal lapses. |
 | `error` | `Failed<string, unknown> \| undefined` | The app's resolver having failed. |
@@ -144,14 +144,17 @@ tracking rules.
 ### The caller, in a rung
 
 ```ts #server/rpc/invoices.ts — excerpt
-export const getInvoice = GET(invoiceById, {
-    middleware: [
-        (next, ctx) => {
-            if (!principal.authenticated()) return refuse(401)
-            return next(ctx)
-        },
-    ],
-})
+export const voidInvoice = POST(
+    ({ id }: { id: string }) => database.invoice.void(id),
+    {
+        middleware: [
+            (next, ctx) => {
+                if (!principal.authenticated()) return refuse(401)
+                return next(ctx)
+            },
+        ],
+    },
+)
 ```
 
 ### The route, in a layout

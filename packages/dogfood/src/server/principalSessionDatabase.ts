@@ -11,7 +11,7 @@ const USERS: Record<string, User> = {
 }
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const principalSessionDatabase = {
     users: {
         async byEmail(email: string): Promise<User | null> {
             await Bun.sleep(450)

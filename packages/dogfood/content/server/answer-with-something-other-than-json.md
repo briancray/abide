@@ -12,6 +12,10 @@ covers:
   - `cache-control: private, no-store`
   - `cache-control: private, max-age=<ttl>`
   - `cache-control: public, max-age=31536000, immutable`
+examples:
+  - packages/dogfood/examples/json-null.json
+  - packages/dogfood/examples/page-issued.json
+  - packages/dogfood/examples/redirect-avatar.json
 ---
 
 Most handlers return a value and never think about a `Response`. Some have to: a sign-in that
@@ -73,46 +77,44 @@ back on where the body is JSON you wanted a header on.
 
 Read on: [Reading data](read-data-without-writing-an-api.md) · [Streaming data](send-data-as-it-arrives.md)
 
-## `json` fixes an answer as JSON
+## `json` answers `null` where a bare return says nothing
 
-```ts server
-response().status = 206
-response().headers.set('cache-control', 'public, max-age=60')
-return json(rows)
-```
+{% example json-null %}
 
-The same serialization a bare return gets, and nothing a caller's `Accept` asks for moves it off
-JSON. `undefined` sends `null` at the status you wrote, where a bare `undefined` is a 204 with no
-body.
+*1 helper, 0 special cases* — the arm spells the `?? null` out, and a route that forgets it
+answers an empty body the script's `json()` throws on.
 
-## `page` sends what a render produced
+A bare `undefined` is a 204 with no body (16.32), which is right for a write with nothing to report
+and wrong for a read whose answer is "nobody". `json` sends `null` at the status written through
+`response`, 200 unless something wrote another (17.10). It is the same serialization a bare return
+gets otherwise, fixed, so nothing a caller's `Accept` asks for moves it off JSON.
 
-`page` takes what a render **produced** rather than doing the render, which is why it takes the
-bytes `render` hands back:
+## `page` answers with a document
 
-```ts #server/rpc/previews.ts — excerpt
-import { page, render } from 'abide'
-import Invoice from '#ui/components/Invoice.abide'
+{% example page-issued %}
 
-export const previewInvoice = GET(async ({ id }: { id: string }) =>
-    page(await render(Invoice({ invoice: await database.invoice.find(id) }))),
-)
-```
+*1 helper, 0 headers* — the arm sets `text/html` itself, and an answer without it is text a
+browser is told by `nosniff` not to guess at.
 
-`text/html`, the bytes as the render built them. `render` takes an optional shell, so an email body
-or an embed comes from the same component.
+`page` takes what a render **produced** rather than doing the render — a stored copy, as here, or
+the bytes `render` hands back from one of the app's own components, which
+[Manual rendering](../pages/render-a-document-yourself.md) runs as a preview. Either way it is
+`text/html`, the bytes as they were built.
 
-Read on: [Manual rendering](../pages/render-a-document-yourself.md)
+## `redirect` sends the caller on to another address
 
-## `redirect` navigates, and carries an `init`
+{% example redirect-avatar %}
+
+*0 addresses written twice* — the arm spells the photo route's path and query a second time in the
+`location` it builds, and `photo.url()` is the handler's own address.
 
 ```ts shared
 type RedirectStatus = 301 | 302 | 303 | 307 | 308
 ```
 
 The status is restricted to those five, defaulting to `302`, so a typo is a compile error rather
-than a browser quietly ignoring the header. The `init` is where a sign-in's cookie goes, as
-above.
+than a browser quietly ignoring the header. A sign-in's cookie is written through `cookies` before
+the return, so the cookie and the navigation after it are one answer.
 
 `303` is the one a mutation wants: it turns a `POST` into a `GET` at the destination, which stops
 a refresh re-submitting. A `POST` that returns a plain value to a form navigation
@@ -150,17 +152,9 @@ Read on: [Mutations](change-something-on-the-server.md) ·
 
 ## An app route answers with the same helpers
 
-`src/server/app.ts` exports one route of the app's own, asked before the router, and it uses
-this same set — there is no second one:
-
-```ts #server/app.ts — excerpt
-export default (request: Request) =>
-    new URL(request.url).pathname === '/robots.txt'
-        ? new Response('User-agent: *')
-        : undefined
-```
-
-Returning `undefined` hands the request on to routing.
+`src/server/app.ts` exports one route of the app's own, asked where no page, handler or public
+file answered, and it uses this same set — there is no second one. Returning `undefined` hands
+the request on to the 404.
 
 Read on: [Lifecycle](../app/run-code-at-start-and-stop.md)
 

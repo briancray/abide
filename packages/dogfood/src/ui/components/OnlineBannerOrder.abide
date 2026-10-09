@@ -1,0 +1,12 @@
+<script>
+import { online } from 'abide'
+</script>
+
+{#if !online}
+    <p class="status">You are offline. Nothing is being saved.</p>
+{/if}
+
+<ul class="fields">
+    <li><span>connection</span>
+        <strong>{online ? 'online' : 'offline'}</strong></li>
+</ul>

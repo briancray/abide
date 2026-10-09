@@ -10,7 +10,7 @@ export type Invoice = { total: string; sent: number }
 let sent = 0
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const probeRefreshDatabase = {
     invoices: {
         async find(_id: string): Promise<Invoice> {
             await Bun.sleep(900)

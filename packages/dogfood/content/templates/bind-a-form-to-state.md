@@ -12,6 +12,7 @@ covers:
 examples:
   - packages/dogfood/examples/bind-text.json
   - packages/dogfood/examples/bind-boolean.json
+  - packages/dogfood/examples/bind-branch.json
   - packages/dogfood/examples/bind-group.json
 ---
 
@@ -46,19 +47,21 @@ and **never stringifies it**, so a `false` is an absent attribute rather than th
 `bind:open` is the same binding on a `<details>`, written back from its `toggle` event, so a
 disclosure's open state is somewhere you can read rather than somewhere in the DOM.
 
-```abide abide
-<label><input type="checkbox" bind:checked={subscribed}> Email me</label>
+{% snippet bind-boolean src/ui/components/Advanced.abide <details bind:open … <li><span>advanced %}
 
-<details bind:open={showAdvanced}>
-    <summary>Advanced</summary>
-    <input bind:value={endpoint}>
-</details>
-
-{#if showAdvanced}<p class="hint">These apply on save.</p>{/if}
-```
-
-The `{#if}` reads `showAdvanced` like any other value, which is the point of binding it: the
+The readout reads `showAdvanced` like any other value, which is the point of binding it: the
 disclosure is a value, so the rest of the page can branch on it.
+
+## A bound value decides what renders
+
+{% example bind-branch %}
+
+`{#if billSeparately}` reads the bound value like any other read, so the field mounts when the box
+is ticked and unmounts when it is cleared. There is no listener calling a second render and no
+teardown for the field it built — the hand-written arm carries both.
+
+What was typed into the address goes with it, the input being unbound. Bind it too where it has
+to survive the box being cleared and ticked again.
 
 ## A radio group binds to one value, a checkbox set to an array
 

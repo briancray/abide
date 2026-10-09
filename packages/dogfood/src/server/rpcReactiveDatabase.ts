@@ -5,7 +5,7 @@ export type Invoice = { total: string }
 const INVOICES: Record<string, Invoice> = { '4021': { total: '$1,240.00' } }
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const rpcReactiveDatabase = {
     invoices: {
         async find(id: string): Promise<Invoice> {
             await Bun.sleep(700)

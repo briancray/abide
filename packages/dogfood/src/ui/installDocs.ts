@@ -1,3 +1,5 @@
+import { config } from 'zod'
+
 // THE DOCS APP'S OWN CLIENT CODE — the scroll spy in the rail, and an example card's tabs.
 // Imperative DOM work over nodes the page painted.
 //
@@ -6,6 +8,11 @@
 // what a navigation runs — so the window listeners of the page a reader left go with that page
 // rather than being watched for. It was a `MutationObserver` over the body until the compiler
 // emitted the binding, which is the same thing guessed at.
+
+// zod probes for `new Function` when it BUILDS an object schema, and the CSP refuses that eval
+// (29.5). Every generated page imports this module ahead of its components, so this runs before
+// any example's schema module does — which is what keeps the switch out of the example source.
+config({ jitless: true })
 
 /**
  * Marks the rail link of the heading the reader has scrolled to, until `signal` aborts.

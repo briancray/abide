@@ -10,4 +10,6 @@ const matching = reactive(async (args: { query: string }) => {
     return PEOPLE.filter((one) => one.toLowerCase().includes(word))
 })
 
-export const searchContacts = GET(matching)
+export const searchContacts = GET(matching, {
+    description: 'Contacts whose name contains a query.',
+})

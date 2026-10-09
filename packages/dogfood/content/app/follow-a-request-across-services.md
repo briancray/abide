@@ -9,6 +9,8 @@ covers:
   - `trace.headers`
   - `traceresponse`
   - `server-timing`
+examples:
+  - packages/dogfood/examples/trace-lines.json
 ---
 
 Every log line an abide app writes carries a `trace`. It is the id of the operation the work
@@ -17,9 +19,12 @@ than twelve lines interleaved with everybody else's.
 
 ## `trace()` is built on first ask and held
 
+{% example trace-lines %}
+
 There is nothing to start and nothing to pass down. The id is built the first time something
 asks for it and held for the request, so a rung, a handler and a component rendering on the
-server all read the same one.
+server all read the same one. The billing module above was handed a contact id and nothing else,
+and the line it wrote carries the trace anyway.
 
 A request arriving with a `traceparent` continues that trace rather than starting a new one,
 which is what makes the id useful across a service boundary at all.

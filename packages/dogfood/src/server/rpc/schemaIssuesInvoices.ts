@@ -1,10 +1,10 @@
 import { GET, reactive } from 'abide/server'
 import { z } from 'zod'
-import { database } from '#server/schemaIssuesDatabase'
+import { schemaIssuesDatabase } from '#server/schemaIssuesDatabase'
 
 const found = reactive(
     ({ query, limit }: { query: string; limit: number }) =>
-        database.invoices.search(query, limit),
+        schemaIssuesDatabase.invoices.search(query, limit),
     {
         args: z.object({
             query: z.string().min(2, 'Type at least two characters.'),
@@ -13,4 +13,6 @@ const found = reactive(
     },
 )
 
-export const searchInvoices = GET(found)
+export const searchInvoices = GET(found, {
+    description: 'Invoices matching a query.',
+})

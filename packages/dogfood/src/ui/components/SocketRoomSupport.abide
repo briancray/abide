@@ -1,0 +1,26 @@
+<script>
+import { cookies, reactive } from 'abide'
+import support from '#server/sockets/socketRoomSupport'
+
+// This browser's room, by an id in a cookie every tab of it sends.
+const id = cookies().get('room') ?? crypto.randomUUID()
+cookies().set('room', id)
+const room = support({ id })
+const draft = reactive('Is invoice 4021 paid yet?')
+</script>
+
+<ul class="chat">
+    <li data-speaker={room?.speaker}>
+        <span>{room?.speaker ?? 'connecting'}</span>
+        <p>{room?.text ?? '…'}</p>
+    </li>
+</ul>
+
+<div class="row">
+    <label>message
+        <input bind:value={draft}>
+    </label>
+    <button onclick={() => room.publish({ speaker: 'you', text: draft })}>
+        Send
+    </button>
+</div>

@@ -1,0 +1,13 @@
+{
+    "title": "`createApp()` — the app a test holds, with no port",
+    "summary": "The test beside the card asks for the pool through app.fetch, then stops the app. Fetch the same handler over the wire and read the same answer.",
+    "app": "crm",
+    "about": "server",
+    "files": [
+        "src/server/app.test.ts",
+        "src/server/startHookDatabase.ts",
+        "src/server/rpc/startHookPool.ts",
+        "src/ui/components/AppFetchAnswer.abide"
+    ],
+    "render": "src/ui/components/AppFetchAnswer.abide"
+}

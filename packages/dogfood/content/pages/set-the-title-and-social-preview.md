@@ -48,7 +48,7 @@ the head's.
 
 ```abide #ui/pages/invoices/[id]/page.abide — excerpt
 <head>
-    <title>Invoice {invoice.reference}</title>
+    <title>Invoice {invoice.number}</title>
 </head>
 ```
 

@@ -9,7 +9,7 @@ export type Invoice = { ref: string }
 const INVOICES: Record<string, Invoice> = { 'abc-123': { ref: 'ABC-123' } }
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const schemaKeyDatabase = {
     invoices: {
         async find(id: string): Promise<Invoice> {
             await Bun.sleep(900)

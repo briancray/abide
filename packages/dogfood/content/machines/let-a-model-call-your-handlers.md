@@ -51,7 +51,7 @@ every refusal has one.
 
 Read on: [Failures](../server/refuse-a-request-and-say-why.md)
 
-## Off by default, and inside the onion
+## Off by default, and behind your middleware
 
 `ABIDE_MCP` opts the address in, and the address runs inside the app's own middleware like
 every `/__abide/**` address. So the rung that authorises a browser authorises an agent, with

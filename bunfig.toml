@@ -1,5 +1,8 @@
 [install]
 linker = "hoisted"
+# A peer is not installed for us: bun-plugin-tailwind names `bun` as one, and an installed copy
+# lands first on the PATH inside `bun run`, shadowing the bun that runs everything else.
+peer = false
 
 [test]
 # Registers the DOM the framework's own tests render into. Run `bun test` from the

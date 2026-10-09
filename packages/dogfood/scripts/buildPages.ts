@@ -24,7 +24,7 @@
 // every file is compared before it is written and what is left over is deleted at the end, and
 // one word changes one page.
 
-import { readdir, rm, rmdir } from 'node:fs/promises' // bun has no directory remove or listing of its own
+import { rmdir } from 'node:fs/promises' // bun has no directory remove: `Bun.file().delete()` takes files only
 
 import { escapeAttribute } from 'abide'
 
@@ -92,7 +92,9 @@ function navItems(pages: Page[]): string {
     return `// Written by \`scripts/buildPages.ts\` from the front matter under \`content/\`. The ORDER and the
 // GROUPING are \`scripts/NAV.ts\`; the label and the stub mark are each page's own.
 
-export type NavItem = { slug: string; href: string; nav: string; stub: boolean }
+import type { RouteLiteral } from 'abide'
+
+export type NavItem = { slug: string; href: RouteLiteral; nav: string; stub: boolean }
 export type NavGroup = { section: string; pages: NavItem[] }
 
 export const NAV_ITEMS: NavGroup[] = [
@@ -186,13 +188,16 @@ export const CONTENT: DocsContent = ${JSON.stringify(record, null, 4)}
 // `<slot/>` AT THE BODY'S OWN LEVEL, because the body is a grid — the bar across the top, then nav,
 // `<main>`, rail — and the page's `<main>` and rail are its second and third columns. The region
 // anchors round the slot are comments, which are not grid items.
+//
+// THE SKIP LINK IS OFF SCREEN rather than `hidden`, which would take it out of the tab order it
+// exists for — and on screen again the moment it has focus.
 const LAYOUT = `<script>
 import DocsNav from '#ui/components/DocsNav.abide'
 import SiteBar from '#ui/components/SiteBar.abide'
 import '#ui/app.css'
 </script>
 
-<a class="skip" href="#content">Skip to content</a>
+<a class="absolute -left-1000 focus:top-2 focus:left-2 focus:z-2 focus:rounded-md focus:bg-raised focus:px-3 focus:py-2" href="#content">Skip to content</a>
 <SiteBar/>
 <DocsNav/>
 <slot/>
@@ -365,25 +370,30 @@ async function prune(root: URL, written: Set<string>): Promise<void> {
         onlyFiles: true,
     })) {
         const path = new URL(name, root).pathname
-        if (!written.has(path)) await rm(path)
+        if (!written.has(path)) await Bun.file(path).delete()
     }
     // AND THE DIRECTORIES THAT LEAVES EMPTY, deepest first so a parent is asked after its
     // children went. Under `pages/` an empty directory is harmless; under `public/` it is a folder
     // the app serves a listing-shaped nothing from.
-    const directories = [
-        ...new Bun.Glob('**/*').scanSync({
-            cwd: root.pathname,
-            onlyFiles: false,
-        }),
-    ]
-        .map((name) => new URL(name, root).pathname)
-        .sort((a, b) => b.length - a.length)
-    for (const path of directories)
-        if (
-            !written.has(path) &&
-            (await readdir(path).catch(() => null))?.length === 0
-        )
-            await rmdir(path)
+    const files = new Set(
+        new Bun.Glob('**/*').scanSync({ cwd: root.pathname, onlyFiles: true }),
+    )
+    const directories: string[] = []
+    for (const name of new Bun.Glob('**/*').scanSync({
+        cwd: root.pathname,
+        onlyFiles: false,
+    }))
+        if (!files.has(name)) directories.push(new URL(name, root).pathname)
+    directories.sort((a, b) => b.length - a.length)
+    for (const path of directories) if (isEmpty(path)) await rmdir(path)
+}
+
+function isEmpty(directory: string): boolean {
+    return (
+        new Bun.Glob('*')
+            .scanSync({ cwd: directory, onlyFiles: false, dot: true })
+            .next().done === true
+    )
 }
 
 if (import.meta.main) {

@@ -1,0 +1,21 @@
+<script>
+import { jsonSchema, reactive } from 'abide'
+
+let deal = reactive({ seats: 48 }, {
+    schema: jsonSchema<{ seats: number }>({
+        type: 'object',
+        properties: { seats: { type: 'integer', minimum: 1, maximum: 50 } },
+    }),
+})
+</script>
+
+<ul class="tiles">
+    <li><span>seats on the deal</span>
+        <div class="stepper">
+            <button onclick={() => { deal.seats -= 1 }}>−</button>
+            <strong>{deal.seats}</strong>
+            <button onclick={() => { deal.seats += 1 }}>+</button>
+        </div></li>
+</ul>
+
+<p class="status">{deal.error()?.data.seats?.[0] ?? ''}</p>

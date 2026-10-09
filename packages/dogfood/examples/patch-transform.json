@@ -1,9 +1,8 @@
 {
     "title": "`reactive(() => rows, { transform })` — an array in, an index held",
-    "summary": "The regions table arriving from the server as a list, on a dashboard whose feed names ids.",
+    "summary": "The regions table arriving from the server as a list, on a dashboard whose updates name ids.",
     "app": "dashboard",
     "files": [
-        "src/shared/patchTransformRegions.ts",
         "src/server/rpc/regions.ts",
         "src/ui/components/PatchTransformDashboard.abide"
     ],

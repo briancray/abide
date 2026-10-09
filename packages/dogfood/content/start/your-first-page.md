@@ -83,7 +83,7 @@ Read on: [Local state](../values/show-a-value-that-changes.md) ·
 The same page reaches your database by importing the function that reads it. Anything exported
 from `#server/rpc/**` is callable from a page under the name it was declared with.
 
-```ts #server/rpc/invoices.ts
+```ts #server/rpc/invoices.ts — excerpt
 import { GET } from 'abide/server'
 import { database } from '#server/database'
 
@@ -93,7 +93,7 @@ export const getInvoice = GET(
 )
 ```
 
-```abide #ui/pages/invoices/[id]/page.abide
+```abide #ui/pages/invoices/[id]/page.abide — excerpt
 <script>
 import { reactive, route } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'

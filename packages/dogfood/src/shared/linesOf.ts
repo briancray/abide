@@ -2,6 +2,10 @@
  * The lines `body` carries, each as it lands, the last one whether or not a newline ends it.
  *
  * A reader rather than `for await`, which not every engine a reader brings iterates a body with.
+ *
+ * A harness child's stdout for /bench and /tests, and the rows the page reads back. Its own rather
+ * than the bridge's `readLines`: neither package depends on the other, and abide exports no line
+ * reader of its own.
  */
 export async function* linesOf(
     body: ReadableStream<Uint8Array>,

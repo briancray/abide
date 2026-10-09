@@ -7,6 +7,7 @@ covers:
   - rpc › `middleware`
   - Lifecycle hooks › `middleware`
 examples:
+  - packages/dogfood/examples/middleware-stamp.json
   - packages/dogfood/examples/rung-order.json
 ---
 
@@ -46,8 +47,8 @@ id in the arguments cannot be reachable by a browser and missed by the render. T
 stays `Response`-shaped because pre-routing there is no value yet, which also makes it the lane
 where a rung that must set a header belongs.
 
-A rung's refusals join the handler's own in what the caller can narrow, so `getInvoice.isError(
-error, 'NotYours')` reaches a name the rung declared and never the handler.
+A rung's refusals join the handler's own in what the caller can narrow, so `rpc.isError(error,
+'NotYours')` reaches a name the rung declared and never the handler.
 
 Read on: [Sockets](keep-a-room-of-callers-in-sync.md)
 
@@ -74,15 +75,13 @@ A rung that wants to observe both — a timer, a log line — calls `next` insid
 
 ## The app-wide rung goes in `app.ts`
 
+{% example middleware-stamp %}
+
 `middleware(...)` registers pre-routing rungs. It is a hook you **call**, so it can be
 registered from whatever module owns the thing it is about, and `app.ts` is the right place for
-the app-wide ones only because that file always runs at startup:
-
-```ts #server/app.ts
-import { csp, middleware } from 'abide'
-
-middleware(csp(), requireSignIn())
-```
+the app-wide ones only because that file always runs at startup. The rung after `csp()` sets a
+header on the way out, so every answer carries it — a page, this handler, a built asset, the
+health check — and no handler wrote it.
 
 Rungs compose in registration order. The call hands back the way off again, so a module that is
 torn down can remove its own.
@@ -126,7 +125,7 @@ Read on: [Request](../app/read-the-incoming-request.md)
 app middleware -> routing -> rpc middleware -> args parse -> handler
 ```
 
-Two things sit **outside** the onion on purpose: a `CORS` preflight, which carries no
+Two things sit **outside** middleware on purpose: a `CORS` preflight, which carries no
 credentials and so has nothing for a rung to authorise, and `/__abide/health`, for the same
 reason.
 

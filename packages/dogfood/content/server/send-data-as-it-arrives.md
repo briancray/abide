@@ -8,6 +8,9 @@ covers:
   - `bytes`
   - `Values<T>`
 examples:
+  - packages/dogfood/examples/sse-wallboard.json
+  - packages/dogfood/examples/jsonl-export.json
+  - packages/dogfood/examples/bytes-csv.json
   - packages/dogfood/examples/stream-rows.json
 ---
 
@@ -18,17 +21,19 @@ Yield from the handler. What it produces is streamed as it arrives, and the same
 answers with the whole thing to anything that waits for the whole thing — one address, and no
 second endpoint to keep in step with the first.
 
-## The two framings
+## The three framings
 
 | The handler returns | The caller gets |
 | --- | --- |
 | an `AsyncGenerator` | **jsonl** — one JSON value per line, `application/jsonl` |
+| `jsonl(values)` | the same, fixed: no `Accept` moves it |
 | `sse(values)` | `text/event-stream` — the same transcript, `data: ` per line |
+| `bytes(values)` | `application/octet-stream` — the chunks as they are, no framing |
 
-Both take `Values<T>`, and the second is reachable from the first without declaring it: send
+Each takes `Values<T>`, and sse is reachable from jsonl without declaring it: send
 `Accept: text/event-stream` to a jsonl address and the answer is reframed, which is why it
-carries `vary: accept`. Every signature is in the
-[Transports](../reference/transports.md) reference.
+carries `vary: accept`. A helper fixes the framing, and nothing a caller asks for moves an answer
+off it. Every signature is in the [Transports](../reference/transports.md) reference.
 
 ## An async generator streams as JSON Lines
 
@@ -38,21 +43,46 @@ cursor rather than piling rows up in memory.
 
 That is the default framing and not the only one.
 
-## `sse` frames the same stream as events
+## `sse` answers events whatever the caller asked for
 
-Two ways to get `text/event-stream` out of the same handler:
+{% example sse-wallboard %}
 
-```ts #server/rpc/reports.ts — excerpt
-import { sse } from 'abide'
+*1 helper, 0 lines of framing* — the arm writes `data: `, the blank line after it and the two
+headers a proxy needs to leave the stream alone, by hand, per event.
 
-export const ticks = GET(() => sse(marketFeed()))
-```
-
-Or send `Accept: text/event-stream` to the address above and get the jsonl transcript reframed
-— `data: <json>` per line with a blank line after it, plus `no-cache` and
-`X-Accel-Buffering: no`. One URL with two bodies, so the answer carries `vary: accept`.
+The card's request carries no `Accept`, which is what a wallboard script or a `curl` sends, and
+without `sse` that caller is answered jsonl. A caller that does ask — an `EventSource` sends
+`Accept: text/event-stream` — gets the same events from a handler that never declared them: the
+jsonl transcript reframed as `data: <json>` per line with a blank line after it, `no-cache` and
+`X-Accel-Buffering: no`. That is one URL with two bodies, so it carries `vary: accept`. Declaring
+`sse` is for the caller who cannot say what it wants. The `:` the card's answer opens on is a
+comment, which sends the head before the first event exists.
 
 Read on: [Response types](answer-with-something-other-than-json.md)
+
+## `jsonl` sends a list a line at a time
+
+{% example jsonl-export %}
+
+*1 helper, 0 joins* — the arm serializes each row and writes the newline after it, and a
+trailing one so the last line is whole to a reader that splits on them.
+
+An array is a value, so returned bare it goes out as one JSON array (16.31) — a loader that reads
+line by line gets one very long line. `jsonl` makes any `Values<T>` a stream, an array included,
+and fixes the framing: a caller sending `Accept: text/event-stream` is still answered lines
+(17.7).
+
+## `bytes` writes a file as its rows are read
+
+{% example bytes-csv %}
+
+*1 helper, 0 stream controllers* — the arm hand-writes the `ReadableStream`: a pull per row, the
+header line first, the close at the end.
+
+Each chunk goes out as it is yielded, unframed, as `application/octet-stream`. A stream whose first
+chunk is binary is answered that way without the helper (16.48); what `bytes` adds is saying so
+before there is a first chunk. An export with no rows yields nothing to read the type from, and is
+answered as an empty jsonl stream rather than an empty file.
 
 ## Every body helper takes `Values<T>`
 
@@ -60,7 +90,7 @@ Read on: [Response types](answer-with-something-other-than-json.md)
 type Values<T> = Iterable<T> | AsyncIterable<T> | ReadableStream<T>
 ```
 
-One input type across `page`, `json`, `jsonl` and `sse`. A source that is already a
+One input type across `page`, `jsonl`, `sse` and `bytes`. A source that is already a
 `ReadableStream` is not converted into an iterable to become one.
 
 ## The caller gets a `Reactive`, not a stream to manage

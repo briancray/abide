@@ -2,9 +2,6 @@
     "title": "`s.patch(mutate)` — change in place, and mint the production",
     "summary": "A regional dashboard whose order counts arrive one region at a time.",
     "app": "dashboard",
-    "files": [
-        "src/shared/patchWakesRegions.ts",
-        "src/ui/components/PatchWakesDashboard.abide"
-    ],
+    "files": ["src/ui/components/PatchWakesDashboard.abide"],
     "render": "src/ui/components/PatchWakesDashboard.abide"
 }

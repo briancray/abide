@@ -1,6 +1,6 @@
 <script>
 import { principal, reactive } from 'abide'
-import { signIn } from '#server/rpc/principalSessionSession'
+import { signIn, signOut } from '#server/rpc/principalSessionSession'
 
 let email = reactive('ada@example.com')
 </script>
@@ -10,7 +10,7 @@ let email = reactive('ada@example.com')
         <input bind:value={email}>
     </label>
     <button onclick={() => {
-        if (principal.authenticated()) principal.clear()
+        if (principal.authenticated()) signOut()
         else signIn({ email })
     }}>{principal.authenticated() ? 'Sign out' : 'Sign in'}</button>
 </div>

@@ -9,9 +9,7 @@ const invoice = reactive(() => getInvoice({ id: '4021' }))
     <button onclick={() => refresh(invoice)}>Retry</button>
 </div>
 
-{#if invoice.error()}
-    <p class="status">{invoice.error().message}</p>
-{/if}
+<p class="status">{invoice.error()?.message ?? ''}</p>
 
 <ul class="fields stacked">
     <li><span>total</span>

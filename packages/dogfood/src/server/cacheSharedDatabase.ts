@@ -15,7 +15,7 @@ const BY_RANGE: Record<string, { orders: number; average: string }> = {
 let computed = 0
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const cacheSharedDatabase = {
     metrics: {
         async forRange(range: string): Promise<Metrics> {
             await Bun.sleep(700)

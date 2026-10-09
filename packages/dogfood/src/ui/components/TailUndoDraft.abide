@@ -1,6 +1,6 @@
 <script>
 import { reactive, watch } from 'abide'
-import { undoStack } from '#shared/undo'
+import { undoStack } from '#shared/undoStack'
 
 let draft = reactive('How do')
 

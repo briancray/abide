@@ -1,0 +1,6 @@
+<script>
+import { issuedInvoice } from '#server/rpc/pageIssuedInvoices'
+</script>
+
+<iframe src={issuedInvoice.url({ id: '4021' })} title="INV-4021"
+    class="h-56 w-full rounded-md border border-rule"></iframe>

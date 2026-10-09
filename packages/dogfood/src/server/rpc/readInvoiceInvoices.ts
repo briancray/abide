@@ -1,7 +1,10 @@
 import { GET, notFound } from 'abide/server'
-import { database } from '#server/readInvoiceDatabase'
+import { readInvoiceDatabase } from '#server/readInvoiceDatabase'
 
-export const getInvoice = GET(async ({ id }: { id: string }) => {
-    const invoice = await database.invoice.find(id)
-    return invoice ?? notFound({ path: `/invoices/${id}`, method: 'GET' })
-})
+export const getInvoice = GET(
+    async ({ id }: { id: string }) => {
+        const invoice = await readInvoiceDatabase.invoice.find(id)
+        return invoice ?? notFound({ path: `/invoices/${id}`, method: 'GET' })
+    },
+    { description: 'An invoice, by id.' },
+)

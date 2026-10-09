@@ -7,6 +7,16 @@ const ON_ACCOUNT = ['4310', '4311', '4312']
 let id = reactive('4310')
 
 const invoice = reactive(() => getInvoice({ id }))
+
+/** What the refusal says, matched by the name it was refused under. */
+function refusal() {
+    const failed = invoice.error()
+    if (invoice.isError(failed, 'NotYours'))
+        return `Owned by ${failed.data.owner}.`
+    if (invoice.isError(failed, 'Superseded'))
+        return `Replaced by #${failed.data.replacedBy}.`
+    return ''
+}
 </script>
 
 <div class="tabs">
@@ -16,11 +26,7 @@ const invoice = reactive(() => getInvoice({ id }))
 {/for}
 </div>
 
-{#if invoice.isError(invoice.error(), 'NotYours')}
-    <p class="status">Owned by {invoice.error().data.owner}.</p>
-{:else if invoice.isError(invoice.error(), 'Superseded')}
-    <p class="status">Replaced by #{invoice.error().data.replacedBy}.</p>
-{/if}
+<p class="status">{refusal()}</p>
 
 <ul class="fields">
     <li><span>total</span>

@@ -1,0 +1,23 @@
+<script>
+import { isFailed, reactive, refresh } from 'abide'
+import { capturedErrors, exportContacts } from '#server/rpc/errorReportContacts'
+
+let told = reactive('—')
+const captured = capturedErrors()
+</script>
+
+<div class="row">
+    <button onclick={async () => {
+        try {
+            await exportContacts()
+        } catch (failed) {
+            if (isFailed(failed)) told = `${failed.status} ${failed.message}`
+        }
+        refresh(captured)
+    }}>Export contacts</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>the caller got</span><strong>{told}</strong></li>
+    <li><span>onError got</span><strong>{captured[0] ?? '—'}</strong></li>
+</ul>

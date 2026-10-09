@@ -44,7 +44,7 @@ export you are looking at.
 
 ## A page reaches the handler through an ordinary import
 
-```abide #ui/pages/invoices/[id]/page.abide
+```abide #ui/pages/invoices/[id]/page.abide — excerpt
 <script>
 import { reactive, route } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'
@@ -105,7 +105,7 @@ A browser that reads a `GET` stays subscribed to it over one web socket the whol
 the handler serves a `global` value, a change the server makes — a `set`, a `patch`, a reload —
 reaches every browser holding it, and the list above moves with nothing on the page asking.
 
-The first read and the feed are two channels, and a change landing between them would be lost. So
+The first read and the socket are two paths, and a change landing between them would be lost. So
 the answer names the version it carried in `abide-version`, the browser names that version when it
 subscribes, and the server sends the value only if it has moved since.
 
@@ -122,13 +122,13 @@ asking for invoice `42` are one request, and the second gets the value the first
 Hand `GET` the keyed value directly to name the caching yourself:
 
 ```ts #server/rpc/invoices.ts — excerpt
-const invoiceById = reactive(
-    ({ id }: { id: string }) => database.invoice.find(id),
+const invoiceTotals = reactive(
+    ({ id }: { id: string }) => database.invoice.totals(id),
     { ttl: 30_000 },
 )
 
-export const getInvoice = GET(invoiceById, {
-    description: 'One invoice, by id. Cached for 30 seconds.',
+export const getInvoiceTotals = GET(invoiceTotals, {
+    description: "One invoice's totals, by id. Cached for 30 seconds.",
 })
 ```
 

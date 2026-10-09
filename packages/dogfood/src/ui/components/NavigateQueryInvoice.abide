@@ -1,0 +1,25 @@
+<script>
+import { navigate, reactive, route } from 'abide'
+
+const ON_ACCOUNT = ['4310', '4311', '4312']
+
+let note = reactive('')
+
+const open = reactive(() => route.url.searchParams.get('invoice') ?? '4310')
+</script>
+
+<div class="tabs">
+{#for id of ON_ACCOUNT}
+    <button aria-selected={open === id}
+        onclick={() => navigate(`?invoice=${id}`, { replace: true })}>
+        {id}</button>
+{/for}
+</div>
+
+<label>note
+    <input bind:value={note} placeholder="Call back Tuesday">
+</label>
+
+<ul class="fields">
+    <li><span>address</span><strong>{route.url.search || '—'}</strong></li>
+</ul>

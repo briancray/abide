@@ -7,6 +7,12 @@ const REGIONS = ['north', 'south']
 let region = reactive('north')
 
 const rows = reactive(() => salesByRegion({ region }))
+
+/** The refusal as the status line shows it: its status, then its message. */
+function refusal() {
+    const failed = rows.error()
+    return failed ? `${failed.status} ${failed.message}` : ''
+}
 </script>
 
 <div class="tabs">
@@ -16,9 +22,7 @@ const rows = reactive(() => salesByRegion({ region }))
 {/for}
 </div>
 
-<p class="status">
-    {rows.error() ? `${rows.error().status} ${rows.error().message}` : ''}
-</p>
+<p class="status">{refusal()}</p>
 
 <ul class="fields">
     <li><span>rows</span>

@@ -15,7 +15,7 @@ function fewer() {
 }
 </script>
 
-<ul class="grid">
+<ul class="tiles">
     <li><span>seats</span>
         <div class="stepper">
             <button onclick={fewer}>−</button>

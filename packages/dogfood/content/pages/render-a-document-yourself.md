@@ -7,26 +7,24 @@ covers:
   - `Component`
   - `Shell`
   - `src/ui/app.html`
+examples:
+  - packages/dogfood/examples/render-preview.json
 ---
 
 `render` is what produces a document, and the page pipeline is one caller of it. Reach for it
 where you want the same components and not the same request: an email body, an embed somebody
 else's page includes, a file written at build time.
 
-```ts #server/rpc/previews.ts — excerpt
-import { GET, page, render } from 'abide'
-import Invoice from '#ui/components/Invoice.abide'
-
-export const previewInvoice = GET(async ({ id }: { id: string }) =>
-    page(await render(Invoice({ invoice: await database.invoice.find(id) }))),
-)
-```
-
 ## `render` takes a component already bound to its props
 
-`Invoice({ invoice })` is a `Component` — the component **bound to its props**, not invoked and
-not rendered. That is what makes the signature one argument rather than two, and what keeps the
-props typed at the binding site rather than as an untyped bag handed alongside.
+{% example render-preview %}
+
+*0 copies of the markup* — the arm writes the invoice's markup a second time as a string, and
+escapes every value in it by hand.
+
+`Document({ invoice })` is a `Component` — the component **bound to its props**, not invoked and
+not rendered. That is what makes the signature one argument rather than two, and the import is the
+same `.abide` a page would place with a tag.
 
 It produces the document's **bytes**, built whole before any of them are handed back (41.1) — the
 same thing the page pipeline sends. A caller that wants text decodes them, and a caller answering
@@ -46,6 +44,8 @@ The shell defaults to `src/ui/app.html`, which is the document an app's pages ar
 
 An email body wants a different shell — no bundle, no font preloads, inline styles — and that
 is the whole of what asking for one means. Nothing else about the render changes.
+
+{% snippet render-preview src/server/rpc/renderPreviewInvoices.ts const SHELL %}
 
 ## `src/ui/app.html` is the app's own shell
 

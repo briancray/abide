@@ -14,7 +14,7 @@ const INVOICES: Invoice[] = [
 ]
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const schemaIssuesDatabase = {
     invoices: {
         async search(query: string, limit: number): Promise<Invoice[]> {
             await Bun.sleep(450)

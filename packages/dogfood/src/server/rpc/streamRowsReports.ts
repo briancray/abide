@@ -1,6 +1,10 @@
 import { GET } from 'abide/server'
-import { database } from '#server/streamRowsDatabase'
+import { streamRowsDatabase } from '#server/streamRowsDatabase'
 
-export const salesByRegion = GET(async function* ({ year }: { year: number }) {
-    for await (const row of database.sales.byRegion(year)) yield row
-})
+export const salesByRegion = GET(
+    async function* ({ year }: { year: number }) {
+        for await (const row of streamRowsDatabase.sales.byRegion(year))
+            yield row
+    },
+    { description: 'Sales by region for a year, a row at a time.' },
+)

@@ -1,0 +1,12 @@
+{
+    "title": "`render(component)` — an invoice preview from the component itself",
+    "summary": "The invoice a customer will be sent, previewed before it is issued: the handler renders the app's own invoice component into a document of its own.",
+    "app": "crm",
+    "about": "server",
+    "files": [
+        "src/server/rpc/renderPreviewInvoices.ts",
+        "src/ui/components/RenderPreviewDocument.abide",
+        "src/ui/components/RenderPreviewInvoice.abide"
+    ],
+    "render": "src/ui/components/RenderPreviewInvoice.abide"
+}

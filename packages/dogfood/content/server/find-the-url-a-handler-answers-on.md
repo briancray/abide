@@ -109,9 +109,10 @@ the OpenAPI operation, the MCP tool and the CLI command — one place to write i
 surface can carry a different sentence than another.
 
 ```ts server
-export const getInvoice = GET(invoiceById, {
-    description: 'One invoice, by id.',
-})
+export const getInvoice = GET(
+    ({ id }: { id: string }) => database.invoice.find(id),
+    { description: 'One invoice, by id.' },
+)
 ```
 
 Read on: [OpenAPI](../machines/describe-your-api-without-writing-a-spec.md) ·
@@ -121,7 +122,7 @@ Read on: [OpenAPI](../machines/describe-your-api-without-writing-a-spec.md) ·
 
 A provider that calls you wants an absolute URL, which is `rpc.url` read on the server:
 
-```ts #server/app.ts — excerpt
+```ts server
 onStart(async (start) => {
     await payments.registerWebhook(paymentSettled.url())
     await start()

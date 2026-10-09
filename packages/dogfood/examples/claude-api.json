@@ -1,0 +1,12 @@
+{
+    "title": "`claudeApi(config)` — the request body you wrote, sent as written",
+    "summary": "The support assistant on claudeApi, its baseURL pointed at a stand-in on this site that answers with the body it was sent. Ask, and read the request.",
+    "app": "chat",
+    "about": "server",
+    "files": [
+        "src/server/rpc/claudeApiSupport.ts",
+        "src/server/rpc/claudeApiModel/v1.ts",
+        "src/ui/components/ClaudeApiRequest.abide"
+    ],
+    "render": "src/ui/components/ClaudeApiRequest.abide"
+}

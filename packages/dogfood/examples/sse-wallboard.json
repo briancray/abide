@@ -1,0 +1,11 @@
+{
+    "title": "`sse(values)` — events, whoever asks",
+    "summary": "A wallboard by the sales floor reads the visits feed. It sends no Accept header, and what comes back is events anyway.",
+    "app": "dashboard",
+    "about": "server",
+    "files": [
+        "src/server/rpc/sseWallboardVisits.ts",
+        "src/ui/components/SseWallboardFeed.abide"
+    ],
+    "render": "src/ui/components/SseWallboardFeed.abide"
+}

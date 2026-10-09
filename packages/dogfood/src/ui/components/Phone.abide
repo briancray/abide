@@ -1,6 +1,6 @@
 <script>
 import { reactive } from 'abide'
-import { notAPhone } from '#shared/refuseWriteFailures'
+import { notAPhone } from '#shared/notAPhone'
 
 let draft = reactive('415 555 0132')
 
@@ -12,6 +12,14 @@ let phone = reactive('415 555 0132', {
         return `(${area}) ${digits.slice(3, 6)}-${digits.slice(6)}`
     },
 })
+
+/** What the refusal says, where the last save was refused. */
+function refusal() {
+    const failed = phone.error()
+    return phone.isError(failed, 'NotAPhone')
+        ? `“${failed.data.typed}” is not ten digits.`
+        : ''
+}
 </script>
 
 <div class="row">
@@ -21,9 +29,7 @@ let phone = reactive('415 555 0132', {
     <button onclick={() => { phone = draft }}>Save</button>
 </div>
 
-{#if phone.isError(phone.error(), 'NotAPhone')}
-    <p class="status">“{phone.error().data.typed}” is not ten digits.</p>
-{/if}
+<p class="status">{refusal()}</p>
 
 <ul class="fields">
     <li><span>on the record</span>

@@ -11,13 +11,18 @@ const pipeline = reactive(
     { global: true },
 )
 
-export const openDeals = GET(pipeline)
-
-export const advanceDeal = POST(({ id }: { id: string }) => {
-    pipeline.patch((deals) => {
-        const deal = deals.find((each) => each.id === id)
-        if (deal === undefined) return
-        const next = (STAGES.indexOf(deal.stage) + 1) % STAGES.length
-        deal.stage = STAGES[next] as string
-    })
+export const openDeals = GET(pipeline, {
+    description: 'The open deals, and the stage each is at.',
 })
+
+export const advanceDeal = POST(
+    ({ id }: { id: string }) => {
+        pipeline.patch((deals) => {
+            const deal = deals.find((each) => each.id === id)
+            if (deal === undefined) return
+            const next = (STAGES.indexOf(deal.stage) + 1) % STAGES.length
+            deal.stage = STAGES[next] as string
+        })
+    },
+    { description: 'Moves a deal to its next stage.' },
+)

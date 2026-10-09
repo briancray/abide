@@ -1,0 +1,12 @@
+{
+    "title": "`trace()` — one id for everything one request did",
+    "summary": "A contact synced to billing across two modules. Sync it, and both lines it logged carry that request's trace; sync again for a new one.",
+    "app": "crm",
+    "about": "server",
+    "files": [
+        "src/server/rpc/traceLinesSync.ts",
+        "src/server/traceLinesBilling.ts",
+        "src/ui/components/TraceLinesSync.abide"
+    ],
+    "render": "src/ui/components/TraceLinesSync.abide"
+}

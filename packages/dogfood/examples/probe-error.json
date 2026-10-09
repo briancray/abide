@@ -3,7 +3,7 @@
     "summary": "An invoice whose billing service is down. The page renders the message instead of letting it reach the error page.",
     "app": "crm",
     "files": [
-        "src/shared/probeErrorFailures.ts",
+        "src/shared/notReachable.ts",
         "src/server/rpc/probeErrorInvoices.ts",
         "src/ui/components/ProbeErrorInvoice.abide"
     ],

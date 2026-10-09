@@ -1,9 +1,13 @@
 import { GET, reactive } from 'abide/server'
-import { database } from '#server/cacheCanonicalDatabase'
+import { cacheCanonicalDatabase } from '#server/cacheCanonicalDatabase'
 
-type Query = { range: string; region: string; compare?: string }
+type Query = { range: string; region: string; compare?: string | undefined }
 
 /** One entry per args key, and the key is the canonical wire form. */
-const metricsFor = reactive((query: Query) => database.metrics.find(query))
+const metricsFor = reactive((query: Query) =>
+    cacheCanonicalDatabase.metrics.find(query),
+)
 
-export const getMetrics = GET(metricsFor)
+export const getMetrics = GET(metricsFor, {
+    description: 'Metrics for a range and a region.',
+})

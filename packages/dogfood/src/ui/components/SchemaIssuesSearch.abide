@@ -8,9 +8,10 @@ let limit = reactive('2')
 const found = reactive(() => searchInvoices({ query, limit: Number(limit) }))
 
 // The key is the field's own path, so a lookup is what a message costs.
-const issues = reactive(() =>
-    found.isError(found.error(), 'ValidationError') ? found.error().data : {},
-)
+const issues = reactive(() => {
+    const failed = found.error()
+    return found.isError(failed, 'ValidationError') ? failed.data : {}
+})
 </script>
 
 <label>query

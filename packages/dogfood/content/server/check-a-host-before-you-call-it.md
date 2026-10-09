@@ -4,6 +4,8 @@ nav: Reachable hosts
 intent: Refuse at once while a host is down, rather than waiting out a timeout per call.
 covers:
   - `reachable`
+examples:
+  - packages/dogfood/examples/reachable-host.json
 ---
 
 A handler that calls another service inherits that service's bad day. The catalog API goes
@@ -24,19 +26,11 @@ signature is in the [Helpers](../reference/helpers.md) reference.
 
 ## `reachable` goes ahead of the call
 
-Ask, and refuse where the answer is no.
+{% example reachable-host %}
 
-```ts #server/rpc/getCatalog.ts — excerpt
-import { GET, refuse } from 'abide'
-import { reachable } from 'abide/server'
-
-export const getCatalog = GET(async () => {
-    if (!(await reachable('api.example.com')))
-        return refuse(503, 'The catalog is unreachable')
-    const answer = await fetch('https://api.example.com/catalog')
-    return answer.json()
-})
-```
+Ask, and refuse where the answer is no. The first send waits out the five-second probe (23.11);
+every send after it in the next minute is answered from what that probe learned and refused at
+once (23.12), which the message's own timing shows.
 
 The refusal is an ordinary one, so the page that called renders it the way it renders any
 other — see [Failures](refuse-a-request-and-say-why.md).

@@ -125,7 +125,8 @@ export function sideOf(label: string): 'server' | 'abide' | 'browser' {
     if (
         address.startsWith('#server/') ||
         address.startsWith('src/server/') ||
-        address === 'server'
+        address === 'server' ||
+        address === '.env'
     )
         return 'server'
     return 'browser'

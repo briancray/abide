@@ -14,7 +14,7 @@ watch(() => {
 })
 </script>
 
-<ul class="grid">
+<ul class="tiles">
     <li><span>feed</span><strong>{received}</strong></li>
     <li><span>tile</span><strong>{shown}</strong></li>
 </ul>

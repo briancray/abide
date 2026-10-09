@@ -1,0 +1,23 @@
+<script>
+import { reactive } from 'abide'
+import { signInAs } from '#server/rpc/principalResolveSession'
+
+let id = reactive<string>()
+
+// Built from the call, so it can fail with whatever the call can.
+const user = reactive(() => signInAs({ id }))
+</script>
+
+<div class="row">
+    <button onclick={() => { id = 'ada' }}>Sign in as ada</button>
+    <button onclick={() => { id = 'grace' }}>Sign in as grace</button>
+</div>
+
+<ul class="fields">
+    <li><span>sealed</span>
+        <strong>{user.ready() ? user.id : '—'}</strong></li>
+    <li><span>name</span>
+        <strong>{user.ready() ? user.name : '—'}</strong></li>
+    <li><span>role</span>
+        <strong>{user.ready() ? user.role : '—'}</strong></li>
+</ul>

@@ -18,7 +18,7 @@ const computed: Record<string, number> = { north: 0, south: 0 }
 const loaded: Record<string, number> = { north: 0, south: 0 }
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const cacheTagsDatabase = {
     metrics: {
         async totals({ region }: { region: string }): Promise<Totals> {
             await Bun.sleep(450)

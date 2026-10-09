@@ -9,7 +9,7 @@ export type Level = { onHand: number; loads: number }
 let loads = 0
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const reloadTtlDatabase = {
     stock: {
         async find(_warehouse: string, _sku: string): Promise<Level> {
             await Bun.sleep(450)

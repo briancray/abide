@@ -1,0 +1,11 @@
+{
+    "title": "`redirect(to)` — one address, sent on to another",
+    "summary": "Every contact's avatar has one address that never changes. It sends the browser on to the photo's current version.",
+    "app": "crm",
+    "about": "server",
+    "files": [
+        "src/server/rpc/redirectAvatarContacts.ts",
+        "src/ui/components/RedirectAvatarContact.abide"
+    ],
+    "render": "src/ui/components/RedirectAvatarContact.abide"
+}

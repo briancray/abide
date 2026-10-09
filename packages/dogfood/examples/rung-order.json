@@ -5,6 +5,7 @@
     "about": "server",
     "files": [
         "src/server/rpc/rungOrderInvoices.ts",
+        "src/server/rpc/rungOrderSession.ts",
         "src/ui/components/Recent.abide"
     ],
     "render": "src/ui/components/Recent.abide"

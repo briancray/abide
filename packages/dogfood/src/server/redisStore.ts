@@ -1,6 +1,6 @@
 // A `Store` at an ADDRESS, which is the one thing this example needs of it:
-// `cache.ts` builds one per args key so two profiles land at two addresses and
-// neither reads back the other's.
+// `storeKeyedCache.ts` builds one per args key so two profiles land at two
+// addresses and neither reads back the other's.
 //
 // IN PROCESS, AND IT SAYS SO. What is actually behind the address is not what
 // the example teaches, so the keyed map below stands in for the client, and the

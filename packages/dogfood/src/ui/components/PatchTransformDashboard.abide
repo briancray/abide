@@ -1,6 +1,5 @@
 <script>
 import { reactive } from 'abide'
-import { applyOrderCount, type OrderCount } from '#shared/patchTransformRegions'
 import { getRegions } from '#server/rpc/regions'
 
 const regions = reactive(() => getRegions())
@@ -12,7 +11,7 @@ const byId = reactive(() => regions, {
 
 const rows = reactive(() => [...byId.values()])
 
-const FEED: OrderCount[] = [
+const FEED = [
     { id: 'south', orders: 95 },
     { id: 'north', orders: 130 },
     { id: 'west', orders: 88 },
@@ -24,7 +23,10 @@ function applyNextFrame() {
     const frame = FEED.shift()
     if (!frame) return
     FEED.push(frame)
-    byId.patch((held) => applyOrderCount(held, frame))
+    byId.patch((held) => {
+        const region = held.get(frame.id)
+        if (region) region.orders = frame.orders
+    })
 }
 </script>
 

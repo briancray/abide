@@ -1,0 +1,10 @@
+{
+    "title": "`identity: structural` — an equal reload wakes nobody",
+    "summary": "Two regional totals and the chart drawn from them. Record a sale and the chart redraws; refresh with nothing new and it does not.",
+    "app": "dashboard",
+    "files": [
+        "src/server/rpc/identityStructuralSales.ts",
+        "src/ui/components/IdentityStructuralChart.abide"
+    ],
+    "render": "src/ui/components/IdentityStructuralChart.abide"
+}

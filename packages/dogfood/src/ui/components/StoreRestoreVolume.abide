@@ -6,7 +6,7 @@ import { settingsStore } from '#shared/settingsStore'
 let volume = reactive(4, { store: settingsStore<number>('volume') })
 </script>
 
-<ul class="grid">
+<ul class="tiles">
     <li><span>volume</span>
         <div class="stepper">
             <button onclick={() => (volume -= 1)}>−</button>

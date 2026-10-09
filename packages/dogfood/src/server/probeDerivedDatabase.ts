@@ -9,7 +9,7 @@ const INVOICES: Invoice[] = [
 ]
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const probeDerivedDatabase = {
     invoices: {
         async all(): Promise<Invoice[]> {
             await Bun.sleep(900)

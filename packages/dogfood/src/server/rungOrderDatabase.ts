@@ -14,7 +14,7 @@ const INVOICES: Invoice[] = [
 ]
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const rungOrderDatabase = {
     invoices: {
         async recent(limit: number): Promise<Invoice[]> {
             await Bun.sleep(450)

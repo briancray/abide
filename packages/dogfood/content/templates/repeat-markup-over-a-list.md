@@ -23,9 +23,9 @@ reorder moves the nodes that were already there, or builds new ones that look th
 
 `index` and `by` are both optional, and the second is the one worth spelling. The subject is
 read like any other name, so `{#for row of rows}` walks the value `rows` holds. Walking what a
-value **produces** is spelled with a cursor, and over one the block appends rather than
-reconciles, so the cursor decides its own replay depth — `history(50)`, `history(0)` — and the block
-does not have to be told.
+value **produces** is spelled with a cursor. The block replays from the depth the cursor was handed
+— `history(50)`, `history(0)` — follows each production live from there, and drops a row once the
+value's own retention does, so its length is bounded by the value rather than by the block.
 
 It iterates **zero times** over an absent subject. A list still loading is not an error and
 not a special case; it is a block with nothing in it yet.

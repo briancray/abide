@@ -14,7 +14,9 @@ covers:
   - `jsonSchema`
 examples:
   - packages/dogfood/examples/schema-browser.json
+  - packages/dogfood/examples/json-schema.json
   - packages/dogfood/examples/schema-issues.json
+  - packages/dogfood/examples/validate-json.json
   - packages/dogfood/examples/schema-key.json
 ---
 
@@ -34,10 +36,10 @@ defaults, and `Args` itself is optional where the parameter has one.
 
 | Declaration | Schema | Called as |
 | --- | --- | --- |
-| `({ id }: { id: number })` | `{ id: number }`, `id` required | `getInvoice({ id: 42 })` |
-| `({ id = 1 })` | `{ id?: number }`, `default: 1` | `getInvoice()` or `getInvoice({ id: 7 })` |
-| `({ id = 1 } = {})` | `Args` itself optional | `getInvoice()` with a bare URL |
-| no parameter at all | none | `getInvoice()` |
+| `({ page }: { page: number })` | `{ page: number }`, `page` required | `listPayments({ page: 2 })` |
+| `({ page = 1 })` | `{ page?: number }`, `default: 1` | `listPayments()` or `listPayments({ page: 7 })` |
+| `({ page = 1 } = {})` | `Args` itself optional | `listPayments()` with a bare URL |
+| no parameter at all | none | `listPayments()` |
 
 ## `args` and `schema` gate what comes in, `transform` shapes what is stored
 
@@ -112,7 +114,7 @@ A shape is a fact about the **value**, the way `ttl` is, so it rides in on the
 `reactive` that was passed and `RpcOptions` is left describing an address — `description`, `middleware`,
 `timeout`, `crossOrigin`, `maxBodySize`.
 
-So `GET(getInvoice)` and `POST(getInvoice)` state the shape once between them, and an in-process
+So one `reactive` handed to both `GET` and `POST` states the shape once between them, and an in-process
 caller gets the check a wire caller gets. A schema declared at the transport
 is one that **skips itself** every other way the handler is reached — read inside another
 value, imported by a second server module — so the shape would hold for your untrusted callers
@@ -135,21 +137,20 @@ as the value is the silent version of a refusal.
 | --- | --- |
 | `(value: unknown) => T` | returns what it accepts, throws a sentence at what it refuses |
 | `StandardSchemaV1<T>` | the interop spec zod, valibot and arktype all answer to |
-A JSON Schema document is the **native** shape, and it enters as the Standard form:
-`jsonSchema(document)` wraps it.
 
-```ts shared
-import { jsonSchema, reactive } from 'abide'
+A JSON Schema document is the **native** shape, and it enters as the Standard form.
 
-const age = reactive(30, {
-    schema: jsonSchema<number>({ type: 'number', minimum: 0 }),
-})
-```
+## A JSON Schema document gates a value through `jsonSchema`
+
+{% example json-schema %}
+
+`jsonSchema(document)` wraps a document as a Standard Schema that carries its own validator, so it
+goes wherever a `Schema` goes. The refusal is worded by the document, and keyed the way `Issues<T>`
+keys any other schema's.
 
 A handler means `JsonSchema`, and it is the only shape publishable to a tool definition or an
 OpenAPI operation — the wrapper exposes the document where a Standard Schema exposes its JSON
-Schema, so it is published as written. `validateJson(schema, value)` is the native validator,
-handing back `null` when the value matches and `Issues<T>` when it does not.
+Schema, so it is published as written.
 
 A document is data, so something has to read it, and `jsonSchema` is what brings the validator.
 A page that never calls it carries none of it (19.14). Hand a gate a bare document and it refuses
@@ -186,6 +187,19 @@ lookup stops being checked. And integer-like keys iterate first in JavaScript wh
 insertion order — what an array wants, and what a mixed shape merely has.
 
 Read on: [OpenAPI](../machines/describe-your-api-without-writing-a-spec.md)
+
+## `validateJson` checks a value nothing gates
+
+{% example validate-json %}
+
+`validateJson(schema, value)` is the validator `jsonSchema` carries, called on its own. It hands
+back `null` when the value matches and `Issues<T>` when it does not, and stores and refuses
+nothing either way. Reach for it where the value is not one you hold yet — a pasted row, an import,
+a file — and the only question is whether it fits.
+
+A keyword it does not implement throws rather than being skipped, because a document declaring a
+constraint nothing applied reads as checked. `format` is one. `title`, `description` and `default`
+are annotations, and pass.
 
 ## `JsonValue` is the bound on an argument
 
@@ -264,7 +278,7 @@ A channel's message is its input, so that is `schema` — the same option a valu
 `Accepted` being the message here:
 
 ```ts #shared/channels.ts — excerpt
-export const thread = reactive<Post>(undefined, {
+export const announcements = reactive<Post>(undefined, {
     history: 50,
     schema: messageSchema,
     global: true,
@@ -279,11 +293,11 @@ A channel keyed by its args also has a **channel key**, and that is the paramete
 declares, so it is `args`. The key picks which channel while the message flows:
 
 ```ts #shared/channels.ts — excerpt
-export const threads = reactive(
+export const thread = reactive(
     (_args: { id: string }): Post | undefined => undefined,
     {
         history: 50,
-        args: z.object({ id: z.string().uuid() }),
+        args: z.object({ id: z.string().min(1) }),
         schema: messageSchema,
         global: true,
     },

@@ -12,7 +12,7 @@ let contacts = reactive(
 
 function swapTop() {
     const [first, second, ...rest] = contacts
-    contacts = [second, first, ...rest]
+    if (first && second) contacts = [second, first, ...rest]
 }
 </script>
 
@@ -49,6 +49,6 @@ function swapTop() {
 
 .queue li + li::before {
     content: '→ ';
-    color: var(--muted);
+    color: var(--color-muted);
 }
 </style>

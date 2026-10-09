@@ -1,0 +1,7 @@
+{
+    "title": "`{#if}` over a bound value — the field decides what renders",
+    "summary": "A contact form that only asks for a billing address when you say there is one. Tick the box.",
+    "app": "crm",
+    "files": ["src/ui/components/BindBranchContact.abide"],
+    "render": "src/ui/components/BindBranchContact.abide"
+}

@@ -17,7 +17,10 @@ import {
     TypeSession,
 } from 'abide/compiler'
 import { render } from 'abide/server'
+import { componentImports } from '../../abide/src/server/componentImports.ts'
 import { inScope } from '../../abide/src/server/requestScope.ts'
+import { browserCookies, COOKIES } from '../../abide/src/shared/cookies.ts'
+import { RPC_SERVER } from '../../abide/src/shared/RPC_SERVER.ts'
 import {
     removeTemporaryModules,
     temporaryModule,
@@ -46,11 +49,12 @@ async function appTree(session: TypeSession): Promise<Record<string, string>> {
     const files: { path: string; file: AbideFile }[] = []
     for (const path of new Bun.Glob('src/ui/components/*.abide').scanSync({
         cwd: APP,
-    }))
-        files.push({
-            path: `${APP}${path}`,
-            file: parseAbide(await Bun.file(`${APP}${path}`).text()),
-        })
+    })) {
+        // The source rides along: a handler that imports a component resolves the `.abide` itself.
+        const text = await Bun.file(`${APP}${path}`).text()
+        tree[path] = text
+        files.push({ path: `${APP}${path}`, file: parseAbide(text) })
+    }
     // 32.17 — which components another one invokes decides whether a module carries its own
     // markup for a row built in the browser.
     const graph = componentGraph(files, Bun.resolveSync)
@@ -111,8 +115,38 @@ test('every example renders on the server and mounts on the client', async () =>
         warned(...args)
     }
 
+    const serverCookies = COOKIES.current
+    const fetched = globalThis.fetch
+    // NO APP ANSWERS A `raw` CALL IN PROCESS, whatever ran first: an app booted earlier in this
+    // process is the one a call outside every request falls to (16.43), stopped or not, and the
+    // `null` the stub below would have answered is that app's refusal instead. THE REVERT: drop the
+    // pin; after `socketScope.test.ts` in one process `json-null` reports a `SyntaxError`.
+    const serverRaw = RPC_SERVER.raw
+    RPC_SERVER.raw = null
     try {
         const dir = temporaryModule(await appTree(session))
+        Bun.plugin(componentImports(dir, dir))
+        // 16.10 — A HANDLER HAS ITS ADDRESS FROM BOOT, so a card reading `rpc.url` or `rpc.raw` has
+        // one before anything is called; the copy is given the address `mountHandlers` would give.
+        for (const path of new Bun.Glob('src/server/rpc/**/*.ts').scanSync({
+            cwd: APP,
+        })) {
+            const module = await import(`${dir}/${path}`)
+            const at = path.slice('src/server/rpc/'.length, -'.ts'.length)
+            for (const [name, handler] of Object.entries(module))
+                if (typeof handler === 'function' && 'method' in handler)
+                    (handler as { address?: string }).address =
+                        `/__abide/rpc/${at}/${name}`
+        }
+        // A `raw` CALL GOES OVER THE WIRE, and there is no server here: it is answered `null`, which
+        // is what is under test — the card paints and adopts — and not what the handler says.
+        globalThis.fetch = Object.assign(
+            async () =>
+                new Response('null', {
+                    headers: { 'content-type': 'application/json' },
+                }),
+            { preconnect: () => {} },
+        ) as typeof fetch
         for (const example of examples) {
             painting = example
             const manifest: Manifest = await readManifest(example)
@@ -122,6 +156,7 @@ test('every example renders on the server and mounts on the client', async () =>
                 let html = ''
                 // IN A REQUEST, as a page is always rendered: `principal` reads the request's
                 // cookie and throws outside one (22.1).
+                COOKIES.current = serverCookies
                 await inScope(new Request('http://example.test/'), async () => {
                     html = new TextDecoder().decode(
                         await render(Component, SHELL),
@@ -142,6 +177,10 @@ test('every example renders on the server and mounts on the client', async () =>
                 const { default: mount } = await import(
                     `${dir}/${stem}.client.ts`
                 )
+                // A BROWSER'S COOKIES ON THE CLIENT HALF. Importing `abide/server` pointed the slot
+                // at the request scope, which a browser never does, so a mount reading `cookies()`
+                // would refuse as if it ran outside a request.
+                COOKIES.current = browserCookies
                 // The host holds the component and nothing else, so the pair `render` wrote round
                 // it (41.9) is its first child and its last.
                 mount({ open: host.firstChild, close: host.lastChild })
@@ -157,6 +196,9 @@ test('every example renders on the server and mounts on the client', async () =>
         // listeners are gone, and that example is scored as running.
         await new Promise((resolve) => setTimeout(resolve, 300))
     } finally {
+        globalThis.fetch = fetched
+        RPC_SERVER.raw = serverRaw
+        COOKIES.current = serverCookies
         console.warn = warned
         removeEventListener('error', escaped)
         removeEventListener('unhandledrejection', escaped)

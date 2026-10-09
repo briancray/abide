@@ -7,7 +7,7 @@ const INVOICES: Record<string, Invoice> = {
 }
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const readInvoiceDatabase = {
     invoice: {
         async find(id: string): Promise<Invoice | undefined> {
             await Bun.sleep(450)

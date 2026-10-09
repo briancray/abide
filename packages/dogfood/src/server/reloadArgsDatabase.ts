@@ -10,7 +10,7 @@ const ON_HAND: Record<string, number> = { 'east/A-70': 12, 'west/A-70': 5 }
 const loads: Record<string, number> = {}
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const reloadArgsDatabase = {
     stock: {
         async find(warehouse: string, sku: string): Promise<Level> {
             await Bun.sleep(450)

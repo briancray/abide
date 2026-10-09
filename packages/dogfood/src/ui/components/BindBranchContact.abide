@@ -1,0 +1,14 @@
+<script>
+import { reactive } from 'abide'
+
+let billSeparately = reactive(false)
+</script>
+
+<label><input type="checkbox" bind:checked={billSeparately}>
+    Bill a different address</label>
+
+{#if billSeparately}
+    <label>billing address
+        <input placeholder="12 Analytical Row, London">
+    </label>
+{/if}

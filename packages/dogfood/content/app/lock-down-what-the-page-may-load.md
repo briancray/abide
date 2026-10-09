@@ -6,6 +6,8 @@ covers:
   - `csp`
   - `csp.nonce`
   - `content-security-policy: frame-ancestors 'none'`
+examples:
+  - packages/dogfood/examples/csp-blocked.json
 ---
 
 A content security policy is worth having and painful to write, because the hard part is not
@@ -13,21 +15,26 @@ the policy — it is knowing what your own build emits. `csp()` already knows: i
 where every rung is, and the policy it produces covers the bundle's own chunks and the styles a
 component adopted.
 
-```ts #server/app.ts — excerpt
-import { csp, middleware } from 'abide'
+## `csp()` lets your own build through, and nothing else
 
-middleware(csp())
-```
+{% example csp-blocked %}
+
+The rung is `csp()` in `app.ts`, and it is the policy every page of these docs is served under. Every script and stylesheet on the page ran, because the build serves them from its
+own origin. The widget's address is another origin, so `script-src 'self'` refused it before a
+request was made. The inline script the render writes is let through by a hash taken at build time,
+which is why `'unsafe-inline'` never has to appear.
 
 ## Adding a source, not writing a policy
 
-```ts #server/app.ts — excerpt
-middleware(csp({ 'img-src': ["'self'", 'https://cdn.example'] }))
-```
+{% snippet csp-blocked src/server/app.ts middleware( %}
 
-What you pass is **merged over** what the build knows, per directive. So naming `img-src`
-because your avatars live on a CDN does not require you to also know what `script-src` should
-say for a bundle you did not hand-write.
+These docs name one directive. They frame their own invoice previews, so `frame-ancestors` is
+`'self'` where the baseline says `'none'`, and every other directive is the baseline's.
+
+Each directive you name **replaces** that directive, and only that one: naming `img-src` because
+your avatars live on a CDN does not require you to also know what `script-src` should say for a
+bundle you did not hand-write. The one you name is the whole directive, so it says `'self'`
+again. A directive given an empty array is dropped, and one the baseline lacks is added.
 
 That is the shape worth insisting on: a policy an app maintains by hand goes stale the first
 time the build changes, and it goes stale silently — the symptom is a blocked script in a

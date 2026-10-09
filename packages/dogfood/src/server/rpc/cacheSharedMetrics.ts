@@ -1,11 +1,11 @@
 import { GET, reactive } from 'abide/server'
-import { database } from '#server/cacheSharedDatabase'
-
-type Range = { range: string }
+import { cacheSharedDatabase } from '#server/cacheSharedDatabase'
 
 /** Takes args, so it is keyed: one entry per args key, held. */
-const metricsFor = reactive(({ range }: Range) =>
-    database.metrics.forRange(range),
+const metricsFor = reactive(({ range }: { range: string }) =>
+    cacheSharedDatabase.metrics.forRange(range),
 )
 
-export const getMetrics = GET(metricsFor)
+export const getMetrics = GET(metricsFor, {
+    description: 'Metrics for a range.',
+})

@@ -55,7 +55,7 @@ row's item without being handed it:
 ```abide #ui/pages/contacts/page.abide — excerpt
 <script>
 import { reactive } from 'abide'
-import { listContacts } from '#server/contacts.ts'
+import { listContacts } from '#server/rpc/contacts'
 import type { Contact } from '#shared/Contact.ts'
 
 const contacts = listContacts()

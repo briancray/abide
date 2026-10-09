@@ -1,0 +1,36 @@
+<script>
+import { NotLanded, reactive } from 'abide'
+import { getContact } from '#server/rpc/notLandedCopyContacts'
+
+const PEOPLE = ['ada', 'grace', 'katherine']
+
+let id = reactive('ada')
+let copied = reactive('')
+
+const contact = reactive(() => getContact({ id }))
+
+function copy() {
+    try {
+        copied = contact.email
+    } catch (error) {
+        if (!(error instanceof NotLanded)) throw error
+        copied = 'still loading'
+    }
+}
+</script>
+
+<div class="tabs">
+{#for one of PEOPLE}
+    <button aria-selected={id === one}
+        onclick={() => { id = one; copied = '' }}>{one}</button>
+{/for}
+</div>
+
+<div class="row">
+    <button onclick={copy}>Copy email</button>
+    <span class="status">{contact.busy() ? 'loading…' : ''}</span>
+</div>
+
+<ul class="fields">
+    <li><span>copied</span><strong>{copied || '—'}</strong></li>
+</ul>

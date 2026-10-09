@@ -1,10 +1,8 @@
 <script>
 import { reactive } from 'abide'
-import {
-    applyOrderCount,
-    type OrderCount,
-    type Region,
-} from '#shared/patchUnseenRegions'
+
+type Region = { id: string; name: string; orders: number }
+type OrderCount = { id: string; orders: number }
 
 const byId = reactive(
     new Map<string, Region>([
@@ -23,6 +21,11 @@ const FEED: OrderCount[] = [
     { id: 'west', orders: 88 },
     { id: 'east', orders: 71 },
 ]
+
+function applyOrderCount(index: Map<string, Region>, frame: OrderCount) {
+    const region = index.get(frame.id)
+    if (region) region.orders = frame.orders
+}
 
 function applyNextFrame() {
     const frame = FEED.shift()

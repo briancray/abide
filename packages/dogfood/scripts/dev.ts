@@ -8,6 +8,8 @@
 
 import { watch } from 'node:fs' // bun exposes no file watcher of its own
 
+// A BUILD SCRIPT, NOT APP CODE: it debounces a burst of saves by the settle `abide dev` uses,
+// and exporting the framework's internal constant to reach it would make it public surface.
 import { SETTLE_MILLISECONDS } from '../../abide/src/server/SETTLE_MILLISECONDS.ts'
 import { buildPages } from './buildPages.ts'
 

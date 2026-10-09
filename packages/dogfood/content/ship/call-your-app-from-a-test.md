@@ -10,10 +10,12 @@ covers:
   - `App.listen`
   - `App.stop`
   - `App[Symbol.asyncDispose]`
+examples:
+  - packages/dogfood/examples/app-fetch.json
 ---
 
 ```ts server
-import { createApp } from 'abide'
+import { createApp } from 'abide/server'
 
 const app = await createApp()
 
@@ -22,15 +24,19 @@ const answer = await app.fetch(
 )
 ```
 
-`createApp` builds the app — the route table, the middleware onions, the config read, and
+`createApp` builds the app — the route table, the middleware, the config read, and
 `onStart` around all of it. What it does not build is a socket. The app can answer before
 anything is listening, and `app.fetch` is how you ask it to.
+
+It finds the app the way `abide start` does, from the directory it runs in, so run `bun test`
+from the app's own directory. Under `bun test` it builds the app from its sources as they stand,
+once, rather than reading whatever `abide build` last left.
 
 ## The app is an object, and a host is one caller
 
 | | |
 | --- | --- |
-| `createApp()` | tables, onions, config, `onStart` |
+| `createApp()` | tables, middleware, config, `onStart` |
 | `app.fetch(request)` | the whole request path, in this process |
 | `app.run(fn, { request })` | one scope, with your function inside it |
 | `app.listen({ port })` | the socket |
@@ -45,14 +51,12 @@ Read on: [Build & start](build-and-serve-the-app.md) ·
 
 ## `app.fetch` answers what the wire answers
 
+{% example app-fetch %}
+
 A `Request` in and a `Response` out, through everything a served request goes through: the
 middleware in registration order, the argument coercion, the timeout, the generated headers,
-and the status a refusal carries.
-
-```ts server
-expect(answer.status).toBe(200)
-expect(answer.headers.get('traceresponse')).not.toBeNull()
-```
+and the status a refusal carries. The test asserts on the status and the `traceresponse` header,
+and the card reads the same two off the wire.
 
 Those are the parts a handler called directly does not have, which is the reason to reach for
 a request at all. Assert on the response and you are asserting on what a browser would have
@@ -101,22 +105,16 @@ off the network, so two test files holding an app are not queueing for the same 
 
 ## Stop the app, or the suite hangs
 
-`app.stop()` stops accepting, waits for what is in flight, ends live streams, closes sockets
-and clears the timers the app holds — and then `onStop` runs. A file that builds an app and
-never stops it leaves a timer standing, and a suite that hangs reports nothing at all: no
-failure, no summary, nothing to read.
+`app.stop()` stops accepting, waits for what is in flight, ends every stream it is still
+writing, closes its sockets and drops the seed entries its renders left, timers and all — and
+then `onStop` runs. A file that builds an app and never stops it leaves whatever `onStart`
+opened still open, and a suite that hangs reports nothing at all: no failure, no summary,
+nothing to read.
 
-Hold it with `await using` and it stops where the block ends, a failed assertion included.
+Hold it with `await using` and it stops where the block ends, a failed assertion included. The
+test's second case stops the app by hand and finds the pool `onStart` opened closed again:
 
-```ts server
-test('a contact loads', async () => {
-    await using app = await createApp()
-    const answer = await app.fetch(
-        new Request('http://app.invalid/__abide/rpc/contacts/getContact?id=42'),
-    )
-    expect(answer.status).toBe(200)
-})
-```
+{% snippet app-fetch src/server/app.test.ts test('stopping %}
 
 ## There is no test client
 

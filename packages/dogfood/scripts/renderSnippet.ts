@@ -9,6 +9,8 @@
 
 import { escapeAttribute } from 'abide'
 
+// A BUILD SCRIPT, NOT APP CODE: it balances markup by the compiler's own void list, and exporting
+// that list to reach it would make it public surface.
 import { VOID_ELEMENTS } from '../../abide/src/compiler/VOID_ELEMENTS.ts'
 import { readManifest, readSource } from './renderExample.ts'
 import { displayPath, highlight, sideOf } from './renderMarkdown.ts'

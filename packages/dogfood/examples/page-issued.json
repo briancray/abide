@@ -1,0 +1,11 @@
+{
+    "title": "`page(body)` — an invoice as a document of its own",
+    "summary": "The invoice exactly as it was issued, kept as the HTML the customer was sent.",
+    "app": "crm",
+    "about": "server",
+    "files": [
+        "src/server/rpc/pageIssuedInvoices.ts",
+        "src/ui/components/PageIssuedInvoice.abide"
+    ],
+    "render": "src/ui/components/PageIssuedInvoice.abide"
+}

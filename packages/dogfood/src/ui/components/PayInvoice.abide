@@ -13,5 +13,5 @@ let paid = reactive()
 
 <ul class="fields">
     <li><span>payments</span>
-        <strong>{paid.ready() ? paid.payments : '—'}</strong></li>
+        <strong>{paid.ready() ? paid : '—'}</strong></li>
 </ul>

@@ -16,7 +16,7 @@ were read.
 
 | | Stage | What runs |
 | --- | --- | --- |
-| 1 | the request arrives | your app's own route, then the middleware onion |
+| 1 | the request arrives | your app's own route, then each `middleware` rung |
 | 2 | the route resolves | the `page.abide` at that path, inside its layouts |
 | 3 | the render starts | every load the page reads, all of them at once |
 | 4 | the first bytes leave | the head, then the markup as far as it goes |
@@ -29,19 +29,20 @@ file in `src/` runs is a separate question, and the map for it is the last secti
 
 ## 1. The request arrives
 
-`#server/app.ts` default-exports a route of your own, and it is asked first — a `robots.txt`, a
-webhook, anything you would rather answer without a page. Return nothing and the request carries
-on to the router.
+`#server/app.ts` registers the rungs every request passes before anything is routed, and
+default-exports a route of your own — a `llms.txt`, a webhook, anything you would rather answer
+without a page. That route is asked only where no page, handler or public file answered, and
+returning nothing hands the request on to the 404.
 
-```ts #server/app.ts
-import { middleware, csp, onStart } from 'abide'
+```ts server
+import { csp, middleware, onStart } from 'abide/server'
 
-middleware(csp(), requireAuth())
-onStart(async (start) => { await database.migrate(); await start() })
+middleware(csp(), requireSignIn())
+onStart(async (start) => { await database.connect(); await start() })
 
 export default (request: Request) =>
-    new URL(request.url).pathname === '/robots.txt'
-        ? new Response('User-agent: *')
+    new URL(request.url).pathname === '/llms.txt'
+        ? new Response('# abide')
         : undefined
 ```
 
@@ -52,10 +53,9 @@ Each `middleware` rung runs per request, and they run **before** the route resol
 the request and nothing else. Anything that needs to know which row is being asked for is a
 handler's own rung instead, where the arguments exist.
 
-Everything abide serves goes through those rungs, `/__abide/**` included. Three things do not,
-and each says why: the built assets, served in front of the pipeline; `/__abide/health`, because
-a load balancer presents no credentials; and `/__abide/principal`, whose answer is composed from
-the caller's own cookie.
+Everything abide serves goes through those rungs — `/__abide/**`, the built assets and
+`/__abide/health` included. A rung that refuses a caller with no credentials has to let the
+health check and the assets through by address.
 
 Read on: [Auth & principal](../app/know-who-is-calling.md) ·
 [Authorization](../server/decide-who-may-call-what.md)
@@ -108,7 +108,7 @@ rather than left as a hole.
 The head goes first, then the markup. A read of a value still in flight renders nothing and opens
 a **sink**, and the hole fills when the value lands. The markup after it keeps going out.
 
-```abide #ui/pages/invoices/[id]/page.abide
+```abide #ui/pages/invoices/[id]/page.abide — excerpt
 <script>
 import { reactive, route } from 'abide'
 import { getInvoice } from '#server/rpc/invoices'

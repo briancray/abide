@@ -2,10 +2,11 @@
 // you are in and the sidebar lists that one's pages — the reference apart from the guides, and
 // nothing at all beside an instrument, which is a page with no siblings to navigate between.
 
-import { type NavGroup, NAV_ITEMS } from '#ui/NAV_ITEMS.ts'
+import type { RouteLiteral } from 'abide'
+import { NAV_ITEMS, type NavGroup } from '#ui/NAV_ITEMS.ts'
 
 /** The site bar's tabs, in order: the docs, the reference, and the two instruments. */
-export const SITE_TABS = [
+export const SITE_TABS: { href: RouteLiteral; label: string }[] = [
     { href: '/', label: 'Docs' },
     { href: '/reference', label: 'Reference' },
     { href: '/bench', label: 'Bench' },

@@ -1,0 +1,15 @@
+<script>
+import { reactive } from 'abide'
+import { previewInvoice } from '#server/rpc/renderPreviewInvoices'
+
+let id = reactive('4021')
+</script>
+
+<div class="tabs">
+    <button aria-selected={id === '4021'}
+        onclick={() => { id = '4021' }}>INV-4021</button>
+    <button aria-selected={id === '4022'}
+        onclick={() => { id = '4022' }}>INV-4022</button>
+</div>
+<iframe src={previewInvoice.url({ id })} title="Invoice preview"
+    class="h-56 w-full rounded-md border border-rule"></iframe>

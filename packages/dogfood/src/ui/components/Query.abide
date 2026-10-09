@@ -6,7 +6,7 @@ const REGIONS = ['north', 'south']
 const SPELLINGS = ['range first', 'region first', 'with compare']
 
 /** One query, three spellings: reordered, then an absent option written. */
-function spelled(name, region) {
+function spelled(name: string, region: string) {
     if (name === 'range first') return { range: '7d', region }
     if (name === 'region first') return { region, range: '7d' }
     return { region, range: '7d', compare: undefined }

@@ -1,0 +1,13 @@
+{
+    "title": "`onStart(fn)` — work the first request cannot race",
+    "summary": "A CRM's database pool, connected before the app answers anything. Reload the page and both times stay where the boot put them.",
+    "app": "crm",
+    "about": "server",
+    "files": [
+        "src/server/app.ts",
+        "src/server/startHookDatabase.ts",
+        "src/server/rpc/startHookPool.ts",
+        "src/ui/components/StartHookPool.abide"
+    ],
+    "render": "src/ui/components/StartHookPool.abide"
+}

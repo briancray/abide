@@ -6,6 +6,9 @@ enumerates:
   - Environment variables
   - Files
   - Lifecycle hooks
+examples:
+  - packages/dogfood/examples/config-coerced.json
+  - packages/dogfood/examples/start-hook.json
 ---
 
 An abide app is configured by three things: the **environment** it starts in, the **files** it
@@ -121,30 +124,11 @@ it against `'production'` is comparing against the string it was started with.
 
 ### Declaring the app's own config
 
-```ts #server/app.ts — excerpt
-import { onConfig } from 'abide'
-
-onConfig({
-    STRIPE_KEY: { type: 'string' },
-    INVOICE_PREFIX: { type: 'string', default: 'INV-' },
-})
-```
+{% snippet config-coerced src/server/app.ts declare module 'abide/server' … onConfig( %}
 
 ### Running work around the boot
 
-```ts #server/app.ts — excerpt
-import { onStart, onStop } from 'abide'
-
-onStart(async (start) => {
-    await database.connect()
-    await start()
-})
-
-onStop(async (stop) => {
-    await stop()
-    await database.close()
-})
-```
+{% snippet start-hook src/server/app.ts onStart( … onStop( %}
 
 ## See also
 

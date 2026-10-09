@@ -1,0 +1,7 @@
+{
+    "title": "`online` — the connection, read by name",
+    "summary": "An order form with unsaved changes. Take the browser offline — DevTools' Network panel, or the Wi-Fi — and watch the line.",
+    "app": "crm",
+    "files": ["src/ui/components/OnlineBannerOrder.abide"],
+    "render": "src/ui/components/OnlineBannerOrder.abide"
+}

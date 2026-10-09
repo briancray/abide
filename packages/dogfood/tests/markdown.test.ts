@@ -11,9 +11,8 @@ import {
 } from '../scripts/readContent.ts'
 import { renderMarkdown } from '../scripts/renderMarkdown.ts'
 
-// THE PAGE AS THE APP HOLDS IT. What used to be one HTML document is now a body, a rail and a
-// `.abide` that carries both — so a gate on the prose asks the body, and a gate on what the page
-// OFFERS asks the two the generator writes around it.
+// THE PAGE AS THE APP HOLDS IT: a body, a rail and a `.abide` that carries both. A gate on the
+// prose asks the body, and a gate on what the page OFFERS asks the two the generator writes around it.
 async function bodyOf(page: Page, pages: Page[]): Promise<string> {
     return (await renderBody(page, pages)).body
 }

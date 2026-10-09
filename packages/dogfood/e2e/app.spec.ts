@@ -124,7 +124,7 @@ test('the rail follows the page a reader navigated to', async ({ page }) => {
         `nav a[href="${underMount('/values/patch-a-list-from-a-live-feed')}"]`,
     )
     await expect(page.locator('main h1')).toHaveText(
-        'Patch a list from a live feed',
+        'Patch a list as updates arrive',
     )
 
     const first = page.locator('.toc a[href^="#"]').first()
@@ -208,8 +208,8 @@ test('a file under public is answered at its own address — 36.11', async ({
 test('the bundled stylesheet reaches the page', async ({ page }) => {
     await page.goto(underMount('/'))
 
-    // The heading token out of `app.css`, computed. `--heading` is #8E4426, and a document with
-    // no stylesheet leaves an h1 at the UA's near-black.
+    // The heading token out of `app.css`, computed. `--color-heading` is #8E4426, and a document
+    // with no stylesheet leaves an h1 at the UA's near-black.
     const colour = await page
         .locator('main h1')
         .evaluate((node) => getComputedStyle(node).color)

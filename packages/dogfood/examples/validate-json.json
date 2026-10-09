@@ -1,0 +1,7 @@
+{
+    "title": "`validateJson(schema, value)` — the issues, with no value to gate",
+    "summary": "A contact row pasted from a partner's export, checked before it is imported. Fix the plan and the seats, and watch each issue leave its own field.",
+    "app": "crm",
+    "files": ["src/ui/components/ValidateJsonImport.abide"],
+    "render": "src/ui/components/ValidateJsonImport.abide"
+}

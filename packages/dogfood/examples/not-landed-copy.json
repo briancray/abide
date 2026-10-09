@@ -1,0 +1,10 @@
+{
+    "title": "`NotLanded` — a read before the value arrives",
+    "summary": "A contact's email, with a Copy button. Open another contact and press Copy before the address lands.",
+    "app": "crm",
+    "files": [
+        "src/server/rpc/notLandedCopyContacts.ts",
+        "src/ui/components/NotLandedCopyContact.abide"
+    ],
+    "render": "src/ui/components/NotLandedCopyContact.abide"
+}

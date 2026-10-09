@@ -7,14 +7,14 @@
 
 export type Metrics = { orders: number; computed: number }
 
-type Query = { range: string; region: string; compare?: string }
+type Query = { range: string; region: string; compare?: string | undefined }
 
 const ORDERS: Record<string, number> = { north: 128, south: 94 }
 
 let computed = 0
 
 /** A slow database, so the wait is on screen. */
-export const database = {
+export const cacheCanonicalDatabase = {
     metrics: {
         async find(query: Query): Promise<Metrics> {
             await Bun.sleep(700)

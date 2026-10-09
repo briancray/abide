@@ -1,0 +1,22 @@
+<script>
+import { reactive } from 'abide'
+import { syncInvoice } from '#server/rpc/reachableHostInvoices'
+
+let status = reactive('')
+
+async function send() {
+    status = 'asking billing…'
+    try {
+        await syncInvoice({ id: '4310' })
+        status = 'sent'
+    } catch (refusal) {
+        if (!syncInvoice.isError(refusal, 'HttpError')) throw refusal
+        status = refusal.message
+    }
+}
+</script>
+
+<div class="row">
+    <button onclick={send}>Send to billing</button>
+    <span class="status">{status}</span>
+</div>

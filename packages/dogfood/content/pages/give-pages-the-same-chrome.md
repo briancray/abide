@@ -12,7 +12,7 @@ a navigation between two of them changes what is in the slot and nothing around 
 
 ## A layout is a component with a slot
 
-```abide #ui/pages/layout.abide
+```abide #ui/pages/layout.abide — excerpt
 <script>
 import { principal } from 'abide'
 </script>

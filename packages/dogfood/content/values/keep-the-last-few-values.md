@@ -94,9 +94,9 @@ any name; `{#for item of source.history(n)}` replays the ring and then goes live
 live without replaying. `by` keys it exactly as over a list — a wired value's default key being
 the production's own `seq` (18.16).
 
-There is no cap on what the **block** then accumulates. A stream painting a hundred thousand rows
-is yours to bound, exactly as a `{#for}` over a hundred thousand items is; conflating the two into
-one number made a chat channel's default retention render one message.
+The block holds what the value retains and nothing more: a row leaves once the value's retention
+drops its production, so `history` is both how far back a block replays and the bound on what it
+paints.
 
 Read on: [Lists](../templates/repeat-markup-over-a-list.md) ·
 [Loading states](show-a-value-that-isnt-there-yet.md)
@@ -119,7 +119,7 @@ write copies down the path.
 And **an undo is itself a write**, so the `watch` pushes it onto the same array — walk backwards
 through an array you are also appending to and the second step reads the first one back. So the
 position lives over a snapshot: take one when a run begins and move an index over it, which is the
-`run` and `at` pair in `undo.ts`.
+`run` and `at` pair in `undoStack.ts`.
 
 Read on: [Watching values](do-something-when-a-value-changes.md) ·
 [Values by name](../templates/read-and-write-a-value-by-name.md)
