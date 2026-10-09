@@ -3,9 +3,12 @@
 // that distinguishes them, and it is the only reason markers might still be right somewhere.
 
 import { execFileSync } from 'node:child_process'
-import { test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import type { Sample } from 'harness/report'
+import { type Report, reportScript } from './reportScript.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
+const REPORT = reportScript()
 const CASES: [number, number][] = [
     [2, 200],
     [8, 200],
@@ -47,90 +50,141 @@ console.log(JSON.stringify(out))
     depth: number
 }[]
 
+// WEBKIT CANNOT PRICE THESE INSIDE A GATE: its clock is 1 ms, so 44.11's bar is 100 ms a sample
+// and `batch()` refuses rather than report the clock. `list.spec.ts` carries the whole reason.
+test.skip(
+    ({ browserName }) => browserName === 'webkit',
+    'webkit coarsens its clock to 1 ms; 44.11 cannot be met inside a gate budget',
+)
+
+/**
+ * A scheme's slot script, re-pointed from the document at the root it is handed.
+ *
+ * The three schemes share one page so `batch()` can interleave them, and each script finds its
+ * tree by id — so each is scoped to its own container rather than to whichever tree comes first.
+ */
+function rooted(script: string): string {
+    const scoped = script.replaceAll(
+        'document.querySelector(',
+        'scope.querySelector(',
+    )
+    if (scoped === script)
+        throw new Error(
+            'a depth script no longer finds its tree the way this re-points',
+        )
+    return scoped
+}
+
 test('the walk against tree depth, in this engine', async ({
     page,
 }, testInfo) => {
     test.setTimeout(5 * 60 * 1000)
-    const rows: {
-        scheme: string
+    const lines = [`\n=== ${testInfo.project.name} — one hydration walk ===`]
+    const groups: {
+        label: string
         shape: 'deep' | 'wide'
         depth: number
         bindings: number
-        ns: number
-        found: number
     }[] = []
-
-    for (const built of trees) {
-        await page.goto('about:blank')
-        await page.setContent(
-            `<!doctype html><html><body>${built.markup}</body></html>`,
-        )
-        const measured = (await page.evaluate(
-            ({ script, bindings }) => {
-                const run = new Function(script)
-                for (let at = 0; at < 5; at += 1) run()
-                const reps = bindings >= 2000 ? 200 : 2000
-                const start = performance.now()
-                for (let at = 0; at < reps; at += 1) run()
-                const elapsed = performance.now() - start
-                const slots = (
-                    globalThis as unknown as { __SLOTS__: unknown[] }
-                ).__SLOTS__
-                return {
-                    ns: (elapsed * 1e6) / reps,
-                    // An arm that found nothing is the fastest on the table.
-                    found: slots.filter((n) => n != null).length,
-                }
-            },
-            { script: built.script, bindings: built.bindings },
-        )) as { ns: number; found: number }
-        rows.push({
-            scheme: built.scheme,
-            shape: built.shape,
-            depth: built.depth,
-            bindings: built.bindings,
-            ns: measured.ns,
-            found: measured.found,
-        })
-    }
-
-    const lines = [`\n=== ${testInfo.project.name} — one hydration walk ===`]
-    const groups: { label: string; rows: typeof rows }[] = []
     for (const [depth, bindings] of CASES)
         groups.push({
             label: `deep  ${String(depth).padStart(2)} x ${String(bindings).padStart(4)}`,
-            rows: rows.filter(
-                (row) =>
-                    row.shape === 'deep' &&
-                    row.depth === depth &&
-                    row.bindings === bindings,
-            ),
+            shape: 'deep',
+            depth,
+            bindings,
         })
     groups.push({
         label: 'wide   4 x 2000 (500 parents)',
-        rows: rows.filter((row) => row.shape === 'wide'),
+        shape: 'wide',
+        depth: -1,
+        bindings: -1,
     })
 
     for (const group of groups) {
-        const here = group.rows
+        const here = trees.filter(
+            (built) =>
+                built.shape === group.shape &&
+                (group.shape === 'wide' ||
+                    (built.depth === group.depth &&
+                        built.bindings === group.bindings)),
+        )
         const bindings = here[0]?.bindings ?? 0
-        const naive = here.find((row) => row.scheme === 'structural')
-        const cursor = here.find((row) => row.scheme === 'cursor')
-        const markers = here.find((row) => row.scheme === 'markers')
-        if (
-            naive === undefined ||
-            cursor === undefined ||
-            markers === undefined
+        await page.goto('about:blank')
+        await page.setContent(
+            `<!doctype html><html><body>${here.map((built) => `<div data-scheme="${built.scheme}">${built.markup}</div>`).join('')}</body></html>`,
         )
-            continue
-        const wrong = here.filter((row) => row.found !== bindings)
-        const ok =
-            wrong.length === 0
-                ? ''
-                : `  !! ${wrong.map((row) => `${row.scheme} found ${row.found}`).join(', ')} of ${bindings}`
+        await page.addScriptTag({ content: REPORT })
+        const measured = await page.evaluate(
+            (schemes) => {
+                const { batch, claimOf, emulatedDom, ratio } = (
+                    globalThis as unknown as { __REPORT__: Report }
+                ).__REPORT__
+                const walks: Record<string, () => void> = {}
+                const found: Record<string, number> = {}
+                for (const { scheme, script } of schemes) {
+                    const root = document.querySelector(
+                        `[data-scheme="${scheme}"]`,
+                    )
+                    const walk = new Function('scope', script) as (
+                        root: Element | null,
+                    ) => void
+                    walks[scheme] = () => walk(root)
+                    // An arm that found nothing is the fastest on the table.
+                    walk(root)
+                    let count = 0
+                    for (const slot of (
+                        globalThis as unknown as { __SLOTS__: unknown[] }
+                    ).__SLOTS__)
+                        if (slot != null) count += 1
+                    found[scheme] = count
+                }
+                const work: Record<string, Record<string, number>> = {}
+                for (const scheme in found)
+                    work[scheme] = { slotsFound: found[scheme] as number }
+                // `markers` FIRST: it is the denominator, and the first arm is the A/A control.
+                const timed = batch({
+                    case: 'the hydration walk',
+                    arms: {
+                        markers: walks.markers as () => void,
+                        cursor: walks.cursor as () => void,
+                        structural: walks.structural as () => void,
+                    },
+                    emulated: emulatedDom(),
+                    work,
+                    budgetNanoseconds: 20_000_000_000,
+                })
+                const markers = timed.samples.markers as Sample
+                const cursor = timed.samples.cursor as Sample
+                const structural = timed.samples.structural as Sample
+                const verdict = ratio(cursor, markers, { floor: timed.floor })
+                return {
+                    markers: markers.nanoseconds,
+                    cursor: cursor.nanoseconds,
+                    structural: structural.nanoseconds,
+                    claim: claimOf(verdict),
+                    workDisagreement: verdict.workDisagreement,
+                    found,
+                    n: timed.n,
+                    floor: timed.floor,
+                }
+            },
+            here.map((built) => ({
+                scheme: built.scheme,
+                script: rooted(built.script),
+            })),
+        )
+
         lines.push(
-            `  ${group.label}   naive ${(naive.ns / 1e6).toFixed(3)}   cursor ${(cursor.ns / 1e6).toFixed(3)}   markers ${(markers.ns / 1e6).toFixed(3)} ms   cursor/markers ${(cursor.ns / markers.ns).toFixed(2)}x${ok}`,
+            `  ${group.label}   naive ${(measured.structural / 1e6).toFixed(3)}   cursor ${(measured.cursor / 1e6).toFixed(3)}   markers ${(measured.markers / 1e6).toFixed(3)} ms   cursor/markers ${measured.claim}   [n=${measured.n} floor=${(measured.floor * 100).toFixed(2)}%]`,
         )
+        if (measured.workDisagreement.length > 0)
+            lines.push(
+                `    WORK DISAGREES — ${measured.workDisagreement.join('; ')}`,
+            )
+        for (const scheme in measured.found)
+            expect(measured.found[scheme], `${scheme} in ${group.label}`).toBe(
+                bindings,
+            )
     }
     console.log(lines.join('\n'))
 })

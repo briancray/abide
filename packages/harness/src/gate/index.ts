@@ -1,7 +1,7 @@
 // A GATE IS VERIFIED BY REVERTING THE FIX AND WATCHING IT FAIL, and this is what
 // turns that from a habit three tests were written in violation of into a mechanism.
 //
-// Entry 5 of 5, and not a lane. `harness/measure`, `harness/engine` and `harness/server` are partitioned
+// Not a lane. `harness/measure`, `harness/engine` and `harness/server` are partitioned
 // by DEPENDENCY and `harness/report` depends on nothing; this depends on `bun:test`,
 // which is why it is neither one of the three nor part of the leaf — a `bun:test`
 // import in the leaf would take the browser injectable with it.

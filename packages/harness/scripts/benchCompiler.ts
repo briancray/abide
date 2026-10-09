@@ -30,6 +30,7 @@ const REPO = new URL('../../../', import.meta.url)
 
 // Enough rounds that one slow scheduling hiccup cannot carry the average.
 const ROUNDS = 10
+const SCRIPT_TAG_LINE = /^[ \t]*<script\b[^>]*\bsrc=[^>]*><\/script>[ \t]*$/gm
 
 export type Arm = {
     name: string
@@ -63,7 +64,13 @@ export async function armOf(
     if (vanillaScripts.length === 0) return null
 
     const authoredAbide = await countLines(DOGFOOD, abideSources)
-    const authoredVanilla = await countLines(ARMS, vanillaScripts)
+    const scriptLines = await countLines(ARMS, vanillaScripts)
+    // THE MARKUP IS AUTHORED TOO. A `.abide` file is counted whole, markup included, so the arm's
+    // page is counted beside its scripts — less the `<script src>` that loads them, which is
+    // wiring the `.abide` side has no line for.
+    const markup = await Bun.file(new URL(`${name}/index.html`, ARMS)).text()
+    const authoredVanilla =
+        scriptLines + codeLinesOf(markup.replace(SCRIPT_TAG_LINE, ''))
 
     // What the browser gets: the emitted client module for each page. A page with nothing to
     // hydrate emits none, and counts zero — which is the point of that emptiness.
@@ -111,7 +118,9 @@ export async function armOf(
         authoredAbide,
         authoredVanilla,
         shippedAbide,
-        shippedVanilla: authoredVanilla,
+        // The page's markup is not charged on either side: the emitted client module is what
+        // the abide arm ships as script, and its markup arrives as server-rendered HTML.
+        shippedVanilla: scriptLines,
         typeable,
     }
 }

@@ -29,7 +29,7 @@ export const CASES: Record<string, () => void> = {
         host.append(document.createElement('u'), 'tail')
         fresh.cloneNode(true)
     },
-    // The one arm of the 69 that reaches class and style — `markup-class-style` —
+    // The one docs arm that reaches class and style — `markup-class-style` —
     // and the reason both moved out of the refused list. happy-dom implements a CSS
     // property write over its own `setProperty`, which is patched; chromium and
     // webkit implement the property natively, where no JS-visible call happens.
@@ -44,7 +44,9 @@ export const CASES: Record<string, () => void> = {
         host.style.cssText = 'margin:0'
     },
     // A two-row swap of a keyed list: the case that distinguishes a minimal keyed
-    // reconcile from a rebuild, where a full reverse cannot.
+    // reconcile from a rebuild, where a full reverse cannot. The first and last of three
+    // exchange places — [0,1,2] -> [2,1,0] — so the second call is a real move rather
+    // than a node put back where it already was.
     'a two-row swap': () => {
         const list = document.createElement('ul')
         const rows: HTMLElement[] = []
@@ -56,7 +58,7 @@ export const CASES: Record<string, () => void> = {
         }
         document.body.appendChild(list)
         list.insertBefore(rows[2] as Node, rows[0] as Node)
-        list.insertBefore(rows[0] as Node, rows[1] as Node)
+        list.insertBefore(rows[0] as Node, null)
     },
     // A TEMPLATE, because the compiled arm makes every row from one and this is the
     // shadowing case: happy-dom gives `HTMLTemplateElement` its own `innerHTML` where

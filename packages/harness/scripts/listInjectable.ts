@@ -21,43 +21,64 @@ type Row = {
     buysClaim: string
     n: number
     floor: number
+    buysN: number
+    buysFloor: number
     substrate: string
+    workDisagreement: string[]
+    wrong: string[]
 }
 
 function run(): Row[] {
     const rows: Row[] = []
     for (const kase of listCases()) {
         const arms = kase.setup()
-        const measured = batch({
+        // COUNTED APART FROM THE TIMING, because the observer would be inside the op.
+        const work = arms.work()
+        // TWO BATCHES, NOT ONE. `batch()` sizes n by the FASTEST arm, so all three arms in one
+        // call run the rebuild at the n a single `insertBefore` needs: n=57,524 on the adjacent
+        // swap, one rep in twenty seconds, and the case refused. Each ratio is between two arms
+        // of comparable cost, each with its own interleave and its own A/A floor.
+        // A browser clock is ~2,400x coarser than bun's, and a 200-row reorder is far dearer
+        // than a signal write, so the default ceiling is not enough.
+        const budgetNanoseconds = 20_000_000_000
+        const against = batch({
             case: kase.name,
-            arms: {
-                vanilla: arms.vanilla,
-                abide: arms.abide,
-                careless: arms.careless,
-            },
+            arms: { vanilla: arms.vanilla, abide: arms.abide },
             emulated: emulatedDom(),
-            // A browser clock is ~2,400x coarser than bun's, and a 200-row reorder is
-            // far dearer than a signal write, so the default ceiling is not enough.
-            budgetNanoseconds: 20_000_000_000,
+            work,
+            budgetNanoseconds,
         })
-        const abide = measured.samples.abide as Sample
-        const vanilla = measured.samples.vanilla as Sample
-        const careless = measured.samples.careless as Sample
+        const over = batch({
+            case: kase.name,
+            arms: { abide: arms.abide, careless: arms.careless },
+            emulated: emulatedDom(),
+            work,
+            budgetNanoseconds,
+        })
+        const abide = against.samples.abide as Sample
+        const vanilla = against.samples.vanilla as Sample
+        const careless = over.samples.careless as Sample
+        const cost = ratio(abide, vanilla, { floor: against.floor })
+        const buys = ratio(over.samples.abide as Sample, careless, {
+            floor: over.floor,
+        })
         rows.push({
             case: kase.name,
             distinguishes: kase.distinguishes,
             abide: abide.nanoseconds,
             vanilla: vanilla.nanoseconds,
             careless: careless.nanoseconds,
-            costClaim: claimOf(
-                ratio(abide, vanilla, { floor: measured.floor }),
-            ),
-            buysClaim: claimOf(
-                ratio(abide, careless, { floor: measured.floor }),
-            ),
-            n: measured.n,
-            floor: measured.floor,
-            substrate: measured.substrate,
+            costClaim: claimOf(cost),
+            buysClaim: claimOf(buys),
+            n: against.n,
+            floor: against.floor,
+            buysN: over.n,
+            buysFloor: over.floor,
+            substrate: against.substrate,
+            // Against the FLOOR only: the rebuild creates every row by design, so its
+            // disagreement is the receipt rather than a fault.
+            workDisagreement: cost.workDisagreement,
+            wrong: arms.verify(),
         })
         // The hosts are attached, and three per case over four cases is twelve 200-row
         // lists left in the document — which the NEXT case would then be laid out

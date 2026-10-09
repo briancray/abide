@@ -1,14 +1,12 @@
-// THREE COSTS, PRICED IN BOTH ENGINES: a canonical-key level, a combinator's scratch report, and a
-// keyed reach's parameter defaults.
-// Each case runs the shape before the change beside the shape shipped — the revert arm, kept as a
-// copy — plus SHARE rows pricing the layer against the whole op somebody waits on. JSC with
+// THREE COSTS, PRICED IN BOTH ENGINES: a canonical-key level, a combinator's report, and a keyed
+// reach's parameter defaults.
+// The canonical-key case runs the spellings it chose between beside the one shipped, and it and
+// the validateJson case carry SHARE rows pricing the layer against the whole op somebody waits on. JSC with
 // `bun packages/harness/scripts/benchShared.ts`, V8 with `bunx playwright test
 // --project=harness packages/harness/e2e/shared.spec.ts`.
-import { jsonSchema, reactive } from 'abide'
+import { jsonSchema, reactive, validateJson } from 'abide'
 import { putOwn } from '../../abide/src/shared/putOwn.ts'
 import { canonicalKey } from '../../abide/src/shared/reactive/canonicalKey.ts'
-import { validateJson } from '../../abide/src/shared/validateJson.ts'
-import { validateJsonScratch } from './validateJsonScratch.ts'
 
 // Defeats dead-code elimination without allocating: every arm writes here.
 let sink: unknown
@@ -161,25 +159,23 @@ function defaultsBuildCase(): SharedCase {
     }
 }
 
-// ---- validateJson: a scratch record per branch against a mismatch flag ----
+// ---- validateJson: a combinator's report, against the gated write it sits in ----
 
+// A MISMATCH FLAG REPLACED A SCRATCH RECORD per combinator branch per value. The record's arm was a
+// hand-synced copy of the module that had drifted from it, so it left with its last reading — one
+// JSC run, 2026-10-08, flag / record: anyOf with the first branch failing 0.80x (A/A floor 24%),
+// oneOf over three object shapes 0.86x (floor 2.7%), `not` passing 0.91x (floor 16%). Only the
+// oneOf row clears its floor.
 function validateCase(
     name: string,
     schema: Parameters<typeof validateJson>[0],
     value: unknown,
 ): SharedCase {
-    const current = JSON.stringify(validateJsonScratch(schema, value))
-    const candidate = JSON.stringify(validateJson(schema, value))
-    if (current !== candidate)
-        throw new Error(`${name}: ${current} against ${candidate}`)
     const gated = reactive<unknown>(value, { schema: jsonSchema(schema) })
     return {
         name,
         arms: {
-            'scratch record (before)': (): void => {
-                sink = validateJsonScratch(schema, value)
-            },
-            'mismatch flag (shipped)': (): void => {
+            'validateJson as shipped': (): void => {
                 sink = validateJson(schema, value)
             },
             'SHARE: whole gated write': (): void => {

@@ -29,7 +29,7 @@ Bun.serve({
                     {
                         name: 'ValidationError',
                         status: 422,
-                        message: 'Those arguments were refused.',
+                        message: 'Unprocessable Content',
                         data: issues,
                     },
                     { status: 422 },

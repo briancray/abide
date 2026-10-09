@@ -6,23 +6,39 @@
 // happy-dom (44.18 refuses the other kind at the instrument). The client half is `render.spec.ts`,
 // in a browser, for the same reason.
 
-import { render } from 'abide/server'
-import { batch, emulatedDom, type Sample } from 'harness/report'
+import {
+    batch,
+    claimOf,
+    emulatedDom,
+    type Ratio,
+    ratio,
+    type Sample,
+} from 'harness/report'
 import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
 import {
     abideLoopSource,
     abideSource,
     cards,
+    vanillaCarefulMarkup,
     vanillaMarkup,
 } from './renderCases.ts'
 
 const SIZES = [10, 100, 1000]
 
+type Verdicts = {
+    size: number
+    // `{#for}` over each hand-written page, and the unrolled page over `{#for}`.
+    obvious: Ratio
+    careful: Ratio
+    unrolled: Ratio
+}
+
 async function main(): Promise<void> {
     const { compile, close } = await openBenchCompiler()
     console.log(
-        'SERVER RENDER — a card list, against the page written by hand\n',
+        'SERVER RENDER — a card list, against the page written by hand two ways\n',
     )
+    const verdicts: Verdicts[] = []
     try {
         for (const size of SIZES) {
             const list = cards(size)
@@ -45,6 +61,9 @@ async function main(): Promise<void> {
                     vanilla: (): void => {
                         void vanillaMarkup(list)
                     },
+                    'vanilla, careful': (): void => {
+                        void vanillaCarefulMarkup(list)
+                    },
                     'abide, {#for}': (): void => {
                         void drain(Loop)
                     },
@@ -54,11 +73,12 @@ async function main(): Promise<void> {
                 },
                 emulated: emulatedDom(),
             })
-            report(size, measured)
+            verdicts.push(report(size, measured))
         }
     } finally {
         close()
     }
+    summarize(verdicts)
 }
 
 /**
@@ -72,38 +92,70 @@ function drain(component: Render): string {
     return rendered.head + rendered.body
 }
 
-function report(size: number, measured: ReturnType<typeof batch>): void {
+const µs = (sample: Sample): string =>
+    `${(sample.nanoseconds / 1000).toFixed(1)} µs`
+
+function report(size: number, measured: ReturnType<typeof batch>): Verdicts {
     const vanilla = measured.samples.vanilla as Sample
+    const careful = measured.samples['vanilla, careful'] as Sample
     const loop = measured.samples['abide, {#for}'] as Sample
     const unrolled = measured.samples['abide, unrolled'] as Sample
+    const floor = { floor: measured.floor }
+    const verdicts = {
+        size,
+        obvious: ratio(loop, vanilla, floor),
+        careful: ratio(loop, careful, floor),
+        unrolled: ratio(unrolled, loop, floor),
+    }
     console.log(
-        `  ${String(size).padStart(4)} cards   vanilla ${(vanilla.nanoseconds / 1000).toFixed(1)} µs   {#for} ${(loop.nanoseconds / 1000).toFixed(1)} µs (${(loop.nanoseconds / vanilla.nanoseconds).toFixed(2)}x)   unrolled ${(unrolled.nanoseconds / 1000).toFixed(1)} µs (${(unrolled.nanoseconds / vanilla.nanoseconds).toFixed(2)}x)`,
+        `  ${String(size).padStart(4)} cards   A/A floor ${(measured.floor * 100).toFixed(1)}%   n=${measured.n}`,
     )
     console.log(
-        `              ${(loop.nanoseconds / size).toFixed(0)} ns a card through the loop; ${(unrolled.nanoseconds / loop.nanoseconds).toFixed(2)}x of it unrolled`,
+        `              vanilla ${µs(vanilla)}   careful ${µs(careful)}   {#for} ${µs(loop)} (${claimOf(verdicts.obvious)} vanilla, ${claimOf(verdicts.careful)} careful)   unrolled ${µs(unrolled)}`,
     )
+    console.log(
+        `              ${(loop.nanoseconds / size).toFixed(0)} ns a card through the loop; unrolled is ${claimOf(verdicts.unrolled)} of it`,
+    )
+    return verdicts
 }
 
-console.log(`
-WHAT THIS SAYS
+/** Which way a verdict points, or `level` when the floor cannot tell. */
+function sideOf(result: Ratio): 'faster' | 'slower' | 'level' {
+    if (result.kind !== 'ratio') return 'level'
+    return result.value < 1 ? 'faster' : 'slower'
+}
 
-  ABIDE IS FASTER THAN THE HAND-WRITTEN PAGE at every size a page really is — 0.81x at 10
-  cards, 0.87x at 100 — and the reason is the escaping. \`escapeText\` SCANS and returns the
-  input untouched when there is nothing to rewrite; a person writing the same page by hand
-  reaches for a \`replaceAll\` chain, which allocates three times per value whether or not
-  anything needed escaping. \`renderShare.ts\` prices that alone at 40 µs against 124.
+/**
+ * What THIS run says, derived from its verdicts: a conclusion typed into the source goes on
+ * printing beside runs that measured the opposite.
+ */
+function summarize(verdicts: Verdicts[]): void {
+    console.log('\nWHAT THIS RUN SAYS\n')
+    for (const verdict of verdicts) {
+        const obvious = sideOf(verdict.obvious)
+        const careful = sideOf(verdict.careful)
+        const escaping =
+            obvious === 'faster' && careful !== 'faster'
+                ? ' — the win is the escaping: a hand arm that tests before rewriting takes it back'
+                : ''
+        const loop = sideOf(verdict.unrolled)
+        console.log(
+            `  ${String(verdict.size).padStart(4)} cards: {#for} is ${obvious === 'level' ? 'level with' : `${obvious} than`} the obvious page and ${careful === 'level' ? 'level with' : `${careful} than`} the careful one${escaping}; unrolled is ${loop === 'level' ? 'level with' : `${loop} than`} the loop`,
+        )
+    }
+    console.log(`
+  ONE RUN. This bench has swung 1.2x-1.8x across runs of identical code, wider than the A/A floor
+  one run measures — take five and read the spread before quoting any ratio above.
 
-  THE FIRST VERSION OF THIS BENCH SAID 28x THE OTHER WAY, and it was wrong because the arm
-  did not escape at all. An unescaped interpolation of data you did not author is an
-  injection, so it was not the same work — the compiled page has 32.1 and cannot choose.
-  SHARED SOURCE IS NOT SHARED WORK, and an arm that skips the safety is the same mistake as
-  an arm that renders nothing.
+  THE HAND ARMS ESCAPE, and they have to. The first version of this bench did not, and read 28x
+  the other way: an unescaped interpolation of data you did not author is an injection, and the
+  compiled page has 32.1 and cannot choose. SHARED SOURCE IS NOT SHARED WORK. The obvious arm
+  escapes with a \`replaceAll\` chain that allocates three times per value; the careful arm tests
+  first, the way \`escapeText\` scans first, so what separates abide from it is not the escaping.
 
-  THE UNROLLED COLUMN IS WHY \`{#for}\` EXISTS. A 1000-card page written without it becomes one
-  function with ~7000 straight-line property accesses, and straight-line code that runs once
-  never becomes warm. This bench predicted that a loop would fix it and by roughly how much,
-  before the loop was built; the two columns are that prediction, kept, and it held.
+  THE UNROLLED COLUMN IS WHY \`{#for}\` EXISTS: a page written without it compiles to one function
+  of straight-line property accesses, and straight-line code that runs once never becomes warm.
 `)
+}
 
-void render
 await main()

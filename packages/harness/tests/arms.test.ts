@@ -1248,6 +1248,39 @@ test('rpc-call: the page gets the row with no API written between them', async (
     expect(asked).toEqual(['/api/invoices/get?id=4021'])
 })
 
+// The homepage's card. Reverted — the route dropped from `server.ts` — the heading reads
+// '' where 'Invoice INV-0042' was owed, and the line reads the arm's own error branch.
+test('read-invoice: the row the handler returns is the row on the page', async () => {
+    const routes = await routesOf('read-invoice', 'server.ts')
+    const asked: string[] = []
+    globalThis.fetch = Object.assign(
+        async (input: string) => {
+            asked.push(input)
+            const url = new URL(input, 'http://example.invalid')
+            return (
+                routes[url.pathname]?.(new Request(url)) ??
+                new Response('', { status: 404 })
+            )
+        },
+        { preconnect: () => {} },
+    ) as typeof fetch
+
+    await mount('read-invoice', 'invoice.js')
+    await Bun.sleep(30)
+    // THE CLAIM: a row from the database on the page, through the one handler.
+    expect([read('#number'), read('#line')]).toEqual([
+        'Invoice INV-0042',
+        '$1,240.00 due 2026-09-14',
+    ])
+    // What the arm pays for it: an address and an encoding written out by hand on both
+    // sides, and a miss the handler has to turn into a status the page then branches on.
+    expect(asked).toEqual(['/api/invoice?id=42'])
+    const missing = await routes['/api/invoice']?.(
+        new Request('http://example.invalid/api/invoice?id=7'),
+    )
+    expect(missing?.status).toBe(404)
+})
+
 test('rpc-reactive: the button reads the probes off the call itself', async () => {
     let loads = 0
     globalThis.fetch = Object.assign(
@@ -1516,7 +1549,7 @@ test('write-coalesced: two presses inside one flight are one write', async () =>
             writes += 1
             const answered = writes
             await Bun.sleep(40)
-            return Response.json({ payments: answered })
+            return Response.json(answered)
         },
         { preconnect: () => {} },
     ) as typeof fetch
@@ -1639,6 +1672,8 @@ test('schema-key: two spellings of one key are two entries and two loads', async
     expect([read('#status'), asked.join(',')]).toEqual(['', 'ABC-123,abc-123'])
 })
 
+// Reverted — the parse hoisted above the sign-in check — a signed-out caller asking for nine reads
+// `422 Unprocessable Content` where `401 Sign in first.` was owed.
 test('rung-order: a signed-out caller is refused before the arguments are read', async () => {
     const routes = await routesOf('rung-order', 'server.ts')
     globalThis.fetch = Object.assign(
@@ -1668,7 +1703,7 @@ test('rung-order: a signed-out caller is refused before the arguments are read',
 
     click('#seal')
     await Bun.sleep(20)
-    expect(read('#status')).toBe('422 Those arguments were refused.')
+    expect(read('#status')).toBe('422 Unprocessable Content')
 
     type('#limit', '2')
     await Bun.sleep(20)
@@ -1989,14 +2024,19 @@ test('script-scope: one counter is per instance and the other is per module', as
     expect(rows()).toEqual(['1 calls · row 1', '1 calls · row 2'])
 })
 
+// Reverted — the sign-out cleared in the page, with no request — `asked` reads only the sign-in,
+// and the HttpOnly seal the next request carries is still the signed-in one.
 test('principal-session: the seal and what it resolved to move together', async () => {
+    const asked: string[] = []
     globalThis.fetch = Object.assign(
-        async () =>
-            Response.json({
+        async (input: string, init?: RequestInit) => {
+            asked.push(`${init?.method ?? 'GET'} ${input}`)
+            return Response.json({
                 authenticated: true,
                 id: 'u_1',
                 name: 'Ada Lovelace',
-            }),
+            })
+        },
         { preconnect: () => {} },
     ) as typeof fetch
 
@@ -2017,12 +2057,15 @@ test('principal-session: the seal and what it resolved to move together', async 
         'Sign out',
     ])
 
+    // And signing out is a request too: the page cannot clear an HttpOnly seal.
     click('#seal')
+    await Bun.sleep(20)
     expect([read('#state'), read('#who'), read('#seal')]).toEqual([
         'no',
         '—',
         'Sign in',
     ])
+    expect(asked).toEqual(['POST /api/signIn', 'POST /api/signOut'])
 })
 
 test('log-channels: a line on a channel nothing selected is never recorded', async () => {
@@ -2057,6 +2100,212 @@ test('log-channels: a line on a channel nothing selected is never recorded', asy
 // controls are compared — and against the TEXT NODES of the templates, never whole source:
 // matching a label against a whole file lets any coincidence rescue it, and `Post` on a button
 // was once covered by `type Post` in a sibling `.ts` with the button renamed.
+// AN ARM'S OWN ROUTES BEHIND `fetch`, so a spec drives the page and the server it wrote as one
+// thing. A route may be a function or a table by method, which is what `Bun.serve` takes.
+type MethodRoutes = Record<
+    string,
+    | ((request: Request) => Response | Promise<Response>)
+    | Record<string, (request: Request) => Response | Promise<Response>>
+>
+
+function servedBy(routes: MethodRoutes, asked: string[] = []): typeof fetch {
+    return Object.assign(
+        async (input: string, init?: RequestInit) => {
+            const method = init?.method ?? 'GET'
+            asked.push(`${method} ${input}`)
+            const url = new URL(input, 'http://example.invalid')
+            const route = routes[url.pathname]
+            const handler =
+                typeof route === 'function' ? route : route?.[method]
+            return (
+                (await handler?.(new Request(url, init))) ??
+                new Response('', { status: 404 })
+            )
+        },
+        { preconnect: () => {} },
+    ) as typeof fetch
+}
+
+// Reverted — the route's content-type written as `application/jsonl` — the readout reads that
+// where 'text/event-stream' was owed.
+test('sse-wallboard: a caller that sent no Accept is answered events', async () => {
+    const routes = await routesOf('sse-wallboard', 'server.ts')
+    globalThis.fetch = servedBy(routes)
+
+    await mount('sse-wallboard', 'feed.js')
+    await Bun.sleep(1200)
+    // THE CLAIM: the request asked for nothing, and the answer is framed as events.
+    expect(read('#type')).toBe('text/event-stream')
+    expect(read('#body').trim().split('\n\n')).toEqual([
+        'data: {"page":"/pricing","at":"09:41:02"}',
+        'data: {"page":"/signup","at":"09:41:05"}',
+        'data: {"page":"/docs","at":"09:41:09"}',
+    ])
+})
+
+// Reverted — the route answering `Response.json(rows)` — the body is one line holding an array,
+// which reads as one row with no region where three regions were owed.
+test('jsonl-export: a list goes out one value per line', async () => {
+    const routes = await routesOf('jsonl-export', 'server.ts')
+    globalThis.fetch = servedBy(routes)
+
+    await mount('jsonl-export', 'export.js')
+    await Bun.sleep(50)
+    expect(read('#type')).toBe('application/jsonl')
+    // THE CLAIM: every line parses on its own, and there is one per row.
+    const lines = read('#body').trim().split('\n')
+    expect(lines.map((line) => JSON.parse(line).region)).toEqual([
+        'north',
+        'south',
+        'east',
+    ])
+})
+
+// Reverted — the route writing the whole file as its first chunk — the first read takes 4 lines
+// where the header line alone was owed.
+test('bytes-csv: the file is written as the rows are read', async () => {
+    const routes = await routesOf('bytes-csv', 'server.ts')
+    const answer = await routes['/api/salesCsv']?.(
+        new Request('http://example.invalid/api/salesCsv?year=2026'),
+    )
+    expect(answer?.headers.get('content-type')).toBe('application/octet-stream')
+    // THE CLAIM: the first chunk is the header line alone, ahead of any row.
+    const reader = (
+        answer as Response
+    ).body?.getReader() as ReadableStreamDefaultReader<Uint8Array>
+    const first = await reader.read()
+    expect(new TextDecoder().decode(first.value)).toBe('region,total\n')
+    await reader.cancel()
+
+    globalThis.fetch = servedBy(routes)
+    await mount('bytes-csv', 'csv.js')
+    await Bun.sleep(1200)
+    expect(read('#body').trim().split('\n')).toEqual([
+        'region,total',
+        'north,12480.00',
+        'south,9140.00',
+        'east,7020.00',
+    ])
+})
+
+// Reverted — the route answering `new Response(null, { status: 204 })` for nobody — the script's
+// `json()` throws on the empty body and the readouts stay at Ada's '200' and 'Charles Babbage'.
+test('json-null: nobody is `null` at 200, not an empty answer', async () => {
+    const routes = await routesOf('json-null', 'server.ts')
+    globalThis.fetch = servedBy(routes)
+
+    await mount('json-null', 'manager.js')
+    await Bun.sleep(30)
+    expect([read('#status'), read('#manager')]).toEqual([
+        '200',
+        'Charles Babbage',
+    ])
+    // THE CLAIM: Grace has no manager, and the answer still reads as JSON.
+    click('#grace')
+    await Bun.sleep(30)
+    expect([read('#status'), read('#manager')]).toEqual(['200', 'null'])
+})
+
+// Reverted — the avatar route answering a photo itself — 200 and no `location`, where 302 and
+// the current version's address were owed.
+test('redirect-avatar: the stable address sends the browser on to the version', async () => {
+    const routes = await routesOf('redirect-avatar', 'server.ts')
+    // THE CLAIM: the address the page asks for answers a redirect to the current version.
+    const answer = await routes['/api/avatar']?.(
+        new Request('http://example.invalid/api/avatar?id=4022'),
+    )
+    expect([answer?.status, answer?.headers.get('location')]).toEqual([
+        302,
+        '/api/photo?id=4022&version=7',
+    ])
+    const photo = await routes['/api/photo']?.(
+        new Request(`http://example.invalid${answer?.headers.get('location')}`),
+    )
+    expect(photo?.headers.get('content-type')).toBe('image/svg+xml')
+
+    await mount('redirect-avatar', 'avatar.js')
+    click('#grace')
+    expect(read('#asked')).toBe('/api/avatar?id=4022')
+})
+
+// Reverted — the route's `content-type` left off — the answer is typed `text/plain;charset=UTF-8`,
+// which a browser under `nosniff` shows as text rather than painting the invoice.
+test('page-issued: the stored invoice is answered as a document', async () => {
+    const routes = await routesOf('page-issued', 'server.ts')
+    const answer = await routes['/api/issuedInvoice']?.(
+        new Request('http://example.invalid/api/issuedInvoice?id=4021'),
+    )
+    // THE CLAIM: the stored HTML goes out as HTML, unchanged.
+    expect(answer?.headers.get('content-type')).toBe('text/html; charset=utf-8')
+    expect(await answer?.text()).toContain('<h1>Invoice INV-4021</h1>')
+
+    // The page is the frame pointed at that route. Read rather than mounted: happy-dom would load
+    // the frame itself, against a server this spec never started.
+    const page = await Bun.file(
+        new URL('page-issued/invoice.js', ARMS_DIR),
+    ).text()
+    expect(page).toContain("'/api/issuedInvoice?id=4021'")
+})
+
+// Reverted — the route answering `Response.json(contact)` with no init — the readouts read '200'
+// and '' where '201' and the new record's address were owed.
+test("response-created: the status and the location are the handler's to write", async () => {
+    const routes = await routesOf('response-created', 'server.ts')
+    globalThis.fetch = servedBy(routes)
+
+    await mount('response-created', 'contact.js')
+    expect([read('#status'), read('#location')]).toEqual(['—', '—'])
+    click('#add')
+    await Bun.sleep(30)
+    // THE CLAIM: a create answers 201 and says where the record now lives.
+    expect([read('#status'), read('#location')]).toEqual([
+        '201',
+        '/contacts/4031',
+    ])
+})
+
+// Reverted — `DELETE` sent with the tag in a JSON body, as the other writes send theirs — the
+// route reads no `tag` off the URL, removes nothing, and three tags stand where two were owed.
+test('write-methods: each write goes out on its own method', async () => {
+    const routes = (await routesOf(
+        'write-methods',
+        'server.ts',
+    )) as unknown as MethodRoutes
+    const asked: string[] = []
+    globalThis.fetch = servedBy(routes, asked)
+    const tags = () =>
+        [...document.querySelectorAll('#tags button')].map(
+            (button) => button.textContent,
+        )
+
+    await mount('write-methods', 'contact.js')
+    await Bun.sleep(30)
+    expect([read('#phone'), tags()]).toEqual([
+        '020 7946 0018',
+        ['customer ✕', 'newsletter ✕', 'vip ✕'],
+    ])
+
+    click('#save')
+    await Bun.sleep(30)
+    ;(document.querySelectorAll('#tags button')[1] as HTMLElement).click()
+    await Bun.sleep(30)
+    expect([read('#phone'), tags()]).toEqual([
+        '020 7946 0019',
+        ['customer ✕', 'vip ✕'],
+    ])
+    click('#reset')
+    await Bun.sleep(30)
+    expect(tags()).toEqual(['customer ✕', 'newsletter ✕', 'vip ✕'])
+    // THE CLAIM, and what the arm pays for it: four verbs, each a string here that the server's
+    // route table has to agree with, and a query built by hand for the one carrying it in the URL.
+    expect(asked).toEqual([
+        'GET /api/contact?id=4021',
+        'PATCH /api/contact',
+        'DELETE /api/contact?id=4021&tag=newsletter',
+        'PUT /api/contact',
+    ])
+})
+
 test('every control the arm renders is one the page source names', async () => {
     const strays: string[] = []
     for (const path of new Bun.Glob('*/index.html').scanSync({
@@ -2180,4 +2429,728 @@ test('every arm is paired with a docs example', async () => {
             unpaired.push(name)
     }
     expect(unpaired).toEqual([])
+})
+
+// Reverted — the arm's `plan` rule dropped — the opening row reads one issue where two were owed.
+test('validate-json: each issue sits under its own path and leaves when that field is fixed', async () => {
+    await mount('validate-json', 'import.js')
+    const issues = () => {
+        const found: string[][] = []
+        for (const item of document.querySelectorAll('#issues li'))
+            found.push([
+                item.querySelector('span')?.textContent ?? '',
+                item.querySelector('strong')?.textContent ?? '',
+            ])
+        return found
+    }
+    expect(issues()).toEqual([
+        ['plan', 'must be one of "starter", "team", "enterprise"'],
+        ['seats', 'must be at most 50'],
+    ])
+
+    // THE CLAIM. Fixing one field takes its issue away and leaves the other's standing.
+    type('#pasted', '{ "name": "Ada Lovelace", "plan": "team", "seats": 80 }')
+    expect(issues()).toEqual([['seats', 'must be at most 50']])
+    type('#pasted', '{ "name": "Ada Lovelace", "plan": "team", "seats": 12 }')
+    expect(issues()).toEqual([['import', 'ready']])
+    type('#pasted', '{ "name": ')
+    expect(issues()).toEqual([['the row', 'must be object, was string']])
+})
+
+// Reverted — the arm's upper bound dropped — the third press reads 51 where the deal held 50.
+test('json-schema: a write past the bound is refused and the deal keeps what it had', async () => {
+    await mount('json-schema', 'seats.js')
+    click('#more')
+    click('#more')
+    expect([read('#seats'), read('#message')]).toEqual(['50', ''])
+    click('#more')
+    expect([read('#seats'), read('#message')]).toEqual([
+        '50',
+        'must be at most 50',
+    ])
+    click('#fewer')
+    expect([read('#seats'), read('#message')]).toEqual(['49', ''])
+})
+
+// A WEB SOCKET ARM SERVES ITSELF TOO. `Bun.serve` is stubbed to keep the arm's `websocket`
+// handlers, and the page's `WebSocket` is a stand-in wired straight to them — so a second tab is a
+// second stand-in on the one captured server, holding the room id its address carries. Reverted —
+// the arm's `server.publish` swapped for the sending socket's own `send` — the other tab reads the
+// opening turn where the sent one was owed; reverted — every socket subscribed and published under
+// one fixed topic rather than its id — the stranger reads `Sent from this tab`.
+test('socket-room: a turn one tab sends reaches every tab of that browser, and no other', async () => {
+    type Peer = {
+        data: { id: string }
+        subscribe(topic: string): void
+        send(text: string): void
+    }
+    type Handlers = {
+        open(peer: Peer): void
+        message(peer: Peer, text: string): void
+    }
+    const topics = new Map<string, Set<Peer>>()
+    let handlers: Handlers | undefined
+    const serve = Bun.serve
+    ;(Bun as { serve: unknown }).serve = (options: { websocket: Handlers }) => {
+        handlers = options.websocket
+        return {
+            publish(topic: string, text: string) {
+                for (const peer of topics.get(topic) ?? []) peer.send(text)
+            },
+        }
+    }
+    try {
+        await import(
+            `${new URL('socket-room/server.ts', ARMS_DIR).pathname}?${Math.random()}`
+        )
+    } finally {
+        Bun.serve = serve
+    }
+
+    class TabSocket extends EventTarget {
+        static OPEN = 1
+        readyState = 0
+        peer: Peer
+        constructor(address: string) {
+            super()
+            const tab = this
+            this.peer = {
+                data: { id: new URL(address).searchParams.get('id') ?? '' },
+                subscribe(topic) {
+                    const peers = topics.get(topic) ?? new Set<Peer>()
+                    peers.add(tab.peer)
+                    topics.set(topic, peers)
+                },
+                send(text) {
+                    tab.dispatchEvent(
+                        new MessageEvent('message', { data: text }),
+                    )
+                },
+            }
+            queueMicrotask(() => {
+                this.readyState = TabSocket.OPEN
+                this.dispatchEvent(new Event('open'))
+                handlers?.open(this.peer)
+            })
+        }
+        send(text: string): void {
+            handlers?.message(this.peer, text)
+        }
+    }
+    function said(tab: TabSocket): () => string {
+        let latest = ''
+        tab.addEventListener('message', (event) => {
+            latest = JSON.parse(String((event as MessageEvent).data)).text
+        })
+        return () => latest
+    }
+    const standing = globalThis.WebSocket
+    globalThis.WebSocket = TabSocket as unknown as typeof WebSocket
+    // biome-ignore lint/suspicious/noDocumentCookie: the browser's id, as a second tab finds it.
+    document.cookie = 'room=reader-1; Path=/'
+    try {
+        const otherTab = said(new TabSocket('ws://docs.test/room?id=reader-1'))
+        const stranger = said(new TabSocket('ws://docs.test/room?id=reader-2'))
+
+        await mount('socket-room', 'room.js')
+        await Bun.sleep(5)
+        const GREETING = 'Ask about any invoice here.'
+        expect([read('#said'), otherTab(), stranger()]).toEqual([
+            GREETING,
+            GREETING,
+            GREETING,
+        ])
+
+        // THE CLAIM. The sending tab paints the turn when its room sends it back, the other tab of
+        // that browser is sent the same frame, and a browser with another id is sent nothing.
+        type('#draft', 'Sent from this tab')
+        click('#send')
+        expect([
+            read('#speaker'),
+            read('#said'),
+            otherTab(),
+            stranger(),
+        ]).toEqual([
+            'you',
+            'Sent from this tab',
+            'Sent from this tab',
+            GREETING,
+        ])
+    } finally {
+        globalThis.WebSocket = standing
+        // biome-ignore lint/suspicious/noDocumentCookie: clearing what this test set.
+        document.cookie = 'room=; Path=/; Max-Age=0'
+    }
+})
+
+test('bind-branch: the field exists only while the box is ticked', async () => {
+    await mount('bind-branch', 'contact.js')
+    const box = document.querySelector('#separately') as HTMLInputElement
+    expect(document.querySelector('#address')).toBeNull()
+
+    // THE CLAIM. The branch follows the bound value both ways: built on the tick, gone
+    // on the clear — the arm's second render and its teardown are what carry that.
+    box.checked = true
+    box.dispatchEvent(new Event('change'))
+    expect(document.querySelector('#address')).not.toBeNull()
+
+    box.checked = false
+    box.dispatchEvent(new Event('change'))
+    expect(document.querySelector('#address')).toBeNull()
+})
+
+test('online-banner: the banner follows the connection both ways', async () => {
+    const standing = Object.getOwnPropertyDescriptor(navigator, 'onLine')
+    Object.defineProperty(navigator, 'onLine', {
+        configurable: true,
+        get: () => true,
+    })
+    try {
+        await mount('online-banner', 'order.js')
+        const banner = document.querySelector('#banner') as HTMLElement
+        expect([read('#connection'), banner.hidden]).toEqual(['online', true])
+
+        window.dispatchEvent(new Event('offline'))
+        expect([read('#connection'), banner.hidden]).toEqual(['offline', false])
+
+        window.dispatchEvent(new Event('online'))
+        expect([read('#connection'), banner.hidden]).toEqual(['online', true])
+    } finally {
+        if (standing) Object.defineProperty(navigator, 'onLine', standing)
+        else delete (navigator as { onLine?: boolean }).onLine
+    }
+})
+
+test('navigate-query: the address moves and the page stays', async () => {
+    const standing = location.href
+    try {
+        await mount('navigate-query', 'invoice.js')
+        expect(read('[aria-selected="true"]')).toBe('4310')
+        type('#note', 'call back Tuesday')
+
+        // THE CLAIM. The query is written without a document load, so what was typed is
+        // still in the field and the readout follows the address it now names.
+        click('#open-4311')
+        expect([
+            location.search,
+            read('#address'),
+            read('[aria-selected="true"]'),
+            (document.querySelector('#note') as HTMLInputElement).value,
+        ]).toEqual([
+            '?invoice=4311',
+            '?invoice=4311',
+            '4311',
+            'call back Tuesday',
+        ])
+    } finally {
+        history.replaceState(null, '', standing)
+    }
+})
+
+test('cookies-density: the pick lands in the cookie, and the server paints it', async () => {
+    try {
+        await mount('cookies-density', 'contacts.js')
+        expect(read('#density')).toBe('comfortable')
+
+        click('#compact')
+        expect([read('#density'), document.cookie]).toEqual([
+            'compact',
+            expect.stringContaining('density=compact'),
+        ])
+
+        // THE CLAIM'S SECOND HALF. A reload is painted from the request's header, so the
+        // page arrives on the density picked rather than flashing the default.
+        const routes = await routesOf('cookies-density', 'server.ts')
+        const page =
+            await // A bare header rather than a `Request`: the DOM preload's `Request` drops
+            // `cookie`, a header a browser's script may not set.
+            (
+                await (routes['/'] as Routes[string])({
+                    headers: new Map([['cookie', 'density=compact']]),
+                } as unknown as Request)
+            ).text()
+        expect(page).toContain('<strong id="density">compact</strong>')
+        expect(page).toContain('data-density="compact" aria-selected="true"')
+    } finally {
+        // biome-ignore lint/suspicious/noDocumentCookie: the arm writes the jar this resets.
+        document.cookie = 'density=; Path=/; Max-Age=0'
+    }
+})
+
+test('flush-sync-scroll: the measurement after the write counts the new row', async () => {
+    await mount('flush-sync-scroll', 'notes.js')
+    expect([read('#count'), read('#measured')]).toEqual(['2', '0'])
+
+    // THE CLAIM. The handler measures straight after the write, and reads the list the
+    // write left — never one row short.
+    click('#add')
+    click('#add')
+    click('#add')
+    expect([read('#count'), read('#measured')]).toEqual(['5', '5'])
+    expect(read('#notes li:last-child')).toBe('Follow-up 3')
+})
+
+test('reachable-host: one probe answers every send for the minute', async () => {
+    let probes = 0
+    let calls = 0
+    const standing = globalThis.fetch
+    globalThis.fetch = (async (_input: string, init?: RequestInit) => {
+        if (init?.method === 'HEAD') probes += 1
+        else calls += 1
+        throw new TypeError('connection refused')
+    }) as unknown as typeof fetch
+    try {
+        const routes = await routesOf('reachable-host', 'server.ts')
+        const send = routes['/api/sync'] as Routes[string]
+        const ask = () =>
+            send(new Request('http://example.test/api/sync?id=4310'))
+
+        const first = await ask()
+        const second = await ask()
+
+        // THE CLAIM. The second send is refused from the held answer — no second probe,
+        // and no call to the host at all.
+        expect([first.status, second.status, probes, calls]).toEqual([
+            503, 503, 1, 0,
+        ])
+        expect(await second.text()).toStartWith('Billing is unreachable')
+    } finally {
+        globalThis.fetch = standing
+    }
+})
+
+test('identity-structural: an equal reload does not redraw, a changed one does', async () => {
+    const totals = { north: 1240, south: 980 }
+    const standing = globalThis.fetch
+    globalThis.fetch = (async (_input: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+            totals.north += 120
+            return new Response(null, { status: 204 })
+        }
+        // A fresh record every load, as a query result is.
+        return Response.json({ ...totals })
+    }) as unknown as typeof fetch
+    try {
+        await mount('identity-structural', 'chart.js')
+        await Bun.sleep(10)
+        expect([read('#north'), read('#redraws')]).toEqual(['1240', '1'])
+
+        // THE CLAIM. A refresh handing back the same numbers in a new object draws nothing.
+        click('#refresh')
+        await Bun.sleep(10)
+        expect(read('#redraws')).toBe('1')
+
+        // The positive case, so the count above is a count that can move.
+        click('#sale')
+        await Bun.sleep(10)
+        expect([read('#north'), read('#redraws')]).toEqual(['1360', '2'])
+    } finally {
+        globalThis.fetch = standing
+    }
+})
+
+test('aborted-signal: a cancelled load reads as cancelled, with nothing in flight', async () => {
+    const standing = globalThis.fetch
+    globalThis.fetch = ((_input: string, init?: RequestInit) =>
+        new Promise((resolve, reject) => {
+            const answer = setTimeout(
+                () => resolve(Response.json({ total: '$1,240.00' })),
+                200,
+            )
+            init?.signal?.addEventListener('abort', () => {
+                clearTimeout(answer)
+                reject(new DOMException('aborted', 'AbortError'))
+            })
+        })) as unknown as typeof fetch
+    try {
+        await mount('aborted-signal', 'statement.js')
+        click('#load')
+        const cancel = document.querySelector('#cancel') as HTMLButtonElement
+        expect([read('#status'), cancel.disabled]).toEqual(['loading…', false])
+
+        // THE CLAIM. The cancel is told apart from a failure, and every flag the load
+        // set is down again.
+        click('#cancel')
+        await Bun.sleep(10)
+        expect([read('#statement'), read('#status'), cancel.disabled]).toEqual([
+            'cancelled',
+            '',
+            true,
+        ])
+
+        click('#load')
+        await Bun.sleep(250)
+        expect(read('#statement')).toBe('$1,240.00')
+    } finally {
+        globalThis.fetch = standing
+    }
+})
+
+test('not-landed-copy: a copy before the contact lands says so', async () => {
+    const standing = globalThis.fetch
+    globalThis.fetch = (async (input: string) => {
+        await Bun.sleep(40)
+        const id = new URL(input, 'http://example.test').searchParams.get('id')
+        return Response.json({ id, email: `${id}@example.com` })
+    }) as unknown as typeof fetch
+    try {
+        await mount('not-landed-copy', 'contact.js')
+        await Bun.sleep(60)
+        click('#copy')
+        expect(read('#copied')).toBe('ada@example.com')
+
+        // THE CLAIM. Pressed before the next contact lands, the copy reports it rather
+        // than handing over the previous contact's address.
+        click('#grace')
+        click('#copy')
+        expect([read('#copied'), read('#status')]).toEqual([
+            'still loading',
+            'loading…',
+        ])
+
+        await Bun.sleep(60)
+        click('#copy')
+        expect([read('#copied'), read('#status')]).toEqual([
+            'grace@example.com',
+            '',
+        ])
+    } finally {
+        globalThis.fetch = standing
+    }
+})
+
+// THE ASSISTANT ARMS' ROUTES carry a method map rather than one function, and the relay keys a
+// browser by a cookie it already holds. happy-dom strips `cookie` from a `Request` it builds, so the
+// stub hands the route the headers it would have sent.
+function serveArm(routes: Record<string, unknown>): string[] {
+    const asked: string[] = []
+    globalThis.fetch = Object.assign(
+        async (input: string | URL, init?: RequestInit) => {
+            const url = new URL(String(input), 'http://example.invalid')
+            const method = init?.method ?? 'GET'
+            asked.push(`${method} ${url.pathname}`)
+            const route = routes[url.pathname] as
+                | ((request: Request) => Response | Promise<Response>)
+                | Record<
+                      string,
+                      (request: Request) => Response | Promise<Response>
+                  >
+                | undefined
+            const handler =
+                typeof route === 'function' ? route : route?.[method]
+            if (handler === undefined) return new Response('', { status: 404 })
+            const request = new Request(url, init)
+            const headers = new Headers(init?.headers)
+            headers.set('cookie', 'caller=reader-1')
+            Object.defineProperty(request, 'headers', { value: headers })
+            return handler(request)
+        },
+        { preconnect: () => {} },
+    ) as typeof fetch
+    return asked
+}
+
+function chatTurns(): string[][] {
+    const turns: string[][] = []
+    for (const item of document.querySelectorAll('.chat li'))
+        if (!(item as HTMLElement).hidden)
+            turns.push([
+                item.querySelector('span')?.textContent ?? '',
+                item.querySelector('p')?.textContent?.trim() ?? '',
+            ])
+    return turns
+}
+
+// Reverted — the arm's dispatch answering every name as a missing tool — the result line reads
+// "No tool named invoiceStatus." where the handler's answer was owed.
+test('assistant-tools: the call the model asks for runs the handler, and its answer is in the stream', async () => {
+    serveArm(await routesOf('assistant-tools', 'server.ts'))
+    await mount('assistant-tools', 'chat.js')
+    click('#ask')
+    await Bun.sleep(30)
+    expect(chatTurns()).toEqual([
+        ['you', 'Is invoice INV-4021 paid?'],
+        ['tool call', 'invoiceStatus {"id":"INV-4021"}'],
+        ['your handler answered', '{"id":"INV-4021","paid":true}'],
+        ['assistant', 'Yes, INV-4021 is paid.'],
+    ])
+    expect(read('#status')).toBe('done')
+})
+
+// Reverted — `stream: true` dropped from the arm's hand-written body — the request the stand-in
+// echoes no longer carries it, and nothing on the arm's side noticed.
+test('claude-api: the request body is the fields written, with messages and stream beside them', async () => {
+    const asked = serveArm(await routesOf('claude-api', 'server.ts'))
+    await mount('claude-api', 'request.js')
+    click('#ask')
+    await Bun.sleep(30)
+    expect(JSON.parse(read('#reply'))).toEqual({
+        model: 'claude-opus-5',
+        max_tokens: 1024,
+        system: 'Answer questions about invoices.',
+        thinking: { type: 'adaptive' },
+        stream: true,
+        messages: [{ role: 'user', content: 'Is invoice INV-4021 paid?' }],
+    })
+    expect(asked).toEqual(['POST /api/ask', 'POST /v1/messages'])
+})
+
+// Reverted — the 409 branch removed from the arm's `/api/ask` — the ask before pairing hangs on a
+// turn no bridge will ever answer, and the status line stays empty.
+test('claude-code: a turn is refused until a bridge pairs, then runs on that bridge', async () => {
+    const routes = await routesOf('claude-code', 'server.ts')
+    serveArm(routes)
+    await mount('claude-code', 'bridge.js')
+
+    click('#ask')
+    await Bun.sleep(20)
+    expect(read('#status')).toBe('No Claude Code is paired with this browser.')
+
+    click('#connect')
+    await Bun.sleep(20)
+    const command = read('#command')
+    expect(command).toMatch(/^bunx abide-bridge@0\.1\.0 \S+ \S+$/)
+    expect((document.querySelector('#paired') as HTMLElement).hidden).toBe(true)
+
+    // THE BRIDGE, as the reader's terminal would run it: it dials in with the code and reads turns.
+    const code = command.split(' ').at(-1) ?? ''
+    const relay = routes['/bridge'] as unknown as Record<
+        string,
+        (request: Request) => Promise<Response> | Response
+    >
+    const dialled = await relay.GET?.(
+        new Request(`http://example.invalid/bridge?code=${code}`),
+    )
+    const frames = (
+        dialled as Response
+    ).body?.getReader() as ReadableStreamDefaultReader<Uint8Array>
+    await Bun.sleep(20)
+    expect([
+        (document.querySelector('#paired') as HTMLElement).hidden,
+        (document.querySelector('#command') as HTMLElement).hidden,
+    ]).toEqual([false, true])
+
+    click('#ask')
+    await Bun.sleep(20)
+    const sent = JSON.parse(
+        new TextDecoder().decode((await frames.read()).value),
+    ) as {
+        caller: string
+        turn: string
+        prompt: string
+    }
+    expect(sent.prompt).toBe('What does an invoice record, in one sentence?')
+    for (const event of [
+        { type: 'text', text: 'Who owes what, ' },
+        { type: 'text', text: 'and by when.' },
+        { type: 'end' },
+    ])
+        await relay.POST?.(
+            new Request('http://example.invalid/bridge', {
+                method: 'POST',
+                body: JSON.stringify({ ...sent, event }),
+            }),
+        )
+    await Bun.sleep(20)
+    expect([read('#status'), read('#answer')]).toEqual([
+        '',
+        'Who owes what, and by when.',
+    ])
+})
+
+// THE `app.ts` ARMS. Each one's server half is the arm, so the page's fetch is routed into the
+// routes its `Bun.serve` was handed.
+function routedFetch(routes: Routes): typeof fetch {
+    return Object.assign(
+        async (input: string, init?: RequestInit) => {
+            const url = new URL(input, 'http://example.invalid')
+            return (
+                (await routes[url.pathname]?.(new Request(url, init))) ??
+                new Response('', { status: 404 })
+            )
+        },
+        { preconnect: () => {} },
+    ) as typeof fetch
+}
+
+test('start-hook: the pool connected before the app came up', async () => {
+    globalThis.fetch = routedFetch(await routesOf('start-hook', 'server.ts'))
+    await mount('start-hook', 'pool.js')
+    await Bun.sleep(20)
+    const [connected, up] = [read('#connected'), read('#up')]
+    expect(connected).not.toBe('')
+    // THE CLAIM. Revert-verified: the stamp moved above the connect -> up precedes connected.
+    expect(connected <= up).toBe(true)
+})
+
+test('config-coerced: the environment overrides the default, and arrives a number', async () => {
+    const was = process.env.RETRIES
+    try {
+        process.env.RETRIES = '5'
+        globalThis.fetch = routedFetch(
+            await routesOf('config-coerced', 'server.ts'),
+        )
+        await mount('config-coerced', 'retries.js')
+        await Bun.sleep(20)
+        // THE CLAIM. Revert-verified: `Number` dropped from the read -> attempts "51".
+        expect([read('#retries'), read('#attempts')]).toEqual(['5', '6'])
+
+        process.env.RETRIES = 'lots'
+        await mount('config-coerced', 'retries.js')
+        await Bun.sleep(20)
+        expect([read('#retries'), read('#attempts')]).toEqual(['3', '4'])
+    } finally {
+        if (was === undefined) delete process.env.RETRIES
+        else process.env.RETRIES = was
+    }
+})
+
+test("health-merge: the app's own field sits beside the baseline", async () => {
+    globalThis.fetch = routedFetch(await routesOf('health-merge', 'server.ts'))
+    await mount('health-merge', 'health.js')
+    await Bun.sleep(20)
+    expect([read('#version'), read('#database')]).toEqual([
+        '0.0.0',
+        'connected',
+    ])
+    expect(read('#started')).not.toBe('')
+})
+
+test('principal-resolve: the sign-in answers with a user it was handed only the id of', async () => {
+    globalThis.fetch = routedFetch(
+        await routesOf('principal-resolve', 'server.ts'),
+    )
+    await mount('principal-resolve', 'badge.js')
+    expect(read('#name')).toBe('—')
+
+    click('#grace')
+    await Bun.sleep(20)
+    expect([read('#sealed'), read('#name'), read('#role')]).toEqual([
+        'grace',
+        'Grace Hopper',
+        'sales',
+    ])
+})
+
+test('csp-blocked: every document carries the whole policy, with a nonce of its own', async () => {
+    const routes = await routesOf('csp-blocked', 'server.ts')
+    const policies: string[] = []
+    for (let turn = 0; turn < 2; turn += 1) {
+        const answer = await routes['/']?.(
+            new Request('http://example.invalid/'),
+        )
+        policies.push(answer?.headers.get('content-security-policy') ?? '')
+    }
+    for (const policy of policies) {
+        expect(policy).toContain("script-src 'self' 'nonce-")
+        expect(policy).toContain("frame-ancestors 'self'")
+    }
+    // THE CLAIM. A nonce is per response, or it is a password printed on every page.
+    expect(policies[0]).not.toBe(policies[1])
+
+    await mount('csp-blocked', 'widget.js')
+    click('#add')
+    const added = document.head.querySelector(
+        'script[src="https://widget.example/chat.js"]',
+    )
+    expect(added).not.toBeNull()
+    // A DOM emulator enforces no policy, so the refusal the browser would raise is handed in.
+    document.dispatchEvent(
+        Object.assign(new Event('securitypolicyviolation'), {
+            blockedURI: 'https://widget.example/chat.js',
+            violatedDirective: 'script-src-elem',
+        }),
+    )
+    expect(read('#refused')).toBe(
+        'https://widget.example/chat.js by script-src-elem',
+    )
+    added?.remove()
+})
+
+test('middleware-stamp: an answer carries the header its handler never wrote', async () => {
+    globalThis.fetch = routedFetch(
+        await routesOf('middleware-stamp', 'server.ts'),
+    )
+    await mount('middleware-stamp', 'instance.js')
+    click('#ask')
+    await Bun.sleep(20)
+    expect(read('#served')).toMatch(/^[0-9a-f]{8}$/)
+})
+
+test('trace-lines: both lines of one request carry its trace, and the next request has another', async () => {
+    globalThis.fetch = routedFetch(await routesOf('trace-lines', 'server.ts'))
+    await mount('trace-lines', 'sync.js')
+    click('#sync')
+    await Bun.sleep(200)
+    const first = read('#trace')
+    expect(first).toMatch(/^[0-9a-f]{32}$/)
+    expect(read('#lines')).toBe(
+        'contact 4021 loaded · billing told about contact 4021',
+    )
+
+    // THE CLAIM. Lines are selected by trace, so a second sync shows its own two, not four.
+    click('#sync')
+    await Bun.sleep(200)
+    expect(read('#trace')).not.toBe(first)
+    expect(read('#lines')).toBe(
+        'contact 4021 loaded · billing told about contact 4021',
+    )
+})
+
+test('error-report: the caller is told 500 and the tracker is told why', async () => {
+    globalThis.fetch = routedFetch(await routesOf('error-report', 'server.ts'))
+    await mount('error-report', 'export.js')
+    await Bun.sleep(20)
+    expect([read('#told'), read('#captured')]).toEqual(['—', '—'])
+
+    click('#export')
+    await Bun.sleep(400)
+    expect([read('#told'), read('#captured')]).toEqual([
+        '500 Internal Server Error',
+        'the export worker reset the connection',
+    ])
+})
+
+test('app-fetch: the wire answers with a status and a trace header', async () => {
+    globalThis.fetch = routedFetch(await routesOf('app-fetch', 'server.ts'))
+    await mount('app-fetch', 'answer.js')
+    click('#fetch')
+    await Bun.sleep(20)
+    expect(read('#status')).toBe('200')
+    expect(read('#traced')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-00$/)
+})
+
+// THE EXAMPLE'S OWN TEST, run as its reader runs it: `bun test` from the docs app's directory, where
+// `createApp` finds the app. Revert-verified: `onStop` with its close removed -> the second case
+// fails on `connected` still true.
+test('app-fetch: the test the card shows passes from the docs app', async () => {
+    const { spawned } = await import('../src/gate/index.ts')
+    const run = await spawned(
+        [process.execPath, 'test', './src/server/app.test.ts'],
+        { cwd: DOGFOOD.pathname, deadline: 120_000 },
+    )
+    expect(`${run.exitCode} ${run.stderr.includes('2 pass')}`).toBe('0 true')
+}, 130_000)
+
+// Reverted — `escapeHtml` dropped from `documentOf` — the second invoice's customer reads
+// `Hopper & Co` raw where `Hopper &amp; Co` was owed.
+test('render-preview: each invoice is rendered into a document of its own', async () => {
+    const routes = await routesOf('render-preview', 'server.ts')
+    const answer = await routes['/api/previewInvoice']?.(
+        new Request('http://example.invalid/api/previewInvoice?id=4022'),
+    )
+    // THE CLAIM: a whole document, built from that invoice's record, escaped.
+    expect(answer?.headers.get('content-type')).toBe('text/html; charset=utf-8')
+    const html = (await answer?.text()) ?? ''
+    expect(html).toStartWith('<!doctype html>')
+    expect(html).toContain('<h1>Invoice INV-4022</h1>')
+    expect(html).toContain('Hopper &amp; Co')
+
+    // The page is a frame pointed at that route, and the tab moves it. Read off the attribute
+    // rather than loaded: happy-dom would fetch the frame against a server this spec never started.
+    await mount('render-preview', 'invoice.js')
+    const frame = () => document.querySelector('#preview')?.getAttribute('src')
+    expect(frame()).toBe('/api/previewInvoice?id=4021')
+    click('#inv-4022')
+    expect(frame()).toBe('/api/previewInvoice?id=4022')
 })

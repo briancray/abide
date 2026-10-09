@@ -1,0 +1,18 @@
+<ul class="fields" id="paired" hidden>
+    <li><span>your claude code</span><strong>paired</strong></li>
+</ul>
+<pre id="command" class="rounded-md border border-rule bg-raised p-snug text-chrome" hidden></pre>
+<div class="row" id="connecting">
+    <button id="connect" type="button">Connect</button>
+</div>
+
+<ul class="chat">
+    <li data-speaker="you"><span>you</span><p>What does an invoice record, in one sentence?</p></li>
+    <li id="reply" hidden><span>claude code</span><p id="answer"></p></li>
+</ul>
+
+<div class="row">
+    <button id="ask" type="button">Ask</button>
+    <span class="status" id="status"></span>
+</div>
+<script type="module" src="./bridge.js"></script>

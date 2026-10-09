@@ -1,4 +1,4 @@
-// Lane 3 of 3, and entry 3 of 5 — bytes, microtask turns and allocations, on bun.
+// Lane 3 of 3 — bytes, microtask turns and allocations, on bun.
 // The lane that prices what ships and what the server spends getting it there.
 //
 // `harness/report` is a FOURTH entry and is not a fourth lane: a lane is a DEPENDENCY

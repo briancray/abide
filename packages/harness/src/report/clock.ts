@@ -12,8 +12,8 @@ import { underBun } from './environment.ts'
 // fixed 20,000 pairs sees a step on bun (41 ns) and on chromium (100 µs) and sees
 // NOTHING in webkit, which clamps `performance.now()` harder — 20,000 pairs is about
 // a millisecond of wall time, so a 1 ms clock may not tick once inside the probe. A
-// probe that returns "unmeasurable" for Safari would take the whole timing half of a
-// live panel off the table in one of the three engines a reader might bring.
+// probe that returns "unmeasurable" for Safari would take every browser timing off the
+// table in one of the three engines a reader might bring.
 //
 // So it runs until it has seen a step, and then keeps going briefly to find the
 // smallest one. 8 ms is under a frame and is paid once per process.

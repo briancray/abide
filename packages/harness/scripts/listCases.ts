@@ -37,8 +37,20 @@ type Case = {
         vanilla: () => void
         abide: () => void
         careless: () => void
+        /**
+         * Runs each arm once under a `MutationObserver` and returns the nodes it moved, created
+         * and dropped — the counting pass `batch()` is handed as `work`, apart from the timing.
+         */
+        work: () => Record<ArmName, Record<string, number>>
+        /**
+         * Each host's row order against the order that arm last wrote, one line per host that
+         * disagrees. The full reverse is owed for CORRECTNESS, and a timing never looks.
+         */
+        verify: () => string[]
     }
 }
+
+type ArmName = 'vanilla' | 'abide' | 'careless'
 
 type Datum = { id: number; label: string }
 
@@ -144,6 +156,18 @@ function listCase(
             const b = host(seed)
             const c = host(seed)
             const rebuilt = [markup(moved), markup(seed)]
+            // HELD FROM SETUP, so the floor pays the moves and nothing else — a
+            // `querySelectorAll` over 200 rows per op was a cost the reconcile it is
+            // priced against does not pay. Indexed by seed position; the arm knows the
+            // permutation, so it never has to read the order back.
+            const seedNodes: HTMLElement[] = []
+            for (
+                let node = b.region.open.nextSibling;
+                node !== b.region.close;
+                node = (node as ChildNode).nextSibling
+            )
+                seedNodes.push(node as HTMLElement)
+            const reversedNodes = seedNodes.slice().reverse()
 
             // EVERY ARM ALTERNATES BETWEEN THE TWO ORDERS, because a rep repeats and an
             // edit does not: applied twice, a relocation is a no-op the second time and
@@ -153,7 +177,7 @@ function listCase(
             let side = 0
             let floorSide = 0
             let carelessSide = 0
-            return {
+            const arms = {
                 abide: (): void => {
                     const at = side
                     side = 1 - side
@@ -165,29 +189,35 @@ function listCase(
                 vanilla: (): void => {
                     const forward = floorSide === 0
                     floorSide = 1 - floorSide
-                    const items = b.list.querySelectorAll('li')
                     if (kind === 'reverse') {
-                        for (let at = items.length - 1; at >= 0; at -= 1)
+                        const current = forward ? seedNodes : reversedNodes
+                        for (let at = current.length - 1; at >= 0; at -= 1)
                             b.list.insertBefore(
-                                items[at] as HTMLElement,
+                                current[at] as HTMLElement,
                                 b.region.close,
                             )
                         return
                     }
                     if (kind === 'relocate') {
                         // Out and back: 198 -> 1, then 1 -> 198. One call either way.
-                        const from = forward ? ROWS - 2 : 1
-                        const to = forward ? 1 : ROWS - 1
                         b.list.insertBefore(
-                            items[from] as HTMLElement,
-                            (items[to] as HTMLElement) ?? b.region.close,
+                            seedNodes[ROWS - 2] as HTMLElement,
+                            seedNodes[forward ? 1 : ROWS - 1] as HTMLElement,
                         )
                         return
                     }
                     const [low, high] =
                         kind === 'adjacent' ? [0, 1] : [1, ROWS - 2]
-                    const first = items[low] as HTMLElement
-                    const second = items[high] as HTMLElement
+                    const first = seedNodes[forward ? low : high] as HTMLElement
+                    const second = seedNodes[
+                        forward ? high : low
+                    ] as HTMLElement
+                    // ADJACENT IS ONE MOVE: the second call of a general swap would put
+                    // `first` back where it already is, which the DOM still records.
+                    if (kind === 'adjacent') {
+                        b.list.insertBefore(second, first)
+                        return
+                    }
                     const after = second.nextSibling
                     b.list.insertBefore(second, first)
                     b.list.insertBefore(first, after)
@@ -207,9 +237,76 @@ function listCase(
                     template.innerHTML = rebuilt[at] as string
                     c.list.insertBefore(template.content, c.region.close)
                 },
+                work: () => ({
+                    vanilla: observed(b.list, arms.vanilla),
+                    abide: observed(a.list, arms.abide),
+                    careless: observed(c.list, arms.careless),
+                }),
+                verify: () => {
+                    // The side each arm flips TO is the one it writes next, so the
+                    // order it last wrote is the other one.
+                    const wrong: string[] = []
+                    const hosts: [ArmName, HTMLElement, number][] = [
+                        ['abide', a.list, side],
+                        ['vanilla', b.list, floorSide],
+                        ['careless', c.list, carelessSide],
+                    ]
+                    for (const [name, list, next] of hosts) {
+                        const expected = idsOf(orders[1 - next] as Datum[])
+                        const actual = idsInDocument(list)
+                        if (actual !== expected)
+                            wrong.push(
+                                `${name}: ${actual.slice(0, 60)}… where ${expected.slice(0, 60)}…`,
+                            )
+                    }
+                    return wrong
+                },
             }
+            return arms
         },
     }
+}
+
+/** The ids a list of rows renders, comma-joined. */
+function idsOf(rows: Datum[]): string {
+    let out = ''
+    for (let at = 0; at < rows.length; at += 1)
+        out += `${(rows[at] as Datum).id},`
+    return out
+}
+
+/** The ids of the `<li>` rows a host holds, in document order, comma-joined. */
+function idsInDocument(list: HTMLElement): string {
+    let out = ''
+    for (let node = list.firstChild; node !== null; node = node.nextSibling)
+        if (node.nodeType === 1)
+            out += `${(node as Element).getAttribute('data-id')},`
+    return out
+}
+
+/**
+ * Runs `op` once and counts what it did to `list`'s children.
+ *
+ * A node removed and inserted again in the one op MOVED; inserted alone it was CREATED; removed
+ * alone it was DROPPED. `takeRecords` is synchronous, so the op is counted before anything else
+ * runs.
+ */
+function observed(list: HTMLElement, op: () => void): Record<string, number> {
+    const observer = new MutationObserver(() => {})
+    observer.observe(list, { childList: true })
+    op()
+    const records = observer.takeRecords()
+    observer.disconnect()
+    const left = new Set<Node>()
+    let nodesMoved = 0
+    let nodesCreated = 0
+    for (const record of records) {
+        for (const node of record.removedNodes) left.add(node)
+        for (const node of record.addedNodes)
+            if (left.delete(node)) nodesMoved += 1
+            else nodesCreated += 1
+    }
+    return { nodesMoved, nodesCreated, nodesDropped: left.size }
 }
 
 /** The four keyed-reorder cases, from the distinguishing swap to the full reverse. */

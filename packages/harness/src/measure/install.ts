@@ -97,11 +97,9 @@ const DECLARED: [interfaceName: string, member: string, role: Role][] = [
     ['Document', 'createComment', 'create'],
     ['Document', 'importNode', 'create'],
     ['EventTarget', 'addEventListener', 'listener'],
-    // COUNTED RATHER THAN REFUSED, and they moved for a reason worth recording: the
-    // live panel runs this patch set in a reader's browser over 69 hand-written arms,
-    // and a refused member there is a throw on somebody's docs page. One arm of the
-    // 69 reaches them — `markup-class-style`, whose whole subject is class and style —
-    // so the answer is a counter rather than an escape hatch.
+    // COUNTED RATHER THAN REFUSED: a refused member is a throw in any arm that
+    // reaches it, and `markup-class-style`, whose whole subject is class and style,
+    // does — so the answer is a counter rather than an escape hatch.
     ['DOMTokenList', 'add', 'classWrite'],
     ['DOMTokenList', 'remove', 'classWrite'],
     ['DOMTokenList', 'toggle', 'classWrite'],

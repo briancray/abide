@@ -73,17 +73,24 @@ test('the measure lane has no abide in its graph', async () => {
     expect(found).toEqual([])
 })
 
-// The gate above is only worth what it catches, so this asserts it catches something: the same walk
-// over the FRAMEWORK's own entry must find abide. A walker that silently returned [] for every
-// input would pass the test above forever.
+// The gate above is only worth what it catches, so this asserts it catches something — and
+// catches it by FOLLOWING EDGES, which is the part an entry inside `packages/abide/` cannot
+// show: it is recorded on the first pop with no import read. So the start is a harness script
+// that does not import abide itself and reaches it through `reactiveCases.ts`, two edges down.
+// Reverted — the walker records the entry and follows nothing — `found` is [] and this fails.
 test('the graph walk finds abide when abide is there', async () => {
-    const entry = new URL('../../abide/src/ui/index.ts', import.meta.url)
+    const entry = new URL('../scripts/reactiveInjectable.ts', import.meta.url)
         .pathname
+    const directory = entry.slice(0, entry.lastIndexOf('/'))
+    for (const imported of IMPORT_SCANNER.scanImports(
+        await Bun.file(entry).text(),
+    ))
+        expect(Bun.resolveSync(imported.path, directory)).not.toContain(
+            '/packages/abide/',
+        )
     const found = await abideInGraphOf(entry)
-    expect(
-        found.length > 0 ||
-            (await Bun.file(entry).text()).trim() === 'export {}',
-    ).toBe(true)
+    expect(found.length).toBeGreaterThan(0)
+    expect(found).not.toContain(entry)
 })
 
 // THE LEAF IS JUSTIFIED BY ONE PROPERTY and this is it: every lane needs the record,

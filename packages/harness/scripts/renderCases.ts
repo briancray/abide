@@ -109,12 +109,36 @@ export function vanillaMarkup(list: Card[]): string {
     return `${out}</main>`
 }
 
+/**
+ * The hand-written card list again, escaped by a person who tests before rewriting.
+ *
+ * THE CAREFUL ARM, beside the obvious one. `vanillaMarkup`'s chain allocates three strings per
+ * value whether or not anything needed escaping, and `escapeText` scans and hands the input back
+ * untouched — so a win against the obvious arm alone could be the escaping and nothing else. This
+ * arm skips the rewrite the same way, and what is left between it and abide is the rest of the
+ * page.
+ */
+export function vanillaCarefulMarkup(list: Card[]): string {
+    let out = '<main id="list">'
+    for (const card of list)
+        out += `<article class="card"><h2>${escapeCarefully(card.title)}</h2><p>${escapeCarefully(card.body)}</p><span class="n">${escapeCarefully(String(card.count))}</span></article>`
+    return `${out}</main>`
+}
+
 /** What a person writes when they escape by hand, which is a `replace` chain rather than a scan. */
 function escapeByHand(value: string): string {
     return value
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;')
+}
+
+// The three characters `escapeText` rewrites in a text slot, and no more.
+const NEEDS_ESCAPING = /[&<>]/
+
+/** The same chain, behind the test a careful person puts in front of it. */
+function escapeCarefully(value: string): string {
+    return NEEDS_ESCAPING.test(value) ? escapeByHand(value) : value
 }
 
 /**

@@ -1,14 +1,13 @@
 // WHERE THIS RUNS, probed once and the same way by every lane.
 //
-// PROBED BY THE MEMBER, NOT BY THE GLOBAL. A docs example frame defines a `Bun.serve` shim so a
-// hand-written arm's `server.ts` can run in the page, so `globalThis.Bun` is truthy in a browser
-// that has no `nanoseconds` — and a bare check called headless chromium bun.
+// PROBED BY THE MEMBER the clock reads, so the answer is the capability the lanes rely on rather
+// than the name of a global anything could define.
 
 const UNDER_BUN =
     typeof (globalThis as { Bun?: { nanoseconds?: unknown } }).Bun
         ?.nanoseconds === 'function'
 
-/** Whether this is bun, rather than a browser — one with a `Bun.serve` shim included. */
+/** Whether this is bun, rather than a browser. */
 export function underBun(): boolean {
     return UNDER_BUN
 }

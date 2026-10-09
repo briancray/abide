@@ -15,6 +15,7 @@ import {
     batch,
     claimOf,
     emulatedDom,
+    type Ratio,
     ratio,
     type Sample,
 } from 'harness/report'
@@ -57,14 +58,19 @@ function compilerOf(context: Context): ReturnType<typeof openBenchCompiler> {
     return context.compiler
 }
 
-/**
- * `abide / vanilla` as a two-decimal `x` string, with no floor and no refusal.
- *
- * NOT `ratio()` for the render lanes, for `benchComponent`'s reason: it refuses a sample under a
- * frame, and a string render on a bun clock has no frame waiting on it.
- */
+/** `abide / vanilla` as a two-decimal `x` string — for COUNTS, which have no clock and no floor. */
 function divided(abide: number, vanilla: number): string {
     return `${(abide / vanilla).toFixed(2)}x`
+}
+
+/**
+ * A timed row's claim.
+ *
+ * Inside the A/A floor the arms are indistinguishable, and the floor has a column of its own to
+ * say how wide that is.
+ */
+function claimed(result: Ratio): string {
+    return result.kind === 'underTheFloor' ? '1.00x' : claimOf(result)
 }
 
 function timed(
@@ -73,13 +79,13 @@ function timed(
     unitDivisor: number,
     unit: string,
 ): Measured {
-    const abide = (measured.samples[abideArm] as Sample).nanoseconds
-    const vanilla = (measured.samples.vanilla as Sample).nanoseconds
+    const abide = measured.samples[abideArm] as Sample
+    const vanilla = measured.samples.vanilla as Sample
     return {
         unit,
-        abide: abide / unitDivisor,
-        vanilla: vanilla / unitDivisor,
-        claim: divided(abide, vanilla),
+        abide: abide.nanoseconds / unitDivisor,
+        vanilla: vanilla.nanoseconds / unitDivisor,
+        claim: claimed(ratio(abide, vanilla, { floor: measured.floor })),
         n: measured.n,
         floor: measured.floor,
         note: '',
@@ -113,12 +119,7 @@ function reactiveItems(): BenchItem[] {
                     unit: 'ns',
                     abide: abide.nanoseconds,
                     vanilla: vanilla.nanoseconds,
-                    // Inside the A/A floor the arms are indistinguishable, and the floor has a column of
-                    // its own to say how wide that is.
-                    claim:
-                        result.kind === 'underTheFloor'
-                            ? '1.00x'
-                            : claimOf(result),
+                    claim: claimed(result),
                     n: measured.n,
                     floor: measured.floor,
                     // WORK FIRST: a ratio over two arms doing different jobs prices two jobs.

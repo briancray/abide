@@ -25,10 +25,42 @@ type Case = {
     distinguishes: string
     vanilla: () => void
     abide: () => void
-    /** Work counts, taken in a separate pass — counting and timing cannot share one. */
-    work: () => {
-        vanilla: Record<string, number>
-        abide: Record<string, number>
+    /**
+     * Work counts, taken in a separate pass over the SAME closures the timer runs.
+     *
+     * Counting and timing cannot share a pass, and the work cannot come off a replica either: a
+     * fresh graph or a scripted sequence agrees with itself whatever the timed arm does, so two
+     * arms that had drifted apart would read as agreeing.
+     */
+    work: () => WorkPair
+}
+
+type WorkPair = {
+    vanilla: Record<string, number>
+    abide: Record<string, number>
+}
+
+/**
+ * Runs each timed arm `ops` times and reports how far its counter moved.
+ *
+ * THE COUNTER LIVES IN THE TIMED GRAPH, in a callback both arms have — a subscriber, a derived
+ * body — so the increment is priced alike on each side, and the delta is taken across the arm's
+ * own op rather than a re-enactment of it.
+ */
+function countedOver(
+    field: string,
+    arms: { vanilla: () => void; abide: () => void },
+    counters: { vanilla: () => number; abide: () => number },
+    ops = 1,
+): WorkPair {
+    const handBefore = counters.vanilla()
+    for (let at = 0; at < ops; at += 1) arms.vanilla()
+    const handMoved = counters.vanilla() - handBefore
+    const abideBefore = counters.abide()
+    for (let at = 0; at < ops; at += 1) arms.abide()
+    return {
+        vanilla: { [field]: handMoved },
+        abide: { [field]: counters.abide() - abideBefore },
     }
 }
 
@@ -52,21 +84,50 @@ type Case = {
  * more than that, and is confirmed by a second run.
  */
 function constructValue(): Case {
+    const vanilla = (): void => {
+        sink = signal(1)
+    }
+    const abide = (): void => {
+        sink = reactive(1)
+    }
     return {
         name: 'construct a value',
         distinguishes:
             'the cost of MAKING a reactive value rather than using one — the op a table pays once per cell per row, and the one every other case here hides in its setup',
-        vanilla: (): void => {
-            sink = signal(1)
+        vanilla,
+        abide,
+        // WHAT EACH ARM MADE, read back: the value the timed op built holds what it was given.
+        work: () => {
+            vanilla()
+            const hand = (sink as { read(): number }).read()
+            abide()
+            return {
+                vanilla: { holds: hand },
+                abide: { holds: (sink as () => number)() },
+            }
         },
-        abide: (): void => {
-            sink = reactive(1)
-        },
-        work: () => ({ vanilla: { values: 1 }, abide: { values: 1 } }),
     }
 }
 
 function constructDerived(): Case {
+    let handRuns = 0
+    let abideRuns = 0
+    const vanilla = (): void => {
+        const held = signal(1)
+        const node = handDerived([held], () => {
+            handRuns += 1
+            return held.read() * 2
+        })
+        node.read()
+        sink = node
+    }
+    const abide = (): void => {
+        const source = reactive(1)
+        sink = reactive(() => {
+            abideRuns += 1
+            return source() * 2
+        })
+    }
     return {
         name: 'construct a source and a value derived from it',
         distinguishes:
@@ -80,98 +141,85 @@ function constructDerived(): Case {
         // computes on the first `read`, where abide's first run is at construction (3.16).
         // Without the read the ratio is a construction against a construction plus a run, and
         // `work` counts 0 body runs against 1.
-        vanilla: (): void => {
-            const held = signal(1)
-            const node = handDerived([held], () => held.read() * 2)
-            node.read()
-            sink = node
-        },
-        abide: (): void => {
-            const source = reactive(1)
-            sink = reactive(() => source() * 2)
-        },
-        work: () => {
-            let handRuns = 0
-            const held = signal(1)
-            const node = handDerived([held], () => {
-                handRuns += 1
-                return held.read() * 2
-            })
-            node.read()
-            sink = node
-            let abideRuns = 0
-            const source = reactive(1)
-            sink = reactive(() => {
-                abideRuns += 1
-                return source() * 2
-            })
-            return {
-                vanilla: { bodyRuns: handRuns },
-                abide: { bodyRuns: abideRuns },
-            }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'bodyRuns',
+                { vanilla, abide },
+                { vanilla: () => handRuns, abide: () => abideRuns },
+            ),
     }
 }
 
 function readSettled(): Case {
     const held = signal(41)
     const value = reactive(41)
+    const vanilla = (): void => {
+        sink = held.read()
+    }
+    const abide = (): void => {
+        sink = value()
+    }
     return {
         name: 'read a settled value',
         distinguishes:
             'the cost of a read that finds a landed value — the hottest path in the design, walked per template slot per row',
-        vanilla: (): void => {
-            sink = held.read()
+        vanilla,
+        abide,
+        // WHAT THE READ RETURNED, off the timed op. A read wakes nothing on either arm, so there
+        // is no counter to move — the answer is the one thing the op produces.
+        work: () => {
+            vanilla()
+            const hand = sink as number
+            abide()
+            return {
+                vanilla: { read: hand },
+                abide: { read: sink as number },
+            }
         },
-        abide: (): void => {
-            sink = value()
-        },
-        work: () => ({ vanilla: { wakes: 0 }, abide: { wakes: 0 } }),
     }
 }
 
 function writeChanged(): Case {
     const held = signal(0)
     const value = reactive(0)
-    held.subscribe(() => {})
-    const stop = value.watch(() => {})
-    void stop
+    let handWakes = 0
+    let abideWakes = 0
+    held.subscribe(() => {
+        handWakes += 1
+    })
+    value.watch(() => {
+        abideWakes += 1
+    })
+    flushSync()
     let flip = 0
     let flop = 0
+    const vanilla = (): void => {
+        flip = flip === 0 ? 1 : 0
+        held.write(flip)
+    }
+    const abide = (): void => {
+        flop = flop === 0 ? 1 : 0
+        value.set(flop)
+        // THE TURN IS ENDED INSIDE THE OP. An effect is batched to the end of one, so
+        // a timed loop of n writes would run the effect ONCE for the whole batch while
+        // the hand-written arm runs its subscriber n times — the ratio of two
+        // different jobs, and the work counts would say so only if somebody looked.
+        flushSync()
+    }
     return {
         name: 'write a value that changed',
         distinguishes:
             'the write path with one subscriber attached — both arms must wake, so this is cost with the work held equal',
-        vanilla: (): void => {
-            flip = flip === 0 ? 1 : 0
-            held.write(flip)
-        },
-        abide: (): void => {
-            flop = flop === 0 ? 1 : 0
-            value.set(flop)
-            // THE TURN IS ENDED INSIDE THE OP. An effect is batched to the end of one, so
-            // a timed loop of n writes would run the effect ONCE for the whole batch while
-            // the hand-written arm runs its subscriber n times — the ratio of two
-            // different jobs, and the work counts would say so only if somebody looked.
-            flushSync()
-        },
-        work: () => {
-            const one = signal(0)
-            const two = reactive(0)
-            let a = 0
-            let b = 0
-            one.subscribe(() => {
-                a += 1
-            })
-            two.watch(() => {
-                b += 1
-            })
-            b = 0
-            one.write(1)
-            two.set(1)
-            flushSync()
-            return { vanilla: { wakes: a }, abide: { wakes: b } }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'wakes',
+                { vanilla, abide },
+                { vanilla: () => handWakes, abide: () => abideWakes },
+            ),
     }
 }
 
@@ -191,46 +239,39 @@ function writeChanged(): Case {
  * puts the same ten writes through a binding and reports 10 `.data` writes against 1.
  */
 function writeTenTimes(): Case {
+    let handWakes = 0
+    let abideWakes = 0
     const held = signal(0)
-    held.subscribe(() => {})
+    held.subscribe(() => {
+        handWakes += 1
+    })
     const value = reactive(0)
-    value.watch(() => {})
-    let handAt = 0
-    let abideAt = 0
+    value.watch(() => {
+        abideWakes += 1
+    })
+    flushSync()
+    // FROM 1, so the first write differs from the 0 both hold and the first op is ten changes too.
+    let handAt = 1
+    let abideAt = 1
+    const vanilla = (): void => {
+        for (let step = 0; step < 10; step += 1) held.write(handAt++)
+    }
+    const abide = (): void => {
+        for (let step = 0; step < 10; step += 1) value.set(abideAt++)
+        flushSync()
+    }
     return {
         name: 'ten writes in one handler',
         distinguishes:
             'the batch: a turn that writes the same value ten times reaches its reader once, where an arm with nowhere to hold the intermediate values reaches it ten times',
-        vanilla: (): void => {
-            for (let step = 0; step < 10; step += 1) held.write(handAt++)
-        },
-        abide: (): void => {
-            for (let step = 0; step < 10; step += 1) value.set(abideAt++)
-            flushSync()
-        },
-        work: () => {
-            let handWakes = 0
-            let abideWakes = 0
-            const one = signal(0)
-            one.subscribe(() => {
-                handWakes += 1
-            })
-            const two = reactive(0)
-            two.watch(() => {
-                abideWakes += 1
-            })
-            flushSync()
-            abideWakes = 0
-            for (let step = 1; step <= 10; step += 1) {
-                one.write(step)
-                two.set(step)
-            }
-            flushSync()
-            return {
-                vanilla: { wakes: handWakes },
-                abide: { wakes: abideWakes },
-            }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'wakes',
+                { vanilla, abide },
+                { vanilla: () => handWakes, abide: () => abideWakes },
+            ),
     }
 }
 
@@ -245,36 +286,34 @@ function writeTenTimes(): Case {
 function writeEqualObject(): Case {
     const held = signal({ id: 1, total: 100 })
     const value = reactive({ id: 1, total: 100 })
-    held.subscribe(() => {})
-    value.watch(() => {})
+    let handWakes = 0
+    let abideWakes = 0
+    held.subscribe(() => {
+        handWakes += 1
+    })
+    value.watch(() => {
+        abideWakes += 1
+    })
+    flushSync()
+    const vanilla = (): void => {
+        held.write({ id: 1, total: 100 })
+    }
+    const abide = (): void => {
+        value.set({ id: 1, total: 100 })
+        flushSync()
+    }
     return {
         name: 'write a re-materialised equal value, default identity',
         distinguishes:
             'the write path with a fresh object and a reference compare on both arms — cost with the work held equal',
-        vanilla: (): void => {
-            held.write({ id: 1, total: 100 })
-        },
-        abide: (): void => {
-            value.set({ id: 1, total: 100 })
-            flushSync()
-        },
-        work: () => {
-            const one = signal({ id: 1, total: 100 })
-            const two = reactive({ id: 1, total: 100 })
-            let a = 0
-            let b = 0
-            one.subscribe(() => {
-                a += 1
-            })
-            two.watch(() => {
-                b += 1
-            })
-            b = 0
-            one.write({ id: 1, total: 100 })
-            two.set({ id: 1, total: 100 })
-            flushSync()
-            return { vanilla: { wakes: a }, abide: { wakes: b } }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'wakes',
+                { vanilla, abide },
+                { vanilla: () => handWakes, abide: () => abideWakes },
+            ),
     }
 }
 
@@ -290,39 +329,34 @@ function writeEqualObject(): Case {
 function writeEqualObjectStructural(): Case {
     const held = signal({ id: 1, total: 100 })
     const value = reactive({ id: 1, total: 100 }, { identity: structural })
-    held.subscribe(() => {})
-    value.watch(() => {})
+    let handWakes = 0
+    let abideWakes = 0
+    held.subscribe(() => {
+        handWakes += 1
+    })
+    value.watch(() => {
+        abideWakes += 1
+    })
+    flushSync()
+    const vanilla = (): void => {
+        held.write({ id: 1, total: 100 })
+    }
+    const abide = (): void => {
+        value.set({ id: 1, total: 100 })
+        flushSync()
+    }
     return {
         name: 'write a re-materialised equal value, structural declared',
         distinguishes:
             'the option an app passes where a reload rebuilds an equal payload — a deep walk per write against a wake per write',
-        vanilla: (): void => {
-            held.write({ id: 1, total: 100 })
-        },
-        abide: (): void => {
-            value.set({ id: 1, total: 100 })
-            flushSync()
-        },
-        work: () => {
-            const one = signal({ id: 1, total: 100 })
-            const two = reactive(
-                { id: 1, total: 100 },
-                { identity: structural },
-            )
-            let a = 0
-            let b = 0
-            one.subscribe(() => {
-                a += 1
-            })
-            two.watch(() => {
-                b += 1
-            })
-            b = 0
-            one.write({ id: 1, total: 100 })
-            two.set({ id: 1, total: 100 })
-            flushSync()
-            return { vanilla: { wakes: a }, abide: { wakes: b } }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'wakes',
+                { vanilla, abide },
+                { vanilla: () => handWakes, abide: () => abideWakes },
+            ),
     }
 }
 
@@ -334,6 +368,8 @@ function writeEqualObjectStructural(): Case {
  * they do not have a framework. Anything less is not a comparison.
  */
 function derived(): Case {
+    let handRecomputes = 0
+    let abideRecomputes = 0
     const held = signal(1)
     let cached = held.read() * 2
     let dirty = false
@@ -342,6 +378,7 @@ function derived(): Case {
     })
     const readDerived = (): number => {
         if (dirty) {
+            handRecomputes += 1
             cached = held.read() * 2
             dirty = false
         }
@@ -349,54 +386,39 @@ function derived(): Case {
     }
 
     const source = reactive(1)
-    const doubled = reactive(() => source() * 2)
+    const doubled = reactive(() => {
+        abideRecomputes += 1
+        return source() * 2
+    })
 
-    let flip = 0
-    let flop = 0
+    // FROM 1, the value the source holds, so the first op writes 0 and is a change.
+    let flip = 1
+    let flop = 1
+    const vanilla = (): void => {
+        flip = flip === 0 ? 1 : 0
+        held.write(flip)
+        sink = readDerived()
+    }
+    const abide = (): void => {
+        flop = flop === 0 ? 1 : 0
+        source.set(flop)
+        sink = doubled()
+    }
     return {
         name: 'write a source, then read what derives from it',
         distinguishes:
             'the recompute path — a dirty flag and a lazy read against a marked body pulled forward by the read',
-        vanilla: (): void => {
-            flip = flip === 0 ? 1 : 0
-            held.write(flip)
-            sink = readDerived()
-        },
-        abide: (): void => {
-            flop = flop === 0 ? 1 : 0
-            source.set(flop)
-            sink = doubled()
-        },
-        work: () => {
-            let recomputes = 0
-            const one = signal(1)
-            let flag = false
-            one.subscribe(() => {
-                flag = true
-            })
-            const read = (): number => {
-                if (flag) {
-                    recomputes += 1
-                    flag = false
-                }
-                return one.read() * 2
-            }
-            one.write(2)
-            read()
-            let runs = 0
-            const two = reactive(1)
-            const derivedTwo = reactive(() => {
-                runs += 1
-                return two() * 2
-            })
-            runs = 0
-            two.set(2)
-            derivedTwo()
-            return {
-                vanilla: { recomputes },
-                abide: { recomputes: runs },
-            }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'recomputes',
+                { vanilla, abide },
+                {
+                    vanilla: () => handRecomputes,
+                    abide: () => abideRecomputes,
+                },
+            ),
     }
 }
 
@@ -410,6 +432,8 @@ function derived(): Case {
  * cost, this one prices what it is for, and neither is the claim alone.
  */
 function derivedUnchanged(): Case {
+    let handWakes = 0
+    let abideWakes = 0
     const held = signal(1)
     let dirty = false
     held.subscribe(() => {
@@ -423,54 +447,40 @@ function derivedUnchanged(): Case {
     const source = reactive(1)
     const positive = reactive(() => source() > 0)
     // A downstream reader on both arms, so the wake each arm causes is a wake into
-    // something. What it COUNTS is taken in the work pass — a counter incremented
-    // inside a timed body is the counter running in the path it counts.
-    positive.watch(() => {})
+    // something — and the counter is in that reader on both, so it is priced alike.
+    positive.watch(() => {
+        abideWakes += 1
+    })
+    flushSync()
 
     let flip = 1
     let flop = 1
+    const vanilla = (): void => {
+        flip = flip === 1 ? 2 : 1
+        held.write(flip)
+        if (dirty) {
+            handWakes += 1
+            sink = readDerived()
+        }
+    }
+    const abide = (): void => {
+        flop = flop === 1 ? 2 : 1
+        source.set(flop)
+        flushSync()
+    }
     return {
         name: 'a source changes without changing what derives from it',
         distinguishes:
             'the identity gate on a recompute — a dirty flag wakes everything downstream, a production the identity gate collapses wakes nothing',
-        vanilla: (): void => {
-            flip = flip === 1 ? 2 : 1
-            held.write(flip)
-            if (dirty) sink = readDerived()
-        },
-        abide: (): void => {
-            flop = flop === 1 ? 2 : 1
-            source.set(flop)
-            flushSync()
-        },
-        work: () => {
-            let vanillaWakes = 0
-            const one = signal(1)
-            let flag = false
-            one.subscribe(() => {
-                flag = true
-            })
-            one.write(2)
-            if (flag) vanillaWakes += 1
-            one.write(3)
-            if (flag) vanillaWakes += 1
-
-            let abideWakes = 0
-            const two = reactive(1)
-            const derivedTwo = reactive(() => two() > 0)
-            derivedTwo.watch(() => {
-                abideWakes += 1
-            })
-            abideWakes = 0
-            two.set(2)
-            flushSync()
-            two.set(3)
-            flushSync()
-            return {
-                vanilla: { downstreamWakes: vanillaWakes },
-                abide: { downstreamWakes: abideWakes },
-            }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'downstreamWakes',
+                { vanilla, abide },
+                { vanilla: () => handWakes, abide: () => abideWakes },
+                2,
+            ),
     }
 }
 
@@ -494,36 +504,42 @@ function logAppendAndRead(): Case {
     const rows: number[] = []
     const room = reactive<number>(undefined, { history: DEPTH - 1 })
     let at = 0
+    let handWalked = 0
+    let abideWalked = 0
+    const vanilla = (): void => {
+        rows.push(at++)
+        if (rows.length > DEPTH) rows.shift()
+        let total = 0
+        for (const row of rows) total += row
+        handWalked = rows.length
+        sink = total
+    }
+    const abide = (): void => {
+        room.publish(at++)
+        let total = 0
+        let walked = 0
+        for (const row of room.history()) {
+            total += row
+            walked += 1
+        }
+        abideWalked = walked
+        sink = total
+    }
     return {
         name: 'append to a capped log and walk it',
         distinguishes:
             'retention read end to end — an append that must not cost the depth, and a window walked by the consumer that wants it rather than materialised per write',
-        vanilla: (): void => {
-            rows.push(at++)
-            if (rows.length > DEPTH) rows.shift()
-            let total = 0
-            for (const row of rows) total += row
-            sink = total
-        },
-        abide: (): void => {
-            room.publish(at++)
-            let total = 0
-            for (const row of room.history()) total += row
-            sink = total
-        },
-        // Both arms walk the same window, or the timings price two different jobs.
+        vanilla,
+        abide,
+        // Both arms walk the same window, or the timings price two different jobs. Run past
+        // the cap, so the window counted is the full one rather than a warm-up's.
         work: () => {
-            const held: number[] = []
-            const kept = reactive<number>(undefined, { history: 7 })
-            for (let index = 0; index < 40; index += 1) {
-                held.push(index)
-                if (held.length > 8) held.shift()
-                kept.publish(index)
+            for (let index = 0; index <= DEPTH; index += 1) {
+                vanilla()
+                abide()
             }
-            let abideWalked = 0
-            for (const _ of kept.history()) abideWalked += 1
             return {
-                vanilla: { walked: held.length },
+                vanilla: { walked: handWalked },
                 abide: { walked: abideWalked },
             }
         },
@@ -546,30 +562,30 @@ function publishIntoCappedRing(): Case {
     const room = reactive<number>(undefined, { history: DEPTH - 1 })
     let handAt = 0
     let abideAt = 0
+    const vanilla = (): void => {
+        rows.push(handAt++)
+        if (rows.length > DEPTH) rows.shift()
+    }
+    const abide = (): void => {
+        room.publish(abideAt++)
+    }
     return {
         name: 'publish into a capped ring',
         distinguishes:
             'the write path under retention — a cap maintained by shifting every element against one trimmed in bulk, which is the difference between linear in the depth and amortised constant',
-        vanilla: (): void => {
-            rows.push(handAt++)
-            if (rows.length > DEPTH) rows.shift()
-        },
-        abide: (): void => {
-            room.publish(abideAt++)
-        },
+        vanilla,
+        abide,
         // Both arms hold the same window afterwards, which is what makes the timings
         // comparable at all: a cap that retained less would be a cheaper different job.
+        // Read off the timed structures once the arms have run past the cap.
         work: () => {
-            const held: number[] = []
-            const kept = reactive<number>(undefined, { history: 7 })
-            for (let index = 0; index < 40; index += 1) {
-                held.push(index)
-                if (held.length > 8) held.shift()
-                kept.publish(index)
+            for (let index = 0; index <= DEPTH; index += 1) {
+                vanilla()
+                abide()
             }
             return {
-                vanilla: { retained: held.length },
-                abide: { retained: [...kept.history()].length },
+                vanilla: { retained: rows.length },
+                abide: { retained: [...room.history()].length },
             }
         },
     }
@@ -597,42 +613,44 @@ function cursorBurst(): Case {
     const room = reactive<number>(undefined, { history: DEPTH - 1 })
     const cursor = room.history(0)[Symbol.asyncIterator]()
     let abideAt = 0
+    const vanilla = (): void => {
+        for (let index = 0; index < BURST; index += 1) {
+            rows.push(handAt++)
+            if (rows.length > DEPTH) {
+                rows.shift()
+                handBase += 1
+            }
+        }
+        for (let index = 0; index < BURST; index += 1) {
+            if (handCursor < handBase) handCursor = handBase
+            sink = Promise.resolve(rows[handCursor - handBase])
+            handCursor += 1
+        }
+    }
+    const abide = (): void => {
+        for (let index = 0; index < BURST; index += 1) room.publish(abideAt++)
+        // Balanced with the publishes on purpose: a `next` with nothing outstanding
+        // hands back a promise that is never settled, and a batch of those is a
+        // measurement of an allocator rather than of a cursor.
+        for (let index = 0; index < BURST; index += 1) sink = cursor.next()
+    }
     return {
         name: `take a burst of ${BURST} from a cursor`,
         distinguishes:
             'a cursor over retention: several productions landing between two turns must be several turns, so the arms are balanced and the ratio is the cost of finding one by ordinal against one by index',
-        vanilla: (): void => {
-            for (let index = 0; index < BURST; index += 1) {
-                rows.push(handAt++)
-                if (rows.length > DEPTH) {
-                    rows.shift()
-                    handBase += 1
-                }
-            }
-            for (let index = 0; index < BURST; index += 1) {
-                if (handCursor < handBase) handCursor = handBase
-                sink = Promise.resolve(rows[handCursor - handBase])
-                handCursor += 1
-            }
-        },
-        abide: (): void => {
-            for (let index = 0; index < BURST; index += 1)
-                room.publish(abideAt++)
-            // Balanced with the publishes on purpose: a `next` with nothing outstanding
-            // hands back a promise that is never settled, and a batch of those is a
-            // measurement of an allocator rather than of a cursor.
-            for (let index = 0; index < BURST; index += 1) sink = cursor.next()
-        },
+        vanilla,
+        abide,
+        // WHAT EACH ARM RETAINS once it has run past the cap, read off the timed structures. A
+        // take is a promise on both arms, so what it settles to is not a count a synchronous
+        // pass can read — the window the takes index into is.
         work: () => {
-            const held: number[] = []
-            const kept = reactive<number>(undefined, { history: DEPTH - 1 })
-            for (let index = 0; index < BURST; index += 1) {
-                held.push(index)
-                kept.publish(index)
+            for (let index = 0; index <= DEPTH / BURST; index += 1) {
+                vanilla()
+                abide()
             }
             return {
-                vanilla: { retained: held.length },
-                abide: { retained: [...kept.history(BURST)].length },
+                vanilla: { retained: rows.length },
+                abide: { retained: [...room.history()].length },
             }
         },
     }
@@ -716,68 +734,52 @@ function handDerived(
  * pay for the other nine. This is a row's worth of cells over one record.
  */
 function fanOut(width: number): Case {
+    let handRuns = 0
+    let abideRuns = 0
     const held = signal(0)
     const hand: HandWritten[] = []
     for (let index = 0; index < width; index += 1)
-        hand.push(handDerived([held], () => held.read() + index))
+        hand.push(
+            handDerived([held], () => {
+                handRuns += 1
+                return held.read() + index
+            }),
+        )
 
     const source = reactive(0)
     const derivedValues: (() => number)[] = []
     for (let index = 0; index < width; index += 1)
         derivedValues.push(
-            reactive(() => source() + index) as unknown as () => number,
+            reactive(() => {
+                abideRuns += 1
+                return source() + index
+            }) as unknown as () => number,
         )
 
     let flip = 0
     let flop = 0
+    const vanilla = (): void => {
+        flip = flip === 0 ? 1 : 0
+        held.write(flip)
+        sink = (hand[0] as HandWritten).read()
+    }
+    const abide = (): void => {
+        flop = flop === 0 ? 1 : 0
+        source.set(flop)
+        sink = (derivedValues[0] as () => number)()
+    }
     return {
         name: `fan-out to ${width} readers, one read after the write`,
         distinguishes:
             'a write that must reach every reader against a read that wants one of them — both arms mark the fan and run the one node that is read, so what is left is the cost of a mark',
-        vanilla: (): void => {
-            flip = flip === 0 ? 1 : 0
-            held.write(flip)
-            sink = (hand[0] as HandWritten).read()
-        },
-        abide: (): void => {
-            flop = flop === 0 ? 1 : 0
-            source.set(flop)
-            sink = (derivedValues[0] as () => number)()
-        },
-        work: () => {
-            let handRuns = 0
-            const one = signal(0)
-            const nodes: HandWritten[] = []
-            for (let index = 0; index < width; index += 1)
-                nodes.push(
-                    handDerived([one], () => {
-                        handRuns += 1
-                        return one.read()
-                    }),
-                )
-            for (const node of nodes) node.read()
-            handRuns = 0
-            one.write(1)
-            ;(nodes[0] as HandWritten).read()
-
-            const two = reactive(0)
-            let abideRuns = 0
-            const built: (() => number)[] = []
-            for (let index = 0; index < width; index += 1)
-                built.push(
-                    reactive(() => {
-                        abideRuns += 1
-                        return two() + index
-                    }) as unknown as () => number,
-                )
-            abideRuns = 0
-            two.set(1)
-            ;(built[0] as () => number)()
-            return {
-                vanilla: { bodyRuns: handRuns },
-                abide: { bodyRuns: abideRuns },
-            }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'bodyRuns',
+                { vanilla, abide },
+                { vanilla: () => handRuns, abide: () => abideRuns },
+            ),
     }
 }
 
@@ -790,7 +792,10 @@ function fanOut(width: number): Case {
 function fanIn(width: number): Case {
     const held: ReturnType<typeof signal<number>>[] = []
     for (let index = 0; index < width; index += 1) held.push(signal(index))
+    let handRuns = 0
+    let abideRuns = 0
     const hand = handDerived(held, () => {
+        handRuns += 1
         let total = 0
         for (let index = 0; index < width; index += 1)
             total += (held[index] as { read(): number }).read()
@@ -800,6 +805,7 @@ function fanIn(width: number): Case {
     const sources: ReturnType<typeof reactive<number>>[] = []
     for (let index = 0; index < width; index += 1) sources.push(reactive(index))
     const summed = reactive(() => {
+        abideRuns += 1
         let total = 0
         for (let index = 0; index < width; index += 1)
             total += (sources[index] as () => number)()
@@ -808,59 +814,28 @@ function fanIn(width: number): Case {
 
     let flip = 0
     let flop = 0
+    const vanilla = (): void => {
+        flip = flip === 0 ? 1 : 0
+        ;(held[0] as { write(value: number): void }).write(flip)
+        sink = hand.read()
+    }
+    const abide = (): void => {
+        flop = flop === 0 ? 1 : 0
+        ;(sources[0] as { set(value: number): void }).set(flop)
+        sink = summed()
+    }
     return {
         name: `fan-in from ${width} sources, one changes`,
         distinguishes:
             'the cursor protocol in steady state — a body whose source order never changes should mutate nothing, and one source moving should not re-subscribe the other nine',
-        vanilla: (): void => {
-            flip = flip === 0 ? 1 : 0
-            ;(held[0] as { write(value: number): void }).write(flip)
-            sink = hand.read()
-        },
-        abide: (): void => {
-            flop = flop === 0 ? 1 : 0
-            ;(sources[0] as { set(value: number): void }).set(flop)
-            sink = summed()
-        },
-        // COUNTED ON A FRESH GRAPH, as `fanOut` is: the timed arms carry no counter, and a
-        // record written as a literal agrees with itself whatever either arm did.
-        work: () => {
-            let handRuns = 0
-            const handSources: ReturnType<typeof signal<number>>[] = []
-            for (let index = 0; index < width; index += 1)
-                handSources.push(signal(index))
-            const handTop = handDerived(handSources, () => {
-                handRuns += 1
-                let total = 0
-                for (let index = 0; index < width; index += 1)
-                    total += (handSources[index] as { read(): number }).read()
-                return total
-            })
-            handTop.read()
-            handRuns = 0
-            ;(handSources[0] as { write(value: number): void }).write(-1)
-            handTop.read()
-
-            let abideRuns = 0
-            const abideSources: ReturnType<typeof reactive<number>>[] = []
-            for (let index = 0; index < width; index += 1)
-                abideSources.push(reactive(index))
-            const abideTop = reactive(() => {
-                abideRuns += 1
-                let total = 0
-                for (let index = 0; index < width; index += 1)
-                    total += (abideSources[index] as () => number)()
-                return total
-            }) as unknown as () => number
-            abideTop()
-            abideRuns = 0
-            ;(abideSources[0] as { set(value: number): void }).set(-1)
-            abideTop()
-            return {
-                vanilla: { bodyRuns: handRuns },
-                abide: { bodyRuns: abideRuns },
-            }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'bodyRuns',
+                { vanilla, abide },
+                { vanilla: () => handRuns, abide: () => abideRuns },
+            ),
     }
 }
 
@@ -929,42 +904,28 @@ function layeredDag(width: number, depth: number): Case {
 
     let flip = 0
     let flop = 0
+    const vanilla = (): void => {
+        flip = flip === 0 ? 1 : 0
+        ;(handBase[0] as { write(value: number): void }).write(flip)
+        sink = handTop.read()
+    }
+    const abide = (): void => {
+        flop = flop === 0 ? 1 : 0
+        ;(abideBase[0] as unknown as { set(value: number): void }).set(flop)
+        sink = abideTop()
+    }
     return {
         name: `layered DAG ${width} wide x ${depth} deep, one base value changes`,
         distinguishes:
             'sharing at every level — a walk that guards the STACK rather than what it has VISITED re-walks each shared subgraph once per path, which is an asymptote rather than a constant',
-        vanilla: (): void => {
-            flip = flip === 0 ? 1 : 0
-            ;(handBase[0] as { write(value: number): void }).write(flip)
-            sink = handTop.read()
-        },
-        abide: (): void => {
-            flop = flop === 0 ? 1 : 0
-            ;(abideBase[0] as unknown as { set(value: number): void }).set(flop)
-            sink = abideTop()
-        },
-        // BOTH ARMS CARRY THEIR COUNTER IN THE TIMED GRAPH, so the increment is priced on each
-        // side alike. The write is one past what the base holds, so it is a change whatever
-        // state the timed loop left it in.
-        work: () => {
-            const handBefore = handRuns
-            const handSource = handBase[0] as {
-                read(): number
-                write(value: number): void
-            }
-            handSource.write(handSource.read() + 1)
-            handTop.read()
-            const abideBefore = abideRuns
-            const abideSource = abideBase[0] as unknown as (() => number) & {
-                set(value: number): void
-            }
-            abideSource.set(abideSource() + 1)
-            abideTop()
-            return {
-                vanilla: { bodyRuns: handRuns - handBefore },
-                abide: { bodyRuns: abideRuns - abideBefore },
-            }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'bodyRuns',
+                { vanilla, abide },
+                { vanilla: () => handRuns, abide: () => abideRuns },
+            ),
     }
 }
 
@@ -975,77 +936,58 @@ function layeredDag(width: number, depth: number): Case {
  * which of the DAG's cost is depth and which is sharing.
  */
 function chain(depth: number): Case {
+    let handRuns = 0
+    let abideRuns = 0
     const held = signal(0)
-    let handNode = handDerived([held], () => held.read() + 1)
+    let handNode = handDerived([held], () => {
+        handRuns += 1
+        return held.read() + 1
+    })
     for (let level = 1; level < depth; level += 1) {
         const below = handNode
-        handNode = handDerived([below], () => below.read() + 1)
+        handNode = handDerived([below], () => {
+            handRuns += 1
+            return below.read() + 1
+        })
     }
 
     const source = reactive(0)
-    let node = reactive(() => source() + 1) as unknown as () => number
+    let node = reactive(() => {
+        abideRuns += 1
+        return source() + 1
+    }) as unknown as () => number
     for (let level = 1; level < depth; level += 1) {
         const below = node
-        node = reactive(() => below() + 1) as unknown as () => number
+        node = reactive(() => {
+            abideRuns += 1
+            return below() + 1
+        }) as unknown as () => number
     }
 
     let flip = 0
     let flop = 0
+    const vanilla = (): void => {
+        flip = flip === 0 ? 1 : 0
+        held.write(flip)
+        sink = handNode.read()
+    }
+    const abide = (): void => {
+        flop = flop === 0 ? 1 : 0
+        source.set(flop)
+        sink = node()
+    }
     return {
         name: `chain ${depth} deep`,
         distinguishes:
             "depth with no sharing — the control against the DAG, so the DAG's extra cost is attributable to sharing rather than to size",
-        vanilla: (): void => {
-            flip = flip === 0 ? 1 : 0
-            held.write(flip)
-            sink = handNode.read()
-        },
-        abide: (): void => {
-            flop = flop === 0 ? 1 : 0
-            source.set(flop)
-            sink = node()
-        },
-        work: () => {
-            let handRuns = 0
-            const handSource = signal(0)
-            let handLink = handDerived([handSource], () => {
-                handRuns += 1
-                return handSource.read() + 1
-            })
-            for (let level = 1; level < depth; level += 1) {
-                const below = handLink
-                handLink = handDerived([below], () => {
-                    handRuns += 1
-                    return below.read() + 1
-                })
-            }
-            handLink.read()
-            handRuns = 0
-            handSource.write(1)
-            handLink.read()
-
-            let abideRuns = 0
-            const abideSource = reactive(0)
-            let abideLink = reactive(() => {
-                abideRuns += 1
-                return abideSource() + 1
-            }) as unknown as () => number
-            for (let level = 1; level < depth; level += 1) {
-                const below = abideLink
-                abideLink = reactive(() => {
-                    abideRuns += 1
-                    return below() + 1
-                }) as unknown as () => number
-            }
-            abideLink()
-            abideRuns = 0
-            abideSource.set(1)
-            abideLink()
-            return {
-                vanilla: { bodyRuns: handRuns },
-                abide: { bodyRuns: abideRuns },
-            }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'bodyRuns',
+                { vanilla, abide },
+                { vanilla: () => handRuns, abide: () => abideRuns },
+            ),
     }
 }
 
@@ -1057,116 +999,99 @@ function chain(depth: number): Case {
  * re-subscribed. 14.15 warns on exactly this shape, and this is what the warning costs.
  */
 function alternatingSources(): Case {
+    let handRuns = 0
+    let abideRuns = 0
     const flagHeld = signal(true)
     const left = signal(1)
     const right = signal(2)
-    const hand = handDerived([flagHeld, left, right], () =>
-        flagHeld.read() ? left.read() : right.read(),
-    )
+    const hand = handDerived([flagHeld, left, right], () => {
+        handRuns += 1
+        return flagHeld.read() ? left.read() : right.read()
+    })
 
     const flag = reactive(true)
     const one = reactive(1)
     const two = reactive(2)
-    const picked = reactive(() =>
-        flag() ? one() : two(),
-    ) as unknown as () => number
+    const picked = reactive(() => {
+        abideRuns += 1
+        return flag() ? one() : two()
+    }) as unknown as () => number
 
     let handFlag = true
     let abideFlag = true
+    const vanilla = (): void => {
+        handFlag = !handFlag
+        flagHeld.write(handFlag)
+        sink = hand.read()
+    }
+    const abide = (): void => {
+        abideFlag = !abideFlag
+        flag.set(abideFlag)
+        sink = picked()
+    }
+    type Source = { bump(): void }
+    // BODY RUNS AND THE EDGES THE OP MOVED, on the timed graph. Neither arm exposes its
+    // subscription list, so an edge is counted by what it DOES: a source REACHES the body
+    // when writing it makes the next read re-run the body. The source the op stops reading is
+    // asked after it (`edgesDropped` is 1 if it no longer reaches), and the one it starts
+    // reading before and after (`edgesAdded` is 1 if it reaches only once the op has run).
+    function counted(
+        op: () => void,
+        read: () => void,
+        runs: () => number,
+        reading: () => { now: Source; next: Source },
+    ): Record<string, number> {
+        const reaches = (source: Source): number => {
+            const before = runs()
+            source.bump()
+            read()
+            return runs() > before ? 1 : 0
+        }
+        read()
+        const { now, next } = reading()
+        const nextBefore = reaches(next)
+        const before = runs()
+        op()
+        const bodyRuns = runs() - before
+        return {
+            bodyRuns,
+            edgesDropped: 1 - reaches(now),
+            edgesAdded: reaches(next) - nextBefore,
+        }
+    }
+    const handLeft = { bump: () => left.write(left.read() + 1) }
+    const handRight = { bump: () => right.write(right.read() + 1) }
+    const abideLeft = { bump: () => one.set(one() + 1) }
+    const abideRight = { bump: () => two.set(two() + 1) }
     return {
         name: 'a body whose source alternates every run',
         distinguishes:
             'the cursor protocol when it always misses — a stable body mutates nothing, and this one detaches and re-subscribes on every single run',
-        vanilla: (): void => {
-            handFlag = !handFlag
-            flagHeld.write(handFlag)
-            sink = hand.read()
-        },
-        abide: (): void => {
-            abideFlag = !abideFlag
-            flag.set(abideFlag)
-            sink = picked()
-        },
-        // BODY RUNS AND THE EDGES THE OP MOVED, counted on a fresh graph per arm. Neither arm
-        // exposes its subscription list, so an edge is counted by what it DOES: a source
-        // REACHES the body when writing it makes the next read re-run the body. The source
-        // the body stops reading is asked after the op (`edgesDropped` is 1 if it no longer
-        // reaches), and the one it starts reading is asked before and after (`edgesAdded` is 1
-        // if it reaches only once the op has run). The hand-written node subscribes to all
-        // three once and re-subscribes nothing, so these two DISAGREE, 0 against 1 — the
-        // hand-written arm is the superset subscription somebody writes, and this is the
-        // re-subscription it never pays.
-        work: () => {
-            type Graph = {
-                read(): void
-                flip(): void
-                writeOld(): void
-                writeNew(): void
-            }
-            function counted(
-                build: (ran: () => void) => Graph,
-            ): Record<string, number> {
-                let runs = 0
-                const graph = build(() => {
-                    runs += 1
-                })
-                const reaches = (write: () => void): number => {
-                    const before = runs
-                    write()
-                    graph.read()
-                    return runs > before ? 1 : 0
-                }
-                graph.read()
-                const newBefore = reaches(graph.writeNew)
-                runs = 0
-                graph.flip()
-                graph.read()
-                const bodyRuns = runs
-                const oldAfter = reaches(graph.writeOld)
-                return {
-                    bodyRuns,
-                    edgesDropped: 1 - oldAfter,
-                    edgesAdded: reaches(graph.writeNew) - newBefore,
-                }
-            }
-            return {
-                vanilla: counted((ran) => {
-                    const flagSource = signal(true)
-                    const oldSource = signal(1)
-                    const newSource = signal(2)
-                    const node = handDerived(
-                        [flagSource, oldSource, newSource],
-                        () => {
-                            ran()
-                            return flagSource.read()
-                                ? oldSource.read()
-                                : newSource.read()
-                        },
-                    )
-                    return {
-                        read: () => void node.read(),
-                        flip: () => flagSource.write(false),
-                        writeOld: () => oldSource.write(oldSource.read() + 1),
-                        writeNew: () => newSource.write(newSource.read() + 1),
-                    }
-                }),
-                abide: counted((ran) => {
-                    const flagSource = reactive(true)
-                    const oldSource = reactive(1)
-                    const newSource = reactive(2)
-                    const node = reactive(() => {
-                        ran()
-                        return flagSource() ? oldSource() : newSource()
-                    }) as unknown as () => number
-                    return {
-                        read: () => void node(),
-                        flip: () => flagSource.set(false),
-                        writeOld: () => oldSource.set(oldSource() + 1),
-                        writeNew: () => newSource.set(newSource() + 1),
-                    }
-                }),
-            }
-        },
+        vanilla,
+        abide,
+        // The hand-written node subscribes to all three once and re-subscribes nothing, so
+        // the edge rows DISAGREE, 0 against 1 — the hand-written arm is the superset
+        // subscription somebody writes, and this is the re-subscription it never pays.
+        work: () => ({
+            vanilla: counted(
+                vanilla,
+                () => void hand.read(),
+                () => handRuns,
+                () =>
+                    handFlag
+                        ? { now: handLeft, next: handRight }
+                        : { now: handRight, next: handLeft },
+            ),
+            abide: counted(
+                abide,
+                () => void picked(),
+                () => abideRuns,
+                () =>
+                    abideFlag
+                        ? { now: abideLeft, next: abideRight }
+                        : { now: abideRight, next: abideLeft },
+            ),
+        }),
     }
 }
 
@@ -1178,8 +1103,11 @@ function alternatingSources(): Case {
  * the dedupe in `track` is what keeps the wake count at one.
  */
 function repeatedReads(times: number): Case {
+    let handRuns = 0
+    let abideRuns = 0
     const held = signal(1)
     const hand = handDerived([held], () => {
+        handRuns += 1
         let total = 0
         for (let index = 0; index < times; index += 1) total += held.read()
         return total
@@ -1187,6 +1115,7 @@ function repeatedReads(times: number): Case {
 
     const source = reactive(1)
     const summed = reactive(() => {
+        abideRuns += 1
         let total = 0
         for (let index = 0; index < times; index += 1) total += source()
         return total
@@ -1194,53 +1123,28 @@ function repeatedReads(times: number): Case {
 
     let flip = 1
     let flop = 1
+    const vanilla = (): void => {
+        flip = flip === 1 ? 2 : 1
+        held.write(flip)
+        sink = hand.read()
+    }
+    const abide = (): void => {
+        flop = flop === 1 ? 2 : 1
+        source.set(flop)
+        sink = summed()
+    }
     return {
         name: `one source read ${times} times in one body`,
         distinguishes:
             'a duplicate in the source list — the cursor must match it each time and the reader must still be woken exactly once',
-        vanilla: (): void => {
-            flip = flip === 1 ? 2 : 1
-            held.write(flip)
-            sink = hand.read()
-        },
-        abide: (): void => {
-            flop = flop === 1 ? 2 : 1
-            source.set(flop)
-            sink = summed()
-        },
-        work: () => {
-            let handRuns = 0
-            const handSource = signal(1)
-            const handTop = handDerived([handSource], () => {
-                handRuns += 1
-                let total = 0
-                for (let index = 0; index < times; index += 1)
-                    total += handSource.read()
-                return total
-            })
-            handTop.read()
-            handRuns = 0
-            handSource.write(2)
-            handTop.read()
-
-            let abideRuns = 0
-            const abideSource = reactive(1)
-            const abideTop = reactive(() => {
-                abideRuns += 1
-                let total = 0
-                for (let index = 0; index < times; index += 1)
-                    total += abideSource()
-                return total
-            }) as unknown as () => number
-            abideTop()
-            abideRuns = 0
-            abideSource.set(2)
-            abideTop()
-            return {
-                vanilla: { bodyRuns: handRuns },
-                abide: { bodyRuns: abideRuns },
-            }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'bodyRuns',
+                { vanilla, abide },
+                { vanilla: () => handRuns, abide: () => abideRuns },
+            ),
     }
 }
 
@@ -1305,26 +1209,30 @@ function probeSettledDag(width: number, depth: number): Case {
     }) as unknown as (() => number) & { busy(): boolean }
     top()
 
+    const vanilla = (): void => {
+        seen.clear()
+        sink = anyBusy(handTop)
+    }
+    const abide = (): void => {
+        sink = top.busy()
+    }
     return {
         name: `probe a settled DAG ${width} wide x ${depth} deep`,
         distinguishes:
             'a probe walk over a SHARED graph — a guard that tracks the stack re-walks each shared subgraph once per path, where one that tracks what it visited walks each edge once',
-        vanilla: (): void => {
-            seen.clear()
-            sink = anyBusy(handTop)
-        },
-        abide: (): void => {
-            sink = top.busy()
-        },
-        // THE ANSWER EACH ARM GAVE, taken from the arm rather than written down: an all-idle
-        // graph probes not-busy in both. How many nodes abide's walk VISITED has no public
-        // counter — `WORK.descents` counts the mark walk, not this one — so the visit count
-        // that tells a stack guard from a visited stamp is not on this record.
+        vanilla,
+        abide,
+        // THE ANSWER EACH ARM GAVE, taken from the timed op rather than written down: an
+        // all-idle graph probes not-busy in both. How many nodes abide's walk VISITED has no
+        // public counter — `WORK.descents` counts the mark walk, not this one — so the visit
+        // count that tells a stack guard from a visited stamp is not on this record.
         work: () => {
-            seen.clear()
+            vanilla()
+            const hand = sink === true ? 1 : 0
+            abide()
             return {
-                vanilla: { busy: anyBusy(handTop) ? 1 : 0 },
-                abide: { busy: top.busy() ? 1 : 0 },
+                vanilla: { busy: hand },
+                abide: { busy: sink === true ? 1 : 0 },
             }
         },
     }
@@ -1350,54 +1258,49 @@ function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
     const make = (): { id: number; total: number } => ({ id: 1, total: 100 })
     const standing = make()
     // SEEDED WITH THE VALUE THE WRITE WRITES, so "already held" is true on the first
-    // write and not only from the second — the timed loop repeats, but the work pass
-    // writes ONCE, and a case whose two passes disagree is the failure the work record
-    // exists to catch.
+    // write and not only from the second.
     const held = carelessSignal(fresh ? make() : standing)
     const value = fresh
         ? reactive(make(), { identity: structural })
         : reactive(standing)
+    // THE READER BODY IS ONE FIELD INCREMENT AND NOTHING ELSE, because only the
+    // hand-written arm ever runs it — the counter is not priced alike on both sides
+    // here, it is priced on one, and with 100 readers it IS the vanilla arm. Measured
+    // in chromium on the held-value row: `sink = next` plus a captured `let` counter
+    // 495 ns, the `let` alone 420, `sink = next` alone 350, this 121 — a store into a
+    // captured or module `let` is 2-3 ns a wake dearer than a field under V8. The dear
+    // body inflated the ratio in abide's favor, and since n is sized by abide's 6 ns
+    // op, every vanilla batch was ~1.1 s and the row ran out the injectable's 20 s
+    // budget.
+    const wakes = { hand: 0, abide: 0 }
     for (let at = 0; at < width; at += 1) {
-        held.subscribe((next) => {
-            sink = next
+        held.subscribe(() => {
+            wakes.hand += 1
         })
-        value.watch((next) => {
-            sink = next
+        value.watch(() => {
+            wakes.abide += 1
         })
+    }
+    flushSync()
+    const vanilla = (): void => {
+        held.write(fresh ? make() : standing)
+    }
+    const abide = (): void => {
+        value.set(fresh ? make() : standing)
+        flushSync()
     }
     return {
         name,
         distinguishes:
             'what the gate BUYS rather than what it costs — abide skips the wake and this arm wakes every reader on a write that moved nothing, which is the version most people write first',
-        vanilla: (): void => {
-            held.write(fresh ? make() : standing)
-        },
-        abide: (): void => {
-            value.set(fresh ? make() : standing)
-            flushSync()
-        },
-        work: () => {
-            const same = make()
-            const one = carelessSignal(fresh ? make() : same)
-            const two = fresh
-                ? reactive(make(), { identity: structural })
-                : reactive(same)
-            let a = 0
-            let b = 0
-            for (let at = 0; at < width; at += 1) {
-                one.subscribe(() => {
-                    a += 1
-                })
-                two.watch(() => {
-                    b += 1
-                })
-            }
-            b = 0
-            one.write(fresh ? make() : same)
-            two.set(fresh ? make() : same)
-            flushSync()
-            return { vanilla: { wakes: a }, abide: { wakes: b } }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'wakes',
+                { vanilla, abide },
+                { vanilla: () => wakes.hand, abide: () => wakes.abide },
+            ),
     }
 }
 
@@ -1439,62 +1342,51 @@ function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
  */
 
 function mountReaders(width: number): Case {
+    let handMounted = 0
+    let abideMounted = 0
+    const vanilla = (): void => {
+        const held = signal(0)
+        const stops: (() => void)[] = []
+        for (let index = 0; index < width; index += 1) {
+            stops.push(
+                held.subscribe(() => {
+                    sink = held.read()
+                }),
+            )
+            sink = held.read()
+            handMounted += 1
+        }
+        for (const stop of stops) stop()
+    }
+    const abide = (): void => {
+        const source = reactive(0)
+        const stops: (() => void)[] = []
+        for (let index = 0; index < width; index += 1)
+            stops.push(
+                watch(() => {
+                    sink = source()
+                    abideMounted += 1
+                }),
+            )
+        for (const stop of stops) stop()
+    }
     return {
         name: `mount ${width} readers on one value`,
         distinguishes:
             'the subscribe path, which every fan-out case builds in setup and never times — a dedup scanned per arriving reader against one scanned per value the body reads, which is the difference between quadratic in the reader count and flat',
-        vanilla: (): void => {
-            const held = signal(0)
-            const stops: (() => void)[] = []
-            for (let index = 0; index < width; index += 1) {
-                stops.push(
-                    held.subscribe(() => {
-                        sink = held.read()
-                    }),
-                )
-                sink = held.read()
-            }
-            for (const stop of stops) stop()
-        },
-        abide: (): void => {
-            const source = reactive(0)
-            const stops: (() => void)[] = []
-            for (let index = 0; index < width; index += 1)
-                stops.push(
-                    watch(() => {
-                        sink = source()
-                    }),
-                )
-            for (const stop of stops) stop()
-        },
+        vanilla,
+        abide,
         // BOTH ARMS HOLD THE SAME FAN while they are up, which is what makes the timings
         // comparable: an arm that subscribed fewer readers would be a cheaper different job.
-        work: () => {
-            let handRuns = 0
-            const held = signal(0)
-            const handStops: (() => void)[] = []
-            for (let index = 0; index < width; index += 1) {
-                handStops.push(held.subscribe(() => {}))
-                handRuns += 1
-            }
-            let abideRuns = 0
-            const source = reactive(0)
-            const abideStops: (() => void)[] = []
-            for (let index = 0; index < width; index += 1)
-                abideStops.push(
-                    watch(() => {
-                        source()
-                        abideRuns += 1
-                    }),
-                )
-            flushSync()
-            for (const stop of handStops) stop()
-            for (const stop of abideStops) stop()
-            return {
-                vanilla: { subscribed: handRuns },
-                abide: { subscribed: abideRuns },
-            }
-        },
+        // A watch's mount IS its first run, so the abide count is taken in the body; the
+        // hand-written subscriber runs on a write and none comes, so it is taken beside
+        // the subscribe.
+        work: () =>
+            countedOver(
+                'subscribed',
+                { vanilla, abide },
+                { vanilla: () => handMounted, abide: () => abideMounted },
+            ),
     }
 }
 
@@ -1506,32 +1398,33 @@ function mountReaders(width: number): Case {
 const KEYED_WIDTH = 8
 
 function constructKeyed(): Case {
+    // NO ENTRY IS BUILT BY MAKING ONE: an entry is the factory run once for its key, so the
+    // abide arm counts factory runs and the hand-written arm counts what its map grew by.
+    let handBuilt = 0
+    let abideBuilt = 0
+    const vanilla = (): void => {
+        const entries = new Map<string, { ready: boolean }>()
+        sink = (args: { id: number }) => entries.get(JSON.stringify(args))
+        handBuilt += entries.size
+    }
+    const abide = (): void => {
+        sink = reactive((args: { id: number }) => {
+            abideBuilt += 1
+            return args.id
+        })
+    }
     return {
         name: 'construct a keyed value',
         distinguishes:
             'the cost of MAKING a keyed factory — its entry map and its statics — before any key is reached',
-        vanilla: (): void => {
-            const entries = new Map<string, { ready: boolean }>()
-            sink = (args: { id: number }) => entries.get(JSON.stringify(args))
-        },
-        abide: (): void => {
-            sink = reactive((args: { id: number }) => args.id)
-        },
-        // NO ENTRY IS BUILT BY MAKING ONE: an entry is the factory run once for its key, so the
-        // abide arm counts factory runs and the hand-written arm counts map entries.
-        work: () => {
-            const entries = new Map<string, { ready: boolean }>()
-            sink = (args: { id: number }) => entries.get(JSON.stringify(args))
-            let built = 0
-            sink = reactive((args: { id: number }) => {
-                built += 1
-                return args.id
-            })
-            return {
-                vanilla: { built: entries.size },
-                abide: { built },
-            }
-        },
+        vanilla,
+        abide,
+        work: () =>
+            countedOver(
+                'built',
+                { vanilla, abide },
+                { vanilla: () => handBuilt, abide: () => abideBuilt },
+            ),
     }
 }
 
@@ -1553,32 +1446,32 @@ function reachKeyed(): Case {
         keyed({ id: index })
     }
     let at = 0
+    const vanilla = (): void => {
+        at = (at + 1) % KEYED_WIDTH
+        sink = handEntries.get(JSON.stringify({ id: at }))
+    }
+    const abide = (): void => {
+        at = (at + 1) % KEYED_WIDTH
+        sink = keyed({ id: at })
+    }
     return {
         name: `reach a standing keyed entry among ${KEYED_WIDTH}`,
         distinguishes:
             'the reach that finds its entry already standing (1.8) — the key and the lookup, no entry built',
-        vanilla: (): void => {
-            at = (at + 1) % KEYED_WIDTH
-            sink = handEntries.get(JSON.stringify({ id: at }))
-        },
-        abide: (): void => {
-            at = (at + 1) % KEYED_WIDTH
-            sink = keyed({ id: at })
-        },
-        // A FULL LAP OF REACHES over the timed structures, counting entries built during it:
-        // the factory's runs for abide, the map's growth for the hand-written arm.
-        work: () => {
-            const handBefore = handEntries.size
-            const abideBefore = abideBuilt
-            for (let index = 0; index < KEYED_WIDTH; index += 1) {
-                sink = handEntries.get(JSON.stringify({ id: index }))
-                sink = keyed({ id: index })
-            }
-            return {
-                vanilla: { built: handEntries.size - handBefore },
-                abide: { built: abideBuilt - abideBefore },
-            }
-        },
+        vanilla,
+        abide,
+        // A FULL LAP OF THE TIMED REACHES, counting entries built during it: the factory's
+        // runs for abide, the map's growth for the hand-written arm.
+        work: () =>
+            countedOver(
+                'built',
+                { vanilla, abide },
+                {
+                    vanilla: () => handEntries.size,
+                    abide: () => abideBuilt,
+                },
+                KEYED_WIDTH,
+            ),
     }
 }
 
@@ -1616,32 +1509,34 @@ function probeKeyed(): Case {
             }
         return ready && !busy
     }
+    const vanilla = (): void => {
+        sink = handProbe()
+    }
+    const abide = (): void => {
+        sink = keyed.ready() && !keyed.busy(pattern)
+    }
     return {
         name: `probe a keyed value of ${KEYED_WIDTH} entries, whole and by pattern`,
         distinguishes:
             'a keyed STATIC walking its entries — where the statics live is what this reaches first',
-        vanilla: (): void => {
-            sink = handProbe()
-        },
-        abide: (): void => {
-            sink = keyed.ready() && !keyed.busy(pattern)
-        },
+        vanilla,
+        abide,
         // WHAT THE PROBE ANSWERED, and what it BUILT doing so — a static walks the entries that
         // stand and builds none. How many entries abide's static walked has no public counter.
         work: () => {
-            const handBefore = handEntries.size
-            const abideBefore = abideBuilt
-            const handAnswer = handProbe()
-            const abideAnswer = keyed.ready() && !keyed.busy(pattern)
+            const built = countedOver(
+                'built',
+                { vanilla, abide },
+                {
+                    vanilla: () => handEntries.size,
+                    abide: () => abideBuilt,
+                },
+            )
+            const abideSettled = sink === true ? 1 : 0
+            vanilla()
             return {
-                vanilla: {
-                    settled: handAnswer ? 1 : 0,
-                    built: handEntries.size - handBefore,
-                },
-                abide: {
-                    settled: abideAnswer ? 1 : 0,
-                    built: abideBuilt - abideBefore,
-                },
+                vanilla: { settled: sink === true ? 1 : 0, ...built.vanilla },
+                abide: { settled: abideSettled, ...built.abide },
             }
         },
     }

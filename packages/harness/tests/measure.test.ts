@@ -5,13 +5,10 @@
 import { expect, test } from 'bun:test'
 import { gate } from 'harness/gate'
 import {
-    armCase,
-    disarmCase,
     measure,
     PUBLISHED_WORK_KEY,
     type PublishedWork,
     patchSet,
-    profile,
     time,
 } from 'harness/measure'
 
@@ -141,8 +138,8 @@ test('a .data write that changes nothing is counted apart', () => {
 
 // A CLASS WRITE AND A STYLE WRITE ARE DIFFERENT COSTS and are different rows: a class
 // goes through the cascade and its cost depends on whether a rule matches it, where an
-// inline style skips the cascade entirely. Both were REFUSED until the live panel
-// needed to run this patch set in a reader's browser over 69 hand-written arms.
+// inline style skips the cascade entirely. Both were REFUSED until a hand-written arm
+// whose subject is class and style needed counting rather than a throw.
 //
 // Reverted — count a style write in the `styleWrites` row without taking the depth in
 // the proxy's set trap — `style.paddingLeft = x` reports 2 under happy-dom, which
@@ -179,13 +176,26 @@ test('the style proxy is scoped to the case and writes still land', () => {
 // `addEventListener` is NOT "bindings per row". A keyed row calls it in neither arm,
 // so read as the binding count the two arms agree at zero with the mechanism in and
 // out — a gate green against its own bug.
+//
+// WITH NO RECORD PUBLISHED, which is what the case is about: abide publishes one when its
+// core loads, so in a process where an earlier file imported abide the lane reads binding
+// runs off it and `0` is right. Pinned here and put back after, so later files keep theirs.
 test('listeners bound and binding runs are separate rows', () => {
-    const element = document.createElement('button')
-    const work = measure(() => element.addEventListener('click', () => {}))
-    expect(work.listenersBound).toBe(1)
-    // NULL, not 0. This lane counts listeners and does not count binding runs, and
-    // `0` was the row saying "none ran" about a counter it never reads — 44.20.
-    expect(work.bindingRuns).toBeNull()
+    const global = globalThis as Record<string, unknown>
+    const standing = global[PUBLISHED_WORK_KEY] as
+        | Partial<PublishedWork>
+        | undefined
+    publish(undefined)
+    try {
+        const element = document.createElement('button')
+        const work = measure(() => element.addEventListener('click', () => {}))
+        expect(work.listenersBound).toBe(1)
+        // NULL, not 0. This lane counts listeners and does not count binding runs, and
+        // `0` was the row saying "none ran" about a counter it never reads — 44.20.
+        expect(work.bindingRuns).toBeNull()
+    } finally {
+        publish(standing)
+    }
 })
 
 // Wakes, binding runs and descents are read off the record abide publishes, zeroed
@@ -298,30 +308,6 @@ test('time() under bun refuses on the emulated DOM', () => {
     expect(() => time({ case: 'emulated', arms: { one: () => {} } })).toThrow(
         /happy-dom can produce a count|parallel worker/,
     )
-})
-
-// Reverted — no check on `baseline` — the case closes, the arms are timed, and `ratio()`
-// fails on an undefined denominator (serial) or the batch refuses the worker (parallel):
-// no message names the arm. Before the ratio loop lost its guard it was `ratios: {}`.
-test('profile() refuses a baseline that is not one of its runs', () => {
-    armCase()
-    try {
-        expect(() =>
-            profile({
-                op: 'missing baseline',
-                runs: { vanilla: () => {} },
-                baseline: 'handwritten',
-                loadedArm: 'vanilla',
-                scriptBytes: 0,
-            }),
-        ).toThrow(/baseline "handwritten", which is not one of its runs/)
-    } finally {
-        try {
-            disarmCase()
-        } catch {
-            // Already closed: the reverted arm reached `disarmCase()` itself.
-        }
-    }
 })
 
 // THE BOTH-SUBSTRATES GATE'S BUN HALF. Asserted on the LIST rather than on a count,

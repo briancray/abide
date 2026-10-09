@@ -4,14 +4,15 @@
 // JSC tiers LLInt -> Baseline -> DFG -> FTL, so whichever arm ran second inherits
 // warmed code, which is a systematic bias and not noise — so the arms are supplied
 // together and the interleave is the only thing this can do. The first arm is run a
-// SECOND time, labelled as its own control — so even a single arm, a docs frame's
-// hand-written one through `profile()`, is interleaved against that control — and
+// SECOND time, labelled as its own control — so even a single arm is interleaved
+// against that control — and
 // whatever ratio that produces IS the floor for this case on this machine today.
 // `underTheFloor` then means a number with a provenance rather than a word: "two runs,
 // and if the arms swap places it is noise" is a sign test at n=2 and misses half of it
 // by construction.
 
 import { clockResolution, nanoseconds } from './clock.ts'
+import { underBun } from './environment.ts'
 import type { Sample } from './Sample.ts'
 import { substrate } from './substrate.ts'
 import { THRESHOLDS } from './THRESHOLDS.ts'
@@ -59,8 +60,8 @@ const DEFAULT_BUDGET_NANOSECONDS = 2_000_000_000
 // `Bun.gc(true)` is a synchronous full collection and it is on the global rather than
 // behind an import, which is what lets this file ship into the browser injectable —
 // `bun:jsc` is a specifier a browser bundler must resolve and nothing stands in for it.
-// By the MEMBER, not the global: a docs example frame's `Bun.serve` shim has no `gc`,
-// and `BUN?.gc(true)` on it is a TypeError in the middle of a timing run.
+// Read by the MEMBER, so a browser — which has no `Bun` — gets `undefined` here and
+// `collectGarbage` does nothing, rather than a TypeError in the middle of a timing run.
 const BUN_GC = (globalThis as { Bun?: { gc?(sync: boolean): void } }).Bun?.gc
 
 // `bun run test` is `--parallel`, and bun marks a worker process with this.
@@ -312,10 +313,14 @@ export function batch(spec: BatchSpec): Batched {
             emulated: spec.emulated,
             nanoseconds: taken.min,
             p95: taken.p95,
-            // An op measured WHOLE and under a frame cannot be resolved by a wall
-            // clock. A batched micro-op is under a frame by construction and the
-            // frame is not its threshold.
-            underOneFrame: n === 1 && taken.min < THRESHOLDS.frame,
+            // An op measured WHOLE and under a frame, IN A PAGE, is under the
+            // quantum a reader sees by. Under bun there is no frame: a string render
+            // timed whole on a 41 ns clock is a reading, and tagging it made three
+            // benches divide by hand rather than through `ratio()`. A batched
+            // micro-op is under a frame by construction and the frame is not its
+            // threshold.
+            underOneFrame:
+                !underBun() && n === 1 && taken.min < THRESHOLDS.frame,
             work: spec.work?.[name] ?? null,
         }
     }

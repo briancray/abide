@@ -9,7 +9,7 @@
 // SERVER ONLY, for `benchRender`'s reason: no DOM is touched, so a bun clock is a real number
 // rather than a fact about happy-dom (44.18).
 
-import { batch, emulatedDom, type Sample } from 'harness/report'
+import { batch, claimOf, emulatedDom, ratio, type Sample } from 'harness/report'
 import { allocated, closures } from 'harness/server'
 import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
 import {
@@ -85,13 +85,16 @@ async function main(): Promise<void> {
             const alone = measured.samples.declared as Sample
             const called = measured.samples.invoked as Sample
             console.log(
-                `  ${String(size).padStart(4)} cards   vanilla ${µs(vanilla)}   inline ${µs(flat)} (${times(flat, vanilla)})   component ${µs(child)} (${times(child, vanilla)})`,
+                `  ${String(size).padStart(4)} cards   A/A floor ${(measured.floor * 100).toFixed(1)}%   n=${measured.n}`,
             )
             console.log(
-                `              ${perRow(flat, size)} ns a row inline, ${perRow(child, size)} ns a row as a component — ${times(child, flat)} for the invocation`,
+                `              vanilla ${µs(vanilla)}   inline ${µs(flat)} (${times(flat, vanilla, measured.floor)})   component ${µs(child)} (${times(child, vanilla, measured.floor)})`,
             )
             console.log(
-                `              inline component: ${perRow(alone, size)} ns a row declared alone (${times(alone, flat)}), ${perRow(called, size)} ns a row invoked (${times(called, flat)})`,
+                `              ${perRow(flat, size)} ns a row inline, ${perRow(child, size)} ns a row as a component — ${times(child, flat, measured.floor)} for the invocation`,
+            )
+            console.log(
+                `              inline component: ${perRow(alone, size)} ns a row declared alone (${times(alone, flat, measured.floor)}), ${perRow(called, size)} ns a row invoked (${times(called, flat, measured.floor)})`,
             )
             if (size === SIZES[SIZES.length - 1]) {
                 bytes(inline.render().body, nested.render().body, size)
@@ -148,16 +151,9 @@ function allocations(flat: Render, nested: Render, size: number): void {
 
 const µs = (sample: Sample): string =>
     `${(sample.nanoseconds / 1000).toFixed(1)} µs`
-/**
- * One sample's time over another's, as `1.23x`.
- *
- * NOT `harness/report`'s `ratio`, deliberately, and the name says so. That one refuses any sample
- * `batch()` took unbatched and under a frame — which is click -> paint being frame quantised, and
- * is every size above 10 cards here. This lane is a bun clock over a string render with nothing
- * waiting on a frame, so the refusal does not apply and the division is the honest report.
- */
-const times = (sample: Sample, against: Sample): string =>
-    `${(sample.nanoseconds / against.nanoseconds).toFixed(2)}x`
+/** One sample's time over another's through `ratio()`, inside the A/A floor `batch()` measured. */
+const times = (sample: Sample, against: Sample, floor: number): string =>
+    claimOf(ratio(sample, against, { floor }))
 const perRow = (sample: Sample, size: number): string =>
     (sample.nanoseconds / size).toFixed(0)
 

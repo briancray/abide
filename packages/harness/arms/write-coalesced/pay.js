@@ -17,7 +17,7 @@ function pay() {
     })
         .then((answer) => answer.json())
         .then((paid) => {
-            payments.textContent = paid.payments
+            payments.textContent = paid
             status.textContent = ''
             flight = null
         })

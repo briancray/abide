@@ -26,7 +26,7 @@ Bun.serve({
                     {
                         name: 'ValidationError',
                         status: 422,
-                        message: 'Those arguments were refused.',
+                        message: 'Unprocessable Content',
                         data: { limit: ['Between 1 and 3.'] },
                     },
                     { status: 422 },

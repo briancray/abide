@@ -13,13 +13,13 @@
 // touched an emulated DOM, so there is no bun-side arm to add — a reorder in happy-dom
 // would describe happy-dom.
 //
-// It reports rather than asserts, like `reactive.spec.ts`: a threshold here is a
-// threshold on somebody else's machine under somebody else's load. What it is for is
-// the SIGN and the ORDER of the two ratios, and whether the relocation case stays a
-// relocation.
+// It reports the clock rather than asserting it, like `reactive.spec.ts`: a threshold
+// here is a threshold on somebody else's machine under somebody else's load. What it is
+// for is the SIGN and the ORDER of the two ratios, and whether the relocation case stays
+// a relocation. What it DOES assert is each arm's final row order.
 
 import { execFileSync } from 'node:child_process'
-import { test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 
@@ -33,7 +33,11 @@ type Row = {
     buysClaim: string
     n: number
     floor: number
+    buysN: number
+    buysFloor: number
     substrate: string
+    workDisagreement: string[]
+    wrong: string[]
 }
 
 const built = execFileSync(
@@ -84,8 +88,16 @@ test('a keyed reorder against the DOM-call floor and against a rebuild', async (
         lines.push(
             `${row.case}\n  distinguishes: ${row.distinguishes}\n` +
                 `  abide ${(row.abide / 1000).toFixed(2)} µs   floor ${(row.vanilla / 1000).toFixed(2)} µs   rebuild ${(row.careless / 1000).toFixed(2)} µs\n` +
-                `  costs ${row.costClaim} the DOM-call floor   buys ${row.buysClaim} a rebuild   [n=${row.n} floor=${(row.floor * 100).toFixed(2)}% ${row.substrate}]`,
+                `  costs ${row.costClaim} the DOM-call floor [n=${row.n} floor=${(row.floor * 100).toFixed(2)}%]   buys ${row.buysClaim} a rebuild [n=${row.buysN} floor=${(row.buysFloor * 100).toFixed(2)}%]   ${row.substrate}`,
         )
+        if (row.workDisagreement.length > 0)
+            lines.push(`  WORK DISAGREES — ${row.workDisagreement.join('; ')}`)
     }
     console.log(lines.join('\n'))
+    // THE ONE ASSERTION, and it is on the output rather than the clock: every arm's host ends
+    // in the order it last wrote. The full reverse is the case that catches a transposition
+    // that corrupts every reorder a two-row swap reports clean, and only if somebody looks.
+    // Reverted — the floor's reverse walking its rows forward, a no-op that timed as one — this
+    // read `vanilla: 0,1,2,… where 199,198,197,…`, and nothing about the clock moved.
+    for (const row of rows) expect(row.wrong, row.case).toEqual([])
 })

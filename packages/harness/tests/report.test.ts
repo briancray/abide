@@ -89,6 +89,20 @@ console.log('n=' + done.n + ' floor=' + done.floor)`,
     expect(run.output).toMatch(/n=\d+ floor=/)
 })
 
+// THE FRAME IS A PAGE'S. Under bun nothing waits on a paint, so a whole op timed once on a
+// 41 ns clock is a reading. Reverted — tag any n=1 sample under 16.7 ms — this reads `true`,
+// and every bun-side render bench divided by hand to get round `ratio()`.
+test('a whole op timed under bun is not tagged as under one frame', async () => {
+    const run = await inAFreshProcess(
+        `${IMPORTS}
+const spin = () => { const until = Bun.nanoseconds() + 200_000; while (Bun.nanoseconds() < until) {} }
+const done = batch({ case: 'whole', arms: { one: spin, two: spin }, emulated: null, n: 1, reps: 3, warmup: 1 })
+console.log('tagged=' + done.samples.one.underOneFrame + ',' + done.samples.two.underOneFrame)`,
+    )
+    expect(run.ok).toBe(true)
+    expect(run.output).toContain('tagged=false,false')
+})
+
 function sampleOf(over: Partial<Sample>): Sample {
     return {
         arm: 'abide',

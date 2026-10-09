@@ -10,34 +10,53 @@
 import { countExportedNames } from './countExportedNames.ts'
 import { countLines } from './countLines.ts'
 
+const PACKAGE = new URL('../', import.meta.url)
+
 /**
- * The harness package's public entries, in the order the lanes are read in.
+ * The package's public entries, READ OFF ITS `exports` MAP rather than listed — a list beside the
+ * map is a second copy, and the one this replaced named five entries while the map had seven.
  *
- * 44.1 — FIVE ENTRIES, THREE LANES. The package's whole public surface: `measure` counts DOM calls
- * from inside the page, `engine` is what Blink did, `server` is bytes and turns on bun, and the two
- * that are not lanes are `report` (the Sample, the clock, the batcher, `ratio()`) and `gate` (the
- * bun-side test vocabulary).
+ * 44.1's five are the three lanes and the two entries that are not lanes, `report` and `gate`.
+ * The other two are surface all the same and are counted with them: `measure/vanilla` is the
+ * hand-written signal every reactive ratio is against, and `rows` is the contract the docs app's
+ * bench and tests pages read.
  */
-const HARNESS_ENTRIES: readonly string[] = [
-    'harness/measure',
-    'harness/engine',
-    'harness/server',
-    'harness/report',
-    'harness/gate',
-]
+async function exportedEntries(): Promise<{
+    specifiers: string[]
+    files: string[]
+}> {
+    const manifest = (await Bun.file(
+        new URL('package.json', PACKAGE),
+    ).json()) as {
+        name: string
+        exports: Record<string, string>
+    }
+    const specifiers: string[] = []
+    const files: string[] = []
+    for (const [subpath, file] of Object.entries(manifest.exports)) {
+        specifiers.push(`${manifest.name}${subpath.slice(1)}`)
+        files.push(file.replace(/^\.\//, ''))
+    }
+    return { specifiers, files }
+}
 
 async function machinery(): Promise<void> {
-    const source = new URL('../src/', import.meta.url)
+    const { specifiers, files: entryFiles } = await exportedEntries()
+    // EVERYTHING UNDER `src/`, plus each entry file that lives outside it — `rows` is a script,
+    // and a surface counted for its names and not its lines is half a budget.
     const files = [
-        ...new Bun.Glob('**/*.ts').scanSync({
-            cwd: source.pathname,
+        ...new Bun.Glob('src/**/*.ts').scanSync({
+            cwd: PACKAGE.pathname,
             onlyFiles: true,
         }),
     ]
-    const lines = await countLines(source, files)
-    const names = await countExportedNames(HARNESS_ENTRIES)
+    for (const file of entryFiles) if (!files.includes(file)) files.push(file)
+    const lines = await countLines(PACKAGE, files)
+    const names = await countExportedNames(specifiers)
     console.log(`harness: ${lines} code lines across ${files.length} files`)
-    console.log(`harness: ${names.total} exported names`)
+    console.log(
+        `harness: ${names.total} exported names across ${specifiers.length} entries`,
+    )
     for (const [entry, exported] of Object.entries(names.byEntry))
         console.log(`  ${entry}: ${exported.join(', ') || '—'}`)
 }

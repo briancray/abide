@@ -26,10 +26,13 @@ readers.add(() => {
 })
 
 seal.addEventListener('click', () => {
+    // The seal is an HttpOnly cookie, so only the server can take it away.
     if (authenticated) {
-        authenticated = false
-        resolved = null
-        wakeReaders()
+        fetch('/api/signOut', { method: 'POST' }).then(() => {
+            authenticated = false
+            resolved = null
+            wakeReaders()
+        })
         return
     }
     fetch('/api/signIn', {

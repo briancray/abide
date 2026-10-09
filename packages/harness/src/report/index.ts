@@ -1,4 +1,4 @@
-// Entry 4 of 5, and NOT A LANE. All three lanes need every name in here, in both
+// NOT A LANE. All three lanes need every name in here, in both
 // substrates, and they ship into the browser injectable — so a lane is a DEPENDENCY
 // partition and this depends on nothing, which makes it a leaf rather than a fourth
 // question.

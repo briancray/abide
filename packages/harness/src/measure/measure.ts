@@ -1,7 +1,4 @@
-// A CASE IS ARMED AND DISARMED, and `measure()` is those two around a body. They are
-// apart from the barrel so `profile.ts` can reach them without importing the module
-// that re-exports it — a cycle that resolved fine and would have broken on the first
-// reordering.
+// A CASE IS ARMED AND DISARMED, and `measure()` is those two around a body.
 
 import { arm, blankWork, disarm } from './install.ts'
 import {
@@ -55,16 +52,8 @@ function published(): PublishedWork | null {
 
 let openCase: Work | null = null
 
-/**
- * Opens a case: starts counting DOM calls and zeroes abide's published record.
- *
- * A CASE WITH NO BODY, for the one op whose body is the page itself. The arm a docs frame runs is
- * not a function anybody can call — it is a script tag, and it keeps working after load while a
- * fixture's latency runs out — so the load is counted by arming at document-start and reading
- * whenever somebody asks, rather than by detecting that it has settled. `measure()` is these two
- * around a body.
- */
-export function armCase(): void {
+/** Opens a case: starts counting DOM calls and zeroes abide's published record. */
+function armCase(): void {
     const record = blankWork()
     const reactive = published()
     if (reactive) {
@@ -77,7 +66,7 @@ export function armCase(): void {
 }
 
 /** Closes the open case and returns its `Work`, with abide's published counts read in. */
-export function disarmCase(): Work {
+function disarmCase(): Work {
     const record = openCase
     if (!record) throw new Error('disarmCase() was called with no case armed.')
     disarm()
