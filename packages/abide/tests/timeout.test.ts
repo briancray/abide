@@ -129,20 +129,29 @@ test('a reload that times out keeps serving what the value held — 16.64', asyn
 })
 
 // 16.65 — ONE CLOCK PER LOAD. A call joining at 150 ms does not start the 200 ms over: the refusal
-// lands at 200, where a joined call's own clock would have held it to 350. THE REVERT: have a call
-// that finds its load already timed re-arm that load's clock (drop the `timed` test in `callLoad`);
-// the load runs to 350.
+// lands at 200, where a joined call's own clock would have held it to 350. ORDERED BY THE TIMER
+// QUEUE rather than read off the wall clock: a timer armed at the join for 100 ms is due at 250 or
+// later — after the load's clock at 200, before a re-armed one at 350 — and timers fire in the
+// order they fall due however late a loaded process runs them. THE REVERT: have a call that finds
+// its load already timed re-arm that load's clock — `timeLoad` on every call, clearing the timer
+// the call before it armed; the load is still busy at the checkpoint. Dropping the `timed` test in
+// `callLoad` alone is not that revert: each call then arms a clock of its own, and the first still
+// ends the load at 200.
 test('a call joining a load does not extend its timeout — 16.65', async () => {
     const never = GET(() => new Promise<string>(() => {}), {
         timeout: 200,
     }) as unknown as () => Loading
-    const started = performance.now()
     const value = never()
-    await Bun.sleep(150)
+    await new Promise((done) => setTimeout(done, 150))
     expect(never()).toBe(value)
+    const busyAtCheckpoint = await new Promise((done) =>
+        setTimeout(() => done(value.busy()), 100),
+    )
+    expect(`busy at the checkpoint: ${busyAtCheckpoint}`).toBe(
+        'busy at the checkpoint: false',
+    )
     await settled(value)
     expect(statusOf(value)).toBe(504)
-    expect(performance.now() - started).toBeLessThan(300)
 })
 
 // 16.62 — the environment's `timeout`, which a server fills through `RPC_SERVER`, for a handler that

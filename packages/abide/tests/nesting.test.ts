@@ -18,54 +18,23 @@ import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
 import { parseAbide } from '#compiler'
 import { emitSource } from '#compiler/emitSource.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
 import { pageRegion } from '#ui/regions.ts'
 import type { Scope } from '#ui/Scope.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-import { clientOf, closeTyped } from './typed.ts'
+import {
+    clientOf,
+    closeTyped,
+    mountPage,
+    renderPage,
+    TYPED_ROOT,
+    typedSession,
+} from './typed.ts'
 
 afterAll(closeTyped)
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
-
-// THE SCOPE THE LAST `mountPage` OPENED. A gate about what a region still HOLDS cannot be read
-// from the work counters — an accumulated scope that was already stopped runs nothing — so the
-// page's own scope is the only place that fact is visible.
-let mounted: Scope | undefined
-
-async function mountPage(source: string): Promise<string> {
-    const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const { server, client } = emitSource(
-        'ui/pages/page.abide',
-        file,
-        names,
-        false,
-    )
-    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mounted = mount(pageRegion(document.body)) as Scope
-    return html
-}
+const session = await typedSession()
+afterAll(removeTemporaryModules)
 
 const click = (id: string): void => {
     ;(document.querySelector(id) as HTMLElement).click()
@@ -219,7 +188,7 @@ let msg = reactive('')
 <p id="out">{msg}<b>x</b></p>`
 
     const said = await warningsWhile(async () => {
-        const html = await mountPage(source)
+        const { html } = await mountPage(source)
         // The SERVER wrote nothing for the run, which is what makes this case exist at all.
         expect(html).toContain('<p id="out"><b>x</b></p>')
     })
@@ -340,36 +309,15 @@ let name = reactive('ada')
 <footer id="foot">{name}</footer>
 <button id="rename" onclick={() => name = name + '!'}>rename</button>`
 
-    const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const { server, client } = emitSource(
-        'ui/pages/page.abide',
-        file,
-        names,
-        false,
-    )
-    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
+    const { mount } = await renderPage(source)
 
     // The corruption: the arm's own node, replaced by one of a shape the plan does not describe.
     // Everything outside the region is untouched.
     const wrong = document.createElement('b')
     ;(document.querySelector('#body') as HTMLElement).replaceWith(wrong)
 
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
     const said = await warningsWhile(async () => {
-        mount(pageRegion(document.body))
+        mount()
     })
 
     expect(said).toHaveLength(1)
@@ -413,7 +361,7 @@ const boom = (): string => {
 <p id="out">{boom()}{count}</p>`
 
     const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
+    const names = await session.reads(`${TYPED_ROOT}src/page.abide`, file)
     const { server, client } = emitSource(
         'ui/pages/page.abide',
         file,
@@ -552,27 +500,7 @@ let prefix = reactive('p')
 
 <ul id="list">{#for row of rows by row.id}<li>id {prefix}-{row.id}</li>{/for}</ul>`
 
-    const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const { server, client } = emitSource(
-        'ui/pages/page.abide',
-        file,
-        names,
-        false,
-    )
-    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
+    const { mount } = await renderPage(source)
 
     // One row's node, replaced by a shape the row's plan does not describe.
     const wrong = document.createElement('b')
@@ -580,9 +508,8 @@ let prefix = reactive('p')
         wrong,
     )
 
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
     const said = await warningsWhile(async () => {
-        mount(pageRegion(document.body))
+        mount()
     })
 
     expect(said).toHaveLength(1)
@@ -938,7 +865,7 @@ seen.take = () => plus
 // nothing-live check — the browser's instance is never made, so the one found is the server's,
 // which the stop disposes 0 times where 1 is due.
 test('a component with nothing live runs its <script>, and stops what it opened — 41.6, 12.4', async () => {
-    await mountPage(`<script>
+    const { scope } = await mountPage(`<script>
 import { reactive, watch } from 'abide'
 
 let mark = reactive('')
@@ -953,7 +880,7 @@ ${COUNTED.replace('NAME', "'static'")}
     const page = lastInstance('static')
     expect(page.runs).toBe(1)
 
-    mounted?.stop()
+    scope.stop()
     expect(page.disposed).toBe(1)
     ;(globalThis as { bumpStatic?: (to: string) => void }).bumpStatic?.('!')
     flushSync()
@@ -971,7 +898,7 @@ ${COUNTED.replace('NAME', "'static'")}
 // `emitClient` — `children` is 12 long after eleven flips instead of 1. The arm binds `{on}`
 // because an arm that binds nothing opens no scope at all (the test below).
 test('an arm that swaps leaves one scope on the region above it — 12.13', async () => {
-    await mountPage(`<script>
+    const { scope: page } = await mountPage(`<script>
 import { reactive } from 'abide'
 
 let on = reactive(true)
@@ -980,7 +907,6 @@ let on = reactive(true)
 <div>{#if on}<b>{on}</b>{:else}<i>no</i>{/if}</div>
 <button id="flip" onclick={() => { on = !on }}>flip</button>`)
     flushSync()
-    const page = mounted as Scope
     expect(page.children).toHaveLength(1)
     for (let at = 0; at < 11; at += 1) click('#flip')
     expect(document.querySelector('i')?.textContent).toBe('no')
@@ -1077,7 +1003,7 @@ function held(owner: unknown, into = { scopes: 0, stops: 0 }) {
 // `selected` and the inner list's stay — one `watch` each a row. THE REVERT: watch every `{#if}`
 // whatever its subject — 31 stops against 21.
 test('an {#if} whose arms bind nothing opens no scope and no mount — 32.12', async () => {
-    await mountPage(`<script>
+    const { scope } = await mountPage(`<script>
 import { reactive } from 'abide'
 
 const ROWS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((id) => ({ id, stub: id % 2 === 0, parts: ['p'] }))
@@ -1086,7 +1012,7 @@ let selected = reactive(1)
 
 <ul>{#for row of ROWS by row.id}<li>{#if row.stub}<i>stub</i>{/if}{#for part of row.parts}<b>{part}</b>{/for}{#if row.id === selected}<em>on</em>{/if}</li>{/for}</ul>
 <button id="pick" onclick={() => { selected = 2 }}>pick</button>`)
-    expect(held(mounted)).toEqual({ scopes: 21, stops: 21 })
+    expect(held(scope)).toEqual({ scopes: 21, stops: 21 })
     expect(document.querySelectorAll('i')).toHaveLength(5)
     expect(document.querySelectorAll('b')).toHaveLength(10)
     click('#pick')
@@ -1615,33 +1541,12 @@ let on = reactive(true)
 ${COUNTED.replace('NAME', "'rebuilt'")}
 </script><p id="armp">arm {mark}</p>{/if}
 <button id="bump" onclick={() => { mark = '!' }}>bump</button>`
-    const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const { server, client } = emitSource(
-        'ui/pages/page.abide',
-        file,
-        names,
-        false,
-    )
-    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
+    const { mount } = await renderPage(source)
     ;(document.querySelector('#armp') as HTMLElement).replaceWith(
         document.createElement('b'),
     )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
     const said = await warningsWhile(async () => {
-        mounted = mount(pageRegion(document.body)) as Scope
+        mount()
     })
     expect(said.filter((line) => line.includes('41.10'))).toHaveLength(1)
     const arm = lastInstance('rebuilt')

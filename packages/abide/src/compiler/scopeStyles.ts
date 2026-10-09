@@ -13,7 +13,7 @@ import {
     type TemplateNode,
     visitBodies,
 } from './TemplateNode.ts'
-import { skipQuoted } from './tokenise.ts'
+import { skipQuoted } from './tokenize.ts'
 
 // What never carries a token: a document-level tag, and the tags a head contributes. The head's
 // own contributions never reach here — `parseAbide` splits them off the template.
@@ -51,10 +51,10 @@ export function scopeToken(relative: string): string {
 export function markScoped(
     nodes: TemplateNode[],
     token: string,
-    tokens: string[] = [token],
-    bodies: { css: string; token: string }[] = [],
-    components: InlineComponent[] = [],
+    tokens: string[],
+    components: InlineComponent[],
 ): { css: string; token: string }[] {
+    const bodies: { css: string; token: string }[] = []
     const file = { children: nodes, setup: null, style: null, components }
     visitBodies(file, tokens, (body, around) => {
         const own = bodyTokens(body.style, token, around, bodies)

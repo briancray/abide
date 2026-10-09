@@ -4,24 +4,17 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { emitClient, emitComponent, parseAbide } from '#compiler'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
+import { parseAbide } from '#compiler'
 import { flushSync, NotLanded } from '#shared'
 import { Mismatch } from '#ui/Mismatch.ts'
 import { markupNodes } from '#ui/parseMarkup.ts'
-import { pageRegion } from '#ui/regions.ts'
 import { BOUNDARY, Scope } from '#ui/Scope.ts'
 import { TryRegion } from '#ui/TryRegion.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, renderPage } from './typed.ts'
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
+afterAll(closeTyped)
+afterAll(removeTemporaryModules)
 
 // The docs' own example (`examples/try-region`), with the rate's starting value a parameter.
 const pageWith = (rate: string) => `<script>
@@ -53,28 +46,9 @@ async function served(
     source: string,
     beforeMount?: () => void,
 ): Promise<string> {
-    const file = parseAbide(source)
-    const reads = await session.reads(`${ROOT}src/try.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, reads),
-        'Page.client.ts': emitClient(file, reads),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + 6,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
+    const { html, mount } = await renderPage(source)
     beforeMount?.()
-    mount(pageRegion(document.body))
-    flushSync()
+    mount()
     return html
 }
 
@@ -284,43 +258,14 @@ test('a body that only failed on the server is filled on the client, quietly —
     expect(warned.filter((line) => line.includes('abide:hydrate'))).toEqual([])
 })
 
-// A page and the component files it imports, compiled as the build compiles them and served; the
-// mount is handed back unrun, so a test can count what hydrating does.
+// `renderPage`'s unrun mount, with the parser's one template made before anything is counted.
 async function servedWith(
     page: string,
     components: Record<string, string>,
 ): Promise<() => void> {
-    const modules: Record<string, string> = {}
-    for (const [name, source] of Object.entries({
-        ...components,
-        Page: page,
-    })) {
-        const file = parseAbide(source)
-        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
-        modules[`${name}.ts`] = emitComponent(file, reads)
-        modules[`${name}.client.ts`] =
-            emitClient(file, reads, name === 'Page' ? 'none' : 'invoked') ||
-            'export default () => {}'
-    }
-    const dir = temporaryModule(modules)
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    const html = new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + 6,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    // The parser's one template, made before anything is counted.
+    const { mount } = await renderPage(page, components)
     markupNodes(document, '')
-    return () => {
-        mount(pageRegion(document.body))
-        flushSync()
-    }
+    return mount
 }
 
 // A component that throws as it is set up, unless told to succeed.

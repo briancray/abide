@@ -7,10 +7,17 @@
 import { isReactive } from '#shared/reactive/index.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { prefers } from './prefers.ts'
-import { currentRequestScope, type Framing, holdScope } from './requestScope.ts'
+import {
+    currentRequestScope,
+    type Framing,
+    heldByApp,
+    holdScope,
+} from './requestScope.ts'
 import { resumeProductions } from './resumeProductions.ts'
 
 const ENCODER = new TextEncoder()
+// AN EVENT STREAM OPENS ON A COMMENT — `bodyOf` says why.
+const SSE_OPENER = ':\n\n'
 
 function isValues(
     value: unknown,
@@ -49,9 +56,9 @@ export async function answerValue(
     if (isReactive(value))
         return answerProductions(value, request, headers, status)
     // 16.32 — nothing to say is 204, where the handler wrote no status of its own, and 16.56 — a
-    // type for no content is noise.
+    // type for no content is noise, at any status: a `redirect` has no body for it to describe.
     if (value === undefined) {
-        if (status === 200) headers.delete('content-type')
+        headers.delete('content-type')
         return new Response(null, {
             status: status === 200 ? 204 : status,
             headers,
@@ -75,7 +82,7 @@ export async function answerValue(
             headers,
         })
     }
-    if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
+    if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
         headers.set('content-type', 'application/octet-stream')
         return new Response(value as BodyInit, { status, headers })
     }
@@ -136,42 +143,52 @@ function answerProductions(
                 ? `id: ${at}:${epoch}\ndata: ${JSON.stringify(item)}\n\n`
                 : `${JSON.stringify({ op: 'prod', seq: at, epoch, value: item })}\n`,
         )
-    // 12.5 — the request's scope stays open while the feed is read in it.
-    const release = holdScope()
-    const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-            if (sse) controller.enqueue(ENCODER.encode(':\n\n'))
-            if (!moved) {
-                for (const [at, item] of ring)
-                    controller.enqueue(production(at, item))
-                return
-            }
-            const at = ring.at(-1)?.[0] ?? cursor.at
-            controller.enqueue(
-                ENCODER.encode(
-                    sse
-                        ? `event: reset\nid: ${at}:${epoch}\ndata: ${JSON.stringify(ring)}\n\n`
-                        : `${JSON.stringify({ op: 'reset', epoch, ring })}\n`,
-                ),
-            )
-        },
-        async pull(controller) {
+    const head: Uint8Array[] = []
+    if (sse) head.push(ENCODER.encode(SSE_OPENER))
+    if (!moved) for (const [at, item] of ring) head.push(production(at, item))
+    else {
+        const at = ring.at(-1)?.[0] ?? cursor.at
+        head.push(
+            ENCODER.encode(
+                sse
+                    ? `event: reset\nid: ${at}:${epoch}\ndata: ${JSON.stringify(ring)}\n\n`
+                    : `${JSON.stringify({ op: 'reset', epoch, ring })}\n`,
+            ),
+        )
+    }
+    // The head, and then each production live, already framed — so `bodyOf` writes them as bytes.
+    let headAt = 0
+    const frames: AsyncIterator<Uint8Array> = {
+        async next() {
+            if (headAt < head.length)
+                return { done: false, value: head[headAt++] as Uint8Array }
             const next = await cursor.next()
-            if (next.done === true) {
-                controller.close()
-                release()
-            } else controller.enqueue(production(cursor.at, next.value))
+            return next.done === true
+                ? { done: true, value: undefined }
+                : { done: false, value: production(cursor.at, next.value) }
         },
-        cancel() {
-            void cursor.return?.(undefined)
-            release()
+        return(value) {
+            void cursor.return?.(value)
+            return Promise.resolve({ done: true, value: undefined })
         },
-    })
-    headers.set('content-type', sse ? 'text/event-stream' : 'application/jsonl')
-    // 16.46 — a feed is never stored, whatever the production's own life said (21.8).
+    }
+    if (sse) sseHeaders(headers)
+    else {
+        headers.set('content-type', 'application/jsonl')
+        // 16.46 — a feed is never stored, whatever the production's own life said (21.8).
+        headers.set('cache-control', 'no-cache')
+    }
+    return new Response(bodyOf(frames, 'bytes'), { status, headers })
+}
+
+/**
+ * The head of an event stream. 16.46 — never stored, whatever the value's own life said (21.8), and
+ * never buffered by a proxy in front.
+ */
+function sseHeaders(headers: Headers): void {
+    headers.set('content-type', 'text/event-stream')
     headers.set('cache-control', 'no-cache')
-    if (sse) headers.set('x-accel-buffering', 'no')
-    return new Response(body, { status, headers })
+    headers.set('x-accel-buffering', 'no')
 }
 
 /**
@@ -231,12 +248,7 @@ export function framed(
         headers.set('content-type', 'application/octet-stream')
     else if (framing === 'jsonl')
         headers.set('content-type', 'application/jsonl')
-    else {
-        // 16.46.
-        headers.set('content-type', 'text/event-stream')
-        headers.set('cache-control', 'no-cache')
-        headers.set('x-accel-buffering', 'no')
-    }
+    else sseHeaders(headers)
     return new Response(bodyOf(chunks, framing, first), {
         status,
         headers,
@@ -255,6 +267,9 @@ export function framed(
  *
  * `first` is a result already pulled — the one a framing was decided from — and is sent ahead of
  * the rest.
+ *
+ * 42.11 — A BODY STILL BEING WRITTEN WHEN THE APP STOPS IS ENDED: its generator returned and its
+ * reader handed the end of the stream, rather than left streaming into a process that has stopped.
  */
 export function bodyOf(
     chunks: AsyncIterator<unknown>,
@@ -263,10 +278,25 @@ export function bodyOf(
 ): ReadableStream<Uint8Array> {
     let pulled = first
     // 12.5 — the request's scope stays open while the body is read in it.
-    const release = holdScope()
+    const releaseHold = holdScope()
+    let ended = false
+    const release = (): void => {
+        ended = true
+        releaseHold()
+        unhold()
+    }
+    let stopped = (): void => {}
+    const unhold = heldByApp(() => stopped())
     return new ReadableStream<Uint8Array>({
         start(controller) {
-            if (framing === 'sse') controller.enqueue(ENCODER.encode(':\n\n'))
+            if (framing === 'sse')
+                controller.enqueue(ENCODER.encode(SSE_OPENER))
+            stopped = () => {
+                if (ended) return
+                release()
+                void chunks.return?.(undefined)
+                controller.close()
+            }
         },
         async pull(controller) {
             let next: IteratorResult<unknown>
@@ -277,10 +307,13 @@ export function bodyOf(
                 try {
                     next = await chunks.next()
                 } catch (thrown) {
+                    if (ended) return
                     controller.error(thrown)
                     release()
                     return
                 }
+            // Ended by the app's stop while this pull waited on the chunk.
+            if (ended) return
             if (next.done === true) {
                 controller.close()
                 release()

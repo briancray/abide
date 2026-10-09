@@ -106,6 +106,11 @@ export type PageRender = {
 export type AnsweringApp = {
     answer: (request: Request) => Promise<Response>
     mcp: McpSurface
+    /**
+     * What this app's answers still hold past their request, each as what ends it: a streamed body
+     * still being written, a seed entry and its timer. 42.11 — `App.stop` ends every one.
+     */
+    held: Set<() => void>
 }
 
 /**
@@ -169,10 +174,8 @@ export function scopeFor(
 export function inScope<Result>(
     given: Request | undefined,
     body: () => Result,
-    app: RequestScope['app'] = undefined,
-    received: Request | undefined = given,
 ): Result {
-    return STORAGE.run(scopeFor(given, received, app), body)
+    return STORAGE.run(scopeFor(given, given, undefined), body)
 }
 
 /** Runs `body` in `scope`, which `scopeFor` opened, and returns what it returned. */
@@ -220,6 +223,21 @@ export function holdScope(): () => void {
         if (released) return
         released = true
         releaseScope(scope)
+    }
+}
+
+/**
+ * Files `end` with the app answering the current scope, for `App.stop` to run; answers the unfiling.
+ *
+ * 42.11 — whatever outlives its request is the app's to end when it stops. Outside an app's scope
+ * there is no stop to end it, and the unfiling does nothing.
+ */
+export function heldByApp(end: () => void): () => void {
+    const held = STORAGE.getStore()?.app?.held
+    if (held === undefined) return () => {}
+    held.add(end)
+    return () => {
+        held.delete(end)
     }
 }
 

@@ -44,6 +44,21 @@ export const feed = GET(async function* () {
     yield { n: 2 }
 })
 
+// Held after its first line until \`release\` is called, so a reader that has the first line before
+// it releases the second proves the line went out before the body was done.
+let open = (): void => {}
+export const held = GET(async function* () {
+    yield { n: 1 }
+    await new Promise<void>((done) => {
+        open = done
+    })
+    yield { n: 2 }
+})
+
+export const release = POST(() => {
+    open()
+})
+
 export const late = GET(async function* () {
     await Bun.sleep(150)
     yield { n: 1 }
@@ -116,6 +131,19 @@ test('a handler returning undefined answers 204 with no content-type — 16.32, 
     expect(answer.headers.get('content-type')).toBeNull()
 })
 
+// 16.56 — A BODILESS ANSWER CARRIES NO TYPE AT ANY STATUS, a redirect's as much as a 204's: the
+// handler headers default to `application/json`, and only the 204 used to drop it. THE REVERT: guard
+// `answerValue`'s `delete('content-type')` with `status === 200`; the 303 reads `application/json`.
+test('a redirect answers with no content-type — 16.56', async () => {
+    const moved = await Bun.fetch(`${base}${RPC}/moved`, {
+        method: 'POST',
+        redirect: 'manual',
+    })
+    expect(moved.status).toBe(303)
+    expect(moved.headers.get('content-type')).toBeNull()
+    expect(await moved.text()).toBe('')
+})
+
 // 16.58 — NO CEILING WHERE NOTHING NAMES ONE, bun's own included. THE REVERT: fall back to
 // `1024 * 1024` in `answerRpc`'s ceiling; the body is refused 413.
 test('a mutation with no ceiling named takes a body of any size — 16.58', async () => {
@@ -137,17 +165,31 @@ test('a HEAD is answered by the GET handler at its address — 16.54', async () 
 })
 
 // 16.33, 16.45 — A STREAMING HANDLER IS ANSWERED AS IT PRODUCES, jsonl by default, one line a chunk:
-// the first line is read while the handler is still waiting to produce the second. THE REVERT:
-// settle `reached` itself in `outcomeOf` in place of `streamingOrSettled`; the stream settles to one
-// snapshot, and the first read waits the 300 ms out and arrives as one JSON array.
+// the first line is read while the handler is still waiting to produce the second — which waits on
+// a release this test sends only once it has the first, so no clock is read. THE REVERT: settle
+// `reached` itself in `outcomeOf` in place of `streamingOrSettled`; the stream settles to one
+// snapshot that waits on a release never sent, and the first read reports 'timed out'.
 test('a streaming handler is framed as jsonl, a chunk per line, as it produces — 16.33, 16.45', async () => {
-    const answer = await Bun.fetch(`${base}${RPC}/feed`)
-    expect(answer.headers.get('content-type')).toBe('application/jsonl')
-    const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
-    const started = performance.now()
-    const first = new TextDecoder().decode((await reader.read()).value)
-    expect(performance.now() - started).toBeLessThan(250)
+    const answering = Bun.fetch(`${base}${RPC}/held`)
+    const reading = answering.then((answer) =>
+        (answer.body as ReadableStream<Uint8Array>).getReader(),
+    )
+    let gaveUp: ReturnType<typeof setTimeout> | undefined
+    const first = await Promise.race([
+        reading
+            .then((reader) => reader.read())
+            .then(({ value }) => new TextDecoder().decode(value)),
+        new Promise<string>((done) => {
+            gaveUp = setTimeout(() => done('timed out'), 3000)
+        }),
+    ])
+    clearTimeout(gaveUp)
+    await Bun.fetch(`${base}${RPC}/release`, { method: 'POST' })
     expect(first).toBe('{"n":1}\n')
+    expect((await answering).headers.get('content-type')).toBe(
+        'application/jsonl',
+    )
+    const reader = await reading
     let rest = ''
     for (;;) {
         const next = await reader.read()

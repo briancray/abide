@@ -10,7 +10,8 @@ import { jsonSchema, reactive, validateJson } from '#shared'
 // not an object, and `unknown` is not — so `validateJson(…)` with none types its own result
 // as a list, and every keyed expectation below it reads as a mistake. `Paths` of this one
 // widens to `string` (19.6), which is right here: what is under test is the report's shape,
-// not the shape it is a report about.
+// not the shape it is a report about. A SCALAR is checked as `<unknown>` for the same reason
+// turned round: its report is the bare list, and `Anywhere` would type it as a record.
 type Anywhere = Record<string, unknown>
 
 test('a value that satisfies its schema reports nothing', () => {
@@ -102,17 +103,15 @@ test('annotations are read past rather than refused', () => {
         minimum: 0,
     }
     expect(validateJson<Anywhere>(schema, 3)).toBeNull()
-    expect(validateJson<Anywhere>(schema, -1)).toEqual({
-        '': ['must be at least 0'],
-    })
+    expect(validateJson<unknown>(schema, -1)).toEqual(['must be at least 0'])
 })
 
 // AN INTEGER IS A WHOLE NUMBER, which is JSON Schema's own reading — and the case that
 // separates them is the one worth asserting, not the one where they agree.
 test('integer and number are told apart', () => {
-    expect(validateJson<Anywhere>({ type: 'integer' }, 3.5)).toEqual({
-        '': ['must be integer, was number'],
-    })
+    expect(validateJson<unknown>({ type: 'integer' }, 3.5)).toEqual([
+        'must be integer, was number',
+    ])
     expect(validateJson<Anywhere>({ type: 'number' }, 3.5)).toBeNull()
     expect(validateJson<Anywhere>({ type: 'number' }, 3)).toBeNull()
 })
@@ -126,9 +125,9 @@ test('integer and number are told apart', () => {
 test('a combinator arm that failed reports nothing', () => {
     const schema = { anyOf: [{ type: 'string' }, { type: 'integer' }] }
     expect(validateJson<Anywhere>(schema, 7)).toBeNull()
-    expect(validateJson<Anywhere>(schema, 1.5)).toEqual({
-        '': ['does not match any of the allowed shapes'],
-    })
+    expect(validateJson<unknown>(schema, 1.5)).toEqual([
+        'does not match any of the allowed shapes',
+    ])
 })
 
 // A SCRATCH ATTEMPT NESTS, and the inner one must not clear the outer one's failure. The first
@@ -158,6 +157,7 @@ test('an array reports the index that was wrong', () => {
     expect(validateJson<Anywhere>(schema, [1, 'two', 3])).toEqual({
         '1': ['must be integer, was string'],
     })
+    // An array is an object, so its own issues stay on `''` rather than collapsing to a list.
     expect(validateJson<Anywhere>(schema, [1])).toEqual({
         '': ['must have at least 2 items'],
     })
@@ -267,26 +267,24 @@ test('a member named after an Object.prototype key is checked like any other', (
 // THE REVERT: delete the non-finite refusal at the head of `check`. This test then reports `null`
 // for every non-finite value below — accepted, with no issue, by schemas that each declared a bound.
 test('NaN and the infinities are not JSON values, whatever the node declares', () => {
-    const refused = (was: string) => ({
-        '': [`must be a JSON value, was ${was}`],
-    })
+    const refused = (was: string) => [`must be a JSON value, was ${was}`]
     const upper = { maximum: 100 }
     const lower = { minimum: 0 }
-    expect(validateJson<Anywhere>(upper, Number.NEGATIVE_INFINITY)).toEqual(
+    expect(validateJson<unknown>(upper, Number.NEGATIVE_INFINITY)).toEqual(
         refused('-Infinity'),
     )
-    expect(validateJson<Anywhere>(lower, Number.POSITIVE_INFINITY)).toEqual(
+    expect(validateJson<unknown>(lower, Number.POSITIVE_INFINITY)).toEqual(
         refused('Infinity'),
     )
     expect(
-        validateJson<Anywhere>(
+        validateJson<unknown>(
             { exclusiveMaximum: 100 },
             Number.NEGATIVE_INFINITY,
         ),
     ).toEqual(refused('-Infinity'))
-    expect(validateJson<Anywhere>(upper, Number.NaN)).toEqual(refused('NaN'))
+    expect(validateJson<unknown>(upper, Number.NaN)).toEqual(refused('NaN'))
     expect(
-        validateJson<Anywhere>(
+        validateJson<unknown>(
             { type: 'number', minimum: 0, maximum: 100 },
             Number.POSITIVE_INFINITY,
         ),
@@ -300,9 +298,7 @@ test('NaN and the infinities are not JSON values, whatever the node declares', (
     ).toEqual({ age: ['must be a JSON value, was NaN'] })
     // What the bounds are FOR still holds.
     expect(validateJson<Anywhere>(upper, 50)).toBeNull()
-    expect(validateJson<Anywhere>(upper, 101)).toEqual({
-        '': ['must be at most 100'],
-    })
+    expect(validateJson<unknown>(upper, 101)).toEqual(['must be at most 100'])
 })
 
 // `nullable` WIDENS THE TYPE AND NOTHING ELSE. Read as "null is fine here" it skipped every other
@@ -313,14 +309,14 @@ test('NaN and the infinities are not JSON values, whatever the node declares', (
 // one value they are given, both silently unapplied.
 test('nullable widens the type check rather than skipping the node', () => {
     expect(
-        validateJson<Anywhere>(
+        validateJson<unknown>(
             { type: 'string', nullable: true, enum: ['a'] },
             null,
         ),
-    ).toEqual({ '': ['must be one of "a"'] })
+    ).toEqual(['must be one of "a"'])
     expect(
-        validateJson<Anywhere>({ nullable: true, not: { type: 'null' } }, null),
-    ).toEqual({ '': ['matches a shape that is not allowed'] })
+        validateJson<unknown>({ nullable: true, not: { type: 'null' } }, null),
+    ).toEqual(['matches a shape that is not allowed'])
     // What it is FOR still works: null passes a type it widens, and so does a real value.
     expect(
         validateJson<Anywhere>({ type: 'string', nullable: true }, null),
@@ -347,9 +343,9 @@ test('a constraint whose value cannot be read is refused rather than skipped', (
     expect(said).toContain('boolean for "exclusiveMinimum"')
     expect(said).toContain('cannot be applied')
     // The spelling abide publishes still works, both ways.
-    expect(validateJson<Anywhere>({ exclusiveMinimum: 5 }, 5)).toEqual({
-        '': ['must be greater than 5'],
-    })
+    expect(validateJson<unknown>({ exclusiveMinimum: 5 }, 5)).toEqual([
+        'must be greater than 5',
+    ])
     expect(validateJson<Anywhere>({ exclusiveMinimum: 5 }, 6)).toBeNull()
     // And a pattern that is not a regular expression names the schema rather than arriving as a
     // bare SyntaxError from inside the validator.
@@ -392,14 +388,16 @@ test('const compares by value, not by serialisation', () => {
 // `peek` RATHER THAN A READ: 4.3 puts the schema in front of every way in, construction included,
 // so the initial value is refused too and a read would throw what `set` handed back (2.2).
 // What a gate hands back from `set`; `Failures` is `never` where no refusal is declared.
-type Refusal = { name: string; data: Record<string, string[]> } | undefined
+type Refusal =
+    | { name: string; data: string[] | Record<string, string[]> }
+    | undefined
 
 test('a bare JSON Schema document refuses, naming the wrapper', () => {
     const gated = reactive(1, { schema: { type: 'number' } as never })
-    const refusal = gated.set(2) as Refusal
+    const refusal = gated.set(2) as { name: string; data: string[] } | undefined
     expect(`stored: ${gated.peek()}`).toBe('stored: undefined')
     expect(refusal?.name).toBe('ValidationError')
-    expect(refusal?.data['']?.[0]).toContain('jsonSchema(document)')
+    expect(refusal?.data[0]).toContain('jsonSchema(document)')
 })
 
 // WRAPPED, THE DOCUMENT REPORTS WHERE, the one thing the native form was chosen for: an issue's
@@ -496,7 +494,123 @@ test('const holding undefined constrains nothing', () => {
         ),
     ).toBeNull()
     // `null` is a JSON value, and a `const` holding it still constrains.
-    expect(validateJson<Anywhere>({ const: null }, 'abc')).toEqual({
-        '': ['must be null'],
+    expect(validateJson<unknown>({ const: null }, 'abc')).toEqual([
+        'must be null',
+    ])
+})
+
+// `Issues<T>` OVER A SCALAR IS THE BARE LIST, and every form of `Schema` has to hand it back that
+// way: the schema-browser card reads `email.error().data[0]` for a zod `string().email()`, and the
+// docs table promises "a primitive: no key; `data` is the `string[]`". An object's issue about the
+// whole value still stands on `''`, because there the record is what `Issues<T>` is.
+//
+// THE REVERT: have `issuesOf` return `found` whatever the value. Every scalar arm below then reads
+// `{ '': [...] }` — `data[0]` undefined, the card's status line blank.
+test('a scalar refusal is the bare list in every schema form, an object one stays keyed', () => {
+    const standard: StandardSchemaV1<string> = {
+        '~standard': {
+            version: 1,
+            vendor: 'test',
+            validate: (value) =>
+                typeof value === 'string' && value.includes('@')
+                    ? { value }
+                    : {
+                          issues: [
+                              { message: 'That is not an email address.' },
+                          ],
+                      },
+        },
+    }
+    const thrown = (value: unknown): number => {
+        if (typeof value !== 'number' || value < 0)
+            throw new Error('must not be negative')
+        return value
+    }
+    const email = reactive('ada@example.com', { schema: standard })
+    const count = reactive(1, { schema: thrown })
+    const age = reactive(1, { schema: jsonSchema<number>({ minimum: 0 }) })
+    const said = (refusal: unknown) => (refusal as { data: unknown }).data
+    expect(said(email.set('ada'))).toEqual(['That is not an email address.'])
+    expect(said(count.set(-1))).toEqual(['must not be negative'])
+    expect(said(age.set(-1))).toEqual(['must be at least 0'])
+    expect(validateJson<number>({ minimum: 0 }, -1)?.[0]).toBe(
+        'must be at least 0',
+    )
+    const pair = reactive(
+        { low: 1, high: 2 },
+        {
+            schema: (value: unknown) => {
+                const held = value as { low: number; high: number }
+                if (held.low > held.high) throw new Error('low is above high')
+                return held
+            },
+        },
+    )
+    expect(said(pair.set({ low: 3, high: 2 }))).toEqual({
+        '': ['low is above high'],
     })
+})
+
+// 1.3 IN THE TYPE: a declared `schema` carries its `ValidationError` in `Failures` without the app
+// declaring it, its `data` the `Issues` of what the schema gates. This is a TYPE gate as much as a
+// run-time one — `bun run typecheck` is what reads the `@ts-expect-error` lines.
+//
+// THE REVERT: make `Gated` answer `never` whatever the gate. `tsc` then refuses both reads below
+// (`Property 'data' does not exist on type 'never'`, the cards' own complaint under `abide check`).
+// Made to answer the refusal whatever the gate instead, the ungated `@ts-expect-error` goes unused.
+test('a schema types its ValidationError into error(), and only a schema does', () => {
+    const standard: StandardSchemaV1<string> = {
+        '~standard': {
+            version: 1,
+            vendor: 'test',
+            validate: (value) =>
+                typeof value === 'string' && value.includes('@')
+                    ? { value }
+                    : { issues: [{ message: 'not an email' }] },
+        },
+    }
+    const email = reactive('ada@example.com', { schema: standard })
+    email.set('ada')
+    const said: string | undefined = email.error()?.data[0]
+    expect(said).toBe('not an email')
+
+    const deal = reactive(
+        { seats: 48 },
+        {
+            schema: jsonSchema<{ seats: number }>({
+                type: 'object',
+                properties: { seats: { type: 'integer', maximum: 50 } },
+            }),
+        },
+    )
+    deal.set({ seats: 51 })
+    const seats: string[] | undefined = deal.error()?.data.seats
+    expect(seats).toEqual(['must be at most 50'])
+    // @ts-expect-error — a path the gated shape does not have.
+    expect(deal.error()?.data.chairs).toBeUndefined()
+
+    const plain = reactive(1)
+    // @ts-expect-error — no schema declared, so no refusal to read.
+    expect(plain.error()?.data).toBeUndefined()
+})
+
+// 15.8 IN THE TYPE, FOR `args`: a keyed value's `args` gate refuses with the same `ValidationError`
+// a `schema` does, so it is carried in `Failures` the same way, its `data` the `Issues` of the args.
+//
+// THE REVERT: drop `| Gated<ArgsGate, Args>` from the keyed overload. `tsc` then refuses the read
+// below (`Property 'data' does not exist on type 'never'`, `SchemaIssuesSearch.abide`'s complaint
+// under `abide check`). Answering the refusal whatever the gate leaves the ungated line unused.
+test('an args gate types its ValidationError into a keyed error(), and only a gate does', () => {
+    const invoice = reactive((args: { id: number }) => args.id * 2, {
+        args: jsonSchema<{ id: number }>({
+            type: 'object',
+            properties: { id: { type: 'integer', minimum: 0 } },
+        }),
+    })
+    const ids: string[] | undefined = invoice({ id: -1 }).error()?.data.id
+    expect(ids).toEqual(['must be at least 0'])
+
+    const plain = reactive((args: { id: number }) => args.id * 2)
+    // @ts-expect-error — no gate declared, so no refusal to read.
+    expect(plain({ id: -1 }).error()?.data).toBeUndefined()
 })

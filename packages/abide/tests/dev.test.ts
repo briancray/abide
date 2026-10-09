@@ -53,6 +53,8 @@ const TSCONFIG = JSON.stringify({
 })
 
 let server: Bun.Subprocess | undefined
+// What the server and its worker have written to stderr so far, read as it arrives.
+let serverSaid = ''
 let base = ''
 let app = ''
 
@@ -100,7 +102,13 @@ process.exit(3)
         stdout: 'pipe',
         stderr: 'pipe',
     })
-    base = await addressOf(server)
+    const decoder = new TextDecoder()
+    const stderr = server.stderr as ReadableStream<Uint8Array>
+    const told = (async () => {
+        for await (const chunk of stderr) serverSaid += decoder.decode(chunk)
+        return serverSaid
+    })()
+    base = await addressOf(server, () => told)
 }, 30_000)
 
 afterAll(() => {
@@ -431,18 +439,34 @@ afterAll(() => {
 
 // THE REVERT: throw on `built.success === false` in `bundleInMemory` — the way `abide build` does
 // — and the command dies at boot, so this test has no server to ask.
-// THE REVERT: drop `keepServing()` from the worker; the rejection ends it, 38.42 replaces it, and the
-// count starts again from 1.
+// THE REVERT: drop `keepServing()` from the worker; bun ends it, 38.42 replaces it, and the count
+// reads 1 where it should read `count + 1`.
+//
+// SEQUENCED BY WHICH POLICY SPOKE, not by the rejection being printed. bun's own default prints the
+// rejection and ends the process a turn or more LATER, so a request sent on the printed line is
+// still answered by the worker that is about to die — sequenced that way the revert read
+// `count + 1` too. Each arm says something only it says: the lifecycle log is `keepServing`'s
+// report (37.8), and the listener's restart line comes after bun's exit.
+const REPORTED = /abide:lifecycle[^\n]*nobody awaited this/
+const RESTARTED = 'the app exited, so it was restarted'
 test('a rejection nobody awaited neither ends the app nor loses its state — 37.8, 37.9', async () => {
     const before = await received(await Bun.fetch(`${base}/served`))
     const count = Number(/<main id="served">(\d+)/.exec(before)?.[1])
+    const restartsBefore = serverSaid.split(RESTARTED).length
     expect(await received(await Bun.fetch(`${base}/orphan`))).toContain(
         'orphaned',
     )
-    await Bun.sleep(100)
+    await waitUntil(
+        async () => serverSaid,
+        (said) =>
+            REPORTED.test(said) ||
+            said.split(RESTARTED).length > restartsBefore,
+        'the rejection reported, or the app restarted',
+    )
     expect(await received(await Bun.fetch(`${base}/served`))).toContain(
         `<main id="served">${count + 1}</main>`,
     )
+    expect(serverSaid).toMatch(REPORTED)
 }, 30_000)
 
 // THE REVERT: drop the worker's `close` listener in `serveDev`; the request is never answered and

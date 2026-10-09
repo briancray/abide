@@ -69,8 +69,8 @@ export function replaceRow(row: Row, next: Node[]): void {
 /**
  * Reconciles a keyed list's rows to `data`, moving survivors rather than remaking them.
  *
- * `make` builds a row's nodes for a key it has not seen; `mount` wires one and hands back its
- * scope. Rows that survive are MOVED, never remade.
+ * A key it has not seen gets a row from the builders `list.setUp` answers for it (14.8). Rows that
+ * survive are MOVED, never remade.
  */
 export function reconcile(list: List, data: unknown[]): void {
     const region = list.region

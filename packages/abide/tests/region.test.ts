@@ -8,22 +8,13 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { emitClient, emitComponent, parseAbide } from '#compiler'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
-import { pageRegion } from '#ui/regions.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-import { clientOf, closeTyped } from './typed.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { clientOf, closeTyped, renderPage } from './typed.ts'
 
 afterAll(closeTyped)
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
+afterAll(removeTemporaryModules)
 
 const PAGE = `<script>
 import { reactive } from 'abide'
@@ -38,31 +29,8 @@ let name = reactive('ada')
 <button id="go" onclick={() => open = !open}>toggle</button>
 <button id="rename" onclick={() => name = name + '!'}>rename</button>`
 
-async function mountPage(source: string) {
-    const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    return { html, mount }
-}
-
 test('the server renders one branch, between anchors', async () => {
-    const { html } = await mountPage(PAGE)
+    const { html } = await renderPage(PAGE)
     // 32.12 — ONE branch. `open` is false, so the else arm is what was sent.
     expect(html).toContain('<em id="shut">closed</em>')
     expect(html).not.toContain('id="body"')
@@ -75,8 +43,8 @@ test('the server renders one branch, between anchors', async () => {
 })
 
 test('a sibling after the region is bound through the anchor, not by index', async () => {
-    const { mount } = await mountPage(PAGE)
-    mount(pageRegion(document.body))
+    const { mount } = await renderPage(PAGE)
+    mount()
     const foot = document.querySelector('#foot') as HTMLElement
     expect(foot.textContent).toBe('ada')
 
@@ -89,8 +57,8 @@ test('a sibling after the region is bound through the anchor, not by index', asy
 })
 
 test('a branch swap replaces the arm and nothing around it', async () => {
-    const { mount } = await mountPage(PAGE)
-    mount(pageRegion(document.body))
+    const { mount } = await renderPage(PAGE)
+    mount()
 
     expect(document.querySelector('#shut')).not.toBeNull()
     expect(document.querySelector('#body')).toBeNull()
@@ -124,8 +92,8 @@ test('a branch swap replaces the arm and nothing around it', async () => {
 // what it collected. `bindingRuns` on a rename then reports 3 where 2 are due — the two live runs
 // plus the `if` arm's `hello {name}`, still awake over a node that was removed.
 test('the arm a swap replaced stops waking', async () => {
-    const { mount } = await mountPage(PAGE)
-    mount(pageRegion(document.body))
+    const { mount } = await renderPage(PAGE)
+    mount()
     const toggle = document.querySelector('#go') as HTMLElement
     const rename = document.querySelector('#rename') as HTMLElement
 
@@ -170,8 +138,8 @@ let name = reactive('ada')
 <span id="right">{#if open}<i>{name}</i>{/if}</span>`
 
 test('two regions under different parents each find their own', async () => {
-    const { mount } = await mountPage(SPREAD)
-    mount(pageRegion(document.body))
+    const { mount } = await renderPage(SPREAD)
+    mount()
     expect((document.querySelector('#left b') as HTMLElement).textContent).toBe(
         'ada',
     )

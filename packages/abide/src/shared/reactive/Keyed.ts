@@ -32,6 +32,7 @@ import {
     type Reactive,
     type ReactiveOptions,
     refuseBothCaps,
+    signalMoved,
     startDeferred,
 } from './Reactive.ts'
 import {
@@ -329,6 +330,16 @@ export function createKeyed<
     // call that wrote them and one that left them to the parameter. Read once, here: a body with
     // none pays a `null` test per reach.
     const defaults = parameterDefaults(body)
+    // WHICH KEYS EXIST IS ITSELF SOMETHING `busy` AND `ready` ANSWER FROM (13.2, 13.11), and no
+    // entry's probe carries it: a guard asked before a key was reached subscribed to the entries
+    // there were, so the key that starts loading next — search-as-you-type — never woke it. One
+    // signal per `Keyed`, moved where an entry is reached and where one is released.
+    const membership: Tracked = { readers: [], probeReaders: [] }
+
+    function askMembership(): void {
+        const reader = TRACKING.reader
+        if (reader !== null) trackProbe(membership, reader)
+    }
 
     // Out of the map and out of every selection with it, rather than reachable by a sweep until a
     // collection happens to run.
@@ -338,6 +349,7 @@ export function createKeyed<
     ): void {
         entries.delete(key)
         leaveSelections(created)
+        signalMoved(membership)
     }
 
     function reach(given: Args): Reactive<Stored, Accepted, Failures> {
@@ -376,6 +388,7 @@ export function createKeyed<
                 // 5.20: superseded before it started — not held, so a later reach starts afresh.
                 if (entries.get(key) === created) release(key, created)
             })
+        signalMoved(membership)
         return created
     }
 
@@ -386,6 +399,7 @@ export function createKeyed<
         [PARAMETER_DEFAULTS]: defaults,
         entries,
         busy: (pattern?: Partial<Args>): boolean => {
+            askMembership()
             for (const entry of entries.values())
                 if (matchesPattern(argsOf(entry), pattern) && entry.busy())
                     return true
@@ -395,6 +409,7 @@ export function createKeyed<
         // asks whether anything is loading, `ready` whether everything is servable, and
         // that is the only pairing under which `busy && !ready` reads as one sentence.
         ready: (pattern?: Partial<Args>): boolean => {
+            askMembership()
             for (const entry of entries.values())
                 if (matchesPattern(argsOf(entry), pattern) && !entry.ready())
                     return false

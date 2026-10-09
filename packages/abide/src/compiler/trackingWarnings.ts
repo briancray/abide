@@ -15,6 +15,7 @@ import {
     isWhileStatement,
 } from 'typescript/unstable/ast/is'
 import { FUNCTIONS, TRANSPARENT } from './classifyRead.ts'
+import type { Finding } from './Finding.ts'
 import type { PositionKind, PositionTable } from './PositionTable.ts'
 
 // 14.14, 14.15, 14.16 — WHERE A READ STANDS IN A BODY THAT TRACKS, and the three ways it can stand
@@ -24,9 +25,6 @@ import type { PositionKind, PositionTable } from './PositionTable.ts'
 //
 // A TRACKED BODY is an unkeyed `reactive` body (14.3), a `watch` effect (14.6), or a template
 // position (14.2) of a kind in `TRACKED`.
-
-/** A warning at a projection offset. */
-export type Warning = { at: number; message: string }
 
 // A callback these hand a function to runs it before they return, so a read inside it is the
 // body's own read. Anything else — `then`, `setTimeout`, an event, a function kept for later — may
@@ -88,21 +86,26 @@ function calleeName(call: Node): string | undefined {
 }
 
 /** Which kind of tracked body a function is, or `undefined` where it is none. */
-function trackedKind(fn: Node): Body['kind'] | undefined {
-    if (!isArrowFunction(fn) && !isFunctionExpression(fn)) return undefined
-    const { child, parent } = holderOf(fn)
+function trackedKind(functionNode: Node): Body['kind'] | undefined {
+    if (!isArrowFunction(functionNode) && !isFunctionExpression(functionNode))
+        return undefined
+    const { child, parent } = holderOf(functionNode)
     if (!isCallExpression(parent) || parent.arguments[0] !== child)
         return undefined
     const name = calleeName(parent)
     // 14.4 — a body declaring a parameter is keyed, and does not track.
-    if (name === 'reactive' && fn.parameters.length === 0) return 'reactive'
+    if (name === 'reactive' && functionNode.parameters.length === 0)
+        return 'reactive'
     if (name === 'watch') return 'watch'
     return undefined
 }
 
 /** Whether a function a tracked body creates runs before the body returns. */
-function runsSynchronously(fn: Node, positions: PositionTable): boolean {
-    const { child, parent } = holderOf(fn)
+function runsSynchronously(
+    functionNode: Node,
+    positions: PositionTable,
+): boolean {
+    const { child, parent } = holderOf(functionNode)
     // 14.18 — A COMPONENT'S `bind:` PAIR (32.6) is not kept for later: the child calls `get` inside a body
     // that tracks, and `set` where it writes, so a read in either is where it should be.
     const member =
@@ -143,7 +146,13 @@ function isCondition(child: Node, parent: Node): boolean {
 // Every `await` a body runs itself, a nested function's aside. Asked once per body.
 const AWAITS = new WeakMap<Node, number[]>()
 
-/** Where each `await` a body runs itself starts, memoized in `AWAITS`. */
+/**
+ * Where each `await` a body runs itself suspends, memoized in `AWAITS`.
+ *
+ * AT THE END OF WHAT IT AWAITS, not at the keyword: the operand is evaluated before the body
+ * suspends, so `id` in `await call({ id })` is read while the body still tracks — where `c` in
+ * `await a(b) + c` is not. A `for await` suspends once its iterable is evaluated.
+ */
 function awaitsIn(body: Node): number[] {
     let found = AWAITS.get(body)
     if (found !== undefined) return found
@@ -151,9 +160,9 @@ function awaitsIn(body: Node): number[] {
     const list = found
     const visit = (node: Node): void => {
         if (node !== body && FUNCTIONS.has(node.kind)) return
-        if (isAwaitExpression(node)) list.push(node.getStart())
+        if (isAwaitExpression(node)) list.push(node.expression.end)
         if (isForOfStatement(node) && node.awaitModifier !== undefined)
-            list.push(node.getStart())
+            list.push(node.expression.end)
         node.forEachChild((child) => {
             visit(child)
             return undefined
@@ -174,7 +183,7 @@ export function trackingWarnings(
     name: string,
     positions: PositionTable,
     reads: readonly { start: number; name: string }[],
-): Warning[] {
+): Finding[] {
     const created: Node[] = []
     let decides: { condition: Node; within: Node } | undefined
     let body: Body | undefined
@@ -205,11 +214,11 @@ export function trackingWarnings(
         child = node
     }
     if (body === undefined) return []
-    const warnings: Warning[] = []
+    const warnings: Finding[] = []
     const at = read.getStart()
     // 14.16 — a function the body creates and hands to something that runs it later.
-    for (const fn of created)
-        if (!runsSynchronously(fn, positions)) {
+    for (const functionNode of created)
+        if (!runsSynchronously(functionNode, positions)) {
             warnings.push({
                 at,
                 message: `abide: \`${name}\` is read inside a function this tracked body creates and does not call as it runs, so nothing tracks the read and a change to \`${name}\` will not rerun the body. Read it in the body and close over the value. RULEBOOK 14.16.`,
@@ -217,8 +226,8 @@ export function trackingWarnings(
             return warnings
         }
     // 14.14 — past an `await`, the body has returned to whatever tracked it.
-    for (const awaited of awaitsIn(body.node))
-        if (awaited < at) {
+    for (const suspends of awaitsIn(body.node))
+        if (suspends <= at) {
             warnings.push({
                 at,
                 message: `abide: \`${name}\` is read after an \`await\` in a tracked body, and tracking ends at the first \`await\`, so a change to \`${name}\` will not rerun the body. Read it before the \`await\`. RULEBOOK 14.14.`,

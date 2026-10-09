@@ -1,9 +1,10 @@
 import type { AppPackage } from '#server/config.ts'
 import abidePackage from '../../package.json' with { type: 'json' }
 
-const RUN_COMPILED = new URL('../server/runCompiled.ts', import.meta.url)
-    .pathname
-const PACKAGE = new URL('../../', import.meta.url).pathname
+const RUN_COMPILED = Bun.fileURLToPath(
+    new URL('../server/runCompiled.ts', import.meta.url),
+)
+const PACKAGE = Bun.fileURLToPath(new URL('../../', import.meta.url))
 
 /**
  * Abide's own package entries, by the specifier an app imports each with, to the module behind it.

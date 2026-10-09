@@ -1,4 +1,5 @@
 import type { CheckerAnswer } from './CheckerAnswer.ts'
+import type { Finding } from './Finding.ts'
 import { CHECKED_VALUES, CHECKED_WRITE, Lowering } from './Lowering.ts'
 import { holdsReactive } from './PositionTable.ts'
 import type { AbideFile } from './parseAbide.ts'
@@ -24,7 +25,7 @@ export type CheckedShadow = {
     text: string
     origins: Origin[]
     /** What the lowering refused, at projection offsets (`Lowering.refusals`). */
-    refusals: { at: number; message: string }[]
+    refusals: Finding[]
 }
 
 /**
@@ -82,7 +83,7 @@ export function checkedShadow(
         if (span.start < at) continue
         origins.push({ at: text.length, source: at, length: span.start - at })
         text += source.slice(at, span.start)
-        text += lowering.lowerMapped(span, holds, origins, text.length)
+        text += lowering.lower(span, holds, origins, text.length)
         at = span.end
         if (span === projection.scripts) scriptsEnd = text.length
     }

@@ -1,5 +1,5 @@
 import { useColor } from '#shared/log.ts'
-import { paint } from './paint.ts'
+import { paint } from '#shared/paint.ts'
 
 const ESCAPE = '\x1b['
 const CONSOLE_METHODS = ['log', 'info', 'warn', 'error', 'debug'] as const

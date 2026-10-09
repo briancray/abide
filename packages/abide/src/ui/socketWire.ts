@@ -85,8 +85,10 @@ class Subscription {
             return
         }
         this.epoch = frame.epoch
-        if (frame.op === 'reset') {
-            for (const [seq, value] of frame.ring ?? []) {
+        // A REPLAY IS ONE FRAME, a reset or not, so the whole ring lands in one turn.
+        const ring = frame.ring
+        if (ring !== undefined) {
+            for (const [seq, value] of ring) {
                 this.seq = seq
                 this.deliver(value)
             }
@@ -96,14 +98,21 @@ class Subscription {
         this.deliver(frame.value)
     }
 
+    /**
+     * Lands one production in the copy.
+     *
+     * PUBLISHED EVEN WHERE IT IS THE FIRST, and the load resolved after it. A publish made while
+     * the load is in flight ends `busy` and supersedes the load, so the resolve that follows is
+     * dropped. Resolving first instead left the load in flight for the turn, and a ring landed in
+     * that same turn had its first entry superseded by the publish after it.
+     */
     deliver(value: unknown): void {
+        this.publish.call(this.copy, value)
         if (this.first !== null) {
             this.first(value)
             this.first = null
             this.refuse = null
-            return
         }
-        this.publish.call(this.copy, value)
     }
 }
 
@@ -256,7 +265,8 @@ class Mux {
     }
 }
 
-const MUXES = new Map<string, Mux>()
+// Exported for a test to forget: a page never does, and a test process outlives one.
+export const MUXES = new Map<string, Mux>()
 
 /**
  * The mux a socket's or a handler's address is carried over, made on first use.

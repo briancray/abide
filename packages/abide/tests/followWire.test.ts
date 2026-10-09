@@ -14,7 +14,20 @@ type Sent = {
     version?: number
 }
 
+// AN ORIGIN OF THIS FILE'S OWN. The browser's muxes and follows are process-wide, keyed by address
+// (`socketWire`), so at the page's own origin this file would be handed a mux an earlier file in
+// the same process opened — over its socket, not one of these — and every follow it reads would be
+// another file's.
+const LIBRARY = 'http://follow-wire.test/__abide/rpc/library'
+const MUX = 'ws://follow-wire.test/__abide/socket'
+
 const sockets: FakeSocket[] = []
+
+// The stand-in this file's mux opened last: an earlier file's mux reconnecting under the stub is
+// handed one too.
+function muxSocket(): FakeSocket {
+    return sockets.findLast((socket) => socket.url === MUX) as FakeSocket
+}
 
 class FakeSocket {
     static OPEN = 1
@@ -45,15 +58,17 @@ const unstubbedSocket = globalThis.WebSocket
 const unstubbedFetch = globalThis.fetch
 let shelf: string[] = ['dune']
 let answers = 0
+let answeredVersion = 0
 
 beforeAll(() => {
     globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket
     globalThis.fetch = (async () => {
         answers += 1
+        answeredVersion = 100 + answers
         return new Response(JSON.stringify(shelf), {
             headers: {
                 'content-type': 'application/json',
-                'abide-version': String(100 + answers),
+                'abide-version': String(answeredVersion),
             },
         })
     }) as unknown as typeof fetch
@@ -70,24 +85,24 @@ const settle = (): Promise<void> => new Promise((done) => setTimeout(done, 10))
 // copy's. THE REVERT: skip `followRpc` in `wire`'s settle; nothing is sent over the mux and the copy
 // keeps ['dune'] where ['dune', 'emma'] is due.
 test('a GET loaded is followed at the version it was answered with, and takes what it is sent', async () => {
-    const books = wire('GET', '/__abide/rpc/library/books') as (
+    const books = wire('GET', `${LIBRARY}/books`) as (
         args?: unknown,
     ) => (() => string[]) & PromiseLike<string[]>
     expect(await books()).toEqual(['dune'])
     await settle()
 
-    const socket = sockets.at(-1) as FakeSocket
-    expect(new URL(socket.url).pathname).toBe('/__abide/socket')
+    const socket = muxSocket()
+    expect(socket?.url).toBe(MUX)
     const follow = socket.sent.find(
-        (frame) => frame.address === '/__abide/rpc/library/books',
+        (frame) => frame.address === `${LIBRARY}/books`,
     ) as Sent
     expect(follow.op).toBe('sub')
-    expect(follow.version).toBe(101)
+    expect(follow.version).toBe(answeredVersion)
 
     socket.push({
         op: 'value',
         id: follow.id,
-        version: 102,
+        version: answeredVersion + 1,
         value: ['dune', 'emma'],
     })
     flushSync()
@@ -98,14 +113,14 @@ test('a GET loaded is followed at the version it was answered with, and takes wh
 // producer, which fetches (7.12). THE REVERT: ignore `invalidate` in `Following.receive`; the read is
 // answered from what is held and no second fetch is made.
 test('an invalidate the server sends makes the next read fetch', async () => {
-    const contact = wire('GET', '/__abide/rpc/library/contact') as (
+    const contact = wire('GET', `${LIBRARY}/contact`) as (
         args?: unknown,
     ) => (() => unknown) & PromiseLike<unknown>
     await contact({ id: 7 })
     await settle()
-    const socket = sockets.at(-1) as FakeSocket
+    const socket = muxSocket()
     const follow = socket.sent.find(
-        (frame) => frame.address === '/__abide/rpc/library/contact',
+        (frame) => frame.address === `${LIBRARY}/contact`,
     ) as Sent
     const before = answers
 
@@ -120,14 +135,14 @@ test('an invalidate the server sends makes the next read fetch', async () => {
 // \`Following.receive\`; the copy keeps ['dune'].
 test('a patch over the version held is written into the copy', async () => {
     shelf = ['dune']
-    const shelved = wire('GET', '/__abide/rpc/library/shelved') as (
+    const shelved = wire('GET', `${LIBRARY}/shelved`) as (
         args?: unknown,
     ) => (() => string[]) & PromiseLike<string[]>
     await shelved()
     await settle()
-    const socket = sockets.at(-1) as FakeSocket
+    const socket = muxSocket()
     const follow = socket.sent.find(
-        (frame) => frame.address === '/__abide/rpc/library/shelved',
+        (frame) => frame.address === `${LIBRARY}/shelved`,
     ) as Sent
     const held = shelved()()
     const before = answers
@@ -153,14 +168,14 @@ test('a patch over the version held is written into the copy', async () => {
 // read is made.
 test('a patch over a version the copy does not hold makes it read again', async () => {
     shelf = ['dune']
-    const archived = wire('GET', '/__abide/rpc/library/archived') as (
+    const archived = wire('GET', `${LIBRARY}/archived`) as (
         args?: unknown,
     ) => (() => string[]) & PromiseLike<string[]>
     await archived()
     await settle()
-    const socket = sockets.at(-1) as FakeSocket
+    const socket = muxSocket()
     const follow = socket.sent.find(
-        (frame) => frame.address === '/__abide/rpc/library/archived',
+        (frame) => frame.address === `${LIBRARY}/archived`,
     ) as Sent
     const before = answers
 
@@ -182,7 +197,7 @@ test('a patch over a version the copy does not hold makes it read again', async 
 // ends it. THE REVERT: have `wire`'s follow reach `rpc(args)` rather than the value; the frame pins
 // the reload the page is waiting on, and it is still busy after the page aborts.
 test("a frame the follow takes does not keep a page's load going — 16.52", async () => {
-    const reading = wire('GET', '/__abide/rpc/library/reading') as (
+    const reading = wire('GET', `${LIBRARY}/reading`) as (
         args?: unknown,
         options?: { signal?: AbortSignal },
     ) => (() => unknown) &
@@ -190,9 +205,9 @@ test("a frame the follow takes does not keep a page's load going — 16.52", asy
     const value = reading()
     await value
     await settle()
-    const socket = sockets.at(-1) as FakeSocket
+    const socket = muxSocket()
     const follow = socket.sent.find(
-        (frame) => frame.address === '/__abide/rpc/library/reading',
+        (frame) => frame.address === `${LIBRARY}/reading`,
     ) as Sent
 
     const answering = globalThis.fetch

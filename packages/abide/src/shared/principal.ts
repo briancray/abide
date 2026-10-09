@@ -8,23 +8,27 @@
 
 import { PRINCIPAL_ADDRESS } from './ADDRESSES.ts'
 import { type Failed, isFailed } from './Failed.ts'
+import { PRINCIPAL_ROTATED } from './PRINCIPAL_ROTATED.ts'
 import { ambient } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import { seededDocument } from './seededDocument.ts'
 
-/** The principal document: whether the caller is authenticated, and its claims. */
-export type Principal = {
+/**
+ * The principal document: whether the caller is authenticated, and its claims.
+ *
+ * AN INTERFACE, as `Config` (27.12) and `Health` (25.4) are, so an app declares what its `onPrincipal` resolves to by merging into it, and
+ * `principal.resolved()` reads those fields typed. A claim is absent for a caller who is not signed in,
+ * so one declared without `?` is a promise the app is making about every reader.
+ */
+export interface Principal {
+    [claim: string]: unknown
     authenticated: boolean
     expiresAt?: string | undefined
     error?: Failed<string, unknown> | undefined
-    [claim: string]: unknown
 }
 
-/**
- * The slots `principal` reads through: a browser's defaults, which the server replaces
- * (`#server/principal.ts`).
- */
-export const PRINCIPAL: {
+/** A browser's defaults for the slots `principal` reads through. */
+export const BROWSER_PRINCIPAL: {
     document: () => Principal | Promise<Principal>
     caller: () => string
     set: (claims: unknown) => Promise<void>
@@ -32,17 +36,13 @@ export const PRINCIPAL: {
 } = {
     // 26.17 — seeded as any handler's answer is. 26.23 — a refused one is the unauthenticated
     // document carrying the refusal, as a resolver that failed is on the server (26.3), so
-    // `principal` is never without a document (26.10).
-    document: () =>
-        seededDocument<Principal>(PRINCIPAL_ADDRESS).then((document) =>
-            isFailed(document)
-                ? {
-                      authenticated: false,
-                      expiresAt: undefined,
-                      error: document,
-                  }
-                : document,
-        ),
+    // `principal` is never without a document (26.10). 41.27 — settled at once where the seed is.
+    document: () => {
+        const seeded = seededDocument<Principal>(PRINCIPAL_ADDRESS)
+        return seeded instanceof Promise
+            ? seeded.then(documentOf)
+            : documentOf(seeded)
+    },
     // 26.22.
     caller: () => {
         throw new Error(
@@ -62,12 +62,24 @@ export const PRINCIPAL: {
     },
 }
 
+/**
+ * The slots `principal` reads through: a browser's defaults, which the server replaces
+ * (`#server/principal.ts`).
+ */
+export const PRINCIPAL: typeof BROWSER_PRINCIPAL = { ...BROWSER_PRINCIPAL }
+
+function documentOf(seeded: Principal | Failed<string, unknown>): Principal {
+    return isFailed(seeded)
+        ? { authenticated: false, expiresAt: undefined, error: seeded }
+        : seeded
+}
+
 type Members = {
     document: Reactive<Principal>
     authenticated: Reactive<boolean>
     expiresAt: Reactive<string | undefined>
     error: Reactive<Failed<string, unknown> | undefined>
-    resolved: Reactive<unknown>
+    resolved: Reactive<Principal>
     caller: Reactive<string>
 }
 
@@ -90,12 +102,16 @@ export function principalMembers(): Members {
         error: ambient(() => document().error) as unknown as Reactive<
             Failed<string, unknown> | undefined
         >,
-        resolved: ambient(() => document()) as unknown as Reactive<unknown>,
+        resolved: ambient(() => document()) as unknown as Reactive<Principal>,
         // 26.5 — NEEDS NO RESOLUTION: read off its own cookie, apart from the document.
         caller: ambient(() =>
             PRINCIPAL.caller(),
         ) as unknown as Reactive<string>,
     }
+    // A SIGN-IN OR SIGN-OUT A HANDLER ANSWERED reloads the document, and every member reads
+    // through it. A REFRESH, not an invalidate: 7.4 keeps the document a click handler reads
+    // served until the new one lands.
+    PRINCIPAL_ROTATED.current = () => document.refresh()
     return members
 }
 
@@ -110,7 +126,7 @@ export const principal = {
     get error(): Reactive<Failed<string, unknown> | undefined> {
         return principalMembers().error
     },
-    get resolved(): Reactive<unknown> {
+    get resolved(): Reactive<Principal> {
         return principalMembers().resolved
     },
     get caller(): Reactive<string> {

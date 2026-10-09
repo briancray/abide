@@ -2,9 +2,6 @@
 // commands that serve are built on: `abide start` over what the build wrote and `abide dev` over
 // what its worker compiled. Where the parts come from is the caller's (`sources`); what is done with
 // them — the hooks, the onion, the one scope a request is answered in — is here, once.
-//
-// NOT HERE YET: 42.11's ending of every live stream and timer. Its sockets are closed, and the
-// requests in flight drained, in `stopOnce`.
 
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
@@ -133,11 +130,17 @@ export function originUnder(root: string): AppOrigin {
     }
 }
 
+/**
+ * An `App` as a command boots it: with the mux over its tables, which `listen` opens and `abide dev`'s
+ * worker opens in its stead — one `AnsweringApp`, and one MCP surface, per app either way.
+ */
+export type BootedApp = App & { openMux(): Mux }
+
 /** An `App` booted over the sources `load` supplies, inside the app's `onStart` hooks. */
 export async function bootApp(
     origin: AppOrigin,
     load: () => Promise<LoadedSources>,
-): Promise<App> {
+): Promise<BootedApp> {
     installServer()
     // 37.1 — OPTIONAL, and imported for what it CALLS: every hook it runs is filed by the time the
     // import settles.
@@ -176,8 +179,8 @@ export async function bootApp(
         return answered
     })
 
-    // The mux `listen` runs over this app's tables. `abide dev` holds its sockets in another process,
-    // and its worker runs one over the same tables (`devWorker`).
+    // The mux over this app's tables (`openMux`): `listen` opens it, or `abide dev`'s worker, whose
+    // sockets the listener holds in another process.
     let mux: Mux | undefined
     let inFlight = 0
     let drained: (() => void) | undefined
@@ -236,12 +239,19 @@ export async function bootApp(
     const answering: AnsweringApp = {
         answer: fetch,
         mcp: new McpSurface(booted.handlers, fetch),
+        held: new Set(),
     }
 
     // 16.43, 42.12 — A `raw` CALL MADE ON THIS SERVER IS ANSWERED IN PROCESS, by the app answering the
     // request it was made in; only a call made outside every request falls to the app built last.
-    RPC_SERVER.raw = (request) =>
+    const answerRaw = (request: Request): Promise<Response> =>
         (currentRequestScope()?.app?.answer ?? fetch)(request)
+    RPC_SERVER.raw = answerRaw
+
+    const openMux = (): Mux => {
+        mux = new Mux(booted.sockets, booted.handlers, answering)
+        return mux
+    }
 
     // 42.15 — ONE STOP, however many ask for it: a signal landing while the shell's `exit` is already
     // stopping the app is answered with that stop, and `onStop` runs once.
@@ -251,17 +261,29 @@ export async function bootApp(
         return stopped
     }
 
+    // 42.11 — every streamed body still being written and every seed entry still standing, ended.
+    // A copy, because each end unfiles itself.
+    const endHeld = (): void => {
+        for (const end of [...answering.held]) end()
+    }
+
     // 42.10 — stop accepting, drain, and only then the teardown `onStop` wraps (37.4).
     async function stopOnce(): Promise<void> {
         stopping = true
-        // 42.11 — every open socket is closed rather than left to the process's exit.
+        // 42.11 — every open socket is closed rather than left to the process's exit, and every
+        // stream ended, which a listener's stop otherwise waits on for as long as it streams.
         mux?.closeAll(1001, 'the app is stopping')
+        endHeld()
         await bound?.stop()
         if (inFlight > 0)
             await new Promise<void>((done) => {
                 drained = done
             })
+        // What the requests drained here left behind them.
+        endHeld()
         if (LISTENING.server === bound) LISTENING.server = undefined
+        // 16.43 — a stopped app answers no `raw` call made outside every request.
+        if (RPC_SERVER.raw === answerRaw) RPC_SERVER.raw = null
         bound = undefined
         await compose(HOOKS.stops, async () => {})(undefined)
     }
@@ -272,8 +294,7 @@ export async function bootApp(
         // 42.9 — the socket, and what `server` hands back from then on.
         async listen(options) {
             const port = options?.port
-            const opened = new Mux(booted.sockets, booted.handlers, answering)
-            mux = opened
+            const opened = openMux()
             // The upgrade carries its request to `open`, where the connection is made over the socket.
             type Upgraded = {
                 request: Request
@@ -299,20 +320,24 @@ export async function bootApp(
                         : answered
                 },
                 websocket: {
-                    open(ws) {
-                        ws.data.connection = opened.connect(ws.data.request, ws)
+                    open(socket) {
+                        socket.data.connection = opened.connect(
+                            socket.data.request,
+                            socket,
+                        )
                     },
-                    message(ws, raw) {
-                        return ws.data.connection?.message(raw)
+                    message(socket, raw) {
+                        return socket.data.connection?.message(raw)
                     },
-                    close(ws) {
-                        ws.data.connection?.close()
+                    close(socket) {
+                        socket.data.connection?.close()
                     },
                 },
             })
             bound = server as unknown as Bun.Server<unknown>
             LISTENING.server = bound
         },
+        openMux,
         stop,
         // 42.14.
         [Symbol.asyncDispose]: stop,

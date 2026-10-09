@@ -23,12 +23,24 @@ export interface Health {
 /**
  * The slot `health` reports through: a browser's fetch, which the server replaces.
  *
- * A refused fetch is returned, so `health` refuses as any handler's copy does (15.5).
+ * A refused fetch is returned, so `health` refuses as any handler's copy does (15.5); a seed the
+ * server painted settled is answered at once (41.27).
  */
 export const HEALTH: {
-    report: () => Promise<Health | Failed<string, unknown>>
+    report: () =>
+        | Health
+        | Failed<string, unknown>
+        | Promise<Health | Failed<string, unknown>>
 } = {
-    report: () => seededDocument<Health>(HEALTH_ADDRESS),
+    report: browserHealthReport,
+}
+
+/** A browser's `HEALTH.report`: the seeded answer to `/__abide/health`. */
+export function browserHealthReport():
+    | Health
+    | Failed<string, unknown>
+    | Promise<Health | Failed<string, unknown>> {
+    return seededDocument<Health>(HEALTH_ADDRESS)
 }
 
 /** The account of the app this call is in. */

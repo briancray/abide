@@ -5,21 +5,12 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { parseAbide } from '#compiler'
-import { emitSource } from '#compiler/emitSource.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
-import { pageRegion } from '#ui/regions.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, mountPage } from './typed.ts'
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
+afterAll(closeTyped)
+afterAll(removeTemporaryModules)
 
 const BAR = `<script>
 import { props } from 'abide'
@@ -36,46 +27,6 @@ const { label } = props<{ label: string }>()
 </script>
 
 <i class="baz">baz {label}</i>`
-
-async function mountPage(
-    page: string,
-    components: Record<string, string>,
-): Promise<string> {
-    const modules: Record<string, string> = {}
-    for (const [name, source] of Object.entries({
-        ...components,
-        Page: page,
-    })) {
-        const file = parseAbide(source)
-        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
-        const page = name === 'Page'
-        const { server, client } = emitSource(
-            page ? 'ui/pages/page.abide' : `${name}.abide`,
-            file,
-            reads,
-            !page,
-        )
-        modules[`${name}.ts`] = server
-        modules[`${name}.client.ts`] = client
-    }
-    const dir = temporaryModule(modules)
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
-    flushSync()
-    return html
-}
 
 // 32.34's second binding: a component handed in as a prop, invoked by the name `props` gave it.
 const FRAME = `<script>
@@ -106,7 +57,7 @@ let Shown = reactive(() => (which % 2 === 0 ? Bar : Baz))
 <button id="label" onclick={() => { label = 'two' }}>label</button>`
 
 test('a tag naming a Reactive invokes the component it holds, on both sides — 32.34', async () => {
-    const html = await mountPage(PAGE, { Bar: BAR, Baz: BAZ })
+    const { html } = await mountPage(PAGE, { Bar: BAR, Baz: BAZ })
     expect(html).toContain(
         '<div id="host"><!--[--><b class="bar">bar one</b><!--]--></div>',
     )
@@ -158,7 +109,7 @@ let which = reactive(0)
 })
 
 test('an absent value renders nothing, and the region fills when one arrives — 32.36', async () => {
-    const html = await mountPage(
+    const { html } = await mountPage(
         `<script>
 import { reactive } from 'abide'
 import Bar from './Bar.abide'

@@ -22,6 +22,11 @@ export type Answer = {
     life: string | null | undefined
     text: string | undefined
     /**
+     * A binary answer's body read to the end (16.35), set in place of `text` — a body read as text
+     * is not the bytes it carried.
+     */
+    bytes: Uint8Array | undefined
+    /**
      * A streamed answer's body, left unread so its chunks are taken as they land (16.33).
      *
      * Set in place of `text` for a handler the build marked as streaming, and by the early-call

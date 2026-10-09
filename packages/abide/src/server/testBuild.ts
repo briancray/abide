@@ -4,22 +4,16 @@
 // `--parallel` worker, every spawned child — reuses the one that does. Eight workers each building
 // their own copy of a 1.3 s build waited 7–10 s apiece.
 
-import {
-    mkdir,
-    readdir,
-    readFile,
-    rename,
-    rm,
-    stat,
-    utimes,
-    writeFile,
-} from 'node:fs/promises' // bun exposes no directory listing, rename, removal, mtime write or exclusive create of its own
+import { mkdir, rename, rm, utimes, writeFile } from 'node:fs/promises' // bun exposes no directory creation, rename, removal, mtime write or exclusive create of its own
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
+import { namesUnder } from './namesUnder.ts'
 
 // The CLI, spawned rather than imported: the compiler is not reachable from the server seam.
-const ABIDE_BIN = new URL('../../bin/abide.ts', import.meta.url).pathname
+const ABIDE_BIN = Bun.fileURLToPath(
+    new URL('../../bin/abide.ts', import.meta.url),
+)
 // The framework's own source is part of what made a build: a compiler change is a new build.
-const FRAMEWORK = new URL('../..', import.meta.url).pathname
+const FRAMEWORK = Bun.fileURLToPath(new URL('../..', import.meta.url))
 const POLL_MS = 50
 // A build no test process has reused for this long is swept by the next one that builds.
 const UNUSED_FOR_MS = 24 * 60 * 60 * 1000
@@ -125,9 +119,9 @@ async function runBuild(root: string, out: string): Promise<void> {
 export async function sourceHash(root: string): Promise<string> {
     const app = dirname(root)
     const paths = [
-        ...(await filesUnder(root)),
-        ...(await filesUnder(`${FRAMEWORK}src`)),
-        ...(await filesUnder(`${FRAMEWORK}bin`)),
+        ...filesUnder(root),
+        ...filesUnder(`${FRAMEWORK}src`),
+        ...filesUnder(`${FRAMEWORK}bin`),
         `${app}/package.json`,
         `${app}/tsconfig.json`,
     ]
@@ -153,18 +147,11 @@ export async function sourceHash(root: string): Promise<string> {
 
 // Sorted, so the hash does not depend on the order a directory lists in. Dot entries and
 // `node_modules` are skipped: neither is the app's source, and the builds live in one.
-async function filesUnder(directory: string): Promise<string[]> {
+function filesUnder(directory: string): string[] {
     const found: string[] = []
-    const entries = await readdir(directory, { withFileTypes: true }).catch(
-        () => [],
-    )
-    for (const entry of entries) {
-        if (entry.name.startsWith('.') || entry.name === 'node_modules')
-            continue
-        const path = `${directory}/${entry.name}`
-        if (entry.isDirectory()) found.push(...(await filesUnder(path)))
-        else if (entry.isFile()) found.push(path)
-    }
+    for (const name of namesUnder(directory))
+        if (!`/${name}`.includes('/node_modules/'))
+            found.push(`${directory}/${name}`)
     return found.sort()
 }
 
@@ -187,7 +174,9 @@ async function claim(lock: string): Promise<boolean> {
 }
 
 async function holderEnded(lock: string): Promise<boolean> {
-    const text = await readFile(lock, 'utf8').catch(() => undefined)
+    const text = await Bun.file(lock)
+        .text()
+        .catch(() => undefined)
     // Gone is not ended: the holder finished, and the next pass finds its build.
     if (text === undefined) return false
     // Empty is a holder between creating the lock and writing its pid.
@@ -196,7 +185,7 @@ async function holderEnded(lock: string): Promise<boolean> {
 
 /** Removes builds unused for a day, and what an ended process left half-made. */
 async function sweep(builds: string, kept: string): Promise<void> {
-    const names = await readdir(builds).catch(() => [] as string[])
+    const names = new Bun.Glob('*').scanSync({ cwd: builds, onlyFiles: false })
     const removals: Promise<void>[] = []
     const now = Date.now()
     for (const name of names) {
@@ -211,7 +200,8 @@ async function sweep(builds: string, kept: string): Promise<void> {
         }
         if (name.endsWith('.lock')) continue
         removals.push(
-            stat(`${builds}/${name}`)
+            Bun.file(`${builds}/${name}`)
+                .stat()
                 .then((found) =>
                     now - found.mtimeMs > UNUSED_FOR_MS
                         ? rm(`${builds}/${name}`, {
@@ -227,7 +217,13 @@ async function sweep(builds: string, kept: string): Promise<void> {
 }
 
 async function isDirectory(path: string): Promise<boolean> {
-    return (await stat(path).catch(() => undefined))?.isDirectory() === true
+    return (
+        (
+            await Bun.file(path)
+                .stat()
+                .catch(() => undefined)
+        )?.isDirectory() === true
+    )
 }
 
 function isRunning(pid: number): boolean {

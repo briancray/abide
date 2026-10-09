@@ -41,6 +41,7 @@ import {
     type Read,
     TRANSPARENT,
 } from './classifyRead.ts'
+import type { Finding } from './Finding.ts'
 import {
     holdsReactive,
     type Position,
@@ -58,7 +59,7 @@ import {
     unionMembers,
     valueTypeOf,
 } from './reactiveTypes.ts'
-import { trackingWarnings, type Warning } from './trackingWarnings.ts'
+import { trackingWarnings } from './trackingWarnings.ts'
 
 /** Where in a `.abide`'s shadow each kind of question is asked (`projectShadow`). */
 export type ShadowSpans = {
@@ -120,7 +121,7 @@ export async function readsIn(
     spans: ShadowSpans,
     abidePath: string,
     file: AbideFile,
-): Promise<{ answer: CheckerAnswer; warnings: Warning[] }> {
+): Promise<{ answer: CheckerAnswer; warnings: Finding[] }> {
     // A destructuring pattern binds names this does not see, and that is 31.12's case.
     const names: Node[] = []
     const spelled = new Set<string>()
@@ -274,14 +275,14 @@ export async function readsIn(
 /**
  * The tracking and type warnings a file's reactive reads earn.
  *
- * THE WARNINGS A FILE'S READS EARN. The syntax alone decides 14.14 to 14.16 (`trackingWarnings`);
+ * The syntax alone decides 14.14 to 14.16 (`trackingWarnings`);
  * 14.17 and 31.13 ask what a read hands back, which is the return of the `Reactive`'s call.
  */
 async function warningsFor(
     checker: Checker,
     located: { node: Node; read: Read }[],
     positions: PositionTable,
-): Promise<Warning[]> {
+): Promise<Finding[]> {
     const starts: { start: number; name: string }[] = []
     for (const { node, read } of located)
         if (READING.has(read.shape))
@@ -289,7 +290,7 @@ async function warningsFor(
                 start: read.start,
                 name: (node as { text?: string }).text ?? '',
             })
-    const warnings: Warning[] = []
+    const warnings: Finding[] = []
     const typed: Promise<void>[] = []
     for (const { node, read } of located) {
         const name = (node as { text?: string }).text ?? ''
@@ -377,8 +378,8 @@ async function admitsNullish(type: Type): Promise<boolean> {
 /**
  * The declared type of the position a read stands in: a parameter, an annotated binding or return.
  *
- * 31.3 — THE DECLARED TYPE OF THE POSITION A READ STANDS IN, where it is one of the three the
- * clause names: a call's parameter, an annotated binding, an annotated return. An array literal
+ * 31.3 — the three the clause names: a call's parameter, an annotated binding, an annotated
+ * return. An array literal
  * passes its position through, because `watch([a, b], …)` is the parameter's own shape. Anything
  * else is `undefined` and stays a read.
  *
@@ -450,8 +451,8 @@ function annotated(
 /**
  * Marks each template position the checker proves reads nothing reactive with a `static` read.
  *
- * 14.2 — EVERY TEMPLATE POSITION THE CHECKER CAN PROVE READS NOTHING REACTIVE, marked with a
- * zero-width `static` read at its start. Everything else is bound, which is the inversion: the old
+ * 14.2 — the read is zero-width, at the position's start. Everything else is bound, which is the
+ * inversion: the old
  * question — does it NAME a `Reactive` — let `{big()}` over a function reading `n` be written once.
  *
  * A PROOF IS THREE THINGS: no reactive read inside the span, a syntax that runs no author code

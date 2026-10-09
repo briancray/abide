@@ -26,6 +26,7 @@ import {
 } from '#compiler/compileApp.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
+import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
 import type { Ask, FromWorker, ToWorker } from './devWorker.ts'
 import { upgraded } from './muxUpgrade.ts'
 import { plainAnswer } from './plainAnswer.ts'
@@ -61,7 +62,6 @@ type DevWorker = {
 
 type Compiled = { modules: Map<string, string>; failure: string }
 
-const FIRST_DEV_PORT = 3000
 const LAST_DEV_PORT = 3099
 
 // 37.3 — the answers the worker said `admitsMux`, which the listener upgrades on.
@@ -70,7 +70,7 @@ const ADMITTED = new WeakSet<Response>()
 // An app-mux socket's data: the id the worker knows its connection by, and what `Mux.connect` reads
 // off the upgrade. `undefined` on the reload client's.
 type Carried =
-    | { conn: number; url: string; headers: [string, string][] }
+    | { connection: number; url: string; headers: [string, string][] }
     | undefined
 
 /**
@@ -164,7 +164,10 @@ export async function serveDev(
         // THE ENVIRONMENT AS IT STANDS, `NODE_ENV` included (36.3): the child is handed what this
         // process holds now rather than what it started with. `advanced` carries an `ArrayBuffer`.
         const child = Bun.spawn(
-            ['bun', new URL('./devWorker.ts', import.meta.url).pathname],
+            [
+                'bun',
+                Bun.fileURLToPath(new URL('./devWorker.ts', import.meta.url)),
+            ],
             {
                 env: process.env as Record<string, string>,
                 stdio: ['inherit', 'inherit', 'inherit'],
@@ -172,7 +175,7 @@ export async function serveDev(
                 ipc(message: FromWorker) {
                     if (message.kind === 'ready') ready = true
                     else if (message.kind === 'socket-send')
-                        muxed.get(message.conn)?.send(message.text)
+                        muxed.get(message.connection)?.send(message.text)
                     else if (message.kind === 'timeout') {
                         const asked = inFlight.get(message.id)?.request
                         if (asked !== undefined)
@@ -424,7 +427,7 @@ export async function serveDev(
                 if (mux) {
                     nextConnection += 1
                     data = {
-                        conn: nextConnection,
+                        connection: nextConnection,
                         url: request.url,
                         headers: [...request.headers.entries()],
                     }
@@ -442,7 +445,7 @@ export async function serveDev(
                     sockets.add(socket)
                     const carried = socket.data
                     if (carried === undefined) return
-                    muxed.set(carried.conn, socket)
+                    muxed.set(carried.connection, socket)
                     worker?.postMessage({ kind: 'socket-open', ...carried })
                 },
                 close(socket) {
@@ -450,10 +453,10 @@ export async function serveDev(
                     const carried = socket.data
                     if (carried === undefined) return
                     // A socket a reload terminated is the old worker's, and the new one never knew it.
-                    if (muxed.delete(carried.conn))
+                    if (muxed.delete(carried.connection))
                         worker?.postMessage({
                             kind: 'socket-close',
-                            conn: carried.conn,
+                            connection: carried.connection,
                         })
                 },
                 // The reload client says nothing; an app socket's frames go to the mux in the worker.
@@ -462,7 +465,7 @@ export async function serveDev(
                     if (carried === undefined) return
                     worker?.postMessage({
                         kind: 'socket-message',
-                        conn: carried.conn,
+                        connection: carried.connection,
                         text: String(text),
                     })
                 },
@@ -483,7 +486,7 @@ export async function serveDev(
 function listenOnFirstFree<Listener>(
     listen: (port: number) => Listener,
 ): Listener {
-    for (let port = FIRST_DEV_PORT; ; port += 1)
+    for (let port = DEFAULT_PORT; ; port += 1)
         try {
             return listen(port)
         } catch (thrown) {

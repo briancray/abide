@@ -2,21 +2,12 @@
 // value standing at render into the tag, and the client binds the property where the server left it.
 
 import { afterAll, expect, test } from 'bun:test'
-import { parseAbide } from '#compiler'
-import { emitSource } from '#compiler/emitSource.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
-import { pageRegion } from '#ui/regions.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, mountPage, renderPage } from './typed.ts'
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
+afterAll(closeTyped)
+afterAll(removeTemporaryModules)
 
 const PAGE = `<script>
 import { reactive } from 'abide'
@@ -40,31 +31,7 @@ let open = reactive(false)
 <p id="out">{name} {age} {subscribed} {size} {toppings.join(',')} {open}</p>`
 
 async function mounted(): Promise<string> {
-    const file = parseAbide(PAGE)
-    const reads = await session.reads(`${ROOT}src/page.abide`, file)
-    const { server, client } = emitSource(
-        'ui/pages/page.abide',
-        file,
-        reads,
-        false,
-    )
-    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + 6,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
-    flushSync()
-    return html
+    return (await mountPage(PAGE)).html
 }
 
 const input = (id: string) => document.getElementById(id) as HTMLInputElement
@@ -144,33 +111,11 @@ let attrs = reactive<Record<string, unknown>>({ title: 'first', 'data-kind': 'ca
 // carrying is removed. THE REVERT: skip `removeAttribute` in `bindSpread`; `data-kind` outlives the
 // value that carried it.
 test('a spread writes attributes, and keeps them in step with the value — 32.11', async () => {
-    const file = parseAbide(SPREAD)
-    const reads = await session.reads(`${ROOT}src/spread.abide`, file)
-    const { server, client } = emitSource(
-        'ui/pages/page.abide',
-        file,
-        reads,
-        false,
-    )
-    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
+    const { html, mount } = await renderPage(SPREAD)
     expect(html).toContain(
         '<div id="card" title="first" data-kind="card">card</div>',
     )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + 6,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
-    flushSync()
+    mount()
     ;(document.getElementById('swap') as HTMLElement).click()
     flushSync()
     const card = document.getElementById('card') as HTMLElement
@@ -201,31 +146,9 @@ let attrs = reactive<Record<string, unknown>>({ onClick: () => heard.push('first
 test('a spread binds its on<event> functions as listeners, and keeps them in step — 32.11', async () => {
     const heard: string[] = []
     ;(globalThis as unknown as { heard: string[] }).heard = heard
-    const file = parseAbide(SPREAD_LISTENERS)
-    const reads = await session.reads(`${ROOT}src/spread.abide`, file)
-    const { server, client } = emitSource(
-        'ui/pages/page.abide',
-        file,
-        reads,
-        false,
-    )
-    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
+    const { html, mount } = await renderPage(SPREAD_LISTENERS)
     expect(html).toContain('<p id="target">target</p>')
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + 6,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
-    flushSync()
+    mount()
     const target = document.getElementById('target') as HTMLElement
     expect(target.hasAttribute('onfocus')).toBe(false)
     target.click()

@@ -28,8 +28,9 @@ import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
  * walk's guess at them. Every offset is into the file's projection (`projectShadow`).
  *
  * ONE SHAPE IS NOT A REACTIVE NAME: `raw` is the callee of a template expression's bare `raw(…)`
- * (32.25), which lowers to the framework's own `raw`; a `<script>`'s is left as written. It rides this list because it is a rewrite at an occurrence, which is what the splice
- * walks; what the checker proved about a whole position is `CheckerAnswer`'s.
+ * (32.25), which lowers to the framework's own `raw`; a `<script>`'s is left as written. It rides
+ * this list because it is a rewrite at an occurrence, which is what the splice walks; what the
+ * checker proved about a whole position is `CheckerAnswer`'s.
  *
  * THE SHAPE IS FIXED: every field on every read, so `Lowering`'s splice sees one hidden class.
  */
@@ -371,7 +372,7 @@ export function provePosition(
  * member (`markdown.raw(x)`) is that object's method, and a `raw` that is not called is whatever
  * the file bound.
  */
-export function rawCall(node: Node): CallExpression | undefined {
+function rawCall(node: Node): CallExpression | undefined {
     if (!isCallExpression(node)) return undefined
     const callee = node.expression
     return callee.kind === SyntaxKind.Identifier &&
@@ -455,6 +456,12 @@ export const TRANSPARENT: ReadonlySet<SyntaxKind> = new Set([
 
 /** Whether syntax proves `node` runs no author code, queuing what the checker must confirm. */
 function proveStatic(node: Node, primitives: Node[], members: Node[]): boolean {
+    if (TRANSPARENT.has(node.kind))
+        return proveStatic(
+            (node as unknown as { expression: Node }).expression,
+            primitives,
+            members,
+        )
     switch (node.kind) {
         case SyntaxKind.StringLiteral:
         case SyntaxKind.NumericLiteral:
@@ -465,11 +472,6 @@ function proveStatic(node: Node, primitives: Node[], members: Node[]): boolean {
         case SyntaxKind.NullKeyword:
         case SyntaxKind.Identifier:
             return true
-        case SyntaxKind.ParenthesizedExpression:
-        case SyntaxKind.AsExpression:
-        case SyntaxKind.SatisfiesExpression:
-        case SyntaxKind.NonNullExpression:
-        case SyntaxKind.TypeAssertionExpression:
         // Not `TRANSPARENT`, and runs no code but its operand's: its value is a primitive.
         case SyntaxKind.TypeOfExpression:
         case SyntaxKind.VoidExpression:

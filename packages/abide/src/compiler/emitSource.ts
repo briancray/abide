@@ -42,7 +42,6 @@ export function emitSource(
         file.template,
         token,
         componentStyled ? [token] : [],
-        [],
         file.components,
     )
     let sheet: string | undefined

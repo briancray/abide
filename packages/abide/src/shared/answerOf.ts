@@ -2,7 +2,9 @@
 // one way whoever made it: a handler's `wire`, and a handler abide mounts itself (`seededDocument`).
 
 import { failed, isFailed } from './Failed.ts'
-import { framedChunks, framingPrefix } from './framing.ts'
+import { carriesBytes, framedChunks, framingPrefix } from './framing.ts'
+import { PRINCIPAL_HEADER } from './PRINCIPAL_HEADER.ts'
+import { PRINCIPAL_ROTATED } from './PRINCIPAL_ROTATED.ts'
 import { refuse } from './refuse.ts'
 import type { RpcRequest } from './rpcRequest.ts'
 import { type Answer, takeEarlyCall } from './takeEarlyCall.ts'
@@ -25,23 +27,39 @@ export function answerOf(
 ): Answer | Promise<Answer> {
     const early = takeEarlyCall(request.key)
     if (early === undefined) return fetched(request, streams, signal)
-    if (early.text !== undefined && early.painted === 1) return early
+    if (readAsText(early) && early.painted === 1) return early
     return early.promise.then((): Answer | Promise<Answer> => {
-        if (early.text !== undefined) return early
-        // The early call failed as a request, so this one is made again.
+        if (readAsText(early)) return early
+        // The early call failed as a request — or read a binary as text, which lost its bytes — so
+        // this one is made again.
         if (early.body === undefined || early.body === null)
             return fetched(request, streams, signal)
         if (streams) return early
-        return new Response(early.body)
-            .text()
-            .then((text) => ({ ...early, text, body: undefined }))
+        const read = new Response(early.body)
+        return carriesBytes(early.type) && succeeded(early.status)
+            ? read
+                  .bytes()
+                  .then((bytes) => ({ ...early, bytes, body: undefined }))
+            : read.text().then((text) => ({ ...early, text, body: undefined }))
     })
+}
+
+/** Whether an early call's answer arrived as text that is what it carried — no binary read as one. */
+function readAsText(early: Answer): boolean {
+    return (
+        early.text !== undefined &&
+        !(carriesBytes(early.type) && succeeded(early.status))
+    )
+}
+
+function succeeded(status: number | undefined): boolean {
+    return status !== undefined && status >= 200 && status < 300
 }
 
 /**
  * Fetches a call's answer; a framed answer to a streaming copy keeps its body unread (16.33).
  *
- * Anything else is read as text.
+ * Anything else is read to its end: as bytes where it is a binary (16.35), as text otherwise.
  */
 async function fetched(
     request: RpcRequest,
@@ -52,16 +70,22 @@ async function fetched(
         request.url,
         signal === undefined ? request.init : { ...request.init, signal },
     )
+    // THE HANDLER SIGNED THIS CALLER IN OR OUT, and the cookie is already the browser's.
+    if (answer.headers.has(PRINCIPAL_HEADER)) PRINCIPAL_ROTATED.current?.()
     const type = answer.headers.get('content-type')
-    const framed = streams && answer.ok && framingPrefix(type) !== null
+    const binary = answer.ok && carriesBytes(type)
+    // A streaming copy reads bytes as they land too (16.47), as it does a framed answer's lines.
+    const unread =
+        streams && answer.ok && (binary || framingPrefix(type) !== null)
     return {
         status: answer.status,
         statusText: answer.statusText,
         type,
         version: answer.headers.get(VERSION_HEADER),
         life: answer.headers.get('cache-control'),
-        text: framed ? undefined : await answer.text(),
-        body: framed ? answer.body : undefined,
+        text: unread || binary ? undefined : await answer.text(),
+        bytes: !unread && binary ? await answer.bytes() : undefined,
+        body: unread ? answer.body : undefined,
     }
 }
 
@@ -78,8 +102,10 @@ async function fetched(
 export function answered(answer: Answer): unknown {
     const status = answer.status ?? 0
     if (status === 204) return undefined
-    const succeeded = status >= 200 && status < 300
-    if (succeeded) {
+    const ok = succeeded(status)
+    if (ok) {
+        // 16.35 — a binary decodes back to the bytes it was.
+        if (answer.bytes !== undefined) return answer.bytes
         const prefix = framingPrefix(answer.type)
         if (prefix !== null) return framedChunks(answer.text ?? '', prefix)
     }
@@ -89,7 +115,7 @@ export function answered(answer: Answer): unknown {
     } catch {
         body = undefined
     }
-    if (succeeded) return body
+    if (ok) return body
     if (isFailed(body))
         return failed(body.name, body.status, body.message, body.data)
     return refuse(status, answer.statusText || undefined)

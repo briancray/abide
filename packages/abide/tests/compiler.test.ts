@@ -1369,7 +1369,7 @@ const k = Promise.resolve(1)
 
 // A PREFIX `!` DOES NOT END AN OPERAND and a keyword after a `.` is a property name. Read the
 // other way each opened a scan that ran to the end of the file, and what came out still parsed as
-// a document with nodes silently missing. THE REVERT: let `!` fall to `default` in `tokenise`'s
+// a document with nodes silently missing. THE REVERT: let `!` fall to `default` in `tokenize`'s
 // `scan`, or drop its `.` test; the sibling element disappears.
 test('a slot ends where it reads as ending', () => {
     const bang = parseAbide(
@@ -1444,6 +1444,8 @@ test('a shell with no closing head tag still gets its head content', async () =>
     let out = ''
     out += new TextDecoder().decode(await render(Page, shell))
 
+    // Present first: a title dropped altogether is at -1, which is before `<body>` too.
+    expect(out).toContain('<title>abide</title>')
     expect(out.indexOf('<title>abide</title>')).toBeLessThan(
         out.indexOf('<body>'),
     )

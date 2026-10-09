@@ -36,7 +36,7 @@ export async function valueTypeOf(
 }
 
 /**
- * What the value a symbol names was initialised with, through an import to the module that declares
+ * What the value a symbol names was initialized with, through an import to the module that declares
  * it: `reactive(…)` in `const rows = reactive(…)`, wherever `rows` is read from.
  */
 export async function boundInitializer(
@@ -76,20 +76,24 @@ async function everyPresentMember(
     return present
 }
 
-// Where abide declares `Reactive`, `props` and `Selection`, found in the project the way
+// Where abide declares `Reactive`, `props`, `route` and `Selection`, found in the project the way
 // `METHODS_SOURCE` is.
-const REACTIVE_SOURCE = new URL(
-    '../shared/reactive/Reactive.ts',
-    import.meta.url,
-).pathname
-const PROPS_SOURCE = new URL('../shared/props.ts', import.meta.url).pathname
-const ROUTE_SOURCE = new URL('../shared/route.ts', import.meta.url).pathname
-const SELECTION_SOURCE = new URL('../shared/reactive/index.ts', import.meta.url)
-    .pathname
+const REACTIVE_SOURCE = Bun.fileURLToPath(
+    new URL('../shared/reactive/Reactive.ts', import.meta.url),
+)
+const PROPS_SOURCE = Bun.fileURLToPath(
+    new URL('../shared/props.ts', import.meta.url),
+)
+const ROUTE_SOURCE = Bun.fileURLToPath(
+    new URL('../shared/route.ts', import.meta.url),
+)
+const SELECTION_SOURCE = Bun.fileURLToPath(
+    new URL('../shared/reactive/index.ts', import.meta.url),
+)
 
 /**
- * Abide's own `Reactive`, `Selection` and `props` declarations, as this project's checker names
- * them.
+ * Abide's own `Reactive`, `Selection`, `props` and `route` declarations, as this project's checker
+ * names them.
  *
  * 31.3 — A `Reactive` IS TOLD BY ITS DECLARATION, never by how it prints. Every instantiation of
  * abide's `Reactive` carries the symbol of the one type literal it is declared as, whatever alias

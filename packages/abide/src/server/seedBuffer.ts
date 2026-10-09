@@ -33,7 +33,7 @@ import {
     streamingOrSettled,
 } from '#shared/reactive/index.ts'
 import { positiveSetting } from './config.ts'
-import type { PageRender } from './requestScope.ts'
+import { heldByApp, type PageRender } from './requestScope.ts'
 
 const HYDRATE_LOG = namedLogger('abide:hydrate')
 
@@ -64,6 +64,8 @@ type Entry = {
     timer: ReturnType<typeof setTimeout> | undefined
     // Stops counting a stream's transcript against its bound.
     release: () => void
+    // 42.11 — unfiles the entry from the app whose render left it, which drops it when it stops.
+    unhold: () => void
 }
 
 // INDEXED BY THE THREE THINGS 41.18 MATCHES ON — caller, handler, args key — so a call finds its entry
@@ -102,6 +104,7 @@ export function seedFor(caller: string): PageRender['seed'] {
             expires: Date.now() + SEED_LIFE_MS,
             timer: undefined,
             release: NOTHING_HELD,
+            unhold: NOTHING_HELD,
         }
         const bound = positiveSetting(
             'ABIDE_MAX_STREAM_BUFFER_SIZE',
@@ -128,6 +131,7 @@ export function seedFor(caller: string): PageRender['seed'] {
             byKey.set(key, entries)
         }
         entries.push(entry)
+        entry.unhold = heldByApp(() => drop(caller, entry))
         // UNREF'D, so a process with nothing else to do is not kept up by entries nobody will take.
         entry.timer = setTimeout(
             () => drop(caller, entry),
@@ -241,6 +245,7 @@ function seedKey(args: unknown): string | undefined {
 function drop(caller: string, entry: Entry): void {
     clearTimeout(entry.timer)
     entry.release()
+    entry.unhold()
     const byRpc = BUFFER.get(caller)
     const byKey = byRpc?.get(entry.rpc)
     const entries = byKey?.get(entry.key)

@@ -2,6 +2,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Read } from './classifyRead.ts'
 import { holdsSlot } from './classifyTemplate.ts'
+import type { Finding } from './Finding.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
     type Origin,
@@ -10,7 +11,7 @@ import {
     type Span,
 } from './projectShadow.ts'
 import type { InlineComponent, Setup, TemplateNode } from './TemplateNode.ts'
-import { nesting, type Token, tokenise } from './tokenise.ts'
+import { nesting, type Token, tokenize } from './tokenize.ts'
 
 // 31.1 and 31.4 — inside a `.abide` a name bound to a `Reactive` is READ where it stands and
 // WRITTEN where it is assigned.
@@ -26,7 +27,7 @@ import { nesting, type Token, tokenise } from './tokenise.ts'
 // unconditional `n.set(n() || v)` stores the value it already held — every reader woken for a
 // value that never moved, which is the failure no correctness test can see.
 //
-// THE READ STANDS IN FRONT AND NOTHING WRAPS IT. A parenthesised `(n() || n.set(v))` reads as a
+// THE READ STANDS IN FRONT AND NOTHING WRAPS IT. A parenthesized `(n() || n.set(v))` reads as a
 // call on the line above it — ASI refuses to break in front of a `(` — and the operator binds
 // looser than everything an author can legally write around an assignment, so the bare form needs
 // no parentheses to survive one.
@@ -75,7 +76,7 @@ export class Lowering {
      * Collected rather than thrown, so one refusal is one finding and the rest of the file is
      * still checked.
      */
-    readonly refusals: { at: number; message: string }[] = []
+    readonly refusals: Finding[] = []
 
     constructor(file: AbideFile, answer: CheckerAnswer, checking = false) {
         this.projection = projectShadow(file)
@@ -128,7 +129,7 @@ export class Lowering {
     opensShareScope(): boolean {
         const text = this.projection.text
         if (!text.includes('.share')) return false
-        const tokens = tokenise(text)
+        const tokens = tokenize(text)
         let found = false
         for (let at = 0; at < tokens.length - 3; at += 1) {
             if ((tokens[at] as Token).text !== 'reactive') continue
@@ -283,37 +284,17 @@ export class Lowering {
     }
 
     /**
-     * A span lowered as `expression` lowers one, with each run recorded in `origins` against where
-     * it came from.
-     *
-     * 38.3 — the same splice as `lower`, each run it copies recorded against where the projection
-     * held it, so a checker's position in the output is a position in the file.
-     */
-    lowerMapped(
-        span: Span,
-        holds: boolean,
-        origins: Origin[],
-        base: number,
-    ): string {
-        return this.lower(span, holds, origins, base)
-    }
-
-    /**
      * The source of `span`, every read in it rewritten.
      *
      * A write's value and a computed segment are spans inside it, lowered by the same call, and
      * the reads they hold are skipped by the outer walk because it resumes past them.
      *
-     * `origins`, where given, collects what `lowerMapped` says it does: a copied run at its own
-     * offset, and a rewritten one as a run of no length at the read it replaced, so anything inside
-     * the rewrite is placed at the read.
+     * 38.3 — `origins`, where given, records each run against where the projection held it, so a
+     * checker's position in the output is a position in the file: a copied run at its own offset,
+     * and a rewritten one as a run of no length at the read it replaced, so anything inside the
+     * rewrite is placed at the read. `base` is where the output lands in the text it is added to.
      */
-    private lower(
-        span: Span,
-        holds = false,
-        origins?: Origin[],
-        base = 0,
-    ): string {
+    lower(span: Span, holds = false, origins?: Origin[], base = 0): string {
         const from = span.start
         const to = span.end
         const source = this.projection.text
@@ -605,7 +586,7 @@ function isRawCallee(read: Read): boolean {
 function grouped(text: string): string {
     if (!text.includes(',') && !text.includes('/') && text[0] !== '{')
         return text
-    const tokens = tokenise(text)
+    const tokens = tokenize(text)
     const last = tokens[tokens.length - 1]
     if (last !== undefined && last.end < text.trimEnd().length)
         return `(${text}\n)`

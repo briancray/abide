@@ -10,6 +10,7 @@ import {
     refresh,
     watch,
 } from '#shared'
+import { answered } from '#shared/answerOf.ts'
 
 const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0))
 
@@ -108,6 +109,69 @@ test('a generator handler streams, and the value is its chunks', async () => {
         { region: 'north', year: 2026 },
         { region: 'south', year: 2026 },
     ])
+})
+
+// 16.9 — EVERY `Rpc` CARRIES THE TRANSPORT'S `HttpError`, declared or not: a stream handler that
+// declares nothing still times out 504, and the wire rebuilds a 500 whose body was no `Failed` as one.
+// The runtime half pins the shape the type names — name, status, data `undefined`. The type half is
+// the reads: `events.error()?.message` and `error.data` only compile where the `Rpc`'s failures carry
+// it, and the `@ts-expect-error` keeps a name no failure carries refusing. THE REVERT: drop
+// `| Failed<'HttpError', undefined>` from the call's `Reactive` in `rpc.ts` — four reads fail
+// typecheck, `.message`, `.status` and `.data` on `never`.
+test('every rpc carries the transport refusal in its failures — 16.9', async () => {
+    const ask = POST(
+        async function* (_args: { question: string }) {
+            await new Promise(() => {})
+            yield { type: 'text', text: '' }
+        },
+        { timeout: 20 },
+    )
+    const events = ask({ question: 'why' })
+    await events.catch(() => {})
+    const message: string | undefined = events.error()?.message
+    expect(message).toBe('Gateway Timeout')
+    const error = events.error()
+    expect(error).toMatchObject({ name: 'HttpError', status: 504 })
+    expect(error?.data).toBeUndefined()
+    if (ask.isError(error, 'HttpError')) {
+        const status: number = error.status
+        const data: undefined = error.data
+        expect([status, data]).toEqual([504, undefined])
+    }
+    // @ts-expect-error no failure of this name is carried, declared or the transport's
+    expect(error?.name === 'NotFound').toBe(false)
+
+    const rebuilt = answered({
+        status: 500,
+        statusText: 'Internal Server Error',
+        type: 'text/plain',
+        version: null,
+        life: null,
+        text: 'the handler threw',
+        bytes: undefined,
+        body: undefined,
+    })
+    expect(rebuilt).toMatchObject({
+        name: 'HttpError',
+        status: 500,
+        message: 'Internal Server Error',
+    })
+    expect((rebuilt as { data: unknown }).data).toBeUndefined()
+})
+
+// 11.62 — A VALUE ADOPTS A CALL CARRYING THE FAILURES IT CARRIES: a contact read through a `GET` and
+// written through a `POST` both hold the transport's refusal. THE REVERT: type `set`'s `Reactive` arm
+// back to `Reactive<Accepted>` in `Reactive.ts` — the `set` below fails typecheck, failures `never`.
+test('a value adopts an rpc call whose failures it carries — 11.62, 16.9', async () => {
+    const getContact = GET(async (_args: { id: string }) => ({ phone: '1' }))
+    const updatePhone = POST(async ({ phone }: { phone: string }) => ({
+        phone,
+    }))
+    const contact = reactive(() => getContact({ id: '4021' }))
+    await contact
+    contact.set(updatePhone({ phone: '2' }))
+    await contact
+    expect(contact().phone).toBe('2')
 })
 
 test('an rpc carries its method and description', () => {

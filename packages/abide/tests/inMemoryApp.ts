@@ -34,6 +34,7 @@ export function inMemoryApp(
                 name,
                 ui: true,
                 cli: true,
+                mcp: true,
                 description: undefined,
                 copy: undefined,
                 defaults: undefined,

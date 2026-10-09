@@ -638,24 +638,21 @@ test('a diamond produces once, and never a value the system was not in', () => {
 })
 
 // 5.2 ON A DIAMOND, which is the contract eager claimed and broke. The source moves,
-// the derived value does not, and nothing downstream may wake.
+// the derived value does not, and nothing downstream may wake. The revert is `false` for the
+// `Object.is(produced, previous)` in `produce`: `woken` is 1 against 0.
 test('a diamond whose value does not change wakes nobody', () => {
     const a = reactive(1)
     const b = reactive(() => a() > 0)
     const c = reactive(() => a() < 100)
     const both = reactive(() => b() && c())
-    let woken = 0
-    const stop = both.watch(() => {
-        woken += 1
-    })
-    woken = 0
+    const woken = wakes(both)
 
     a.set(2)
     expect(both()).toBe(true)
     a.set(3)
     expect(both()).toBe(true)
-    expect(woken).toBe(0)
-    stop()
+    expect(woken.count()).toBe(0)
+    woken.stop()
 })
 
 // 11.58, AND THE WHOLE OF WHAT PUSH-PULL BUYS. A write MARKS every derived value that
@@ -1134,7 +1131,14 @@ test('an effect that throws stops its s.watch, as it stops a watch', () => {
 
     // The revert is the missing `catch`: without it this is 2, and it keeps climbing —
     // one more run per write, for the life of the value.
-    expect(() => count.set(2)).not.toThrow()
+    // `set` returns `void | Failures`, and bun's `not.toThrow` reads a RETURNED `Error` as a throw.
+    let threw = false
+    try {
+        count.set(2)
+    } catch {
+        threw = true
+    }
+    expect(threw).toBe(false)
     expect(runs).toBe(1)
 })
 
@@ -1581,7 +1585,7 @@ test('adopted productions mirror into the outer value, through its own transform
 // and the value would be right every time.
 //
 // The revert is dropping the `standing.source === inner` test in `adopt`: this goes from 0
-// to 2, one wake per recompute, for as long as the value lives.
+// to 1 at each write, one wake per recompute, for as long as the value lives.
 test('a recompute onto the same adopted Reactive wakes no reader', () => {
     const trigger = reactive(0)
     const held = reactive(1)
@@ -1589,17 +1593,14 @@ test('a recompute onto the same adopted Reactive wakes no reader', () => {
         trigger()
         return held
     })
-    let woken = 0
-    const stop = outer.watch(() => {
-        woken += 1
-    })
-    woken = 0
+    const woken = wakes(outer)
 
     trigger.set(1)
+    expect(woken.count()).toBe(0)
     trigger.set(2)
-    expect(woken).toBe(0)
+    expect(woken.count()).toBe(0)
     expect(outer()).toBe(1)
-    stop()
+    woken.stop()
 })
 
 // 11.16: on re-adoption the outer clears where the newly adopted has nothing to serve. It
@@ -1694,52 +1695,72 @@ test('re-adopting something with nothing to serve wakes the guards too', () => {
     stop()
 })
 
+// 11.17 IS ONLY VISIBLE ACROSS A RE-ADOPTION. A write to the adopted value is gated by the
+// adopted value's own `identity` first, so a production the inherited comparator would collapse
+// never reaches the mirror at all — the gate the outer inherits is the one that compares what the
+// NEW inner serves against what the OLD one did. Two values holding equal contents in different
+// objects: `structural` collapses the switch, the reference default would not.
+//
+// The revert is assigning `cell.declaredIdentityFn` alone in `adopt`, inheriting nothing: `woken`
+// is 1 against 0.
 test('an adopting value inherits the identity it did not declare', () => {
-    const inner = reactive({ id: 1 }, { identity: structural })
-    const outer = reactive(() => inner)
-    let woken = 0
-    const stop = outer.watch(() => {
-        woken += 1
-    })
-    woken = 0
+    const first = reactive({ id: 1 }, { identity: structural })
+    const second = reactive({ id: 1 }, { identity: structural })
+    const pick = reactive(true)
+    const outer = reactive(() => (pick() ? first : second))
+    const woken = wakes(outer)
 
-    // A fresh object with the same contents: `structural` collapses it, the reference
-    // default would not.
-    inner.set({ id: 1 })
-    expect(woken).toBe(0)
+    pick.set(false)
+    expect(woken.count()).toBe(0)
+    woken.stop()
+})
+
+// 11.17 INHERITS FOR THE LENGTH OF THE ADOPTION, NOT FOR THE LIFE OF THE VALUE. An inherited
+// comparator left on the outer once it stops adopting gates the outer's OWN productions with a
+// comparison it never declared: keyed on `.id`, every number reads as the same `undefined`, so the
+// outer answers its first number forever and its watcher never wakes. Nothing else would tell.
+//
+// The revert is dropping the reset to `declaredIdentityFn` in `dropAdoption`: `outer()` stays 0
+// and `seen` is `[0]` against `[0, 5]`.
+test('a value that stops adopting goes back to the identity it declared', () => {
+    const inner = reactive({ id: 1 }, { identity: (row) => row.id })
+    const adopting = reactive(true)
+    const count = reactive(0)
+    const outer = reactive((): unknown => (adopting() ? inner : count()))
+    expect(outer()).toEqual({ id: 1 })
+    adopting.set(false)
+    expect(outer()).toBe(0)
+
+    const seen: unknown[] = []
+    const stop = outer.watch((value) => {
+        seen.push(value)
+    })
+    count.set(5)
+    flushSync()
+    expect(outer()).toBe(5)
+    expect(seen).toEqual([0, 5])
     stop()
 })
 
-// THE SHORT WRITE'S PREDICATE MUST OUTLIVE THE THING THAT MADE IT FALSE. `simple` is what
-// seats a value on `SIMPLE_PROTOTYPE`, where `set` is `Object.is` and three stores — and
-// `identityFn` is one of the fields under it that MOVES after construction, because 11.17
-// has an adoption inherit the inner value's. A value that adopted, inherited `structural`,
-// and then stopped adopting keeps the inherited comparator, so it must not still be sitting
-// on the short write when a later `set` arrives.
+// The same, across a RE-ADOPTION: the inherited comparator is the adopted value's, so a second
+// inner declaring none hands the outer the reference default rather than the first one's.
 //
-// The revert is dropping the `simpleShape(cell)` call in `adopt`: `woken` goes from 0 to 1,
-// because `dropAdoption` re-seats by a `simple` that never heard about the comparator.
-test('a value that stops adopting keeps the identity it inherited', () => {
-    const inner = reactive({ id: 1 }, { identity: structural })
-    const adopting = reactive(true)
-    const outer = reactive(() => (adopting() ? inner : { id: 1 }))
-    // Adopt, then hand back something that is not a `Reactive`, then pull the recompute.
-    expect(outer()).toEqual({ id: 1 })
-    adopting.set(false)
-    flushSync()
-    expect(outer()).toEqual({ id: 1 })
-
-    let woken = 0
-    const stop = outer.watch(() => {
-        woken += 1
-    })
-    woken = 0
-    // A fresh object with the same contents. The inherited `structural` collapses it; the
-    // reference compare the short write uses would not.
-    outer.set({ id: 1 })
-    flushSync()
-    expect(woken).toBe(0)
-    stop()
+// The revert is `if (cell.identityFn === null)` in front of the assignment in `adopt`: the first
+// inner's `.id` comparator stays, `{ id: 1 }` with a new `name` reads as unchanged, and `woken`
+// is 0 against 1.
+test('a re-adoption takes the identity of what it adopts now', () => {
+    const keyed = reactive({ id: 1, name: 'a' }, { identity: (row) => row.id })
+    const plain = reactive({ id: 1, name: 'a' })
+    const pick = reactive(true)
+    const outer = reactive(() => (pick() ? keyed : plain))
+    expect(outer()).toEqual({ id: 1, name: 'a' })
+    pick.set(false)
+    expect(outer()).toEqual({ id: 1, name: 'a' })
+    const woken = wakes(outer)
+    plain.set({ id: 1, name: 'b' })
+    expect(woken.count()).toBe(1)
+    expect(outer()).toEqual({ id: 1, name: 'b' })
+    woken.stop()
 })
 
 // 11.19 through a load: an adopting value reports busy only where the adopted one does,
@@ -4098,10 +4119,11 @@ test('a schema refuses by throwing, and the throw becomes a ValidationError', ()
     const refusal = positive.error() as unknown as {
         name: string
         status: number
-        data: Record<string, string[]>
+        data: string[]
     }
     expect(`${refusal.name} ${refusal.status}`).toBe('ValidationError 422')
-    expect(refusal.data).toEqual({ '': ['must be positive'] })
+    // A number has no path to key by, so `Issues<number>` is the bare list (`issuesOf`).
+    expect(refusal.data).toEqual(['must be positive'])
 })
 
 // 19.4, AND IT CANNOT BE CAUGHT BY A TYPE. `Schema<boolean>` and a predicate are the same
@@ -4816,6 +4838,38 @@ test('a set on a stream moves no cursor over it', async () => {
     taken.push((await pending).value)
     await cursor.return?.()
     expect(`cursor: ${taken.join('|')}`).toBe('cursor: 1|2|3')
+})
+
+// 11.19 THROUGH 9.25: A WRITE FOLLOWING A CALL IN FLIGHT. A stream that failed before its first chunk
+// is neither busy nor servable; a `Reactive` written over it that is still loading makes it busy by
+// FOLLOWING, which mints nothing, and `unserve` finds nothing to lose — so a guard subscribed before
+// the write hears it from `follow` itself, onto true, and back onto false when the call lands. Over a
+// stream that had landed, `unserve` already woke the guard; that case never failed.
+//
+// THE REVERT is dropping the `probesMoved` at the end of `follow`: `seen: false,false`.
+test('a busy guard on a stream hears a write that follows a call in flight', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    run.fail(new Error('the feed dropped'))
+    await turns()
+    const seen: boolean[] = []
+    const stop = watch(() => {
+        seen.push(rows.busy())
+    })
+    let settle: (value: number[]) => void = (): void => {}
+    const call = reactive(
+        new Promise<number[]>((resolve) => {
+            settle = resolve
+        }),
+    )
+    rows.set(call as never)
+    flushSync()
+    settle([2])
+    await call
+    flushSync()
+    stop()
+    expect(`seen: ${seen.join(',')}`).toBe('seen: false,true,false')
 })
 
 // 11.62 ON A STREAM IS 9.25's WRITE, FOLLOWING. A `Reactive` written over a stream is adopted, not
@@ -6195,6 +6249,34 @@ test('a Reactive written with set is adopted rather than stored', () => {
     stop()
 })
 
+// 11.19 THROUGH 11.62: `paid = payInvoice(…)` over a `reactive()` that holds nothing. The guard
+// asking `paid.busy()` subscribed before the write, and the write moves the probe by ADOPTING —
+// no production, and the mirror's `unserve` finds nothing to lose — so the guard has to be woken
+// by the adoption itself, onto true, and again onto false when the call lands.
+//
+// THE REVERT is dropping the `probesMoved` at the end of `adopt`: `seen: false,false` — the
+// guard never shows the load, and wakes only once it is over.
+test('a busy guard hears a write that adopts a call in flight', async () => {
+    const paid = reactive<number>()
+    const seen: boolean[] = []
+    const stop = watch(() => {
+        seen.push(paid.busy())
+    })
+    let settle: (value: number) => void = (): void => {}
+    const call = reactive(
+        new Promise<number>((resolve) => {
+            settle = resolve
+        }),
+    )
+    paid.set(call as never)
+    flushSync()
+    settle(1)
+    await call
+    flushSync()
+    stop()
+    expect(`seen: ${seen.join(',')}`).toBe('seen: false,true,false')
+})
+
 // 11.60: AN ADOPTING VALUE IS THE VALUE IT ADOPTS, writes included. A write standing on the adopter
 // alone was the one member that did not reach through, so a value built over a shared entry held a
 // private copy of every edit made to it.
@@ -6616,4 +6698,180 @@ test('a schema runs untracked', () => {
     other.set(2)
     flushSync()
     expect(bodyRuns).toBe(settled)
+})
+
+// 12.14 OVER A STREAM FOLLOWING A WRITE (9.25, 11.62). An own stream's `adoption` is the
+// `Reactive` its standing write follows, not a stream it forwards — and releasing the orphan
+// read it as a forward, nulled the stream's own record and left a wake already queued for it to
+// read a field off `null` on the next task. The revert is dropping the `stream.source === null`
+// return from `dropAdoption`: `stream` reads `null` against a record, and the queued
+// `wakeStreams` throws `null is not an object`.
+test('releasing an orphaned stream that follows a write keeps the stream its own', async () => {
+    let push: (value: number) => void = (): void => {}
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    const s = reactive(async function* () {
+        yield 1
+        yield await new Promise<number>((resolve) => {
+            push = resolve
+        })
+    })
+    collectWatches(previous)
+    await Bun.sleep(5)
+    // The chunk lands and its wake is queued for the next task …
+    push(2)
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve()
+    // … and before that task the stream follows a write, and its owner stops.
+    s.set(reactive(7) as never)
+    for (const stop of stops) stop()
+    expect(
+        `stream: ${cellOf<{ stream: unknown }>(s).stream === null ? 'null' : 'own'}`,
+    ).toBe('stream: own')
+    let thrown: unknown
+    const reported = (error: unknown): void => {
+        thrown = error
+    }
+    process.on('uncaughtException', reported)
+    await Bun.sleep(5)
+    process.off('uncaughtException', reported)
+    expect(String(thrown)).toBe('undefined')
+})
+
+// 2.4 PAST `next()`. The pump caught only the generator's own throw, so one raised while it lands
+// or closes a run — here a `transform` the close reads through — rejected a promise nobody held:
+// an unhandled rejection, and a value that went on reporting no error. The revert is dropping the
+// `.then(undefined, …)` from `pumpRun`: `error` reads `undefined` and the rejection escapes.
+test('a stream whose close throws refuses the run rather than rejecting into nothing', async () => {
+    let escaped: unknown
+    const reported = (error: unknown): void => {
+        escaped = error
+    }
+    process.on('unhandledRejection', reported)
+    const s = reactive(
+        async function* () {
+            yield 1
+        },
+        {
+            transform: (): never => {
+                throw new Error('bad transform')
+            },
+        } as never,
+    )
+    await Bun.sleep(5)
+    process.off('unhandledRejection', reported)
+    expect(String(s.error())).toBe('Error: bad transform')
+    expect(String(escaped)).toBe('undefined')
+})
+
+// 13.2 AND 13.11 OVER KEYS NOT YET REACHED. `k.busy` subscribed to the probes of the entries there
+// were, so a guard asked before the first search — search-as-you-type — never heard the key that
+// started loading next, and went on saying idle over a load in flight. The revert is dropping the
+// `signalMoved(membership)` from `reach` in `Keyed.ts`: the guard runs 1 time against 2, and
+// reads `[false]` while `search.busy()` is true.
+test('a keyed guard asked before a key is reached wakes when that key starts loading', () => {
+    const search = reactive(
+        (_args: { q: string }) => new Promise<string>(() => {}),
+    )
+    const sawBusy: boolean[] = []
+    const sawReady: boolean[] = []
+    const stopBusy = watch(() => {
+        sawBusy.push(search.busy())
+    })
+    const stopReady = watch(() => {
+        sawReady.push(search.ready())
+    })
+    flushSync()
+    search({ q: 'a' })
+    flushSync()
+    expect(search.busy()).toBe(true)
+    expect(sawBusy).toEqual([false, true])
+    expect(sawReady).toEqual([true, false])
+    // A key already reached is not a membership move, so reaching it again wakes nobody.
+    search({ q: 'a' })
+    flushSync()
+    expect(sawBusy).toEqual([false, true])
+    stopBusy()
+    stopReady()
+})
+
+// The other half of membership: an entry RELEASED takes its answer with it. A refused entry holds
+// `ready` false, and its eviction (11.46) moves no probe of its own — so a guard over the keyed
+// value goes on saying not-ready over a map that no longer holds anything unready. The revert is
+// dropping the `signalMoved(membership)` from `release` in `Keyed.ts`: `seen` ends `false` against
+// `true`.
+test('a keyed guard wakes when an entry it was answering from is released', async () => {
+    const lookup = reactive(
+        (_args: { id: number }): number => {
+            throw new Error('no')
+        },
+        { ttl: 5 },
+    )
+    lookup({ id: 1 })
+    const seen: boolean[] = []
+    const stop = watch(() => {
+        seen.push(lookup.ready())
+    })
+    flushSync()
+    expect(seen).toEqual([false])
+    await Bun.sleep(20)
+    flushSync()
+    expect(lookup.entries.size).toBe(0)
+    expect(seen).toEqual([false, true])
+    stop()
+})
+
+// THE DEDUP IN `track` MUST NOT BE QUADRATIC IN THE BODY. A body reading a thousand rows' values
+// that diverges near its front — a row inserted at index 0 — asked the whole kept prefix about
+// every read for the rest of the run. Counted as what it is, loads from the reader's `sources`:
+// the right output either way, so the count is the gate. The revert is the scan alone in `track`
+// (the `at < SET_OVER_SCAN` arm for every read): 504,503 loads against 3,822 at n=1000.
+test('a body that diverges near its front dedups its reads in linear work', () => {
+    const width = 1000
+    const rows = Array.from({ length: width }, (_, index) => reactive(index))
+    const list = reactive(rows)
+    const sum = reactive(() => {
+        let total = 0
+        for (const row of list()) total += row()
+        return total
+    })
+    expect(sum()).toBe((width * (width - 1)) / 2)
+    const record = cellOf<{ sources: unknown[] }>(sum)
+    let loads = 0
+    record.sources = new Proxy(record.sources, {
+        get(target, key, receiver) {
+            if (typeof key === 'string' && key.charCodeAt(0) <= 57) loads += 1
+            return Reflect.get(target, key, receiver)
+        },
+    })
+    list.set([reactive(width), ...rows])
+    expect(sum()).toBe((width * (width + 1)) / 2)
+    expect(loads).toBeLessThan(width * 10)
+    // Every value is still subscribed once: one more write to a row recomputes the sum.
+    ;(rows[500] as Reactive<number>).set(0)
+    expect(sum()).toBe((width * (width + 1)) / 2 - 500)
+    expect(cellOf<{ readers: unknown[] }>(rows[500]).readers.length).toBe(1)
+})
+
+// The set `track` dedups a long body against must still dedup: a value read again and again past
+// the scan's threshold, before and after the set is built, holds one subscription. The revert is
+// dropping the `has` test on the set in `track`: `repeated` holds 82 subscriptions against 1.
+test('a long body that reads one value many times holds one subscription of it', () => {
+    const rows = Array.from({ length: 100 }, (_, index) => reactive(index))
+    const repeated = reactive(0)
+    const one = reactive(1)
+    const flip = reactive(false)
+    // The flip puts `one` at the second slot, so the run diverges there and every read after it
+    // is deduped by `track`.
+    const total = reactive(() => {
+        let sum = flip() ? one() : 0
+        for (const row of rows) sum += row() + repeated()
+        return sum
+    })
+    total()
+    flip.set(true)
+    expect(total()).toBe(4951)
+    expect(cellOf<{ readers: unknown[] }>(repeated).readers.length).toBe(1)
+    expect(cellOf<{ readers: unknown[] }>(rows[99]).readers.length).toBe(1)
+    repeated.set(1)
+    expect(total()).toBe(5051)
 })

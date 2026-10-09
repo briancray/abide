@@ -719,6 +719,18 @@ ${handlers}`,
         '`getRows` returns a `Reactive` at `[].owner.held`',
     )
     expect(await refusals('')).toEqual([])
+    // As deep as `argsSchemaOf` walks and no deeper: seven members down is read, eight is past
+    // `DEEPEST`. THE REVERT: `walk.depth > DEEPEST` in `nestedReactiveIn` refuses the eighth, 1
+    // where 0 is due.
+    const deepest = await refusals(
+        'export const getDeep = GET(() => ({ a: { b: { c: { d: { e: { f: { g: user } } } } } } }))\n',
+    )
+    expect(deepest.length).toBe(1)
+    expect(deepest[0]).toContain('at `.a.b.c.d.e.f.g`')
+    const past = await refusals(
+        'export const getPast = GET(() => ({ a: { b: { c: { d: { e: { f: { g: { h: user } } } } } } } }))\n',
+    )
+    expect(past).toEqual([])
 }, 60_000)
 
 // 32.6 — A `bind:` WITH NOTHING BOUND IS NO PROP, to the checker as to the build: both key a tag's

@@ -35,7 +35,7 @@ import {
 import type { Method } from '#shared/rpc.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { defaultedMembers, parameterPattern } from './argsDefaultsIn.ts'
-import { argsSchemaOf } from './argsSchemaOf.ts'
+import { argsSchemaOf, DEEPEST, type Walk } from './argsSchemaOf.ts'
 import { diagnosisAt } from './lineOf.ts'
 import { isReactiveCall, optionNamed } from './reactiveOptions.ts'
 import {
@@ -64,7 +64,7 @@ export async function declaredExports(
     paths: readonly string[],
 ): Promise<DeclaredExport[][]> {
     const checker = project.checker
-    // ABIDE'S FILE AS THE CHECKER NAMES IT, not as this module does: it canonicalises a path to
+    // ABIDE'S FILE AS THE CHECKER NAMES IT, not as this module does: it canonicalizes a path to
     // the disk's case rules, so on a case-insensitive disk `/Users/…/Code` comes back
     // `/users/…/code` and a string compared against `import.meta.url` never matched.
     const methodsPath = (await project.program.getSourceFile(METHODS_SOURCE))
@@ -131,6 +131,7 @@ export async function declaredExports(
                         method: declared?.method,
                         ui: declared?.ui ?? true,
                         cli: declared?.cli ?? true,
+                        mcp: declared?.mcp ?? true,
                         description: declared?.description,
                         copy: declared?.copy,
                         defaults: declared?.defaults,
@@ -155,21 +156,31 @@ export async function declaredExports(
 }
 
 /** Where abide declares the five methods: `GET` is `declare('GET')` there and nowhere else. */
-const METHODS_SOURCE = new URL('../shared/rpc.ts', import.meta.url).pathname
+const METHODS_SOURCE = Bun.fileURLToPath(
+    new URL('../shared/rpc.ts', import.meta.url),
+)
 /** And where it declares `socket` (18.1), which a module under `server/sockets` exports. */
-const SOCKET_SOURCE = new URL('../shared/socket.ts', import.meta.url).pathname
+const SOCKET_SOURCE = Bun.fileURLToPath(
+    new URL('../shared/socket.ts', import.meta.url),
+)
 
 /** What declared an export: one of the five methods, or `socket`. */
 type Declared = Mount['method']
 type DeclaredExport = Pick<
     Mount,
-    'name' | 'ui' | 'cli' | 'copy' | 'defaults' | 'args' | 'description'
+    'name' | 'ui' | 'cli' | 'mcp' | 'copy' | 'defaults' | 'args' | 'description'
 > & {
     method: Declared | undefined
     /** 18.30 — what its copy's options declare and the build could not read. */
     unread: Diagnosis[]
 }
-const METHODS = new Set<string>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+const METHODS: ReadonlySet<string> = new Set<Method>([
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+])
 
 /**
  * The method of the abide call a value is declared by — `const x = GET(…)` or `export default
@@ -185,6 +196,7 @@ async function declaringMethod(
           method: Declared
           ui: boolean
           cli: boolean
+          mcp: boolean
           description: string | undefined
           copy: CopyOptions | undefined
           unread: Node[]
@@ -209,8 +221,7 @@ async function declaringMethod(
     const named = await checker.getSymbolAtLocation(callee)
     if (named === undefined) return undefined
     const method = await aliasedSymbol(checker, named)
-    const ui = !withheldFrom(call, 'ui')
-    const cli = !withheldFrom(call, 'cli')
+    const ui = declaredFor(call, 'ui') ?? true
     const description = describedAs(call)
     if (
         method.name === 'socket' &&
@@ -220,7 +231,8 @@ async function declaringMethod(
         return {
             method: 'SOCKET',
             ui,
-            cli,
+            cli: declaredFor(call, 'cli') ?? true,
+            mcp: declaredFor(call, 'mcp') ?? true,
             description,
             copy: undefined,
             unread: [],
@@ -240,12 +252,19 @@ async function declaringMethod(
     // read it as one rather than wait out the whole response: the one thing about it the build can
     // tell from its type and the wire cannot tell from its first byte in time. A mutation's stream is
     // read the same way.
-    if (await returnsGenerator(checker, body))
+    const returned = await awaitedReturnOf(checker, body)
+    if (await isGenerator(checker, returned))
         declared.copy = { ...declared.copy, stream: true }
+    // 16.38 — A HANDLER ANSWERING A WHOLE `Response` HAS NO VALUE A TOOL OR THE SHELL CAN PUBLISH, so
+    // both default off where its `clients` does not say. Read off the type, since the runtime only
+    // learns it by calling the handler; `page`, `redirect` and the stream helpers hand back what
+    // they were given, and are not a `Response`.
+    const answersResponse = await isResponse(returned)
     return {
         method: method.name as Method,
         ui,
-        cli,
+        cli: declaredFor(call, 'cli') ?? !answersResponse,
+        mcp: declaredFor(call, 'mcp') ?? !answersResponse,
         description,
         ...declared,
         defaulted: defaultedMembers(body),
@@ -303,7 +322,7 @@ function literalDefaults(node: Node | undefined): Defaults | null {
  * and the options object it is handed, each written inline or bound to a name first. A value is
  * read off its TYPE, so `history: SIZE` over a `const SIZE = 3` carries 3 as `history: 3` does: a
  * string `by`, string `tags`, a number `history`, and an `identity` of abide's `structural`. A
- * function form has no serialisation and stays the server's. 18.30 — anything else of `by`, `tags`
+ * function form has no serialization and stays the server's. 18.30 — anything else of `by`, `tags`
  * or `history` is handed back UNREAD, for the build to warn on.
  */
 async function declaredCopy(
@@ -371,16 +390,15 @@ async function allSettled<T>(promises: Promise<T>[]): Promise<T[]> {
 }
 
 /**
- * Whether a handler's function returns an async generator, and so streams (9.20): declared
- * `async function*`, an arrow handing one back or a promise of one, or a member naming one
- * (`claudeCode.bridge`).
+ * What a handler's function returns, a promise's value in place of the promise: declared
+ * `async function*`, an arrow, or a member naming one (`claudeCode.bridge`).
  */
-async function returnsGenerator(
+async function awaitedReturnOf(
     checker: Checker,
     body: Node | undefined,
-): Promise<boolean> {
-    if (body === undefined) return false
-    let returned = await valueTypeOf(
+): Promise<Type | undefined> {
+    if (body === undefined) return undefined
+    const returned = await valueTypeOf(
         checker,
         isFunctionDeclaration(body) && body.name !== undefined
             ? body.name
@@ -391,7 +409,15 @@ async function returnsGenerator(
         ((returned as ObjectType).objectFlags & ObjectFlags.Reference) !== 0 &&
         (await returned.getSymbol())?.name === 'Promise'
     )
-        [returned] = await checker.getTypeArguments(returned as TypeReference)
+        return (await checker.getTypeArguments(returned as TypeReference))[0]
+    return returned
+}
+
+/** Whether a handler's returned type is an async generator, and so streams (9.20). */
+async function isGenerator(
+    checker: Checker,
+    returned: Type | undefined,
+): Promise<boolean> {
     if (returned === undefined) return false
     // An async generator's own members: `sse(…)`'s `Values` and a `ReadableStream` are iterated
     // too, and neither is typed as a stream.
@@ -402,6 +428,25 @@ async function returnsGenerator(
         else if (member.name === 'throw') throws = true
     }
     return iterates && throws
+}
+
+/**
+ * Whether a handler's returned type is a `Response`, or a union with one in it.
+ *
+ * 16.38 — ANY ARM: an arm answering a whole `Response` has no value to publish however the others
+ * answer, and leaving a surface off is what `clients` turns back on. Read by the type's own name,
+ * which the lib's global and Bun's both carry.
+ */
+async function isResponse(returned: Type | undefined): Promise<boolean> {
+    if (returned === undefined) return false
+    if (returned.flags & TypeFlags.Union) {
+        for (const member of await (
+            returned as UnionOrIntersectionType
+        ).getTypes())
+            if (await isResponse(member)) return true
+        return false
+    }
+    return (await returned.getSymbol())?.name === 'Response'
 }
 
 /** `boundValue`, and a function declaration where the name is one. */
@@ -420,7 +465,7 @@ async function declarationOf(
     return boundInitializer(checker, named)
 }
 
-/** A node, or where it is a name, what the name was initialised with. */
+/** A node, or where it is a name, what the name was initialized with. */
 async function boundValue(
     checker: Checker,
     node: Node | undefined,
@@ -481,7 +526,7 @@ async function isAbideStructural(
 /**
  * The `description` a handler call declares inline, where it is written as a literal.
  *
- * What the build can read without running the handler, as `withheldFrom` reads `clients` — for
+ * What the build can read without running the handler, as `declaredFor` reads `clients` — for
  * the shell, which lists the table the build wrote. A description built at run time still reaches
  * OpenAPI and MCP off the handler itself, and is not in the table.
  */
@@ -500,26 +545,30 @@ function describedAs(
 }
 
 /**
- * Whether a handler call declares `clients: { [surface]: false }` inline.
+ * What a handler call's inline `clients` declares for `surface`, or `undefined` where it does not.
  *
  * 20.4, 38.63 — written on the declaration, which is what the build can read without running it:
  * `ui: false` hands a browser no wrapper, and importing the handler from `#ui` is 16.30's compile
- * error; `cli: false` keeps it off the shell's listing, which reads the table the build wrote (38.7).
- * An options object built elsewhere is not read, and leaves the surface in place.
+ * error; `cli: false` keeps it off the shell's listing, which reads the table the build wrote (38.7);
+ * and an explicit `true` overrides 16.38's default. An options object built elsewhere, or a value
+ * that is not a literal, is not read.
  */
-function withheldFrom(
+function declaredFor(
     call: Node & { arguments?: readonly Node[] },
-    surface: 'ui' | 'cli',
-): boolean {
+    surface: 'ui' | 'cli' | 'mcp',
+): boolean | undefined {
     const options = call.arguments?.[1]
     if (options === undefined || !isObjectLiteralExpression(options))
-        return false
+        return undefined
     const clients = optionNamed(options, 'clients')
-    return (
-        clients !== undefined &&
-        isObjectLiteralExpression(clients) &&
-        optionNamed(clients, surface)?.kind === SyntaxKind.FalseKeyword
-    )
+    if (clients === undefined || !isObjectLiteralExpression(clients))
+        return undefined
+    const kind = optionNamed(clients, surface)?.kind
+    return kind === SyntaxKind.FalseKeyword
+        ? false
+        : kind === SyntaxKind.TrueKeyword
+          ? true
+          : undefined
 }
 
 /**
@@ -559,9 +608,9 @@ async function nestedReactiveIn(
     reactive: CheckedSymbol,
     type: Type | undefined,
     path: string,
-    walk: { seen: Set<number>; depth: number },
+    walk: Walk<Set<number>>,
 ): Promise<string | undefined> {
-    if (type === undefined || walk.depth > 8) return undefined
+    if (type === undefined || walk.depth >= DEEPEST) return undefined
     if (type.flags & TypeFlags.Union) {
         for (const member of await (
             type as UnionOrIntersectionType
@@ -586,7 +635,7 @@ async function nestedReactiveIn(
         return path
     if (walk.seen.has(type.id)) return undefined
     walk.seen.add(type.id)
-    const inner = { seen: walk.seen, depth: walk.depth + 1 }
+    const inner: Walk<Set<number>> = { seen: walk.seen, depth: walk.depth + 1 }
     const [array, tuple, calls] = await Promise.all([
         checker.isArrayType(type),
         checker.isTupleType(type),

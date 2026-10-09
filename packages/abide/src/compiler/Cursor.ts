@@ -7,7 +7,11 @@ import {
     isSlot,
     isTextish,
 } from './classifyTemplate.ts'
-import type { InlineComponent, TemplateNode } from './TemplateNode.ts'
+import type {
+    ElementNode,
+    InlineComponent,
+    TemplateNode,
+} from './TemplateNode.ts'
 
 // WHAT A TEMPLATE IS, ONCE, as the positions its nodes stand at: every text run, element and region,
 // in document order and as a tree. `placeTemplate` is the one walk over the template nodes, and
@@ -50,16 +54,16 @@ export const REGION_ROOT = '__root'
  */
 export const ROW_ROOT = '__row'
 
-export type PositionKind = 'text' | 'element' | 'region'
+type PlacedKind = 'text' | 'element' | 'region'
 
 /** Where one text run, element or region stands in a template, and how the walk finds it. */
-export type Position = {
+export type PlacedNode = {
     /**
      * The slot the adopt half binds this node to. Unique within the region, and the name the
      * positions after it are found from.
      */
     name: string
-    kind: PositionKind
+    kind: PlacedKind
     /**
      * The template node this position stands for, and the key a binding is looked up by: a run's
      * FIRST piece, the element itself, or the block, invocation or `<slot/>` a region is.
@@ -89,7 +93,7 @@ export type Position = {
      * The element this position stands inside, or null at the region's own root. What the walk's
      * pruning reads: a position is walked only when something at or after it in its parent is.
      */
-    within: Position | null
+    within: PlacedNode | null
     /**
      * Whether this position is, or stands inside, content only the parser makes right
      * (`isParserOwned`) — which is what sends a row the browser grows to the parser instead of a
@@ -108,7 +112,7 @@ export type Position = {
      * An element's own positions, in order — the tree the markup is rendered from. Empty for the
      * other two kinds, whose insides are their `inner` sinks or nothing at all.
      */
-    children: Position[]
+    children: PlacedNode[]
 }
 
 /** A run of siblings being walked: the region's own root, or the inside of one element. */
@@ -117,7 +121,7 @@ type Frame = {
      * The slot holding the node these children hang off, or the region root's own parent expression.
      */
     parent: string
-    within: Position | null
+    within: PlacedNode | null
     parserOwned: boolean
     /**
      * The expression the next sibling follows: the last slot placed, the last region's `close`, or
@@ -129,9 +133,9 @@ type Frame = {
 /** One region's positions, placed in document order by `placeTemplate`. */
 export class Cursor {
     /** In document order, which is the order the walk visits them in. */
-    readonly positions: Position[] = []
+    readonly positions: PlacedNode[] = []
     /** The positions at the region's own root, in order — what a renderer starts from. */
-    readonly top: Position[] = []
+    readonly top: PlacedNode[] = []
     /**
      * Whether this region can be made more than once in one document.
      *
@@ -186,7 +190,7 @@ export class Cursor {
      * A run of adjacent text and expressions, which a browser parses as ONE text node however many
      * pieces it was written as — see `classifyTemplate`'s head for why that is the unit.
      */
-    text(run: TemplateNode[], blank: boolean): Position {
+    text(run: TemplateNode[], blank: boolean): PlacedNode {
         return this.record('text', run[0] as TemplateNode, '', blank, run)
     }
 
@@ -197,7 +201,7 @@ export class Cursor {
      * `leave`. The stack discipline the markup emitter already walks in — an element's children are
      * emitted between its open and close tags and nowhere else. A void element is left at once.
      */
-    element(node: TemplateNode & { kind: 'element' }): Position {
+    element(node: ElementNode): PlacedNode {
         const at = this.record('element', node, node.lowerTag, false, [])
         this.frames.push({
             parent: at.name,
@@ -215,7 +219,7 @@ export class Cursor {
      * rather than by counting — which is the negative-step encoding falling out rather than being
      * ported. How many nodes stand between the anchors depends on a value, and a cursor never asks.
      */
-    region(holder: TemplateNode): Position {
+    region(holder: TemplateNode): PlacedNode {
         if (
             (holder.kind === 'element' && !isSlot(holder)) ||
             holdsSetup(holder)
@@ -238,7 +242,7 @@ export class Cursor {
      * A nested region's sink, hung off the region's position. A `{#for}` row passes its own head
      * and parent, because a row's root is the row's first node and not a pair of anchors.
      */
-    nest(at: Position, head?: string, parent?: string, row = false): Cursor {
+    nest(at: PlacedNode, head?: string, parent?: string, row = false): Cursor {
         const sink = new Cursor(
             head,
             parent,
@@ -256,14 +260,14 @@ export class Cursor {
     }
 
     private record(
-        kind: PositionKind,
+        kind: PlacedKind,
         holder: TemplateNode,
         tag: string,
         blank: boolean,
         run: TemplateNode[],
-    ): Position {
+    ): PlacedNode {
         const frame = this.here()
-        const at: Position = {
+        const at: PlacedNode = {
             name: `__c${this.next}`,
             kind,
             holder,

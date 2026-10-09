@@ -11,47 +11,17 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { emitClient, emitComponent, parseAbide } from '#compiler'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
-import { pageRegion } from '#ui/regions.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, renderPage } from './typed.ts'
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
+afterAll(closeTyped)
+afterAll(removeTemporaryModules)
 
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
-
+// `renderPage`, mounted under the counters.
 async function mountPage(source: string) {
-    const file = parseAbide(source)
-    const reads = await session.reads(`${ROOT}src/page.abide`, file)
-    const client = emitClient(file, reads)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, reads),
-        'Page.client.ts': client || 'export default () => {}',
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    const mounting = measure(() => {
-        mount(pageRegion(document.body))
-        flushSync()
-    })
-    return { html, client, mounting }
+    const { html, client, mount } = await renderPage(source)
+    return { html, client, mounting: measure(mount) }
 }
 
 const click = (selector: string): void => {

@@ -23,6 +23,7 @@ function row(path: string, rest: Partial<Mount> = {}): Mount {
         name: path.split('/').at(-1) as string,
         ui: true,
         cli: true,
+        mcp: true,
         description: undefined,
         copy: undefined,
         defaults: undefined,
@@ -101,6 +102,23 @@ test('a mounted handler is projected off the handler, a row off the build — 20
     expect(surfaceOf(row('pay', { method: 'POST' }), 'mcp')?.method).toBe(
         'POST',
     )
+})
+
+// 16.38 — THE BUILD'S DEFAULT HOLDS WHERE THE HANDLER'S `clients` IS SILENT, and gives way where it
+// speaks. THE REVERT: read only the handler's `clients` for a mounted handler; `silent` is published.
+test("a Response handler's row keeps it off MCP unless its clients puts it back — 16.38", () => {
+    const mountedAs = (clients: { mcp?: boolean }): Mounted => ({
+        ...row('media/playlist', { mcp: false }),
+        method: 'GET',
+        handler: GET(() => new Response(''), { clients }) as Mounted['handler'],
+        argsDocument: undefined,
+        wireArgs: undefined,
+    })
+    expect(surfaceOf(mountedAs({}), 'mcp')).toBeUndefined()
+    expect(surfaceOf(mountedAs({ mcp: true }), 'mcp')?.path).toBe(
+        'media/playlist',
+    )
+    expect(surfaceOf(mountedAs({}), 'openapi')?.path).toBe('media/playlist')
 })
 
 // 38.63 — A HANDLER'S ARGS AS THEY ARE TYPED: required bare, optional bracketed, an enum as its

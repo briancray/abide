@@ -9,10 +9,9 @@
 // and the MCP protocol is `McpSurface`'s alone, whoever frames it: this endpoint over http, or a
 // provider that speaks MCP itself (`assistant`'s `forwardOf`).
 //
-// NOT HERE YET: 16.38's default of `mcp` and `cli` to false for a handler returning a `Response`,
-// which wants the return type. 20.4's `ui: false` is the build's to withhold, and 20.11's
-// type-derived schema is the build's too (19.10), arriving here as the mount's `argsDocument`. The
-// build writes no `cli` onto a row yet, so the shell lists what `clients: { cli: false }` withholds.
+// WHAT ONLY THE TYPE SAYS IS THE BUILD'S, arriving here on the mount: 16.38's default of `mcp` and
+// `cli` to false for a handler returning a `Response`, 20.4's `ui: false`, and 20.11's type-derived
+// schema (19.10) as `argsDocument`.
 
 import { log, namedLogger } from '#shared/log.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
@@ -236,13 +235,17 @@ export class McpSurface {
         args: unknown,
         asker: Request,
     ): Promise<{ text: string; failed: boolean }> {
-        const tool = this.#published().tools.find((one) => one.name === name)
+        const tool = this.#tool(name)
         if (tool === undefined)
             return Promise.resolve({
                 text: `No tool named ${name}.`,
                 failed: true,
             })
         return this.#called(tool, args as Record<string, unknown>, asker)
+    }
+
+    #tool(name: unknown): Published | undefined {
+        return this.#published().tools.find((one) => one.name === name)
     }
 
     async #called(
@@ -287,9 +290,7 @@ export class McpSurface {
                     },
                 }
             case 'tools/call': {
-                const tool = this.#published().tools.find(
-                    (one) => one.name === params?.name,
-                )
+                const tool = this.#tool(params?.name)
                 if (tool === undefined)
                     return mcpFailure(
                         -32602,

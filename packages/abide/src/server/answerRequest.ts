@@ -237,8 +237,6 @@ export async function answerRequest(
     // 38.30 — `vary` WHETHER OR NOT THIS ONE IS COMPRESSED: the document is negotiated, and a cache
     // that stored the identity answer for a reader who sent no `accept-encoding` must not hand it
     // to one who did, nor the reverse.
-    // 11.32 — the page renders in a scope of its own, so what its values hold is this request's —
-    // and 41.13, every call it makes is left for the browser's own call to be answered from.
     const headers = new Headers(DOCUMENT_HEADERS)
     // THE HEADERS A `GET` WOULD CARRY, and no render for a body nobody is sent — nor a caller
     // minted for a request that never becomes a page.
@@ -254,6 +252,8 @@ export async function answerRequest(
     const at = new URL(request.url)
     at.pathname = mounted(at.pathname)
     arrive(at.href, found.route.pattern, found.params)
+    // 11.32 — the page renders in a scope of its own, so what its values hold is this request's —
+    // and 41.13, every call it makes is left for the browser's own call to be answered from.
     beginRender({ seed: seedFor(caller), calls: [] })
     // 41.1, 35.2 — THE DOCUMENT IS THE BUILT PAGE, read whole before there is a `Response` to commit a
     // status to: a refusal the page read, or a throw, is answered by the nearest error page at its own

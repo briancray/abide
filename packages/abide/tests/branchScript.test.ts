@@ -3,22 +3,15 @@
 // hydrated and then driven on the client, because each side builds a body its own way.
 
 import { afterAll, expect, test } from 'bun:test'
-import { emitClient, emitComponent, parseAbide } from '#compiler'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
+import { parseAbide } from '#compiler'
 import { flushSync } from '#shared'
-import { pageRegion } from '#ui/regions.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-import { closeTyped } from './typed.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, mountPage, TYPED_ROOT, typedSession } from './typed.ts'
 
 afterAll(closeTyped)
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
+const session = await typedSession()
+afterAll(removeTemporaryModules)
 
 // How many times each body's setup ran, by what it names itself.
 const runs = (): Record<string, number> =>
@@ -26,27 +19,7 @@ const runs = (): Record<string, number> =>
 
 async function mountSource(source: string): Promise<string> {
     ;(globalThis as { __setups?: Record<string, number> }).__setups = {}
-    const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/branch.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
-    return html
+    return (await mountPage(source)).html
 }
 
 const ROWS = `<script>
@@ -220,7 +193,7 @@ setTimeout(() => one, 0)
 {#if setTimeout(() => one, 0)}<b>x</b>{/if}`
     const { warnings } = await session.readsFor([
         {
-            path: `${ROOT}src/branch.abide`,
+            path: `${TYPED_ROOT}src/branch.abide`,
             file: parseAbide(source),
             text: source,
         },
@@ -246,13 +219,13 @@ function bump() { inner = inner + 1 }
 {#for x of [1]}<script>
 const inner = reactive('s')
 </script><i>{${use}}</i>{/for}`
-    const path = `${ROOT}src/branch.abide`
+    const path = `${TYPED_ROOT}src/branch.abide`
     const diagnosed = async (source: string) => {
         const file = parseAbide(source)
         const answer = await session.reads(path, file)
         const { diagnoses } = await session.diagnose(
             [{ path, text: source, file, answer }],
-            `${ROOT}src`,
+            `${TYPED_ROOT}src`,
             false,
         )
         return diagnoses

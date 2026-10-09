@@ -11,20 +11,13 @@ import { afterAll, expect, test } from 'bun:test'
 import { spawned } from 'harness/gate'
 import { measure } from 'harness/measure'
 import { emitComponent, parseAbide } from '#compiler'
-import { emitSource } from '#compiler/emitSource.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
-import { pageRegion } from '#ui/regions.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { closeTyped, renderPage, TYPED_ROOT, typedSession } from './typed.ts'
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
+afterAll(closeTyped)
+const session = await typedSession()
+afterAll(removeTemporaryModules)
 
 const TOTAL = `<script>
 import { props } from 'abide'
@@ -44,54 +37,12 @@ let lines = reactive(2)
 <ul><li><span>lines</span><strong>{lines}</strong></li><li><Total amount={lines * 620}/></li></ul>
 <button onclick={() => { lines = lines + 1 }}>+</button>`
 
-// A page and the components it invokes, compiled together and mounted into the markup the server
-// wrote — which is the whole of what a caller and a child have to agree on.
-async function mountPage(
-    page: string,
-    components: Record<string, string> = {},
-): Promise<{ html: string; mount: (root: unknown) => void }> {
-    const modules: Record<string, string> = {}
-    for (const [name, source] of Object.entries({
-        ...components,
-        Page: page,
-    })) {
-        const file = parseAbide(source)
-        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
-        const page = name === 'Page'
-        const { server, client } = emitSource(
-            page ? 'ui/pages/page.abide' : `${name}.abide`,
-            file,
-            reads,
-            !page,
-        )
-        modules[`${name}.ts`] = server
-        modules[`${name}.client.ts`] = client
-    }
-    const dir = temporaryModule(modules)
-
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    return { html, mount }
-}
-
 // THE REVERT: emit the invocation as markup, which is what it was until now — the document carries
 // a literal `<Total amount="1240">` tag, the child never runs, and `1240.00` is nowhere on the
 // page. It is also what makes the anchors worth their bytes: without them the `<button>` after the
 // list is addressed by counting through a shape that lives in another file.
 test('a component renders where it stands, and its prop is the caller expression — 32.17, 33.5', async () => {
-    const { html } = await mountPage(PAGE, { Total: TOTAL })
+    const { html } = await renderPage(PAGE, { Total: TOTAL })
 
     expect(html).toContain('<strong>USD 1240.00</strong>')
     expect(html).not.toContain('<Total')
@@ -105,8 +56,8 @@ test('a component renders where it stands, and its prop is the caller expression
 // binding wakes in the child, and no node is created: the child's own text node, written by the
 // server, is the one that moves.
 test('a prop re-reads when the caller value moves, and nothing is rebuilt — 33.5', async () => {
-    const { mount } = await mountPage(PAGE, { Total: TOTAL })
-    mount(pageRegion(document.body))
+    const { mount } = await renderPage(PAGE, { Total: TOTAL })
+    mount()
     flushSync()
 
     const child = document.querySelector('li:last-child strong') as Element
@@ -134,7 +85,7 @@ test('a prop re-reads when the caller value moves, and nothing is rebuilt — 33
 //
 // THE REVERT: drop the `untracked` round the call in `emitInvocation` — `wakes` 1 -> 2.
 test('a child setup in an arm does not wake the arm choice — 14.7', async () => {
-    const { mount } = await mountPage(
+    const { mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Total from './Total.abide'
@@ -157,7 +108,7 @@ const first = amount * 2
 <strong id="in">{amount} {first}</strong>`,
         },
     )
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     ;(document.querySelector('#show') as HTMLElement).click()
     flushSync()
@@ -173,7 +124,7 @@ const first = amount * 2
 // 33.4 — ONE ACCESSOR PER KEY, so a default is an accessor too: bound as the author wrote it,
 // `currency` is a string and every read of it in the child is a call on a string.
 test('a default prop is answered where the caller passed none — 33.4', async () => {
-    const { html } = await mountPage(
+    const { html } = await renderPage(
         `<script>
 import Total from './Total.abide'
 </script>
@@ -189,7 +140,7 @@ import Total from './Total.abide'
 // `withoutKeys` from the `props` lowering; the key stays in the record, the pattern's default never
 // stands, and the render reads ` 3.00` where `USD 3.00` is due.
 test('a default prop is answered where the caller passed undefined — 33.20', async () => {
-    const { html, mount } = await mountPage(
+    const { html, mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Total from './Total.abide'
@@ -202,7 +153,7 @@ let chosen = reactive<string | undefined>(undefined)
     expect(html).toContain('<strong>USD 3.00</strong>')
     const text = (): string =>
         document.querySelector('strong')?.textContent ?? ''
-    mount(pageRegion(document.body))
+    mount()
     expect(text()).toBe('USD 3.00')
     document.querySelector('button')?.click()
     flushSync()
@@ -217,7 +168,7 @@ let chosen = reactive<string | undefined>(undefined)
 // the render. THE REVERT: drop the `absent` read in `propsReads`; the render throws `label is not a
 // function`, and the mount does too.
 test('an optional prop the caller left out reads undefined — 33.4', async () => {
-    const { html, mount } = await mountPage(
+    const { html, mount } = await renderPage(
         `<script>
 import Tag from './Tag.abide'
 </script>
@@ -234,7 +185,7 @@ const { label } = props<{ label?: string }>()
     )
     expect(html).toContain('<b>given</b>')
     expect(html).toContain('<b>none</b>')
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     expect(document.body.textContent).toContain('givennone')
 })
@@ -245,7 +196,7 @@ const { label } = props<{ label?: string }>()
 // rest element reads as a named binding and the render throws `rest is not a function`; drop the
 // `?.` from the `restMember` lowering and it throws `rest.count is not a function`.
 test('a props rest element renders and re-reads each key live — 33.15', async () => {
-    const { html, mount } = await mountPage(
+    const { html, mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Note from './Note.abide'
@@ -264,7 +215,7 @@ const { title, ...rest } = props<{ title: string; note: string; count?: number }
         },
     )
     expect(html).toContain('<b>t first none</b>')
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     const work = measure(() => {
         document.querySelector('button')?.click()
@@ -282,7 +233,7 @@ const { title, ...rest } = props<{ title: string; note: string; count?: number }
 // `CHILDREN` test from `restValues`; the button carries `children="…"` and the content is in the
 // document twice.
 test('a rest element spread around a slot carries no children — 33.25', async () => {
-    const { html } = await mountPage(
+    const { html } = await renderPage(
         `<script>
 import Card from './Card.abide'
 </script>
@@ -306,7 +257,7 @@ const { class: className = '', ...attributes } = props<Attributes<'section'>>()
 // other attribute makes it markup. THE REVERT: drop the two from `scriptBlock`; the setup is
 // written into the document as an inline script, `items` is never declared, and the render throws.
 test('a script carrying lang="ts" and generics is component setup — 34.12, 34.13', async () => {
-    const { html } = await mountPage(
+    const { html } = await renderPage(
         `<script>
 import List from './List.abide'
 </script>
@@ -331,7 +282,7 @@ const { items } = props<{ items: Item[] }>()
 // `restReads`; the spread is handed the accessors, the server writes `<button>` with no attribute
 // at all, and the inner child renders the accessor's source where `first` is due.
 test('a props rest element spreads its values onto an element and a component — 33.22', async () => {
-    const { html, mount } = await mountPage(
+    const { html, mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Outer from './Outer.abide'
@@ -360,7 +311,7 @@ const { 'data-note': note } = props<{ 'data-note': string }>()
     )
     expect(html).toContain('<button data-note="first" aria-label="go">')
     expect(html).toContain('<b>first</b>')
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     document.querySelector('button')?.click()
     flushSync()
@@ -418,7 +369,7 @@ let count = reactive(0)
 // server painted, and a static child is where the two can differ silently — the caller writes its
 // anchors and stops, so nothing but the child's own module can put markup between them.
 test('a static child fills the anchors of a row the browser grew — 32.17', async () => {
-    const { mount } = await mountPage(
+    const { mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Tag from './Tag.abide'
@@ -430,7 +381,7 @@ let rows = reactive(['one'])
 <button id="add" onclick={() => { rows = ['one', 'two'] }}>add</button>`,
         { Tag: '<b class="tag">static</b>' },
     )
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     ;(document.querySelector('#add') as HTMLElement).click()
     flushSync()
@@ -457,7 +408,7 @@ let playing = reactive.share('nowPlaying', () => reactive('nothing'))
 // THE REVERT: create in the scope the key was FOUND in rather than the calling one — the two
 // shelves below then share one `queued` and the second test reads `jazz` in both.
 test('a key an ancestor holds is found on the way up — 10.5', async () => {
-    const { html } = await mountPage(
+    const { html } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import NowPlaying from './NowPlaying.abide'
@@ -488,7 +439,7 @@ let queued = reactive.share('queued', () => reactive(name))
 </script>
 
 <li>{queued}</li>`
-    const { html } = await mountPage(
+    const { html } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Shelf from './Shelf.abide'
@@ -505,7 +456,7 @@ reactive.share('library', () => reactive('everything'))
 // 10.1 — ONE CALL GETS OR CREATES, so a second call in the same scope hands back the one that won
 // and the value it was given is not it. `share-winner` is the page that demonstrates it.
 test('a second call hands back the value that won — 10.1', async () => {
-    const { html } = await mountPage(`<script>
+    const { html } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let volume = reactive.share('volume', () => reactive(4))
@@ -525,7 +476,7 @@ const key = 'volume'
 let volume = reactive.share(key, () => reactive(4))
 </script>
 <p>{volume}</p>`)
-    const reads = await session.reads(`${ROOT}src/Page.abide`, file)
+    const reads = await session.reads(`${TYPED_ROOT}src/page.abide`, file)
     let refused = ''
     try {
         emitComponent(file, reads)
@@ -554,7 +505,7 @@ const { title } = props<{ title: string }>()
 <li>{title}</li>`
 
 test('a component in a {#for} renders, hydrates, and builds the row it grows by — 32.17', async () => {
-    const { html, mount } = await mountPage(
+    const { html, mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Row from './Row.abide'
@@ -570,7 +521,7 @@ let titles = reactive(['one', 'two'])
     expect(html).toContain('<li>one</li>')
     expect(html).toContain('<li>two</li>')
 
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     const first: unknown = document.querySelector('li')
 
@@ -593,7 +544,7 @@ let titles = reactive(['one', 'two'])
 // THE REVERT: emit the head application for every `selfFill` but `'none'` (`emitClient`) — three
 // grown rows append three `<meta charset>`s where none is due.
 test("a component's head is not applied per row it grows by — 39.6", async () => {
-    const { mount } = await mountPage(
+    const { mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Row from './Row.abide'
@@ -606,7 +557,7 @@ let titles = reactive<string[]>([])
         { Row: `<head><meta charset="utf-8"></head>\n${ROW}` },
     )
     document.head.innerHTML = ''
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     ;(document.querySelector('button') as HTMLElement).click()
     flushSync()
@@ -623,7 +574,7 @@ let titles = reactive<string[]>([])
 // THE REVERT: move a multi-root row by the nodes `make` returned rather than by the range from its
 // anchor (`moveRow`). This reports `['a', 'b', 'c']` after the reverse.
 test('a component row the list grew reorders with its markup', async () => {
-    const { mount } = await mountPage(
+    const { mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Row from './Row.abide'
@@ -636,7 +587,7 @@ let titles = reactive(['a'])
 <button id="reverse" onclick={() => { titles = ['c', 'b', 'a'] }}>reverse</button>`,
         { Row: ROW },
     )
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     const text = (): (string | null)[] =>
         [...document.querySelectorAll('li')].map((row) => row.textContent)
@@ -662,7 +613,7 @@ let playing = reactive.share('nowPlaying', () => reactive('nothing'))
 </script>
 
 <li>{playing}</li>`
-    const { mount } = await mountPage(
+    const { mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Row from './Row.abide'
@@ -675,7 +626,7 @@ let titles = reactive(['one'])
 <button onclick={() => { titles = [...titles, 'two'] }}>add</button>`,
         { Row: row },
     )
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     ;(document.querySelector('button') as HTMLElement).click()
     flushSync()
@@ -702,7 +653,7 @@ const { label } = props<{ label: string }>()
 </script>
 
 <li>{label}</li>`
-    const { mount } = await mountPage(
+    const { mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Row from './Row.abide'
@@ -716,7 +667,7 @@ let mark = reactive('')
 <button id="bump" onclick={() => { mark = '!' }}>bump</button>`,
         { Row: row },
     )
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     expect(document.querySelectorAll('li').length).toBe(2)
 
@@ -757,7 +708,7 @@ watch(() => {
 </script>
 
 <li>{label}</li>`
-    const { mount } = await mountPage(
+    const { mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Row from './Row.abide'
@@ -771,7 +722,7 @@ let mark = reactive('')
 <button id="bump" onclick={() => { mark = '!' }}>bump</button>`,
         { Row: row },
     )
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     const rows = (
         globalThis as {
@@ -807,14 +758,14 @@ let rows = reactive(['a'])
 </script>
 <ul id="grown">{#for row of rows}<li>{row}</li>{/for}</ul>
 <button id="grow" onclick={() => { rows = [...rows, 'b'] }}>grow</button>`
-    const { mount } = await mountPage(
+    const { mount } = await renderPage(
         `<script>
 import List from './List.abide'
 </script>
 <main><List/></main>`,
         { List: LIST },
     )
-    mount(pageRegion(document.body))
+    mount()
     ;(document.querySelector('#grow') as HTMLElement).click()
     flushSync()
     expect(
@@ -851,8 +802,8 @@ let cents = reactive(300)
 // `set` an empty `reactive` once from `read(true)` rather than computing it, and the bound half
 // still passes while the reset reads "1120" — the child kept 11 over the caller's 20.
 test("a child's write goes where the caller bound it — 33.6, 33.7", async () => {
-    const { mount } = await mountPage(STEPPED, { Stepper: STEPPER })
-    mount(pageRegion(document.body))
+    const { mount } = await renderPage(STEPPED, { Stepper: STEPPER })
+    mount()
     flushSync()
     const text = (id: string): string =>
         (document.getElementById(id) as Element).textContent ?? ''
@@ -896,7 +847,7 @@ const { title, line, edge } = props<{ title: string; line: string; edge: string 
 </script>
 
 <b class="card">{title.replaceAll('&', '+')}|{line.replaceAll('&', '+')}|{edge.replaceAll('&', '+')}</b>`
-    const { html, mount } = await mountPage(
+    const { html, mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Card from './Card.abide'
@@ -912,7 +863,7 @@ const amp = 'amp;'
         { Card: CARD },
     )
     expect(html).toContain('<b class="card">AT+T|AT+T 0|+amp;</b>')
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     ;(document.querySelector('button') as HTMLElement).click()
     flushSync()
@@ -934,7 +885,7 @@ const { enable, label } = props<{ enable?: boolean; label?: string }>()
 </script>
 
 <b class="flag">{typeof enable}:{enable}|{typeof label}:{label}</b>`
-    const { html, mount } = await mountPage(
+    const { html, mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Flag from './Flag.abide'
@@ -948,7 +899,7 @@ let show = reactive(false)
         { Flag: FLAG },
     )
     expect(html).toContain('<b class="flag">boolean:true|string:</b>')
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     ;(document.querySelector('button') as HTMLElement).click()
     flushSync()

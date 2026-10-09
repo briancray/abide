@@ -6,26 +6,24 @@
 // corrupts the middle, which the swap is blind to. CLAUDE.md asks for both and they are both here.
 
 import { afterAll, expect, test } from 'bun:test'
+import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
 import { measure } from 'harness/measure'
-import { emitClient, emitComponent, parseAbide } from '#compiler'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync, reactive } from '#shared'
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
 import { List, listAt, updateList } from '#ui/List.ts'
-import { pageRegion } from '#ui/regions.ts'
 import { EMPTY_SCOPE, Scope } from '#ui/Scope.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-import { clientOf, closeTyped, refusal } from './typed.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import {
+    clientOf,
+    closeTyped,
+    mountPage,
+    refusal,
+    renderPage,
+} from './typed.ts'
 
 afterAll(closeTyped)
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
+afterAll(removeTemporaryModules)
 
 const PAGE = `<script>
 import { reactive } from 'abide'
@@ -51,37 +49,13 @@ function reverse() {
 <button id="swap" onclick={swapTop}>swap</button>
 <button id="reverse" onclick={reverse}>reverse</button>`
 
-async function mountPage() {
-    const file = parseAbide(PAGE)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
-    return html
-}
-
 const order = (): string[] =>
     [...document.querySelectorAll('#list li')].map(
         (node) => (node as HTMLElement).getAttribute('data-id') ?? '',
     )
 
 test('the server renders every row, and the list carries no per-row marker', async () => {
-    const html = await mountPage()
+    const { html } = await mountPage(PAGE)
     expect(order()).toEqual(['ada', 'grace', 'katherine', 'dorothy'])
     // Two anchors for the region and two for the page (41.9), and nothing per row: a row IS its
     // element, so there is nothing to add to tell rows apart.
@@ -98,7 +72,7 @@ test('the server renders every row, and the list carries no per-row marker', asy
 // Dropping the cursor check instead is NOT the revert — it breaks the order and fails all four,
 // which measures nothing about the mechanism.
 test('a two-row swap moves one node', async () => {
-    await mountPage()
+    await mountPage(PAGE)
     const before = document.querySelectorAll('#list li')[2] as HTMLElement
 
     const work = measure(() => {
@@ -117,7 +91,7 @@ test('a two-row swap moves one node', async () => {
 // the one that catches a reconcile that transposes correctly at the ends and corrupts the middle,
 // which the swap above is blind to.
 test('a full reverse puts every row in the right place', async () => {
-    await mountPage()
+    await mountPage(PAGE)
     const nodes = new Map(
         [...document.querySelectorAll('#list li')].map((node) => [
             (node as HTMLElement).getAttribute('data-id'),
@@ -136,7 +110,7 @@ test('a full reverse puts every row in the right place', async () => {
 })
 
 test('the rows survive a swap with their bindings', async () => {
-    await mountPage()
+    await mountPage(PAGE)
     ;(document.querySelector('#swap') as HTMLElement).click()
     flushSync()
     ;(document.querySelector('#reverse') as HTMLElement).click()
@@ -171,37 +145,13 @@ function reverse() {
 <dl id="pairs">{#for row of rows by row.id}<dt>{row.k}</dt><dd>{row.v}</dd>{/for}</dl>
 <button id="rev" onclick={reverse}>reverse</button>`
 
-async function mountPairs() {
-    const file = parseAbide(PAIRS)
-    const names = await session.reads(`${ROOT}src/pairs.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
-    return html
-}
-
 const pairText = (): string[] =>
     [...document.querySelectorAll('#pairs > *')].map(
         (node) => node.textContent ?? '',
     )
 
 test('a row with several top-level nodes mounts and reorders whole', async () => {
-    const html = await mountPairs()
+    const { html } = await mountPage(PAIRS)
     // One anchor a row, plus the region's two. A single-element row would have only the two.
     expect((html.match(/<!--r-->/g) ?? []).length).toBe(3)
     expect(pairText()).toEqual([
@@ -235,7 +185,7 @@ test('a row with several top-level nodes mounts and reorders whole', async () =>
 // always). `rowsIn` then finds 6 rows in a list of 3, and the mount throws
 // `undefined is not an object` on the fourth — which is what this did before it was built.
 test('a single-element row still carries no anchor', async () => {
-    const html = await mountPage()
+    const { html } = await mountPage(PAGE)
     expect(html).not.toContain('<!--r-->')
     // The list's pair and the page's.
     expect((html.match(/<!--/g) ?? []).length).toBe(4)
@@ -266,26 +216,8 @@ function bump() {
 <button id="bump" onclick={bump}>bump</button>`
 
 test('a binding below a row’s first child is reached, in both row shapes', async () => {
-    const file = parseAbide(NESTED)
-    const names = await session.reads(`${ROOT}src/nested.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
+    const { mount } = await renderPage(NESTED)
+    mount()
 
     ;(document.querySelector('#bump') as HTMLElement).click()
     flushSync()
@@ -329,26 +261,8 @@ function bump() {
 <button id="tick" onclick={bump}>tick</button>`
 
 test('a row that left stops reading', async () => {
-    const file = parseAbide(LEAVING)
-    const names = await session.reads(`${ROOT}src/leaving.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
+    const { mount } = await renderPage(LEAVING)
+    mount()
 
     const three = measure(() => {
         ;(document.querySelector('#tick') as HTMLElement).click()
@@ -427,31 +341,8 @@ const refetched = (): string[] =>
         (node) => node.textContent ?? '',
     )
 
-async function mountRefetch() {
-    const file = parseAbide(REFETCH)
-    const names = await session.reads(`${ROOT}src/refetch.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
-}
-
 test('a refetch that keeps every key and replaces every row remakes them in place', async () => {
-    await mountRefetch()
+    await mountPage(REFETCH)
     expect(refetched()).toEqual([
         'Ada Lovelace',
         'Grace Hopper',
@@ -473,7 +364,7 @@ test('a refetch that keeps every key and replaces every row remakes them in plac
 // remake from one that rebuilds the list — every row is new either way — so this replaces two of
 // four and asks whether the other two are the same nodes.
 test('a row remade between two that survive keeps its neighbours', async () => {
-    await mountRefetch()
+    await mountPage(REFETCH)
     const first = document.querySelectorAll('#refetched li')[0] as HTMLElement
     const last = document.querySelectorAll('#refetched li')[3] as HTMLElement
 
@@ -511,26 +402,8 @@ function append() {
 <button id="append" onclick={append}>append</button>`
 
 test('a row whose value is NaN is not remade', async () => {
-    const file = parseAbide(NUMBERS)
-    const names = await session.reads(`${ROOT}src/numbers.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
+    const { mount } = await renderPage(NUMBERS)
+    mount()
 
     const before = [...document.querySelectorAll('#nums li')]
     ;(document.querySelector('#append') as HTMLElement).click()
@@ -572,31 +445,13 @@ const arriving = ticks()
 <ul id="stream">{#for row of arriving}<li>{row}</li>{/for}</ul>`
 
 test('a for over an async iterable appends each item as it arrives', async () => {
-    const file = parseAbide(ASYNC_PAGE)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const dir = temporaryModule({
-        'Async.ts': emitComponent(file, names),
-        'Async.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Async.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
+    const { html, mount } = await renderPage(ASYNC_PAGE)
 
     // 41.3 — NOTHING INLINE, and the anchors are still there for the client to fill between.
     expect(html).toContain('<ul id="stream"><!--[--><!--]--></ul>')
     expect(html).not.toContain('<li>')
 
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Async.client.ts`)
-    mount(pageRegion(document.body))
+    mount()
 
     // The pump is microtasks; one macrotask turn drains every one of them.
     await new Promise((settle) => setTimeout(settle, 0))
@@ -643,24 +498,7 @@ function bump() {
 <button id="bump" onclick={bump}>bump</button>`
 
 test('a repeated {#for} key keeps the last row, drops what it shadows, and warns once', async () => {
-    const file = parseAbide(REPEATED)
-    const names = await session.reads(`${ROOT}src/repeated.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
+    const { mount } = await renderPage(REPEATED)
 
     // Only the reconcile's own lines, and only while the clicks below run — `console.warn` is the
     // stand-in for `log.named` everywhere in this seam, so the channel is what tells them apart.
@@ -670,8 +508,7 @@ test('a repeated {#for} key keeps the last row, drops what it shadows, and warns
         said.push(parts.map(String).join(' '))
     }
     try {
-        const { default: mount } = await import(`${dir}/Page.client.ts`)
-        mount(pageRegion(document.body))
+        mount()
 
         const rows = (): string[] =>
             [...document.querySelectorAll('#repeated li')].map(
@@ -1000,27 +837,9 @@ let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 <ul id="fresh">{#for row of rows.map((r) => ({ ...r })) by row.id}<li>{row.id}</li>{/for}</ul>`
 
 test('a subject building fresh items keeps the rows the server sent', async () => {
-    const file = parseAbide(FRESH)
-    const names = await session.reads(`${ROOT}src/fresh.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
+    const { mount } = await renderPage(FRESH)
     const sent = [...document.querySelectorAll('#fresh li')]
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
+    mount()
     const kept = [...document.querySelectorAll('#fresh li')].filter(
         (node, at) => node === sent[at],
     )
@@ -1050,24 +869,7 @@ let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: '
 <ul id="five">{#for row of rows by row.id}<li>{row.id}</li>{/for}</ul>`
 
 test('a document holding fewer rows than the client computes reconciles — 41.10', async () => {
-    const file = parseAbide(FIVE)
-    const names = await session.reads(`${ROOT}src/five.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
+    const { mount } = await renderPage(FIVE)
     // THE DIVERGENCE, made by hand because no shape in this suite produces one: the document is
     // short two rows, exactly as a server that rendered against a smaller list would leave it.
     const painted = [...document.querySelectorAll('#five li')]
@@ -1075,14 +877,13 @@ test('a document holding fewer rows than the client computes reconciles — 41.1
     for (const node of painted.slice(3)) node.remove()
     expect(document.querySelectorAll('#five li')).toHaveLength(3)
 
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
     const said: string[] = []
     const warn = console.warn
     console.warn = (...parts: unknown[]): void => {
         said.push(parts.map(String).join(' '))
     }
     try {
-        mount(pageRegion(document.body))
+        mount()
     } finally {
         console.warn = warn
     }
@@ -1114,24 +915,7 @@ let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 <ul id="three">{#for row of rows by row.id}<li>{row.id}</li>{/for}</ul>`
 
 test('a document holding more rows than the client computes warns and rebuilds — 41.10', async () => {
-    const file = parseAbide(THREE)
-    const names = await session.reads(`${ROOT}src/three.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
+    const { mount } = await renderPage(THREE)
     const painted = [...document.querySelectorAll('#three li')]
     expect(painted).toHaveLength(3)
     let last = painted[2] as Element
@@ -1143,14 +927,13 @@ test('a document holding more rows than the client computes warns and rebuilds �
     }
     expect(document.querySelectorAll('#three li')).toHaveLength(5)
 
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
     const said: string[] = []
     const warn = console.warn
     console.warn = (...parts: unknown[]): void => {
         said.push(parts.map(String).join(' '))
     }
     try {
-        mount(pageRegion(document.body))
+        mount()
     } finally {
         console.warn = warn
     }
@@ -1194,29 +977,6 @@ function reverse() {
 <button id="reverse" onclick={reverse}>reverse</button>`
 }
 
-async function mountSource(source: string): Promise<void> {
-    const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/by.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    mount(pageRegion(document.body))
-}
-
 const nodesById = (): Map<string | null, Element> =>
     new Map(
         [...document.querySelectorAll('#list li')].map((node) => [
@@ -1226,7 +986,7 @@ const nodesById = (): Map<string | null, Element> =>
     )
 
 test('a {#for} with no key takes the property its value names on `by`', async () => {
-    await mountSource(byPage(`'id'`))
+    await mountPage(byPage(`'id'`))
     const before = document.querySelectorAll('#list li')[2] as HTMLElement
 
     const work = measure(() => {
@@ -1241,7 +1001,7 @@ test('a {#for} with no key takes the property its value names on `by`', async ()
 })
 
 test('a {#for} with no key takes the function its value declares on `by`, and reverses whole', async () => {
-    await mountSource(byPage('(row) => row.id'))
+    await mountPage(byPage('(row) => row.id'))
     const nodes = nodesById()
 
     ;(document.querySelector('#reverse') as HTMLElement).click()
@@ -1255,7 +1015,7 @@ test('a {#for} with no key takes the function its value declares on `by`, and re
 // A SUBJECT COMPUTED FROM THE VALUE declared no `by` of its own, and stays positional (32.13):
 // every row is rewritten where it stands rather than moved.
 test('a {#for} over a value computed from one declaring `by` stays positional', async () => {
-    await mountSource(byPage(`'id'`, 'rows.slice()'))
+    await mountPage(byPage(`'id'`, 'rows.slice()'))
     const nodes = nodesById()
 
     ;(document.querySelector('#reverse') as HTMLElement).click()
@@ -1274,7 +1034,7 @@ test('a {#for} over a value computed from one declaring `by` stays positional', 
 // THE REVERT, for this and the three 32.33 cases below it: `patchedSince` answering false. Every row
 // is kept, and each of the four reports the text it showed before the patch.
 test('a row patched in place shows the patch', async () => {
-    await mountSource(
+    await mountPage(
         byPage(`'id'`).replace(
             '<button id="reverse"',
             `<button id="rename" onclick={() => rows.patch((list) => { list[1].name = 'Grace Brewster Hopper' })}>rename</button>
@@ -1307,7 +1067,7 @@ const textOf = (id: string): string | null | undefined =>
     document.querySelector(`#list li[data-id="${id}"]`)?.textContent
 
 test('a patch remakes the one row it wrote to and keeps the rest', async () => {
-    await mountSource(PATCHED('rows', `list[1].name = 'Grace Brewster Hopper'`))
+    await mountPage(PATCHED('rows', `list[1].name = 'Grace Brewster Hopper'`))
     const nodes = nodesById()
 
     const work = measure(() => {
@@ -1329,7 +1089,7 @@ test('a patch remakes the one row it wrote to and keeps the rest', async () => {
 // THE CASE A KEY ON THE VALUE CANNOT REACH: the list walks a new array built from the value, over the
 // same objects, so what was written travels with the object rather than with the value.
 test('a list over an array computed from a patched value shows the patch', async () => {
-    await mountSource(
+    await mountPage(
         PATCHED(
             'rows.filter(() => true)',
             `list[2].name = 'Katherine G. Johnson'`,
@@ -1343,14 +1103,14 @@ test('a list over an array computed from a patched value shows the patch', async
 // A WRITE BELOW THE ROW'S OWN OBJECT. The row reads `row.place.city`, and the object written is
 // `place` — so the whole path down to it is what the patch marks.
 test('a patch nested below a row remakes that row', async () => {
-    await mountSource(PATCHED('rows', `list[0].place.city = 'Marylebone'`))
+    await mountPage(PATCHED('rows', `list[0].place.city = 'Marylebone'`))
     ;(document.querySelector('#patch') as HTMLElement).click()
     flushSync()
     expect(textOf('ada')).toBe('Ada Lovelace, Marylebone')
 })
 
 test('a patch that adds a row makes that row alone', async () => {
-    await mountSource(
+    await mountPage(
         PATCHED(
             'rows',
             `list.push({ id: 'dorothy', name: 'Dorothy Vaughan', place: { city: 'Hampton' } })`,
@@ -1374,7 +1134,7 @@ test('a patch that adds a row makes that row alone', async () => {
 // `mark` never climbs to a parent it has not met, so a parent met late is marked where it is met.
 // THE REVERT: drop the `mark(parent)` at the end of `adopt`, and Grace keeps "Arlington".
 test('an object two rows share is fresh in both once the patch reaches it through each', async () => {
-    await mountSource(`<script>
+    await mountPage(`<script>
 import { reactive } from 'abide'
 
 const office = { city: 'Arlington' }
@@ -1410,26 +1170,8 @@ function more() {
 <button id="more" onclick={more}>more</button>`
 
 test('a row that binds nothing allocates no scope, hydrated or made', async () => {
-    const file = parseAbide(STATIC_ROWS)
-    const names = await session.reads(`${ROOT}src/staticRows.abide`, file)
-    const dir = temporaryModule({
-        'Page.ts': emitComponent(file, names),
-        'Page.client.ts': emitClient(file, names),
-    })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    const page = mount(pageRegion(document.body)) as Scope
+    const { mount } = await renderPage(STATIC_ROWS)
+    const page = mount() as Scope
     ;(document.querySelector('#more') as HTMLElement).click()
     flushSync()
     expect(document.querySelectorAll('#static-rows li').length).toBe(5)
@@ -1473,4 +1215,292 @@ test('a row that throws while made leaves no row unrecorded — 41.14', () => {
     updateList(list, ['a', 'c', 'd'])
     expect(text()).toEqual(['a', 'c', 'd'])
     host.remove()
+})
+
+// A `{#for}` OVER `s.history(n)` IS A READER OF THE VALUE'S PAST, and a publish is what moves it.
+// The window's sync face read nothing, so the block painted the ring it found at mount and never
+// woke again — Send on the `channel-tail` card changed nothing on screen. Each block holds the
+// position it first replayed from (2.5): `history(2)` keeps the two it replayed and gathers every
+// arrival after them, `history(0)` gathers arrivals alone, and both lose what the VALUE's retention
+// drops (2.6, 6.16) — `history: 3` keeps four.
+//
+// THE REVERTS, each run: drop the read in `HistoryWindow`'s sync face and the first publish
+// reports `[2, 3]` and `[]`; drop `heldFrom` and it reports `[3, 4]` and `[]`, the window sliding;
+// drop the retention clamp and the last step reports `[2, 3, 4, 5, 6, 7]`, the ring's untrimmed
+// array rather than the four `history: 3` keeps.
+const HISTORY_ROWS = `<script>
+import { reactive } from 'abide'
+
+const token = reactive<number>(undefined, { history: 3 })
+for (const at of [1, 2, 3]) token.publish(at)
+let sent = 3
+
+function emit() {
+    sent += 1
+    token.publish(sent)
+}
+</script>
+
+<ul id="replayed">{#for at of token.history(2)}<li>{at}</li>{/for}</ul>
+<ul id="live">{#for at of token.history(0)}<li>{at}</li>{/for}</ul>
+<button id="emit" onclick={emit}>emit</button>`
+
+test('a {#for} over s.history(n) follows the value it reads — 2.5, 2.6', async () => {
+    await mountPage(HISTORY_ROWS)
+    const shown = (id: string): string[] =>
+        [...document.querySelectorAll(`#${id} li`)].map(
+            (node) => node.textContent ?? '',
+        )
+    expect([shown('replayed'), shown('live')]).toEqual([['2', '3'], []])
+    const standing = document.querySelector('#replayed li')
+
+    const work = measure(() => {
+        ;(document.querySelector('#emit') as HTMLElement).click()
+        flushSync()
+    })
+    expect([shown('replayed'), shown('live')]).toEqual([['2', '3', '4'], ['4']])
+    // One row inserted per block, and the rows already standing are the same nodes.
+    expect([work.nodesCreated, work.elementsMoved]).toEqual([4, 2])
+    expect(document.querySelector('#replayed li')).toBe(standing)
+
+    for (let press = 0; press < 3; press += 1) {
+        ;(document.querySelector('#emit') as HTMLElement).click()
+        flushSync()
+    }
+    expect([shown('replayed'), shown('live')]).toEqual([
+        ['4', '5', '6', '7'],
+        ['4', '5', '6', '7'],
+    ])
+})
+
+// A SUBSCRIBER'S COPY HAS NOTHING AT HYDRATION. The server painted the owner's ring; the copy in the
+// browser is busy until the mux's first frame (9.29), so its window is empty on the client's first
+// run — and an empty list against three painted rows was a mismatch, the block rebuilt and a
+// warning on `abide:hydrate`. The block's read aborts instead (2.13), the painted rows stand
+// (32.23), and the replay is reconciled against them when it lands (41.8). The copy here is what
+// `socketWire` builds — a value over a load the first frame settles — and the replay lands in one
+// turn, which is what a block needs to read what the server painted.
+//
+// THE REVERT, run: drop the read in `HistoryWindow`'s sync face. This reports one `abide:hydrate`
+// warning ("holds 3 rows where this {#for} computes 0") and an empty list that never fills.
+test('a {#for} over a copy that has not landed adopts the rows the server painted — 41.8', async () => {
+    const turns = ['ask', 'answer', 'follow-up']
+    const side = globalThis as { historySubject?: unknown }
+    const owner = reactive<string>(undefined, { history: 100 })
+    for (const turn of turns) owner.publish(turn)
+    side.historySubject = owner
+    const { mount } = await renderPage(`<script>
+const transcript = (globalThis as { historySubject?: any }).historySubject
+</script>
+
+<ul id="transcript">{#for turn of transcript.history(50)}<li>{turn}</li>{/for}</ul>`)
+    const painted = document.querySelector('#transcript li')
+
+    const landed = Promise.withResolvers<unknown>()
+    const copy = reactive<string>(landed.promise as Promise<string>, {
+        history: 100,
+    })
+    side.historySubject = copy
+    const warned: string[] = []
+    const warn = console.warn
+    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
+    try {
+        mount()
+        flushSync()
+        // Still busy, so the painted rows are what stands — and what is adopted once it lands.
+        await Bun.sleep(0)
+        flushSync()
+        // The replay in one turn, every production published: a publish lands where a
+        // load is in flight, and the load settled after it is superseded.
+        for (const turn of turns) copy.publish(turn)
+        landed.resolve(turns[0])
+        await Bun.sleep(0)
+        flushSync()
+    } finally {
+        console.warn = warn
+        side.historySubject = undefined
+    }
+    expect({
+        rows: [...document.querySelectorAll('#transcript li')].map(
+            (node) => node.textContent,
+        ),
+        adopted: document.querySelector('#transcript li') === painted,
+        warnings: warned.filter((line) => line.includes('abide:hydrate')),
+    }).toEqual({ rows: turns, adopted: true, warnings: [] })
+})
+
+// THE SAME ADOPTION OVER THE WIRE, end to end: the owner behind the mux in this process, the copy
+// `socketWire` builds in the browser, and each frame arriving in a task of its own as a web socket's
+// do. Both halves are what put the ring in the copy in ONE turn — the mux sends the replay as one
+// frame, and the copy publishes each entry rather than settling its load with the first.
+//
+// THE REVERTS, each run: send the ring a `prod` frame per entry in `subscribe` and the copy lands
+// the first turn alone — rows `['ask']` and one `abide:hydrate` warning ("holds 3 rows where this
+// {#for} computes 1"); resolve the load before publishing in `deliver` and the first entry is
+// superseded by the publish after it — rows `['answer', 'follow-up']` and the same warning.
+test('a {#for} over a socket copy adopts the rows the server painted, over the mux — 41.8, 41.10', async () => {
+    const { Mux } = await import('#server/answerSocket.ts')
+    const { socket } = await import('#shared/socket.ts')
+    const { MUXES, socketWire } = await import('#ui/socketWire.ts')
+    const address = '/__abide/socket/transcript'
+    const turns = ['ask', 'answer', 'follow-up']
+    const owner = reactive<string>(undefined, { history: 100, global: true })
+    for (const turn of turns) owner.publish(turn)
+    const mux = new Mux(
+        new Map([[address, socket(owner as never)]]) as never,
+        new Map(),
+        undefined,
+    )
+    // A web socket whose far end is the mux above: every frame either way is its own task. A frame
+    // down is delivered OUTSIDE the connection's request scope, as a browser's is — a timer set
+    // inside it carries that scope, and the copy's publishes land in the scope's own copy instead.
+    const outside = AsyncLocalStorage.snapshot()
+    class LoopbackSocket {
+        static OPEN = 1
+        readyState = 0
+        onopen: (() => void) | null = null
+        onmessage: ((event: { data: string }) => void) | null = null
+        onclose: (() => void) | null = null
+        onerror: (() => void) | null = null
+        down: string[] = []
+        connection = mux.connect(
+            new Request('http://app.test/__abide/socket'),
+            {
+                send: (text: string) => {
+                    this.down.push(text)
+                    if (this.down.length === 1) this.deliverDown()
+                },
+                close() {},
+            },
+        )
+        // One frame per task, the next not before the last was handled.
+        deliverDown(): void {
+            setTimeout(
+                () =>
+                    outside(() => {
+                        this.onmessage?.({ data: this.down.shift() as string })
+                        if (this.down.length !== 0) this.deliverDown()
+                    }),
+                1,
+            )
+        }
+        constructor() {
+            setTimeout(() => {
+                this.readyState = 1
+                this.onopen?.()
+            }, 0)
+        }
+        send(text: string): void {
+            setTimeout(() => void this.connection.message(text), 0)
+        }
+    }
+    const side = globalThis as { historySubject?: unknown; WebSocket: unknown }
+    side.historySubject = owner
+    const { mount } = await renderPage(`<script>
+const transcript = (globalThis as { historySubject?: any }).historySubject
+</script>
+
+<ul id="transcript">{#for turn of transcript.history(50)}<li>{turn}</li>{/for}</ul>`)
+    const painted = document.querySelector('#transcript li')
+
+    const realSocket = side.WebSocket
+    side.WebSocket = LoopbackSocket
+    // THE MUX IS THIS CASE'S, whatever ran first: a page's muxes stand for its life, so one an
+    // earlier file in this process opened — over a stub socket that never opens — would carry the
+    // copy instead. THE REVERT: drop the clear; after `wire.test.ts` in one process this reports
+    // `landed: false`.
+    MUXES.clear()
+    const warned: string[] = []
+    const warn = console.warn
+    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
+    const copy = (socketWire(address) as () => { busy(): boolean })()
+    try {
+        side.historySubject = copy
+        mount()
+        flushSync()
+        for (let task = 0; task < 20 && copy.busy(); task += 1) {
+            await Bun.sleep(1)
+            flushSync()
+        }
+        await Bun.sleep(1)
+        flushSync()
+    } finally {
+        console.warn = warn
+        side.WebSocket = realSocket
+        side.historySubject = undefined
+        MUXES.clear()
+    }
+    expect({
+        rows: [...document.querySelectorAll('#transcript li')].map(
+            (node) => node.textContent,
+        ),
+        adopted: document.querySelector('#transcript li') === painted,
+        warnings: warned.filter((line) => line.includes('abide:hydrate')),
+        landed: !copy.busy(),
+    }).toEqual({ rows: turns, adopted: true, warnings: [], landed: true })
+})
+
+// A `{#for}` OVER A STREAM'S `s.history(n)` reads the runs that CLOSED (6.17), and a close is not a
+// chunk: the block woke on each chunk through its read of the value and then never for the close
+// that entered the run into the past, so the run it was waiting for never painted.
+//
+// THE REVERT, run: drop the subscription to the past in `HistoryWindow`'s sync face. This reports
+// `[]` after the first close rather than `['ab']`, and `['ab']` after the second rather than
+// `['ab', 'c']`.
+test('a {#for} over a stream’s s.history(n) paints each run as it closes — 6.17, 2.5', async () => {
+    const side = globalThis as { historySubject?: unknown }
+    side.historySubject = reactive<string[]>(undefined, { history: 3 })
+    const { mount } = await renderPage(`<script>
+const runs = (globalThis as { historySubject?: any }).historySubject
+</script>
+
+<ul id="runs">{#for run of runs.history(3)}<li>{run.join('')}</li>{/for}</ul>`)
+    // Each run is a queue the test fills, and closes by pushing `null`.
+    let queue: (string | null)[] = []
+    let wake = (): void => {}
+    const feed = reactive(
+        async function* () {
+            queue = []
+            for (;;) {
+                while (queue.length === 0)
+                    await new Promise<void>((resolve) => {
+                        wake = resolve
+                    })
+                const chunk = queue.shift() as string | null
+                if (chunk === null) return
+                yield chunk
+            }
+        },
+        { history: 3 },
+    )
+    const send = async (...chunks: (string | null)[]): Promise<void> => {
+        for (const chunk of chunks) {
+            queue.push(chunk)
+            wake()
+            for (let turn = 0; turn < 5; turn += 1) await Bun.sleep(0)
+        }
+        flushSync()
+    }
+    const shown = (): string[] =>
+        [...document.querySelectorAll('#runs li')].map(
+            (node) => node.textContent ?? '',
+        )
+    side.historySubject = feed
+    try {
+        mount()
+        flushSync()
+        await send('a', 'b')
+        const midRun = shown()
+        await send(null)
+        const firstClosed = shown()
+        feed.refresh()
+        await send('c', null)
+        expect({ midRun, firstClosed, secondClosed: shown() }).toEqual({
+            midRun: [],
+            firstClosed: ['ab'],
+            secondClosed: ['ab', 'c'],
+        })
+    } finally {
+        side.historySubject = undefined
+    }
 })

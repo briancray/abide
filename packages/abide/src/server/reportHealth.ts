@@ -2,7 +2,7 @@
 // the app winning each collision (25.2). A report that throws or answers something that is not an
 // object is left out and said so, rather than taking the account down with it.
 //
-// What `health` reports through on a server: `answerRequest` fills `HEALTH` with it.
+// What `health` reports through on a server: `installServer` fills `HEALTH` with it.
 
 import type { Health } from '#shared/health.ts'
 import { isRecord } from '#shared/isRecord.ts'

@@ -20,7 +20,7 @@
 import { answered, answerOf } from '#shared/answerOf.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import { isFailed } from '#shared/Failed.ts'
-import { framedStream, framingPrefix } from '#shared/framing.ts'
+import { answerChunks } from '#shared/framing.ts'
 import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
 import { reactive, structural } from '#shared/reactive/index.ts'
 import {
@@ -73,7 +73,7 @@ export function wire(
         )
         if (method === 'GET') follow(args, answer)
         if (answer.body !== undefined && answer.body !== null) {
-            yield* framedStream(answer.body, framingPrefix(answer.type) ?? '')
+            yield* answerChunks(answer.body, answer.type)
             return
         }
         const value = answered(answer)

@@ -58,9 +58,9 @@ export function emitComponent(
     const declared = definitions(page, lowering)
 
     // EMITTED AFTER THE BODY, NOT BEFORE. 39.12 merges across the whole FILE, so a second `<head>`
-    // further down the template shadows the first one's `<title>` — and `emitNode` adds to `used`,
-    // so emitting a contribution the merge then drops leaves the module importing a name nothing
-    // calls. `headSink` is the client lane's too, which is what keeps the two from drifting.
+    // further down the template shadows the first one's `<title>` — and rendering a node adds to
+    // `Lowering.used` (`lowering.use`), so emitting a contribution the merge then drops leaves the
+    // module importing a name nothing calls. `headSink` is the client lane's too, which is what keeps the two from drifting.
     const head = renderMarkup(headSink(file), lowering, SERVER_LANE)
 
     // 31.1 and 31.4 hold INSIDE a `.abide` file, not just in its template, so the script block is

@@ -2,7 +2,7 @@
 // modules already loaded (`inMemoryApp.ts`): the same `bootApp` and `appSources` every command boots
 // through, with no `abide build` and no child process ahead of it.
 
-import { afterAll, expect, test } from 'bun:test'
+import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { GET, jsonSchema, POST, reactive, refuse, request } from '#server'
 import { config } from '#server/config.ts'
 import type { McpSurface } from '#server/generatedSurfaces.ts'
@@ -11,8 +11,13 @@ import { inMemoryApp } from './inMemoryApp.ts'
 
 const RPC = '/__abide/rpc/invoices'
 
-// 36.7 — read by the boot, so opened before any app here is built.
-process.env.ABIDE_MCP = '1'
+// 36.7 — read by the boot, so opened before any app here is built, and closed again after: a
+// flag left on `process.env` reaches every app the worker serves after this file.
+const mcpAsFound = process.env.ABIDE_MCP
+beforeAll(() => {
+    process.env.ABIDE_MCP = '1'
+    config.invalidate()
+})
 
 const INVOICES = {
     getInvoice: GET(
@@ -31,6 +36,9 @@ const INVOICES = {
 
 afterAll(() => {
     LISTENING.server = undefined
+    if (mcpAsFound === undefined) delete process.env.ABIDE_MCP
+    else process.env.ABIDE_MCP = mcpAsFound
+    config.invalidate()
 })
 
 // 16.23, 16.60, 16.61 — WHAT A CALL RAISES THE REQUEST'S IDLE TIMEOUT TO, read off a recording server:

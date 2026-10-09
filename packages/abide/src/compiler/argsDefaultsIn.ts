@@ -16,8 +16,8 @@ import {
     isStringLiteral,
 } from 'typescript/unstable/ast/is'
 import { type Checker, SymbolFlags, type Type } from 'typescript/unstable/async'
+import type { Finding } from './Finding.ts'
 import { optionNamed, reactiveOptions } from './reactiveOptions.ts'
-import type { Warning } from './trackingWarnings.ts'
 
 // 11.30 — AN `args` SCHEMA DEFAULTING A MEMBER THE BODY'S PARAMETER DOES NOT. The key is taken before
 // `args` runs (11.26), so a default only the schema writes is applied after it: `{}` and `{ page: 1 }`
@@ -71,7 +71,7 @@ export function defaultedMembers(node: Node | undefined): string[] {
 export async function argsDefaultsIn(
     checker: Checker,
     sourceFile: Node,
-): Promise<Warning[]> {
+): Promise<Finding[]> {
     const gated: { args: Node; body: Node }[] = []
     const visit = (node: Node): void => {
         if (isCallExpression(node)) {
@@ -86,7 +86,7 @@ export async function argsDefaultsIn(
         })
     }
     visit(sourceFile)
-    const found: Warning[] = []
+    const found: Finding[] = []
     for (const { args, body } of gated) {
         const written = defaultedMembers(body)
         for (const member of await schemaDefaults(checker, args))

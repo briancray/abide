@@ -10,66 +10,14 @@ import { parseAbide } from '#compiler'
 import { UNCHECKED } from '#compiler/CheckerAnswer.ts'
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
-import { emitSource } from '#compiler/emitSource.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
-import { pageRegion } from '#ui/regions.ts'
 import { appFixture } from './builtApp.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, renderPage, TYPED_ROOT, typedSession } from './typed.ts'
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
-
-// A page, and any component file it imports, compiled as the build compiles them and mounted into
-// the markup the server wrote. The mount is handed back unrun, so a test can count what it does.
-async function mountPage(
-    page: string,
-    components: Record<string, string> = {},
-): Promise<{ html: string; mount: () => void }> {
-    const modules: Record<string, string> = {}
-    for (const [name, source] of Object.entries({
-        ...components,
-        Page: page,
-    })) {
-        const file = parseAbide(source)
-        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
-        const page = name === 'Page'
-        const { server, client } = emitSource(
-            page ? 'ui/pages/page.abide' : `${name}.abide`,
-            file,
-            reads,
-            !page,
-        )
-        modules[`${name}.ts`] = server
-        modules[`${name}.client.ts`] = client
-    }
-    const dir = temporaryModule(modules)
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    const html = new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    return {
-        html,
-        mount: () => {
-            mount(pageRegion(document.body))
-            flushSync()
-        },
-    }
-}
+afterAll(closeTyped)
+const session = await typedSession()
+afterAll(removeTemporaryModules)
 
 const click = (selector: string): void => {
     ;(document.querySelector(selector) as HTMLElement).click()
@@ -95,7 +43,7 @@ let count = reactive(1)
 // out of its mount (`clientComponent` emitting no `bindings`) — the click moves `count`, the text
 // stays `1`, and wakes is 0.
 test("an inline component reads its file's script by name, live — 32.42, 31.2", async () => {
-    const { html, mount } = await mountPage(COUNTER)
+    const { html, mount } = await renderPage(COUNTER)
     expect(html).toContain(
         '<p><!--[--><b>1</b><!--]--><!--[--><b>1</b><!--]--></p>',
     )
@@ -121,7 +69,7 @@ test("an inline component reads its file's script by name, live — 32.42, 31.2"
 // (10.6), and the sibling cannot see it. THE REVERT: drop `shareScope` from `clientComponent` and
 // `serverComponent` — both counters are one value, so a click on the first moves the second too.
 test('two inline instances each share their own value — 10.5, 32.46', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 </script>
 
@@ -144,7 +92,7 @@ let count = reactive.share('count', () => reactive(0))
 // render throws `Cell is not defined`; or out of the row's mount on the client (`emitRegion`
 // declaring nothing in a repeated region) — hydration throws it.
 test('an inline component declared in a {#for} row reads the row — 32.41, 32.42', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let rows = reactive([{ id: 1, name: 'one' }, { id: 2, name: 'two' }])
@@ -170,7 +118,7 @@ let rows = reactive([{ id: 1, name: 'one' }, { id: 2, name: 'two' }])
 // a component written inside an ordinary element on nothing (`collect` skipping `declared` for an
 // element's own list) — `Mark` is unbound and the render throws.
 test('an inline component declared in an element and in an {#if} arm — 32.41, 32.43', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let open = reactive(false)
@@ -209,7 +157,7 @@ const { Item, title } = props<{ Item: (props: { n: number }) => unknown; title: 
 // passed (`fileComponents` leaving `passed` empty) — either way `Item` is absent in `Outer`, and
 // both of its positions render the empty pair (32.36).
 test('an inline component written between the tags is passed as a prop — 32.50, 32.52', async () => {
-    const { html, mount } = await mountPage(
+    const { html, mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Outer from './Outer.abide'
@@ -238,7 +186,7 @@ let unit = reactive('kg')
 // fallback. THE REVERT: give an inline component no record (`clientComponent` and `serverComponent`
 // taking `__root` alone) — the render throws on the `__props` the slot reads its children from.
 test('children render into an inline component slot, and the fallback where none were passed — 32.18', async () => {
-    const { html } = await mountPage(`<Panel><b>given</b></Panel><Panel/>
+    const { html } = await renderPage(`<Panel><b>given</b></Panel><Panel/>
 {#component Panel()}
 <section><slot>empty</slot></section>
 {/component}`)
@@ -251,7 +199,7 @@ test('children render into an inline component slot, and the fallback where none
 // drop the component's setup from `serverComponent`; `label` is unbound and the render throws.
 test('an inline component sets itself up and invokes itself — 32.44, 32.46', async () => {
     const { html } =
-        await mountPage(`{#component Nest({ depth }: { depth: number })}
+        await renderPage(`{#component Nest({ depth }: { depth: number })}
 <script>
 const label = 'level ' + depth
 </script>
@@ -271,12 +219,12 @@ test('a hover inside an inline component is answered — 38.40', async () => {
 <b>{amount.toFixed(2)}</b>
 {/component}
 <Price amount={3}/>`
-    const path = `${ROOT}src/Hover.abide`
+    const path = `${TYPED_ROOT}src/Hover.abide`
     const file = parseAbide(page)
     const { answers } = await session.readsFor([{ path, text: page, file }])
     const { diagnoses } = await session.diagnose(
         [{ path, text: page, file, answer: answers[0] ?? UNCHECKED }],
-        ROOT,
+        TYPED_ROOT,
         false,
     )
     expect(diagnoses).toEqual([])
@@ -319,7 +267,7 @@ const { Row } = props<{ Row: string }>()
     try {
         await session.readsFor([
             {
-                path: `${ROOT}src/Twice.abide`,
+                path: `${TYPED_ROOT}src/Twice.abide`,
                 text: page,
                 file: parseAbide(page),
             },

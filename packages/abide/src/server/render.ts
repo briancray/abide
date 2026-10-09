@@ -1,6 +1,8 @@
 // 35.4 and 35.5 — `render` takes a component already bound to its props and produces the document's
 // bytes.
 
+/// <reference path="./componentModules.d.ts" />
+
 import { regionMarkup } from '#shared/anchorMarkup.ts'
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import { headKeyOf } from '#shared/headKeyOf.ts'
@@ -14,9 +16,10 @@ import { currentRequestScope, type PageCall } from './requestScope.ts'
 /**
  * A compiled component, opaque to an app.
  *
- * REGISTRY declares `Component` opaque. What a compiled component IS today is a function
- * returning its markup, and the cast lives here, in one place, rather than in the type an app
- * reads. It becomes a richer thing when a component takes props (33) and holds state (34.1).
+ * REGISTRY declares `Component` opaque. What a compiled component IS on the server is a function
+ * taking its props as accessors (33.4) and answering a `Rendered` — and, for a page or a layout,
+ * the share scope its setup ran in. The cast to that lives at each call site here and in
+ * `renderComponent`, rather than in the type an app reads.
  * The emptiness IS the surface — a component is opaque to an app — so narrowing it here to
  * satisfy the linter would put the code and the registry row out of step, which is the drift
  * the documents exist to stop.
@@ -33,12 +36,7 @@ const BARE_SHELL = '<!doctype html><html><head></head><body></body></html>'
 
 const ENCODER = new TextEncoder()
 
-/**
- * What a compiled component answers: its head and its body markup.
- *
- * One reference beyond the cast that reads it — the `await` guard needs the settled shape and the
- * promise shape to be the same name.
- */
+/** What a compiled component answers: its head and its body markup. */
 export type Rendered = { head: string; body: string }
 
 /**
@@ -388,7 +386,7 @@ function earlyCallScript(calls: PageCall[]): string {
     return `<script type="application/json">${JSON.stringify(rows).replace(/</g, '\\u003c')}</script><script>${EARLY_CALL_RUNNER}</script>`
 }
 
-const EARLY_CALL_RUNNER = `(function(s,c){for(var i=0;i<c.length;i++)(function(k,u,n,h){var e=s[k]={painted:h,status:void 0,statusText:void 0,type:void 0,version:void 0,life:void 0,text:void 0,body:void 0};e.promise=fetch(u,n).then(function(r){e.status=r.status;e.statusText=r.statusText;e.type=r.headers.get("content-type");e.version=r.headers.get("${VERSION_HEADER}");e.life=r.headers.get("cache-control");if(r.ok&&/^(application\\/jsonl|text\\/event-stream)/.test(e.type||"")){e.body=r.body;return}return r.text()}).then(function(t){if(t!==void 0)e.text=t},function(){})})(c[i][0],c[i][1],c[i][2],c[i][3])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),JSON.parse(document.currentScript.previousElementSibling.textContent))`
+const EARLY_CALL_RUNNER = `(function(s,c){for(var i=0;i<c.length;i++)(function(k,u,n,h){var e=s[k]={painted:h,status:void 0,statusText:void 0,type:void 0,version:void 0,life:void 0,text:void 0,bytes:void 0,body:void 0};e.promise=fetch(u,n).then(function(r){e.status=r.status;e.statusText=r.statusText;e.type=r.headers.get("content-type");e.version=r.headers.get("${VERSION_HEADER}");e.life=r.headers.get("cache-control");if(r.ok&&e.type&&!/^application\\/([^;]*\\+)?json\\s*(;|$)/.test(e.type)){e.body=r.body;return}return r.text()}).then(function(t){if(t!==void 0)e.text=t},function(){})})(c[i][0],c[i][1],c[i][2],c[i][3])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),JSON.parse(document.currentScript.previousElementSibling.textContent))`
 
 /** The early-call runner's hash, as `script-src` names it. 29.9. */
 export const EARLY_CALL_HASH = `'sha256-${new Bun.CryptoHasher('sha256').update(EARLY_CALL_RUNNER).digest('base64')}'`

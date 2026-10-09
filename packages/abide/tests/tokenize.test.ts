@@ -1,17 +1,17 @@
 import { expect, test } from 'bun:test'
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { parseAbide } from '#compiler/parseAbide.ts'
-import { slotEnd, tokenise } from '#compiler/tokenise.ts'
+import { slotEnd, tokenize } from '#compiler/tokenize.ts'
 
 // A `/` IS A LITERAL WHERE AN OPERAND IS EXPECTED AND A DIVISION WHERE ONE ENDED. Each case below
 // is counted in regular expression literals: a division read as a literal turns `/ n /` into one,
 // a literal read as a division leaves none — and the rest of its line as tokens.
 const regexes = (source: string): number =>
-    tokenise(source).filter(
+    tokenize(source).filter(
         (token) => token.kind === SyntaxKind.RegularExpressionLiteral,
     ).length
 const namesIn = (source: string, name: string): number =>
-    tokenise(source).filter(
+    tokenize(source).filter(
         (token) => token.kind === SyntaxKind.Identifier && token.text === name,
     ).length
 

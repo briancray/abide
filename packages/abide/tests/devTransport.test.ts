@@ -4,8 +4,7 @@
 // `WebSocket` is not bun's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { spawned } from 'harness/gate'
-import { addressOf, BIN } from './builtApp.ts'
+import { addressOf, BIN, lastLinePrinted } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, POST, reactive } from 'abide/server'
@@ -165,12 +164,9 @@ const answer = await fetch(process.argv[2] + '/__abide/socket', { headers: { upg
 console.log(JSON.stringify([answer.status, answer.headers.get('x-content-type-options'), answer.headers.get('cache-control')]))
 `,
     })
-    const ran = await spawned(['bun', `${dir}/bad.ts`, base])
-    expect(JSON.parse(ran.stdout.trim().split('\n').at(-1) as string)).toEqual([
-        400,
-        'nosniff',
-        'private, no-store',
-    ])
+    expect(
+        await lastLinePrinted<unknown[]>(['bun', `${dir}/bad.ts`, base]),
+    ).toEqual([400, 'nosniff', 'private, no-store'])
 }, 20_000)
 
 async function followed(
@@ -179,31 +175,42 @@ async function followed(
 ): Promise<{ op: string; value: string[] }[]> {
     const dir = temporaryModule({
         'client.ts': `const base = process.argv[2] + process.argv[3]
-const frames: unknown[] = []
+const frames: { op: string }[] = []
 const answered = await fetch(base + '/__abide/rpc/library/books')
 const version = Number(answered.headers.get('abide-version'))
 const ws = new WebSocket(base.replace('http', 'ws') + '/__abide/socket')
-ws.onmessage = (event) => frames.push(JSON.parse(String(event.data)))
+// A subscription to an address nothing answers is refused as the mux reads it, so the refusal
+// says the follow sent before it has been taken.
+let taken = () => {}
+let landed = () => {}
+const followed = new Promise<void>((done) => (taken = done))
+const shelved = new Promise<void>((done) => (landed = done))
+ws.onmessage = (event) => {
+    const frame = JSON.parse(String(event.data))
+    if (frame.id === 2) return taken()
+    frames.push(frame)
+    landed()
+}
+let refused: ReturnType<typeof setTimeout> | undefined
 const opened = await Promise.race([
     new Promise((done) => (ws.onopen = () => done(true))),
-    new Promise((done) => setTimeout(() => done(false), 3000)),
+    new Promise((done) => (refused = setTimeout(() => done(false), 3000))),
 ])
+clearTimeout(refused)
 if (opened) {
     ws.send(JSON.stringify({ op: 'sub', id: 1, address: process.argv[3] + '/__abide/rpc/library/books', version }))
-    await new Promise((done) => setTimeout(done, 100))
+    ws.send(JSON.stringify({ op: 'sub', id: 2, address: process.argv[3] + '/__abide/rpc/library/nothingAnswersHere' }))
+    await Promise.race([followed, new Promise((done) => setTimeout(done, 3000).unref())])
     await fetch(base + '/__abide/rpc/library/shelve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'emma' }) })
-    await new Promise((done) => setTimeout(done, 200))
+    await Promise.race([shelved, new Promise((done) => setTimeout(done, 3000).unref())])
+    // Closed and drained, so a second frame sent before the close lands ahead of what is said.
     ws.close()
+    await new Promise((done) => (ws.onclose = done))
 }
 console.log(JSON.stringify(frames))
 `,
     })
-    const ran = Bun.spawn(['bun', `${dir}/client.ts`, at, mount], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
-    const printed = await new Response(ran.stdout).text()
-    return JSON.parse(printed.trim().split('\n').at(-1) as string)
+    return lastLinePrinted(['bun', `${dir}/client.ts`, at, mount])
 }
 
 // Runs \`steps\` in a bun process, where \`base\` is the app and \`say\` is what the test reads back.
@@ -217,12 +224,7 @@ ${steps}
 console.log(JSON.stringify(said))
 `,
     })
-    const ran = Bun.spawn(['bun', `${dir}/client.ts`, base], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
-    const printed = await new Response(ran.stdout).text()
-    return JSON.parse(printed.trim().split('\n').at(-1) as string)
+    return lastLinePrinted(['bun', `${dir}/client.ts`, base])
 }
 
 // 38.36 — THE FIRST LINE ARRIVES BEFORE THE HANDLER HAS WRITTEN THE LAST, which is only possible
@@ -283,12 +285,13 @@ console.log(JSON.stringify({ status: answered.status, raised }))
 process.exit(0)
 `,
     })
-    const ran = Bun.spawn(['bun', `${dir}/raise.ts`, app], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
-    const printed = await new Response(ran.stdout).text()
-    expect(JSON.parse(printed.trim().split('\n').at(-1) as string)).toEqual({
+    expect(
+        await lastLinePrinted<Record<string, unknown>>([
+            'bun',
+            `${dir}/raise.ts`,
+            app,
+        ]),
+    ).toEqual({
         status: 200,
         raised: [40],
     })
@@ -318,11 +321,10 @@ for (const address of JSON.parse(process.argv[3])) outcomes.push(await opened(ad
 console.log(JSON.stringify(outcomes))
 `,
     })
-    const ran = await spawned([
+    return lastLinePrinted([
         'bun',
         `${dir}/upgrade.ts`,
         at,
         JSON.stringify(addresses),
     ])
-    return JSON.parse(ran.stdout.trim().split('\n').at(-1) as string)
 }

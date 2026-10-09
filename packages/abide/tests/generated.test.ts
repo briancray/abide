@@ -28,21 +28,36 @@ export const guarded = POST(() => 'never', {
 export const shout = POST(({ text }: { text: string }) => {
     log(text)
 })
+
+export const playlist = POST(async ({ id }: { id: string }) => new Response(\`#EXTM3U \${id}\`), {
+    description: 'A playlist.',
+})
+
+export const tagged = POST(({ id }: { id: string }) => Response.json({ id }), {
+    description: 'Back on.',
+    clients: { mcp: true },
+})
 `
 
 let base = ''
 let stop = (): void => {}
 
 beforeAll(async () => {
-    process.env.ABIDE_OPENAPI = '1'
-    // 36.7, 27.8 — A SURFACE'S SWITCH IS A BOOLEAN, read in the environment's spelling of one. THE
-    // REVERT: drop the standing `false`s from `config`; `TRUE` stays text and MCP answers 404.
-    process.env.ABIDE_MCP = 'TRUE'
-    process.env.ABIDE_LOGS = '1'
-    ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/invoices.ts': HANDLERS,
-    }))
+    ;({ base, stop } = await serveApp(
+        {
+            'ui/pages/page.abide': '<main>home</main>',
+            'server/rpc/invoices.ts': HANDLERS,
+        },
+        {
+            ...process.env,
+            ABIDE_OPENAPI: '1',
+            // 36.7, 27.8 — A SURFACE'S SWITCH IS A BOOLEAN, read in the environment's spelling of
+            // one. THE REVERT: drop the standing `false`s from `config`; `TRUE` stays text and MCP
+            // answers 404.
+            ABIDE_MCP: 'TRUE',
+            ABIDE_LOGS: '1',
+        },
+    ))
 }, 30_000)
 
 afterAll(() => {
@@ -95,7 +110,9 @@ test('the OpenAPI document is derived from the route table — 20.1, 20.6, 20.11
         '/__abide/rpc/invoices/guarded',
         '/__abide/rpc/invoices/listInvoices',
         '/__abide/rpc/invoices/pay',
+        '/__abide/rpc/invoices/playlist',
         '/__abide/rpc/invoices/shout',
+        '/__abide/rpc/invoices/tagged',
     ])
     const get = document.paths['/__abide/rpc/invoices/getInvoice']?.get
     expect(get?.description).toBe('One invoice.')
@@ -111,6 +128,9 @@ test('the OpenAPI document is derived from the route table — 20.1, 20.6, 20.11
 
 // 20.9 — A HANDLER TAKING NO ARGS IS A RESOURCE and one taking args, or a mutation, is a TOOL, read off
 // the arm `GET` took. THE REVERT: list every `GET` as a resource; `getInvoice` is not a tool.
+// 16.38 — AND ONE TYPED AS RETURNING A `Response` IS NEITHER unless its `clients` puts it back:
+// `playlist` is withheld, `tagged` listed. THE REVERT: default `mcp` to true in `declaringMethod`;
+// `invoices_playlist` is listed, six tools rather than five.
 test('MCP lists tools and resources by the arm GET took — 20.9', async () => {
     const init = (await mcp('initialize')).result as {
         capabilities: Record<string, unknown>
@@ -127,6 +147,7 @@ test('MCP lists tools and resources by the arm GET took — 20.9', async () => {
         'invoices_guarded',
         'invoices_pay',
         'invoices_shout',
+        'invoices_tagged',
     ])
     const resources = (
         (await mcp('resources/list')).result as { resources: { uri: string }[] }

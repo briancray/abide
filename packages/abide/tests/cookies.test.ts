@@ -1,8 +1,26 @@
 // 22.4, 22.5, 22.8 — the browser's jar, over happy-dom's `document.cookie`.
 
-import { expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { cookies, flushSync, watch } from '#shared'
-import { COOKIES, Cookies, serializeCookie } from '#shared/cookies.ts'
+import {
+    browserCookies,
+    COOKIES,
+    Cookies,
+    serializeCookie,
+} from '#shared/cookies.ts'
+
+// THE BROWSER'S SLOT, PINNED for every test here. A file earlier in the same process that installs
+// the server (`installServer`) leaves `COOKIES.current` reading the request, and `cookies()` then
+// refuses. THE REVERT: drop the pin; run after `bind.test.ts` in one process, the 3 tests that call
+// `cookies()` throw the request scope's refusal (22.1).
+let slotAsFound = COOKIES.current
+beforeEach(() => {
+    slotAsFound = COOKIES.current
+    COOKIES.current = browserCookies
+})
+afterEach(() => {
+    COOKIES.current = slotAsFound
+})
 
 // 22.4, 22.5 — A READ TRACKS ITS NAME, and a write wakes that name's readers alone. THE REVERT: have
 // `get` read `this.every` rather than `versionOf(name)`; the reader of `theme` wakes for `seen` too,
@@ -70,7 +88,8 @@ test("a cookieStore change is held decoded, and a write's own echo wakes nobody 
 // A BROWSER'S JAR KEEPS NO `set-cookie` LINES: its writes went into the document, and it lives as
 // long as the page, so a line held per write grew with nothing to read it. A server's jar keeps
 // them. THE REVERT: push onto `writes` whatever the side in `Cookies.write`; the browser's jar
-// holds every line this file has written through it, 7 by the time this runs.
+// holds every line written through it — the 3 this test writes, and the 4 the tests above it write
+// when the file runs whole.
 test("a browser's jar holds no set-cookie lines; a server's does", () => {
     const browser = cookies()
     for (let write = 0; write < 3; write++) browser.set('draft', String(write))
@@ -99,11 +118,6 @@ test('secure defaults from NODE_ENV — 22.3', () => {
 // 22.8 — outside a request on a server, the jar is refused. The server's slot is what throws; the
 // browser's is the stand-in until a server installs its own.
 test('cookies throws outside a request on a server — 22.8', async () => {
-    const browser = COOKIES.current
     COOKIES.current = (await import('#server/requestScope.ts')).requestCookies
-    try {
-        expect(() => cookies()).toThrow('outside a request')
-    } finally {
-        COOKIES.current = browser
-    }
+    expect(() => cookies()).toThrow('outside a request')
 })

@@ -8,6 +8,7 @@ import type { AbideFile } from './parseAbide.ts'
 import {
     type Body,
     bodiesOf,
+    type ForBlock,
     type TemplateNode,
     visitBodies,
 } from './TemplateNode.ts'
@@ -104,10 +105,7 @@ function holdsState(nodes: TemplateNode[]): boolean {
  * `Reactive` and calls nothing, a constant the checker was not asked about or a file read with no
  * checker, cannot move, and a warning there is one an author learns to skip.
  */
-function canChange(
-    node: TemplateNode & { kind: 'block'; block: 'for' },
-    lowering: Lowering,
-): boolean {
+function canChange(node: ForBlock, lowering: Lowering): boolean {
     if (!lowering.isLive(node)) return false
     return node.subject.includes('(') || lowering.holdsRead(node)
 }
@@ -118,10 +116,7 @@ function canChange(
  * 32.32 — such a subject IS KEYED, by the value rather than the block. The checker has already said
  * which names that is (`Read.byValue`), through an import as well as in the page's own setup.
  */
-function keyedByValue(
-    node: TemplateNode & { kind: 'block'; block: 'for' },
-    lowering: Lowering,
-): boolean {
+function keyedByValue(node: ForBlock, lowering: Lowering): boolean {
     return (
         isNamedAlone(node.subject.trim()) &&
         lowering.holdsRead(node, isKeyedByValue)

@@ -9,20 +9,12 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { emitComponent, parseAbide } from '#compiler'
-import { emitSource } from '#compiler/emitSource.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
-import { pageRegion } from '#ui/regions.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, renderPage } from './typed.ts'
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
+afterAll(closeTyped)
+afterAll(removeTemporaryModules)
 
 // The layout shape: chrome of its own, and the caller's markup in the middle of it.
 const CARD = `<script>
@@ -36,45 +28,6 @@ const { title } = props<{ title: string }>()
 // 32.18's second row: children, or a fallback where the caller wrote none.
 const NOTE = `<aside><slot>nothing yet</slot></aside>`
 
-async function mountPage(
-    page: string,
-    components: Record<string, string>,
-): Promise<{ html: string; mount: (root: unknown) => void }> {
-    const modules: Record<string, string> = {}
-    for (const [name, source] of Object.entries({
-        ...components,
-        Page: page,
-    })) {
-        const file = parseAbide(source)
-        const reads = await session.reads(`${ROOT}src/${name}.abide`, file)
-        const page = name === 'Page'
-        const { server, client } = emitSource(
-            page ? 'ui/pages/page.abide' : `${name}.abide`,
-            file,
-            reads,
-            !page,
-        )
-        modules[`${name}.ts`] = server
-        modules[`${name}.client.ts`] = client
-    }
-    const dir = temporaryModule(modules)
-
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    return { html, mount }
-}
-
 const click = (selector: string): void => {
     ;(document.querySelector(selector) as HTMLElement).click()
     flushSync()
@@ -82,7 +35,7 @@ const click = (selector: string): void => {
 
 // THE REVERT: the throw this replaced — `<Card>` with children was a compile error naming 32.18.
 test('a caller writes markup between the tags and the child places it — 32.18', async () => {
-    const { html, mount } = await mountPage(
+    const { html, mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Card from './Card.abide'
@@ -104,13 +57,13 @@ let clicks = reactive(0)
 
     // AND IT IS ALIVE. The binding and the listener are the CALLER's, mounted into a region the
     // child owns — which is the half a string assertion cannot see.
-    mount(pageRegion(document.body))
+    mount()
     click('#bump')
     expect(document.querySelector('#count')?.textContent).toBe('1 so far')
 })
 
 test('a slot with no children renders its fallback — 32.18', async () => {
-    const { html } = await mountPage(
+    const { html } = await renderPage(
         `<script>
 import Note from './Note.abide'
 </script>
@@ -122,7 +75,7 @@ import Note from './Note.abide'
 })
 
 test('children given win over the fallback — 32.18', async () => {
-    const { html } = await mountPage(
+    const { html } = await renderPage(
         `<script>
 import Note from './Note.abide'
 </script>
@@ -137,7 +90,7 @@ import Note from './Note.abide'
 // A REGION INSIDE THE SLOT, which is where the addressing is easiest to get wrong: the arm's
 // paths are counted from the slot's anchors, and the slot's from the child's.
 test('a block inside the children swaps where the child put it — 32.12, 32.18', async () => {
-    const { mount } = await mountPage(
+    const { mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Card from './Card.abide'
@@ -149,7 +102,7 @@ let open = reactive(false)
         { Card: CARD },
     )
 
-    mount(pageRegion(document.body))
+    mount()
     expect(document.querySelector('#shown')).toBeNull()
     click('#toggle')
     expect(document.querySelector('#shown')?.textContent).toBe('shown')
@@ -173,7 +126,7 @@ import Note from './Note.abide'
 })
 
 test('a child grown in the browser fills its slot from the caller — 32.17, 32.18', async () => {
-    const { mount } = await mountPage(
+    const { mount } = await renderPage(
         `<script>
 import { reactive } from 'abide'
 import Card from './Card.abide'
@@ -186,7 +139,7 @@ let rows = reactive<string[]>([])
         { Card: CARD },
     )
 
-    mount(pageRegion(document.body))
+    mount()
     expect(document.querySelectorAll('.grown').length).toBe(0)
     click('#add')
     expect(document.querySelectorAll('.grown').length).toBe(1)

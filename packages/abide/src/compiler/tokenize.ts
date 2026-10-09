@@ -1,14 +1,10 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { createScanner, type Scanner } from 'typescript/unstable/ast/scanner'
 
-// ONE TOKENISER, read by `splitImports`, `forBlock`, `projectShadow` and `Lowering`, and by
-// `slotEnd` through the same scan. Two of them was two answers to the same question and they
-// drifted: a template re-scan written for one reader and never for the split left every import
-// after a template literal inside the component body, and the emitted module did not parse.
-//
-// `parseAbide` reads where a template SLOT ends through `slotEnd` below, the same scan — a second,
-// character-level scanner beside this one answered the regex-or-division question a second way,
-// and the two agreed case by case rather than by construction.
+// ONE TOKENIZER, read by `splitImports`, `forBlock`, `projectShadow` and `Lowering`, and by
+// `parseAbide` through `slotEnd`, which is the same scan. A template literal's re-scan, the
+// regex-or-division question and where a slot ends are each answered once, so every reader agrees
+// by construction rather than case by case.
 //
 // A SCANNER SAYS WHERE THE TOKENS ARE, NOT WHAT THEY MEAN, and that is the whole contract — the
 // expression grammar is never parsed, which is what keeps 19.12 a property of the file.
@@ -21,7 +17,7 @@ export type Token = {
 }
 
 /** The tokens of `source`, scanned the way `slotEnd` scans a slot. */
-export function tokenise(source: string): Token[] {
+export function tokenize(source: string): Token[] {
     const tokens: Token[] = []
     scan(source, 0, (kind, scanner) => {
         tokens.push({
@@ -59,8 +55,7 @@ export function nesting(kind: SyntaxKind): number {
 /**
  * The index of the `}` closing the template slot opened at `open`, or the source's length.
  *
- * 32.1 — WHERE A TEMPLATE SLOT OPENED AT `open` ENDS: the index of its closing `}`, or the length
- * of the source where it never closes. The same scan `tokenise` makes, so the regex-or-division
+ * 32.1 — the same scan `tokenize` makes, so the regex-or-division
  * question, a template literal's substitutions, strings and comments are answered once for both
  * — `{f('}')}`, `{ /* } *\/ x }` and `{xs.filter(s => /}/.test(s))}` end where they read as ending.
  *
@@ -166,8 +161,8 @@ function scan(
     // A TEMPLATE LITERAL IS NOT ORDINARY TOKENS. `` `a${b}c` `` scans as TemplateHead, then `b`,
     // then a CLOSE BRACE that has to be RE-SCANNED as the literal's continuation — without that
     // the scanner reads `c\`` as ordinary code, and a bare word in the TEXT of a template gets
-    // rewritten as if it were a read. Found by compiling the corpus: `${owner} — … of notes`
-    // lowered to `${owner())} — … of notes()`, which is not a program.
+    // rewritten as if it were a read: `${owner} — … of notes` would lower to
+    // `${owner())} — … of notes()`, which is not a program.
     //
     // Only a `}` whose opener was the `${` continues the literal, so an object literal in a
     // substitution closes on its own brace.

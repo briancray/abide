@@ -64,6 +64,12 @@ export type Mount = {
     ui: boolean
     /** Whether the command line lists it — the shell's listing and completion, never whether `call` reaches it. 20.3, 38.63. */
     cli: boolean
+    /**
+     * Whether MCP lists it where its runtime `clients` does not say.
+     *
+     * 16.38 — false for a handler typed as returning a `Response`, which only the build can tell.
+     */
+    mcp: boolean
     /** Its `description`, where the declaration writes one as a literal the build can read. */
     description: string | undefined
     /**
@@ -125,6 +131,7 @@ export function mountedOwn(
             name,
             ui: false,
             cli: false,
+            mcp: false,
             description: undefined,
             copy: undefined,
             defaults: undefined,

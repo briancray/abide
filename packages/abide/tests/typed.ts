@@ -1,11 +1,16 @@
-import type { AbideFile } from '#compiler'
+import { type AbideFile, parseAbide } from '#compiler'
 import type { CheckerAnswer } from '#compiler/CheckerAnswer.ts'
 import { emitSource } from '#compiler/emitSource.ts'
 import { Lowering } from '#compiler/Lowering.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
 import { parseSources, readSources } from '#compiler/readSources.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
-import { type Token, tokenise } from '#compiler/tokenise.ts'
+import { type Token, tokenize } from '#compiler/tokenize.ts'
+import { render } from '#server'
+import { flushSync } from '#shared'
+import { pageRegion } from '#ui/regions.ts'
+import type { Scope } from '#ui/Scope.ts'
+import { temporaryModule } from './temporaryModule.ts'
 
 // THE CHECKER DECIDES WHAT IS REACTIVE, so a test that means "`n` is a `Reactive` here" has to say
 // so in a way the checker reads. `typed` declares every name it is given as one at module scope —
@@ -13,10 +18,16 @@ import { type Token, tokenise } from '#compiler/tokenise.ts'
 // hands back the file with its reads. Nothing about the answer is forged: the same session an app
 // build opens is asked the same question.
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const PAGE = `${ROOT}src/typed.abide`
+// The fixture project every typed test is checked against, and the one session that checks it.
+export const TYPED_ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
+const PAGE = `${TYPED_ROOT}src/typed.abide`
 
 let session: TypeSession | undefined
+
+export async function typedSession(): Promise<TypeSession> {
+    session ??= await TypeSession.open(`${TYPED_ROOT}tsconfig.json`)
+    return session
+}
 
 export async function closeTyped(): Promise<void> {
     await session?.close()
@@ -60,7 +71,7 @@ function declare(
 // The first name after each top-level `const`/`let`/`var`, which is all a fixture here writes.
 function moduleNames(script: string): Set<string> {
     const names = new Set<string>()
-    const tokens = tokenise(script)
+    const tokens = tokenize(script)
     let depth = 0
     for (let i = 0; i < tokens.length; i += 1) {
         const text = (tokens[i] as Token).text
@@ -85,10 +96,10 @@ export async function typed(
     answer: CheckerAnswer
 }> {
     const declared = declare(source, names)
-    session ??= await TypeSession.open(`${ROOT}tsconfig.json`)
+    const checker = await typedSession()
     // The pipeline a build runs, so a refusal throws here as it stops a build.
     const { read } = await readSources(
-        session,
+        checker,
         parseSources([{ path: PAGE, text: declared.source }]),
     )
     const [page] = read as [(typeof read)[number]]
@@ -152,4 +163,68 @@ export async function serverOf(
 ): Promise<string> {
     const { file, answer } = await typed(source, names)
     return emitSource('typed.abide', file, answer, false).server
+}
+
+// A page, and any component file it invokes, compiled as the build compiles them, rendered by the
+// server, and its body handed to `document.body` the way a browser would have arrived at it. The
+// client's mount is handed back UNRUN, so a test can count what it does; run, it hydrates those very
+// nodes and drains what the hydration scheduled. `client` is the page's client module.
+export async function renderPage(
+    page: string,
+    components: Record<string, string> = {},
+): Promise<{ html: string; client: string; mount: () => Scope }> {
+    const checker = await typedSession()
+    const modules: Record<string, string> = {}
+    let pageClient = ''
+    for (const [name, source] of Object.entries({
+        ...components,
+        Page: page,
+    })) {
+        const file = parseAbide(source)
+        const isPage = name === 'Page'
+        const reads = await checker.reads(
+            `${TYPED_ROOT}src/${name}.abide`,
+            file,
+        )
+        const { server, client } = emitSource(
+            isPage ? 'ui/pages/page.abide' : `${name}.abide`,
+            file,
+            reads,
+            !isPage,
+        )
+        modules[`${name}.ts`] = server
+        modules[`${name}.client.ts`] = client
+        if (isPage) pageClient = client
+    }
+    const dir = temporaryModule(modules)
+    const { default: Component } = await import(`${dir}/Page.ts`)
+    const html = new TextDecoder().decode(
+        await render(
+            Component,
+            '<!doctype html><html><head></head><body></body></html>',
+        ),
+    )
+    document.body.innerHTML = html.slice(
+        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('</body>'),
+    )
+    const { default: mount } = await import(`${dir}/Page.client.ts`)
+    return {
+        html,
+        client: pageClient,
+        mount: () => {
+            const scope = mount(pageRegion(document.body)) as Scope
+            flushSync()
+            return scope
+        },
+    }
+}
+
+// `renderPage`, mounted.
+export async function mountPage(
+    page: string,
+    components: Record<string, string> = {},
+): Promise<{ html: string; client: string; scope: Scope }> {
+    const { html, client, mount } = await renderPage(page, components)
+    return { html, client, scope: mount() }
 }

@@ -33,16 +33,34 @@ function connected(
     return { connection, sent }
 }
 
-async function frames(
-    value: unknown,
-): Promise<{ op: string; seq?: number; value?: unknown }[]> {
-    const sent: { op: string; seq?: number; value?: unknown }[] = []
+type Frame = {
+    op: string
+    seq?: number
+    value?: unknown
+    ring?: [number, unknown][]
+}
+
+/** Every frame a fresh subscription to `value` is sent. */
+async function sentTo(value: unknown): Promise<Frame[]> {
+    const sent: Frame[] = []
     const { connection } = connected(socket(value as never), sent)
     await connection.message(
         JSON.stringify({ op: 'sub', id: 1, address: '/room' }),
     )
     connection.close()
     return sent
+}
+
+/** Every production a fresh subscription is sent, a ring's entries one by one. */
+async function frames(value: unknown): Promise<Frame[]> {
+    const productions: Frame[] = []
+    for (const frame of await sentTo(value)) {
+        if (frame.ring === undefined) productions.push(frame)
+        else
+            for (const [seq, item] of frame.ring)
+                productions.push({ op: frame.op, seq, value: item })
+    }
+    return productions
 }
 
 async function replayed(value: unknown): Promise<unknown[]> {
@@ -156,4 +174,23 @@ test('a subscription whose rung resolves after the close or the unsub is not ins
     ]).toEqual([0, 0])
     expect([...closed.sent, ...unsubbed.sent]).toEqual([])
     unsubbed.connection.close()
+})
+
+// 18.13 — A FRESH SUBSCRIPTION IS SENT ITS RING AS ONE FRAME, so the copy lands the whole replay in
+// one turn and a hydrating `{#for}` over it reads every row the server painted (41.8). THE REVERT,
+// run: send the ring a `prod` frame per entry in `subscribe`; this reads 3 frames rather than 1.
+test('a fresh subscription is sent its ring in one frame — 18.13, 41.8', async () => {
+    const room = reactive<string>(undefined, { history: 9, global: true })
+    for (const turn of ['a', 'b', 'c']) room.publish(turn)
+    const sent = await sentTo(room)
+    expect(sent.map((frame) => [frame.op, frame.ring])).toEqual([
+        [
+            'prod',
+            [
+                [1, 'a'],
+                [2, 'b'],
+                [3, 'c'],
+            ],
+        ],
+    ])
 })

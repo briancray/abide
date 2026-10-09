@@ -11,6 +11,7 @@ import { validationError } from '#shared/refuse.ts'
 import { runSchema } from '#shared/Schema.ts'
 import { appDirectories } from './appDirectories.ts'
 import { type Env, HOOKS } from './hooks.ts'
+import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /** The fields of an app's `package.json` 27.3 derives from. */
 export type AppPackage = { name?: string; version?: string }
@@ -168,11 +169,11 @@ function appUrl(): URL | undefined {
     const text = typeof declared === 'string' ? declared : ''
     if (text !== appUrlFor) {
         appUrlFor = text
-        appUrlIs = undefined
-        try {
-            if (text !== '') appUrlIs = new URL(text)
-        } catch {}
-        mountIs = appUrlIs?.pathname.replace(/\/+$/, '') ?? ''
+        appUrlIs = text === '' ? undefined : (URL.parse(text) ?? undefined)
+        mountIs =
+            appUrlIs === undefined
+                ? ''
+                : withoutTrailingSlash(appUrlIs.pathname)
     }
     return appUrlIs
 }

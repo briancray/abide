@@ -10,7 +10,7 @@ import { CHILDREN } from '#shared/CHILDREN.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import {
     Cursor,
-    type Position,
+    type PlacedNode,
     placeTemplate,
     REGION_ROOT,
     ROW_ROOT,
@@ -49,6 +49,8 @@ import {
 import { splitImports } from './splitImports.ts'
 import type {
     Attribute,
+    ElementNode,
+    ForBlock,
     InlineComponent,
     Setup,
     TemplateNode,
@@ -113,8 +115,8 @@ class RegionEmission {
 /**
  * Which empty regions a client module fills itself: a routed page's, an invoked row's, or both.
  *
- * How this module can be mounted against an EMPTY region: a file a ROUTE reaches
- * (30.11) is mounted against a page no server painted, once a navigation; a file another INVOKES
+ * A file a ROUTE reaches (30.11) is mounted against a page no server painted, once a
+ * navigation; a file another INVOKES
  * as a component (32.17) can stand in a row a list grew by, once A ROW. Both need a second copy of
  * the template, and one that needs neither is 34% more client than it needs: measured at 1797 ->
  * 2405 shipped lines over the corpus with every file carrying one. INVOKED decides whether that
@@ -475,9 +477,9 @@ function readsLive(sink: Cursor, lowering: Lowering): boolean {
 /**
  * One region's bindings, as its walk, its helpers and its guarded units.
  *
- * One region's bindings, emitted against its own root: the page, a `{#if}` arm, a `{#for}` row, a
- * `<slot/>` fallback or a caller's children. Each is a sink of its own (`Cursor`), so `__c1` in one
- * and `__c1` in another are different nodes and neither region can reach the other's.
+ * Emitted against the region's own root: the page, a `{#if}` arm, a `{#for}` row, a `<slot/>`
+ * fallback or a caller's children. Each is a sink of its own (`Cursor`), so `__c1` in one and
+ * `__c1` in another are different nodes and neither region can reach the other's.
  *
  * TWO KINDS OF LINE, and the split is 41.10's. The WALK — one `const` per position it needs, each
  * found from the one before it — goes into `chain` and NEVER THROWS: an absent node is carried
@@ -497,8 +499,8 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
     const lines = region.lines
     const positions = sink.positions
     // Each bound element's attributes, classified once and read by both passes below.
-    const bound = new Map<Position, ClassifiedAttribute[]>()
-    const live = new Set<Position>()
+    const bound = new Map<PlacedNode, ClassifiedAttribute[]>()
+    const live = new Set<PlacedNode>()
     for (const at of positions) {
         if (at.kind === 'region') {
             live.add(at)
@@ -520,10 +522,10 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
     // BACKWARDS, so everything after a position — its later siblings and its own descendants — is
     // decided before it is. `followed` holds the frames, keyed by the element they stand inside,
     // that have a walked position later than the one being decided.
-    const walked = new Set<Position>()
-    const followed = new Set<Position | null>()
+    const walked = new Set<PlacedNode>()
+    const followed = new Set<PlacedNode | null>()
     for (let index = positions.length - 1; index >= 0; index -= 1) {
-        const at = positions[index] as Position
+        const at = positions[index] as PlacedNode
         if (!live.has(at) && !followed.has(at) && !followed.has(at.within))
             continue
         walked.add(at)
@@ -556,7 +558,7 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
     const handlers: string[] = []
     const attributes: string[] = []
     const elements: string[] = []
-    const regions: Position[] = []
+    const regions: PlacedNode[] = []
     for (const at of positions) {
         if (!live.has(at)) continue
         if (at.kind === 'region') {
@@ -686,8 +688,6 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
     return region
 }
 
-type ElementNode = Extract<TemplateNode, { kind: 'element' }>
-
 // A region's bindings go through its SCOPE, so what replaced the region can stop them (see
 // `Scope`). In the framework's own `__` namespace because a row binds the AUTHOR's item name as a
 // parameter in the same scope.
@@ -742,10 +742,10 @@ function emitMaker(
 }
 
 /**
- * The body that builds a row's nodes with DOM calls, from the positions the markup walk placed.
+ * The body that builds a row's nodes with DOM calls, from the positions `placeTemplate` placed.
  *
- * A ROW THE BROWSER BUILDS, from the positions the markup walk placed for it — the same positions
- * the row's mount walks (`emitRegion`), under the same slot names. So a row has one description:
+ * The same positions the row's mount walks (`emitRegion`), under the same slot names. So a row has
+ * one description:
  * the server writes it as bytes, `make` builds it, `mount` finds it, and none of the three can
  * disagree about where a node stands.
  *
@@ -778,7 +778,7 @@ function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
             `__built.push(${DOCUMENT}.createComment(${JSON.stringify(ROW_OPEN)}))`,
         )
     const render = buildRender(lowering)
-    const into = (at: Position, node: string): string =>
+    const into = (at: PlacedNode, node: string): string =>
         at.within === null
             ? `__built.push(${node})`
             : `${at.within.name}.appendChild(${node})`
@@ -837,9 +837,9 @@ function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
  * one, and none where it can render none (a blank run), which is what the server leaves too.
  */
 function builtRun(
-    at: Position,
+    at: PlacedNode,
     lowering: Lowering,
-    into: (at: Position, node: string) => string,
+    into: (at: PlacedNode, node: string) => string,
 ): string[] {
     const make = (text: string): string =>
         into(at, `${DOCUMENT}.createTextNode(${text})`)
@@ -926,8 +926,7 @@ function buildRender(lowering: Lowering): ValueRender {
 /**
  * Emits a region's `_build` and `_mount` pair into `helpers`, for a region nobody painted.
  *
- * A REGION NOBODY PAINTED, as the pair that fills it: `_build` for the nodes and `_mount` for the
- * bindings. 32.17 and 32.18 are the same mechanism from two sides — a caller's children handed to a
+ * 32.17 and 32.18 are the same mechanism from two sides — a caller's children handed to a
  * child, and the child's own fallback for a slot nothing was passed — so they are one emitter
  * rather than two that have to be kept byte-compatible by hand.
  */
@@ -1012,7 +1011,7 @@ function mountFunction(
  * changed in place is re-emitted alone.
  */
 function emitInvocation(
-    at: Position,
+    at: PlacedNode,
     node: ElementNode,
     region: RegionEmission,
 ): void {
@@ -1060,7 +1059,7 @@ ${SCOPE}.watch(() => ${name}.show(${chosen}))`)
  * THE FALLBACK IS THE CHILD'S OWN, so it is emitted here as an arm is — its markup for a region
  * nobody painted, its bindings for one somebody did.
  */
-function emitSlot(at: Position, region: RegionEmission): void {
+function emitSlot(at: PlacedNode, region: RegionEmission): void {
     const lowering = region.lowering
     const name = region.claim('sl')
 
@@ -1084,7 +1083,7 @@ ${SCOPE}.own(${name}_kids === undefined ? ${name}_mount(${name}) : ${name}_kids.
  * included — the arm hydrated is the arm the watch then compares against.
  */
 function emitBlock(
-    at: Position,
+    at: PlacedNode,
     block: Extract<TemplateNode, { kind: 'block'; block: 'if' }>,
     region: RegionEmission,
 ): void {
@@ -1129,7 +1128,7 @@ ${lowering.isLiveChain(block.branches) ? `${SCOPE}.watch(() => ${show})` : show}
  * author bound. Two arms, so the arm taken is `0` or `1` and never the `{#if}` floor.
  */
 function emitTry(
-    at: Position,
+    at: PlacedNode,
     block: Extract<TemplateNode, { kind: 'block'; block: 'try' }>,
     region: RegionEmission,
 ): void {
@@ -1163,7 +1162,7 @@ ${SCOPE}.watch(() => ${name}.follow())`)
  */
 function emitArms(
     name: string,
-    at: Position,
+    at: PlacedNode,
     region: RegionEmission,
     /** The `{#try}` catch's binding, `''` where it binds no name; `undefined` for an `{#if}`. */
     caught: string | undefined,
@@ -1234,8 +1233,8 @@ function emitArms(
  * 32.21 — the subject is read ONCE for the block. 32.22 — an absent subject iterates zero times.
  */
 function emitList(
-    position: Position,
-    block: Extract<TemplateNode, { kind: 'block'; block: 'for' }>,
+    position: PlacedNode,
+    block: ForBlock,
     region: RegionEmission,
 ): void {
     const lowering = region.lowering

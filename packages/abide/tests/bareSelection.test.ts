@@ -7,7 +7,7 @@
 // standing would be in reach, and each test here settles what it starts so the next one's
 // `busy()` is not answering about it. The server's arm, scope and `global`, is in `scope.test.ts`.
 
-import { expect, test } from 'bun:test'
+import { beforeAll, expect, test } from 'bun:test'
 import {
     busy,
     flushSync,
@@ -20,10 +20,19 @@ import {
 import { online } from '#shared/online.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { FOLLOWED } from '#shared/reactive/FOLLOWED.ts'
+import { unfileProducers } from '#shared/reactive/Reactive.ts'
 
 function cellOf<Fields>(value: unknown): Fields {
     return (value as { [CELL]: Fields })[CELL]
 }
+
+// A FILE OF ITS OWN IS NOT A PROCESS OF ITS OWN: under `bun run test:serial` every file before this
+// one ran here, and what each left filed is in this sweep — the principal's document, a stream
+// another file dropped and nothing has collected — and `busy()` reads true while they ask.
+// `reachable`'s held answers no longer need it: their keyed `ttl` lifetimes stopped counting as
+// readers to 13.7. THE REVERT: drop this hook; after `principalEarly.test.ts` in one process the
+// guard reads `busy saw: true,true,true`.
+beforeAll(unfileProducers)
 
 // Loads settled by hand, so a case can hold a set of values busy between two lines.
 function deferredLoads(): {
@@ -238,4 +247,29 @@ test('refreshing on reconnect reloads what is read and marks the rest', async ()
         'unread runs before a read: 1',
     )
     expect(await archive).toBe(2)
+})
+
+// 13.7 OVER A KEYED `ttl` — AN ENTRY'S LIFETIME IS NOT A READER. The mirror `Lifetime.follow`
+// subscribes to every entry of a keyed value declaring `ttl` (11.46) hears its productions, and a
+// bare `refresh()` that counted it as something reading the entry reloaded an entry nothing reads.
+//
+// THE REVERT: count every reader in `refreshOver`'s subscribed test, the lifetime included —
+// `unread entry loads before a read: 2`.
+test('a bare refresh marks a keyed ttl entry nothing reads rather than reloading it — 13.7', async () => {
+    let loads = 0
+    const keyed = reactive(
+        async (args: { id: number }) => {
+            loads += 1
+            return args.id * 10 + loads
+        },
+        { ttl: 60_000 },
+    )
+    const entry = keyed({ id: 1 })
+    await entry
+    refresh()
+    flushSync()
+    expect(`unread entry loads before a read: ${loads}`).toBe(
+        'unread entry loads before a read: 1',
+    )
+    expect(await entry).toBe(12)
 })

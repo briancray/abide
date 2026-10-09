@@ -10,60 +10,28 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
-import { parseAbide } from '#compiler'
-import { emitSource } from '#compiler/emitSource.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
-import { pageRegion } from '#ui/regions.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, renderPage } from './typed.ts'
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
+afterAll(closeTyped)
+afterAll(removeTemporaryModules)
 
-// Server-renders the page, hands its body to the document the way a browser would have arrived at
-// it, and mounts the client into those very nodes. What `console.warn` was told while it did is
-// handed back: 41.10's warning is the only trace a rebuilt region leaves.
-async function mountPage(
-    source: string,
-    beforeMount: () => void = () => {},
-): Promise<{ html: string; said: string[]; work: Work }> {
-    const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const { server, client } = emitSource(
-        'ui/pages/page.abide',
-        file,
-        names,
-        false,
-    )
-    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    const body = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    document.body.innerHTML = body
-    beforeMount()
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
+// A mount run under the counters, and what `console.warn` was told while it ran: 41.10's warning is
+// the only trace a rebuilt region leaves.
+function countedMount(mount: () => unknown): { said: string[]; work: Work } {
     let work: Work | undefined
     const said = warningsWhile(() => {
-        work = measure(() => {
-            mount(pageRegion(document.body))
-            flushSync()
-        })
+        work = measure(mount)
     })
-    return { html: body, said, work: work as Work }
+    return { said, work: work as Work }
+}
+
+async function mountCounted(
+    source: string,
+): Promise<{ html: string; said: string[]; work: Work }> {
+    const { html, mount } = await renderPage(source)
+    return { html, ...countedMount(mount) }
 }
 
 type Work = ReturnType<typeof measure>
@@ -114,7 +82,7 @@ const out = (): Element => document.querySelector('#out') as Element
 // of the eight tests here are refused with 41.10's "text was due" warning. Have `markupRun` never anchor,
 // and seven of the eight fail.
 test('a live {raw(html)} writes its next value as markup', async () => {
-    const { html, said } = await mountPage(`<script>
+    const { html, said } = await mountCounted(`<script>
 import { reactive } from 'abide'
 
 let html = reactive('<b>one</b>')
@@ -136,7 +104,7 @@ let count = reactive(0)
 
 // THE SAME RUN WITH TEXT ON BOTH SIDES OF IT — one run to the parser, and one to the anchors.
 test('a live raw value inside a run of text is the whole run, anchored', async () => {
-    const { said } = await mountPage(`<script>
+    const { said } = await mountCounted(`<script>
 import { reactive } from 'abide'
 
 let html = reactive('<b>one</b>')
@@ -168,7 +136,7 @@ let value = reactive<string | Raw>(${first})
 <button id="text" onclick={() => { value = '<i>plain</i>' }}>text</button>`
 
 test('a slot holding a string and then a raw value renders each as itself', async () => {
-    const { html, said } = await mountPage(SWITCHING("'<i>plain</i>'"))
+    const { html, said } = await mountCounted(SWITCHING("'<i>plain</i>'"))
     expect(html).toContain('<p id="out">&lt;i&gt;plain&lt;/i&gt;</p>')
     expect(said).toEqual([])
     expect(shapeOf(out())).toBe('"<i>plain</i>"')
@@ -182,7 +150,7 @@ test('a slot holding a string and then a raw value renders each as itself', asyn
 })
 
 test('a slot holding a raw value and then a string renders each as itself', async () => {
-    const { html, said } = await mountPage(SWITCHING("raw('<b>bold</b>')"))
+    const { html, said } = await mountCounted(SWITCHING("raw('<b>bold</b>')"))
     expect(html).toContain('<p id="out"><!--{--><b>bold</b><!--}--></p>')
     expect(said).toEqual([])
     expect(shapeOf(out())).toBe('<!--{-->,b(bold),<!--}-->')
@@ -201,7 +169,7 @@ test('a slot holding a raw value and then a string renders each as itself', asyn
 // run and the `{#if}` after it are both looked for at the run's opening anchor, and this reports
 // 41.10's "text was due" AND "a region was due" warnings.
 test('hydration keeps the markup a raw slot was painted with', async () => {
-    const { said } = await mountPage(`<script>
+    const { said } = await mountCounted(`<script>
 import { reactive } from 'abide'
 
 let html = reactive('<b>one</b><em>two</em>')
@@ -227,19 +195,15 @@ let on = reactive(true)
 })
 
 test('hydrating a painted raw slot creates no node', async () => {
-    let painted: Element | null = null
-    const { said, work } = await mountPage(
-        `<script>
+    const { mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let html = reactive('<b>one</b>')
 </script>
 
-<p id="out">{raw(html)}</p>`,
-        () => {
-            painted = document.querySelector('#out b')
-        },
-    )
+<p id="out">{raw(html)}</p>`)
+    const painted = document.querySelector('#out b')
+    const { said, work } = countedMount(mount)
     expect(said).toEqual([])
     // THE REVERT: have `setMarkup` rewrite a run it adopted rather than keep it. The markup is
     // the same and this reports `nodesCreated` 0 -> 2 and a different `<b>`.
@@ -254,7 +218,7 @@ let html = reactive('<b>one</b>')
 // THE REVERT: the pre-fix `setText` emitter. Every row, painted or grown, reports its markup as
 // text: `"<b>a</b>"` where `b(a)` is due.
 test('a raw slot in a {#for} row renders as markup, painted and grown', async () => {
-    const { said } = await mountPage(`<script>
+    const { said } = await mountCounted(`<script>
 import { reactive } from 'abide'
 
 let tag = reactive('b')
@@ -290,7 +254,7 @@ let rows = reactive([{ id: 'a' }])
 // AND AT A ROW'S TOP LEVEL, where the row is its anchor and its siblings: the anchored run moves
 // with the row it stands in, and a sibling after it in the row is still found.
 test('a raw slot at the top of a row moves with its row', async () => {
-    const { said } = await mountPage(`<script>
+    const { said } = await mountCounted(`<script>
 import { reactive } from 'abide'
 
 let tag = reactive('b')

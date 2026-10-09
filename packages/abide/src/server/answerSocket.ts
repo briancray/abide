@@ -321,9 +321,9 @@ export class MuxConnection {
 /**
  * Subscribes `id` to a socket's value: the ring's replay, then every production live.
  *
- * 18.13, 18.14 — what the ring holds past where the subscriber stood — all of it for a fresh one,
- * and all of it marked a reset where the epoch it carried is not this value's — then every
- * production after it, live.
+ * 18.13, 18.14 — what the ring holds past where the subscriber stood, in one frame — all of it for
+ * a fresh one, and all of it marked a reset where the epoch it carried is not this value's — then
+ * every production after it, live, a frame each.
  */
 function subscribe(
     connection: MuxConnection,
@@ -339,16 +339,11 @@ function subscribe(
         cursor,
     } = resumeProductions(value, seq, epoch)
     const peer = connection.peer
-    if (moved) send(peer, { op: 'reset', id, epoch: current, ring })
-    else
-        for (const [number, item] of ring)
-            send(peer, {
-                op: 'prod',
-                id,
-                seq: number,
-                epoch: current,
-                value: item,
-            })
+    // THE RING IS ONE FRAME, so a copy lands the whole replay in one turn: one frame per entry
+    // landed a hydrating `{#for}`'s copy with its first row alone against every row the server
+    // painted (41.8, 41.10). A moved epoch marks it a reset (18.14).
+    if (moved || ring.length !== 0)
+        send(peer, { op: moved ? 'reset' : 'prod', id, epoch: current, ring })
     let stopped = false
     connection.subscriptions.set(id, () => {
         stopped = true

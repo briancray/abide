@@ -4,10 +4,12 @@
 // sent (36.6), and neither variable is read anywhere else.
 
 import { LOGS_ADDRESS, RPC_ADDRESS } from '#shared/ADDRESSES.ts'
-import { framedStream } from '#shared/framing.ts'
+import { framedStream, framingPrefix } from '#shared/framing.ts'
 import type { Method } from '#shared/rpc.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import type { Mount } from './answerRpc.ts'
+import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
+import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /**
  * The running app asked for, or `undefined` where none is.
@@ -20,9 +22,10 @@ export function remoteUrl(given: string | undefined): string | undefined {
 
 /** The URL of the running app asked for, or the local one, with no trailing slash. */
 export function appUrl(given: string | undefined): string {
-    const url =
-        remoteUrl(given) ?? `http://localhost:${process.env.PORT ?? 3000}`
-    return url.replace(/\/$/, '')
+    return withoutTrailingSlash(
+        remoteUrl(given) ??
+            `http://localhost:${process.env.PORT ?? DEFAULT_PORT}`,
+    )
 }
 
 /** The headers a call to a running app carries: `ABIDE_APP_TOKEN` as the bearer, where set. */
@@ -131,7 +134,10 @@ export async function followLogs(url: string): Promise<number> {
         )
         return 1
     }
-    for await (const record of framedStream(answer.body, 'data: ')) {
+    for await (const record of framedStream(
+        answer.body,
+        framingPrefix('text/event-stream') as string,
+    )) {
         const { time, level, namespace, message } = record as Record<
             string,
             string

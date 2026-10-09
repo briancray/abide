@@ -11,6 +11,8 @@
 // 19.7 IS THE OTHER HALF: coercion belongs to the pipeline and is never asked of a schema.
 // Together they are what lets 19.4 be enforced at all — see `runSchema`.
 
+import type { Issues } from './Issues.ts'
+import { issuesOf } from './issuesOf.ts'
 import { note } from './note.ts'
 import { isThenable } from './reactive/isThenable.ts'
 import { untracked } from './reactive/tracking.ts'
@@ -73,32 +75,34 @@ export type Schema<T> = ((value: unknown) => T) | StandardSchemaV1<T>
  * WRONG AND WHERE; turning that into a named refusal at 422 (15.8) is the caller's, and
  * the caller is the one place that knows whether this was a write, a publish or a body.
  */
-export type Checked = { value: unknown; issues: Found | null }
+export type Checked = { value: unknown; issues: Issues<Found> | null }
 
 function accepted(value: unknown): Checked {
     return { value, issues: null }
 }
 
 /**
- * Issues keyed by path.
+ * The `T` a schema's issues are typed against: any record, or any value that is not one.
  *
- * KEYED BY PATH, and the type is written out rather than reached for as `Issues<unknown>`:
- * `Issues<T>` answers `string[]` where `T` is not an object, and `unknown` is not, so that
- * spelling types the record as a list and every cast around it as a mistake.
+ * A UNION OF BOTH ARMS rather than `unknown`: `Issues<T>` decides by a `T` the runtime no longer
+ * has, and `unknown` is not an object, so `Issues<unknown>` types every record as a list. Over
+ * this union it distributes to the record or the bare list — which of the two a refusal holds
+ * is `issuesOf`'s, decided by the value refused.
  */
-export type Found = Record<string, string[]>
+export type Found = Record<string, unknown> | string | number | boolean | null
 
-function refusedAs(found: Found): Checked {
-    return { value: undefined, issues: found }
+function refusedAs(found: Record<string, string[]>, value: unknown): Checked {
+    return { value: undefined, issues: issuesOf(found, value) as Issues<Found> }
 }
 
 /**
  * A throw from a schema, as the `''` issue entry.
  *
  * 19.5: the plain-function form throws what it refuses, and the throw becomes the `''`
- * entry — the key for "about the value itself", which is all a bare throw can say.
+ * entry — the key for "about the value itself", which is all a bare throw can say. Over a
+ * value that is not an object the entry IS the issues: `Issues<T>` is the bare list there.
  */
-function fromThrow(thrown: unknown): Checked {
+function fromThrow(thrown: unknown, value: unknown): Checked {
     const said =
         thrown instanceof Error
             ? thrown.message
@@ -110,7 +114,7 @@ function fromThrow(thrown: unknown): Checked {
     // throws a named refusal reads as though the name should survive, but then a `schema`
     // and a `transform` refuse in two different shapes and 4.4's pipeline has two kinds of
     // stop in it. A `transform` is where a named refusal belongs (4.6).
-    return refusedAs({ '': [said] })
+    return refusedAs({ '': [said] }, value)
 }
 
 /** A Standard Schema issue's path as a dotted key — 19.6's `''` where it has none. */
@@ -147,7 +151,7 @@ function runSchemaTracked(schema: unknown, value: unknown): Checked {
         try {
             returned = (schema as (value: unknown) => unknown)(value)
         } catch (thrown) {
-            return fromThrow(thrown)
+            return fromThrow(thrown, value)
         }
         // 19.4: A PREDICATE IS NOT A `Schema`, and this is where it is caught rather than
         // in the type — `Schema<boolean>` and a predicate are the same function type, so
@@ -175,6 +179,7 @@ function runSchemaTracked(schema: unknown, value: unknown): Checked {
         new Error(
             'A JSON Schema document is not a Schema on its own: wrap it as `jsonSchema(document)`, which brings the validator that reads it (RULEBOOK 19.15).',
         ),
+        value,
     )
 }
 
@@ -186,7 +191,7 @@ function runStandard(
     try {
         result = standard.validate(value)
     } catch (thrown) {
-        return fromThrow(thrown)
+        return fromThrow(thrown, value)
     }
     // 19.13: AN ASYNC SCHEMA IS REFUSED, and this is a decision rather than a gap. The
     // machinery to await one exists and is not the obstacle — `absorb` already turns a
@@ -207,6 +212,7 @@ function runStandard(
             new Error(
                 `The schema from "${standard.vendor}" answered ${result === null ? 'null' : typeof result}. A Standard Schema must answer a result object.`,
             ),
+            value,
         )
     if (isThenable(result))
         throw new Error(
@@ -216,8 +222,8 @@ function runStandard(
     if (settled.issues === undefined) return accepted(settled.value)
     // A path is built from the offending KEY, which for a record schema is the caller's — `note`
     // is why `constructor` and `__proto__` land as members rather than as the prototype's.
-    const found: Found = {}
+    const found: Record<string, string[]> = {}
     for (const issue of settled.issues)
         note(found, pathOf(issue.path), issue.message)
-    return refusedAs(found)
+    return refusedAs(found, value)
 }

@@ -4,7 +4,7 @@ import { armAnchor } from '#shared/armAnchor.ts'
 import { CHILDREN } from '#shared/CHILDREN.ts'
 import { escapeQuote } from '#shared/escapeText.ts'
 import { headKeyOf } from '#shared/headKeyOf.ts'
-import { Cursor, type Position, placeTemplate } from './Cursor.ts'
+import { Cursor, type PlacedNode, placeTemplate } from './Cursor.ts'
 import {
     attributeOf,
     type ClassifiedAttribute,
@@ -21,6 +21,7 @@ import type { AbideFile } from './parseAbide.ts'
 import { shareScope } from './shareScope.ts'
 import type {
     Attribute,
+    ElementNode,
     InlineComponent,
     TemplateNode,
 } from './TemplateNode.ts'
@@ -149,7 +150,7 @@ function slotValueOf(lowering: Lowering, lowered: string): string {
  * `lane` is the module this markup is for (`MarkupLane`).
  */
 function renderPosition(
-    at: Position,
+    at: PlacedNode,
     lowering: Lowering,
     lane: MarkupLane,
 ): string {
@@ -368,7 +369,7 @@ function renderPosition(
  * (`placeTemplate`). What the CALLER passed instead is the caller's markup and the caller's
  * addressing, so it is not this file's to place.
  */
-function slotMarkup(at: Position, lowering: Lowering): string {
+function slotMarkup(at: PlacedNode, lowering: Lowering): string {
     const given = `${PROPS}[${JSON.stringify(CHILDREN)}]`
     const fallback = renderMarkup(at.inner[0] as Cursor, lowering, SERVER_LANE)
     return `${OPEN_ANCHOR} + (${given} === undefined ? ${scoped(definitions(at.inner[0] as Cursor, lowering), fallback)} : ${given}()) + ${CLOSE_ANCHOR}`
@@ -387,8 +388,8 @@ function slotMarkup(at: Position, lowering: Lowering): string {
  * child's nodes one addressable thing, and they are the same pair `{#if}` uses.
  */
 function invocationMarkup(
-    node: Extract<TemplateNode, { kind: 'element' }>,
-    at: Position,
+    node: ElementNode,
+    at: PlacedNode,
     lowering: Lowering,
 ): string {
     // 33.16 — `children` IS NEVER DECLARED, so a caller writing it as an attribute beside a body
@@ -445,7 +446,7 @@ export function renderMarkup(
 
 /** Each position's markup, apart: the server's body reads them before it joins them. */
 export function renderLevel(
-    positions: Position[],
+    positions: PlacedNode[],
     lowering: Lowering,
     lane: MarkupLane,
 ): string[] {

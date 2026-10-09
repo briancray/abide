@@ -10,6 +10,7 @@
 // into the head, and the browser's own stored `debug` answers only where the document carries none.
 
 import { DEBUG_META } from './DEBUG_META.ts'
+import { paint } from './paint.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
 type Level = 'debug' | 'info' | 'warning' | 'error'
@@ -146,11 +147,12 @@ export function useColor(): boolean {
     return process.stdout.isTTY === true
 }
 
+// The ANSI style `paint` writes each level in.
 const LEVEL_COLOR: Record<Level, string> = {
-    debug: '\x1b[90m',
-    info: '\x1b[36m',
-    warning: '\x1b[33m',
-    error: '\x1b[31m',
+    debug: '90',
+    info: '36',
+    warning: '33',
+    error: '31',
 }
 
 function messageOf(args: unknown[]): string {
@@ -190,9 +192,10 @@ function write(
     if (format === 'json') line = JSON.stringify(record)
     else if (format === 'tsv')
         line = `${record.time}\t${level}\t${namespace}\t${record.trace}\t${record.message.replaceAll('\n', '\\n')}`
-    else if (useColor())
-        line = `\x1b[90m${record.time}\x1b[0m ${LEVEL_COLOR[level]}${level}\x1b[0m \x1b[1m${namespace}\x1b[0m ${record.message}`
-    else line = `${record.time} ${level} ${namespace} ${record.message}`
+    else {
+        const color = useColor()
+        line = `${paint(color, '90', record.time)} ${paint(color, LEVEL_COLOR[level], level)} ${paint(color, '1', namespace)} ${record.message}`
+    }
     if (level === 'error') console.error(line)
     else if (level === 'warning') console.warn(line)
     else console.log(line)

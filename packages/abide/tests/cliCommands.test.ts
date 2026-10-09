@@ -32,12 +32,13 @@ let base = ''
 let stop = (): void => {}
 
 beforeAll(async () => {
-    process.env.ABIDE_OPENAPI = '1'
-    process.env.ABIDE_MCP = '1'
-    ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/things.ts': HANDLERS,
-    }))
+    ;({ base, stop } = await serveApp(
+        {
+            'ui/pages/page.abide': '<main>home</main>',
+            'server/rpc/things.ts': HANDLERS,
+        },
+        { ...process.env, ABIDE_OPENAPI: '1', ABIDE_MCP: '1' },
+    ))
 }, 30_000)
 
 afterAll(() => {
@@ -69,31 +70,25 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
     // A dependency that installs: this checkout's own path, since no registry carries its version,
     // and the runtime's types beside it. THE REVERT: `^0.0.0` fails `bun install`, and without
     // `@types/bun` `abide check` reports `Bun` untyped in the starter's own `app.ts`.
-    const manifest = JSON.parse(
-        require('node:fs').readFileSync(`${app}/package.json`, 'utf8'),
-    )
+    const manifest = await Bun.file(`${app}/package.json`).json()
     expect(manifest.dependencies.abide).toBe(
         `file:${new URL('..', import.meta.url).pathname.replace(/\/$/, '')}`,
     )
     expect(Object.keys(manifest.devDependencies)).toEqual(['@types/bun'])
     expect(
-        JSON.parse(
-            require('node:fs').readFileSync(`${app}/tsconfig.json`, 'utf8'),
-        ).compilerOptions.types,
+        (await Bun.file(`${app}/tsconfig.json`).json()).compilerOptions.types,
     ).toEqual(['bun'])
 
     const edited = 'edited by the author\n'
-    Bun.write(`${app}/src/ui/app.html`, edited)
+    await Bun.write(`${app}/src/ui/app.html`, edited)
     const again = await spawned(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
     })
     expect(again.exitCode).toBe(0)
     expect(again.stdout).toContain('kept    src/ui/app.html')
-    expect(
-        require('node:fs').readFileSync(`${app}/src/ui/app.html`, 'utf8'),
-    ).toBe(edited)
+    expect(await Bun.file(`${app}/src/ui/app.html`).text()).toBe(edited)
 
-    Bun.write(
+    await Bun.write(
         `${app}/src/ui/app.html`,
         '<!doctype html><html><head></head><body></body></html>',
     )
@@ -134,10 +129,7 @@ test('build runs the plugins bunfig.toml declares over the client — 38.44', as
     const sheets = [...new Bun.Glob('*.css').scanSync(`${app}/.abide/client`)]
     expect(sheets.length).toBe(1)
     expect(
-        require('node:fs').readFileSync(
-            `${app}/.abide/client/${sheets[0]}`,
-            'utf8',
-        ),
+        await Bun.file(`${app}/.abide/client/${sheets[0]}`).text(),
     ).toContain('.stamped-by-plugin')
 })
 

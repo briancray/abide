@@ -27,17 +27,16 @@ import {
     type LoadedSources,
     type ServerTable,
 } from './answerRequest.ts'
-import { Mux, type MuxConnection } from './answerSocket.ts'
+import type { Mux, MuxConnection } from './answerSocket.ts'
 import { appPlugins } from './appPlugins.ts'
 import { CLIENT_ENTRY, PUBLIC_DIRECTORY } from './CLIENT_BUILD.ts'
 import {
     clientBuildOptions,
     stylesheetUnderMount,
 } from './clientBuildOptions.ts'
-import { type App, bootApp, originUnder } from './createApp.ts'
+import { type BootedApp, bootApp, originUnder } from './createApp.ts'
 import { keepServing } from './faultPolicy.ts'
 import { fenceServer } from './fenceServer.ts'
-import { McpSurface } from './generatedSurfaces.ts'
 import { type Manifest, manifestOf, NO_MANIFEST } from './manifestOf.ts'
 import { admitsMux } from './muxUpgrade.ts'
 import { refuseAddressCollision } from './refuseAddressCollision.ts'
@@ -76,12 +75,12 @@ export type ToWorker =
     | { kind: 'cancel'; id: number }
     | {
           kind: 'socket-open'
-          conn: number
+          connection: number
           url: string
           headers: [string, string][]
       }
-    | { kind: 'socket-message'; conn: number; text: string }
-    | { kind: 'socket-close'; conn: number }
+    | { kind: 'socket-message'; connection: number; text: string }
+    | { kind: 'socket-close'; connection: number }
 
 /**
  * A message from this worker to the listener.
@@ -91,7 +90,7 @@ export type ToWorker =
  */
 export type FromWorker =
     | { kind: 'ready' }
-    | { kind: 'socket-send'; conn: number; text: string }
+    | { kind: 'socket-send'; connection: number; text: string }
     | { kind: 'timeout'; id: number; seconds: number }
     | {
           kind: 'head'
@@ -135,7 +134,7 @@ process.on('disconnect', () => process.exit(0))
 // request after a save is answered with the failure document for a failure that never happened.
 let opening: Promise<void> | undefined
 
-let app: App | undefined
+let app: BootedApp | undefined
 // 18.2 — the mux over this worker's handlers and sockets, and each connection the listener holds.
 let mux: Mux | undefined
 // What the mux carries, which `admitsMux` reads: an app with neither table has no mux to open.
@@ -165,26 +164,30 @@ async function receive(message: ToWorker): Promise<void> {
     await opening
     if (message.kind === 'request') return answerAsk(message)
     if (message.kind === 'socket-open') {
-        const { conn } = message
+        const numbered = message.connection
         const connection = mux?.connect(
             new Request(message.url, { headers: message.headers }),
             {
                 send(text: string) {
-                    toListener({ kind: 'socket-send', conn, text })
+                    toListener({
+                        kind: 'socket-send',
+                        connection: numbered,
+                        text,
+                    })
                 },
                 // NOTHING TO CLOSE: the listener holds the browser's socket, and it outlives this
                 // worker (38.15). Nothing here stops the mux, either.
                 close() {},
             },
         )
-        if (connection !== undefined) connections.set(conn, connection)
+        if (connection !== undefined) connections.set(numbered, connection)
         return
     }
-    const connection = connections.get(message.conn)
+    const connection = connections.get(message.connection)
     if (connection === undefined) return
     if (message.kind === 'socket-message')
         return connection.message(message.text)
-    connections.delete(message.conn)
+    connections.delete(message.connection)
     connection.close()
 }
 
@@ -366,7 +369,7 @@ async function open(
             table,
             shell,
             handlers,
-            handlerModule: sourceModuleLoader(root),
+            handlerModule: sourceModuleLoader(root, base),
             published,
             client: bundling.then((bundle) => ({
                 manifest: bundle.manifest,
@@ -385,12 +388,9 @@ async function open(
         carried = sources
         // THE SAME `App` `abide start` boots, so an app's hooks and middleware run in dev too.
         app = await bootApp(originUnder(root), async () => sources)
-        // 18.2 — the mux over the same tables `App.listen` would run one over.
-        // The app's own record, as `bootApp` holds it: a frame's `rpc.raw` and MCP surface are this app's.
-        mux = new Mux(sources.sockets, sources.handlers, {
-            answer: app.fetch,
-            mcp: new McpSurface(sources.handlers, app.fetch),
-        })
+        // 18.2 — the mux `App.listen` would open, over the app's own record: a frame's `rpc.raw` and
+        // MCP surface are this app's.
+        mux = app.openMux()
     } catch (thrown) {
         failure = thrown instanceof Error ? thrown.message : String(thrown)
     }
@@ -501,8 +501,9 @@ function virtualModules(modules: Map<string, string>): Bun.BunPlugin {
                 if (!modules.has(importer)) return undefined
                 const from = importer.slice(0, importer.lastIndexOf('/'))
                 if (args.path.startsWith('.')) {
-                    const beside = new URL(args.path, `file://${from}/`)
-                        .pathname
+                    const beside = Bun.fileURLToPath(
+                        new URL(args.path, Bun.pathToFileURL(`${from}/`)),
+                    )
                     if (modules.has(beside))
                         return { path: beside, namespace: 'abide-dev' }
                 }

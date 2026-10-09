@@ -2,16 +2,21 @@ import { escapeAttribute, escapeQuote } from '#shared/escapeText.ts'
 import { isEventName } from '#shared/isEventName.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
 import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
-import { type Attribute, bodiesOf, type TemplateNode } from './TemplateNode.ts'
+import {
+    type Attribute,
+    bodiesOf,
+    type ElementNode,
+    type TemplateNode,
+} from './TemplateNode.ts'
 
-// THE CLASSIFICATION both emitters share. Where a node STANDS is not decided here: `renderMarkup`
-// carries a `Cursor`, so the walk that writes a node is the walk that places it. What IS decided
-// here is what a node IS — and a decision that must bind BOTH lanes belongs here, because one copy
-// of it is the agreement.
+// THE CLASSIFICATION both emitters share. Where a node STANDS is not decided here: `Cursor`'s
+// `placeTemplate` is the one walk that places a node, and the markup, the build and the adopt walk
+// are rendered from what it places. What IS decided here is what a node IS — and a decision that
+// must bind BOTH lanes belongs here, because one copy of it is the agreement.
 //
-// THE PREDICATES — `isComponentTag`, `isSingleRooted`, `isStyleProperty`, `isClassToggle`,
-// `isSlot`, and `#shared`'s `isEventName` — and `classifyAttributes`. An `onclick` the server
-// declines to write and the client binds as a listener is one classification answering twice.
+// THE PREDICATES — `isComponentTag`, `isSingleRooted`, `isSlot`, and `#shared`'s `isEventName` —
+// and `classifyAttributes`. An `onclick` the server declines to write and the client binds as a
+// listener is one classification answering twice.
 //
 // A TEXT RUN IS THE UNIT, not a slot. Adjacent text nodes MERGE when a browser parses markup, so
 // `<p>{label}: {count}</p>` arrives as the single text node `clicks: 0` however it was written.
@@ -22,7 +27,7 @@ import { type Attribute, bodiesOf, type TemplateNode } from './TemplateNode.ts'
 // So the run is written WHOLE: one text node, one `data` write, recomputed from all its parts. A
 // change to one part rewrites the run, which costs the same single write it would have cost
 // anyway plus a string join, and leaves the document identical to the one the author wrote.
-// `isTextish` and `isBlankRun` are the run's two questions, asked by the markup walk.
+// `isTextish` and `isBlankRun` are the run's two questions, asked by `placeTemplate`.
 
 /** Whether a node belongs to a text run: static text or an expression slot. */
 export function isTextish(node: TemplateNode): boolean {
@@ -37,7 +42,7 @@ export function isTextish(node: TemplateNode): boolean {
  * character anywhere in the run and it cannot happen, which is why this is a property of the RUN
  * rather than of a binding.
  *
- * ONE COPY, asked by the markup walk, whose positions the build and the mount both read: two copies
+ * ONE COPY, asked by `placeTemplate`, whose positions the build and the mount both read: two copies
  * of this rule is two answers to "how many nodes did the parser make here", and that disagreement
  * is exactly the defect row construction shipped once already.
  */
@@ -62,13 +67,15 @@ export function isBlankRun(nodes: TemplateNode[], from: number): boolean {
  * reader writes in the order the tag carries.
  *
  * `live` IS `Lowering.isLive`, asked once: an expression the checker could not prove static.
+ *
+ * A `static` attribute's `bytes` are the author's own as the tag serves them between the quotes
+ * (32.27, 32.28), or `undefined` for a static URL 32.20 refuses — dropped here, where the value is
+ * known. An empty `href` is its own answer and is kept, which `=== ''` would have thrown away.
  */
 export type ClassifiedAttribute = {
     attribute: Attribute
     live: boolean
-} & // `undefined` for a static URL 32.20 refuses — dropped here, where the value is known. An // The author's own bytes as the tag serves them between the quotes (32.27, 32.28), or
-// empty `href` is its own answer and is kept, which `=== ''` would have thrown away.
-(
+} & (
     | { kind: 'static'; bytes: string | undefined }
     // 32.3, 32.37 — a whole value from an expression, which may be absent.
     | { kind: 'dynamic' }
@@ -108,7 +115,7 @@ export type ClassifiedAttribute = {
  * `lowering` answers `live` (`Lowering.isLive`).
  */
 export function classifyAttributes(
-    node: TemplateNode & { kind: 'element' },
+    node: ElementNode,
     lowering: { isLive(holder: object): boolean },
 ): ClassifiedAttribute[] {
     const groups = mergeGroupsOf(node)
@@ -268,7 +275,7 @@ const MERGED = [
 ] as const
 
 /** The element's `style` and `class` merge groups, each only where it has a directive. */
-function mergeGroupsOf(node: TemplateNode & { kind: 'element' }): MergeGroup[] {
+function mergeGroupsOf(node: ElementNode): MergeGroup[] {
     const groups: MergeGroup[] = []
     for (const kind of MERGED) {
         const directives = node.attributes.filter(kind.is)
@@ -288,7 +295,7 @@ function mergeGroupsOf(node: TemplateNode & { kind: 'element' }): MergeGroup[] {
 
 /** An element's attribute by its folded name, or `undefined`. */
 export function attributeOf(
-    node: TemplateNode & { kind: 'element' },
+    node: ElementNode,
     name: string,
 ): Attribute | undefined {
     for (const attribute of node.attributes)
@@ -297,10 +304,7 @@ export function attributeOf(
 }
 
 /** An attribute's static value, or `undefined` where it is absent or an expression. */
-function staticAttribute(
-    node: TemplateNode & { kind: 'element' },
-    name: string,
-): string | undefined {
+function staticAttribute(node: ElementNode, name: string): string | undefined {
     const attribute = attributeOf(node, name)
     return attribute === undefined || attribute.expression
         ? undefined
@@ -385,11 +389,10 @@ function valueBindOf(lowerName: string): ValueBind | undefined {
 /**
  * Whether an attribute is a `style:prop` directive, setting ONE style property.
  *
- * 32.10 — `style:prop` sets ONE style property and `class:name` ONE class. Here rather than beside
- * the emitter that writes them out, for `isComponentTag`'s reason: this is what both emitters
- * read, and an edge from here to an emitter is a cycle. The prefix is matched on the FOLDED
- * name; the part after it is read from the author's spelling, because a custom property and a
- * class are both case-sensitive.
+ * 32.10 — `style:prop` sets ONE style property and `class:name` ONE class. Read by `MERGED`
+ * alone, so a directive is classified where its merge group is found. The prefix is matched on the
+ * FOLDED name; the part after it is read from the author's spelling, because a custom property and
+ * a class are both case-sensitive.
  *
  * A BARE `style:` OR `class:` IS NOT ONE — the prefix with nothing after it names no property and
  * no class, so it stays an ordinary attribute and renders as the author wrote it.
@@ -478,7 +481,7 @@ export function propKeyOf(attribute: Attribute): string | undefined {
  * 32.11 — each attribute as the tag carries it, `class:` and `style:` folded into the one attribute
  * they merge into and a bind into the property's own name.
  */
-function explicitNames(node: TemplateNode & { kind: 'element' }): string[] {
+function explicitNames(node: ElementNode): string[] {
     const names: string[] = []
     for (const attribute of node.attributes) {
         if (attribute.name === '...') continue

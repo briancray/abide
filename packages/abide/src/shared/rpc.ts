@@ -14,7 +14,7 @@
 // handler's own. NOT HERE YET: 16.8's publish into a value with no producer, and 16.7's `ttl` default
 // on a `reactive` built before it reached a mutation.
 
-import { isFailedNamed } from './Failed.ts'
+import { type Failed, isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { compose, type Middleware } from './Middleware.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
@@ -60,12 +60,21 @@ export type CallOptions = { signal?: AbortSignal }
  *
  * 16.3 — the call hands back the handler's own `Reactive`; the members below are the handler's,
  * passed through.
+ *
+ * 16.9 — AND ITS FAILURES CARRY THE TRANSPORT'S `HttpError`, which no handler declares and every
+ * call can be answered with: a body over `maxBodySize` (413), a closed `crossOrigin` (403), a
+ * `timeout` (504), and any failure status whose body was not a `Failed`, rebuilt by `answered`.
  */
 export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     ...args: undefined extends Args
         ? [args?: Args, options?: CallOptions]
         : [args: Args, options?: CallOptions]
-) => Reactive<Value, Value, Failures, Produced>) & {
+) => Reactive<
+    Value,
+    Value,
+    Failures | Failed<'HttpError', undefined>,
+    Produced
+>) & {
     method: Method
     description: string | undefined
     /**
@@ -80,7 +89,10 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     isError<Name extends string>(
         error: unknown,
         name: Name,
-    ): error is Extract<Failures, { name: Name }>
+    ): error is Extract<
+        Failures | Failed<'HttpError', undefined>,
+        { name: Name }
+    >
     /**
      * The call's address, resolved against the mount.
      *

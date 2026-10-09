@@ -1,5 +1,5 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
-import { isContextualKeyword, type Token, tokenise } from './tokenise.ts'
+import { isContextualKeyword, type Token, tokenize } from './tokenize.ts'
 
 /**
  * Splits a `<script>` into its import statements and the rest of its body.
@@ -8,7 +8,7 @@ import { isContextualKeyword, type Token, tokenise } from './tokenise.ts'
  * function — but an `import` is only legal at the top of a module. This splits the two so the
  * imports can be hoisted and everything else stays where the author put it.
  *
- * WHERE AN IMPORT BEGINS AND ENDS IS READ OFF the one tokeniser, which carries the template
+ * WHERE AN IMPORT BEGINS AND ENDS IS READ OFF the one tokenizer, which carries the template
  * re-scan a bare `` ` `` needs, so an import after a template literal is still found.
  *
  * With `landed`, every specifier the build moved is rewritten where it stands, a static import's
@@ -33,7 +33,7 @@ export function splitImports(
             if (landed === undefined) continue
             const moved = landedSpecifier(span.specifier, lane, landed)
             if (moved === undefined) continue
-            body += `${script.slice(at, span.literal + 1)}${moved}`
+            body += `${script.slice(at, span.literalStart + 1)}${moved}`
             at = span.end - 1
             continue
         }
@@ -44,7 +44,7 @@ export function splitImports(
         imports +=
             moved === undefined
                 ? `${script.slice(span.start, span.end)}\n`
-                : `${script.slice(span.start, span.literal + 1)}${moved}${script.slice(span.literalEnd - 1, span.end)}\n`
+                : `${script.slice(span.start, span.literalStart + 1)}${moved}${script.slice(span.literalEnd - 1, span.end)}\n`
         // AN IMPORT IS A STATEMENT AND EXCISING IT REMOVES A SEPARATOR. `const x = f()` with an
         // import under it and `[1, 2].forEach(g)` under that becomes `const x = f()` followed by
         // a `[` that automatic semicolon insertion does NOT break — it reads as `f()[2]`, a
@@ -87,7 +87,7 @@ type ImportSpan = {
     /** Where the statement ends — or, for an `import('…')`, the literal does. */
     end: number
     /** Where the specifier's literal begins and ends, quotes included. */
-    literal: number
+    literalStart: number
     literalEnd: number
     specifier: string
     /** An `import('…')` with a literal specifier: an expression, left where it is written. */
@@ -111,7 +111,7 @@ type ImportSpan = {
  * one expression read here, as `dynamic`: it names a module as a declaration does (34.15).
  */
 function importSpans(source: string): ImportSpan[] {
-    const tokens = tokenise(source)
+    const tokens = tokenize(source)
     const spans: ImportSpan[] = []
     for (let i = 0; i < tokens.length; i += 1) {
         const keyword = tokens[i] as Token
@@ -126,7 +126,7 @@ function importSpans(source: string): ImportSpan[] {
                     spans.push({
                         start: literal.start,
                         end: literal.end,
-                        literal: literal.start,
+                        literalStart: literal.start,
                         literalEnd: literal.end,
                         specifier: literal.text.slice(1, -1),
                         dynamic: true,
@@ -152,7 +152,7 @@ function importSpans(source: string): ImportSpan[] {
             // attribute and left ` with { type: 'json' }` behind as a `with` statement, which is
             // illegal in a module and takes the whole file with it.
             end: endOfAttributes(tokens, at + 1, specifier.end, source),
-            literal: specifier.start,
+            literalStart: specifier.start,
             literalEnd: specifier.end,
             specifier: specifier.text.slice(1, -1),
             dynamic: false,
@@ -306,7 +306,7 @@ export function importedNames(
 ): { name: string; specifier: string }[] {
     const names: { name: string; specifier: string }[] = []
     for (const declaration of importDeclarations(script)) {
-        const tokens = tokenise(declaration.text)
+        const tokens = tokenize(declaration.text)
         const last = tokens.findLastIndex(
             (token) => token.kind === SyntaxKind.StringLiteral,
         )

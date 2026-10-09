@@ -4,7 +4,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { spawned } from 'harness/gate'
-import { appFixture, buildApp, serveApp } from './builtApp.ts'
+import { appFixture, buildApp, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<main><h1>home</h1></main>`
@@ -118,15 +118,16 @@ let stop = (): void => {}
 let app = ''
 
 beforeAll(async () => {
-    // 27.8 — read by the spawned server: one that coerces, and one that will not.
-    process.env.LIMIT = '9'
-    process.env.FEATURE = 'maybe'
-    ;({ app, base, stop } = await serveApp({
-        'ui/pages/page.abide': PAGE,
-        'server/rpc/probe.ts': HANDLERS,
-        'server/app.ts': APP,
-        'ui/pages/invoices/[id]/page.abide': WHERE,
-    }))
+    ;({ app, base, stop } = await serveApp(
+        {
+            'ui/pages/page.abide': PAGE,
+            'server/rpc/probe.ts': HANDLERS,
+            'server/app.ts': APP,
+            'ui/pages/invoices/[id]/page.abide': WHERE,
+        },
+        // 27.8 — read by the spawned server: one that coerces, and one that will not.
+        { ...process.env, LIMIT: '9', FEATURE: 'maybe' },
+    ))
 }, 30_000)
 
 afterAll(() => {
@@ -290,10 +291,12 @@ await app.stop()
 console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.status} \${exploded.statusText}\`, inRequest, outside, marks }))
 `,
     )
-    const ran = await spawned(['bun', `${app}/host.ts`], { cwd: app })
-    const printed = ran.stdout.trim().split('\n').at(-1) as string
-    expect(ran.exitCode).toBe(0)
-    expect(JSON.parse(printed)).toEqual({
+    expect(
+        await lastLinePrinted<Record<string, unknown>>(
+            ['bun', `${app}/host.ts`],
+            { cwd: app },
+        ),
+    ).toEqual({
         own: 'own route for POST',
         exploded: '500 Internal Server Error',
         inRequest: 'http://app.test/x',
@@ -323,15 +326,11 @@ import { marks } from './server/app.ts'
 console.log(JSON.stringify(marks))
 `,
     )
-    const ran = await spawned(['bun', `${app}/disposed.ts`], { cwd: app })
-    const printed = ran.stdout.trim().split('\n').at(-1) as string
-    expect(ran.exitCode).toBe(0)
-    expect(JSON.parse(printed)).toEqual([
-        'before start',
-        'after start',
-        'held',
-        'stopped',
-    ])
+    expect(
+        await lastLinePrinted<string[]>(['bun', `${app}/disposed.ts`], {
+            cwd: app,
+        }),
+    ).toEqual(['before start', 'after start', 'held', 'stopped'])
 }, 30_000)
 
 // 37.6 — A THROWING `onStart` FAILS HARD: `abide start` exits rather than serving. THE REVERT: catch

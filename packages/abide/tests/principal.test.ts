@@ -172,3 +172,27 @@ test("a page's read of the principal is seeded, and the browser's read is answer
     })
     expect((await count()) - before).toBe(1)
 })
+
+// A SIGN-IN OR SIGN-OUT A HANDLER ANSWERED SAYS SO, in a header a browser's `fetch` can read — the
+// principal cookie is `HttpOnly` and `set-cookie` is withheld from script, so nothing else on the
+// answer tells the page its `principal` moved. A read of the principal says nothing. THE REVERT:
+// drop the two `PRINCIPAL_HEADER` writes in `#server/principal.ts`; both answers carry `null`.
+test('an answer whose handler signed the caller in or out says so — principal refresh', async () => {
+    const { principal, caller } = await signedIn()
+    const cookie = `${principal}; ${caller}`
+    const signIn = await Bun.fetch(`${base}${RPC}/signIn`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: '{"name":"grace"}',
+    })
+    expect(signIn.headers.get('abide-principal')).toBe('set')
+    const read = await Bun.fetch(`${base}${RPC}/whoami`, {
+        headers: { cookie },
+    })
+    expect(read.headers.get('abide-principal')).toBeNull()
+    const signOut = await Bun.fetch(`${base}${RPC}/signOut`, {
+        method: 'POST',
+        headers: { cookie },
+    })
+    expect(signOut.headers.get('abide-principal')).toBe('clear')
+})

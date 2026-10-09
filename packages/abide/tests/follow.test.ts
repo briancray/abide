@@ -3,7 +3,7 @@
 // process, and its `WebSocket` is not bun's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { serveApp } from './builtApp.ts'
+import { lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, POST, reactive, refuse } from 'abide/server'
@@ -85,30 +85,57 @@ afterAll(() => {
 })
 
 // Runs `steps` in a bun process against the mux, handing back every frame it received, in order.
-// `get` and `post` call the app over http.
+// `get` and `post` call the app over http. NOTHING IS SEQUENCED BY THE CLOCK: `settled()` sends a
+// subscription to an address nothing answers, which the mux refuses as it reads it, so its refusal
+// coming back says every frame sent before it has been taken; `until` waits on a frame the test is
+// owed. Then a last `settled()`, and the socket closed and drained, so a frame the server sent
+// before it took the close — one too many, which is what most of these are about — lands ahead
+// of what is said.
 async function client(steps: string): Promise<Record<string, unknown>[]> {
     const dir = temporaryModule({
         'client.ts': `const base = process.argv[2]
-const frames: unknown[] = []
+type Frame = Record<string, unknown>
+const frames: Frame[] = []
 const ws = new WebSocket(base.replace('http', 'ws') + '/__abide/socket')
 const send = (frame: unknown) => ws.send(JSON.stringify(frame))
-const settle = (ms: number) => new Promise((done) => setTimeout(done, ms))
 const get = (path: string, headers: Record<string, string> = {}) => fetch(base + '/__abide/rpc/library/' + path, { headers })
 const post = (path: string, body: unknown) => fetch(base + '/__abide/rpc/library/' + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-ws.onmessage = (event) => frames.push(JSON.parse(String(event.data)))
+const BARRIER = 1000
+let barrier = BARRIER
+const refused = new Map<number, () => void>()
+const settled = () =>
+    new Promise<void>((done) => {
+        barrier += 1
+        refused.set(barrier, done)
+        send({ op: 'sub', id: barrier, address: '/__abide/rpc/library/nothingAnswersHere' })
+    })
+let arrived = () => {}
+const until = async (owed: (frames: Frame[]) => boolean) => {
+    const deadline = Date.now() + 3000
+    while (!owed(frames) && Date.now() < deadline)
+        await new Promise<void>((done) => {
+            arrived = done
+            setTimeout(done, 50).unref()
+        })
+}
+ws.onmessage = (event) => {
+    const frame = JSON.parse(String(event.data)) as Frame
+    if (frame.op === 'error' && (frame.id as number) > BARRIER) {
+        refused.get(frame.id as number)?.()
+        return
+    }
+    frames.push(frame)
+    arrived()
+}
 await new Promise((done) => (ws.onopen = done))
 ${steps}
-await settle(150)
+await settled()
 ws.close()
+await new Promise((done) => (ws.onclose = done))
 console.log(JSON.stringify(frames))
 `,
     })
-    const ran = Bun.spawn(['bun', `${dir}/client.ts`, base], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
-    const printed = await new Response(ran.stdout).text()
-    return JSON.parse(printed.trim().split('\n').at(-1) as string)
+    return lastLinePrinted(['bun', `${dir}/client.ts`, base])
 }
 
 const ops = (frames: Record<string, unknown>[]): unknown[] =>
@@ -121,8 +148,9 @@ test('a follower naming the answered version is sent only what changes after it'
     const frames = await client(`const answered = await get('books')
 const version = Number(answered.headers.get('abide-version'))
 send({ op: 'sub', id: 1, address: '/__abide/rpc/library/books', version })
-await settle(50)
+await settled()
 await post('shelve', { title: 'emma' })
+await until((frames) => frames.some((frame) => frame.op === 'value'))
 `)
     const values = frames.filter((frame) => frame.op === 'value')
     expect(values.map((frame) => frame.value)).toHaveLength(1)
@@ -133,6 +161,7 @@ await post('shelve', { title: 'emma' })
 test('a follower naming no version is handed the value standing', async () => {
     const frames =
         await client(`send({ op: 'sub', id: 1, address: '/__abide/rpc/library/books' })
+await until((frames) => frames.length > 0)
 `)
     expect(ops(frames)).toEqual(['value'])
     expect((frames[0] as { value: string[] }).value[0]).toBe('dune')
@@ -145,8 +174,9 @@ test('a follower naming no version is handed the value standing', async () => {
 test('a patch reaches a follower as what it wrote, over the version it held', async () => {
     const frames = await client(`const answered = await get('books')
 send({ op: 'sub', id: 1, address: '/__abide/rpc/library/books', version: Number(answered.headers.get('abide-version')) })
-await settle(50)
+await settled()
 await post('rename', { at: 0, title: 'dune messiah' })
+await until((frames) => frames.length > 0)
 `)
     expect(ops(frames)).toEqual(['patch'])
     const patch = frames[0] as {
@@ -164,8 +194,9 @@ await post('rename', { at: 0, title: 'dune messiah' })
 test('a patch that cannot be sent as writes is sent as the value', async () => {
     const frames = await client(`const answered = await get('books')
 send({ op: 'sub', id: 1, address: '/__abide/rpc/library/books', version: Number(answered.headers.get('abide-version')) })
-await settle(50)
+await settled()
 await post('shuffle', {})
+await until((frames) => frames.length > 0)
 `)
     expect(ops(frames)).toEqual(['value'])
 })
@@ -177,8 +208,9 @@ test('an invalidate on the server reaches the followers its pattern names', asyn
     const frames =
         await client(`send({ op: 'sub', id: 1, address: '/__abide/rpc/library/contact', args: { id: 1 } })
 send({ op: 'sub', id: 2, address: '/__abide/rpc/library/contact', args: { id: 2 } })
-await settle(50)
+await settled()
 await post('touch', { id: 2 })
+await until((frames) => frames.length > 0)
 `)
     expect(frames).toEqual([{ op: 'invalidate', id: 2 }])
 })
@@ -187,8 +219,9 @@ await post('touch', { id: 2 })
 test('a refresh on the server reaches the followers its pattern names', async () => {
     const frames =
         await client(`send({ op: 'sub', id: 2, address: '/__abide/rpc/library/contact', args: { id: 2 } })
-await settle(50)
+await settled()
 await post('touch', { id: 2, refresh: true })
+await until((frames) => frames.length > 0)
 `)
     expect(frames).toEqual([{ op: 'refresh', id: 2 }])
 })
@@ -199,9 +232,9 @@ await post('touch', { id: 2, refresh: true })
 test("the value's own invalidate reaches the followers of the GET serving it — 7.10", async () => {
     const frames = await client(`const answered = await get('level')
 send({ op: 'sub', id: 1, address: '/__abide/rpc/library/level', version: Number(answered.headers.get('abide-version')) })
-await settle(50)
+await settled()
 await post('restock', {})
-await settle(50)
+await until((frames) => frames.length > 0)
 `)
     expect(ops(frames)).toEqual(['invalidate'])
 })
@@ -212,9 +245,10 @@ await settle(50)
 test('a guarded handler is followed for its triggers and never fed', async () => {
     const frames = await client(`await get('locked', { 'x-token': 'ok' })
 send({ op: 'sub', id: 1, address: '/__abide/rpc/library/locked' })
-await settle(50)
+await settled()
 await post('shelve', { title: 'persuasion' })
 await post('touchLocked', {})
+await until((frames) => frames.some((frame) => frame.op === 'invalidate'))
 `)
     expect(ops(frames)).toEqual(['invalidate'])
 })
@@ -228,11 +262,11 @@ test('a global GET triggered by args from inside another request reaches the fol
 const two = await get('price?id=2')
 send({ op: 'sub', id: 1, address: '/__abide/rpc/library/price', args: { id: 1 }, version: Number(one.headers.get('abide-version')) })
 send({ op: 'sub', id: 2, address: '/__abide/rpc/library/price', args: { id: 2 }, version: Number(two.headers.get('abide-version')) })
-await settle(50)
+await settled()
 await post('reprice', { id: 1, refresh: true })
-await settle(50)
+await until((frames) => frames.some((frame) => frame.id === 1))
 await post('reprice', { id: 2 })
-await settle(50)
+await until((frames) => frames.some((frame) => frame.id === 2))
 `)
     const seen: unknown[] = []
     for (const frame of frames) seen.push([frame.op, frame.id])
@@ -240,7 +274,7 @@ await settle(50)
         ['value', 1],
         ['invalidate', 2],
     ])
-})
+}, 15_000)
 
 // 13.12 — NO PATTERN IS EVERY ENTRY, so the same trigger with none reaches every browser following the
 // \`GET\`, whatever args each named. THE REVERT: have \`matchesPattern\` answer \`false\` for no pattern;
@@ -250,9 +284,9 @@ test('a global GET triggered with no pattern from inside another request reaches
 const two = await get('price?id=4')
 send({ op: 'sub', id: 1, address: '/__abide/rpc/library/price', args: { id: 3 }, version: Number(one.headers.get('abide-version')) })
 send({ op: 'sub', id: 2, address: '/__abide/rpc/library/price', args: { id: 4 }, version: Number(two.headers.get('abide-version')) })
-await settle(50)
+await settled()
 await post('reprice', {})
-await settle(50)
+await until((frames) => frames.length >= 2)
 `)
     const seen: unknown[] = []
     for (const frame of frames) seen.push([frame.op, frame.id])
@@ -268,11 +302,11 @@ await settle(50)
 test('a follower of args no entry held yet is fed once an answer makes one', async () => {
     const frames =
         await client(`send({ op: 'sub', id: 1, address: '/__abide/rpc/library/price', args: { id: 9 } })
-await settle(50)
+await settled()
 await get('price?id=9')
-await settle(50)
+await until((frames) => frames.length >= 1)
 await post('reprice', { id: 9, refresh: true })
-await settle(50)
+await until((frames) => frames.length >= 2)
 `)
     expect(ops(frames)).toEqual(['value', 'value'])
-})
+}, 15_000)

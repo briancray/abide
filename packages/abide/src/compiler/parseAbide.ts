@@ -8,6 +8,7 @@ import {
     type Attribute,
     type Branch,
     bodiesOf,
+    type ForBlock,
     type InlineComponent,
     type Setup,
     type TemplateNode,
@@ -18,8 +19,8 @@ import {
     skipQuoted,
     slotEnd,
     type Token,
-    tokenise,
-} from './tokenise.ts'
+    tokenize,
+} from './tokenize.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 // A `.abide` file is a script, a style and a template, and this splits it into the three
@@ -544,7 +545,7 @@ function inlineComponent(header: {
     text: string
     at: number
 }): InlineComponent {
-    const tokens = tokenise(header.text)
+    const tokens = tokenize(header.text)
     const name = tokens[0]
     const opener = tokens[1]
     if (
@@ -754,8 +755,7 @@ function newBranch(subject: string): Branch {
 /**
  * The body a `<script>` or `<style>` written inside `block` belongs to.
  *
- * 14.8 — the body a branch-local `<script>` written inside `block` belongs to: a row's, or the arm
- * open where it stands. A `{#try}` body refuses one: what a boundary sets up when its body is replaced
+ * 14.8 — a row's, or the arm open where it stands. A `{#try}` body refuses one: what a boundary sets up when its body is replaced
  * by the catch (32.16) is not decided, and a guess here would be the decision.
  */
 function bodyOf(block: TemplateNode | InlineComponent): {
@@ -784,8 +784,7 @@ function sameTag(left: string, right: string): boolean {
 /**
  * The list a `<script>`'s body belongs in, or `undefined` where it is markup.
  *
- * WHICH BLOCK A `<script>` BELONGS TO, or `undefined` where it is markup. 34.1 is the bare tag and
- * 34.2 is the bare `module` attribute; anything else on the tag — `src`, `type`, `defer`, `nonce` —
+ * 34.1 is the bare tag and 34.2 is the bare `module` attribute; anything else on the tag — `src`, `type`, `defer`, `nonce` —
  * is a `<script>` the author wrote for the DOCUMENT, and lifting it into component setup moves it
  * out of the markup and throws its attributes away.
  *
@@ -841,8 +840,7 @@ function rawBody(
 /**
  * Where a raw-text block's close tag begins and ends, or `null` where it has none.
  *
- * Where a raw-text block's close tag begins and ends, matched the way `sameTag` matches —
- * `indexOf` over the literal spelling missed `</SCRIPT>` and ran the block to the end of the file.
+ * Matched the way `sameTag` matches — `indexOf` over the literal spelling missed `</SCRIPT>` and ran the block to the end of the file.
  *
  * WHITESPACE IS LEGAL BEFORE THE `>`, and demanding it at a fixed offset was the same class of
  * miss one layer down: `</script >` and `</style\n>` matched nothing, so the rest of the document
@@ -869,8 +867,8 @@ function closeTagAt(
 /**
  * Appends the text run from `at` to `children` and returns where the run ends.
  *
- * A run of text from `at`, scanned from `from` — one node, so the `<` that opened no tag is
- * carried by the run that follows it rather than becoming a node of its own.
+ * Scanned from `from` — one node, so the `<` that opened no tag is carried by the run that
+ * follows it rather than becoming a node of its own.
  */
 function pushText(
     children: TemplateNode[],
@@ -941,12 +939,12 @@ function forBlock(
     file: string,
     header: { text: string; at: number },
     origins: Origins,
-): TemplateNode & { kind: 'block'; block: 'for' } {
+): ForBlock {
     const source = header.text
     // THE HEADER IS TOKENS, read by the scanner a slot is: an `of`, a `,` or a `by` inside a string,
     // a call or an object pattern is the expression's own, and only one at depth zero divides the
     // header. `by` is a word rather than a keyword, so a member named `by` is not one.
-    const tokens = tokenise(source)
+    const tokens = tokenize(source)
     let depth = 0
     let of: Token | undefined
     let comma: Token | undefined
@@ -994,7 +992,7 @@ function forBlock(
         by === undefined
             ? { text: '', at: end }
             : trimmed(file, header.at + by.end, end)
-    const block: TemplateNode & { kind: 'block'; block: 'for' } = {
+    const block: ForBlock = {
         kind: 'block',
         block: 'for',
         item,
@@ -1068,7 +1066,7 @@ function readTag(
             }
         }
 
-        const attrStart = at
+        const attributeStart = at
         while (
             at < source.length &&
             !isSpace(source[at] as string) &&
@@ -1077,9 +1075,9 @@ function readTag(
             source[at] !== '>'
         )
             at += 1
-        if (at === attrStart)
+        if (at === attributeStart)
             return { name, attributes, selfClosing: false, end: at + 1 }
-        const attrName = source.slice(attrStart, at)
+        const attributeName = source.slice(attributeStart, at)
 
         if (source[at] !== '=') {
             // 33.21 — A BARE PROP IS `true`. Handed over as the expression rather than given a
@@ -1087,9 +1085,9 @@ function readTag(
             // `enable={true}`. A bare `bind:` names no `Reactive` and stays the literal it was.
             const flag =
                 isComponentTag(name) &&
-                !attrName.toLowerCase().startsWith('bind:')
-            attributes.push(attribute(attrName, flag ? 'true' : '', flag))
-            place(attributes.length - 1, attrStart, attrStart)
+                !attributeName.toLowerCase().startsWith('bind:')
+            attributes.push(attribute(attributeName, flag ? 'true' : '', flag))
+            place(attributes.length - 1, attributeStart, attributeStart)
             continue
         }
         at += 1
@@ -1099,8 +1097,8 @@ function readTag(
         if (source[at] === '{') {
             const close = slotEnd(source, at)
             const value = trimmed(source, at + 1, close)
-            attributes.push(attribute(attrName, value.text, true))
-            place(attributes.length - 1, value.at, attrStart)
+            attributes.push(attribute(attributeName, value.text, true))
+            place(attributes.length - 1, value.at, attributeStart)
             at = close + 1
             continue
         }
@@ -1114,11 +1112,16 @@ function readTag(
             // because the output is a document that parses.
             if (close === -1)
                 throw new Error(
-                    `abide: the ${quote} opening ${attrName} on <${name}> is never closed, so the rest of the file reads as part of that attribute.`,
+                    `abide: the ${quote} opening ${attributeName} on <${name}> is never closed, so the rest of the file reads as part of that attribute.`,
                 )
             const from = attributes.length
-            pushQuoted(attributes, attrName, source.slice(at + 1, close), name)
-            place(from, at + 1, attrStart)
+            pushQuoted(
+                attributes,
+                attributeName,
+                source.slice(at + 1, close),
+                name,
+            )
+            place(from, at + 1, attributeStart)
             at = close + 1
             continue
         }
@@ -1133,8 +1136,13 @@ function readTag(
         // an unquoted value — `<a href=/x/{id}>` — was served as the author's own braces, never
         // lowered and never past the `safeUrl` 32.20 asks a URL attribute for.
         const from = attributes.length
-        pushQuoted(attributes, attrName, source.slice(valueStart, at), name)
-        place(from, valueStart, attrStart)
+        pushQuoted(
+            attributes,
+            attributeName,
+            source.slice(valueStart, at),
+            name,
+        )
+        place(from, valueStart, attributeStart)
     }
     return { name, attributes, selfClosing: false, end: at }
 }
@@ -1168,27 +1176,27 @@ function readTag(
  */
 function pushQuoted(
     attributes: Attribute[],
-    attrName: string,
+    attributeName: string,
     raw: string,
     tag: string,
 ): void {
     const prop = isComponentTag(tag)
     const expression = interpolated(
         raw,
-        prop || !URL_ATTRIBUTES.has(attrName.toLowerCase()),
+        prop || !URL_ATTRIBUTES.has(attributeName.toLowerCase()),
     )
     if (expression === undefined) {
         attributes.push(
             attribute(
-                attrName,
+                attributeName,
                 prop ? decodeCharacterReferences(raw, 'attribute') : raw,
                 false,
             ),
         )
         return
     }
-    if (attrName.toLowerCase() !== 'style') {
-        attributes.push(attribute(attrName, expression, true))
+    if (attributeName.toLowerCase() !== 'style') {
+        attributes.push(attribute(attributeName, expression, true))
         return
     }
     for (const declaration of splitTopLevel(raw, ';')) {

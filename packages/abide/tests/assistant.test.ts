@@ -8,7 +8,7 @@ import { spawned } from 'harness/gate'
 import { BRIDGE_PATH } from '../../bridge/src/bridge.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
 import { BRIDGE_ADDRESS } from '../src/shared/ADDRESSES.ts'
-import { serveApp } from './builtApp.ts'
+import { lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const FIXTURES = new URL('./fixtures/assistant/', import.meta.url).pathname
@@ -49,6 +49,9 @@ let base = ''
 let stop = (): void => {}
 let api: Bun.Subprocess | undefined
 const bridges: Bun.Subprocess[] = []
+// What every child here runs under — the app, the bridges, a host — set in this file alone: a flag
+// left on `process.env` reaches every app the worker serves after this file.
+let environment: Record<string, string | undefined> = process.env
 
 beforeAll(async () => {
     api = Bun.spawn(['bun', `${FIXTURES}fakeMessagesApi.ts`], {
@@ -59,15 +62,21 @@ beforeAll(async () => {
         printed += new TextDecoder().decode(chunk)
         if (printed.includes('\n')) break
     }
-    process.env.FAKE_API = printed.trim().replace(/\/$/, '')
-    process.env.FAKE_RECORD = RECORD
-    process.env.ABIDE_MCP = '1'
-    process.env.ABIDE_BRIDGE = '1'
-    ;({ app, base, stop } = await serveApp({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/invoices.ts': INVOICES,
-        'server/rpc/ask.ts': ASK,
-    }))
+    environment = {
+        ...process.env,
+        FAKE_API: printed.trim().replace(/\/$/, ''),
+        FAKE_RECORD: RECORD,
+        ABIDE_MCP: '1',
+        ABIDE_BRIDGE: '1',
+    }
+    ;({ app, base, stop } = await serveApp(
+        {
+            'ui/pages/page.abide': '<main>home</main>',
+            'server/rpc/invoices.ts': INVOICES,
+            'server/rpc/ask.ts': ASK,
+        },
+        environment,
+    ))
 }, 30_000)
 
 afterEach(() => {
@@ -110,7 +119,7 @@ async function pairBridge(
             '--claude',
             FAKE_CLAUDE,
         ],
-        { stderr: 'pipe', env: process.env },
+        { stderr: 'pipe', env: environment },
     )
     bridges.push(running)
     let said = ''
@@ -242,7 +251,7 @@ test('nothing paired refuses 409, and a pairing code pairs only once — 45.13, 
             '--claude',
             FAKE_CLAUDE,
         ],
-        { deadline: 10_000 },
+        { deadline: 10_000, env: environment },
     )
     expect(again.exitCode).toBe(1)
     expect(again.stderr).toContain('403')
@@ -334,14 +343,10 @@ const answer = await first.fetch(new Request('http://app.test/__abide/rpc/ask/as
 console.log(JSON.stringify({ status: answer.status, text: await answer.text() }))
 `,
     )
-    const ran = await spawned(['bun', `${app}/host.ts`], {
-        cwd: app,
-        env: process.env,
-    })
-    if (ran.exitCode !== 0) console.log(ran.stderr)
-    const printed = JSON.parse(
-        ran.stdout.trim().split('\n').at(-1) as string,
-    ) as { status: number; text: string }
+    const printed = await lastLinePrinted<{ status: number; text: string }>(
+        ['bun', `${app}/host.ts`],
+        { cwd: app, env: environment },
+    )
     expect(printed.status).toBe(200)
     expect(printed.text).toContain('"text":"saw \\"ada\\""')
 }, 30_000)

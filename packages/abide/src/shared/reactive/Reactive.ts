@@ -257,10 +257,15 @@ export type Reactive<
      * splits by MEMBER instead. Hands back the refusal where a gate refused the write (9.5).
      * A `Reactive` IS IN THE UNION because 11.62 adopts one rather than storing it, and it is
      * spelled out rather than left to `PromiseLike`: a `Reactive` satisfies that (1.4), and
-     * taking it through that arm is exactly the settle-to-a-snapshot 1.6 refuses.
+     * taking it through that arm is exactly the settle-to-a-snapshot 1.6 refuses. Its failures are
+     * this value's, since the adopted value's refusal becomes this one's: an `Rpc` call carries
+     * `HttpError` (16.9), so a value read through one is written through another.
      */
     set(
-        value: Accepted | PromiseLike<Accepted> | Reactive<Accepted>,
+        value:
+            | Accepted
+            | PromiseLike<Accepted>
+            | Reactive<Accepted, unknown, Failures, unknown>,
         // biome-ignore lint/suspicious/noConfusingVoidType: same reason as `watch` below — a `set` that returns nothing infers `void`, and 9.5's refusal is the other arm.
     ): void | Failures
     /**
@@ -304,8 +309,8 @@ type Adoption = { source: Cell; stop: () => void }
  * The window a `throttle` or a `debounce` holds open, allocated only where one is declared.
  *
  * THE WINDOW A `throttle` OR A `debounce` HOLDS OPEN (RULEBOOK 5.8). One field on the
- * cell rather than five, allocated only where a value declared one — the shape `adoption`
- * already uses, and for the same reason.
+ * cell rather than one per window field, allocated only where a value declared one — the
+ * shape `adoption` already uses, and for the same reason.
  *
  * WHAT A WINDOW CAPS IS THE WAKE, NEVER THE PRODUCTION (5.9). Every write still mints:
  * the ordinal moves, the ring takes it, and a cursor walking retention is handed every one
@@ -560,6 +565,7 @@ function historyView(cell: Cell, stream: Stream): Retained {
             ringBase: 0,
             ringDepth: cell.ringDepth,
             servable: false,
+            state: CLEAN,
             // NULL THOUGH THIS IS A STREAM'S: `stream` on a `Retained` says "the ring is the
             // accumulation being built", and this ring is the opposite of that — closed runs,
             // bounded by `ringDepth` and read like any other value's past.
@@ -615,13 +621,11 @@ function retainRun(cell: Cell, stream: Stream): void {
         expiry.dropped = false
         armNext(cell, expiry)
     }
-    // The cursors waiting on a run rather than on a chunk, and nothing else: these readers are
-    // not on the cell, so no binding is woken a second time by a close.
-    const waiting = view.readers
-    for (let index = 0; index < waiting.length; index += 1) {
-        const reader = waiting[index] as Subscriber
-        if (reader.alive) reader.notify()
-    }
+    // The readers of the PAST and nothing else — a cursor waiting on a run, and a tracked
+    // iteration of `s.history(n)` (a `{#for}` over it) — marked and drained like any value's.
+    // They are not on the cell, so no binding of the value is woken a second time by a close.
+    // `markReaders` asks of a source its `readers` and its `state`, which the view carries.
+    cascade(view as unknown as Cell)
 }
 
 /**
@@ -700,6 +704,10 @@ class Cell {
      */
     declare probeSources: Cell[]
     declare cursor: number
+    /** See `Subscriber.seen`. */
+    declare seen: Set<Cell> | null
+    declare seenThrough: number
+    declare scanningFrom: number
     declare label: string
     declare body: ((args: unknown) => unknown) | null
     declare args: unknown
@@ -735,6 +743,17 @@ class Cell {
      * `null` IS the default — see `comparatorFor`.
      */
     declare identityFn: ((next: unknown, previous: unknown) => boolean) | null
+    /**
+     * The comparator this value DECLARED, which `identityFn` returns to when an adoption ends.
+     *
+     * 11.17 inherits the adopted value's `identity` only where the outer declared none, and only
+     * for as long as it adopts: kept on `identityFn` alone, the inherited comparator outlived the
+     * adoption and gated the outer's own productions — `flag() ? inner : count()` with `inner`
+     * keyed on `.id` read every number as the same `undefined` and never woke again.
+     */
+    declare declaredIdentityFn:
+        | ((next: unknown, previous: unknown) => boolean)
+        | null
     declare transform: ((value: unknown) => unknown) | null
     /**
      * `null` on every value that declares no `schema`, which keeps the gate off the write
@@ -904,6 +923,9 @@ class Cell {
         this.sources = []
         this.probeSources = []
         this.cursor = 0
+        this.seen = null
+        this.seenThrough = 0
+        this.scanningFrom = -1
         this.label = label
         this.body = body
         this.args = args
@@ -916,6 +938,7 @@ class Cell {
         this.identityFn = comparatorFor(
             options?.identity as Identity<unknown> | undefined,
         )
+        this.declaredIdentityFn = this.identityFn
         this.transform = (options?.transform ?? null) as
             | ((value: unknown) => unknown)
             | null
@@ -1430,6 +1453,19 @@ function markAsked(asked: Subscriber[]): void {
 function probesMoved(cell: Cell): void {
     PROBE_PASS += 1
     markProbes(cell, PROBE_PASS)
+    if (draining || pendingCount === 0) return
+    schedule()
+}
+
+/**
+ * Wakes the guards subscribed to `signal`'s probe edge — a node that is nothing but that edge.
+ *
+ * What a `Keyed`'s statics hear an entry being reached or released through: membership is not a
+ * probe of any entry, so a guard asked before a key existed has no entry to hear it from.
+ */
+export function signalMoved(signal: Tracked): void {
+    if (signal.probeReaders.length === 0) return
+    markAsked(signal.probeReaders)
     if (draining || pendingCount === 0) return
     schedule()
 }
@@ -2087,11 +2123,17 @@ function adopt(cell: Cell, inner: Cell): Error | undefined {
     // The same source again was checked when it was first adopted, so only a new one is walked.
     const cycle = closesCycle(cell, inner)
     if (cycle !== undefined) return cycle
+    // 11.19 MOVES WITH THE ADOPTION ITSELF, and no production carries that move. An adopter with
+    // nothing to serve — `reactive()` before a `paid = payInvoice(…)` — re-adopted onto a call in
+    // flight goes busy while the mirror's `unserve` finds nothing to lose and wakes no guard, so
+    // `{paid.busy() ? 'paying…' : ''}` never painted the load it was asking about.
+    const wasBusy = standing !== null && busyNow(standing.source)
     if (standing !== null) standing.stop()
-    // 11.17: the adopted value's `identity` is inherited where the outer declared none.
+    // 11.17: the adopted value's `identity` is inherited where the outer declared none —
+    // THIS inner's, so a re-adoption onto another one does not keep the first one's.
     // Assigned before the first mirror, or the production that mirror makes is gated by
     // the wrong comparison.
-    if (cell.identityFn === null) cell.identityFn = inner.identityFn
+    cell.identityFn = cell.declaredIdentityFn ?? inner.identityFn
     simpleShape(cell)
     const stop = watchOver([inner], cell, (): undefined => {
         mirror(cell, inner)
@@ -2102,6 +2144,7 @@ function adopt(cell: Cell, inner: Cell): Error | undefined {
     // own rather than a branch on every value's write path — see `acceptIntoStream` for what such a
     // branch costs under V8 even where nothing takes it.
     Object.setPrototypeOf(cell.callable as object, ADOPTING_PROTOTYPE)
+    if (!cell.loading && busyNow(inner) !== wasBusy) probesMoved(cell)
     return undefined
 }
 
@@ -2138,6 +2181,8 @@ function follow(cell: Cell, stream: Stream, inner: Cell): Error | undefined {
     if (cycle !== undefined) return cycle
     // A write supersedes a load a previous write left in flight.
     cell.generation += 1
+    // 11.19 as `adopt` has it: following a call in flight is a busy move nothing mints.
+    const wasBusy = standing !== null && busyNow(standing.source)
     if (standing !== null) unfollow(cell)
     // What `standWrite`'s identity gate compares against is what is served now.
     heldValue(cell)
@@ -2156,6 +2201,7 @@ function follow(cell: Cell, stream: Stream, inner: Cell): Error | undefined {
         return undefined
     })
     cell.adoption = { source: inner, stop }
+    if (!cell.loading && busyNow(inner) !== wasBusy) probesMoved(cell)
     return undefined
 }
 
@@ -2226,7 +2272,16 @@ function mirror(cell: Cell, inner: Cell): void {
 function dropAdoption(cell: Cell): void {
     if (cell.adoption === null) return
     unfollow(cell)
-    if (cell.stream !== null) stopForwarding(cell)
+    const stream = cell.stream
+    // 9.25: AN OWN STREAM'S `adoption` IS A WRITE IT FOLLOWS, not a stream it forwards — the
+    // discriminator `adoptedCellOf` reads. Letting go of the write is all there is: the stream is
+    // its own, so is its prototype, and `follow` never touched `identityFn`. Stopping it as a
+    // forward nulled the stream a queued `wakeStreams` was about to read.
+    if (stream !== null && stream.source === null) return
+    if (stream !== null) stopForwarding(cell)
+    // 11.17 inherited the identity for the length of the adoption only.
+    cell.identityFn = cell.declaredIdentityFn
+    simpleShape(cell)
     Object.setPrototypeOf(
         cell.callable as object,
         cell.simple ? SIMPLE_PROTOTYPE : MEMBER_PROTOTYPE,
@@ -2510,11 +2565,28 @@ function pumpRun(
     beginLoad(cell)
     stream.iterator = iterator
     // 11.32 — a generator's body runs inside each `next()`, so the pump is what carries the scope.
-    void runInScope(
+    runInScope(
         cell.scope,
         () => pump(cell, stream, iterator, run),
         undefined,
+    ).then(undefined, (thrown: unknown) =>
+        pumpFailed(cell, stream, run, thrown),
     )
+}
+
+/**
+ * Refuses a run whose pump threw past `next()` — landing a chunk, closing, or a gate a close reads
+ * through (a `transform` that throws). 2.4 as for a generator's own throw, and the run stops.
+ */
+function pumpFailed(
+    cell: Cell,
+    stream: Stream,
+    run: number,
+    thrown: unknown,
+): void {
+    if (stream.run !== run) return
+    stopStream(stream)
+    refused(cell, thrown)
 }
 
 function openStream(
@@ -3872,6 +3944,23 @@ export function leaveSelections(value: unknown): void {
 }
 
 /**
+ * Takes every value filed so far out of the bare selection, each filed again by its next load.
+ *
+ * A TEST'S SEAM, with no caller in the framework — `bareSelection.test.ts` calls it before its
+ * first case: a page's process ends with the page, and a test process runs every file before this
+ * one in it. What those files left held — a module's `global`
+ * value, a follow the page keeps for its life — is in reach of a bare sweep (13.13), and a bare
+ * `refresh()` reloads it and reads `busy()` true while it asks.
+ */
+export function unfileProducers(): void {
+    for (let index = 0; index < filedProducers.length; index += 1) {
+        const cell = (filedProducers[index] as WeakRef<Cell>).deref()
+        if (cell !== undefined) cell.filed = false
+    }
+    filedProducers = []
+}
+
+/**
  * The values a selection reaches in the current scope, `global` values included: those carrying
  * any of `tags`, or every filed load where `tags` is `null` — the bare selection.
  *
@@ -3976,8 +4065,8 @@ export function invalidateOver(tags: string[] | null): void {
 export function refreshOver(tags: string[] | null): void {
     for (const cell of inReach(tags)) {
         if (
-            cell.readers.length !== 0 ||
-            cell.probeReaders.length !== 0 ||
+            readByAny(cell.readers) ||
+            readByAny(cell.probeReaders) ||
             cell.stream !== null
         ) {
             if (tags === null) refreshOne(cell)
@@ -3987,6 +4076,21 @@ export function refreshOver(tags: string[] | null): void {
             cell.direct = false
         }
     }
+}
+
+/**
+ * Whether any of `readers` is something reading the value rather than a keyed entry's lifetime.
+ *
+ * THE LIFETIME IS THE ONE MIRROR WITH NO ADOPTER (`Subscriber.isMirror`): it subscribes to an entry
+ * of a keyed value declaring `ttl` to hear its productions (11.46), and counted here it had 13.7
+ * reload every such entry nothing reads.
+ */
+function readByAny(readers: Subscriber[]): boolean {
+    for (let index = 0; index < readers.length; index += 1) {
+        const reader = readers[index] as Subscriber
+        if (!reader.isMirror || reader.adopter !== null) return true
+    }
+    return false
 }
 
 const MEMBERS = {
@@ -4084,7 +4188,13 @@ const MEMBERS = {
                 : replay < 0
                   ? 0
                   : replay
-        return historyFrom(source, source.ordinal - depth)
+        // The callable IS the read: `Callable` types only the cell it carries.
+        return historyFrom(
+            source,
+            source.ordinal - depth,
+            this as unknown as () => unknown,
+            replay,
+        )
     },
     [Symbol.asyncIterator](this: Callable): AsyncIterator<unknown> {
         const cell = this[CELL]

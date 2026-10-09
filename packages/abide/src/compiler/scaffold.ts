@@ -8,15 +8,14 @@ import { COMPILER_OPTIONS } from './writeDefaultProject.ts'
 
 // THE STARTER'S OWN FILES, as files: a real document, a real page and a real module, copied as they
 // stand. What depends on the name — the manifests — is written here.
-const STARTER = new URL('../../scaffold/', import.meta.url).pathname
+const STARTER = Bun.fileURLToPath(new URL('../../scaffold/', import.meta.url))
 
 // THE ABIDE THAT WROTE THE PROJECT is the one it depends on. Installed from a registry, that is its
 // version; run from a checkout, no registry has that version, and the only spelling that installs
 // is the checkout's own path.
-const PACKAGE_ROOT = new URL('../../', import.meta.url).pathname.replace(
-    /\/$/,
-    '',
-)
+const PACKAGE_ROOT = Bun.fileURLToPath(
+    new URL('../../', import.meta.url),
+).replace(/\/$/, '')
 const ABIDE_DEPENDENCY = PACKAGE_ROOT.includes('/node_modules/')
     ? `^${abidePackage.version}`
     : `file:${PACKAGE_ROOT}`

@@ -4,9 +4,16 @@
 
 import { expect, test } from 'bun:test'
 import { Mux } from '#server/answerSocket.ts'
-import { request, requestCookies, response } from '#server/requestScope.ts'
+import type { BootedApp } from '#server/createApp.ts'
+import {
+    currentRequestScope,
+    request,
+    requestCookies,
+    response,
+} from '#server/requestScope.ts'
 import { reactive, watch } from '#shared'
 import { socket } from '#shared/socket.ts'
+import { inMemoryApp } from './inMemoryApp.ts'
 
 function connected(
     room: unknown,
@@ -150,4 +157,16 @@ test('a cookie or response write in a socket rung throws, and leaves the jar as 
     expect(after).toBeNull()
     expect(sent.filter((frame) => frame.op === 'error')).toEqual([])
     connection.close()
+})
+
+// 42.12 — THE MUX A COMMAND OPENS ANSWERS AS THE APP ITS REQUESTS DO: one `AnsweringApp`, and one
+// `McpSurface`, per app, whether `listen` opens the mux or `abide dev`'s worker does. THE REVERT:
+// have `openMux` hand the `Mux` a fresh `{ answer: fetch, mcp: new McpSurface(…) }`, as the worker
+// once built for itself; the mux's app is a second record and the two surfaces differ.
+test('the mux an app opens carries the app its requests answer as — 42.12', async () => {
+    await using app = (await inMemoryApp({})) as BootedApp
+    const mux = app.openMux()
+    const scoped = await app.run(() => currentRequestScope()?.app)
+    expect(scoped).toBeDefined()
+    expect(mux.app).toBe(scoped)
 })

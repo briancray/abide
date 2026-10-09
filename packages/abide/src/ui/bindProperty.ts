@@ -15,13 +15,11 @@ import {
 import { numberFromText } from '#shared/numberFromText.ts'
 import type { Scope } from './Scope.ts'
 
-export type BindKind = 'value' | 'checked' | 'open' | 'group'
-
 type Bound = HTMLInputElement & HTMLDetailsElement
 
 export function bindProperty(
     element: Element,
-    kind: BindKind,
+    kind: 'value' | 'checked' | 'open' | 'group',
     operand: unknown,
     scope: Scope,
 ): void {

@@ -8,6 +8,7 @@ import { cookies } from '#shared/cookies.ts'
 import { isFailed } from '#shared/Failed.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { namedLogger } from '#shared/log.ts'
+import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import {
     type PRINCIPAL,
     type Principal,
@@ -154,7 +155,7 @@ async function documentOf(
  *
  * 26.14 — ONCE PER REQUEST, and 26.15 — a seal half spent is sealed again for another full life.
  */
-export function resolvePrincipal(): Promise<Principal> {
+function resolvePrincipal(): Promise<Principal> {
     const scope = within('principal')
     scope.principal ??= (async () => {
         const opened = unseal(cookies().get(PRINCIPAL_COOKIE))
@@ -174,7 +175,9 @@ export function resolvePrincipal(): Promise<Principal> {
  * Signs this caller in with `claims`, sealing them into the cookie.
  *
  * 26.8, 26.21 — AUTHENTICATES THIS CALLER, before the headers are out, leaving `caller` where it
- * was.
+ * was. The answer says so in `PRINCIPAL_HEADER`, which is what has the browser's `principal` load
+ * the document again: the cookie it rides in is `HttpOnly`, and a `set-cookie` is a header no
+ * `fetch` may read.
  */
 async function set(claims: unknown): Promise<void> {
     const scope = within('principal.set')
@@ -184,6 +187,7 @@ async function set(claims: unknown): Promise<void> {
         )
     const expires = Date.now() + ttl()
     writeSeal(claims, expires)
+    scope.response.headers.set(PRINCIPAL_HEADER, 'set')
     const resolved = documentOf(claims, expires)
     scope.principal = resolved
     principalMembers().document.set(await resolved)
@@ -199,6 +203,7 @@ async function set(claims: unknown): Promise<void> {
 function clear(): void {
     const scope = within('principal.clear')
     cookies().delete(PRINCIPAL_COOKIE)
+    scope.response.headers.set(PRINCIPAL_HEADER, 'clear')
     const minted = mintCaller(scope)
     scope.principal = Promise.resolve(ANONYMOUS)
     principalMembers().document.set(ANONYMOUS)

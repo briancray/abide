@@ -15,8 +15,8 @@ import type { Diagnosis, Inspection, Place } from './TypeSession.ts'
 // same text.
 //
 // THE APP IS THE DOCUMENT'S. An editor starts this at the root of whatever it has open, which in a
-// monorepo is not an app at all, so each document is checked against the nearest directory above
-// it holding the `ui/` it sits in (`appRootOf`) — with one checker per app, kept for the session.
+// monorepo is not an app at all, so each document is checked against the directory above the
+// OUTERMOST `ui/` it sits in (`appRootOf`) — with one checker per app, kept for the session.
 // `--root` pins every document to one.
 //
 // ONE CHECK AT A TIME. The checker holds one snapshot, and two checks interleaving would each
@@ -350,9 +350,8 @@ async function closeAll(
 /**
  * The app a file at `path` belongs to: the directory above its outermost `ui/`.
  *
- * The directory `ui/` sits under for the file at `path` — the OUTERMOST `ui` on the way up, so a
- * component folder that happens to be called `ui` inside an app is not taken for the app — or
- * `undefined` where the file is under no `ui/` at all.
+ * OUTERMOST, so a component folder that happens to be called `ui` inside an app is not taken for
+ * the app. `undefined` where the file is under no `ui/` at all.
  */
 function appRootOf(path: string): string | undefined {
     let found: string | undefined

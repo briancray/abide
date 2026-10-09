@@ -15,6 +15,7 @@ import { scaffold } from '#compiler/scaffold.ts'
 import { serveLanguage } from '#compiler/serveLanguage.ts'
 import { appPlugins } from '#server/appPlugins.ts'
 import { banner } from '#server/banner.ts'
+import { buildDirectory } from '#server/buildDirectory.ts'
 import {
     CLIENT_DIRECTORY,
     ENCODING_SUFFIX,
@@ -26,7 +27,7 @@ import {
     stylesheetUnderMount,
 } from '#server/clientBuildOptions.ts'
 import { type Given, type Host, runCommands } from '#server/commands.ts'
-import { buildDirectory } from '#server/buildDirectory.ts'
+import { componentImports } from '#server/componentImports.ts'
 import { packageUnder } from '#server/config.ts'
 import {
     appRoot,
@@ -215,7 +216,8 @@ async function compile(
         const compiled = await Bun.build({
             entrypoints: [entry],
             target: 'bun',
-            plugins: [SERVER_STYLESHEETS],
+            // 35.4 — a handler's `.abide` import, as `abide start` lands it.
+            plugins: [SERVER_STYLESHEETS, componentImports(root, out)],
             // UNMINIFIED, AND MAPPED: the executable is a server, and an error it logs is read by
             // whoever operates it — a minified line prints as the whole page module it sits in. The
             // map is embedded in the executable, which reads it from there.

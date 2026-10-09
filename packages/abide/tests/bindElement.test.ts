@@ -7,48 +7,12 @@
 // actually depends on is asserted through a region that LEAVES.
 
 import { afterAll, expect, test } from 'bun:test'
-import { parseAbide } from '#compiler'
-import { emitSource } from '#compiler/emitSource.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
-import { pageRegion, type Region } from '#ui/regions.ts'
-import type { Scope } from '#ui/Scope.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import { closeTyped, mountPage } from './typed.ts'
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
-
-async function mountPage(source: string): Promise<string> {
-    const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
-    const { server, client } = emitSource(
-        'ui/pages/page.abide',
-        file,
-        names,
-        false,
-    )
-    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    ;(mount as (root: Region) => Scope)(pageRegion(document.body))
-    return html
-}
+afterAll(closeTyped)
+afterAll(removeTemporaryModules)
 
 const click = (selector: string): void => {
     ;(document.querySelector(selector) as HTMLElement).click()
@@ -58,7 +22,7 @@ const click = (selector: string): void => {
 // THE REVERT: what this replaced. `bind:element=""` was written into the markup — inert, ignored
 // by a browser, and the node never reached anything.
 test('a callback is handed the node, and the server writes no attribute — 32.9', async () => {
-    const html = await mountPage(`<script>
+    const { html } = await mountPage(`<script>
 import { reactive } from 'abide'
 
 let tag = reactive('')

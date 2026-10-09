@@ -1,7 +1,7 @@
 import { networkInterfaces } from 'node:os' // bun exposes no network interface list of its own
 import { useColor } from '#shared/log.ts'
+import { paint as painted } from '#shared/paint.ts'
 import type { AppPackage } from './config.ts'
-import { paint as painted } from './paint.ts'
 
 /**
  * What `start` and `dev` print once the app is listening: the app, and every address it answers at.

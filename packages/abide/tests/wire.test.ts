@@ -62,6 +62,27 @@ export const pairing = GET(provider.pairings)
 export const arrowLines = GET(() => pairings())
 
 export const awaitedLines = GET(async () => pairings())
+
+export const pdf = GET(() => new Uint8Array([37, 80, 0, 255]))
+
+export const view = GET(
+    () => new DataView(new Uint8Array([7, 255]).buffer),
+)
+
+export const csv = GET(() => new Blob(['a,b\\n'], { type: 'text/csv' }))
+
+let sendRest = (): void => {}
+export const binaryRows = GET(async function* () {
+    yield new Uint8Array([1, 2])
+    await new Promise<void>((done) => {
+        sendRest = done
+    })
+    yield new Uint8Array([255])
+})
+
+export const releaseRows = POST(() => {
+    sendRest()
+})
 `
 
 const PAGE = `<script>
@@ -270,11 +291,12 @@ test('a handler declared any way the language allows is mounted with its method 
 // 20.3, 38.63 — `clients: { cli: false }` IS READ OFF THE DECLARATION INTO THE TABLE THE BUILD WRITES,
 // the only thing the shell holds of an app it may never have booted (38.7). THE REVERT: read
 // `withheldFrom(call, 'ui')` for `cli` in `declaringMethod`; `internal` reads `cli: true`, and the shell
-// lists it.
-test('a handler with clients.cli false is written to the table withheld from the shell — 20.3, 38.63', async () => {
+// lists it. 16.38 — AND ONE TYPED AS RETURNING A `Response` IS WRITTEN WITHHELD unless its `clients`
+// puts it back. THE REVERT: default `cli` to true in `declaringMethod`; `raw` reads `cli: true`.
+test('a handler with clients.cli false, or returning a Response, is written to the table withheld from the shell — 16.38, 20.3, 38.63', async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
-        'server/rpc/staff.ts': `import { GET } from 'abide/server'\n\nexport const internal = GET(() => 'staff only', { clients: { cli: false } })\n\nexport const open = GET(() => 'anyone')\n`,
+        'server/rpc/staff.ts': `import { GET } from 'abide/server'\n\nexport const internal = GET(() => 'staff only', { clients: { cli: false } })\n\nexport const open = GET(() => 'anyone')\n\nexport const raw = GET(async () => new Response('bytes'))\n\nexport const shown = GET(() => new Response('{}'), { clients: { cli: true } })\n`,
     })
     const built = await buildApp(app)
     expect(built.stderr).toBe('')
@@ -287,6 +309,8 @@ test('a handler with clients.cli false is written to the table withheld from the
     expect(listed).toEqual({
         '/__abide/rpc/staff/internal': false,
         '/__abide/rpc/staff/open': true,
+        '/__abide/rpc/staff/raw': false,
+        '/__abide/rpc/staff/shown': true,
     })
 })
 
@@ -671,5 +695,84 @@ test('hydration waits on the calls painted settled, and a failed one ends the wa
         expect(paintedCallsLanded()).toBeUndefined()
     } finally {
         delete window.__abideCalls
+    }
+})
+
+// 16.35 — A BINARY DECODES BACK TO THE BYTES IT WAS, at `application/octet-stream` and at a `Blob`'s
+// own type alike. `0xff` is no UTF-8, so a body read as text cannot hand these bytes back. THE
+// REVERT: read every answer as text in `answerOf`'s `fetched` (drop the `bytes` arm); the call
+// settles `undefined`, the body being no JSON.
+test('a binary answer decodes back to a Uint8Array in the browser — 16.35', async () => {
+    const window = globalThis as { fetch: typeof fetch }
+    const previous = window.fetch
+    window.fetch = ((input: string, init?: RequestInit) =>
+        Bun.fetch(input, init)) as typeof fetch
+    try {
+        const pdf = wire(
+            'GET',
+            `${base}${RPC}/pdf`,
+        ) as () => PromiseLike<unknown>
+        const decoded = await pdf()
+        expect(decoded).toBeInstanceOf(Uint8Array)
+        expect([...(decoded as Uint8Array)]).toEqual([37, 80, 0, 255])
+        const csv = wire(
+            'GET',
+            `${base}${RPC}/csv`,
+        ) as () => PromiseLike<unknown>
+        expect(new TextDecoder().decode((await csv()) as Uint8Array)).toBe(
+            'a,b\n',
+        )
+        // A `DataView` is a binary too. THE REVERT: test `instanceof Uint8Array` alone in
+        // `answerValue`; the view goes out as JSON `{}` and settles as an empty record.
+        const view = wire(
+            'GET',
+            `${base}${RPC}/view`,
+        ) as () => PromiseLike<unknown>
+        expect([...((await view()) as Uint8Array)]).toEqual([7, 255])
+    } finally {
+        window.fetch = previous
+    }
+})
+
+// 16.3, 16.47 — A STREAM OF BINARY CHUNKS IS A STREAM OF BYTES TO ITS READER, each read landing as it
+// arrives: the handler holds its second chunk until the first has landed in the copy, so a copy that
+// collected shows nothing before the race ends. THE REVERT: leave `binary` out of `fetched`'s
+// `unread` in `answerOf`; the body is read to its end, which waits on a chunk the handler holds
+// back until the first has landed, and the race reports nothing landed.
+test('a streaming copy over binary chunks holds each as a Uint8Array as it lands — 16.3, 16.47', async () => {
+    const window = globalThis as { fetch: typeof fetch }
+    const previous = window.fetch
+    window.fetch = ((input: string, init?: RequestInit) =>
+        Bun.fetch(input, init)) as typeof fetch
+    try {
+        const rows = (
+            wire('GET', `${base}${RPC}/binaryRows`, {
+                stream: true,
+            }) as () => (() => unknown) & {
+                ready(): boolean
+            } & PromiseLike<unknown>
+        )()
+        const landed = await Promise.race([
+            (async () => {
+                while (!rows.ready())
+                    await new Promise((done) => setTimeout(done, 5))
+                return rows()
+            })(),
+            Bun.sleep(5000).then(() => 'nothing before the answer closed'),
+        ])
+        expect(landed).toEqual([new Uint8Array([1, 2])])
+        await Bun.fetch(`${base}${RPC}/releaseRows`, {
+            method: 'POST',
+            headers: { origin: base },
+        })
+        const chunks = (await rows) as Uint8Array[]
+        const bytes: number[] = []
+        for (const chunk of chunks) {
+            expect(chunk).toBeInstanceOf(Uint8Array)
+            bytes.push(...chunk)
+        }
+        expect(bytes).toEqual([1, 2, 255])
+    } finally {
+        window.fetch = previous
     }
 })

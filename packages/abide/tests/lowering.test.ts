@@ -2,7 +2,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { SyntaxKind } from 'typescript/unstable/ast'
 import { emitComponent } from '#compiler'
 import { REACTIVE_MEMBERS } from '#compiler/REACTIVE_MEMBERS.ts'
-import { tokenise } from '#compiler/tokenise.ts'
+import { tokenize } from '#compiler/tokenize.ts'
 import { reactive } from '#shared'
 import { writePath } from '#shared/writePath.ts'
 import { closeTyped, lower, refusal, typed } from './typed.ts'
@@ -11,15 +11,15 @@ afterAll(closeTyped)
 
 const N = new Set(['n'])
 
-// WHAT `tokenise` MADE OF A SOURCE. The lowering reads the checker's tree, so a lowered string
+// WHAT `tokenize` MADE OF A SOURCE. The lowering reads the checker's tree, so a lowered string
 // cannot see a mis-scan any more — but `splitImports`, a slot's end and `raw` still walk these
 // tokens, so the scan is asserted where it is made.
 const regexes = (source: string): number =>
-    tokenise(source).filter(
+    tokenize(source).filter(
         (token) => token.kind === SyntaxKind.RegularExpressionLiteral,
     ).length
 const namesIn = (source: string, name: string): number =>
-    tokenise(source).filter(
+    tokenize(source).filter(
         (token) => token.kind === SyntaxKind.Identifier && token.text === name,
     ).length
 
@@ -181,7 +181,7 @@ test('a destructuring pattern is not a read', async () => {
 })
 
 // A TEMPLATE LITERAL'S TEXT IS TEXT. THE REVERT: drop the `reScanTemplateToken` handling in
-// `tokenise`; the scanner reads the literal's tail as ordinary code, and the second word below
+// `tokenize`; the scanner reads the literal's tail as ordinary code, and the second word below
 // scans as a name — 2 where 1 is due.
 test('a template literal only lowers its substitutions', async () => {
     expect(namesIn('`${n} and n`', 'n')).toBe(1)
@@ -543,7 +543,7 @@ test('import.meta does not swallow the statements after it', async () => {
 
 // A `/` IS A REGEX OR A DIVISION AND THE SCANNER ANSWERS `SlashToken` FOR BOTH, so the scan
 // was believed to produce a `RegularExpressionLiteral` and never did. THE REVERT: drop the
-// `reScanSlashToken` call in `tokenise`; the pattern below is scanned as ordinary tokens — 0
+// `reScanSlashToken` call in `tokenize`; the pattern below is scanned as ordinary tokens — 0
 // literals where 1 is due — and the `)` inside `[)]` feeds any depth count a bracket that was
 // never one.
 test('a regular expression literal is not tokens', async () => {
@@ -806,7 +806,7 @@ test('a generic type argument does not bind the name after its comma', async () 
 })
 
 // Any keyword after a `.` is a property name, and the scanner answers `TypeKeyword` for `type` and
-// `InKeyword` for `in` wherever they stand. THE REVERT: drop the `.` test from `tokenise`'s `scan`; the
+// `InKeyword` for `in` wherever they stand. THE REVERT: drop the `.` test from `tokenize`'s `scan`; the
 // `/ n /` below then scans as one regular expression — 1 literal where 0 are due.
 test('a division after a member named like a keyword still divides', async () => {
     expect(regexes('row.type / n / 2')).toBe(0)
@@ -863,7 +863,7 @@ test('a division after a private name still divides', async () => {
 
 // A BLOCK'S `}` DOES NOT END A VALUE — a function body's and a class body's neither — and a
 // regular expression opening the statement after one is not a division. THE REVERT: tag every `{`
-// `OPERAND` in `tokenise`'s `scan`; the line below scans as a `/`, a `[`, and then one
+// `OPERAND` in `tokenize`'s `scan`; the line below scans as a `/`, a `[`, and then one
 // string literal opened by the apostrophe that runs to the end of the line — 0 literals where 1 is
 // due.
 test('a regex opening the statement after a block is not a division', async () => {

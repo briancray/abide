@@ -6,9 +6,9 @@
 import { createInterface } from 'node:readline' // bun exposes no line editor of its own
 import { isRecord } from '#shared/isRecord.ts'
 import { useColor } from '#shared/log.ts'
+import { paint as painted } from '#shared/paint.ts'
 import type { Mount } from './answerRpc.ts'
 import { LogPanel } from './LogPanel.ts'
-import { paint as painted } from './paint.ts'
 import { callHandler, followLogs } from './remote.ts'
 import { type Listed, surfaceOf } from './surfaceOf.ts'
 

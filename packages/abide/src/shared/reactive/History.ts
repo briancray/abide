@@ -18,7 +18,9 @@ import {
     dropReader,
     newSubscriber,
     type Subscriber,
+    TRACKING,
     type Tracked,
+    track,
 } from './tracking.ts'
 
 /**
@@ -54,6 +56,11 @@ export type Retained = {
      */
     ringDepth: number
     servable: boolean
+    /**
+     * Always `CLEAN` on a stream's past, which no body produces: a reader resolving its sources
+     * asks it and finds nothing owed.
+     */
+    state: number
     /**
      * Non-null on a streaming producer, whose ring is the accumulation of the run being served
      * (9.2) and is retained whole — the chunks ARE the value.
@@ -222,10 +229,21 @@ class Cursor implements AsyncIterator<unknown> {
 class HistoryWindow<Produced> implements History<Produced> {
     source: Retained
     from: number
+    /** The value whose past this is, read by a tracked iteration; `null` where nothing reads it. */
+    read: (() => unknown) | null
+    /** The depth the caller asked for, which is what tells one reader's two windows apart. */
+    replay: number | undefined
 
-    constructor(source: Retained, from: number) {
+    constructor(
+        source: Retained,
+        from: number,
+        read: (() => unknown) | null,
+        replay: number | undefined,
+    ) {
         this.source = source
         this.from = from
+        this.read = read
+        this.replay = replay
     }
 
     /**
@@ -249,7 +267,26 @@ class HistoryWindow<Produced> implements History<Produced> {
      */
     [Symbol.iterator](): Iterator<Produced> {
         const source = this.source
-        const from = this.from
+        let from = this.from
+        const reader = TRACKING.reader
+        if (reader !== null && this.read !== null) {
+            // A TRACKED ITERATION IS A READ OF THE VALUE (31.1), and reading it is the
+            // whole of what makes a `{#for}` over a window follow it: the subscription, a
+            // derived value pulled current before its ring is copied, and an unlanded one
+            // aborting the body (2.13) rather than painting an empty past over the rows
+            // the server sent (32.23, 41.8). The value itself is discarded.
+            this.read()
+            // 6.17: A STREAM'S PAST IS A RING OF ITS OWN, and a run entering it at the close is
+            // not a chunk, so nothing the read subscribed to moves. The past is then a source
+            // too. Over any other value it IS the value just read, the last source tracked.
+            const sources = reader.sources
+            if (sources[reader.cursor - 1] !== source) {
+                const at = reader.cursor
+                if (sources[at] === source) reader.cursor = at + 1
+                else track(source, reader)
+            }
+            from = heldFrom(reader, this)
+        }
         if (from >= source.ordinal) return ([] as Produced[])[Symbol.iterator]()
         // 6.16: with no ring, the standing production is the whole window.
         if (source.ringDepth === 0 && source.stream === null)
@@ -257,7 +294,13 @@ class HistoryWindow<Produced> implements History<Produced> {
                 (source.value === undefined ? [] : [source.value]) as Produced[]
             )[Symbol.iterator]()
         // 9.10: a position older than the ring is answered with the whole ring rather
-        // than with a gap, which is the same clamp the cursor makes.
+        // than with a gap, which is the same clamp the cursor makes — and the ring is
+        // what RETENTION holds, not the array: it runs to twice the depth between trims,
+        // so the oldest entry still held is `retained` back from the end (2.6).
+        if (source.stream === null) {
+            const oldest = source.ordinal - retained(source)
+            if (from < oldest) from = oldest
+        }
         const start = from < source.ringBase ? 0 : from - source.ringBase
         const window = source.ring.slice(start)
         return (window as Produced[])[Symbol.iterator]()
@@ -271,10 +314,40 @@ class HistoryWindow<Produced> implements History<Produced> {
     }
 }
 
-/** The `History` over `source`'s productions after ordinal `from`. */
+/**
+ * Where each tracked reader first iterated a window from, so its re-runs replay from there.
+ *
+ * A BODY RE-RUNS ITS SUBJECT, so `s.history(2)` in a `{#for}` is a fresh window per publish and
+ * each one would start two back from the NEW end — the block sliding along the ring where 2.5 has
+ * it replay once and then continue live. The position is the reader's, which is what a cursor's
+ * `at` is; held beside the reader rather than on it, since `Subscriber` is the shape every node in
+ * the graph carries. Weak, so it goes with the reader.
+ */
+const HELD = new WeakMap<object, HistoryWindow<unknown>>()
+
+function heldFrom(reader: object, window: HistoryWindow<unknown>): number {
+    const held = HELD.get(reader)
+    if (
+        held !== undefined &&
+        held.source === window.source &&
+        held.replay === window.replay
+    )
+        return held.from
+    HELD.set(reader, window)
+    return window.from
+}
+
+/**
+ * The `History` over `source`'s productions after ordinal `from`.
+ *
+ * `read` is the value a tracked iteration of the sync face reads (see `HistoryWindow`), and
+ * `replay` is the depth asked for, which keys the position a reader holds.
+ */
 export function historyFrom<Produced>(
     source: Retained,
     from: number,
+    read: (() => unknown) | null = null,
+    replay: number | undefined = undefined,
 ): History<Produced> {
-    return new HistoryWindow(source, from)
+    return new HistoryWindow(source, from, read, replay)
 }

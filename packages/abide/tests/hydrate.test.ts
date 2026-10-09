@@ -9,23 +9,20 @@
 import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
 import { emitClient, parseAbide } from '#compiler'
-import { emitSource } from '#compiler/emitSource.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
 import { flushSync } from '#shared'
-import { pageRegion } from '#ui/regions.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-import { clientOf, closeTyped } from './typed.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
+import {
+    clientOf,
+    closeTyped,
+    renderPage,
+    TYPED_ROOT,
+    typedSession,
+} from './typed.ts'
 
 afterAll(closeTyped)
 
-const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
-const session = await TypeSession.open(`${ROOT}tsconfig.json`)
-
-afterAll(async () => {
-    await session.close()
-    removeTemporaryModules()
-})
+const session = await typedSession()
+afterAll(removeTemporaryModules)
 
 const PAGE = `<script>
 import { reactive } from 'abide'
@@ -37,39 +34,8 @@ const label = 'clicks'
 <p id="out">{label}: {count}</p>
 <button onclick={() => count = count + 1}>more</button>`
 
-async function mountPage(source: string) {
-    const file = parseAbide(source)
-    const reactive = await session.reads(`${ROOT}src/page.abide`, file)
-
-    const { server, client } = emitSource(
-        'ui/pages/page.abide',
-        file,
-        reactive,
-        false,
-    )
-    const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
-
-    const { default: Component } = await import(`${dir}/Page.ts`)
-    let html = ''
-    html += new TextDecoder().decode(
-        await render(
-            Component,
-            '<!doctype html><html><head></head><body></body></html>',
-        ),
-    )
-
-    // The client mounts into the SERVER's nodes. Setting innerHTML is how a browser would have
-    // arrived at them; nothing is rebuilt from the template.
-    document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
-        html.indexOf('</body>'),
-    )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
-    return { html, mount }
-}
-
 test('a click runs the handler and the slot the server wrote is the slot that moves', async () => {
-    const { html, mount } = await mountPage(PAGE)
+    const { html, mount } = await renderPage(PAGE)
 
     // The server rendered the initial value, so the document is right before any script runs.
     // ONE TEXT RUN, written whole and carrying nothing the author did not. `{label}: {count}`
@@ -87,7 +53,7 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
     // never again — a click-only measurement reports the same 1 with the mechanism out and
     // distinguishes nothing, which is what the revert showed when this was written that way.
     const mountWork = measure(() => {
-        mount(pageRegion(document.body))
+        mount()
         flushSync()
     })
     // Two slots on this page, ONE of which reads a reactive value. THE REVERT: drop the
@@ -135,7 +101,7 @@ const label = 'clicks'
 <p id="live">{count}</p>`
 
     const file = parseAbide(source)
-    const names = await session.reads(`${ROOT}src/page.abide`, file)
+    const names = await session.reads(`${TYPED_ROOT}src/page.abide`, file)
     const client = emitClient(file, names)
 
     // The live run is the only one bound, found through the `<p>` it stands in.
@@ -177,7 +143,7 @@ test('a static component nothing invokes emits no client module', async () => {
 // emits `escapeText(...)` directly — `render` throws `NotLanded: reactive has not landed` and this
 // test reports no document at all rather than a document with one empty slot.
 test('a render continues past a value still in flight — 41.4, 32.23', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
@@ -195,7 +161,7 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 
     // AND IT FILLS. The client re-runs the body (41.6), the value lands, and the binding writes
     // into a text node that was not in the document the server wrote — which is `blank`'s arm.
-    mount(pageRegion(document.body))
+    mount()
     await Promise.resolve()
     await Promise.resolve()
     flushSync()
@@ -214,7 +180,7 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 // `hydrating` was still set when the value landed and the rows were walked against nothing. This
 // test reports [] against [north, south] either way, and only the second one looks fine on screen.
 test('a render continues past a {#for} subject still in flight — 41.4, 32.22', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 const rows = reactive(() => Promise.resolve(['north', 'south']))
@@ -226,7 +192,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
     // The block rendered its anchors and no rows, which is 32.22's zero times.
     expect(document.querySelectorAll('#list li')).toHaveLength(0)
 
-    mount(pageRegion(document.body))
+    mount()
     // A MACROTASK, NOT TWO MICROTASKS. The subject lands in a microtask, the list reconciles in
     // the turn the write wakes, and a slot that is one read is ready a tick sooner than a block
     // that has to build rows — which is why the text case above needs less than this one.
@@ -255,7 +221,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
 // `NotLanded: reactive has not landed` — no document at all, on a page whose static markup is
 // most of it. This test then reports nothing rendered rather than a page with two empty values.
 test('a render continues past an unlanded attribute and style — 41.4', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 const tone = reactive(() => Promise.resolve('warm'))
@@ -277,7 +243,7 @@ const width = reactive(() => Promise.resolve('40px'))
 
     // AND BOTH FILL. THE REVERT: drop the `plan.attributes` loop in `emitRegion` — the document
     // is identical and both values stay empty for the life of the page.
-    mount(pageRegion(document.body))
+    mount()
     await new Promise((resolve) => setTimeout(resolve, 0))
     flushSync()
     expect(document.querySelector('#attr')?.getAttribute('title')).toBe('warm')
@@ -296,7 +262,7 @@ const width = reactive(() => Promise.resolve('40px'))
 // THE REVERT: skip the `BOOLEAN_ATTRIBUTES` arm of `attributeText`; the server then writes
 // `disabled="false"` and `hidden="false"`, and the first assertion reports it.
 test('a boolean attribute is present or absent, and any other is its text — 32.37', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let busy = reactive(false)
@@ -315,7 +281,7 @@ function flip() {
     expect(html).toContain('<div id="s" aria-hidden="false">')
     expect(html).toContain('<input id="r1" disabled>')
 
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     const button = document.querySelector('#b') as HTMLElement
     const flipButton = document.querySelector('#flip') as HTMLElement
@@ -344,7 +310,7 @@ function flip() {
 // find-in-page can no longer reveal it. THE REVERT: answer `''` for every truthy value in
 // `attributeText`'s presence arm; the server writes a bare `hidden` and the binding does too.
 test('a presence attribute given a string carries it — 32.37', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let found = reactive<string | boolean>('until-found')
@@ -353,7 +319,7 @@ let found = reactive<string | boolean>('until-found')
 <main><div id="d" hidden={found}>d</div><button id="f" onclick={() => (found = found === true ? 'until-found' : true)}>f</button></main>`)
 
     expect(html).toContain('<div id="d" hidden="until-found">')
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     const toggle = document.querySelector('#f') as HTMLElement
     toggle.click()
@@ -385,7 +351,7 @@ let found = reactive<string | boolean>('until-found')
 // throws `NotLanded` — no document at all. Drop the `isEmptyRegion` arm of the block's watch in
 // `emitClient` instead and the document is served with an empty region that never fills.
 test('a render continues past an {#if} subject still in flight — 41.4, 32.12', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 const shown = reactive(() => Promise.resolve(true))
@@ -399,7 +365,7 @@ const shown = reactive(() => Promise.resolve(true))
     expect(html).not.toContain('id="arm"')
     expect(html).not.toContain('id="off"')
 
-    mount(pageRegion(document.body))
+    mount()
     await new Promise((resolve) => setTimeout(resolve, 0))
     flushSync()
     expect(document.querySelector('#arm')?.textContent).toBe('on')
@@ -417,7 +383,7 @@ const shown = reactive(() => Promise.resolve(true))
 test('an arm the client chose apart from the painted one is filled, not adopted — 41.24', async () => {
     const side = globalThis as { armSide?: string | undefined }
     side.armSide = 'server'
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let pressed = reactive('')
@@ -432,7 +398,7 @@ const side = (globalThis as { armSide?: string }).armSide
     const warn = console.warn
     console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
     try {
-        mount(pageRegion(document.body))
+        mount()
         flushSync()
     } finally {
         console.warn = warn
@@ -453,7 +419,7 @@ const side = (globalThis as { armSide?: string }).armSide
 // and nothing else. THE REVERT: answer `true` from `paintedOther`; this reports `nodesCreated` 2
 // where 0 is due.
 test('an arm the client chose as the server did is adopted — 41.24', async () => {
-    const { mount } = await mountPage(`<script>
+    const { mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let on = reactive(false)
@@ -466,7 +432,7 @@ let on = reactive(false)
     let work: ReturnType<typeof measure>
     try {
         work = measure(() => {
-            mount(pageRegion(document.body))
+            mount()
             flushSync()
         })
     } finally {
@@ -491,7 +457,7 @@ let on = reactive(false)
 // THE REVERT: drop the `plan.attributes` loop in `emitRegion`. The document is byte-identical and
 // the text beside it still moves; this reports `calm` where `urgent` is due.
 test('an attribute expression keeps moving after hydration — 32.3', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let tone = reactive('calm')
@@ -512,7 +478,7 @@ const kind = 'card'
     // this gate until the revert showed nothing failing.
     // THE REVERT: drop the `isLive` check in the attribute loop; this reports 3.
     const mountWork = measure(() => {
-        mount(pageRegion(document.body))
+        mount()
         flushSync()
     })
     expect(mountWork.bindingRuns).toBe(2)
@@ -547,7 +513,7 @@ const kind = 'card'
 // carries is the CLASS and not the attribute, so the reverted write puts an attribute called
 // `overdue` on the element and the class list never moves at all.
 test('a class: directive toggles one class and keeps the others — 32.10', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let late = reactive(false)
@@ -561,7 +527,7 @@ let late = reactive(false)
     expect(html).toContain('class="badge"')
     expect(html).not.toContain('overdue')
 
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
 
     const out = document.querySelector('#out') as HTMLElement
@@ -590,9 +556,9 @@ let late = reactive(false)
 //
 // THE REVERT: drop the `AwaitExpression` arm of `classifyRead`. The click then runs
 // `await total()` on a value that has not landed and the handler throws `NotLanded` instead of
-// moving the text to 42.
+// moving the text to 42 — this reports `waiting`.
 test('an await operand holds the Reactive — 31.3', async () => {
-    const { mount } = await mountPage(`<script>
+    const { mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 const total = reactive(async () => {
@@ -603,12 +569,21 @@ let shown = reactive('waiting')
 </script>
 
 <p id="out">{shown}</p>
-<button id="go" onclick={async () => { shown = String(await total) }}>go</button>`)
+<button id="go" onclick={async () => {
+    try {
+        shown = String(await total)
+    } finally {
+        ;(globalThis as { __handled?: () => void }).__handled?.()
+    }
+}}>go</button>`)
 
-    mount(pageRegion(document.body))
-    flushSync()
+    mount()
+    // The handler says when it is done, rather than the test guessing how long `total` takes.
+    const handled = new Promise<void>((resolve) => {
+        ;(globalThis as { __handled?: () => void }).__handled = resolve
+    })
     ;(document.querySelector('#go') as HTMLElement).click()
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await handled
     flushSync()
     expect(document.querySelector('#out')?.textContent).toBe('42')
 })
@@ -628,7 +603,7 @@ test('a script block cannot await at its top level — 34.3', async () => {
     for (const block of ['<script>', '<script module>']) {
         let thrown = ''
         try {
-            await mountPage(`${block}
+            await renderPage(`${block}
 const rows = await Promise.resolve(1)
 </script>
 
@@ -651,7 +626,7 @@ const rows = await Promise.resolve(1)
 test('a template position cannot await', async () => {
     let thrown = ''
     try {
-        await mountPage(`<script>
+        await renderPage(`<script>
 import { reactive } from 'abide'
 
 const rows = reactive(async () => 1)
@@ -672,7 +647,7 @@ const rows = reactive(async () => 1)
 // THE REVERT: drop the `FUNCTIONS` arm of `expressionFacts`. This reports
 // `a template position cannot await` against a page that is entirely correct.
 test('a slot that declares its own async may await in it', async () => {
-    const { mount } = await mountPage(`<script>
+    const { mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let shown = reactive('idle')
@@ -682,7 +657,7 @@ const later = async () => 'done'
 <p id="out">{shown}</p>
 <button id="go" onclick={async () => { shown = await later() }}>go</button>`)
 
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     ;(document.querySelector('#go') as HTMLElement).click()
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -705,7 +680,7 @@ const later = async () => 'done'
 // THE REVERT: put `lines.join('\n')` back inside one `try` in `emitClient`. The first binding
 // still warns, and this reports `B` where `B2` is due.
 test('a mismatch in one root binding does not stop the next — 41.10', async () => {
-    const { mount } = await mountPage(`<script>
+    const { mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let a = reactive('A')
@@ -722,7 +697,7 @@ let b = reactive('B')
     const one = document.querySelector('#one') as HTMLElement
     one.innerHTML = '<em>aA</em>'
 
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
 
     // THE BINDING AFTER THE REFUSAL IS LIVE.
@@ -744,7 +719,7 @@ let b = reactive('B')
 // live run's text branch in `emitClient`, rather than decoded. This reports `AT&amp;T 0` at mount and `AT&amp;T 1` after
 // the click, where `AT&T 0` and `AT&T 1` are due.
 test('a live run writes its static entities as the characters they stand for — 32.27', async () => {
-    const { mount } = await mountPage(`<script>
+    const { mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let count = reactive(0)
@@ -752,7 +727,7 @@ let count = reactive(0)
 
 <p id="out">AT&amp;T {count}</p>
 <button onclick={() => count = count + 1}>more</button>`)
-    mount(pageRegion(document.body))
+    mount()
     flushSync()
     const out = document.querySelector('#out') as HTMLElement
     expect(out.textContent).toBe('AT&T 0')
@@ -784,7 +759,7 @@ let count = reactive(0)
 // element's static pieces reach the escape as the author's bytes: the server writes
 // `title="AT&amp;amp;T 0"` and the first assertion reports it.
 test('the static text of an interpolated attribute is markup, and its slots are data — 32.27, 32.28', async () => {
-    const { html, mount } = await mountPage(`<script>
+    const { html, mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let n = reactive(0)
@@ -813,7 +788,7 @@ const slotted = '#38;'
     expect(title('r1')).toBe('AT&T 1')
 
     const mountWork = measure(() => {
-        mount(pageRegion(document.body))
+        mount()
         flushSync()
     })
     expect(mountWork.attributesSet).toBe(0)
@@ -840,7 +815,7 @@ const slotted = '#38;'
 // (`buildRender`'s `bytes` as `JSON.stringify(bytes)`) — the grown row's `data-s` reads
 // `&notin;x &amp;notin` where `∉x &notin` is due.
 test('a built row decodes static text by the text rule and an attribute by the attribute rule — 32.27', async () => {
-    const { mount } = await mountPage(`<script>
+    const { mount } = await renderPage(`<script>
 import { reactive } from 'abide'
 
 let rows = reactive([1])
@@ -857,7 +832,7 @@ let rows = reactive([1])
     }
     expect(read('r1')).toEqual(['¬in & 1|', '∉x &notin', '&notin & 1'])
     const mountWork = measure(() => {
-        mount(pageRegion(document.body))
+        mount()
         flushSync()
     })
     expect(mountWork.attributesSet).toBe(0)

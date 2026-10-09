@@ -11,19 +11,19 @@ import type { AbideFile } from './parseAbide.ts'
 import type {
     Body,
     Branch,
+    ElementNode,
     InlineComponent,
     Setup,
     TemplateNode,
 } from './TemplateNode.ts'
-import { tokenise } from './tokenise.ts'
+import { tokenize } from './tokenize.ts'
 
 export type Span = { start: number; end: number }
 
 /**
  * A `.abide` file as one TypeScript program, with where each piece of it came from.
  *
- * A `.abide` FILE AS ONE TYPESCRIPT PROGRAM: its `<script module>`, its `<script>`, and every
- * expression its template holds, each where the scopes it stands in are. The checker reads this
+ * Its `<script module>`, its `<script>`, and every expression its template holds, each where the scopes it stands in are. The checker reads this
  * text and answers, per occurrence, which binding a name reaches (31.3) — and the emitters lower
  * the same text, span by span, so an offset means one thing on both sides.
  *
@@ -163,9 +163,7 @@ function project(file: AbideFile): Projection {
     // child declares (33.4), reports a name nobody imported, and answers a hover or a jump on the
     // tag with the import's (38.40). Spreads first and explicit keys after, which is the order 33.12
     // resolves them in.
-    const invocation = (
-        node: Extract<TemplateNode, { kind: 'element' }>,
-    ): void => {
+    const invocation = (node: ElementNode): void => {
         // 32.36 — CALLED OPTIONALLY, so a value that may be absent is checked as one that may
         // render nothing; a tag that is always a component reads the same either way.
         //
@@ -430,7 +428,7 @@ function project(file: AbideFile): Projection {
 /**
  * What an attribute's value is opened with, which types it by the position it stands in.
  *
- * WHAT AN ATTRIBUTE'S POSITION TYPES ITS VALUE AS. A listener on an element is handed that
+ * A listener on an element is handed that
  * element's event, so a handler's parameter has the type the browser gives it rather than an
  * implicit `any`; an attribute on a component whose tag is no name a call can spell (`invocation`
  * has the rest) is typed by nothing the shadow can see, and says so with `any` rather than with an
@@ -454,7 +452,7 @@ const RECORD = '__record'
 export const INLINE_PROPS = '__inlineProps'
 const INLINE_PROPS_IMPORT = `
 import { props as ${INLINE_PROPS} } from ${JSON.stringify(
-    new URL('../shared/props.ts', import.meta.url).pathname,
+    Bun.fileURLToPath(new URL('../shared/props.ts', import.meta.url)),
 )}
 `
 /**
@@ -472,19 +470,20 @@ const BOUND = '__bound'
 
 /** 33.6 — the type a written prop's cell is checked as, which is the framework's own. */
 const REACTIVE = `import(${JSON.stringify(
-    new URL('../shared/reactive/Reactive.ts', import.meta.url).pathname,
+    Bun.fileURLToPath(
+        new URL('../shared/reactive/Reactive.ts', import.meta.url),
+    ),
 )}).Reactive`
 
 /** 23.9 — the params a page's own route promises, which the framework spells. */
 const ROUTE_PARAMS = `import(${JSON.stringify(
-    new URL('../shared/url.ts', import.meta.url).pathname,
+    Bun.fileURLToPath(new URL('../shared/url.ts', import.meta.url)),
 )}).RouteParams`
 
 /**
  * Ambient declarations of the helpers the shadow and the checked program call.
  *
- * The names the shadow and the checked program (`checkedShadow`) spell and no author does, declared
- * after everything so no offset above moves, and ambient so nothing is emitted. `export {}` makes
+ * Names the shadow and `checkedShadow` spell and no author does, declared after everything so no offset above moves, and ambient so nothing is emitted. `export {}` makes
  * every shadow a module: a shadow read as a script puts its names in the global scope, where every
  * other file in the project would find them.
  */
@@ -512,7 +511,7 @@ const ROWS_OF = '__rowsOf'
 /**
  * Ambient declaration of the helper that types a row's item from its subject.
  *
- * What a row's item is, read off the subject as `listOf` iterates it: what a `Reactive` read by
+ * The item is read off the subject as `listOf` iterates it: what a `Reactive` read by
  * name hands back (31.1 lowers `rows` to `rows()`), or the subject itself. THE CALL IS THE FIRST
  * OVERLOAD because a `Reactive` is ALSO an `AsyncIterable` of its productions (2.7), and inferred
  * over one union the item came out as the row OR the whole list. Declared AFTER everything, so no
@@ -539,7 +538,7 @@ declare function ${ROWS_OF}<T>(subject: Iterable<T> | AsyncIterable<T> | null | 
 function refuseTopLevelAwait(source: string, block: string): void {
     if (!source.includes(AWAIT)) return
     let depth = 0
-    for (const token of tokenise(source)) {
+    for (const token of tokenize(source)) {
         const text = token.text
         if (text === '{' || text === '(' || text === '[') depth += 1
         else if (text === '}' || text === ')' || text === ']') depth -= 1
@@ -590,7 +589,7 @@ function typeParametersOf(
         constraintFrom = -1
         constraintTo = -1
     }
-    for (const token of tokenise(generics)) {
+    for (const token of tokenize(generics)) {
         const kind = token.kind
         if (
             kind === SyntaxKind.LessThanToken ||

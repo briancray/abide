@@ -12,6 +12,54 @@ export function framingPrefix(type: string | null | undefined): string | null {
     return null
 }
 
+/**
+ * Whether an answer at `type` is read as bytes rather than as JSON: anything neither JSON nor framed.
+ *
+ * 16.35 — A BINARY IS `application/octet-stream`, OR A `Blob`'s OWN TYPE, so the bytes are named by
+ * what an answer is not rather than by one type. An answer naming no type is read as JSON.
+ */
+export function carriesBytes(type: string | null | undefined): boolean {
+    if (type === null || type === undefined || type === '') return false
+    if (framingPrefix(type) !== null) return false
+    const semicolon = type.indexOf(';')
+    const essence = semicolon === -1 ? type : type.slice(0, semicolon)
+    return essence !== 'application/json' && !essence.endsWith('+json')
+}
+
+/**
+ * A streamed answer's chunks: each JSON value its framing carried, or, for bytes (16.47), each
+ * `Uint8Array` as it was read — bytes have no framing to split them back into the chunks the
+ * handler yielded.
+ */
+export function answerChunks(
+    body: ReadableStream<Uint8Array>,
+    type: string | null | undefined,
+): AsyncIterable<unknown> {
+    return carriesBytes(type)
+        ? bytesStream(body)
+        : framedStream(body, framingPrefix(type) ?? '')
+}
+
+/**
+ * A body's reads, yielded as they land.
+ *
+ * Through a reader rather than the stream's own async iterator, which not every browser ships.
+ */
+async function* bytesStream(
+    body: ReadableStream<Uint8Array>,
+): AsyncGenerator<Uint8Array> {
+    const reader = body.getReader()
+    try {
+        for (;;) {
+            const { done, value } = await reader.read()
+            if (done) return
+            yield value
+        }
+    } finally {
+        void reader.cancel().catch(() => {})
+    }
+}
+
 /** The chunks a framed text carried, every line of it complete. */
 export function framedChunks(text: string, prefix: string): unknown[] {
     const chunks: unknown[] = []

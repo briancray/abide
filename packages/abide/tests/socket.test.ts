@@ -2,8 +2,7 @@
 // over a real web socket: happy-dom's preload is in this process, and its `WebSocket` is not bun's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { spawned } from 'harness/gate'
-import { BIN, serveApp } from './builtApp.ts'
+import { BIN, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const SOCKETS = `import { reactive, refuse, socket } from 'abide/server'
@@ -76,31 +75,61 @@ afterAll(() => {
 })
 
 // Runs `steps` in a bun process against the mux, handing back every frame it received, in order —
-// connected from `origin` where one is given.
+// connected from `origin` where one is given. Sequenced as `follow.test.ts`'s client is, by the mux
+// rather than the clock: `settled()` is a subscription to an address nothing answers, refused as the
+// mux reads it, and `until` waits on a frame the test is owed; then the socket is closed and
+// drained, so a frame sent before the server took the close lands ahead of what is said. A replay's
+// one frame is recorded as the productions it carries.
 async function client(
     steps: string,
     origin = '',
 ): Promise<Record<string, unknown>[]> {
     const dir = temporaryModule({
         'client.ts': `const url = process.argv[2].replace('http', 'ws') + '/__abide/socket'
-const frames: unknown[] = []
+type Frame = Record<string, unknown>
+const frames: Frame[] = []
 const ws = new WebSocket(url, process.argv[3] ? { headers: { origin: process.argv[3] } } : undefined)
 const send = (frame: unknown) => ws.send(JSON.stringify(frame))
-const settle = (ms: number) => new Promise((done) => setTimeout(done, ms))
-ws.onmessage = (event) => frames.push(JSON.parse(String(event.data)))
+const BARRIER = 1000
+let barrier = BARRIER
+const refused = new Map<number, () => void>()
+const settled = () =>
+    new Promise<void>((done) => {
+        barrier += 1
+        refused.set(barrier, done)
+        send({ op: 'sub', id: barrier, address: '/__abide/socket/chat/nothingAnswersHere' })
+    })
+let arrived = () => {}
+const until = async (owed: (frames: Frame[]) => boolean) => {
+    const deadline = Date.now() + 3000
+    while (!owed(frames) && Date.now() < deadline)
+        await new Promise<void>((done) => {
+            arrived = done
+            setTimeout(done, 50).unref()
+        })
+}
+ws.onmessage = (event) => {
+    const frame = JSON.parse(String(event.data)) as Frame
+    if (frame.op === 'error' && (frame.id as number) > BARRIER) {
+        refused.get(frame.id as number)?.()
+        return
+    }
+    // A REPLAY IS ONE FRAME (18.13); read here as the productions it carries, one frame each.
+    if (frame.op === 'prod' && Array.isArray(frame.ring))
+        for (const [seq, value] of frame.ring as [number, unknown][])
+            frames.push({ op: 'prod', id: frame.id, seq, epoch: frame.epoch, value })
+    else frames.push(frame)
+    arrived()
+}
 await new Promise((done) => (ws.onopen = done))
 ${steps}
-await settle(150)
+await settled()
 ws.close()
+await new Promise((done) => (ws.onclose = done))
 console.log(JSON.stringify(frames))
 `,
     })
-    const ran = Bun.spawn(['bun', `${dir}/client.ts`, base, origin], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
-    const printed = await new Response(ran.stdout).text()
-    return JSON.parse(printed.trim().split('\n').at(-1) as string)
+    return lastLinePrinted(['bun', `${dir}/client.ts`, base, origin])
 }
 
 // 18.2, 18.10, 9.16 — A SUBSCRIPTION IS FED EVERY PRODUCTION, numbered by its owner, and a publish made
@@ -109,9 +138,10 @@ console.log(JSON.stringify(frames))
 test('a subscriber is fed each production with its sequence number — 18.2, 18.10, 9.16', async () => {
     const frames =
         await client(`send({ op: 'sub', id: 1, address: '/__abide/socket/chat/room' })
-await settle(50)
+await settled()
 for (const text of ['hello', 'world'])
     await fetch(process.argv[2] + '/__abide/rpc/chat/say', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) })
+await until((frames) => frames.some((frame) => frame.value === 'world'))
 `)
     const produced = frames.filter((frame) => frame.op === 'prod')
     expect(produced.map((frame) => frame.value)).toEqual(['hello', 'world'])
@@ -128,9 +158,10 @@ for (const text of ['hello', 'world'])
 test('a publish through the value the socket was handed reaches its subscribers — 9.16', async () => {
     const frames =
         await client(`send({ op: 'sub', id: 1, address: '/__abide/socket/chat/boardSocket' })
-await settle(50)
+await settled()
 for (const text of ['one', 'two'])
     await fetch(process.argv[2] + '/__abide/rpc/chat/post', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) })
+await until((frames) => frames.some((frame) => frame.value === 'two'))
 `)
     expect(
         frames
@@ -145,9 +176,10 @@ for (const text of ['one', 'two'])
 test('a reconnect resumes after its last sequence, and a moved epoch is a reset — 18.13, 18.14', async () => {
     const first =
         await client(`send({ op: 'sub', id: 1, address: '/__abide/socket/chat/room' })
-await settle(50)
+await settled()
 send({ op: 'pub', id: 1, address: '/__abide/socket/chat/room', message: 'a' })
 send({ op: 'pub', id: 1, address: '/__abide/socket/chat/room', message: 'b' })
+await until((frames) => frames.some((frame) => frame.value === 'b'))
 `)
     const seen = first.filter((frame) => frame.op === 'prod') as {
         seq: number
@@ -157,8 +189,9 @@ send({ op: 'pub', id: 1, address: '/__abide/socket/chat/room', message: 'b' })
     const last = seen.at(-1) as { seq: number; epoch: string }
     const resumed =
         await client(`send({ op: 'pub', id: 9, address: '/__abide/socket/chat/room', message: 'c' })
-await settle(50)
+await settled()
 send({ op: 'sub', id: 1, address: '/__abide/socket/chat/room', seq: ${last.seq}, epoch: '${last.epoch}' })
+await until((frames) => frames.some((frame) => frame.value === 'c'))
 `)
     expect(
         resumed
@@ -167,6 +200,7 @@ send({ op: 'sub', id: 1, address: '/__abide/socket/chat/room', seq: ${last.seq},
     ).toEqual(['c'])
     const reset =
         await client(`send({ op: 'sub', id: 1, address: '/__abide/socket/chat/room', seq: 1, epoch: 'another' })
+await until((frames) => frames.length > 0)
 `)
     const [resetFrame] = reset as { op: string; ring: [number, string][] }[]
     expect(resetFrame?.op).toBe('reset')
@@ -212,6 +246,7 @@ test('a connection from another origin is refused a socket that did not declare 
     ])
     const own = await client(
         `send({ op: 'sub', id: 1, address: '/__abide/socket/chat/locked', args: { token: 'ok' } })
+await until((frames) => frames.length > 0)
 `,
         base,
     )
@@ -223,6 +258,7 @@ test('a socket rung refuses a subscription by throwing — 18.3, 18.4', async ()
     const frames =
         await client(`send({ op: 'sub', id: 1, address: '/__abide/socket/chat/locked', args: { token: 'no' } })
 send({ op: 'sub', id: 2, address: '/__abide/socket/chat/locked', args: { token: 'ok' } })
+await until((frames) => frames.length >= 2)
 `)
     expect(frames).toContainEqual({
         op: 'error',
@@ -252,15 +288,9 @@ const opened = async (headers: Record<string, string>) => {
 console.log(JSON.stringify([await opened({}), await opened({ 'x-denied': '1' })]))
 `,
     })
-    const ran = Bun.spawn(['bun', `${dir}/upgrade.ts`, base], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
-    const printed = await new Response(ran.stdout).text()
-    expect(JSON.parse(printed.trim().split('\n').at(-1) as string)).toEqual([
-        'open',
-        'refused',
-    ])
+    expect(
+        await lastLinePrinted<string[]>(['bun', `${dir}/upgrade.ts`, base]),
+    ).toEqual(['open', 'refused'])
 })
 
 // 37.3 — THE MUX OPENS ONLY AT ITS OWN ADDRESS, whatever status some other address answered an upgrade
@@ -281,11 +311,9 @@ const opened = async (address: string) => {
 console.log(JSON.stringify([await opened('/__abide/socket'), await opened('/__abide/rpc/chat/nothing')]))
 `,
     })
-    const ran = await spawned(['bun', `${dir}/upgrade.ts`, base])
-    expect(JSON.parse(ran.stdout.trim().split('\n').at(-1) as string)).toEqual([
-        'open',
-        'refused',
-    ])
+    expect(
+        await lastLinePrinted<string[]>(['bun', `${dir}/upgrade.ts`, base]),
+    ).toEqual(['open', 'refused'])
 })
 
 // 9.29, 18.6 — THE BROWSER'S COPY, through `socketWire` itself: busy until the first production lands,
@@ -300,18 +328,21 @@ const settle = (ms: number) => new Promise((done) => setTimeout(done, ms))
 const room = (socketWire('/__abide/socket/chat/room') as () => any)()
 const busyAtFirst = room.busy()
 room.publish('from the browser')
-await settle(200)
+// Until the owner's production comes back, rather than for as long as that usually takes.
+const deadline = Date.now() + 3000
+while ((room.busy() || room() !== 'from the browser') && Date.now() < deadline) await settle(10)
 const other = (socketWire('/__abide/socket/chat/room') as () => any)
 console.log(JSON.stringify({ busyAtFirst, busyAfter: room.busy(), latest: room(), same: other() === other() }))
 process.exit(0)
 `,
     })
-    const ran = Bun.spawn(['bun', `${dir}/browser.ts`, base], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
-    const printed = await new Response(ran.stdout).text()
-    expect(JSON.parse(printed.trim().split('\n').at(-1) as string)).toEqual({
+    expect(
+        await lastLinePrinted<Record<string, unknown>>([
+            'bun',
+            `${dir}/browser.ts`,
+            base,
+        ]),
+    ).toEqual({
         busyAtFirst: true,
         busyAfter: false,
         latest: 'from the browser',

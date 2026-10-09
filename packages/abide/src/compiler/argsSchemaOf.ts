@@ -29,8 +29,9 @@ type Schema = { [keyword: string]: JsonValue }
  * a type is `{}`. An args record is JSON a few levels deep; a type that reaches the DOM or the lib's
  * class graph instead is wide enough to walk for minutes, and widening it is 19.12's answer.
  */
-type Walk = { seen: Map<number, Schema>; depth: number }
-const DEEPEST = 8
+export type Walk<Seen = Map<number, Schema>> = { seen: Seen; depth: number }
+/** The depth a walk stops at: an object type this deep or deeper is not walked. */
+export const DEEPEST = 8
 
 /**
  * The JSON Schema of a handler's args record, or `undefined` where it takes no record.

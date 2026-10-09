@@ -21,12 +21,18 @@ export function jsonSchema<T>(document: JsonValue): StandardSchemaV1<T> {
             version: 1,
             vendor: 'abide',
             validate(value: unknown) {
-                const found = validateJson<Record<string, string[]>>(
-                    document,
-                    value,
-                )
+                const found = validateJson(document, value) as
+                    | Record<string, string[]>
+                    | string[]
+                    | null
                 if (found === null) return { value: value as T }
                 const issues: { message: string; path: string[] }[] = []
+                // A value that is not an object came back as the bare list, every issue on `''`.
+                if (Array.isArray(found)) {
+                    for (const message of found)
+                        issues.push({ message, path: [] })
+                    return { issues }
+                }
                 for (const path in found)
                     for (const message of found[path] as string[])
                         issues.push({

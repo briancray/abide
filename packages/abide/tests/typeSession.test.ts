@@ -327,8 +327,7 @@ const { label } = props()
 // `TypeSession.close`; `killed` reads false.
 test('closing a session kills its checker process', async () => {
     const opened = await TypeSession.open(TSCONFIG)
-    // The API starts its process at the first request it is asked.
-    await opened.reads(PAGE, parseAbide(PROBE))
+    // `open` starts the process: it asks the checker how it keys a path.
     const child = (
         opened as unknown as {
             api: { client: { process?: { pid: number; killed: boolean } } }
@@ -337,4 +336,36 @@ test('closing a session kills its checker process', async () => {
     expect(`pid: ${typeof child?.pid}`).toBe('pid: number')
     await opened.close()
     expect(`killed: ${child?.killed}`).toBe('killed: true')
+})
+
+// A PATH IS KEYED AS THE CHECKER KEYS IT. On a case-insensitive host the checker folds
+// `Spelling.abide` and `spelling.abide` to one file, so the session has to as well — a case-only
+// rename in `abide dev`, or an editor and a glob spelling one page two ways, hands it both. Where
+// the host is case-sensitive they are two files and each answers for itself, which this asserts
+// as well. THE REVERT: key `shadows` by the path as handed in; the second spelling is reported
+// `created` for a file the checker already holds, and `beta` reads as ` reac` — the first text's
+// offsets over the second's.
+test('two spellings of one path never answer from each other', async () => {
+    const first = parseAbide(`<script>
+import { reactive } from 'abide'
+let alpha = reactive(1)
+</script>
+<p>{alpha}</p>`)
+    const second = parseAbide(`<script>
+import { reactive } from 'abide'
+const filler = 0
+let beta = reactive(2)
+</script>
+<p>{beta}{filler}</p>`)
+    const upper = `${ROOT}src/Spelling.abide`
+    const lower = `${ROOT}src/spelling.abide`
+    expect(namesRead(first, await session.reads(upper, first))).toEqual([
+        'alpha',
+    ])
+    expect(namesRead(second, await session.reads(lower, second))).toEqual([
+        'beta',
+    ])
+    expect(namesRead(first, await session.reads(upper, first))).toEqual([
+        'alpha',
+    ])
 })

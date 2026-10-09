@@ -4,7 +4,11 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { spawned } from 'harness/gate'
+import { GET } from '#server'
+import { inOpenScope, scopeFor } from '#server/requestScope.ts'
+import { seedFor, takeSeed } from '#server/seedBuffer.ts'
 import { addressOf, appFixture, BIN, buildApp } from './builtApp.ts'
+import { inMemoryApp } from './inMemoryApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 // Writes `stopped` where `MARK` names once `onStop`'s body has run — and never gets there where
@@ -150,3 +154,88 @@ console.log(first === second)
     expect(ran.stdout.trim()).toBe('true')
     expect(await Bun.file(mark).text()).toBe('stopped;')
 }, 30_000)
+
+// 42.11 — A STREAM STILL BEING WRITTEN WHEN THE APP STOPS IS ENDED, in process (`inMemoryApp.ts`): a
+// handler that streams forever, read through `App.fetch`, hands its reader the end of the stream once
+// `App.stop` has run, rather than streaming into an app that has stopped. THE REVERT: drop both
+// `endHeld()` calls from `stopOnce` in `createApp.ts`; the reader is `still streaming` when the bound
+// runs out.
+test('App.stop ends a stream it is still writing — 42.11', async () => {
+    const app = await inMemoryApp({
+        'server/rpc/feed.ts': {
+            ticks: GET(async function* () {
+                let tick = 0
+                while (true) {
+                    yield tick
+                    tick += 1
+                    await Bun.sleep(10)
+                }
+            }),
+        },
+    })
+    const answer = await app.fetch(
+        new Request('http://app.internal/__abide/rpc/feed/ticks'),
+    )
+    const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
+    expect((await reader.read()).done).toBe(false)
+    await app.stop()
+    const ended = (async () => {
+        while (!(await reader.read()).done) {}
+        return 'ended'
+    })()
+    expect(
+        await Promise.race([
+            ended,
+            Bun.sleep(1_000).then(() => 'still streaming'),
+        ]),
+    ).toBe('ended')
+})
+
+// 42.11 — A SEED ENTRY IS A TIMER THE APP HOLDS, and the value the render reached: one its render
+// left standing is dropped when the app stops, rather than holding both for the rest of its life.
+// THE REVERT: drop the `heldByApp` filing from `seedFor` in `seedBuffer.ts`; the app holds 0 entries
+// where 1 is due, and the browser's call is still answered from the seed after the stop.
+test('App.stop drops the seed entries its renders left — 42.11', async () => {
+    const held = new Set<() => void>()
+    const app = {
+        answer: async () => new Response(),
+        mcp: undefined as never,
+        held,
+    }
+    const handler = {}
+    const scope = scopeFor(new Request('http://app.internal/'), undefined, app)
+    inOpenScope(scope, () => seedFor('caller')(handler, { id: 1 }, 'reached'))
+    expect(held.size).toBe(1)
+    for (const end of [...held]) end()
+    expect(held.size).toBe(0)
+    expect(takeSeed('caller', handler, { id: 1 })).toBeUndefined()
+})
+
+// 16.43 — A STOPPED APP ANSWERS NO `raw` CALL: one made outside every request after the app built last
+// has stopped goes over the wire rather than in process to an app that refuses it. THE REVERT: drop
+// the `RPC_SERVER.raw = null` line from `stopOnce` in `createApp.ts`; the stopped app refuses the
+// call with its 503 and the wire is reached 0 times, where 1 is due.
+test('a raw call outside every request after App.stop does not reach the stopped app — 16.43', async () => {
+    let answered = 0
+    const greeting = GET(() => {
+        answered += 1
+        return 'hello'
+    })
+    const app = await inMemoryApp({ 'server/rpc/stopped.ts': { greeting } })
+    expect(await (await greeting.raw()).json()).toBe('hello')
+    expect(answered).toBe(1)
+    await app.stop()
+    const realFetch = globalThis.fetch
+    let overTheWire = 0
+    globalThis.fetch = (async () => {
+        overTheWire += 1
+        return Response.json('over the wire')
+    }) as unknown as typeof fetch
+    try {
+        await greeting.raw()
+    } finally {
+        globalThis.fetch = realFetch
+    }
+    expect(answered).toBe(1)
+    expect(overTheWire).toBe(1)
+})

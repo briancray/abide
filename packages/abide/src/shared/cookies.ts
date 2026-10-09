@@ -229,7 +229,7 @@ let documentJar: Cookies | undefined
  * (another tab, a server's `set-cookie`), that name's readers wake; 22.7 — where it does not, nothing
  * does, and the jar is what it last read.
  */
-function browserCookies(): Cookies {
+export function browserCookies(): Cookies {
     if (documentJar !== undefined) return documentJar
     if (typeof document === 'undefined')
         throw new Error(

@@ -20,6 +20,7 @@ import {
     MANIFEST,
     PUBLIC_DIRECTORY,
 } from './CLIENT_BUILD.ts'
+import { componentImports } from './componentImports.ts'
 import { type App, type AppOrigin, bootApp } from './createApp.ts'
 import { stopOnSignalOrFault } from './faultPolicy.ts'
 import type { Manifest } from './manifestOf.ts'
@@ -62,10 +63,17 @@ export async function serveApp(
     return app
 }
 
-/** A loader for a handler's module, out of the app's source tree. */
+/**
+ * A loader for a handler's module, out of the app's source tree.
+ *
+ * `compiled` is where the app's components were compiled to, which a `.abide` the module imports
+ * lands on (`componentImports`).
+ */
 export function sourceModuleLoader(
     root: string,
+    compiled: string,
 ): (source: string) => Promise<Record<string, unknown>> {
+    Bun.plugin(componentImports(root, compiled))
     return (source) => import(Bun.pathToFileURL(`${root}/${source}`).href)
 }
 
@@ -111,7 +119,7 @@ export async function loadBuild(options: {
     return builtSources({
         table,
         handlers,
-        handlerModule: sourceModuleLoader(options.root),
+        handlerModule: sourceModuleLoader(options.root, options.out),
         shell,
         manifest,
         client: pathsUnder(`${options.out}/${CLIENT_DIRECTORY}`),

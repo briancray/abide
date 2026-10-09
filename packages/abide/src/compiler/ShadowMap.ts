@@ -1,4 +1,4 @@
-import type { Origin } from './projectShadow.ts'
+import type { Origin, Span } from './projectShadow.ts'
 
 /** What a `.abide`'s checked module is registered with the checker as, beside the `.abide`. */
 export const CHECKED_SUFFIX = '.check.ts'
@@ -72,11 +72,7 @@ export class ShadowMap {
      * `start` to `end` in `path`, placed in the `.abide`, or `undefined` where it starts in what the
      * checked module added — a declaration of the lowering's own, which the author never wrote.
      */
-    spanToSource(
-        path: string,
-        start: number,
-        end: number,
-    ): { start: number; end: number } | undefined {
+    spanToSource(path: string, start: number, end: number): Span | undefined {
         if (
             path === this.checkedPath &&
             copiedFrom(this.checked, start) === undefined

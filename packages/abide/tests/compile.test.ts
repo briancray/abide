@@ -202,7 +202,7 @@ test('the executable alone opens a shell on the app it serves, and exit stops it
 // the name the script reads is `app`. And a handler module the script does not import never runs:
 // load every specifier as the plugin is registered, and stderr reads `untouched handler module ran`.
 test('run takes abide and the handlers from the executable, under its identity — 38.57, 38.58', async () => {
-    Bun.write(
+    await Bun.write(
         `${where}/script.ts`,
         `import { config } from 'abide/server'
 import { name } from '#server/rpc/identity'

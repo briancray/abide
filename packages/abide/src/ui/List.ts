@@ -56,17 +56,17 @@ export class List {
 
     constructor(
         region: Region,
-        rows: Row[],
+        anchored: boolean,
         key: (item: unknown, at: number) => unknown,
         setUp: (item: unknown, at: number) => RowBuilders,
     ) {
         this.region = region
-        this.rows = rows
+        this.rows = []
         this.pumping = null
         this.iterator = null
         this.warned = false
-        this.hydrating = false
-        this.anchored = false
+        this.hydrating = true
+        this.anchored = anchored
         this.key = key
         this.setUp = setUp
     }
@@ -112,10 +112,7 @@ export function listAt(
     key: (item: unknown, at: number) => unknown,
     setUp: (item: unknown, at: number) => RowBuilders,
 ): List {
-    const list = new List(region, [], key, setUp)
-    list.hydrating = true
-    list.anchored = anchored
-    return list
+    return new List(region, anchored, key, setUp)
 }
 
 /**
@@ -226,8 +223,7 @@ function appendRows(list: List, source: AsyncIterable<unknown>): void {
     // own iterable and calls `make`/`mount`, so a stream that aborts and a row that cannot be
     // hydrated both reject it — and with nothing attached that is a fatal `unhandledRejection`
     // under bun and a bare `unhandledrejection` in a browser, where every other failure in this
-    // seam is one `abide:hydrate` line. The sibling pump in `Reactive.ts` routes its failure the
-    // same way rather than letting it escape.
+    // seam is one `abide:hydrate` line.
     pump(list, source).catch((thrown: unknown) => {
         if (warnMismatch(thrown)) return
         HYDRATE_LOG.warning(thrown)

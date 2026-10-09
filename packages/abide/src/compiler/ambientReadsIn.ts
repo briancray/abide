@@ -25,7 +25,7 @@ import { optionNamed, reactiveOptions } from './reactiveOptions.ts'
 // seen, and is the same limit 14.16 has.
 
 const besideThis = (relative: string): string =>
-    new URL(relative, import.meta.url).pathname
+    Bun.fileURLToPath(new URL(relative, import.meta.url))
 
 // Where abide declares each ambient, and whether only its `.nonce` belongs to the request.
 const AMBIENTS: { path: string; name: string; nonce: boolean }[] = [

@@ -15,6 +15,7 @@
 
 import type { Issues } from './Issues.ts'
 import { isRecord } from './isRecord.ts'
+import { issuesOf } from './issuesOf.ts'
 import type { JsonValue } from './JsonValue.ts'
 import { note } from './note.ts'
 
@@ -207,7 +208,8 @@ function hasShape(shape: Shape, held: unknown): boolean {
 }
 
 /**
- * Checks a value against a JSON Schema document: its issues keyed by path, or `null` when it holds.
+ * Checks a value against a JSON Schema document: its issues keyed by path — the bare list for a
+ * value that is not an object — or `null` when it holds.
  *
  * Throws on a keyword this does not implement, or one holding a value it cannot read — see the
  * module header.
@@ -218,7 +220,7 @@ export function validateJson<T>(
 ): Issues<T> | null {
     const found: Record<string, string[]> = {}
     check(schema, value, '', found)
-    for (const _path in found) return found as Issues<T>
+    for (const _path in found) return issuesOf(found, value) as Issues<T>
     return null
 }
 

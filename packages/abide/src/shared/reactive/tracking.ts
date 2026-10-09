@@ -94,6 +94,18 @@ export type Subscriber = {
      * `track`. Reset before each run.
      */
     cursor: number
+    /**
+     * The distinct values in `sources[0..seenThrough)` once `track` has found them worth a set;
+     * `null` until a body reads that many. See `track`.
+     */
+    seen: Set<Tracked> | null
+    /** The cursor after this reader's last read `track` deduped past `SET_OVER_SCAN`. */
+    seenThrough: number
+    /**
+     * Where the stretch of diverged reads `seenThrough` ends began, while it is still being
+     * scanned — and `-1` once `seen` is what answers for it.
+     */
+    scanningFrom: number
     alive: boolean
 }
 
@@ -133,6 +145,9 @@ export function newSubscriber(
         sources,
         probeSources: [],
         cursor: 0,
+        seen: null,
+        seenThrough: 0,
+        scanningFrom: -1,
         alive: true,
         state: CLEAN,
         running: false,
@@ -347,8 +362,51 @@ export function track(source: Tracked, reader: Subscriber): void {
     // tracks, which `truncate` already depends on. A cursor of 0 against a declared `sources`
     // would have it drop the declared subscription on the first `track`, so a reader that
     // both declares and tracks is already broken above this line.
-    for (let index = 0; index < at; index += 1)
-        if (sources[index] === source) return
+    //
+    // AND THE SCAN IS QUADRATIC IN THE BODY past the first divergence, which is the same bug one
+    // level in: a body summing a thousand rows' values that diverges near the front — a row
+    // inserted at index 0 — scans the kept prefix once per read for the rest of the run, n²/2
+    // compares, 131 ms at n=16,000 under JSC. So a long STRETCH of diverged reads over a long
+    // prefix dedups against a `Set`, priced against the scan the way `truncate` prices its own:
+    // below `SET_OVER_SCAN` on the prefix the scan stays, because a body reads 1-5 values and a set
+    // is an allocation; and a stretch is scanned for its first `SET_OVER_SCAN` reads before the set
+    // is built, because a body that diverges at its LAST read — a thousand stable reads, then a
+    // branch — makes one scan and would pay a thousand inserts for a set it asks once.
+    //
+    // `seenThrough` IS WHAT SAYS THE STRETCH GOES ON. Every read past the threshold comes through
+    // here and moves it to the cursor after it, so a read arriving anywhere else follows a
+    // truncation, a fresh run or a stretch of stable reads — and `sources[0..at)` is then not
+    // what `seen` was last true of, so a new stretch starts. The threshold side cannot alias it:
+    // a run climbing back from below arrives at `SET_OVER_SCAN` exactly, which `seenThrough`,
+    // always one past a read at or above it, never equals.
+    if (at < SET_OVER_SCAN) {
+        for (let index = 0; index < at; index += 1)
+            if (sources[index] === source) return
+        source.readers.push(reader)
+        return
+    }
+    if (reader.seenThrough !== at) reader.scanningFrom = at
+    reader.seenThrough = at + 1
+    let seen = reader.seen
+    const from = reader.scanningFrom
+    if (from !== -1) {
+        if (at - from < SET_OVER_SCAN) {
+            for (let index = 0; index < at; index += 1)
+                if (sources[index] === source) return
+            source.readers.push(reader)
+            return
+        }
+        if (seen === null) {
+            seen = new Set()
+            reader.seen = seen
+        } else seen.clear()
+        for (let index = 0; index < at; index += 1)
+            seen.add(sources[index] as Tracked)
+        reader.scanningFrom = -1
+    }
+    const deduped = seen as Set<Tracked>
+    if (deduped.has(source)) return
+    deduped.add(source)
     source.readers.push(reader)
 }
 

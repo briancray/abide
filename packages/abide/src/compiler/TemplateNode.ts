@@ -34,16 +34,7 @@ export type Attribute = {
  * `subject` is the source between the braces — a condition for `{#if}` and `{:else if}`, and EMPTY
  * for `{:else}`, which is what makes it the arm that always takes.
  */
-export type Branch = {
-    subject: string
-    children: TemplateNode[]
-    /** 14.8 — the arm's branch-local `<script>`, or `null`. */
-    setup: Setup | null
-    /** 34.11 — the arm's branch-local `<style>`, or `null`. */
-    style: string | null
-    /** 32.43 — the inline components the arm declares. */
-    components: InlineComponent[]
-}
+export type Branch = Body & { subject: string }
 
 /**
  * A `{#component Name(pattern)}…{/component}` block: its name, its props pattern and the annotation
@@ -53,7 +44,7 @@ export type Branch = {
  * written in — the text either side of it is one run, as the browser parses it — and it is filed
  * on the body whose scope it is in instead (32.43), or on the invocation it is passed to (32.50).
  */
-export type InlineComponent = {
+export type InlineComponent = Body & {
     kind: 'component'
     name: string
     /** Where the name starts in the source. */
@@ -64,11 +55,6 @@ export type InlineComponent = {
     /** The pattern's type annotation as written, or `''` where it has none. */
     type: string
     typeAt: number
-    children: TemplateNode[]
-    setup: Setup | null
-    style: string | null
-    /** 32.43 — the inline components its own body declares. */
-    components: InlineComponent[]
 }
 
 /**
@@ -79,23 +65,40 @@ export type InlineComponent = {
  */
 export type Setup = { text: string }
 
+/** An element, a component invocation or a `<slot>`, with what it holds. */
+export type ElementNode = {
+    kind: 'element'
+    tag: string
+    lowerTag: string
+    attributes: Attribute[]
+    children: TemplateNode[]
+    /**
+     * 32.43 — the inline components declared between an invocation's or a `<slot>`'s tags and
+     * inside an element there. An element of any other kind files its own on the body around it,
+     * and holds none.
+     */
+    components: InlineComponent[]
+    /** 32.50 — the inline components written directly between an invocation's tags. */
+    passed: InlineComponent[]
+}
+
+/**
+ * 32.13 — a `{#for}` block, which repeats its body over a list. A REGION like `{#if}`, and the body
+ * is planned once and instantiated per row, so a row's paths are the row's own.
+ */
+export type ForBlock = Body & {
+    kind: 'block'
+    block: 'for'
+    /** `{#for item, index of list by key}` — `index` and `key` are optional. */
+    item: string
+    index: string
+    subject: string
+    key: string
+}
+
 /** One node of a parsed `.abide` template: an element, text, an expression slot, or a block. */
 export type TemplateNode =
-    | {
-          kind: 'element'
-          tag: string
-          lowerTag: string
-          attributes: Attribute[]
-          children: TemplateNode[]
-          /**
-           * 32.43 — the inline components declared between an invocation's or a `<slot>`'s tags
-           * and inside an element there. An element of any other kind files its own on the body
-           * around it, and holds none.
-           */
-          components: InlineComponent[]
-          /** 32.50 — the inline components written directly between an invocation's tags. */
-          passed: InlineComponent[]
-      }
+    | ElementNode
     | { kind: 'text'; text: string }
     // The source between the braces, verbatim. 32.1 renders it escaped.
     | { kind: 'expression'; source: string }
@@ -107,24 +110,7 @@ export type TemplateNode =
     // its own copy of the `{:finally}` markup, which stands either way; `error` is the name the catch
     // binds, `''` where the author bound none.
     | { kind: 'block'; block: 'try'; branches: Branch[]; error: string }
-    // 32.13 — repeats its body over a list. A REGION like `{#if}`, and the body is planned once
-    // and instantiated per row, so a row's paths are the row's own.
-    | {
-          kind: 'block'
-          block: 'for'
-          /** `{#for item, index of list by key}` — `index` and `key` are optional. */
-          item: string
-          index: string
-          subject: string
-          key: string
-          children: TemplateNode[]
-          /** 14.8 — the row's branch-local `<script>`, or `null`. */
-          setup: Setup | null
-          /** 34.11 — the row's branch-local `<style>`, or `null`. */
-          style: string | null
-          /** 32.43 — the inline components the row declares. */
-          components: InlineComponent[]
-      }
+    | ForBlock
 
 /**
  * What every body holds: its nodes, its branch-local `<script>` and `<style>`, and the inline
@@ -133,8 +119,11 @@ export type TemplateNode =
  */
 export type Body = {
     children: TemplateNode[]
+    /** 14.8 — the body's branch-local `<script>`, or `null`. */
     setup: Setup | null
+    /** 34.11 — the body's branch-local `<style>`, or `null`. */
     style: string | null
+    /** 32.43 — the inline components the body declares. */
     components: InlineComponent[]
 }
 

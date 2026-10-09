@@ -20,6 +20,7 @@ import {
 } from './remote.ts'
 import { inScope, LISTENING } from './requestScope.ts'
 import { shell } from './shell.ts'
+import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /** What a command is handed: the words after the flags, the command's own first, and the flags. */
 export type Given = ReturnType<typeof parsed>
@@ -238,7 +239,7 @@ async function served(
     const server = LISTENING.server as Bun.Server<unknown>
     return {
         app,
-        url: server.url.href.replace(/\/$/, ''),
+        url: withoutTrailingSlash(server.url.href),
         heading: banner(host.name, 'start', host.appPackage(), server),
     }
 }

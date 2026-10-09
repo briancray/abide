@@ -1,4 +1,5 @@
 import type { Node } from 'typescript/unstable/ast'
+import type { Span } from './projectShadow.ts'
 
 /**
  * What a projected span is, by where the template put it.
@@ -33,7 +34,7 @@ export type PositionKind =
     | 'tag'
 
 /** A span of the projection copied out of the template, and what it is. */
-export type Position = { start: number; end: number; kind: PositionKind }
+export type Position = Span & { kind: PositionKind }
 
 /** 31.3 — whether a position is a `bind:` operand, which holds the `Reactive` rather than reading it. */
 export function holdsReactive(position: Position | undefined): boolean {

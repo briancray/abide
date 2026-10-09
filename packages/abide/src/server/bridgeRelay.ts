@@ -215,7 +215,7 @@ function pair(request: Request): Response {
     return framed(
         bridge.frames[Symbol.asyncIterator](),
         'sse',
-        new Headers({ 'cache-control': 'no-store' }),
+        new Headers(),
         200,
     )
 }

@@ -12,11 +12,14 @@
 import { propKeyOf } from './classifyTemplate.ts'
 import type { Lowering } from './Lowering.ts'
 import { holdsReactive } from './PositionTable.ts'
-import type { InlineComponent, TemplateNode } from './TemplateNode.ts'
+import type {
+    ElementNode,
+    InlineComponent,
+} from './TemplateNode.ts'
 
 /** The props-record entries a component tag hands its child: spreads first, then each prop. */
 export function invocationProps(
-    node: TemplateNode & { kind: 'element' },
+    node: ElementNode,
     lowering: Lowering,
 ): string[] {
     const spreads: string[] = []

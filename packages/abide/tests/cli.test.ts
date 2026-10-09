@@ -80,10 +80,9 @@ test('asking for help is a success and an unknown command is not — 38.13', asy
     // the help — and a command the dispatch reaches, rather than 'unknown'. THE REVERT: drop a row
     // from `COMMANDS`; its registry name goes missing from the help.
     const said = (await spawned(['bun', BIN, '--help'])).stdout
-    const registry = require('node:fs').readFileSync(
+    const registry = await Bun.file(
         new URL('../../../docs/REGISTRY.md', import.meta.url),
-        'utf8',
-    ) as string
+    ).text()
     const named = [...registry.matchAll(/^\| `abide (\w+)/gm)].map(
         (match) => match[1],
     )

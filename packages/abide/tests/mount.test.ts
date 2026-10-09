@@ -2,7 +2,7 @@
 // resolved against the mount at run time (spawned, for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { serveApp } from './builtApp.ts'
+import { lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAGE = `<script>
@@ -19,21 +19,22 @@ let base = ''
 let stop = (): void => {}
 
 beforeAll(async () => {
-    process.env.APP_URL = 'http://example.test/docs/'
-    ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': PAGE,
-        'ui/pages/invoices/[id]/page.abide': `<script>
+    ;({ base, stop } = await serveApp(
+        {
+            'ui/pages/page.abide': PAGE,
+            'ui/pages/invoices/[id]/page.abide': `<script>
 import { route } from 'abide'
 </script>
 
 <main>an invoice at <b id="at">{route.url().pathname}</b></main>`,
-        'ui/app.html': `<!doctype html><html><head><meta charset="utf-8"><link rel="preload" href="/fonts/face.woff2" as="font"><link rel="preconnect" href="//cdn.example.test"></head><body></body></html>`,
-        'ui/face.css': `@font-face { font-family: Face; src: url('/fonts/face.woff2'); }\n`,
-        'ui/public/fonts/face.woff2': 'a face',
-        'ui/public/robots.txt': 'User-agent: *\n',
-        'server/rpc/invoices.ts': `import { GET, reactive } from 'abide/server'\n\nexport const getInvoice = GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n\nexport const count = GET(reactive({ open: 3 }, { global: true }))\n`,
-    }))
-    delete process.env.APP_URL
+            'ui/app.html': `<!doctype html><html><head><meta charset="utf-8"><link rel="preload" href="/fonts/face.woff2" as="font"><link rel="preconnect" href="//cdn.example.test"></head><body></body></html>`,
+            'ui/face.css': `@font-face { font-family: Face; src: url('/fonts/face.woff2'); }\n`,
+            'ui/public/fonts/face.woff2': 'a face',
+            'ui/public/robots.txt': 'User-agent: *\n',
+            'server/rpc/invoices.ts': `import { GET, reactive } from 'abide/server'\n\nexport const getInvoice = GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n\nexport const count = GET(reactive({ open: 3 }, { global: true }))\n`,
+        },
+        { ...process.env, APP_URL: 'http://example.test/docs/' },
+    ))
 }, 30_000)
 
 afterAll(() => {
@@ -85,23 +86,27 @@ test('the mux answers under the mount, for an address under it or a whole URL â€
     const dir = temporaryModule({
         'client.ts': `const base = process.argv[2]
 const frames: unknown[] = []
+let bothArrived = (): void => {}
+const arrived = new Promise<void>((done) => (bothArrived = done))
 const ws = new WebSocket(base.replace('http', 'ws') + '/docs/__abide/socket')
-ws.onmessage = (event) => frames.push(JSON.parse(String(event.data)))
+ws.onmessage = (event) => {
+    frames.push(JSON.parse(String(event.data)))
+    if (frames.length === 2) bothArrived()
+}
 await new Promise((done) => (ws.onopen = done))
 ws.send(JSON.stringify({ op: 'sub', id: 1, address: '/docs/__abide/rpc/invoices/count' }))
 ws.send(JSON.stringify({ op: 'sub', id: 2, address: base + '/docs/__abide/rpc/invoices/count' }))
-await new Promise((done) => setTimeout(done, 150))
+await Promise.race([arrived, new Promise((done) => setTimeout(done, 3000).unref())])
+// CLOSED AND DRAINED before anything is said: a frame sent before the close lands ahead of it.
 ws.close()
+await new Promise((done) => (ws.onclose = done))
 console.log(JSON.stringify(frames))
 `,
     })
-    const ran = Bun.spawn(['bun', `${dir}/client.ts`, base], { stdout: 'pipe' })
-    const printed = await new Response(ran.stdout).text()
-    const frames = JSON.parse(printed.trim().split('\n').at(-1) as string) as {
-        op: string
-        id: number
-        value?: unknown
-    }[]
+    const frames = await lastLinePrinted<
+        { op: string; id: number; value?: unknown }[]
+    >(['bun', `${dir}/client.ts`, base])
+
     expect(frames.map((frame) => [frame.op, frame.id, frame.value])).toEqual([
         ['value', 1, { open: 3 }],
         ['value', 2, { open: 3 }],

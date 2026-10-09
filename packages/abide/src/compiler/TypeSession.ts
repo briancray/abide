@@ -20,11 +20,13 @@ import {
     COMPONENT_STAND_IN,
     checkedShadow,
 } from './checkedShadow.ts'
+import type { Finding } from './Finding.ts'
 import { CHECKED_VALUES } from './Lowering.ts'
 import { diagnosisAt, lineOf } from './lineOf.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { projectShadow } from './projectShadow.ts'
 import { abideIn } from './reactiveTypes.ts'
+import type { ParsedSource, ReadSource } from './readSources.ts'
 import { readsIn, type ShadowSpans } from './readsIn.ts'
 import { CHECKED_SUFFIX, ShadowMap } from './ShadowMap.ts'
 import { templateWarnings } from './templateWarnings.ts'
@@ -47,9 +49,22 @@ export class TypeSession {
     private api: API
     /** The `tsconfig` the session was opened on, which a file outside its project is refused by. */
     readonly tsconfig: string
-    private shadows = new Map<string, string>()
     /**
-     * Per canonical `.abide` path, what `diagnose` last lowered it to — kept for `inspect` alone.
+     * Per checker key, the text the checker reads for a file this session wrote, and the path it
+     * was registered under.
+     *
+     * KEYED AS THE CHECKER KEYS ITS OWN CACHE (`keyOf`), not by the string a caller handed in. On a
+     * case-insensitive disk the checker folds `Page.abide.shadow.ts` and `page.abide.shadow.ts` to
+     * one file, so a map telling them apart reported the second spelling `created` for a file the
+     * checker already held — it read nothing, and answered the second text's reads at the first
+     * text's offsets.
+     */
+    private shadows = new Map<string, { path: string; text: string }>()
+    /** The checker's own key for a path: resolved, and case-folded where its host folds case. */
+    private keyOf: (path: string) => string
+    /**
+     * Per `.abide` path as the checker keys it (`keyOf`), what `diagnose` last lowered it to —
+     * kept for `inspect` alone.
      *
      * THE ONE THING CARRIED FROM ONE CALL TO ANOTHER, because an editor's hover is a request of
      * its own that arrives after the check that lowered the file, and has to map its offset
@@ -61,9 +76,14 @@ export class TypeSession {
         { text: string; map: ShadowMap }
     >()
 
-    private constructor(api: API, tsconfig: string) {
+    private constructor(
+        api: API,
+        tsconfig: string,
+        keyOf: (path: string) => string,
+    ) {
         this.api = api
         this.tsconfig = tsconfig
+        this.keyOf = keyOf
     }
 
     /**
@@ -84,29 +104,41 @@ export class TypeSession {
         } catch {
             return undefined
         }
-        this.stoodIn.add(name)
+        this.stoodIn.add(this.keyOf(name))
         return COMPONENT_MODULE
     }
 
     /** Opens a session on the project `tsconfig` configures. */
     static async open(tsconfig: string): Promise<TypeSession> {
-        const session = new TypeSession(
-            new API({
-                cwd: dirname(tsconfig),
-                fs: {
-                    readFile: (name) =>
-                        session.shadows.get(name) ?? session.standIn(name),
-                    fileExists: (name) =>
-                        session.shadows.has(name) ||
-                        session.standIn(name) !== undefined
-                            ? true
-                            : undefined,
-                    getAccessibleEntries: (directory) =>
-                        session.entriesIn(directory),
-                },
-            }),
-            tsconfig,
-        )
+        const api = new API({
+            cwd: dirname(tsconfig),
+            fs: {
+                readFile: (name) =>
+                    session.shadows.get(session.keyOf(name))?.text ??
+                    session.standIn(name),
+                fileExists: (name) =>
+                    session.shadows.has(session.keyOf(name)) ||
+                    session.standIn(name) !== undefined
+                        ? true
+                        : undefined,
+                getAccessibleEntries: (directory) =>
+                    session.entriesIn(directory),
+            },
+        })
+        // Whether the host folds case is the checker process's answer to `initialize`, and the API
+        // keeps it only inside the private `toPath` its own `getSourceFile` keys by — so that is
+        // what is read, rather than a second guess at the disk that could disagree with it.
+        const internals = api as unknown as {
+            ensureInitialized(): Promise<void>
+            toPath?: (path: string) => string
+        }
+        await internals.ensureInitialized()
+        const toPath = internals.toPath
+        if (typeof toPath !== 'function')
+            throw new Error(
+                'abide: the TypeScript API no longer keeps `toPath` where the type session reads it, so a path cannot be keyed as the checker keys it.',
+            )
+        const session = new TypeSession(api, tsconfig, toPath)
         return session
     }
 
@@ -150,12 +182,12 @@ export class TypeSession {
         // doubled separator, a trailing slash or a relative path, and the shadow then appeared in
         // nobody's listing — so the checker never read it and the refusal below blamed the app's
         // tsconfig for a path this class had mangled.
-        const here = this.canonical(directory)
+        const here = this.keyOf(directory)
         const mine: string[] = []
-        // The key is canonical where it is registered (`shadowPath` below), so only the
-        // incoming directory needs resolving — one `resolve` a call rather than one a shadow.
-        for (const path of this.shadows.keys())
-            if (dirname(path) === here) mine.push(basename(path))
+        // The key is the checker's where it is registered, so only the incoming directory needs
+        // keying — one `toPath` a call rather than one a shadow.
+        for (const [key, shadow] of this.shadows)
+            if (dirname(key) === here) mine.push(basename(shadow.path))
         if (mine.length === 0) return undefined
 
         const files: string[] = []
@@ -222,14 +254,14 @@ export class TypeSession {
                 // A `.abide` that is gone takes its shadows with it, or the checker keeps a page
                 // nobody has as a root of the project for the rest of the session — and a page
                 // importing it goes on reading the props its checked module declared.
-                const gone = this.canonical(path)
-                for (const shadowPath of this.shadows.keys())
+                const gone = this.keyOf(path)
+                for (const [key, shadow] of this.shadows)
                     if (
-                        ShadowMap.isShadowOf(shadowPath, gone) ||
-                        shadowPath.startsWith(`${gone}/`)
+                        ShadowMap.isShadowOf(key, gone) ||
+                        key.startsWith(`${gone}/`)
                     ) {
-                        this.shadows.delete(shadowPath)
-                        this.edits.deleted.push(shadowPath)
+                        this.shadows.delete(key)
+                        this.edits.deleted.push(shadow.path)
                     }
                 continue
             }
@@ -296,7 +328,7 @@ export class TypeSession {
 
     /**
      * THE APP'S OWN FILES the checker holds as roots: under `within`, and neither a dependency nor a
-     * declaration file. Canonical, which is how a shadow is keyed.
+     * declaration file. Resolved against the tsconfig's directory; a caller asking `shadows` keys it.
      */
     private rootsUnder(project: Project, within: string): string[] {
         const root = `${this.canonical(within)}/`
@@ -331,12 +363,13 @@ export class TypeSession {
         created: string[],
         changed: string[],
     ): void {
-        const previous = this.shadows.get(path)
-        const stoodIn = this.stoodIn.delete(path)
+        const key = this.keyOf(path)
+        const previous = this.shadows.get(key)
+        const stoodIn = this.stoodIn.delete(key)
         if (previous === undefined) created.push(path)
-        if (stoodIn || (previous !== undefined && previous !== text))
+        if (stoodIn || (previous !== undefined && previous.text !== text))
             changed.push(path)
-        this.shadows.set(path, text)
+        this.shadows.set(key, { path, text })
     }
 
     /**
@@ -364,7 +397,9 @@ export class TypeSession {
      * was handed in.
      */
     async readsFor(
-        sources: readonly { path: string; file: AbideFile; text?: string }[],
+        sources: readonly (Pick<ParsedSource, 'path' | 'file'> & {
+            text?: string
+        })[],
     ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
         const answered = await this.classify(sources)
         for (let at = 0; at < sources.length; at += 1) {
@@ -384,7 +419,9 @@ export class TypeSession {
     }
 
     private async classify(
-        sources: readonly { path: string; file: AbideFile; text?: string }[],
+        sources: readonly (Pick<ParsedSource, 'path' | 'file'> & {
+            text?: string
+        })[],
     ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
         const warnings: Diagnosis[] = []
         // Per source, its shadow and what is asked of it, or `undefined` where nothing is declared.
@@ -498,7 +535,7 @@ export class TypeSession {
      */
     async lints(
         within: string,
-        sources: readonly { path: string; text: string; file: AbideFile }[],
+        sources: readonly Omit<ParsedSource, 'quiet'>[],
     ): Promise<{ ambient: Diagnosis[]; unkeyed: Diagnosis[] }> {
         const ambient: Diagnosis[] = []
         const unkeyed: Diagnosis[] = []
@@ -525,13 +562,15 @@ export class TypeSession {
                 this.canonical(source.path),
                 projectShadow(source.file).origins,
             )
-            authored.set(map.shadowPath, { source, map })
+            authored.set(this.keyOf(map.shadowPath), { source, map })
         }
         // A file of this session's own is one of `sources`' shadows or not walked at all: a
         // checked module is the lowering's, and placed nowhere an author wrote.
         const files: string[] = []
-        for (const path of this.rootsUnder(project, within))
-            if (authored.has(path) || !this.shadows.has(path)) files.push(path)
+        for (const path of this.rootsUnder(project, within)) {
+            const key = this.keyOf(path)
+            if (authored.has(key) || !this.shadows.has(key)) files.push(path)
+        }
         await Promise.all(
             files.map(async (path) => {
                 const sourceFile = await project.program.getSourceFile(path)
@@ -543,7 +582,7 @@ export class TypeSession {
                     argsDefaultsIn(checker, sourceFile),
                 ])
                 if (reads.length === 0 && defaults.length === 0) return
-                const shadow = authored.get(path)
+                const shadow = authored.get(this.keyOf(path))
                 const source = shadow?.source
                 const text =
                     source === undefined
@@ -593,13 +632,7 @@ export class TypeSession {
      * reported at its line — `abide check` emits the rest of the app without them.
      */
     async diagnose(
-        sources: {
-            path: string
-            text: string
-            file: AbideFile
-            answer: CheckerAnswer
-            quiet?: boolean
-        }[],
+        sources: (Omit<ReadSource, 'quiet'> & { quiet?: boolean })[],
         within: string,
         scripts = true,
     ): Promise<{ diagnoses: Diagnosis[]; refused: Set<string> }> {
@@ -608,7 +641,7 @@ export class TypeSession {
         const checked: {
             source: (typeof sources)[number]
             map: ShadowMap
-            refusals: readonly { at: number; message: string }[]
+            refusals: readonly Finding[]
         }[] = []
         for (const source of sources) {
             const shadow = checkedShadow(source.file, source.answer)
@@ -672,7 +705,7 @@ export class TypeSession {
         const reports: Promise<Diagnosis[]>[] = []
         const refused: Diagnosis[] = []
         for (const { source, map, refusals } of checked) {
-            this.loweredForInspect.set(map.abidePath, {
+            this.loweredForInspect.set(this.keyOf(map.abidePath), {
                 text: source.text,
                 map,
             })
@@ -699,7 +732,7 @@ export class TypeSession {
         }
         const standing = scripts ? this.rootsUnder(project, within) : []
         for (const path of standing)
-            if (!this.shadows.has(path))
+            if (!this.shadows.has(this.keyOf(path)))
                 reports.push(
                     Bun.file(path)
                         .text()
@@ -732,8 +765,7 @@ export class TypeSession {
         text: string,
         offset: number,
     ): Promise<Inspection | undefined> {
-        const abidePath = this.canonical(path)
-        const lowered = this.loweredForInspect.get(abidePath)
+        const lowered = this.loweredForInspect.get(this.keyOf(path))
         const project = this.latest
         if (
             lowered === undefined ||
@@ -742,7 +774,7 @@ export class TypeSession {
         )
             return undefined
         const asked = lowered.map.fromSource(offset)
-        if (asked === undefined || !this.shadows.has(asked.path))
+        if (asked === undefined || !this.shadows.has(this.keyOf(asked.path)))
             return undefined
         const checker = project.checker
         const found = await checker.getSymbolAtPosition(
@@ -810,7 +842,7 @@ export class TypeSession {
                 start: lineOf(text, start),
                 end: lineOf(text, end),
             }
-        const lowered = this.loweredForInspect.get(abidePath)
+        const lowered = this.loweredForInspect.get(this.keyOf(abidePath))
         const placed = lowered?.map.spanToSource(canonical, start, end)
         if (lowered === undefined || placed === undefined) {
             const top = { line: 1, column: 1 }
@@ -855,7 +887,7 @@ export class TypeSession {
 
 const AMBIENT = 'abide-check.d.ts'
 const ROUTES_DECLARATION = 'abide-routes.d.ts'
-const URL_SOURCE = new URL('../shared/url', import.meta.url).pathname
+const URL_SOURCE = Bun.fileURLToPath(new URL('../shared/url', import.meta.url))
 
 /** 30.26 — every page under `root` as a key of abide's `Routes`, or nothing where it has none. */
 function routesDeclaration(root: string): string {

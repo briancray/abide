@@ -1,4 +1,9 @@
-/** The lines `body` carries, each as it lands, the last one whether or not a newline ends it. */
+/**
+ * The lines `body` carries, each as it lands, the last one whether or not a newline ends it.
+ *
+ * The relay's pairing stream and the claude child's stdout. Its own rather than the docs app's
+ * `linesOf`: this CLI ships without the docs app, and abide exports no line reader of its own.
+ */
 export async function* readLines(
     body: ReadableStream<Uint8Array>,
 ): AsyncGenerator<string> {
