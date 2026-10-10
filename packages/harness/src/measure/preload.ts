@@ -10,5 +10,10 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { install } from './install.ts'
 
+// A child spawned with this env would paint its output in ANSI off a pipe (bun's console, and
+// abide's own log under RULEBOOK 36.9), and the suites compare that output as text. A terminal
+// that exports it made the local gate red where CI, which never sets it, stayed green.
+delete process.env.FORCE_COLOR
+
 GlobalRegistrator.register({ url: 'http://localhost/' })
 install()
