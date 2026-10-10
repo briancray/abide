@@ -246,8 +246,8 @@ say(first)
 }, 20_000)
 
 // 38.37 — A READER THAT STOPS STOPS THE HANDLER: an endless body, read once, is pulled only as far as
-// the socket's buffers take it — 21 to 31 chunks of 64 KB over three runs, and 64 is the bound. THE
-// REVERT: have \`pull\` in \`devWorker\` loop the reader to the end rather than read one chunk; the
+// the socket's buffers take it — 21 to 31 chunks of 64 KB over three runs on macOS, 71 on a
+// linux CI runner, whose buffers autotune larger, and 256 is the bound. THE REVERT: have \`pull\` in \`devWorker\` loop the reader to the end rather than read one chunk; the
 // worker reads the endless body flat out, and the client's second request is never answered.
 test('abide dev reads no more of a body than the connection has taken', async () => {
     const said = await run(`const answer = await fetch(rpc + 'count')
@@ -257,7 +257,7 @@ await new Promise((done) => setTimeout(done, 200))
 say(await (await fetch(rpc + 'howFar')).json())
 reader.cancel()
 `)
-    expect(Number(said)).toBeLessThan(64)
+    expect(Number(said)).toBeLessThan(256)
 }, 20_000)
 
 // 16.22 UNDER `abide dev` — THE CONNECTION IS THE LISTENER'S, and the worker answering the call has no
