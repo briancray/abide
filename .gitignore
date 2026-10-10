@@ -12,8 +12,9 @@ blob-report
 # bun run status, if a run is interrupted before it cleans up
 .status-*.xml
 
-# agent worktrees
-.claude/
+# agent worktrees and session state; the project's skills are checked in
+.claude/*
+!.claude/skills/
 
 # Emitted modules a test imports. See packages/abide/tests/temporaryModule.ts
 .test-modules/

@@ -1,9 +1,10 @@
-name: ci
+name: CI
 
+# What a publish has to pass. Runs on pull requests, and release.yml reuses it through
+# workflow_call so a push to main cannot publish without going green first.
 on:
-  push:
-    branches: [abidewhat]
   pull_request:
+  workflow_call:
 
 jobs:
   verify:
@@ -12,7 +13,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun run typecheck
@@ -20,3 +21,56 @@ jobs:
       # quiet one separates. A timing failure under --parallel is not believed until
       # it reproduces here (CLAUDE.md, "checks").
       - run: bun run test:serial
+
+  # The front door, against the packed tarball — the artifact npm would publish.
+  # Catches what the in-repo suite cannot: a file the scaffold needs missing from
+  # `files`, or a starter that pins a framework other than the one that wrote it.
+  scaffold-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Pack @abide/abide
+        run: cd packages/abide && bun pm pack --destination "$RUNNER_TEMP"
+
+      - name: Scaffold an app from the packed artifact
+        run: |
+          mkdir "$RUNNER_TEMP/consumer"
+          cd "$RUNNER_TEMP/consumer"
+          echo '{"name":"consumer","private":true}' > package.json
+          bun add "$(echo "$RUNNER_TEMP"/abide-abide-*.tgz)"
+          ./node_modules/.bin/abide scaffold my-app
+
+      - name: Assert the scaffold pins the packed version
+        run: |
+          cd "$RUNNER_TEMP/consumer/my-app"
+          PIN="$(bun -e 'console.log((await Bun.file("package.json").json()).dependencies["@abide/abide"])')"
+          EXPECTED="^$(bun -e 'console.log((await Bun.file(process.env.GITHUB_WORKSPACE + "/packages/abide/package.json").json()).version)')"
+          echo "pin=$PIN expected=$EXPECTED"
+          test "$PIN" = "$EXPECTED"
+
+      # The pinned version is not on the registry yet — this run is what publishes it — so the
+      # dependency is pointed at the tarball outright.
+      - name: Build the scaffolded app from the tarball
+        run: |
+          cd "$RUNNER_TEMP/consumer/my-app"
+          ABIDE_TARBALL="$(echo "$RUNNER_TEMP"/abide-abide-*.tgz)" \
+            bun -e 'const p = await Bun.file("package.json").json(); p.dependencies["@abide/abide"] = "file:" + process.env.ABIDE_TARBALL; await Bun.write("package.json", JSON.stringify(p, null, 4) + "\n")'
+          bun install
+          bun run build
+
+      - name: Boot and curl health and the page
+        run: |
+          cd "$RUNNER_TEMP/consumer/my-app"
+          PORT=4173 bun run start > server.log 2>&1 &
+          SERVER_PID=$!
+          for attempt in $(seq 1 50); do
+            curl -fs "http://localhost:4173/__abide/health" > /dev/null 2>&1 && break
+            sleep 0.2
+          done
+          curl -fs "http://localhost:4173/__abide/health" | grep -q '"abide":'
+          curl -fs "http://localhost:4173/" | grep -q "Clicked"
+          kill "$SERVER_PID"

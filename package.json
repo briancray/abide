@@ -31,10 +31,15 @@
         "bench:shared": "bun packages/harness/scripts/benchShared.ts",
         "bench:share": "bun packages/harness/scripts/nameTheShare.ts",
         "clauses:uncited": "bun packages/harness/scripts/uncitedClauses.ts",
-        "bench:reorder": "bun packages/harness/scripts/reorderShare.ts"
+        "bench:reorder": "bun packages/harness/scripts/reorderShare.ts",
+        "prepare": "git config core.hooksPath .githooks || true",
+        "changeset": "changeset",
+        "version-packages": "bun run scripts/autofillChangesets.ts && changeset version",
+        "release": "changeset publish"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.15",
+        "@changesets/cli": "^3.0.3",
         "@playwright/test": "^1.63.0",
         "@types/bun": "^1.4.2",
         "typescript": "^7.0.2"

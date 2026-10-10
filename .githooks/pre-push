@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pre-push gate — runs the full local verify (lint · typecheck · readme-tags · test), the same
+# checks CI gates `main` on, before any push. Wired via core.hooksPath=.githooks, which the root
+# `prepare` script sets on install. Bypass a single push with `git push --no-verify`.
+echo "pre-push: running 'bun run verify' before push…"
+# Redirect stdin from /dev/null: git feeds the pushed refs to this hook on stdin, and a CLI test
+# in the suite reads stdin as a JSON body — without this it would consume git's ref data and fail.
+if ! bun run verify </dev/null; then
+    echo "" >&2
+    echo "pre-push: verify FAILED — push aborted." >&2
+    echo "  fix the errors above, or bypass this one push with: git push --no-verify" >&2
+    exit 1
+fi
