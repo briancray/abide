@@ -150,7 +150,7 @@ export function moduleImports(
  * The braces of a framework import: each name bound as `name as __name`.
  *
  * EVERY FRAMEWORK NAME IS BOUND UNDER `__`, the namespace an author does not write in: the escaping
- * helpers are public on `abide`, so an author may import the same name into the same `<script>` —
+ * helpers are public on `@abide/abide`, so an author may import the same name into the same `<script>` —
  * `import { safeUrl } from './mine.ts'` beside one `<a href={u}>` was
  * `Identifier 'safeUrl' has already been declared` — and a `<script module>` declaring `setText` at
  * module scope collides with a runtime import made as written just the same.

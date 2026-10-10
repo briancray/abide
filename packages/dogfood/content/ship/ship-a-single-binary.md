@@ -57,7 +57,7 @@ Run with no command, it serves the app and opens the shell on it: `call`, `handl
 `--help` prints its usage under its own name.
 
 The shell, `run`, `call`, `openapi`, `mcp` and `logs` are `abide`'s. A script `run` imports
-`abide/server` and the app's handlers from the executable, so it needs no `node_modules`
+`@abide/abide/server` and the app's handlers from the executable, so it needs no `node_modules`
 beside it. What needs the source — `dev`, `build`, `check` — is not listed, and answers with
 the `abide` command to run where the source is.
 

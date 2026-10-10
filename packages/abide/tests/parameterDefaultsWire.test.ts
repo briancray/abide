@@ -7,7 +7,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const PAGES = `import { GET } from 'abide/server'
+const PAGES = `import { GET } from '@abide/abide/server'
 
 let runs = 0
 
@@ -21,7 +21,7 @@ export const list = GET(async ({ page = 1 }: { page?: number }) => {
 
 // One page leaves the member to the default and the other writes it.
 const pageCalling = (args: string): string => `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { list } from '#server/rpc/pages.ts'
 
 const shown = reactive(() => list(${args}))

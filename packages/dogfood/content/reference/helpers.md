@@ -117,7 +117,7 @@ the same thing; `navigate` is for the case where the decision is made in code.
 | --- | --- | --- |
 | `reachable` | `(host: string) => Promise<boolean>` | Whether a host answers at all. |
 
-It is a server name, imported from `abide/server`, and it asks with one `HEAD`. Any answer counts
+It is a server name, imported from `@abide/abide/server`, and it asks with one `HEAD`. Any answer counts
 — a 404 came from the host — so `false` means the request was refused, never resolved, or went 5
 seconds unanswered. The answer is held for 60 seconds per host in one cache the whole process
 shares, which is the point: while a host is down, every call queued behind it refuses at once

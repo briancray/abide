@@ -3,7 +3,7 @@ import {
     assistant,
     POST,
     type Provider,
-} from 'abide/server'
+} from '@abide/abide/server'
 
 const TOOL = 'assistantToolsInvoices_invoiceStatus'
 

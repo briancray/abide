@@ -10,8 +10,8 @@ import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'
 
-const SESSION = `import { cookies as jar, principal, reactive } from 'abide'
-import { csp, GET, request } from 'abide/server'
+const SESSION = `import { cookies as jar, principal, reactive } from '@abide/abide'
+import { csp, GET, request } from '@abide/abide/server'
 
 export const who = reactive(() => principal, { global: true })
 export const crumbs = reactive(() => jar(), { global: true })
@@ -22,7 +22,7 @@ export const viewer = GET(() => principal.authenticated, { global: true })
 `
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const route = { x: 1 }
 const mine = reactive(() => route.x, { global: true })

@@ -1,4 +1,4 @@
-import { GET, notFound } from 'abide/server'
+import { GET, notFound } from '@abide/abide/server'
 import { readInvoiceDatabase } from '#server/readInvoiceDatabase'
 
 export const getInvoice = GET(

@@ -23,8 +23,8 @@ const SAME_NAMES = {
     }),
     'ui/app.html': `<!doctype html><html><head></head><body></body></html>`,
     'ui/pages/page.abide': `<script>\nimport Row from '#ui/a/Row.abide'\n</script>\n\n<main><Row label="one"/></main>`,
-    'ui/a/Row.abide': `<script>\nimport { reactive } from 'abide'\n\nlet n = reactive(0)\n</script>\n\n<button onclick={() => { n = n + 1 }}>{n}</button>`,
-    'ui/b/Row.abide': `<script>\nimport { reactive } from 'abide'\n\nlet n = reactive(0)\n</script>\n\n<button onclick={() => { n = n + 1 }}>{n}</button>`,
+    'ui/a/Row.abide': `<script>\nimport { reactive } from '@abide/abide'\n\nlet n = reactive(0)\n</script>\n\n<button onclick={() => { n = n + 1 }}>{n}</button>`,
+    'ui/b/Row.abide': `<script>\nimport { reactive } from '@abide/abide'\n\nlet n = reactive(0)\n</script>\n\n<button onclick={() => { n = n + 1 }}>{n}</button>`,
 }
 
 test('two components with one file name are told apart by path — 32.17', async () => {

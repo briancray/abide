@@ -119,7 +119,7 @@ rather than stored and checked later:
 
 ```abide #ui/pages/account/page.abide — excerpt
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { z } from 'zod'
 
 const email = reactive<string>(undefined, { schema: z.string().email() })
@@ -154,7 +154,7 @@ arrives carrying data you chose. `refuse.named` declares it once and resolves on
 the same name serves a form field and a handler.
 
 ```ts #shared/failures.ts
-import { refuse } from 'abide'
+import { refuse } from '@abide/abide'
 import { z } from 'zod'
 
 export const notAnEmail = refuse.named('NotAnEmail', 422, undefined, {
@@ -164,7 +164,7 @@ export const notAnEmail = refuse.named('NotAnEmail', 422, undefined, {
 
 ```abide #ui/pages/account/page.abide — excerpt
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { notAnEmail } from '#shared/failures'
 
 const email = reactive(undefined, {
@@ -199,7 +199,7 @@ child declares the prop as the type of its value and writes it by name:
 
 ```abide #ui/components/Stepper.abide
 <script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { count } = props<{ count: number }>()
 </script>

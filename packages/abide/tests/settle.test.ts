@@ -9,7 +9,7 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { closeTyped, serverOf } from './typed.ts'
 
-const HANDLERS = `import { GET } from 'abide/server'
+const HANDLERS = `import { GET } from '@abide/abide/server'
 
 let setups = 0
 
@@ -31,7 +31,7 @@ export const getSlow = GET(async () => {
 const LAYOUT = `<main><slot/></main>`
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { getInvoice, getSlow } from '#server/rpc/invoices.ts'
 
 const invoice = reactive(() => getInvoice({ id: '4021' }))
@@ -74,7 +74,7 @@ test('a value that answers within the turn is painted, and one that waits is a h
 // `second`'s body — `overlapped` reads false where true is due.
 test('a render starts every asynchronous read before any answers — 41.2', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const seen = ((globalThis as { overlap?: { firstDone: boolean; overlapped: boolean } }).overlap ??= {
     firstDone: false,

@@ -60,7 +60,7 @@ afterAll(async () => {
 })
 
 const HOME = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 </script>
@@ -70,7 +70,7 @@ let count = reactive(0)
 <a id="to-invoice" href="/invoices/42">invoice 42</a></main>`
 
 const INVOICE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive(['one', 'two'])
 </script>
@@ -407,7 +407,7 @@ test("a watch the page's setup opened stops when a navigation replaces the page 
     const mounts = await pages(
         undefined,
         `<script>
-import { route, watch } from 'abide'
+import { route, watch } from '@abide/abide'
 
 const instances = ((globalThis as { instances?: { runs: number; disposed: number }[] }).instances ??= [])
 const counts = { runs: 0, disposed: 0 }
@@ -733,7 +733,7 @@ test("a navigated page's head follows a value that lands after the mount — 39.
     const mounts = await pages()
     const source = `<head><title>Invoice {number}</title></head>
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const number = reactive(new Promise<string>((resolve) => {
     ;(globalThis as { landNumber?: (value: string) => void }).landNumber = resolve
@@ -783,7 +783,7 @@ test("a navigated page's live head is applied before its body builds — 39.6, 3
     const mounts = await pages()
     const source = `<head><title>Early {number}</title></head>
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const number = reactive(1)
 </script>
@@ -923,7 +923,7 @@ test('a superseded navigation does not mount over the one that replaced it', asy
 // page, and the one part of it a string assertion cannot see: the header keeps its scroll, an
 // open menu stays open, and a component mid-load is still mid-load.
 const CHROME = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let opened = reactive(0)
 </script>
@@ -986,21 +986,21 @@ test("a page under a layout reads the layout's share, hydrated and navigated to 
     history.replaceState(null, '', '/')
     const sources = {
         Themed: `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let theme = reactive.share('theme', () => reactive('dark'))
 </script>
 
 <div id="themed"><button id="lighten" onclick={() => { theme = 'light' }}>{theme}</button><slot/></div>`,
         First: `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const theme = reactive.share('theme', () => reactive('page-own'))
 </script>
 
 <p id="first">{theme}</p>`,
         Second: `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const theme = reactive.share('theme', () => reactive('page-own'))
 </script>
@@ -1135,7 +1135,7 @@ test('a page hydrates inside the layout the server painted — 35.1', async () =
 test('a layout reads what its page set up, hydrating without a mismatch — 41.23', async () => {
     history.replaceState(null, '', '/')
     const files: Record<string, string> = {
-        'crumbs.ts': `import { reactive } from 'abide'\n\nexport const crumbs = reactive<string[]>([])\n`,
+        'crumbs.ts': `import { reactive } from '@abide/abide'\n\nexport const crumbs = reactive<string[]>([])\n`,
     }
     const sources = {
         Crumbed: `<script>
@@ -1495,7 +1495,7 @@ test('a routed link with a fragment scrolls to its element, remounting nothing i
 // navigation, a layout is not mounted again, so whatever its props and its `<slot/>` read has to
 // be read at the moment it is used rather than captured when the layout first mounted.
 const USERS = `<script>
-import { props, reactive } from 'abide'
+import { props, reactive } from '@abide/abide'
 
 const { params } = props<{ params: { id: string } }>()
 let open = reactive(true)
@@ -1504,7 +1504,7 @@ let open = reactive(true)
 <div id="users"><h2 id="who">user {params.id}</h2><button id="fold" onclick={() => { open = !open }}>fold</button>{#if open}<slot/>{/if}</div>`
 
 const PROFILE = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { params } = props<{ params: { id: string } }>()
 </script>
@@ -1512,7 +1512,7 @@ const { params } = props<{ params: { id: string } }>()
 <main id="profile">profile {params.id}</main>`
 
 const EDIT = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let saved = reactive(0)
 </script>
@@ -1801,13 +1801,13 @@ test("a page's setup watch stops with its level when its layout's slot never ope
     counted.innerDisposed = 0
     const sources = {
         Shut: `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const open = reactive(false)
 </script>
 <div id="shut">{#if open}<slot/>{/if}</div>`,
         Inner: `<script>
-import { watch } from 'abide'
+import { watch } from '@abide/abide'
 import { tick } from './tick.ts'
 
 watch(() => {
@@ -1821,7 +1821,7 @@ watch(() => {
 <main id="inner">inner</main>`,
     }
     const files: Record<string, string> = {
-        'tick.ts': `import { reactive } from 'abide'\n\nexport const tick = reactive(0)\n`,
+        'tick.ts': `import { reactive } from '@abide/abide'\n\nexport const tick = reactive(0)\n`,
     }
     for (const [name, source] of Object.entries(sources)) {
         const file = parseAbide(source)

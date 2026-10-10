@@ -1,5 +1,5 @@
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { getInvoice } from '#server/rpc/schemaKeyInvoices'
 
 const SPELLINGS = ['ABC-123', 'abc-123']

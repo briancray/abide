@@ -1,5 +1,5 @@
 <script>
-import { principal, reactive } from 'abide'
+import { principal, reactive } from '@abide/abide'
 import { signIn, signOut } from '#server/rpc/principalSessionSession'
 
 let email = reactive('ada@example.com')

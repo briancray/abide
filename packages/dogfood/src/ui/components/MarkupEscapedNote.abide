@@ -1,5 +1,5 @@
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let note = reactive('Chased <b>twice</b> — no answer')
 </script>

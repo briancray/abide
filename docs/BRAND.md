@@ -283,7 +283,7 @@ three pages later.
   the concerns are compiled away, and what is left in the file is the thing the author meant.
   Every page should leave a reader with fewer moving parts than they arrived with.
 * **Transparent, never magic.** Weightless is not opaque, and that distinction is the product.
-  Every name is imported — `import { reactive, route } from 'abide'` — no type is invented,
+  Every name is imported — `import { reactive, route } from '@abide/abide'` — no type is invented,
   and the compiled output is readable. Say what it removed, never that it handled it.
 * **Name the noun, then the property that makes it worth having.** "Refusals that carry
   typed data" beats "saying no in a way the caller can use". A euphemism is longer than the

@@ -1,4 +1,4 @@
-import { log, onStart } from 'abide/server'
+import { log, onStart } from '@abide/abide/server'
 
 onStart(async (start) => {
     await start()

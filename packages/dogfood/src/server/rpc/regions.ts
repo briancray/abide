@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 
 type Region = { id: string; name: string; orders: number }
 

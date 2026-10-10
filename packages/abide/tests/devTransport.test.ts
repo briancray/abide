@@ -7,7 +7,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { addressOf, BIN, lastLinePrinted } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, POST, reactive } from 'abide/server'
+const HANDLERS = `import { GET, POST, reactive } from '@abide/abide/server'
 
 const shelf = reactive<string[]>(['dune'], { global: true })
 
@@ -127,7 +127,7 @@ test('an upgrade some other address answers 204 opens nothing under abide dev â€
 test('a rung answering 204 opens no mux where the app carries nothing under abide dev â€” 37.3', async () => {
     const bare = temporaryModule({
         'ui/pages/page.abide': '<main>home</main>',
-        'server/app.ts': `import { middleware } from 'abide/server'
+        'server/app.ts': `import { middleware } from '@abide/abide/server'
 
 middleware(async (next, { request }) =>
     request.headers.get('upgrade') === 'websocket' ? new Response(null, { status: 204 }) : next(),

@@ -21,7 +21,7 @@ those seconds each wait their own.
 | `await reachable('api.example.com')` | whether the host answered, asked over https |
 | `await reachable('http://billing.internal:8080')` | the same, of an origin asked as written |
 
-There is one form and no options. It is a server name, imported from `abide/server`, and its
+There is one form and no options. It is a server name, imported from `@abide/abide/server`, and its
 signature is in the [Helpers](../reference/helpers.md) reference.
 
 ## `reachable` goes ahead of the call

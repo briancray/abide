@@ -1,4 +1,4 @@
-import { GET, jsonl } from 'abide/server'
+import { GET, jsonl } from '@abide/abide/server'
 import { jsonlExportDatabase } from '#server/jsonlExportDatabase'
 
 export const salesForWarehouse = GET(

@@ -46,7 +46,7 @@ const RUNS = 5
 // what a keyed reconcile has to carry is the row's own scope, and a row with nothing reactive in
 // it has none.
 const PAGE_SOURCE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const rows = reactive(
     Array.from({ length: ${ROWS} }, (_, at) => ({ id: at, label: 'row ' + at })),

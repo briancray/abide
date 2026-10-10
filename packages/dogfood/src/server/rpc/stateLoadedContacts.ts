@@ -1,5 +1,5 @@
-import { refuse } from 'abide'
-import { GET } from 'abide/server'
+import { refuse } from '@abide/abide'
+import { GET } from '@abide/abide/server'
 
 const CONTACTS: Record<string, { name: string; role: string }> = {
     '42': { name: 'Ada Lovelace', role: 'Engineer' },

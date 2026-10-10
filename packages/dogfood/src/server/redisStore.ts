@@ -6,7 +6,7 @@
 // the example teaches, so the keyed map below stands in for the client, and the
 // address is real even where the server is not.
 
-import type { Store } from 'abide'
+import type { Store } from '@abide/abide'
 
 const AT_ADDRESS = new Map<string, unknown>()
 

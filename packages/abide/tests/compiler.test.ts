@@ -113,12 +113,12 @@ test('an unsafe url scheme is dropped and a relative reference is kept', async (
 })
 
 // The client bundle is the point of this stage: a static page ships no runtime. THE REVERT: emit
-// an unconditional `import 'abide/runtime'` in `emitComponent`; this test then reports 1 runtime
+// an unconditional `import '@abide/abide/runtime'` in `emitComponent`; this test then reports 1 runtime
 // import where 0 is due, and the byte count of the runtime lands on every static page.
 test('a static page emits no client runtime import', async () => {
     const emitted = await serverOf(PAGE)
-    expect(emitted).not.toContain('abide/runtime')
-    expect(emitted).toContain("from 'abide/server'")
+    expect(emitted).not.toContain('@abide/abide/runtime')
+    expect(emitted).toContain("from '@abide/abide/server'")
     // And a page with no slot at all imports nothing: an emitted module carrying an import
     // nothing calls is a name an app's own tooling reports as unused, in a file nobody wrote.
     expect(await serverOf('<h1>static</h1>')).not.toContain('import')
@@ -900,7 +900,7 @@ async function renderPage(source: string): Promise<string> {
 // `ReferenceError: Can't find variable: raw` and no document at all. That is what 32.2's one
 // spelling did before any of this.
 const RAW_PAGE = `<script>
-import { raw } from 'abide'
+import { raw } from '@abide/abide'
 
 const snippet = '<b>bold</b>'
 const branded = raw(snippet)

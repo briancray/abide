@@ -3,7 +3,7 @@
 // escapes by hand as the compiled page must (32.1). The `no escaping` row is the arm that does
 // not, and it is not the same work — `benchRender.ts` says what an arm like it once claimed.
 
-import { escapeText, reactive } from 'abide'
+import { escapeText, reactive } from '@abide/abide'
 import { batch, emulatedDom, type Sample } from 'harness/report'
 import { cards, vanillaMarkup } from './renderCases.ts'
 

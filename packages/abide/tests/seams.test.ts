@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from 'bun:test'
-import { emitClient, parseAbide } from 'abide/compiler'
+import { emitClient, parseAbide } from '@abide/abide/compiler'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 afterAll(removeTemporaryModules)
@@ -27,13 +27,13 @@ test('every seam entry resolves', async () => {
 // grows from 36,929 to 42,170 minified bytes — 12.4% of a page with one text slot.
 test('a client entry declaring no schema does not carry the validator', async () => {
     const dir = temporaryModule({
-        'bare.ts': `import { reactive, watch } from 'abide'
+        'bare.ts': `import { reactive, watch } from '@abide/abide'
 const count = reactive(0)
 watch(() => {
     ;(globalThis as { seen?: number }).seen = count()
 })
 `,
-        'declared.ts': `import { jsonSchema, reactive } from 'abide'
+        'declared.ts': `import { jsonSchema, reactive } from '@abide/abide'
 const count = reactive(0, { schema: jsonSchema({ type: 'number' }) })
 ;(globalThis as { seen?: number }).seen = count()
 `,

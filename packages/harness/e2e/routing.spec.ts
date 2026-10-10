@@ -70,7 +70,7 @@ test.beforeAll(async ({}, testInfo) => {
     )
     writeFileSync(
         `${APP}/ui/pages/page.abide`,
-        `<script>\nimport { reactive } from 'abide'\n\nlet count = reactive(0)\n</script>\n${HOME}`,
+        `<script>\nimport { reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n${HOME}`,
     )
     writeFileSync(
         `${APP}/ui/pages/about/page.abide`,
@@ -129,7 +129,7 @@ test.beforeAll(async ({}, testInfo) => {
             'bun',
             [
                 '-e',
-                `import { render } from 'abide/server'
+                `import { render } from '@abide/abide/server'
 const painted = {}
 for (const page of ['page', 'plain/page']) {
     const { default: C } = await import(${JSON.stringify(`${APP}/.abide/ui/pages/`)} + page + '.ts')

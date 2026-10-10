@@ -23,7 +23,7 @@ const click = (selector: string): void => {
 // by a browser, and the node never reached anything.
 test('a callback is handed the node, and the server writes no attribute — 32.9', async () => {
     const { html } = await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let tag = reactive('')
 </script>
@@ -38,7 +38,7 @@ let tag = reactive('')
 
 test('a Reactive takes the node — 32.9', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let field = reactive<HTMLInputElement>()
 let note = reactive('')
@@ -58,7 +58,7 @@ let note = reactive('')
 test('the disposer runs when the region holding the node leaves — 32.9', async () => {
     ;(globalThis as { __TORN__?: number }).__TORN__ = 0
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(true)
 </script>
@@ -83,7 +83,7 @@ test('a disposer handing back a thenable holds the element until it settles — 
     ;(globalThis as { __EXIT__?: () => Promise<void> }).__EXIT__ = () =>
         new Promise<void>((done) => exits.push(done))
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(true)
 let rows = reactive([1, 2, 3])

@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 
 /** What this caller may do with the record, which only the server knows. */
 export const getViewer = GET(

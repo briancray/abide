@@ -3,10 +3,10 @@ import { splitImports } from '#compiler/splitImports.ts'
 
 test('imports hoist and a dynamic import stays', () => {
     const r = splitImports(
-        "import { reactive } from 'abide'\nimport type { X } from './x.ts'\nconst a = 1\nconst m = import('./late.ts')\n",
+        "import { reactive } from '@abide/abide'\nimport type { X } from './x.ts'\nconst a = 1\nconst m = import('./late.ts')\n",
     )
     expect(r.imports).toBe(
-        "import { reactive } from 'abide'\nimport type { X } from './x.ts'\n",
+        "import { reactive } from '@abide/abide'\nimport type { X } from './x.ts'\n",
     )
     // The `;` each import leaves behind is the statement separator it WAS — see the ASI gate
     // below, which is the whole reason it is there.

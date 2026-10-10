@@ -1,4 +1,4 @@
-import { GET, page, render } from 'abide/server'
+import { GET, page, render } from '@abide/abide/server'
 import { renderPreviewDatabase } from '#server/renderPreviewDatabase'
 import Document from '#ui/components/RenderPreviewDocument.abide'
 

@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 
 /** The same person on every call, so a refill changes no field. */
 export const getPerson = GET(

@@ -14,7 +14,7 @@
 // a trigger on the server reaches the copy for these args, and a `global` value's changes arrive as
 // values the copy takes (18.10).
 //
-// An entry of its own (`abide/wire`) rather than a name on the runtime barrel: only a generated
+// An entry of its own (`@abide/abide/wire`) rather than a name on the runtime barrel: only a generated
 // wrapper imports it, and a page with no handler pays nothing for it.
 
 import { answered, answerOf } from '#shared/answerOf.ts'

@@ -9,19 +9,19 @@ import {
     onPrincipal,
     onStart,
     onStop,
-} from 'abide/server'
+} from '@abide/abide/server'
 import { errorReportTracker } from '#server/errorReportTracker'
 import { principalResolveDatabase } from '#server/principalResolveDatabase'
 import { startHookDatabase } from '#server/startHookDatabase'
 
-declare module 'abide/server' {
+declare module '@abide/abide/server' {
     interface Config {
         INVOICE_PREFIX: string
         RETRIES: number
     }
 }
 
-declare module 'abide' {
+declare module '@abide/abide' {
     interface Health {
         database: string
     }

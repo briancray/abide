@@ -61,14 +61,14 @@ async function authored(
 
 const COMMENT_LINE = /^\s*(\/\/|\*|\/\*)/
 
-// CLAUDE.md, "seams and imports": `abide` / `abide/runtime` / `abide/server` are what an APP
+// CLAUDE.md, "seams and imports": `@abide/abide` / `@abide/abide/runtime` / `@abide/abide/server` are what an APP
 // resolves through, and a file inside this package reaching for one is asking a curated barrel for
 // a name it could have taken from the module. It also builds a cycle the bundler has to break.
 // THREE SPELLINGS reach a specifier — `from '…'`, `import('…')` and the bare side-effect
 // `import '…'` — and the last two were not read until the third was the only one checked.
-// THE REVERT: an `await import('abide/server')` in any src file is named here.
+// THE REVERT: an `await import('@abide/abide/server')` in any src file is named here.
 const SELF_IMPORT =
-    /(?:\bfrom\s*|\bimport\s*\(\s*|^\s*import\s+)'(abide(?:\/[\w-]+)?)'/gm
+    /(?:\bfrom\s*|\bimport\s*\(\s*|^\s*import\s+)'(@abide\/abide(?:\/[\w-]+)?)'/gm
 
 test('framework code imports by seam, never through its own public specifier', async () => {
     const offenders: string[] = []

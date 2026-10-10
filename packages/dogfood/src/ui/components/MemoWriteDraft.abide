@@ -1,5 +1,5 @@
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { getPerson } from '#server/rpc/people'
 
 const person = reactive(() => getPerson({ id: '42' }))

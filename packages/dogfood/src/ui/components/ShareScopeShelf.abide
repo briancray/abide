@@ -1,5 +1,5 @@
 <script>
-import { props, reactive } from 'abide'
+import { props, reactive } from '@abide/abide'
 import QueueControl from '#ui/components/QueueControl.abide'
 
 type Props = { name: string }

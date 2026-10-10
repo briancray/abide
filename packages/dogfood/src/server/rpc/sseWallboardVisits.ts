@@ -1,4 +1,4 @@
-import { GET, sse } from 'abide/server'
+import { GET, sse } from '@abide/abide/server'
 import { sseWallboardDatabase } from '#server/sseWallboardDatabase'
 
 export const visits = GET(() => sse(sseWallboardDatabase.visits.latest()), {

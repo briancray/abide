@@ -1,5 +1,5 @@
 <script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 type Invoice = {
     number: string

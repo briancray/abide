@@ -7,7 +7,7 @@ import { trace } from '#server/trace.ts'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const APP = `import { middleware } from 'abide/server'
+const APP = `import { middleware } from '@abide/abide/server'
 
 middleware(async (next) => {
     await Bun.sleep(50)
@@ -15,8 +15,8 @@ middleware(async (next) => {
 })
 `
 
-const HANDLERS = `import { reactive } from 'abide'
-import { GET, trace } from 'abide/server'
+const HANDLERS = `import { reactive } from '@abide/abide'
+import { GET, trace } from '@abide/abide/server'
 
 export const held = GET(
     reactive(

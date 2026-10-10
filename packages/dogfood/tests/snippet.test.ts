@@ -8,7 +8,7 @@ import { readExample } from '../scripts/renderExample.ts'
 import { ELISION, slice } from '../scripts/renderSnippet.ts'
 
 const SOURCE = `<script>
-import { state } from 'abide'
+import { state } from '@abide/abide'
 
 const count = state(0)
 const handle = state('', { transform: (v) => v.trim() })

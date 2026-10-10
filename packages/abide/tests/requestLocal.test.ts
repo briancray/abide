@@ -23,7 +23,7 @@ let base = ''
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'ui/pages/page.abide': PAGE,
-        'ui/visits.ts': `import { reactive } from 'abide'\n\nexport const visits = reactive(0)\n`,
+        'ui/visits.ts': `import { reactive } from '@abide/abide'\n\nexport const visits = reactive(0)\n`,
     }))
 }, 30_000)
 

@@ -17,7 +17,7 @@ afterAll(closeTyped)
 afterAll(removeTemporaryModules)
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(false)
 let name = reactive('ada')
@@ -128,7 +128,7 @@ test('the arm a swap replaced stops waking', async () => {
 // hold. Nothing counts regions now — each is taken where the walk stands (`regionHere`) — so this
 // holds the case that broke numbering rather than a number: both regions found, both live.
 const SPREAD = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(true)
 let name = reactive('ada')

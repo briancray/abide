@@ -10,7 +10,7 @@ afterAll(closeTyped)
 afterAll(removeTemporaryModules)
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let name = reactive('ada')
 let age = reactive(36)
@@ -98,7 +98,7 @@ test('bind:group holds the radio chosen, or the boxes checked — 32.8', async (
 })
 
 const SPREAD = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let attrs = reactive<Record<string, unknown>>({ title: 'first', 'data-kind': 'card', hidden: false, id: 'ignored' })
 </script>
@@ -125,7 +125,7 @@ test('a spread writes attributes, and keeps them in step with the value — 32.1
 })
 
 const SPREAD_LISTENERS = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const heard = (globalThis as unknown as { heard: string[] }).heard
 let attrs = reactive<Record<string, unknown>>({ onClick: () => heard.push('first'), onfocus: 'text' })

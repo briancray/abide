@@ -372,7 +372,7 @@ export function withoutProps(imports: string): string {
     if (!imports.includes('props')) return imports
     return imports
         .replace(
-            /^import \{([^}]*)\} from ('abide'|"abide")\s*;?$/gm,
+            /^import \{([^}]*)\} from ('@abide\/abide'|"@abide\/abide")\s*;?$/gm,
             (_statement, clause: string, specifier: string) => {
                 const kept: string[] = []
                 for (const name of clause.split(','))

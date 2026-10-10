@@ -18,7 +18,7 @@ afterAll(removeTemporaryModules)
 
 // The docs' own example (`examples/try-region`), with the rate's starting value a parameter.
 const pageWith = (rate: string) => `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rate = reactive('${rate}')
 
@@ -379,7 +379,7 @@ test('a server-painted body is adopted, or replaced where its component throws i
 
 // A component that throws as it is set up while its `ok` prop is false.
 const GATED = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { ok } = props<{ ok: boolean }>()
 if (!ok) throw new Error('child failed')
@@ -389,7 +389,7 @@ if (!ok) throw new Error('child failed')
 // A page whose button fixes what the component reads, starting from what `childSucceeds` says —
 // on the server and again in the browser, so the two can disagree.
 const gatedPage = (invoked: string, imported: string) => `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import ${imported} from './${imported}.abide'
 
 let ok = reactive(Boolean((globalThis as { childSucceeds?: boolean }).childSucceeds))
@@ -410,7 +410,7 @@ const GATED_PAGES: [string, string, Record<string, string>, number][] = [
         {
             Child: GATED,
             Middle: `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 import Child from './Child.abide'
 
 const { ok } = props<{ ok: boolean }>()

@@ -18,8 +18,8 @@ framework itself is not written yet. `docs/REGISTRY.md` is the surface being bui
     packages/dogfood    the documentation app, and the app abide is dogfooded on
 
 `abide` is split by seam — `#shared`, `#ui`, `#server` — and those seams are what
-framework-internal code imports through. An app resolves `abide`, `abide/runtime` and
-`abide/server` instead.
+framework-internal code imports through. An app resolves `@abide/abide`, `@abide/abide/runtime` and
+`@abide/abide/server` instead.
 
 `harness` is split by DEPENDENCY, and that is why it is a package rather than a folder:
 `harness/measure` has no abide in its graph at all, which is what lets the hand-written arm

@@ -17,7 +17,7 @@
 // THE LITERAL, NOT THE ADDRESS: `route.name()` is the route an item's `href` is spelled in, where
 // `route.url()` is where the app is served — below a mount, `/docs/values` for `/values` — and the
 // link is written through `url` for the same reason (16.10).
-import { raw, route, url } from 'abide'
+import { raw, route, url } from '@abide/abide'
 //
 // `-ml-2` IS NOT SPACING: it pulls the link's own padding back off the rail so the TEXT lines up
 // with the section name above it, hover surface and all. A stub's link recedes further than the

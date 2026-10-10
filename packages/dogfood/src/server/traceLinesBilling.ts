@@ -1,4 +1,4 @@
-import { log } from 'abide/server'
+import { log } from '@abide/abide/server'
 
 /** Another module the sync reaches, handed the contact and nothing else. */
 export const traceLinesBilling = {

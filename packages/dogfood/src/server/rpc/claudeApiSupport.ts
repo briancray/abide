@@ -4,7 +4,7 @@ import {
     claudeApi,
     POST,
     request,
-} from 'abide/server'
+} from '@abide/abide/server'
 import { messages as standIn } from '#server/rpc/claudeApiModel/v1'
 
 export const ask = POST(

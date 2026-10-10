@@ -21,7 +21,7 @@ import {
     emitComponent,
     parseAbide,
     TypeSession,
-} from 'abide/compiler'
+} from '@abide/abide/compiler'
 import { codeLinesOf, countLines } from './countLines.ts'
 import { abideSourcesOf, DOGFOOD } from './exampleSources.ts'
 

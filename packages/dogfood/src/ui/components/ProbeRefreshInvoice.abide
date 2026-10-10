@@ -1,5 +1,5 @@
 <script>
-import { reactive, refresh } from 'abide'
+import { reactive, refresh } from '@abide/abide'
 import { getInvoice } from '#server/rpc/probeRefreshInvoices'
 
 const invoice = reactive(() => getInvoice({ id: '4021' }))

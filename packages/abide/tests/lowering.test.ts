@@ -282,7 +282,7 @@ test('a binding shadows the page value for the body it is bound in — 31.3', as
 // handed a string where it walks a source's readers.
 test('a position declared as a Reactive holds the Reactive — 31.3', async () => {
     const NM = new Set(['n', 'm'])
-    const watching = "import { watch } from 'abide'\n"
+    const watching = "import { watch } from '@abide/abide'\n"
     expect(await lower(`${watching}watch([n], () => {})`, NM)).toBe(
         `${watching}watch([n], () => {})`,
     )
@@ -292,15 +292,15 @@ test('a position declared as a Reactive holds the Reactive — 31.3', async () =
     expect(await lower(`${watching}watch(n, () => {})`, NM)).toBe(
         `${watching}watch(n, () => {})`,
     )
-    expect(await lower("const r: import('abide').Reactive<any> = n", NM)).toBe(
-        "const r: import('abide').Reactive<any> = n",
+    expect(await lower("const r: import('@abide/abide').Reactive<any> = n", NM)).toBe(
+        "const r: import('@abide/abide').Reactive<any> = n",
     )
     expect(
         await lower(
-            "function f(): import('abide').Reactive<any> { return n }",
+            "function f(): import('@abide/abide').Reactive<any> { return n }",
             NM,
         ),
-    ).toBe("function f(): import('abide').Reactive<any> { return n }")
+    ).toBe("function f(): import('@abide/abide').Reactive<any> { return n }")
     expect(await lower('structuredClone(n)', NM)).toBe('structuredClone(n())')
     expect(await lower('m.set(n)', NM)).toBe('m.set(n())')
     expect(await lower('const r: number = n', NM)).toBe('const r: number = n()')
@@ -311,7 +311,7 @@ test('a position declared as a Reactive holds the Reactive — 31.3', async () =
 // THE REVERT: drop the `isSelection` call in `isReactiveType`; all four lower to a read, and `refresh(n())` hands `refresh` the number.
 test('a position typed as a Selection holds the Reactive — 31.14', async () => {
     const NM = new Set(['n', 'm'])
-    const free = "import { busy, invalidate, ready, refresh } from 'abide'\n"
+    const free = "import { busy, invalidate, ready, refresh } from '@abide/abide'\n"
     for (const call of ['refresh(n)', 'invalidate(n)', 'busy(n)', 'ready(n)'])
         expect(await lower(`${free}${call}`, NM)).toBe(`${free}${call}`)
     // Beside a plain value's parameter, the same name still reads.
@@ -340,7 +340,7 @@ test('an imported Reactive is read and written by name — 31.1', async () => {
     expect(await lower(`${named}onboarding.set({ text: 'hi' })`)).toBe(
         `${named}onboarding.set({ text: 'hi' })`,
     )
-    const watching = `${named}import { watch } from 'abide'\n`
+    const watching = `${named}import { watch } from '@abide/abide'\n`
     expect(await lower(`${watching}watch([onboarding], () => {})`)).toBe(
         `${watching}watch([onboarding], () => {})`,
     )

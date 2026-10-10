@@ -15,8 +15,8 @@ import {
     emitComponent,
     parseAbide,
     TypeSession,
-} from 'abide/compiler'
-import { render } from 'abide/server'
+} from '@abide/abide/compiler'
+import { render } from '@abide/abide/server'
 import { componentImports } from '../../abide/src/server/componentImports.ts'
 import { inScope } from '../../abide/src/server/requestScope.ts'
 import { browserCookies, COOKIES } from '../../abide/src/shared/cookies.ts'
@@ -177,7 +177,7 @@ test('every example renders on the server and mounts on the client', async () =>
                 const { default: mount } = await import(
                     `${dir}/${stem}.client.ts`
                 )
-                // A BROWSER'S COOKIES ON THE CLIENT HALF. Importing `abide/server` pointed the slot
+                // A BROWSER'S COOKIES ON THE CLIENT HALF. Importing `@abide/abide/server` pointed the slot
                 // at the request scope, which a browser never does, so a mount reading `cookies()`
                 // would refuse as if it ran outside a request.
                 COOKIES.current = browserCookies

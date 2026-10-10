@@ -15,7 +15,7 @@ as a layout is, so a section can answer for its own failures and the app answers
 
 ```abide #ui/pages/error.abide — excerpt
 <script>
-import { notFound, props } from 'abide'
+import { notFound, props } from '@abide/abide'
 
 const { failure } = props<{ failure: Failed }>()
 </script>

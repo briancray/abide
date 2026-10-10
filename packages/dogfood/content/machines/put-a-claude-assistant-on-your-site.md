@@ -57,7 +57,7 @@ import {
     claudeApi,
     config,
     POST,
-} from 'abide/server'
+} from '@abide/abide/server'
 import { onlyStaff } from '#server/onlyStaff'
 
 export const ask = POST(
@@ -163,7 +163,7 @@ the moment the visitor's bridge connects.
 The card above reads it as `pairing`, which holds every status the stream has sent, and the last
 is the one that stands.
 
-The command reads `bunx abide-bridge@<version> <your site> <code>`. The code pairs once, with this
+The command reads `bunx @abide/bridge@<version> <your site> <code>`. The code pairs once, with this
 browser, and expires unused after ten minutes; `claudeCode.bridgeCommand()` mints one on its own
 where a page wants the line alone. Asking with nothing paired refuses 409.
 

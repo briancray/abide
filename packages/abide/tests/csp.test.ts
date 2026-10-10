@@ -6,7 +6,7 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { getTotal } from '#server/rpc/totals.ts'
 
 const total = reactive(() => getTotal())
@@ -14,9 +14,9 @@ const total = reactive(() => getTotal())
 
 <main><p id="total">{total()}</p></main>`
 
-// A PAGE THAT HYDRATES and writes the nonce, reading `csp` from `abide` as any page reads a name.
+// A PAGE THAT HYDRATES and writes the nonce, reading `csp` from `@abide/abide` as any page reads a name.
 const INLINE = `<script>
-import { csp, reactive } from 'abide'
+import { csp, reactive } from '@abide/abide'
 
 let count = reactive(0)
 </script>
@@ -34,8 +34,8 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'ui/pages/page.abide': PAGE,
         'ui/pages/inline/page.abide': INLINE,
-        'server/rpc/totals.ts': `import { GET } from 'abide/server'\n\nexport const getTotal = GET(() => 1240)\n`,
-        'server/app.ts': `import { csp, middleware } from 'abide/server'
+        'server/rpc/totals.ts': `import { GET } from '@abide/abide/server'\n\nexport const getTotal = GET(() => 1240)\n`,
+        'server/app.ts': `import { csp, middleware } from '@abide/abide/server'
 
 middleware(csp({ 'img-src': ['https:'], 'frame-ancestors': [], 'worker-src': ["'self'"] }))
 
@@ -115,10 +115,10 @@ test('csp.nonce is the nonce in the header, and a non-document carries no policy
     expect(json.headers.get('content-security-policy')).toBeNull()
 })
 
-// 29.3, 29.11 — `csp` IS ONE NAME ON BOTH SIDES. A page that hydrates imports it from `abide`, the
+// 29.3, 29.11 — `csp` IS ONE NAME ON BOTH SIDES. A page that hydrates imports it from `@abide/abide`, the
 // server writes the response's nonce into the page's own inline script, and the page's client module
-// builds — `csp` was once `abide/server`'s alone, so a page reading it could not be bundled for a
-// browser at all. THE REVERT: export `csp` from `abide/server` only; the page's `csp` import is
+// builds — `csp` was once `@abide/abide/server`'s alone, so a page reading it could not be bundled for a
+// browser at all. THE REVERT: export `csp` from `@abide/abide/server` only; the page's `csp` import is
 // unresolved and `abide build` fails before `serveApp` answers.
 test('a page that hydrates writes the nonce the header carries — 29.3, 29.11', async () => {
     const page = await Bun.fetch(`${base}/inline`)

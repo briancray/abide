@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 import { streamRowsDatabase } from '#server/streamRowsDatabase'
 
 export const salesByRegion = GET(

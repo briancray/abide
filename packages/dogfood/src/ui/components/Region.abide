@@ -1,5 +1,5 @@
 <script>
-import { props, reactive, refresh } from 'abide'
+import { props, reactive, refresh } from '@abide/abide'
 import { getOrders, getTotals } from '#server/rpc/cacheTagsMetrics'
 
 type Props = { region: string }

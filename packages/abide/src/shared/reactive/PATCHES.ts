@@ -3,7 +3,7 @@
  *
  * 32.33. `epoch` moves once per patch and `written` holds the epoch an object was last written at,
  * so a row made at epoch `e` is stale exactly where its item's entry is past `e`. A leaf, because
- * `reconcile` reads it from the `abide/runtime` barrel.
+ * `reconcile` reads it from the `@abide/abide/runtime` barrel.
  */
 export const PATCHES: { epoch: number; written: WeakMap<object, number> } = {
     epoch: 0,

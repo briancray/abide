@@ -15,7 +15,7 @@ examples:
 ---
 
 ```ts server
-import { createApp } from 'abide/server'
+import { createApp } from '@abide/abide/server'
 
 const app = await createApp()
 

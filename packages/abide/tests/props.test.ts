@@ -20,7 +20,7 @@ const session = await typedSession()
 afterAll(removeTemporaryModules)
 
 const TOTAL = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { amount, currency = 'USD' } = props<{ amount: number; currency?: string }>()
 </script>
@@ -28,7 +28,7 @@ const { amount, currency = 'USD' } = props<{ amount: number; currency?: string }
 <strong>{currency} {amount.toFixed(2)}</strong>`
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Total from './Total.abide'
 
 let lines = reactive(2)
@@ -87,7 +87,7 @@ test('a prop re-reads when the caller value moves, and nothing is rebuilt — 33
 test('a child setup in an arm does not wake the arm choice — 14.7', async () => {
     const { mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Total from './Total.abide'
 
 let show = reactive(false)
@@ -99,7 +99,7 @@ let count = reactive(0)
 <div>{#if show}<Total amount={count}/>{/if}</div>`,
         {
             Total: `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { amount } = props<{ amount: number }>()
 const first = amount * 2
@@ -142,7 +142,7 @@ import Total from './Total.abide'
 test('a default prop is answered where the caller passed undefined — 33.20', async () => {
     const { html, mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Total from './Total.abide'
 
 let chosen = reactive<string | undefined>(undefined)
@@ -175,7 +175,7 @@ import Tag from './Tag.abide'
 <Tag label="given"/><Tag/>`,
         {
             Tag: `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { label } = props<{ label?: string }>()
 </script>
@@ -198,7 +198,7 @@ const { label } = props<{ label?: string }>()
 test('a props rest element renders and re-reads each key live — 33.15', async () => {
     const { html, mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Note from './Note.abide'
 
 let note = reactive('first')
@@ -206,7 +206,7 @@ let note = reactive('first')
 <Note title="t" note={note}/><button onclick={() => { note = 'second' }}>next</button>`,
         {
             Note: `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { title, ...rest } = props<{ title: string; note: string; count?: number }>()
 </script>
@@ -240,7 +240,7 @@ import Card from './Card.abide'
 <Card data-kind="note"><b>inside</b></Card>`,
         {
             Card: `<script>
-import { type Attributes, props } from 'abide'
+import { type Attributes, props } from '@abide/abide'
 
 const { class: className = '', ...attributes } = props<Attributes<'section'>>()
 </script>
@@ -264,7 +264,7 @@ import List from './List.abide'
 <List items={['a', 'b']}/>`,
         {
             List: `<script lang="ts" generics="Item extends string">
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { items } = props<{ items: Item[] }>()
 </script>
@@ -284,7 +284,7 @@ const { items } = props<{ items: Item[] }>()
 test('a props rest element spreads its values onto an element and a component — 33.22', async () => {
     const { html, mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Outer from './Outer.abide'
 
 let note = reactive('first')
@@ -293,7 +293,7 @@ let clicks = reactive(0)
 <Outer title="t" data-note={note} aria-label="go" onclick={() => { clicks += 1; note = 'second' }}/><i>{clicks}</i>`,
         {
             Outer: `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 import Inner from './Inner.abide'
 
 const { title, ...rest } = props<{ title: string; 'data-note': string; 'aria-label': string; onclick: () => void }>()
@@ -301,7 +301,7 @@ const { title, ...rest } = props<{ title: string; 'data-note': string; 'aria-lab
 
 <button {...rest}>{title}</button><Inner {...rest}/>`,
             Inner: `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { 'data-note': note } = props<{ 'data-note': string }>()
 </script>
@@ -338,7 +338,7 @@ test('an invoked static component still gets a client module — 32.17', async (
     const source = temporaryModule({
         'Static.abide': '<strong>nothing moves here</strong>',
         'page.abide': `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Static from './Static.abide'
 
 let count = reactive(0)
@@ -371,7 +371,7 @@ let count = reactive(0)
 test('a static child fills the anchors of a row the browser grew — 32.17', async () => {
     const { mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Tag from './Tag.abide'
 
 let rows = reactive(['one'])
@@ -397,7 +397,7 @@ let rows = reactive(['one'])
 // COMPONENT INSTANCE and its descendants (10.5), which is why 10.7 refuses a process-wide one: a
 // map keyed by name would make the two shelves below one shelf.
 const NOW_PLAYING = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let playing = reactive.share('nowPlaying', () => reactive('nothing'))
 </script>
@@ -410,7 +410,7 @@ let playing = reactive.share('nowPlaying', () => reactive('nothing'))
 test('a key an ancestor holds is found on the way up — 10.5', async () => {
     const { html } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import NowPlaying from './NowPlaying.abide'
 
 reactive.share('nowPlaying', () => reactive('Kind of Blue'))
@@ -432,7 +432,7 @@ reactive.share('nowPlaying', () => reactive('Kind of Blue'))
 // scope exist — and the revert then has both shelves reading `jazz`.
 test('two instances each hold their own where no ancestor does — 10.6', async () => {
     const shelf = `<script>
-import { props, reactive } from 'abide'
+import { props, reactive } from '@abide/abide'
 
 const { name } = props<{ name: string }>()
 let queued = reactive.share('queued', () => reactive(name))
@@ -441,7 +441,7 @@ let queued = reactive.share('queued', () => reactive(name))
 <li>{queued}</li>`
     const { html } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Shelf from './Shelf.abide'
 
 reactive.share('library', () => reactive('everything'))
@@ -457,7 +457,7 @@ reactive.share('library', () => reactive('everything'))
 // and the value it was given is not it. `share-winner` is the page that demonstrates it.
 test('a second call hands back the value that won — 10.1', async () => {
     const { html } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let volume = reactive.share('volume', () => reactive(4))
 const built = reactive(9)
@@ -471,7 +471,7 @@ const shared = reactive.share('volume', () => built)
 // a key computed at run time is a scope nobody can read off the page.
 test('a computed share key is refused — 10.2', async () => {
     const file = parseAbide(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 const key = 'volume'
 let volume = reactive.share(key, () => reactive(4))
 </script>
@@ -494,10 +494,10 @@ let volume = reactive.share(key, () => reactive(4))
 // THE ADDED ROW IS THE ASSERTION. The server-rendered rows hydrate whatever the row builder does,
 // so a test that only mounts distinguishes nothing — the failure waits for the first row the list
 // grows by. THE REVERT: emit the invocation's SERVER form in the row builder (drop the `client`
-// arm in `emitInvocation`); the module then imports `renderComponent` from `abide/runtime`, which
+// arm in `emitInvocation`); the module then imports `renderComponent` from `@abide/abide/runtime`, which
 // does not export it, and the page does not mount at all.
 const ROW = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { title } = props<{ title: string }>()
 </script>
@@ -507,7 +507,7 @@ const { title } = props<{ title: string }>()
 test('a component in a {#for} renders, hydrates, and builds the row it grows by — 32.17', async () => {
     const { html, mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Row from './Row.abide'
 
 let titles = reactive(['one', 'two'])
@@ -546,7 +546,7 @@ let titles = reactive(['one', 'two'])
 test("a component's head is not applied per row it grows by — 39.6", async () => {
     const { mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Row from './Row.abide'
 
 let titles = reactive<string[]>([])
@@ -576,7 +576,7 @@ let titles = reactive<string[]>([])
 test('a component row the list grew reorders with its markup', async () => {
     const { mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Row from './Row.abide'
 
 let titles = reactive(['a'])
@@ -607,7 +607,7 @@ let titles = reactive(['a'])
 // scope has: two values under one key and each half of the page reading a different one.
 test('a row added after mount shares with the page above it — 10.5', async () => {
     const row = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let playing = reactive.share('nowPlaying', () => reactive('nothing'))
 </script>
@@ -615,7 +615,7 @@ let playing = reactive.share('nowPlaying', () => reactive('nothing'))
 <li>{playing}</li>`
     const { mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Row from './Row.abide'
 
 reactive.share('nowPlaying', () => reactive('Kind of Blue'))
@@ -647,7 +647,7 @@ let titles = reactive(['one'])
 // due, and it is 2 whatever the page shows.
 test('a row that leaves stops the bindings its component opened — 12.4', async () => {
     const row = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { label } = props<{ label: string }>()
 </script>
@@ -655,7 +655,7 @@ const { label } = props<{ label: string }>()
 <li>{label}</li>`
     const { mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Row from './Row.abide'
 
 let rows = reactive(['one', 'two'])
@@ -692,7 +692,7 @@ let mark = reactive('')
 // disposer runs 0 times where 1 is due, and its watch wakes again at the bump.
 test("a row that leaves stops the watch its component's setup opened — 12.4", async () => {
     const row = `<script>
-import { props, watch } from 'abide'
+import { props, watch } from '@abide/abide'
 
 const { label, tick } = props<{ label: string; tick: string }>()
 const counts = ((globalThis as { rows?: Record<string, { wakes: number; disposed: number }> }).rows ??= {})
@@ -710,7 +710,7 @@ watch(() => {
 <li>{label}</li>`
     const { mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Row from './Row.abide'
 
 let rows = reactive(['one', 'two'])
@@ -753,7 +753,7 @@ let mark = reactive('')
 // ?? root` at the head of `emitList`'s `make`. This throws the `TypeError` out of the click.
 test('a component whose list grows a row builds it in the right document', async () => {
     const LIST = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 let rows = reactive(['a'])
 </script>
 <ul id="grown">{#for row of rows}<li>{row}</li>{/for}</ul>
@@ -774,7 +774,7 @@ import List from './List.abide'
 })
 
 const STEPPER = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { count } = props<{ count: number }>()
 </script>
@@ -782,7 +782,7 @@ const { count } = props<{ count: number }>()
 <button class="step" onclick={() => { count += 1 }}>{count}</button>`
 
 const STEPPED = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Stepper from './Stepper.abide'
 
 let bound = reactive(1)
@@ -841,7 +841,7 @@ test("a child's write goes where the caller bound it — 33.6, 33.7", async () =
 // reads `AT+amp;T|AT+amp;T 1|+ampamp;`.
 test("a prop's static text arrives decoded, beside a slot as well — 33.4", async () => {
     const CARD = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { title, line, edge } = props<{ title: string; line: string; edge: string }>()
 </script>
@@ -849,7 +849,7 @@ const { title, line, edge } = props<{ title: string; line: string; edge: string 
 <b class="card">{title.replaceAll('&', '+')}|{line.replaceAll('&', '+')}|{edge.replaceAll('&', '+')}</b>`
     const { html, mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Card from './Card.abide'
 
 let n = reactive(0)
@@ -879,7 +879,7 @@ const amp = 'amp;'
 // `readTag` — both lanes write `string:|string:` where `boolean:true|string:` is due.
 test('a bare prop is true — 33.21', async () => {
     const FLAG = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { enable, label } = props<{ enable?: boolean; label?: string }>()
 </script>
@@ -887,7 +887,7 @@ const { enable, label } = props<{ enable?: boolean; label?: string }>()
 <b class="flag">{typeof enable}:{enable}|{typeof label}:{label}</b>`
     const { html, mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Flag from './Flag.abide'
 
 let show = reactive(false)

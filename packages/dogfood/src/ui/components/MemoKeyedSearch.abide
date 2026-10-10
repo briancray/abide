@@ -1,5 +1,5 @@
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { searchContacts } from '#server/rpc/search'
 
 let query = reactive('a')

@@ -18,7 +18,7 @@ afterAll(closeTyped)
 afterAll(removeTemporaryModules)
 
 const SOURCE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 let a = reactive('A')
 let b = reactive('B')
 </script>
@@ -76,7 +76,7 @@ test('the emitted binding walks the markup and adds nothing to the document', as
 // so what this holds is that every position is found exactly once.
 test('bindings under one parent share the walk to it', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 let a = reactive(1)
 let b = reactive(2)
 let c = reactive(3)

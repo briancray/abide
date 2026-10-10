@@ -1,9 +1,36 @@
 {
-    "name": "abide",
-    "version": "0.0.0",
+    "name": "@abide/abide",
+    "version": "0.99.0",
     "type": "module",
     "description": "Isomorphic type-safe framework for reactive async interfaces for humans and machines",
     "license": "MIT",
+    "author": "Brian Cray",
+    "homepage": "https://github.com/briancray/abide#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/briancray/abide.git",
+        "directory": "packages/abide"
+    },
+    "bugs": {
+        "url": "https://github.com/briancray/abide/issues"
+    },
+    "keywords": [
+        "bun",
+        "framework",
+        "isomorphic",
+        "reactive",
+        "ssr",
+        "rpc",
+        "mcp",
+        "cli"
+    ],
+    "engines": {
+        "bun": ">=1.3.0"
+    },
+    "publishConfig": {
+        "access": "public",
+        "provenance": true
+    },
     "bin": {
         "abide": "./bin/abide.ts"
     },
@@ -35,6 +62,7 @@
     "files": [
         "src",
         "bin",
-        "scaffold"
+        "scaffold",
+        "CHANGELOG.md"
     ]
 }

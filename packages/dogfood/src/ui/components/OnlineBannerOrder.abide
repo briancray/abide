@@ -1,5 +1,5 @@
 <script>
-import { online } from 'abide'
+import { online } from '@abide/abide'
 </script>
 
 {#if !online}

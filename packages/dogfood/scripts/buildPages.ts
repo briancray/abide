@@ -26,7 +26,7 @@
 
 import { rmdir } from 'node:fs/promises' // bun has no directory remove: `Bun.file().delete()` takes files only
 
-import { escapeAttribute } from 'abide'
+import { escapeAttribute } from '@abide/abide'
 
 import { ifPresent } from './ifPresent.ts'
 import {
@@ -92,7 +92,7 @@ function navItems(pages: Page[]): string {
     return `// Written by \`scripts/buildPages.ts\` from the front matter under \`content/\`. The ORDER and the
 // GROUPING are \`scripts/NAV.ts\`; the label and the stub mark are each page's own.
 
-import type { RouteLiteral } from 'abide'
+import type { RouteLiteral } from '@abide/abide'
 
 export type NavItem = { slug: string; href: RouteLiteral; nav: string; stub: boolean }
 export type NavGroup = { section: string; pages: NavItem[] }
@@ -265,7 +265,7 @@ export function pageSource(
         )
     }
     return `<script>
-import { raw } from 'abide'
+import { raw } from '@abide/abide'
 import { installDocs } from '#ui/installDocs.ts'
 import { CONTENT } from '#ui/pages/${directory}CONTENT.ts'
 ${imports}</script>

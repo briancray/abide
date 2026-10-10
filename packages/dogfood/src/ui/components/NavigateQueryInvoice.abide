@@ -1,5 +1,5 @@
 <script>
-import { navigate, reactive, route } from 'abide'
+import { navigate, reactive, route } from '@abide/abide'
 
 const ON_ACCOUNT = ['4310', '4311', '4312']
 

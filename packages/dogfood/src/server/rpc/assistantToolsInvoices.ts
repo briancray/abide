@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 
 const PAID = new Set(['INV-4021'])
 

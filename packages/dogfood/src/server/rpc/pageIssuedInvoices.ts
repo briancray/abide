@@ -1,4 +1,4 @@
-import { GET, page } from 'abide/server'
+import { GET, page } from '@abide/abide/server'
 import { pageIssuedDatabase } from '#server/pageIssuedDatabase'
 
 export const issuedInvoice = GET(

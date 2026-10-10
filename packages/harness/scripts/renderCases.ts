@@ -62,7 +62,7 @@ function cardRow(title: string, body: string, count: string): string {
  */
 export function abideLoopSource(): string {
     return `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive(CARDS)
 </script>
@@ -84,7 +84,7 @@ export function abideSource(n: number): string {
             `{rows[${at}].count}`,
         )
     return `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive(CARDS)
 </script>
@@ -150,7 +150,7 @@ function escapeCarefully(value: string): string {
  */
 export function abideCardSource(): string {
     return `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { title, body, count } = props<{ title: string; body: string; count: number }>()
 </script>
@@ -166,7 +166,7 @@ ${cardRow('{title}', '{body}', '{count}')}`
 export function abideDeclaredSource(invoked: boolean): string {
     const card = cardRow('{row.title}', '{row.body}', '{row.count}')
     return `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive(CARDS)
 </script>
@@ -176,7 +176,7 @@ let rows = reactive(CARDS)
 /** The card-list page with each row a `<Card>` invocation, its data left as `CARDS`. */
 export function abideComponentSource(): string {
     return `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Card from './Card.abide'
 
 let rows = reactive(CARDS)

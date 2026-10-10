@@ -13,7 +13,7 @@ afterAll(closeTyped)
 afterAll(removeTemporaryModules)
 
 const BAR = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { label } = props<{ label: string }>()
 </script>
@@ -21,7 +21,7 @@ const { label } = props<{ label: string }>()
 <b class="bar">bar {label}</b>`
 
 const BAZ = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { label } = props<{ label: string }>()
 </script>
@@ -30,7 +30,7 @@ const { label } = props<{ label: string }>()
 
 // 32.34's second binding: a component handed in as a prop, invoked by the name `props` gave it.
 const FRAME = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { as: Inner } = props<{ as: (...args: any[]) => unknown }>()
 </script>
@@ -43,7 +43,7 @@ const click = (id: string): void => {
 }
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Bar from './Bar.abide'
 import Baz from './Baz.abide'
 
@@ -89,7 +89,7 @@ test('a tag naming a Reactive invokes the component it holds, on both sides — 
 test('a write that leaves the same component rebuilds nothing — 32.35', async () => {
     await mountPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Frame from './Frame.abide'
 import Bar from './Bar.abide'
 import Baz from './Baz.abide'
@@ -111,7 +111,7 @@ let which = reactive(0)
 test('an absent value renders nothing, and the region fills when one arrives — 32.36', async () => {
     const { html } = await mountPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Bar from './Bar.abide'
 
 let open = reactive(false)
@@ -136,7 +136,7 @@ let Shown = reactive(() => (open ? Bar : undefined))
 test('a tag naming a prop invokes the component the caller passed — 32.34', async () => {
     await mountPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Frame from './Frame.abide'
 import Bar from './Bar.abide'
 import Baz from './Baz.abide'

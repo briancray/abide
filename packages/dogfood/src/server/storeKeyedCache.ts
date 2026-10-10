@@ -1,4 +1,4 @@
-import { reactive } from 'abide/server'
+import { reactive } from '@abide/abide/server'
 import { redisStore } from '#server/redisStore'
 import { type Settings, storeKeyedDatabase } from '#server/storeKeyedDatabase'
 

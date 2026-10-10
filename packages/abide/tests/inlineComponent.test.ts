@@ -26,7 +26,7 @@ const click = (selector: string): void => {
 
 // 32.42 — THE PAGE'S OWN VALUE, read by name inside the body, with no prop to carry it.
 const COUNTER = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(1)
 </script>
@@ -70,7 +70,7 @@ test("an inline component reads its file's script by name, live — 32.42, 31.2"
 // `serverComponent` — both counters are one value, so a click on the first moves the second too.
 test('two inline instances each share their own value — 10.5, 32.46', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 </script>
 
 {#component Counter({ name })}<script>
@@ -93,7 +93,7 @@ let count = reactive.share('count', () => reactive(0))
 // declaring nothing in a repeated region) — hydration throws it.
 test('an inline component declared in a {#for} row reads the row — 32.41, 32.42', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 1, name: 'one' }, { id: 2, name: 'two' }])
 </script>
@@ -119,7 +119,7 @@ let rows = reactive([{ id: 1, name: 'one' }, { id: 2, name: 'two' }])
 // element's own list) — `Mark` is unbound and the render throws.
 test('an inline component declared in an element and in an {#if} arm — 32.41, 32.43', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(false)
 let label = reactive('shut')
@@ -146,7 +146,7 @@ let label = reactive('shut')
 // invokes it by that name, hands it props of its own, and what else stands between the tags is
 // still the child's `<slot/>`. It closes over the caller, so a write there reaches it in place.
 const OUTER = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { Item, title } = props<{ Item: (props: { n: number }) => unknown; title: string }>()
 </script>
@@ -159,7 +159,7 @@ const { Item, title } = props<{ Item: (props: { n: number }) => unknown; title: 
 test('an inline component written between the tags is passed as a prop — 32.50, 32.52', async () => {
     const { html, mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Outer from './Outer.abide'
 
 let unit = reactive('kg')
@@ -258,7 +258,7 @@ import Row from './Row.abide'
         "{#component Row} is declared inline and Row is also imported from './Row.abide'",
     )
     const page = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { Row } = props<{ Row: string }>()
 </script>
@@ -303,7 +303,7 @@ let app = ''
 beforeAll(async () => {
     app = appFixture({
         'ui/pages/page.abide': `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 </script>

@@ -10,8 +10,8 @@ import type { Diagnosis } from '#compiler/TypeSession.ts'
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const QUERIES = `import { jsonSchema, reactive, type StandardSchemaV1 } from 'abide'
-import { GET } from 'abide/server'
+const QUERIES = `import { jsonSchema, reactive, type StandardSchemaV1 } from '@abide/abide'
+import { GET } from '@abide/abide/server'
 
 export const unwritten = reactive(({ page }: { page?: number }) => page, {
     args: jsonSchema({ type: 'object', properties: { page: { type: 'integer', default: 1 } } }),
@@ -40,7 +40,7 @@ export const handled = GET(({ per }: { per?: number }) => per, {
 `
 
 const PAGE = `<script>
-import { jsonSchema, reactive } from 'abide'
+import { jsonSchema, reactive } from '@abide/abide'
 
 const rows = reactive(({ limit }: { limit?: number }) => limit, {
     args: jsonSchema({ type: 'object', properties: { limit: { type: 'integer', default: 20 } } }),

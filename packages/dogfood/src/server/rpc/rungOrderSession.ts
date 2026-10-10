@@ -1,5 +1,5 @@
-import { principal } from 'abide'
-import { POST } from 'abide/server'
+import { principal } from '@abide/abide'
+import { POST } from '@abide/abide/server'
 
 export const signIn = POST(() => principal.set({ id: 'ada' }), {
     description: 'Signs in as Ada.',

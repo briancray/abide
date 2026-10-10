@@ -1,7 +1,7 @@
 // EVERY SLOT `#shared` LEAVES FOR A SERVER, filled from one place rather than as a side effect of
 // whichever server module a process happened to import — a compiler or a test that reaches one of
 // them for a function is not made a server by it. Called where a server is entered: `bootApp`,
-// `abide run`, and `abide/server`, which an app imports to be one. Filling the same functions again
+// `abide run`, and `@abide/abide/server`, which an app imports to be one. Filling the same functions again
 // changes nothing, so each entry calls it. Three are filled elsewhere: `SCOPING.provider` at
 // `requestScope.ts`'s import (its comment says why), `RPC_SERVER.raw` per boot, and
 // `LISTENING.timeout` by the dev worker alone.

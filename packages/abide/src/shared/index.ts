@@ -1,4 +1,4 @@
-// The isomorphic authoring surface — what an app reaches through `abide`.
+// The isomorphic authoring surface — what an app reaches through `@abide/abide`.
 // Same callable, same name, same intent on both sides: the reactive value and the
 // types its probes narrow to live here, and nothing in this seam may import #ui or
 // #server.
@@ -44,7 +44,7 @@ export {
     menuItem,
 } from './menuItem.ts'
 // `navigate` ALONE, of everything routing needs. This barrel is what an app resolves through the
-// bare `abide` specifier, and the matcher, the pattern grammar and `routeOf` are reached by path
+// bare `@abide/abide` specifier, and the matcher, the pattern grammar and `routeOf` are reached by path
 // from the two places that have them — the build and the client router. Putting them here would
 // widen the public surface with names no clause or registry row gives an author, and drag both
 // modules into the static closure of the entry every page imports.

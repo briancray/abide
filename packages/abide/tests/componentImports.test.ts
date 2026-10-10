@@ -12,13 +12,13 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 
 const FILES = {
     'ui/components/Card.abide': `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { name } = props<{ name: string }>()
 </script>
 <p>hello {name}</p>
 `,
-    'server/rpc/preview.ts': `import { GET, page, render } from 'abide/server'
+    'server/rpc/preview.ts': `import { GET, page, render } from '@abide/abide/server'
 import Card from '#ui/components/Card.abide'
 
 export const preview = GET(async ({ name }: { name: string }) =>

@@ -14,7 +14,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 const SHELL = `<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>`
 
 const HOME = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import '#ui/home.css'
 
 let count = reactive(0)
@@ -89,7 +89,7 @@ Promise.reject(new Error('nobody awaited this'))
         // A HANDLER TREE FROM THE START, so a handler saved later lands in a directory the checker
         // already knows.
         'server/rpc/present.ts':
-            "import { GET } from 'abide/server'\n\nexport const present = GET(() => 'here')\n",
+            "import { GET } from '@abide/abide/server'\n\nexport const present = GET(() => 'here')\n",
         'ui/pages/exit/page.abide': `<script>
 process.exit(3)
 </script>
@@ -325,7 +325,7 @@ test('an edit to a plain .ts reaches the types the next compile reads — 31.3, 
 
     await save(
         'ui/total.ts',
-        "import { reactive } from 'abide'\nexport const total = reactive(8)\n",
+        "import { reactive } from '@abide/abide'\nexport const total = reactive(8)\n",
     )
     expect(
         await waitFor(`${base}/`, (body) =>
@@ -386,7 +386,7 @@ test('an import saved before its module exists recovers when the module is writt
     // compiled page's imports go through abide's plugin, which asks the disk every time.
     await save(
         'server/rpc/late.ts',
-        "import { GET } from 'abide/server'\nimport { late } from '#shared/late'\n\nexport const readLate = GET(() => late)\n",
+        "import { GET } from '@abide/abide/server'\nimport { late } from '#shared/late'\n\nexport const readLate = GET(() => late)\n",
     )
     expect(
         await waitFor(`${base}/__abide/rpc/late/readLate`, (body) =>

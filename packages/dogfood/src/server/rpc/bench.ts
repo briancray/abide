@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 import type { BenchRow } from 'harness/rows'
 import { harnessCatalog, harnessRows } from '#server/harnessRows'
 import { onlyLoopback } from '#server/onlyLoopback'

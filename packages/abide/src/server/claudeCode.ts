@@ -129,7 +129,7 @@ function bridgeCommand(): { command: string; expires: number } {
     const { code, expires } = mintCode(askingCaller())
     const site = `${appOrigin() ?? new URL(request().url).origin}${mounted('')}`
     return {
-        command: `bunx abide-bridge@${BRIDGE_VERSION} ${site} ${code}`,
+        command: `bunx @abide/bridge@${BRIDGE_VERSION} ${site} ${code}`,
         expires,
     }
 }

@@ -1,4 +1,4 @@
-import { POST } from 'abide/server'
+import { POST } from '@abide/abide/server'
 import { writeCoalescedDatabase } from '#server/writeCoalescedDatabase'
 
 export const payInvoice = POST(

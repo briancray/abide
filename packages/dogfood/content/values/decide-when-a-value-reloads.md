@@ -115,7 +115,7 @@ The members above are conveniences over four free functions, and those four take
 | nothing | this scope |
 
 ```ts shared
-import { busy, invalidate, refresh } from 'abide'
+import { busy, invalidate, refresh } from '@abide/abide'
 
 invalidate(level)                     // ≡ level.invalidate()
 invalidate({ tags: ['sku:A-70'] })    // across every value tagging it

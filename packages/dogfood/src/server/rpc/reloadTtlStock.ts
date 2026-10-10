@@ -1,4 +1,4 @@
-import { GET, reactive } from 'abide/server'
+import { GET, reactive } from '@abide/abide/server'
 import { reloadTtlDatabase } from '#server/reloadTtlDatabase'
 
 type Shelf = { warehouse: string; sku: string }

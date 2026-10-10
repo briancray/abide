@@ -1,4 +1,4 @@
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 export type Turn = { id: number; speaker: string; text: string }
 

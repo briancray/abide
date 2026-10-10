@@ -2,7 +2,7 @@
 // live in `reactiveCases.ts` so the browser injectable runs the same bytes; see there
 // for why the substrate matters more than the numbers.
 
-import { reactive, watch } from 'abide'
+import { reactive, watch } from '@abide/abide'
 import {
     type Batched,
     batch,
@@ -45,13 +45,13 @@ function report(measured: Batched, work: Case['work']): void {
 async function machinery(): Promise<void> {
     const { abide: abideLines, vanilla: vanillaLines } =
         await reactiveCoreLines()
-    const names = await countExportedNames(['abide'])
+    const names = await countExportedNames(['@abide/abide'])
     console.log('\nMACHINERY BUDGET — the other half of the trade')
     console.log(
         `  code lines   abide ${abideLines}   vanilla ${vanillaLines}   ${(abideLines / vanillaLines).toFixed(1)}x`,
     )
     console.log(`  exported names on the \`abide\` surface: ${names.total}`)
-    console.log(`  ${(names.byEntry.abide ?? []).join(', ')}`)
+    console.log(`  ${(names.byEntry['@abide/abide'] ?? []).join(', ')}`)
     console.log(
         '  branches added to a shared path: hand-counted, and not produced here.',
     )

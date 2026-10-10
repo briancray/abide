@@ -43,7 +43,7 @@ beforeAll(async () => {
 
 <p id="list">two invoices</p>`,
         'ui/pages/invoices/[id]/page.abide': `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { params } = props<{ params: { id: string } }>()
 </script>

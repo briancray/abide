@@ -1,5 +1,5 @@
 <script>
-import { flushSync, reactive } from 'abide'
+import { flushSync, reactive } from '@abide/abide'
 
 let notes = reactive(['Called about the renewal', 'Sent the new quote'])
 let list = reactive<HTMLOListElement>()

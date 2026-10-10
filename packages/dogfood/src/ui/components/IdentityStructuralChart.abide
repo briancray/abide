@@ -1,5 +1,5 @@
 <script>
-import { reactive, refresh, structural, watch } from 'abide'
+import { reactive, refresh, structural, watch } from '@abide/abide'
 import { getSales, recordSale } from '#server/rpc/identityStructuralSales'
 
 const sales = reactive(() => getSales(), { identity: structural })

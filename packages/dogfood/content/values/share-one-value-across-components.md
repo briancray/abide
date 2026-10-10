@@ -73,7 +73,7 @@ not a precondition. A key it declares is checked against it; a key it does not i
 thunk, so `reactive.share` works before you have written one.
 
 ```ts src/shared/shared.ts — excerpt
-declare module 'abide' {
+declare module '@abide/abide' {
     interface Shared {
         nowPlaying: Reactive<string>
     }

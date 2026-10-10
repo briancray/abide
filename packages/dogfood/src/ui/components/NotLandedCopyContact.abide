@@ -1,5 +1,5 @@
 <script>
-import { NotLanded, reactive } from 'abide'
+import { NotLanded, reactive } from '@abide/abide'
 import { getContact } from '#server/rpc/notLandedCopyContacts'
 
 const PEOPLE = ['ada', 'grace', 'katherine']

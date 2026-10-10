@@ -1,4 +1,4 @@
-import type { Store } from 'abide'
+import type { Store } from '@abide/abide'
 import { readSetting, writeSetting } from '#server/rpc/storeRestoreSettings'
 
 /** Both halves or neither: `Store` has no spelling for one alone. */

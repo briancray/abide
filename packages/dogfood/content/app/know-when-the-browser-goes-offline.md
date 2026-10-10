@@ -54,7 +54,7 @@ looking at — not every value the scope is holding.
 
 ```abide #ui/pages/layout.abide — excerpt
 <script>
-import { online, refresh, watch } from 'abide'
+import { online, refresh, watch } from '@abide/abide'
 
 watch(() => { if (online) refresh() })
 </script>

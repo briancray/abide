@@ -1,10 +1,10 @@
 // THE ROUTER'S OWN ENTRY, so that "the router is not part of what every page imports" is true by
-// CONSTRUCTION rather than by the bundler agreeing. `abide/runtime` is what every compiled client
+// CONSTRUCTION rather than by the bundler agreeing. `@abide/abide/runtime` is what every compiled client
 // module resolves through and its own header calls that list the budget; a whole subsystem on it
 // is a category error there whatever the bundler then manages.
 //
 // IT IS NOT A MEASURED BYTE SAVING, and the attempt is worth recording so nobody takes the
-// reasoning further than the number goes. Two entries both importing `abide/runtime`, built
+// reasoning further than the number goes. Two entries both importing `@abide/abide/runtime`, built
 // `--splitting` so the barrel lands in a SHARED chunk — which is the configuration CLAUDE.md names
 // as where bun stops shaking — came out 7156 bytes with the router off the barrel against 7160
 // with it on, and zero router symbols in the output either way. Bun shook it out. So the argument

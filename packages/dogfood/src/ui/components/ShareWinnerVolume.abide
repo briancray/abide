@@ -1,5 +1,5 @@
 <script>
-import { type Reactive, reactive } from 'abide'
+import { type Reactive, reactive } from '@abide/abide'
 
 let volume = reactive.share('volume', () => reactive(4))
 

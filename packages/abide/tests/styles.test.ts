@@ -71,7 +71,7 @@ test('a nested rule and a grouping at-rule require the token too — 34.4', () =
 })
 
 const CARD = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { title } = props<{ title: string }>()
 </script>

@@ -45,7 +45,7 @@ export you are looking at.
 
 ```abide #ui/pages/invoices/[id]/page.abide — excerpt
 <script>
-import { reactive, route } from 'abide'
+import { reactive, route } from '@abide/abide'
 import { getInvoice } from '#server/rpc/invoices'
 
 const invoice = reactive(() => getInvoice({ id: route.params.id }))

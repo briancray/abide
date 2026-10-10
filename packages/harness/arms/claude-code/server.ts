@@ -63,7 +63,7 @@ Bun.serve({
                                 ? { paired: true }
                                 : {
                                       paired: false,
-                                      command: `bunx abide-bridge@0.1.0 ${SITE} ${code}`,
+                                      command: `bunx @abide/bridge@0.1.0 ${SITE} ${code}`,
                                   },
                         )
                     const mine = watchers.get(caller) ?? new Set()

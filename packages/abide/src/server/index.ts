@@ -1,4 +1,4 @@
-// The server seam — what an app reaches through `abide/server`.
+// The server seam — what an app reaches through `@abide/abide/server`.
 // Request handling, SSR and the rpc boundary. Nothing here may be reached from the client
 // entry's static closure.
 //
@@ -8,7 +8,7 @@
 import { installServer } from './installServer.ts'
 
 // THE WHOLE ISOMORPHIC SURFACE, re-exported rather than owned. A server module imports `GET` and
-// `reactive` through this one specifier — the same callable, by the same name, that `abide`
+// `reactive` through this one specifier — the same callable, by the same name, that `@abide/abide`
 // hands a page. It is also every run-time half an
 // emitted module reaches through here: 32.1's escaping and 32.2's `raw`, which both sides render
 // markup with, 32.20's `safeUrl`, and 31.8's `writePath`.
@@ -82,6 +82,6 @@ export {
 // 24 — the trace this work belongs to.
 export { trace } from './trace.ts'
 
-// AN APP THAT IMPORTS `abide/server` IS ON A SERVER, booted or not: its own tests render, call and
+// AN APP THAT IMPORTS `@abide/abide/server` IS ON A SERVER, booted or not: its own tests render, call and
 // read `config` through these names without `createApp`.
 installServer()

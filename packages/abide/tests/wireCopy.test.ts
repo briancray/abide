@@ -44,7 +44,7 @@ afterAll(() => {
 const settle = (ms = 10): Promise<void> =>
     new Promise((done) => setTimeout(done, ms))
 
-const LIBRARY = `import { GET, POST, reactive, structural } from 'abide/server'
+const LIBRARY = `import { GET, POST, reactive, structural } from '@abide/abide/server'
 
 const shelf = reactive([{ id: 'a' }], {
     global: true,
@@ -103,7 +103,7 @@ test('the build writes what a GET declares for its copy into the wrapper, and no
 test('an option bound to a const carries its literal, and one the build cannot read is warned on', async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/named.ts': `import { GET, reactive } from 'abide/server'
+        'server/rpc/named.ts': `import { GET, reactive } from '@abide/abide/server'
 
 const KEY = 'isbn'
 const TAGS = ['shelf', 'named'] as const
@@ -234,7 +234,7 @@ test('a copy asks past the HTTP cache', async () => {
 test("the build writes a handler's parameter defaults into its wrapper, and refuses one it cannot read", async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/paged.ts': `import { GET, POST, reactive } from 'abide/server'
+        'server/rpc/paged.ts': `import { GET, POST, reactive } from '@abide/abide/server'
 
 export const list = GET(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
 export const kept = GET(reactive(({ size = 20 }: { size?: number }) => size, { by: 'id' }))
@@ -261,7 +261,7 @@ export const plain = GET(async ({ id }: { id: string }) => id)
 
     const refused = appFixture({
         'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/paged.ts': `import { GET } from 'abide/server'
+        'server/rpc/paged.ts': `import { GET } from '@abide/abide/server'
 
 const PAGE_SIZE = 20
 export const list = GET(async ({ size = PAGE_SIZE }: { size?: number }) => size)

@@ -1,5 +1,5 @@
-import { principal, refuse } from 'abide'
-import { GET } from 'abide/server'
+import { principal, refuse } from '@abide/abide'
+import { GET } from '@abide/abide/server'
 import { z } from 'zod'
 import { rungOrderDatabase } from '#server/rungOrderDatabase'
 

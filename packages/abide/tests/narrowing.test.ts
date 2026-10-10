@@ -10,7 +10,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 afterAll(removeTemporaryModules)
 
 const NARROWED = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 type Contact = { name: string; phone?: string }
 let contact = reactive<Contact | undefined>(undefined)
@@ -39,7 +39,7 @@ test('an {#if} narrows the arm it opens, its {:else}, and a row inside a {#for}'
 test('a read outside the {#if} is not narrowed', async () => {
     const app = appFixture({
         'ui/pages/page.abide': `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let contact = reactive<{ name: string } | undefined>(undefined)
 </script>

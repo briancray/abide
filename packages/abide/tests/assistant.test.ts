@@ -17,12 +17,12 @@ const BRIDGE = new URL('../../bridge/', import.meta.url).pathname
 const RECORD = `${Bun.env.TMPDIR ?? '/tmp'}/abide-assistant-${process.pid}.json`
 const SERVER = new URL('../src/server', import.meta.url).pathname
 
-const INVOICES = `import { cookies, POST } from 'abide/server'
+const INVOICES = `import { cookies, POST } from '@abide/abide/server'
 
 export const whoami = POST(() => cookies().get('who') ?? 'nobody', { description: 'Who is asking.' })
 `
 
-const ASK = `import { assistant, type AssistantMessage, claudeApi, claudeCode, GET, POST } from 'abide/server'
+const ASK = `import { assistant, type AssistantMessage, claudeApi, claudeCode, GET, POST } from '@abide/abide/server'
 
 const HIDDEN = { clients: { mcp: false } }
 
@@ -228,7 +228,7 @@ test('the bridge status turns ready the moment the bridge connects — 45.20', a
     }
     expect(first.paired).toBe(false)
     expect(first.command).toStartWith(
-        `bunx abide-bridge@${BRIDGE_VERSION} ${base} `,
+        `bunx @abide/bridge@${BRIDGE_VERSION} ${base} `,
     )
     await pairBridge('two', first.command.split(' ').at(-1))
     expect((await lines.next()).value).toEqual({ paired: true })

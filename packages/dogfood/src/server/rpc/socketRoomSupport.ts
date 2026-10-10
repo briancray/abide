@@ -1,4 +1,4 @@
-import { GET, POST, reactive } from 'abide/server'
+import { GET, POST, reactive } from '@abide/abide/server'
 
 type Turn = { id: string; speaker: string; text: string }
 

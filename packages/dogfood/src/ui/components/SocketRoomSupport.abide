@@ -1,5 +1,5 @@
 <script>
-import { cookies, reactive } from 'abide'
+import { cookies, reactive } from '@abide/abide'
 import { room, say } from '#server/rpc/socketRoomSupport'
 
 // This browser's room, by an id in a cookie every tab of it sends.

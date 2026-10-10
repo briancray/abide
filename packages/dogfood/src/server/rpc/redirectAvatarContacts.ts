@@ -1,4 +1,4 @@
-import { GET, redirect } from 'abide/server'
+import { GET, redirect } from '@abide/abide/server'
 import { redirectAvatarDatabase } from '#server/redirectAvatarDatabase'
 
 export const photo = GET(

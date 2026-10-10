@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 import { probeDerivedDatabase } from '#server/probeDerivedDatabase'
 
 export const listInvoices = GET(() => probeDerivedDatabase.invoices.all(), {

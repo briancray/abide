@@ -4,7 +4,7 @@
 // the validateJson case carry SHARE rows pricing the layer against the whole op somebody waits on. JSC with
 // `bun packages/harness/scripts/benchShared.ts`, V8 with `bunx playwright test
 // --project=harness packages/harness/e2e/shared.spec.ts`.
-import { jsonSchema, reactive, validateJson } from 'abide'
+import { jsonSchema, reactive, validateJson } from '@abide/abide'
 import { putOwn } from '../../abide/src/shared/putOwn.ts'
 import { canonicalKey } from '../../abide/src/shared/reactive/canonicalKey.ts'
 

@@ -1,4 +1,4 @@
-import { POST, principal } from 'abide/server'
+import { POST, principal } from '@abide/abide/server'
 
 /** Seals the id alone, and answers with what `onPrincipal` made of it. */
 export const signInAs = POST(

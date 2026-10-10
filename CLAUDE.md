@@ -74,7 +74,7 @@ not a clause
 * before adding a helper, grep the sibling seam — the same utility on both sides of `#shared` is the duplication this layout invites. widen the existing one, or lift it to `#shared` when both sides need it; a second implementation is only right when the two seams have genuinely different invariants, and then the comment says which
 * an import EDGE is priced by the module it lands on, never by the name it asks for. a module reached from the client entry's STATIC closure keeps every export ANYTHING in the build uses — bun shakes exports fine for a lone entry and stops once the module is in a shared chunk — so one import that reads as free costs that module's whole union on every page.
 * a constant crossing a seam lives in a LEAF — its own UPPERCASE file with no imports of its own.
-* framework-internal code imports by SEAM, never by this package's own public specifier: `abide` / `abide/runtime` / `abide/server` are what an APP resolves through, and a file inside `packages/abide` reaching for one is asking a curated barrel for a name it could have taken from the module.
+* framework-internal code imports by SEAM, never by this package's own public specifier: `@abide/abide` / `@abide/abide/runtime` / `@abide/abide/server` are what an APP resolves through, and a file inside `packages/abide` reaching for one is asking a curated barrel for a name it could have taken from the module.
 
 # simplification
 

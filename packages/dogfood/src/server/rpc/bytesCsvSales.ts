@@ -1,4 +1,4 @@
-import { bytes, GET } from 'abide/server'
+import { bytes, GET } from '@abide/abide/server'
 import { bytesCsvDatabase } from '#server/bytesCsvDatabase'
 
 const ENCODER = new TextEncoder()

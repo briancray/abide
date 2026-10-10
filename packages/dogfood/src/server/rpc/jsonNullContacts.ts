@@ -1,4 +1,4 @@
-import { GET, json } from 'abide/server'
+import { GET, json } from '@abide/abide/server'
 import { jsonNullDatabase } from '#server/jsonNullDatabase'
 
 export const accountManager = GET(

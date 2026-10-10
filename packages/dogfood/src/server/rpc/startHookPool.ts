@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 import { startHookDatabase } from '#server/startHookDatabase'
 
 /** When the pool connected, and when the app came up around it. */

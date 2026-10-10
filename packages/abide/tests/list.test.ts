@@ -26,7 +26,7 @@ afterAll(closeTyped)
 afterAll(removeTemporaryModules)
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([
     { id: 'ada', name: 'Ada Lovelace' },
@@ -95,7 +95,7 @@ test('a two-row swap moves one node', async () => {
 // made where 2 are due.
 test('a message at the cap makes one row where the value declares by — 32.32', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const turns: { id: number; text: string }[] = []
 for (let id = 1; id <= 50; id += 1) turns.push({ id, text: \`message \${id}\` })
@@ -166,7 +166,7 @@ test('the rows survive a swap with their bindings', async () => {
 // It gets ONE anchor per ROW, which is ~2.5 bytes gzipped a row — not the per-SLOT marker
 // `benchGrid.ts` measured doubling a page. A single-element row still carries nothing.
 const PAIRS = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([
     { id: 'a', k: 'Ada', v: '1815' },
@@ -238,7 +238,7 @@ test('a single-element row still carries no anchor', async () => {
 // the walk lands on is still the kind it expected. Green before, because no fixture bound
 // anything below a row's first child.
 const NESTED = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive(['a', 'b'])
 let count = reactive(0)
@@ -279,7 +279,7 @@ test('a binding below a row’s first child is reached, in both row shapes', asy
 // three rows below drop to one and `bindingRuns` reads 3 instead of 1, forever, because the two
 // that left still wake on every write and write into nodes no longer in the document.
 const LEAVING = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 let count = reactive(0)
@@ -351,7 +351,7 @@ test('the loop variable is a parameter, not a rewrite of emitted text', async ()
 // the `insertBefore` after it throws `DOMException: ... not a child of this node` on the FIRST
 // replaced row — 0 of 4 rows rendered where 4 are due, and the list is gone.
 const REFETCH = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([
     { id: 'ada', name: 'Ada Lovelace' },
@@ -426,7 +426,7 @@ test('a row remade between two that survive keeps its neighbours', async () => {
 // node after an append that did not touch it — 2 of 3 rows kept where 3 are due — so its focus,
 // selection, scroll position and any transition mid-flight go with the node that was replaced.
 const NUMBERS = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let nums = reactive([1, Number.NaN, 3])
 
@@ -512,7 +512,7 @@ test('a for over an async iterable appends each item as it arrives', async () =>
 // `third`, `first` — then 5 after one write and 6 after two, which is the growth stated as a
 // count. `bindingRuns` reports 7 where 3 are due and the warning count reports 0 where 1 is.
 const REPEATED = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let tasks = reactive([
     { id: 'a', status: 'done', label: 'first' },
@@ -866,7 +866,7 @@ test('a value a row read while it was built does not re-run the list', () => {
 // page. THE REVERT: hydrate from a `seed` read ahead of the watch rather than on its first run;
 // this reports 0 of 3 server rows kept where 3 are due.
 const FRESH = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 </script>
@@ -898,7 +898,7 @@ test('a subject building fresh items keeps the rows the server sent', async () =
 // THE REVERT: return `true` from `hydrate` whenever `found.length === 0` is false — this reports
 // 3 rows where 5 are due, with no warning and no throw.
 const FIVE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: 'e' }])
 </script>
@@ -944,7 +944,7 @@ test('a document holding fewer rows than the client computes reconciles — 41.1
 // THE REVERT: wire every row the document holds before comparing lengths — the mount throws
 // TypeError: undefined is not an object (evaluating 'row.id') and none of this is reached.
 const THREE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 </script>
@@ -990,7 +990,7 @@ test('a document holding more rows than the client computes warns and rebuilds �
 // 0 are due.
 function byPage(by: string, subject = 'rows'): string {
     return `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([
     { id: 'ada', name: 'Ada Lovelace' },
@@ -1088,7 +1088,7 @@ test('a row patched in place shows the patch', async () => {
 // 32.33 — AND ONLY THAT ROW. The array is written by nothing but a mutation of its own, so the rows
 // whose items the patch never reached are the same nodes.
 const PATCHED = (subject: string, mutation: string): string => `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([
     { id: 'ada', name: 'Ada Lovelace', place: { city: 'London' } },
@@ -1172,7 +1172,7 @@ test('a patch that adds a row makes that row alone', async () => {
 // THE REVERT: drop the `mark(parent)` at the end of `adopt`, and Grace keeps "Arlington".
 test('an object two rows share is fresh in both once the patch reaches it through each', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const office = { city: 'Arlington' }
 let rows = reactive([
@@ -1194,7 +1194,7 @@ let rows = reactive([
 // value: a row with a scope of its own renders the same. THE REVERT: emit the scope and `try` for an
 // empty body in `mountFunction`; this reports 5 of 5 rows with a scope of their own where 0 are due.
 const STATIC_ROWS = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 

@@ -1,4 +1,4 @@
-import { GET, POST } from 'abide/server'
+import { GET, POST } from '@abide/abide/server'
 import { storeRestoreDatabase } from '#server/storeRestoreDatabase'
 
 export const readSetting = GET(

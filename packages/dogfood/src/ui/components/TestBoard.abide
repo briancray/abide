@@ -2,7 +2,7 @@
 // EVERY TEST FILE, RUN FROM THE PAGE — one file per process, so a row lands when its own file
 // finishes (`harness/scripts/testRows.ts`). The bench board's shape, for the bench board's
 // reasons: one value holds the rows and a run patches into it as each lands.
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { matchesFilter, type RowItem, type TestCase, type TestRow } from 'harness/rows'
 import { runTests, testCatalog } from '#server/rpc/tests'
 import { messageOf } from '#ui/messageOf.ts'

@@ -1,4 +1,4 @@
-import { POST, response } from 'abide/server'
+import { POST, response } from '@abide/abide/server'
 import { responseCreatedDatabase } from '#server/responseCreatedDatabase'
 
 export const addContact = POST(

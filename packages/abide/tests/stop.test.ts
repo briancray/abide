@@ -14,7 +14,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 // Writes `stopped` where `MARK` names once `onStop`'s body has run — and never gets there where
 // `HANG_ON_STOP` is set, which is how a drain that never finishes is stood in for — held open by a
 // timer, as a pending promise alone lets the process run out of work and exit.
-const HOOKS = `import { onStop } from 'abide/server'
+const HOOKS = `import { onStop } from '@abide/abide/server'
 
 onStop(async (stop) => {
     if (process.env.HANG_ON_STOP) await new Promise(() => setInterval(() => {}, 1000))
@@ -26,7 +26,7 @@ onStop(async (stop) => {
 
 // KEYED BY ITS ARGS, so the rejection happens when it is called: a handler of none is one value, and
 // its body runs where it is declared — at boot.
-const HANDLERS = `import { POST } from 'abide/server'
+const HANDLERS = `import { POST } from '@abide/abide/server'
 
 export const fault = POST((args: { reason: string }) => {
     void Promise.reject(new Error(args.reason))
@@ -137,7 +137,7 @@ test('App.stop asked twice runs onStop once — 42.15', async () => {
     const mark = `${app}/twice.txt`
     await Bun.write(
         `${app}/twice.ts`,
-        `import { createApp } from 'abide/server'
+        `import { createApp } from '@abide/abide/server'
 import './server/app.ts'
 
 const app = await createApp()

@@ -14,7 +14,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const CLEAN = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Card from '#ui/components/Card.abide'
 import '#ui/app.css'
 
@@ -29,7 +29,7 @@ let thread = reactive<{ text: string } | undefined>(undefined)
 </main>`
 
 const BROKEN = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 const label: string = 5
@@ -45,7 +45,7 @@ const ECHOED = `{#if f}<p title={t}>x</p>{:else if e}<i></i>{/if}
 {#for r of or}<b>{r}</b>{/for}`
 
 const ROUTED = `<script>
-import { route } from 'abide'
+import { route } from '@abide/abide'
 
 const id: string = route.params().id
 const rest: string[] = route.params().rest
@@ -57,7 +57,7 @@ const listed: boolean = route.name.startsWith('/routed') && !route.navigating
 <p>{id} {rest.join('/')} {wrong} {named} {listed} {route.url.pathname}</p>`
 
 const LINKED = `<script>
-import { url } from 'abide'
+import { url } from '@abide/abide'
 
 const good = url('/routed/[id]/[...rest]', { id: 1, rest: ['s', 2] })
 const home = url('/')
@@ -69,7 +69,7 @@ const stale = url('/routed/[id]', { id: 1 })
 // 34.19 — a plain `let` the setup writes, beside one only a handler writes and one that is a
 // `reactive`: the first is the leak, and the other two are not.
 const SHARED = `<script module>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let opened = 0
 let clicks = 0
@@ -87,7 +87,7 @@ function bump() { clicks += 1 }
 `
 
 const WARNED = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let flag = reactive(true)
 let one = reactive(1)
@@ -127,7 +127,7 @@ const unsure = reactive(() => maybe ?? 'nobody')
 {#for row of decoy}<input value={row.id}/>{/for}`
 
 const CARD = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { title } = props<{ title: string }>()
 </script>
@@ -137,7 +137,7 @@ const { title } = props<{ title: string }>()
 // 33.4 — every tag held to what its component declares. The first five are right; each after them
 // is wrong in a different way.
 const PROPS = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Card from '#ui/components/Card.abide'
 import Bare from '#ui/components/Bare.abide'
 import Held from '#ui/components/Held.abide'
@@ -160,7 +160,7 @@ let name = reactive('ada')
 
 // 32.34 — a tag choosing by a value is held to the props of what it may hold, and may hold nothing.
 const CHOSEN = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Card from '#ui/components/Card.abide'
 
 let open = reactive(true)
@@ -174,7 +174,7 @@ let Shown = reactive(() => (open ? Card : undefined))
 // every key `__accessors` hands back as a plain accessor; `value.toUpperCase()` and the write are
 // both reported against this file.
 const HELD = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { value } = props<{ value: string }>()
 </script>
@@ -185,7 +185,7 @@ const { value } = props<{ value: string }>()
 // 33.4 — AN OPTIONAL PROP IS STILL ONE ACCESSOR: the key is optional to the caller, never the
 // accessor to the child. THE REVERT: drop the `-?` on `__accessors`; the read reports TS2344.
 const OPTIONAL = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { label } = props<{ label?: string }>()
 </script>
@@ -196,7 +196,7 @@ const { label } = props<{ label?: string }>()
 // it is a value, and JavaScript reads a line opening on `(` as a call on the line above. THE REVERT:
 // open every checked write on `(`; this reports TS2349, `Promise<void>` not callable.
 const AFTER_AWAIT = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let copied = reactive('')
 
@@ -210,7 +210,7 @@ async function copy() {
 
 // A WRITE NARROWS AS JAVASCRIPT'S DOES: after `x = 3` under `x === null`, `x` is a number.
 const NARROWED = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let x = reactive<number | null>(null)
 
@@ -261,13 +261,13 @@ beforeAll(async () => {
         'ui/pages/routed/[id]/[...rest]/page.abide': ROUTED,
         'ui/pages/linked/page.abide': LINKED,
         'ui/pages/routed/layout.abide': `<script>
-import { route } from 'abide'
+import { route } from '@abide/abide'
 
 const section: string | string[] | undefined = route.params().section
 </script>
 <slot/>`,
         'ui/components/Defaulted.abide': `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { start = 0 } = props<{ start?: number }>()
 </script>
@@ -527,7 +527,7 @@ test('an index signature beside typed props leaves them typed — 33.11', async 
             include: ['.'],
         }),
         'ui/components/Button.abide': `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const SIZES = { sm: 'p-1', md: 'p-2' }
 const COLORS = { stone: 'bg-stone-700', lime: 'bg-lime-700' }
@@ -572,7 +572,7 @@ test('a value opening at undefined is a value with strict off — 4.15', async (
             include: ['.'],
         }),
         'ui/pages/page.abide': `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 type Thing = { go: () => void }
 let thing = reactive<Thing | undefined>(undefined)
@@ -590,7 +590,7 @@ const run = () => thing?.go()
 test('a component typed by Attributes holds its callers to the element — 33.23', async () => {
     const attributed = appFixture({
         'ui/components/Button.abide': `<script>
-import { props, type Attributes } from 'abide'
+import { props, type Attributes } from '@abide/abide'
 
 const SIZES = { sm: 'p-1', md: 'p-2' }
 
@@ -619,7 +619,7 @@ import Button from '#ui/components/Button.abide'
 test('a component typed by Attributes over an SVG element holds its callers to it — 33.26', async () => {
     const icon = appFixture({
         'ui/components/Icon.abide': `<script>
-import { props, type Attributes } from 'abide'
+import { props, type Attributes } from '@abide/abide'
 
 const { class: className = '', ...attributes } = props<Attributes<'svg'>>()
 </script>
@@ -648,7 +648,7 @@ import Icon from '#ui/components/Icon.abide'
 test('a generic component is checked in its body and inferred at its callers — 34.13', async () => {
     const generic = appFixture({
         'ui/components/Select.abide': `<script lang="ts" generics="Item extends { id: string; label: string }">
-import { props } from 'abide'
+import { props } from '@abide/abide'
 const { items, onpick } = props<{ items: Item[]; onpick: (item: Item) => void }>()
 const label: string = items[0]?.label ?? ''
 </script>
@@ -682,7 +682,7 @@ function other(film: { id: string; label: string; year: string }) { void film }
 // declaration; both imported loops warn (3 against 1).
 test('an unkeyed loop over an imported value that declares `by` does not warn — 32.32', async () => {
     const imported = appFixture({
-        'ui/rows.ts': `import { reactive } from 'abide'
+        'ui/rows.ts': `import { reactive } from '@abide/abide'
 export const shared = reactive([{ id: 1 }], { by: 'id' })
 export const plain = reactive([{ id: 1 }])
 `,
@@ -724,8 +724,8 @@ test('a handler returning a Reactive nested in its value is refused by path — 
         const said: string[] = []
         const app = appFixture({
             'ui/pages/page.abide': '<p>hello</p>',
-            'server/rpc/people.ts': `import { reactive } from 'abide'
-import { GET } from 'abide/server'
+            'server/rpc/people.ts': `import { reactive } from '@abide/abide'
+import { GET } from '@abide/abide/server'
 
 const user = reactive({ name: 'Ada' })
 

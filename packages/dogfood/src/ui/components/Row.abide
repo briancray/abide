@@ -1,12 +1,12 @@
 <script module>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 // Once for the module, however many rows; per request on a server.
 let opened = reactive(0)
 </script>
 
 <script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { name } = props<{ name: string }>()
 

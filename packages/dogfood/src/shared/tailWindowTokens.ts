@@ -1,4 +1,4 @@
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 export type Token = { at: number; text: string }
 

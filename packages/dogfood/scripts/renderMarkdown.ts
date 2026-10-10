@@ -10,7 +10,7 @@
 // There is no `---` branch, and that is the DESIGN rule rather than an omission: the site
 // carries no horizontal rules at all, so one cannot come back by accident.
 
-import { escapeAttribute } from 'abide'
+import { escapeAttribute } from '@abide/abide'
 
 const HEADING = /^(#{1,4})\s+(.*)$/
 /**

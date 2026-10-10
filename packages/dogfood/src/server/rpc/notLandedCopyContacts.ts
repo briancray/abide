@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 
 const EMAILS: Record<string, string> = {
     ada: 'ada@example.com',

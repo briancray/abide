@@ -6,7 +6,7 @@ import { dirname } from 'node:path' // bun has no path helpers of its own
 // beside the tests is scanned by the naming and seam rules — and, under `--parallel`, is deleted
 // by its own worker while another worker is mid-glob. Both were real failures.
 //
-// Inside the REPO, though, so `abide` and `abide/runtime` resolve from the root node_modules the
+// Inside the REPO, though, so `@abide/abide` and `@abide/abide/runtime` resolve from the root node_modules the
 // way an app's would.
 const ROOT = new URL('../../../.test-modules/', import.meta.url).pathname
 

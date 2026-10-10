@@ -66,7 +66,7 @@ async function warningsWhile(body: () => Promise<void>): Promise<string[]> {
 // is one of the arm's own, read before it is declared, and the arm's first mount throws.
 test('an {#if} inside an arm is found, and its binding is live', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let outer = reactive(true)
 let inner = reactive(true)
@@ -97,7 +97,7 @@ let name = reactive('ada')
 // rendered document ... (41.10)` warnings where none is due, with neither row wired.
 test('an {#if} inside a {#for} row is found, and so is the sibling after it', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 'a', on: true }, { id: 'b', on: false }])
 </script>
@@ -124,7 +124,7 @@ let rows = reactive([{ id: 'a', on: true }, { id: 'b', on: false }])
 // rebuilds and refuses again, and `xy1` is never written.
 test('a run after a nested region is bound against the arm', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(true)
 let count = reactive(1)
@@ -150,7 +150,7 @@ let count = reactive(1)
 // Nothing warns, which is why the `<b>` is asserted as well as the tail.
 test('a sibling after a region inside an element is found from its close', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(true)
 let count = reactive(1)
@@ -180,7 +180,7 @@ let count = reactive(1)
 // child where two are.
 test('a blank run gets its node back, at the position it belongs', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let msg = reactive('')
 </script>
@@ -209,7 +209,7 @@ let msg = reactive('')
 // run finds the node the blank one made at the end of the parent and writes into it.
 test('a blank run does not steal the node of the run after it', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let label = reactive('')
 let count = reactive(0)
@@ -236,7 +236,7 @@ let count = reactive(0)
 // `abide:hydrate abide: no node at [1] ... (41.10)` where none is due, `#one` and `#two` unwired.
 test('an anchor past a blank run is walked after the run is filled', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let msg = reactive('')
 let a = reactive('A')
@@ -266,7 +266,7 @@ let b = reactive('B')
 // and this reports one `abide:hydrate ... (41.10)` where none is due.
 test('a static blank run is addressed even though it is never bound', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const nothing = ''
 let a = reactive('A')
@@ -299,7 +299,7 @@ let a = reactive('A')
 // where the re-rendered `<p>` is due — one block's failure taking the block away for good.
 test('a mismatch inside a block rebuilds the block and warns', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(true)
 let name = reactive('ada')
@@ -350,7 +350,7 @@ let name = reactive('ada')
 // by the catch written for a mismatch.
 test('a throw that is not a mismatch is not swallowed', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 const boom = (): string => {
@@ -395,7 +395,7 @@ const boom = (): string => {
 // that owns it, so the next swap leaves it behind.
 test('a blank run inside an arm gets its node between the anchors', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(true)
 let msg = reactive('')
@@ -430,7 +430,7 @@ let msg = reactive('')
 // sibling is the row's anchor rather than its run.
 test('a blank run inside a row moves with the row', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let mark = reactive('')
 let rows = reactive([
@@ -492,7 +492,7 @@ function swap() {
 // the corrupted node still in the list — where the rebuilt `<li>id p-b</li>` is due.
 test('a mismatch inside a row rebuilds the row and warns', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 'a' }, { id: 'b' }])
 let prefix = reactive('p')
@@ -532,7 +532,7 @@ let prefix = reactive('p')
 // region reference inside a row element, and it puts the walk one frame inside the row here.
 test('a blank run inside a row element does not join the row', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let mark = reactive('')
 let rows = reactive([{ id: 'a' }, { id: 'b' }])
@@ -573,7 +573,7 @@ function swap() {
 // where 1 is due, and it is 2 whatever the page shows.
 test('a row that leaves stops an {#if} arm opened inside it — 12.13', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive(['one', 'two'])
 let mark = reactive('')
@@ -600,7 +600,7 @@ let on = reactive(true)
 // `dropRow` — which is what stops a row as a list churns — never runs for any of them.
 test('a row that leaves stops a {#for} opened inside it — 12.13', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive(['one', 'two'])
 let mark = reactive('')
@@ -645,7 +645,7 @@ function lastInstance(name: string): Instance {
 
 test('an arm that closes stops the watch its <script> opened — 12.13', async () => {
     await mountPage(`<script>
-import { reactive, watch } from 'abide'
+import { reactive, watch } from '@abide/abide'
 
 let mark = reactive('')
 let on = reactive(true)
@@ -668,7 +668,7 @@ ${COUNTED.replace('NAME', "'arm'")}
 
 test('a row that leaves stops the watch its <script> opened — 12.13', async () => {
     await mountPage(`<script>
-import { reactive, watch } from 'abide'
+import { reactive, watch } from '@abide/abide'
 
 let rows = reactive(['one', 'two'])
 let mark = reactive('')
@@ -696,7 +696,7 @@ ${COUNTED.replace('NAME', 'row')}
 // where 1 is due, and each wakes again at the bump.
 test('a <script> that throws stops the watch it opened first — 12.13', async () => {
     await mountPage(`<script>
-import { reactive, watch } from 'abide'
+import { reactive, watch } from '@abide/abide'
 
 let mark = reactive('')
 let on = reactive(false)
@@ -730,7 +730,7 @@ test('a component that throws in an arm under {#try} shows the catch, once — 3
     const counted = globalThis as { kidRuns?: number }
     counted.kidRuns = 0
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let on = reactive(false)
 </script>
@@ -756,7 +756,7 @@ if (counted.kidRuns <= 25) throw new Error('kid')
 // — the reopened arm is missing and the grown row is too.
 test('an arm reopened and a row grown read the share their page holds — 10.5', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 reactive.share('theme', () => reactive('dark'))
 let on = reactive(true)
@@ -789,7 +789,7 @@ const theme = reactive.share('theme', () => reactive('row-own'))
 // where 0 are due.
 test('a row that leaves releases the values its <script> derived — 12.14', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive(['one', 'two'])
 let level = reactive(0)
@@ -822,7 +822,7 @@ const twice = reactive(() => level * 2)
 // due.
 test('a derived value its owner left behind is current, followed or read — 12.14', async () => {
     await mountPage(`<script>
-import { reactive, watch } from 'abide'
+import { reactive, watch } from '@abide/abide'
 
 let on = reactive(true)
 let level = reactive(0)
@@ -866,7 +866,7 @@ seen.take = () => plus
 // which the stop disposes 0 times where 1 is due.
 test('a component with nothing live runs its <script>, and stops what it opened — 41.6, 12.4', async () => {
     const { scope } = await mountPage(`<script>
-import { reactive, watch } from 'abide'
+import { reactive, watch } from '@abide/abide'
 
 let mark = reactive('')
 ;(globalThis as { bumpStatic?: (to: string) => void }).bumpStatic = (to) => {
@@ -899,7 +899,7 @@ ${COUNTED.replace('NAME', "'static'")}
 // because an arm that binds nothing opens no scope at all (the test below).
 test('an arm that swaps leaves one scope on the region above it — 12.13', async () => {
     const { scope: page } = await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let on = reactive(true)
 </script>
@@ -922,7 +922,7 @@ let on = reactive(true)
 // THE REVERT: call `build` tracked in `fillRegion` — `wakes` 2 -> 3 on each write of `count`.
 test('a value shown only inside an arm does not wake the arm choice — 14.1', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let show = reactive(false)
 let count = reactive(0)
@@ -948,7 +948,7 @@ let count = reactive(0)
 // THE REVERT: call `rgN_swap` tracked in `emitTry` — `wakes` 2 -> 3 on each write of `count`.
 test('a value shown only inside a catch arm does not wake the boundary — 14.1', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let broken = reactive(false)
 let count = reactive(0)
@@ -1004,7 +1004,7 @@ function held(owner: unknown, into = { scopes: 0, stops: 0 }) {
 // whatever its subject — 31 stops against 21.
 test('an {#if} whose arms bind nothing opens no scope and no mount — 32.12', async () => {
     const { scope } = await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const ROWS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((id) => ({ id, stub: id % 2 === 0, parts: ['p'] }))
 let selected = reactive(1)
@@ -1044,7 +1044,7 @@ let selected = reactive(1)
 // its block.
 test('a row grown in the browser fills the region inside it', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 'a', on: true }])
 
@@ -1087,7 +1087,7 @@ function add() {
 // parser makes one, and this reports 3 against the painted row's 1.
 test('a run in a grown row is one text node, and the sibling after it is found', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 'a', name: 'Ada' }])
 
@@ -1245,7 +1245,7 @@ test('a row the browser builds is the document the server would have written', a
     const differed: string[] = []
     for (const [what, body] of ROW_SHAPES) {
         const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let mark = reactive('m')
 let rows = reactive([{ id: 'a', name: 'Ada', on: true, none: '', width: '10px' }])
@@ -1312,7 +1312,7 @@ test('an arm the browser builds is the document the server would have written', 
     const differed: string[] = []
     for (const [what, arm] of ARM_SHAPES) {
         const source = `<script>
-import { reactive, raw } from 'abide'
+import { reactive, raw } from '@abide/abide'
 
 let on = reactive(true)
 let name = reactive('Ada')
@@ -1352,7 +1352,7 @@ const html = '<b>hi</b>'
 // range from its anchor. The swap leaves row b's `<b>` after row a, and this reports
 // `r,[,],span(b),r,[,b(a),],span(a),b(b),]`-shaped rows rather than each row whole.
 const STRANDED = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let mark = reactive('')
 let rows = reactive([{ id: 'a', on: true }])
@@ -1495,7 +1495,7 @@ test('a random multi-step reorder of multi-root rows keeps every row whole', asy
 test('a nested list’s row anchors are not the outer list’s rows', async () => {
     const said = await warningsWhile(async () => {
         await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let mark = reactive('')
 let rows = reactive([
@@ -1531,7 +1531,7 @@ function swap() {
 // disposed at the rebuild and wakes 0 times at the bump where once is due.
 test('an arm rebuilt by a mismatch keeps the watch its <script> opened — 12.13, 41.10', async () => {
     const source = `<script>
-import { reactive, watch } from 'abide'
+import { reactive, watch } from '@abide/abide'
 
 let mark = reactive('')
 let on = reactive(true)

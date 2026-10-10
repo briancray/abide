@@ -35,7 +35,7 @@ const click = (selector: string): void => {
 // `readsIn`) — the server writes `2` and this reports `2` where `4` is due after the click.
 test('a text run calling a function that reads a reactive value moves — 14.2', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let n = reactive(1)
 function big() { return n * 2 }
@@ -52,7 +52,7 @@ function big() { return n * 2 }
 // THE SAME READ FROM AN ATTRIBUTE. THE REVERT: the same one; `title` stays `2`.
 test('an attribute calling a function that reads a reactive value moves — 14.2, 32.3', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let n = reactive(1)
 function big() { return n * 2 }
@@ -70,7 +70,7 @@ function big() { return n * 2 }
 // says so, because `any` has no members to ask about. THE REVERT: the same one; `1` stays.
 test('a member of a value typed any is bound — 14.2', async () => {
     await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let n = reactive(1)
 const box: any = { get value() { return n() } }
@@ -90,7 +90,7 @@ const box: any = { get value() { return n() } }
 // `NotLanded` and this reports no document.
 test('a render continues past a function reading an unlanded value — 41.4', async () => {
     const { html } = await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const n = reactive(() => Promise.resolve(1))
 function big() { return n * 2 }
@@ -117,7 +117,7 @@ function big() { return n * 2 }
 // `emitBlock`: 3.
 test('a provably static position opens no binding', async () => {
     const { mounting, client } = await mountPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 const label = 'clicks'

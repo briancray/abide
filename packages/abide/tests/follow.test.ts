@@ -7,7 +7,7 @@ import { spawned } from 'harness/gate'
 import { BIN, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, invalidate, log, POST, reactive, refresh, refuse } from 'abide/server'
+const HANDLERS = `import { GET, invalidate, log, POST, reactive, refresh, refuse } from '@abide/abide/server'
 
 const shelf = reactive<string[]>(['dune'], { global: true })
 

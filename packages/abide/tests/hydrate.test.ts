@@ -25,7 +25,7 @@ const session = await typedSession()
 afterAll(removeTemporaryModules)
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 const label = 'clicks'
@@ -91,7 +91,7 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
 // the mount gate below reports `bindingRuns` 2 where it reports 1.
 test('a run that reads nothing reactive opens no binding', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 const label = 'clicks'
@@ -144,7 +144,7 @@ test('a static component nothing invokes emits no client module', async () => {
 // test reports no document at all rather than a document with one empty slot.
 test('a render continues past a value still in flight — 41.4, 32.23', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 </script>
@@ -181,7 +181,7 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 // test reports [] against [north, south] either way, and only the second one looks fine on screen.
 test('a render continues past a {#for} subject still in flight — 41.4, 32.22', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const rows = reactive(() => Promise.resolve(['north', 'south']))
 </script>
@@ -222,7 +222,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
 // most of it. This test then reports nothing rendered rather than a page with two empty values.
 test('a render continues past an unlanded attribute and style — 41.4', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const tone = reactive(() => Promise.resolve('warm'))
 const width = reactive(() => Promise.resolve('40px'))
@@ -263,7 +263,7 @@ const width = reactive(() => Promise.resolve('40px'))
 // `disabled="false"` and `hidden="false"`, and the first assertion reports it.
 test('a boolean attribute is present or absent, and any other is its text — 32.37', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let busy = reactive(false)
 let rows = reactive([{ id: 1, off: true }])
@@ -311,7 +311,7 @@ function flip() {
 // `attributeText`'s presence arm; the server writes a bare `hidden` and the binding does too.
 test('a presence attribute given a string carries it — 32.37', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let found = reactive<string | boolean>('until-found')
 </script>
@@ -352,7 +352,7 @@ let found = reactive<string | boolean>('until-found')
 // `emitClient` instead and the document is served with an empty region that never fills.
 test('a render continues past an {#if} subject still in flight — 41.4, 32.12', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const shown = reactive(() => Promise.resolve(true))
 </script>
@@ -384,7 +384,7 @@ test('an arm the client chose apart from the painted one is filled, not adopted 
     const side = globalThis as { armSide?: string | undefined }
     side.armSide = 'server'
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let pressed = reactive('')
 const side = (globalThis as { armSide?: string }).armSide
@@ -420,7 +420,7 @@ const side = (globalThis as { armSide?: string }).armSide
 // where 0 is due.
 test('an arm the client chose as the server did is adopted — 41.24', async () => {
     const { mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let on = reactive(false)
 </script>
@@ -458,7 +458,7 @@ let on = reactive(false)
 // the text beside it still moves; this reports `calm` where `urgent` is due.
 test('an attribute expression keeps moving after hydration — 32.3', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let tone = reactive('calm')
 const kind = 'card'
@@ -514,7 +514,7 @@ const kind = 'card'
 // `overdue` on the element and the class list never moves at all.
 test('a class: directive toggles one class and keeps the others — 32.10', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let late = reactive(false)
 </script>
@@ -559,7 +559,7 @@ let late = reactive(false)
 // moving the text to 42 — this reports `waiting`.
 test('an await operand holds the Reactive — 31.3', async () => {
     const { mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const total = reactive(async () => {
     await Bun.sleep(20)
@@ -645,7 +645,7 @@ test('a template position cannot await', async () => {
     let thrown = ''
     try {
         await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const rows = reactive(async () => 1)
 </script>
@@ -666,7 +666,7 @@ const rows = reactive(async () => 1)
 // `a template position cannot await` against a page that is entirely correct.
 test('a slot that declares its own async may await in it', async () => {
     const { mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let shown = reactive('idle')
 const later = async () => 'done'
@@ -699,7 +699,7 @@ const later = async () => 'done'
 // still warns, and this reports `B` where `B2` is due.
 test('a mismatch in one root binding does not stop the next — 41.10', async () => {
     const { mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let a = reactive('A')
 let b = reactive('B')
@@ -738,7 +738,7 @@ let b = reactive('B')
 // the click, where `AT&T 0` and `AT&T 1` are due.
 test('a live run writes its static entities as the characters they stand for — 32.27', async () => {
     const { mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 </script>
@@ -778,7 +778,7 @@ let count = reactive(0)
 // `title="AT&amp;amp;T 0"` and the first assertion reports it.
 test('the static text of an interpolated attribute is markup, and its slots are data — 32.27, 32.28', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let n = reactive(0)
 let rows = reactive([1])
@@ -834,7 +834,7 @@ const slotted = '#38;'
 // `&notin;x &amp;notin` where `∉x &notin` is due.
 test('a built row decodes static text by the text rule and an attribute by the attribute rule — 32.27', async () => {
     const { mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([1])
 </script>

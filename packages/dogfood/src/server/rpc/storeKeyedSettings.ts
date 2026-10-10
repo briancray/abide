@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 import { storeKeyedCache } from '#server/storeKeyedCache'
 
 export const getSettings = GET(storeKeyedCache, {

@@ -7,7 +7,7 @@
 // and the file tabs. `{% example name %}` becomes this card for the site and the same files as
 // fences for the markdown bundle.
 
-import { escapeAttribute } from 'abide'
+import { escapeAttribute } from '@abide/abide'
 
 import { ifPresent } from './ifPresent.ts'
 import {

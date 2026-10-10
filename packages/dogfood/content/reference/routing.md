@@ -105,7 +105,7 @@ outgoing page's while a layout's do not move.
 
 ```abide #ui/pages/invoices/[id]/[[tab]]/page.abide — excerpt
 <script>
-import { route } from 'abide'
+import { route } from '@abide/abide'
 
 const { id, tab = 'summary' } = route.params
 </script>

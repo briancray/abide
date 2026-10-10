@@ -5,7 +5,7 @@
 //
 // `aria-current="true"` rather than `"page"`: a tab marks the PLACE you are in, and the sidebar's
 // link is the page — two `"page"` marks on one document would each claim the same thing.
-import { route, url } from 'abide'
+import { route, url } from '@abide/abide'
 //
 // SPANS EVERY COLUMN of the body grid, and its own two are the sidebar's and the reading column's,
 // so the brand sits over the nav and the tabs start where a page's title does. Sticky, which is why

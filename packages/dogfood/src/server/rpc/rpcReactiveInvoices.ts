@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 import { rpcReactiveDatabase } from '#server/rpcReactiveDatabase'
 
 /** Address from the file path and export; schemas from the annotation. */

@@ -8,7 +8,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
-const HANDLERS = `import { GET, jsonSchema, POST, reactive, refuse } from 'abide/server'
+const HANDLERS = `import { GET, jsonSchema, POST, reactive, refuse } from '@abide/abide/server'
 
 export const echo = GET((args: { id: string }) => ({ id: args.id }))
 
@@ -71,7 +71,7 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
     // and the runtime's types beside it. THE REVERT: `^0.0.0` fails `bun install`, and without
     // `@types/bun` `abide check` reports `Bun` untyped in the starter's own `app.ts`.
     const manifest = await Bun.file(`${app}/package.json`).json()
-    expect(manifest.dependencies.abide).toBe(
+    expect(manifest.dependencies['@abide/abide']).toBe(
         `file:${new URL('..', import.meta.url).pathname.replace(/\/$/, '')}`,
     )
     expect(Object.keys(manifest.devDependencies)).toEqual(['@types/bun'])
@@ -138,7 +138,7 @@ test('build runs the plugins bunfig.toml declares over the client — 38.44', as
 // refused as an option the CLI does not know.
 test('run passes everything after the file to the script — 38.2', async () => {
     const dir = temporaryModule({
-        'script.ts': `import { request } from 'abide/server'
+        'script.ts': `import { request } from '@abide/abide/server'
 let scoped = 'no'
 try { request() } catch (thrown) { scoped = (thrown as Error).message.includes('22.1') ? 'scope with no request' : 'other' }
 console.log(JSON.stringify({ args: process.argv.slice(2), scoped }))

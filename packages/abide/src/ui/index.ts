@@ -1,4 +1,4 @@
-// The client runtime — what a compiled `.abide` bundle imports through `abide/runtime`.
+// The client runtime — what a compiled `.abide` bundle imports through `@abide/abide/runtime`.
 // Every module reached from here is in the client's static closure, so an export added here is
 // paid for on every page (CLAUDE.md, "seams and imports"). The list IS the budget.
 //
@@ -19,7 +19,7 @@
 // Nothing that finds a node by something added to the document, because a compiler may not invent
 // structure an author's CSS or queries can see.
 
-// THE ROUTER IS NOT HERE. It has its own entry (`ui/routing.ts`, `abide/routing`), which is what
+// THE ROUTER IS NOT HERE. It has its own entry (`ui/routing.ts`, `@abide/abide/routing`), which is what
 // keeps the list below the budget this header calls it — a subsystem only the emitted route table
 // reaches does not belong on what every compiled module resolves through.
 

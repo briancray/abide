@@ -10,7 +10,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const SAVED = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Card from '../components/Card.abide'
 
 let count = reactive(0)
@@ -21,7 +21,7 @@ let count = reactive(0)
 
 // Never written to disk — only the editor holds it.
 const EDITED = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Card from '../components/Card.abide'
 
 let count = reactive(0)
@@ -31,7 +31,7 @@ let count = reactive(0)
 <Card title="x"/>`
 
 const CARD = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { title } = props<{ title: string }>()
 </script>

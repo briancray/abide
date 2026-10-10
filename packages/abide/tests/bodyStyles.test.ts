@@ -9,7 +9,7 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(true)
 let rows = reactive(['ada', 'grace'])

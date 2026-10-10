@@ -1,5 +1,5 @@
-import { principal, refuse } from 'abide'
-import { POST } from 'abide/server'
+import { principal, refuse } from '@abide/abide'
+import { POST } from '@abide/abide/server'
 import { principalSessionDatabase } from '#server/principalSessionDatabase'
 
 export const signIn = POST(

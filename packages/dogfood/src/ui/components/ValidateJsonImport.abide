@@ -1,5 +1,5 @@
 <script>
-import { reactive, validateJson } from 'abide'
+import { reactive, validateJson } from '@abide/abide'
 
 const CONTACT = {
     type: 'object',

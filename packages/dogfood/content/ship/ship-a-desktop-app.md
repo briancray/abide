@@ -76,8 +76,8 @@ Turning both off fails the bundle, because the launcher would have nothing to of
 
 ```abide abide
 <script>
-import { props } from 'abide'
-import type { Launch } from 'abide/server'
+import { props } from '@abide/abide'
+import type { Launch } from '@abide/abide/server'
 
 const { name, start, fields, failure } = props<Launch>()
 </script>
@@ -113,7 +113,7 @@ Read on: [Manual rendering](../pages/render-a-document-yourself.md)
 
 ```abide abide
 <script module>
-import { menuItem } from 'abide'
+import { menuItem } from '@abide/abide'
 
 export const exportInvoices = menuItem({ label: 'Export…', key: 'cmd+e' })
 export const menu = [
@@ -126,7 +126,7 @@ export const menu = [
 </script>
 
 <script>
-import { watch } from 'abide'
+import { watch } from '@abide/abide'
 
 watch(() => exportInvoices.on(() => download()))
 </script>

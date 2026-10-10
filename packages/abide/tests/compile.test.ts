@@ -15,19 +15,19 @@ import { spawned } from 'harness/gate'
 import { addressOf, appFixture, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { config, GET } from 'abide/server'
+const HANDLERS = `import { config, GET } from '@abide/abide/server'
 
 export const name = GET(() => config().APP_NAME)
 `
 
 // A handler module no script below imports: its top level speaks on stderr if it ever runs.
-const UNTOUCHED = `import { GET } from 'abide/server'
+const UNTOUCHED = `import { GET } from '@abide/abide/server'
 
 console.error('untouched handler module ran')
 export const untouched = GET(() => 'untouched')
 `
 
-const HOOKS = `import { onStart } from 'abide/server'
+const HOOKS = `import { onStart } from '@abide/abide/server'
 
 let started = false
 onStart(async (start) => {
@@ -204,7 +204,7 @@ test('the executable alone opens a shell on the app it serves, and exit stops it
 test('run takes abide and the handlers from the executable, under its identity — 38.57, 38.58', async () => {
     await Bun.write(
         `${where}/script.ts`,
-        `import { config } from 'abide/server'
+        `import { config } from '@abide/abide/server'
 import { name } from '#server/rpc/identity'
 console.log(JSON.stringify({ configured: config().APP_NAME, handler: await name(), args: process.argv.slice(2) }))
 `,

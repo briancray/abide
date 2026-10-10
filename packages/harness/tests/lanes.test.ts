@@ -30,7 +30,7 @@ test('the two entries that are not lanes resolve too', async () => {
 // This walks the graph by RESOLUTION rather than by bundling, and the reason is that the two
 // previous spellings each passed with an abide edge planted in them. `Bun.build` with
 // `external: ['*']` bundles nothing, so the output is the entry's own text and an edge one module
-// deep never appears — verified: 3 pass, 0 fail with `import 'abide'` in a sibling module. Reading
+// deep never appears — verified: 3 pass, 0 fail with `import '@abide/abide'` in a sibling module. Reading
 // the sourcemap's `sources` instead fixes that and then misses abide specifically, because
 // `src/shared/index.ts` is `export {}` and an empty module contributes no mappings to bundle. So:
 // resolve every specifier from every file reached, and report the first that lands inside

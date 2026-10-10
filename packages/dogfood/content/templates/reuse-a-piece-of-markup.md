@@ -54,7 +54,7 @@ row's item without being handed it:
 
 ```abide #ui/pages/contacts/page.abide — excerpt
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { listContacts } from '#server/rpc/contacts'
 import type { Contact } from '#shared/Contact.ts'
 
@@ -83,7 +83,7 @@ invokes it by name:
 
 ```abide #ui/components/ContactTable.abide
 <script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 import type { Contact } from '#shared/Contact.ts'
 
 const { contacts, Row } = props<{
@@ -159,7 +159,7 @@ a panel has a default body without the caller having to know what it is:
 
 ```abide #ui/components/Panel.abide
 <script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { title } = props<{ title: string }>()
 </script>
@@ -193,7 +193,7 @@ a caller is held to the element's own attributes and its `onclick` is handed a `
 
 ```abide #ui/components/Button.abide
 <script>
-import { props, type Attributes } from 'abide'
+import { props, type Attributes } from '@abide/abide'
 
 const SIZES = { sm: 'px-2 py-1', md: 'px-3 py-2' }
 

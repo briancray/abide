@@ -1,4 +1,4 @@
-import { refuse } from 'abide'
+import { refuse } from '@abide/abide'
 import { z } from 'zod'
 
 export const notYours = refuse.named(

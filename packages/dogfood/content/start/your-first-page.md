@@ -9,7 +9,7 @@ it answers on — there is no route table to register it in, and no build step t
 
 ```abide #ui/pages/page.abide
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 </script>
@@ -47,7 +47,7 @@ The `<script>` block is the page's setup: ordinary imports, ordinary TypeScript,
 this instance of the page. Everything after it is the markup, and the two share one scope — the
 template resolves names against that script and nothing else.
 
-`import { reactive } from 'abide'` is a real import. Nothing in a `.abide` file is ambient, so a
+`import { reactive } from '@abide/abide'` is a real import. Nothing in a `.abide` file is ambient, so a
 name in the markup is a name you can follow back to where it came from.
 
 ## `count` is read by name, and written by name
@@ -65,7 +65,7 @@ compiling everywhere the sugar does, because the sugar is over those forms rathe
 of them. A `.ts` file — which has no template around it — writes them out:
 
 ```ts #ui/counters.ts
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 export const count = reactive(0)
 count.set(count() + 1)
@@ -84,7 +84,7 @@ The same page reaches your database by importing the function that reads it. Any
 from `#server/rpc/**` is callable from a page under the name it was declared with.
 
 ```ts #server/rpc/invoices.ts — excerpt
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 import { database } from '#server/database'
 
 export const getInvoice = GET(
@@ -95,7 +95,7 @@ export const getInvoice = GET(
 
 ```abide #ui/pages/invoices/[id]/page.abide — excerpt
 <script>
-import { reactive, route } from 'abide'
+import { reactive, route } from '@abide/abide'
 import { getInvoice } from '#server/rpc/invoices'
 
 const invoice = reactive(() => getInvoice({ id: route.params.id }))

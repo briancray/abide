@@ -1,5 +1,5 @@
 <script>
-import { props, reactive } from 'abide'
+import { props, reactive } from '@abide/abide'
 
 type Props = { name: string }
 

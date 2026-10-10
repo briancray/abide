@@ -1,5 +1,5 @@
 <script>
-import { reactive, watch } from 'abide'
+import { reactive, watch } from '@abide/abide'
 
 let notes = reactive('Called Tuesday.')
 let owner = reactive('ada')

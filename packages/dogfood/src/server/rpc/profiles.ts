@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 
 const PEOPLE: Record<string, { name: string; role: string }> = {
     '1': { name: 'Ada Lovelace', role: 'Engineer' },

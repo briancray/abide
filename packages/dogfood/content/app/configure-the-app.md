@@ -113,7 +113,7 @@ Read on: [Reloading](../values/decide-when-a-value-reloads.md) ·
 
 ## A page reads a setting through a handler
 
-`config` is imported from `abide/server`, so it is a server name and never reaches a bundle. A
+`config` is imported from `@abide/abide/server`, so it is a server name and never reaches a bundle. A
 page that needs a setting asks a handler for it — `retryPolicy` in the card above — and the
 handler decides which fields leave the process.
 

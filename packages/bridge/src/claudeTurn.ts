@@ -8,7 +8,7 @@
 
 import { mkdtemp, rm } from 'node:fs/promises' // bun has no temporary directory or recursive remove of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
-import type { AssistantEvent, ClaudeCodeConfig } from 'abide/server'
+import type { AssistantEvent, ClaudeCodeConfig } from '@abide/abide/server'
 import { readLines } from './readLines.ts'
 
 // What Claude Code names the one MCP server it is handed, and so the prefix on each tool it calls.

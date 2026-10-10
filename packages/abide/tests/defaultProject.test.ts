@@ -5,7 +5,7 @@
 // still builds — which is why the gate reads the output rather than the exit code.
 //
 // THE FIXTURE HAS NO PROJECT OF ITS OWN AND NONE ABOVE IT: `temporaryModule` writes inside the repo so
-// `abide` resolves, and the repo root carries `tsconfig.base.json` rather than a `tsconfig.json`.
+// `@abide/abide` resolves, and the repo root carries `tsconfig.base.json` rather than a `tsconfig.json`.
 
 import { afterAll, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
@@ -22,7 +22,7 @@ afterAll(removeTemporaryModules)
 test('an app with no tsconfig.json is typed against a default project — 38.31', async () => {
     const app = temporaryModule({
         'ui/app.html': `<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>`,
-        'ui/pages/page.abide': `<script>\nimport { reactive } from 'abide'\n\nlet count = reactive(0)\n</script>\n\n<main><p>{count}</p><button onclick={() => { count = count + 1 }}>+</button></main>`,
+        'ui/pages/page.abide': `<script>\nimport { reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n\n<main><p>{count}</p><button onclick={() => { count = count + 1 }}>+</button></main>`,
         'package.json': JSON.stringify({
             name: 'untyped-fixture',
             type: 'module',

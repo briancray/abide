@@ -18,7 +18,7 @@ afterAll(removeTemporaryModules)
 
 // The layout shape: chrome of its own, and the caller's markup in the middle of it.
 const CARD = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { title } = props<{ title: string }>()
 </script>
@@ -37,7 +37,7 @@ const click = (selector: string): void => {
 test('a caller writes markup between the tags and the child places it — 32.18', async () => {
     const { html, mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Card from './Card.abide'
 
 let clicks = reactive(0)
@@ -92,7 +92,7 @@ import Note from './Note.abide'
 test('a block inside the children swaps where the child put it — 32.12, 32.18', async () => {
     const { mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Card from './Card.abide'
 
 let open = reactive(false)
@@ -128,7 +128,7 @@ import Note from './Note.abide'
 test('a child grown in the browser fills its slot from the caller — 32.17, 32.18', async () => {
     const { mount } = await renderPage(
         `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Card from './Card.abide'
 
 let rows = reactive<string[]>([])

@@ -4,7 +4,7 @@
 //
 // PIPED, NOT READ. The rows are passed on as the runner wrote them; `harness/rows` is the contract.
 
-import { request } from 'abide/server'
+import { request } from '@abide/abide/server'
 import type { RowItem, RunnerFailure } from 'harness/rows'
 import { linesOf } from '#shared/linesOf.ts'
 

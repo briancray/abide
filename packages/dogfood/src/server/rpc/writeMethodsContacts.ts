@@ -1,4 +1,4 @@
-import { DELETE, GET, PATCH, PUT } from 'abide/server'
+import { DELETE, GET, PATCH, PUT } from '@abide/abide/server'
 import { writeMethodsDatabase } from '#server/writeMethodsDatabase'
 
 const contacts = writeMethodsDatabase.contacts

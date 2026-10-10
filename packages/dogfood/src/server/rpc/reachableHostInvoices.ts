@@ -1,4 +1,4 @@
-import { POST, reachable, refuse } from 'abide/server'
+import { POST, reachable, refuse } from '@abide/abide/server'
 import { reachableHostBilling } from '#server/reachableHostBilling'
 
 export const syncInvoice = POST(

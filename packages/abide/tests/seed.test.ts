@@ -11,7 +11,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 
 // SLOW ON PURPOSE. The render does not wait for it (41.4), so the call below arrives while the
 // render's load is still in flight — the case 41.13 has join rather than run again.
-const INVOICES = `import { GET } from 'abide/server'
+const INVOICES = `import { GET } from '@abide/abide/server'
 
 let runs = 0
 
@@ -24,7 +24,7 @@ export const getInvoice = GET(async ({ id }: { id: string }) => {
 `
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { getInvoice } from '#server/rpc/invoices.ts'
 
 const invoice = reactive(() => getInvoice({ id: '4021' }))
@@ -33,7 +33,7 @@ const invoice = reactive(() => getInvoice({ id: '4021' }))
 <main><p id="total">{invoice().id}</p></main>`
 
 // 26.9 — A RUNG THAT SIGNS THE CALLER OUT before the handler is reached, on a header of the test's.
-const SIGN_OUT = `import { middleware, principal } from 'abide/server'
+const SIGN_OUT = `import { middleware, principal } from '@abide/abide/server'
 
 middleware((next, { request }) => {
     if (request.headers.get('x-sign-out') === '1') principal.clear()
@@ -43,7 +43,7 @@ middleware((next, { request }) => {
 
 // 41.25, 41.26 — ONE CALL OF EACH KIND A PAGE IS PAINTED FROM: answered within the render's turn,
 // refused within it, and a stream that has closed within it.
-const TOTALS = `import { GET, refuse } from 'abide/server'
+const TOTALS = `import { GET, refuse } from '@abide/abide/server'
 
 export const getTotal = GET(({ id }: { id: string }) => ({ id, total: 12 }))
 
@@ -55,7 +55,7 @@ export const getLines = GET(async function* ({ id }: { id: string }) {
 `
 
 const PAINTED = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { getLines, getMissing, getTotal } from '#server/rpc/totals.ts'
 
 const total = reactive(() => getTotal({ id: 't' }))
@@ -66,7 +66,7 @@ const lines = reactive(() => getLines({ id: 'l' }))
 <main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p></main>`
 
 // 18.5, 41.13 — A `global` VALUE A RENDER READ, and a write that moves it before the browser's call.
-const SHELF = `import { GET, POST, reactive } from 'abide/server'
+const SHELF = `import { GET, POST, reactive } from '@abide/abide/server'
 
 const shelf = reactive<string[]>(['dune'], { global: true })
 
@@ -78,7 +78,7 @@ export const shelve = POST(({ title }: { title: string }) => {
 `
 
 // 18.23 — A `global` VALUE HOLDING A BINARY.
-const COVERS = `import { GET, reactive } from 'abide/server'
+const COVERS = `import { GET, reactive } from '@abide/abide/server'
 
 const cover = reactive(new Blob(['png'], { type: 'image/png' }), { global: true })
 
@@ -86,7 +86,7 @@ export const art = GET(cover)
 `
 
 const SHELF_PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { books } from '#server/rpc/shelf.ts'
 
 const shelved = reactive(() => books())

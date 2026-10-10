@@ -9,7 +9,7 @@
 // `bun packages/harness/scripts/benchRows.ts --list`, or `--scope section:Reactive --filter fan`,
 // from the repo root.
 
-import { TypeSession } from 'abide/compiler'
+import { TypeSession } from '@abide/abide/compiler'
 import {
     type Batched,
     batch,

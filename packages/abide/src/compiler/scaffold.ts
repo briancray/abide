@@ -43,7 +43,7 @@ function filesFor(name: string): Record<string, string> {
                     '#server/*': ['./src/server/*', './src/server/*.ts'],
                     '#shared/*': ['./src/shared/*', './src/shared/*.ts'],
                 },
-                dependencies: { abide: ABIDE_DEPENDENCY },
+                dependencies: { '@abide/abide': ABIDE_DEPENDENCY },
                 // `Bun`, `bun:sqlite` and the rest of the runtime a server module reaches for are
                 // typed by these, and `abide check` reports every one untyped without them.
                 devDependencies: { '@types/bun': 'latest' },

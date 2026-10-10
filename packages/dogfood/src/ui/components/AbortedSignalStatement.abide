@@ -1,5 +1,5 @@
 <script>
-import { aborted, reactive } from 'abide'
+import { aborted, reactive } from '@abide/abide'
 import { getStatement } from '#server/rpc/abortedSignalStatements'
 
 let stop = new AbortController()

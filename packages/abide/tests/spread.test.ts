@@ -6,7 +6,7 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const BADGE = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { label, tone, size } = props<{ label: string; tone: string; size: string }>()
 </script>
@@ -14,7 +14,7 @@ const { label, tone, size } = props<{ label: string; tone: string; size: string 
 <span class="badge">{label}/{tone}/{size}</span>`
 
 const FIELD = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { value } = props<{ value: string }>()
 value = value + ' (touched by the child)'
@@ -23,7 +23,7 @@ value = value + ' (touched by the child)'
 <em>{value}</em>`
 
 const ECHO = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { value } = props<{ value: string }>()
 </script>
@@ -31,7 +31,7 @@ const { value } = props<{ value: string }>()
 <b>{value}</b>`
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Badge from '#ui/components/Badge.abide'
 import Field from '#ui/components/Field.abide'
 import Echo from '#ui/components/Echo.abide'

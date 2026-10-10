@@ -1,4 +1,4 @@
-// A LEAF OF ITS OWN for `isReactive`'s reason: `rowKeyOf` is on the `abide/runtime` barrel every
+// A LEAF OF ITS OWN for `isReactive`'s reason: `rowKeyOf` is on the `@abide/abide/runtime` barrel every
 // compiled client module resolves through, and reaching `Reactive.ts` from there puts the core in
 // the chunk every page loads. The cell is read here, in the core's folder, so its layout stays the
 // core's.

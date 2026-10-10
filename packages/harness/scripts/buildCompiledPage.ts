@@ -16,8 +16,8 @@ import {
     emitComponent,
     parseAbide,
     TypeSession,
-} from 'abide/compiler'
-import { render } from 'abide/server'
+} from '@abide/abide/compiler'
+import { render } from '@abide/abide/server'
 import { armLayers } from './armLayers.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
@@ -97,8 +97,8 @@ export async function buildCompiledPage(
             // client pays the same thing — and it is what `{#for}` emits by construction.
             [
                 `import mount from './Page.client.ts'`,
-                `import { flushSync, reactive, watch } from 'abide'`,
-                `import { escapeless, setText } from 'abide/runtime'`,
+                `import { flushSync, reactive, watch } from '@abide/abide'`,
+                `import { escapeless, setText } from '@abide/abide/runtime'`,
                 `const g = globalThis`,
                 // THE HOST HOLDS THE PAGE AND NOTHING ELSE, so the pair `render` wrote round it is
                 // the host's first and last child.

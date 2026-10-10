@@ -8,7 +8,7 @@ import { appFixture, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
-const HANDLER = `import { GET } from 'abide/server'
+const HANDLER = `import { GET } from '@abide/abide/server'
 
 export const ping = GET(() => 'pong')
 `

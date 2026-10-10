@@ -1,5 +1,5 @@
 <script>
-import { jsonSchema, reactive } from 'abide'
+import { jsonSchema, reactive } from '@abide/abide'
 
 let deal = reactive({ seats: 48 }, {
     schema: jsonSchema<{ seats: number }>({

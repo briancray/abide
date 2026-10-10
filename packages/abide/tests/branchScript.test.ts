@@ -23,7 +23,7 @@ async function mountSource(source: string): Promise<string> {
 }
 
 const ROWS = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([
     { id: 'ada', name: 'Ada' },
@@ -106,7 +106,7 @@ test('two scripts in one body are refused', () => {
 })
 
 const ARMS = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let open = reactive(true)
 let name = reactive('ada')
@@ -153,7 +153,7 @@ test('a script inside a {#try} is refused', () => {
 })
 
 const ARM_VALUE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 </script>
 
 {#if true}<script>
@@ -182,7 +182,7 @@ test("a value an arm's script declares is read and written by name", async () =>
 // template position only at the file's top; both reads in the arm go unwarned (0 against 2).
 test("a read an arm's slot defers warns as a top-level one does — 14.16", async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let one = reactive(1)
 </script>
@@ -209,7 +209,7 @@ setTimeout(() => one, 0)
 // local read through `__values` like the page's; the clean file reports `Cannot find name 'inner'`.
 test("an arm's value checks clean, and a wrong use of it is reported — 38.3", async () => {
     const arms = (use: string) => `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 </script>
 
 {#if true}<script>

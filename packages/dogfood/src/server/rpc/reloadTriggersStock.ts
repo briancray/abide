@@ -1,4 +1,4 @@
-import { GET, reactive } from 'abide/server'
+import { GET, reactive } from '@abide/abide/server'
 import { reloadTriggersDatabase } from '#server/reloadTriggersDatabase'
 
 type Shelf = { warehouse: string; sku: string }

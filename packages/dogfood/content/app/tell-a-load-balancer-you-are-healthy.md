@@ -59,7 +59,7 @@ Read on: [Lifecycle](run-code-at-start-and-stop.md) · [Logging](record-what-hap
 
 ## `health` is an rpc that takes no args
 
-`health` is an `Rpc`, imported from `abide` and called the same way on both sides: `health()` in
+`health` is an `Rpc`, imported from `@abide/abide` and called the same way on both sides: `health()` in
 a page, `await health()` in a handler. The call is what asks, so a page that never makes it
 loads no account.
 

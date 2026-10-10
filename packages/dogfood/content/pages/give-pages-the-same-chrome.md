@@ -14,7 +14,7 @@ a navigation between two of them changes what is in the slot and nothing around 
 
 ```abide #ui/pages/layout.abide — excerpt
 <script>
-import { principal } from 'abide'
+import { principal } from '@abide/abide'
 </script>
 
 <header>

@@ -1,5 +1,5 @@
 <script>
-import { reactive, refresh } from 'abide'
+import { reactive, refresh } from '@abide/abide'
 import { salesByRegion } from '#server/rpc/streamRowsReports'
 
 const rows = reactive(() => salesByRegion({ year: 2026 }))

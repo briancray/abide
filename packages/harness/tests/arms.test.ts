@@ -2869,7 +2869,7 @@ test('claude-code: a turn is refused until a bridge pairs, then runs on that bri
     click('#connect')
     await Bun.sleep(20)
     const command = read('#command')
-    expect(command).toMatch(/^bunx abide-bridge@0\.1\.0 \S+ \S+$/)
+    expect(command).toMatch(/^bunx @abide\/bridge@0\.1\.0 \S+ \S+$/)
     expect((document.querySelector('#paired') as HTMLElement).hidden).toBe(true)
 
     // THE BRIDGE, as the reader's terminal would run it: it dials in with the code and reads turns.

@@ -29,12 +29,12 @@ await Promise.resolve()
 </script>`),
     }
     const before = parseAbide(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 let count = reactive(0)
 </script>
 <p>{count}</p>`)
     const after = parseAbide(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 const step = 1
 const other = 2
 let count = reactive(0)
@@ -68,7 +68,7 @@ let count = reactive(0)
 // fails on the 33.14 error, reported unhandled, before its refusal is read.
 test('a nested props pattern is refused without an unhandled rejection', async () => {
     const file = parseAbide(`<script>
-import { props, reactive } from 'abide'
+import { props, reactive } from '@abide/abide'
 let count = reactive(0)
 const step = 1
 const { a: { b } } = props<{ a: { b: number } }>()

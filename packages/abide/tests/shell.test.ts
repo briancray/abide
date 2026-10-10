@@ -12,7 +12,7 @@ let app = ''
 beforeAll(async () => {
     app = appFixture({
         'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/greetings.ts': `import { GET, POST } from 'abide/server'
+        'server/rpc/greetings.ts': `import { GET, POST } from '@abide/abide/server'
 
 export const hello = GET(() => 'hello')
 export const remember = POST((args: { name: string }) => args.name)

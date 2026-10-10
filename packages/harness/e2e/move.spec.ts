@@ -38,7 +38,7 @@ const REPO = new URL('../../../', import.meta.url).pathname
 // three, `b` keeps its place in the order but every sibling around it is rewritten, which is the
 // case where a rebuild and a move look identical from the outside.
 const PAGE_SOURCE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 </script>

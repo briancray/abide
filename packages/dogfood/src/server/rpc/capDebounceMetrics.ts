@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 
 const BY_REGION: Record<string, number> = {
     n: 412,

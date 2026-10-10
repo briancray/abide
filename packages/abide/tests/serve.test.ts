@@ -27,7 +27,7 @@ const SHELL = `<!doctype html><html><head><meta charset="utf-8"></head><body></b
 // emitted module lives in the build tree, which holds no `home.css` and no `greeting.ts`, so either
 // left as written fails the build this whole file is served from.
 const HOME = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Badge from '#ui/components/Badge.abide'
 import '../home.css'
 import { greeting } from './greeting.ts'
@@ -44,7 +44,7 @@ let count = reactive(0)
 // the import map points at. `componentGraph` resolves it to a path inside the build; without that
 // the bundle cannot resolve the client half and the build fails.
 const BADGE = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { label } = props<{ label: string }>()
 </script>
@@ -54,7 +54,7 @@ const { label } = props<{ label: string }>()
 // 33.4 through a page. The address supplies `id` and the page reads it, which is a prop read and
 // nothing else — so it lowers to an accessor call and only an accessor answers it.
 const INVOICE = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { params } = props<{ params: { id: string } }>()
 </script>
@@ -80,7 +80,7 @@ import '#ui/broken.ts'
 
 <main id="broken"><h1>Broken</h1></main>`
 
-const LEDGER = `import { GET } from 'abide/server'
+const LEDGER = `import { GET } from '@abide/abide/server'
 
 export const listRows = GET(() =>
     Array.from({ length: 120 }, (_, at) => ({ id: \`row_\${at}\`, status: at % 2 === 0 ? 'open' : 'paid' })),

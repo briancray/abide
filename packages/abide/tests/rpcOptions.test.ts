@@ -6,7 +6,7 @@ import { rpcRequest } from '#shared/rpcRequest.ts'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, jsonSchema, POST, reactive, refuse } from 'abide/server'
+const HANDLERS = `import { GET, jsonSchema, POST, reactive, refuse } from '@abide/abide/server'
 
 const order: string[] = []
 let innerRuns = 0
@@ -144,7 +144,7 @@ beforeAll(async () => {
         'ui/pages/page.abide': '<main>home</main>',
         'server/rpc/options.ts': HANDLERS,
         // 16.55 — the environment's ceiling, for a handler that names none of its own.
-        'server/app.ts': `import { onConfig } from 'abide/server'
+        'server/app.ts': `import { onConfig } from '@abide/abide/server'
 
 onConfig(() => ({ ABIDE_MAX_REQUEST_BODY_SIZE: 1024 }))
 `,

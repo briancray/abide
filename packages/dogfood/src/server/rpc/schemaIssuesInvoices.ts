@@ -1,4 +1,4 @@
-import { GET, reactive } from 'abide/server'
+import { GET, reactive } from '@abide/abide/server'
 import { z } from 'zod'
 import { schemaIssuesDatabase } from '#server/schemaIssuesDatabase'
 

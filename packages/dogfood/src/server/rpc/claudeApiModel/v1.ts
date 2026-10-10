@@ -1,4 +1,4 @@
-import { POST, sse } from 'abide/server'
+import { POST, sse } from '@abide/abide/server'
 
 // A stand-in for the Messages API, streaming back the body it was sent.
 export const messages = POST(

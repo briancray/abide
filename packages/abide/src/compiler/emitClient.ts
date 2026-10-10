@@ -285,7 +285,7 @@ export function emitClient(
     const markup = routed
         ? deferredMarkup(levelMarkup, owning.declared, lowering)
         : levelMarkup
-    // The escaping is an APP's (`abide`); everything else is the client runtime's (`abide/runtime`).
+    // The escaping is an APP's (`@abide/abide`); everything else is the client runtime's (`@abide/abide/runtime`).
     // THE SETUP IS NOT RE-INDENTED. Adding a margin to every line rewrites the INSIDE of a
     // multi-line template literal, so a string constant gains four spaces it never had.
     return `${moduleImports(lowering, (name) => (SHARED_NAMES.has(name) ? SHARED_SPECIFIER : RUNTIME_SPECIFIER), [moduleSetup, setup])}

@@ -1,4 +1,4 @@
-import { log, POST, trace } from 'abide/server'
+import { log, POST, trace } from '@abide/abide/server'
 import { traceLinesBilling } from '#server/traceLinesBilling'
 
 export const syncContact = POST(

@@ -1,5 +1,5 @@
 <script>
-import { principal, reactive } from 'abide'
+import { principal, reactive } from '@abide/abide'
 import { searchInvoices } from '#server/rpc/rungOrderInvoices'
 import { signIn, signOut } from '#server/rpc/rungOrderSession'
 

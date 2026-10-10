@@ -56,7 +56,7 @@ function declare(
         (prelude !== '' || body.includes('reactive(')) &&
         !/import\s*\{[^}]*\breactive\b/.test(body)
     )
-        prelude = `import { reactive } from 'abide'\n${prelude}`
+        prelude = `import { reactive } from '@abide/abide'\n${prelude}`
     if (prelude === '') return { source, prelude }
     if (open === null)
         return { source: `<script>${prelude}</script>${source}`, prelude }

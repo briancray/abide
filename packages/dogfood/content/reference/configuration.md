@@ -126,7 +126,7 @@ it against `'production'` is comparing against the string it was started with.
 
 ### Declaring the app's own config
 
-{% snippet config-coerced src/server/app.ts declare module 'abide/server' … onConfig( %}
+{% snippet config-coerced src/server/app.ts declare module '@abide/abide/server' … onConfig( %}
 
 ### Running work around the boot
 

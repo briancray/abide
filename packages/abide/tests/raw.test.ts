@@ -83,7 +83,7 @@ const out = (): Element => document.querySelector('#out') as Element
 // and seven of the eight fail.
 test('a live {raw(html)} writes its next value as markup', async () => {
     const { html, said } = await mountCounted(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let html = reactive('<b>one</b>')
 let count = reactive(0)
@@ -105,7 +105,7 @@ let count = reactive(0)
 // THE SAME RUN WITH TEXT ON BOTH SIDES OF IT — one run to the parser, and one to the anchors.
 test('a live raw value inside a run of text is the whole run, anchored', async () => {
     const { said } = await mountCounted(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let html = reactive('<b>one</b>')
 </script>
@@ -126,7 +126,7 @@ let html = reactive('<b>one</b>')
 // THE REVERT: the pre-fix `setText` emitter. Both report `"<b>bold</b>"` as text where the
 // anchored `b(bold)` is due — from a string first on the switch, from a `Raw` first at hydration.
 const SWITCHING = (first: string): string => `<script>
-import { reactive, raw, type Raw } from 'abide'
+import { reactive, raw, type Raw } from '@abide/abide'
 
 let value = reactive<string | Raw>(${first})
 </script>
@@ -170,7 +170,7 @@ test('a slot holding a raw value and then a string renders each as itself', asyn
 // 41.10's "text was due" AND "a region was due" warnings.
 test('hydration keeps the markup a raw slot was painted with', async () => {
     const { said } = await mountCounted(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let html = reactive('<b>one</b><em>two</em>')
 let on = reactive(true)
@@ -196,7 +196,7 @@ let on = reactive(true)
 
 test('hydrating a painted raw slot creates no node', async () => {
     const { mount } = await renderPage(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let html = reactive('<b>one</b>')
 </script>
@@ -219,7 +219,7 @@ let html = reactive('<b>one</b>')
 // text: `"<b>a</b>"` where `b(a)` is due.
 test('a raw slot in a {#for} row renders as markup, painted and grown', async () => {
     const { said } = await mountCounted(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let tag = reactive('b')
 let rows = reactive([{ id: 'a' }])
@@ -255,7 +255,7 @@ let rows = reactive([{ id: 'a' }])
 // with the row it stands in, and a sibling after it in the row is still found.
 test('a raw slot at the top of a row moves with its row', async () => {
     const { said } = await mountCounted(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let tag = reactive('b')
 let rows = reactive([{ id: 'a' }, { id: 'c' }])

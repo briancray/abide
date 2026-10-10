@@ -7,7 +7,7 @@
 // inside the page's own request, as the person at the page. No credential of theirs reaches this
 // machine, and none of this machine's reaches the site.
 
-import type { AssistantEvent } from 'abide/server'
+import type { AssistantEvent } from '@abide/abide/server'
 import { claudeTurn, type TurnRequest } from './claudeTurn.ts'
 import { readLines } from './readLines.ts'
 

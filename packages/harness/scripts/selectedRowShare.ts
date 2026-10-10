@@ -22,7 +22,7 @@ const ROWS = Number(process.argv[2] ?? '1000')
 const RUNS = 5
 
 const page = (row: string): string => `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const rows = reactive(
     Array.from({ length: ${ROWS} }, (_, at) => ({ id: at, label: 'row ' + at })),

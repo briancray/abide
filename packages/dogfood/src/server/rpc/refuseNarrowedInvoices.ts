@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 import { refuseNarrowedDatabase } from '#server/refuseNarrowedDatabase'
 import { notYours, superseded } from '#shared/refuseNarrowedFailures'
 

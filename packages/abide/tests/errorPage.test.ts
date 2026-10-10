@@ -5,7 +5,7 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const ROOT_ERROR = `<script>
-import { notFound, props, type Failed } from 'abide'
+import { notFound, props, type Failed } from '@abide/abide'
 
 const { failure } = props<{ failure: Failed<string, unknown> }>()
 </script>
@@ -18,7 +18,7 @@ const { failure } = props<{ failure: Failed<string, unknown> }>()
 {/if}`
 
 const SECTION_ERROR = `<script>
-import { props, type Failed } from 'abide'
+import { props, type Failed } from '@abide/abide'
 
 const { failure } = props<{ failure: Failed<string, unknown> }>()
 </script>
@@ -27,7 +27,7 @@ const { failure } = props<{ failure: Failed<string, unknown> }>()
 
 // An error page that fails as it renders.
 const BROKEN_ERROR = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { failure } = props<{ failure: { data: { path: string } } }>()
 const missing = undefined as unknown as { boom: string }
@@ -36,7 +36,7 @@ const missing = undefined as unknown as { boom: string }
 <p>{missing.boom} {failure.data.path}</p>`
 
 // 16.38 — handlers a form posts to with no script on the page.
-const FORMS = `import { POST, redirect, refuse } from 'abide/server'
+const FORMS = `import { POST, redirect, refuse } from '@abide/abide/server'
 
 export const save = POST(({ amount }: { amount: string | string[] }) =>
     Number(amount) > 0 ? { saved: amount } : refuse(422, 'The amount has to be above zero.'),
@@ -47,13 +47,13 @@ export const move = POST(() => redirect('/elsewhere', 303))
 
 // 41.1, 35.2 — A DETAIL PAGE WHOSE RECORD IS NOT THERE. The handler refuses, the page reads the
 // refusal while it is built, and nothing of the document has gone out yet.
-const RECORDS = `import { GET, notFound } from 'abide/server'
+const RECORDS = `import { GET, notFound } from '@abide/abide/server'
 
 export const record = GET(({ id }: { id: number }) => (id === 1 ? { title: 'The first record' } : notFound()))
 `
 
 const RECORD_PAGE = `<script>
-import { reactive, route } from 'abide'
+import { reactive, route } from '@abide/abide'
 import { record } from '#server/rpc/records'
 
 const found = reactive(() => record({ id: Number(route.params().id) }))
@@ -79,7 +79,7 @@ beforeAll(async () => {
         'server/rpc/records.ts': RECORDS,
         'ui/pages/records/[id]/page.abide': RECORD_PAGE,
         'ui/pages/records/error.abide': `<script>
-import { props, type Failed } from 'abide'
+import { props, type Failed } from '@abide/abide'
 
 const { failure } = props<{ failure: Failed<string, unknown> }>()
 </script>

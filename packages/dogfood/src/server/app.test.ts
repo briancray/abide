@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { createApp } from 'abide/server'
+import { createApp } from '@abide/abide/server'
 import { startHookDatabase } from '#server/startHookDatabase'
 
 // `createApp` finds the app in the working directory (38.26).

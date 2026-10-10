@@ -3,7 +3,7 @@
 // opening one is seconds, and every compile after it is not.
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
-import { emitComponent, parseAbide, TypeSession } from 'abide/compiler'
+import { emitComponent, parseAbide, TypeSession } from '@abide/abide/compiler'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 

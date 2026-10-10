@@ -16,7 +16,7 @@ import { expect, test } from '@playwright/test'
 const REPO = new URL('../../../', import.meta.url).pathname
 
 const PAGE_SOURCE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 const label = 'clicks'

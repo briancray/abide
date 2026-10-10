@@ -5,7 +5,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, jsonSchema, log, POST, reactive, refuse } from 'abide/server'
+const HANDLERS = `import { GET, jsonSchema, log, POST, reactive, refuse } from '@abide/abide/server'
 
 export const listInvoices = GET(() => [{ id: 1 }], { description: 'Every invoice.' })
 

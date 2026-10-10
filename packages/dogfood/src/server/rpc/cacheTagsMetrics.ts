@@ -1,4 +1,4 @@
-import { GET, reactive } from 'abide/server'
+import { GET, reactive } from '@abide/abide/server'
 import { cacheTagsDatabase } from '#server/cacheTagsDatabase'
 
 type Region = { region: string }

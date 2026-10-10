@@ -1,4 +1,4 @@
-import { GET, reactive } from 'abide/server'
+import { GET, reactive } from '@abide/abide/server'
 import { cacheCanonicalDatabase } from '#server/cacheCanonicalDatabase'
 
 type Query = { range: string; region: string; compare?: string | undefined }

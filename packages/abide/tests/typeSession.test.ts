@@ -21,12 +21,12 @@ afterAll(() => session.close())
 // missed, which is 1 more.
 test('a reactive name is told from an ordinary one by its type', async () => {
     const file = parseAbide(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
-declare function makeCount(): import('abide').Reactive<number>
+declare function makeCount(): import('@abide/abide').Reactive<number>
 
 let rows = reactive([{ id: 'ada' }])
-const count: import('abide').Reactive<number> = reactive(0)
+const count: import('@abide/abide').Reactive<number> = reactive(0)
 const fromHelper = makeCount()
 const step = 1
 const aliased = 'reactive(0)'
@@ -57,7 +57,7 @@ afterAll(removeTemporaryModules)
 // `5` and `10` — 2 wrong slots, and the write silently rebinds the name instead of setting it.
 test('a page reads and writes a reactive name and renders the result', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(2)
 const step = 3
@@ -125,13 +125,13 @@ import { onboarding } from '${ROOT}src/conversations.ts'
 // annotated `held` is 31.3's own hold, and stays a `Reactive` either way.
 test('a binding of a reactive name holds its value, declared or imported — 31.3', async () => {
     const source = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { onboarding } from '${ROOT}src/conversations.ts'
 let a = reactive(1)
 let b = a
 let c = (b)
 let greeting = onboarding
-const held: import('abide').Reactive<number> = a
+const held: import('@abide/abide').Reactive<number> = a
 </script>
 
 <p>{b}|{c}|{greeting.text}|{held}</p>`
@@ -158,12 +158,12 @@ const held: import('abide').Reactive<number> = a
 // are real names and the types are real types, so nothing about the answer looks wrong.
 test('a second file in the same session is not answered from the first', async () => {
     const first = parseAbide(
-        `<script>\nimport { reactive } from 'abide'\nconst a = reactive(1)\nconst b = 2\n</script><p>{a}</p>`,
+        `<script>\nimport { reactive } from '@abide/abide'\nconst a = reactive(1)\nconst b = 2\n</script><p>{a}</p>`,
     )
     expect(namesRead(first, await session.reads(PAGE, first))).toEqual(['a'])
 
     const second = parseAbide(
-        `<script>\nimport { reactive } from 'abide'\nconst a = 1\nconst b = reactive(2)\n</script><p>{b}</p>`,
+        `<script>\nimport { reactive } from '@abide/abide'\nconst a = 1\nconst b = reactive(2)\n</script><p>{b}</p>`,
     )
     expect(namesRead(second, await session.reads(PAGE, second))).toEqual(['b'])
 })
@@ -182,7 +182,7 @@ test('a whole build takes ONE snapshot, not one per file', async () => {
             sources.push({
                 path: `${ROOT}src/batch-${at}.abide`,
                 file: parseAbide(
-                    `<script>\nimport { reactive } from 'abide'\nconst v${at} = reactive(${at})\nconst plain${at} = ${at}\n</script><p>{v${at}}</p>`,
+                    `<script>\nimport { reactive } from '@abide/abide'\nconst v${at} = reactive(${at})\nconst plain${at} = ${at}\n</script><p>{v${at}}</p>`,
                 ),
             })
 
@@ -203,7 +203,7 @@ test('a whole build takes ONE snapshot, not one per file', async () => {
 })
 
 const PROBE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 let rows = reactive([1])
 </script>
 <p>{rows}</p>`
@@ -261,7 +261,7 @@ test('a page path with a doubled separator still finds its shadow', async () => 
 // prints its `Reactive` first.
 test('a Reactive under an alias or another name is reactive, and a lookalike is not', async () => {
     const file = parseAbide(`<script>
-import { reactive, type Reactive } from 'abide'
+import { reactive, type Reactive } from '@abide/abide'
 import type { Signal } from './Signal.ts'
 
 type Counter = Reactive<number>
@@ -347,12 +347,12 @@ test('closing a session kills its checker process', async () => {
 // offsets over the second's.
 test('two spellings of one path never answer from each other', async () => {
     const first = parseAbide(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 let alpha = reactive(1)
 </script>
 <p>{alpha}</p>`)
     const second = parseAbide(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 const filler = 0
 let beta = reactive(2)
 </script>

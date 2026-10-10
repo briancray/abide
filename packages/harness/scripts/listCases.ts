@@ -21,7 +21,7 @@ import {
     REGION_OPEN,
     Scope,
     updateList,
-} from 'abide/runtime'
+} from '@abide/abide/runtime'
 
 type Case = {
     name: string

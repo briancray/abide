@@ -1,4 +1,4 @@
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { tooLong } from '#shared/channelTransformFailures.ts'
 
 export type Turn = { speaker: string; text: string }

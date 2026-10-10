@@ -14,7 +14,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 // handler, and the bundle is searched for it.
 const SECRET = 'db-password-7f3a91'
 
-const INVOICES = `import { GET, POST, refuse, request, response } from 'abide/server'
+const INVOICES = `import { GET, POST, refuse, request, response } from '@abide/abide/server'
 import { SECRET } from '#server/database.ts'
 
 const notYours = refuse.named('NotYours', 403, 'That invoice belongs to someone else.', {
@@ -86,7 +86,7 @@ export const releaseRows = POST(() => {
 `
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { getInvoice } from '#server/rpc/invoices.ts'
 
 const invoice = reactive(() => getInvoice({ id: '4021' }))
@@ -117,7 +117,7 @@ beforeAll(async () => {
         'server/database.ts': `export const SECRET = '${SECRET}'\n`,
         'server/rpc/invoices.ts': INVOICES,
         // `default` answers at the module's own path.
-        'server/rpc/health.ts': `import { GET } from 'abide/server'\n\nexport default GET(() => ({ up: true }))\n`,
+        'server/rpc/health.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ up: true }))\n`,
     }))
 }, 30_000)
 
@@ -209,7 +209,7 @@ test('a handler reads its request and writes its response — 22.1, 22.9', async
 // 16.28 — THE BROWSER GETS THE WRAPPER AND NOT THE MODULE. The handler module imports the secret,
 // the page imports the handler, and the bundle carries the address and not the secret. THE REVERT:
 // drop `fence` from `bundleClient`'s plugins; the server module is bundled as written and the
-// secret is in the client — along with `abide/server` and everything it reaches.
+// secret is in the client — along with `@abide/abide/server` and everything it reaches.
 test('the browser bundle carries the address and none of the server module — 16.28', async () => {
     const chunks = [
         ...new Bun.Glob('**/*.js').scanSync({ cwd: `${app}/.abide/client` }),
@@ -239,7 +239,7 @@ test('a page importing server code that is not a handler does not build — 16.2
 test('an rpc module exporting something that is not a handler does not build — 19.15', async () => {
     const stray = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
-        'server/rpc/invoices.ts': `import { GET } from 'abide/server'\n\nexport const getInvoice = GET(() => 1)\nexport const TAX_RATE = 0.2\n`,
+        'server/rpc/invoices.ts': `import { GET } from '@abide/abide/server'\n\nexport const getInvoice = GET(() => 1)\nexport const TAX_RATE = 0.2\n`,
     })
     const built = await buildApp(stray)
     expect(built.exitCode).not.toBe(0)
@@ -251,8 +251,8 @@ test('an rpc module exporting something that is not a handler does not build —
 test('two handlers at one address do not build, and both files are named — 19.1', async () => {
     const twice = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
-        'server/rpc/admin.ts': `import { GET } from 'abide/server'\n\nexport const audit = GET(() => 1)\n`,
-        'server/rpc/admin/audit.ts': `import { GET } from 'abide/server'\n\nexport default GET(() => 2)\n`,
+        'server/rpc/admin.ts': `import { GET } from '@abide/abide/server'\n\nexport const audit = GET(() => 1)\n`,
+        'server/rpc/admin/audit.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 2)\n`,
     })
     const built = await buildApp(twice)
     expect(built.exitCode).not.toBe(0)
@@ -269,12 +269,12 @@ test('two handlers at one address do not build, and both files are named — 19.
 test('a handler declared any way the language allows is mounted with its method — 19.15', async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
-        'server/shared.ts': `import { PATCH } from 'abide/server'\n\nexport const touch = PATCH(() => 1)\n`,
-        'server/rpc/later.ts': `import { GET } from 'abide/server'\n\nconst find = GET(() => 1)\nexport { find }\nexport { find as lookup }\n`,
-        'server/rpc/renamed.ts': `import { POST as post } from 'abide/server'\n\nexport const save = post(() => 1)\n`,
-        'server/rpc/spaced.ts': `import * as abide from 'abide/server'\n\nexport const replace = abide.PUT(() => 1)\n`,
+        'server/shared.ts': `import { PATCH } from '@abide/abide/server'\n\nexport const touch = PATCH(() => 1)\n`,
+        'server/rpc/later.ts': `import { GET } from '@abide/abide/server'\n\nconst find = GET(() => 1)\nexport { find }\nexport { find as lookup }\n`,
+        'server/rpc/renamed.ts': `import { POST as post } from '@abide/abide/server'\n\nexport const save = post(() => 1)\n`,
+        'server/rpc/spaced.ts': `import * as abide from '@abide/abide/server'\n\nexport const replace = abide.PUT(() => 1)\n`,
         'server/rpc/passed.ts': `export { touch } from '#server/shared.ts'\n`,
-        'server/rpc/named.ts': `import { DELETE } from 'abide/server'\n\nconst drop = DELETE(() => 1)\nexport default drop\nexport type Dropped = { id: string }\n`,
+        'server/rpc/named.ts': `import { DELETE } from '@abide/abide/server'\n\nconst drop = DELETE(() => 1)\nexport default drop\nexport type Dropped = { id: string }\n`,
     })
     const built = await buildApp(app)
     expect(built.stderr).toBe('')
@@ -302,7 +302,7 @@ test('a handler declared any way the language allows is mounted with its method 
 test('a handler with clients.cli false, or returning a Response, is written to the table withheld from the shell — 16.37, 20.3, 38.63', async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
-        'server/rpc/staff.ts': `import { GET } from 'abide/server'\n\nexport const internal = GET(() => 'staff only', { clients: { cli: false } })\n\nexport const open = GET(() => 'anyone')\n\nexport const raw = GET(async () => new Response('bytes'))\n\nexport const shown = GET(() => new Response('{}'), { clients: { cli: true } })\n`,
+        'server/rpc/staff.ts': `import { GET } from '@abide/abide/server'\n\nexport const internal = GET(() => 'staff only', { clients: { cli: false } })\n\nexport const open = GET(() => 'anyone')\n\nexport const raw = GET(async () => new Response('bytes'))\n\nexport const shown = GET(() => new Response('{}'), { clients: { cli: true } })\n`,
     })
     const built = await buildApp(app)
     expect(built.stderr).toBe('')
@@ -627,7 +627,7 @@ test('the build marks a handler returning an async generator as a stream in its 
 // REVERT: write a wrapper for every mount in `wrappersOf`; the build succeeds and the page ships a call
 // to a handler its author withheld.
 test('a handler with clients.ui false gets no browser wrapper — 20.4', async () => {
-    const HANDLERS = `import { GET } from 'abide/server'
+    const HANDLERS = `import { GET } from '@abide/abide/server'
 
 export const internal = GET(() => 'staff only', { clients: { ui: false } })
 
@@ -635,7 +635,7 @@ export const open = GET(() => 'anyone')
 `
     const refused = appFixture({
         'ui/pages/page.abide': `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { internal } from '#server/rpc/staff.ts'
 
 const value = reactive(() => internal())
@@ -650,7 +650,7 @@ const value = reactive(() => internal())
 
     const allowed = appFixture({
         'ui/pages/page.abide': `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { open } from '#server/rpc/staff.ts'
 
 const value = reactive(() => open())

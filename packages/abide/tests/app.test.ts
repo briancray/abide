@@ -5,11 +5,12 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { spawned } from 'harness/gate'
 import { appFixture, buildApp, lastLinePrinted, serveApp } from './builtApp.ts'
+import abidePackage from '../package.json' with { type: 'json' }
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<main><h1>home</h1></main>`
 
-const HANDLERS = `import { config, cookies, GET, POST, request, response, trace } from 'abide/server'
+const HANDLERS = `import { config, cookies, GET, POST, request, response, trace } from '@abide/abide/server'
 
 export const settings = GET(() => {
     const resolved = config()
@@ -43,7 +44,7 @@ export const traced = GET(() =>
 `
 
 // Every hook, each leaving a mark a request or a script can read back.
-const APP = `import { cookies, middleware, onConfig, onError, onHealth, onStart, onStop, redirect, request, response } from 'abide/server'
+const APP = `import { cookies, middleware, onConfig, onError, onHealth, onStart, onStop, redirect, request, response } from '@abide/abide/server'
 
 onConfig(() => ({ LIMIT: 5, FEATURE: false, LABEL: 'default' }))
 onHealth(() => ({ db: 'up', version: 'the app wins' }))
@@ -107,7 +108,7 @@ export default (asked: Request) => {
 
 // 23.1 — A PAGE READS WHERE IT IS off `route`, and `online` answers true on a server (23.8).
 const WHERE = `<script>
-import { online, route } from 'abide'
+import { online, route } from '@abide/abide'
 </script>
 
 <main><p id="where">{route.name()}|{route.params().id}|{route.url().pathname}|{route.navigating()}|{online()}</p>
@@ -205,7 +206,7 @@ test('createApp under bun test builds an app that was never built — 42.16', as
     const fresh = appFixture({
         'ui/pages/page.abide': '<main><p id="fresh">never built</p></main>',
         'host.test.ts': `import { expect, test } from 'bun:test'
-import { createApp } from 'abide/server'
+import { createApp } from '@abide/abide/server'
 
 test('boots', async () => {
     const app = await createApp()
@@ -226,14 +227,14 @@ test('boots', async () => {
 test("a page's watch stops when the request that rendered it is answered — 12.5", async () => {
     const fresh = appFixture({
         'ui/pages/page.abide': `<script module>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 const level = reactive(0, { global: true })
 ;(globalThis as { bump?: () => void }).bump = () => level.set(level.peek() + 1)
 </script>
 
 <script>
-import { watch } from 'abide'
+import { watch } from '@abide/abide'
 
 const tally = ((globalThis as { tally?: { runs: number; disposed: number } }).tally ??= { runs: 0, disposed: 0 })
 watch(() => {
@@ -247,8 +248,8 @@ watch(() => {
 
 <main>page</main>`,
         'host.test.ts': `import { expect, test } from 'bun:test'
-import { flushSync } from 'abide'
-import { createApp } from 'abide/server'
+import { flushSync } from '@abide/abide'
+import { createApp } from '@abide/abide/server'
 
 test('renders twice', async () => {
     const app = await createApp()
@@ -274,7 +275,7 @@ test('renders twice', async () => {
 test('createApp boots inside onStart, answers with no socket, and stops inside onStop — 42, 37.4, 17.8', async () => {
     await Bun.write(
         `${app}/host.ts`,
-        `import { createApp, request } from 'abide/server'
+        `import { createApp, request } from '@abide/abide/server'
 import { marks } from './server/app.ts'
 
 const app = await createApp()
@@ -316,7 +317,7 @@ console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.stat
 test('an App held by await using stops when its block ends — 42.14', async () => {
     await Bun.write(
         `${app}/disposed.ts`,
-        `import { createApp } from 'abide/server'
+        `import { createApp } from '@abide/abide/server'
 import { marks } from './server/app.ts'
 
 {
@@ -338,7 +339,7 @@ console.log(JSON.stringify(marks))
 test('a throwing onStart stops the server starting — 37.6', async () => {
     const broken = appFixture({
         'ui/pages/page.abide': PAGE,
-        'server/app.ts': `import { onStart } from 'abide/server'\n\nonStart(async () => {\n    throw new Error('no database')\n})\n`,
+        'server/app.ts': `import { onStart } from '@abide/abide/server'\n\nonStart(async () => {\n    throw new Error('no database')\n})\n`,
     })
     expect((await buildApp(broken)).exitCode).toBe(0)
     const started = await spawned([
@@ -514,7 +515,7 @@ test('/__abide/health answers the account, the app winning collisions — 25.1, 
     const account = (await answer.json()) as Record<string, string>
     expect(account.version).toBe('the app wins')
     expect(account.db).toBe('up')
-    expect(account.abide).toBe('0.0.0')
+    expect(account.abide).toBe(abidePackage.version)
     expect(Number.isNaN(Date.parse(account.startedAt as string))).toBe(false)
 })
 

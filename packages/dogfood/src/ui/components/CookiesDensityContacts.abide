@@ -1,5 +1,5 @@
 <script>
-import { cookies, reactive } from 'abide'
+import { cookies, reactive } from '@abide/abide'
 
 const DENSITIES = ['comfortable', 'compact']
 

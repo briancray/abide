@@ -16,7 +16,7 @@ const REPO = new URL('../../../', import.meta.url).pathname
 // engines at once, and two tests of one project would each build into one tree.
 test.describe.configure({ mode: 'default' })
 
-const HANDLERS = `import { GET } from 'abide/server'
+const HANDLERS = `import { GET } from '@abide/abide/server'
 
 export const getValue = GET(({ id }: { id: string }) => ({ id, word: 'settled' }))
 
@@ -31,7 +31,7 @@ export const getSlow = GET(async ({ id }: { id: string }) => {
 // refuse an arm bound to the other's nodes (41.10). What witnesses it is the handler a click runs,
 // and the static `class` — the one thing an arm bound to the other's button never writes.
 const pageOver = (handler: string) => `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import { ${handler} } from '#server/rpc/data.ts'
 
 const value = reactive(() => ${handler}({ id: 'one' }))

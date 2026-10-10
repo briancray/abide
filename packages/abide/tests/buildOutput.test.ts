@@ -10,7 +10,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 afterAll(removeTemporaryModules)
 
 const PAGE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 </script>

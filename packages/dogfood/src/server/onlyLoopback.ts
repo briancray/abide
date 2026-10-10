@@ -8,7 +8,7 @@
 // open in the reader's browser could start a run with an `<img src>` — the browser names that
 // request `cross-site` or `same-site`, and a caller outside a browser sends no such header.
 
-import { refuse } from 'abide'
+import { refuse } from '@abide/abide'
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]'])
 

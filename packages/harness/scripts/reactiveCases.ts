@@ -9,7 +9,7 @@
 // `harness/measure` has no abide in its graph at all — the property `lanes.test.ts`
 // walks by resolution, and the reason the harness is a package.
 
-import { flushSync, reactive, structural, watch } from 'abide'
+import { flushSync, reactive, structural, watch } from '@abide/abide'
 import { carelessSignal, signal } from 'harness/measure/vanilla'
 
 // Defeats dead-code elimination without allocating: every read writes here.

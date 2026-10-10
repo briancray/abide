@@ -7,7 +7,7 @@
 // runs to the end of the construct it opens — which is the whole rule, applied by two
 // balancers because markup and code close differently and nothing else does.
 
-import { escapeAttribute } from 'abide'
+import { escapeAttribute } from '@abide/abide'
 
 // A BUILD SCRIPT, NOT APP CODE: it balances markup by the compiler's own void list, and exporting
 // that list to reach it would make it public surface.

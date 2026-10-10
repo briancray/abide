@@ -21,7 +21,7 @@ const ROWS = Number(process.argv[2] ?? '1000')
 const RUNS = 5
 
 const page = (row: string, imports = ''): string => `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 ${imports}
 const rows = reactive(
     Array.from({ length: ${ROWS} }, (_, at) => ({ id: at, label: 'row ' + at })),
@@ -46,7 +46,7 @@ function replace() {
 <button id="replace" onclick={replace}>replace</button>`
 
 const LABEL = `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { label } = props<{ label: string }>()
 </script>

@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 import { probeErrorDatabase } from '#server/probeErrorDatabase'
 import { notReachable } from '#shared/notReachable'
 

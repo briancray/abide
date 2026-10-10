@@ -184,7 +184,7 @@ up to make the strict one safe.
 
 ```abide #ui/components/Handle.abide
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let handle = reactive('ada')
 </script>
@@ -197,7 +197,7 @@ let handle = reactive('ada')
 
 ```abide #ui/components/Panel.abide
 <script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 
 const { title } = props<{ title: string }>()
 </script>

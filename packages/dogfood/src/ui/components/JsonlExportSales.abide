@@ -1,5 +1,5 @@
 <script>
-import { reactive, refresh } from 'abide'
+import { reactive, refresh } from '@abide/abide'
 import { salesForWarehouse } from '#server/rpc/jsonlExportSales'
 
 const answer = reactive(async () => {

@@ -1,5 +1,5 @@
 <script>
-import { reactive, refresh } from 'abide'
+import { reactive, refresh } from '@abide/abide'
 import { visits } from '#server/rpc/sseWallboardVisits'
 
 // A plain request, as a wallboard sends it: no `Accept` asks for events.

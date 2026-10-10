@@ -82,7 +82,7 @@ async function deferred(source: string): Promise<number[]> {
 test("a read an inline component's slot defers warns as a top-level one does — 14.16", async () => {
     expect(
         await deferred(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let one = reactive(1)
 </script>
@@ -97,7 +97,7 @@ let one = reactive(1)
 test("a parenthesized statement in an arm's script is no template position — 14.8", async () => {
     expect(
         await deferred(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let one = reactive(1)
 </script>
@@ -114,7 +114,7 @@ let one = reactive(1)
 test('a reactive body wrapped in a type still tracks — 14.16', async () => {
     expect(
         await deferred(`<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let one = reactive(1)
 const later = reactive((() => setTimeout(() => one, 0)) satisfies () => unknown)

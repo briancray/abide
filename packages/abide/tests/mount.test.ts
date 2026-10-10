@@ -6,7 +6,7 @@ import { lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAGE = `<script>
-import { reactive, url } from 'abide'
+import { reactive, url } from '@abide/abide'
 import { getInvoice } from '#server/rpc/invoices.ts'
 import '#ui/face.css'
 
@@ -23,7 +23,7 @@ beforeAll(async () => {
         {
             'ui/pages/page.abide': PAGE,
             'ui/pages/invoices/[id]/page.abide': `<script>
-import { route } from 'abide'
+import { route } from '@abide/abide'
 </script>
 
 <main>an invoice at <b id="at">{route.url().pathname}</b></main>`,
@@ -31,7 +31,7 @@ import { route } from 'abide'
             'ui/face.css': `@font-face { font-family: Face; src: url('/fonts/face.woff2'); }\n`,
             'ui/public/fonts/face.woff2': 'a face',
             'ui/public/robots.txt': 'User-agent: *\n',
-            'server/rpc/invoices.ts': `import { GET, reactive } from 'abide/server'\n\nexport const getInvoice = GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n\nexport const count = GET(reactive({ open: 3 }, { global: true }))\n`,
+            'server/rpc/invoices.ts': `import { GET, reactive } from '@abide/abide/server'\n\nexport const getInvoice = GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n\nexport const count = GET(reactive({ open: 3 }, { global: true }))\n`,
         },
         { ...process.env, APP_URL: 'http://example.test/docs/' },
     ))

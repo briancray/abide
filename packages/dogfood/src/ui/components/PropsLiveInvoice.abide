@@ -1,5 +1,5 @@
 <script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 import Total from '#ui/components/PropsLiveTotal.abide'
 
 let lines = reactive(2)

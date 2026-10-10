@@ -4,7 +4,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, POST, principal } from 'abide/server'
+const HANDLERS = `import { GET, POST, principal } from '@abide/abide/server'
 import { RESOLVED } from '#server/RESOLVED.ts'
 
 export const signIn = POST(async ({ name }: { name: string }) => {
@@ -31,7 +31,7 @@ const RESOLVED = `export const RESOLVED = { count: 0 }
 `
 
 const PAGE = `<script>
-import { principal } from 'abide'
+import { principal } from '@abide/abide'
 </script>
 
 <main>{principal.authenticated() ? 'in' : 'out'}</main>`
@@ -47,7 +47,7 @@ beforeAll(async () => {
         'server/rpc/session.ts': HANDLERS,
         'server/RESOLVED.ts': RESOLVED,
         // 26.4 — an app answer that tries to claim the baseline's fields.
-        'server/app.ts': `import { onPrincipal } from 'abide/server'\nimport { RESOLVED } from '#server/RESOLVED.ts'\n\nonPrincipal((claims) => {\n    RESOLVED.count += 1\n    return { ...(claims as object), role: 'admin', authenticated: 'spoofed' }\n})\n`,
+        'server/app.ts': `import { onPrincipal } from '@abide/abide/server'\nimport { RESOLVED } from '#server/RESOLVED.ts'\n\nonPrincipal((claims) => {\n    RESOLVED.count += 1\n    return { ...(claims as object), role: 'admin', authenticated: 'spoofed' }\n})\n`,
     }))
 }, 30_000)
 

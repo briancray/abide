@@ -9,8 +9,8 @@
 // route table names the one and only an emitted handler wrapper the other, and an entry each is
 // what keeps them off the runtime barrel every compiled module resolves through. `ui/routing.ts`
 // records what that is and is not worth.
-export const SHARED_SPECIFIER = 'abide'
-export const SERVER_SPECIFIER = 'abide/server'
-export const RUNTIME_SPECIFIER = 'abide/runtime'
-export const ROUTING_SPECIFIER = 'abide/routing'
-export const WIRE_SPECIFIER = 'abide/wire'
+export const SHARED_SPECIFIER = '@abide/abide'
+export const SERVER_SPECIFIER = '@abide/abide/server'
+export const RUNTIME_SPECIFIER = '@abide/abide/runtime'
+export const ROUTING_SPECIFIER = '@abide/abide/routing'
+export const WIRE_SPECIFIER = '@abide/abide/wire'

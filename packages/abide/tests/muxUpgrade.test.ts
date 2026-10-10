@@ -8,7 +8,7 @@ import { BIN, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 // A `GET` over a `global` value, so the app has a handler for the mux to carry (37.3).
-const HANDLERS = `import { GET, reactive } from 'abide/server'
+const HANDLERS = `import { GET, reactive } from '@abide/abide/server'
 
 export const books = GET(reactive<string[]>(['dune'], { global: true }))
 
@@ -17,7 +17,7 @@ export const nothing = GET(() => new Response(null, { status: 204 }))
 `
 
 // 37.3 — an app rung that refuses a request it can tell by a header, the mux's upgrade included.
-const APP = `import { middleware } from 'abide/server'
+const APP = `import { middleware } from '@abide/abide/server'
 
 middleware(async (next, { request }) => {
     if (request.headers.get('x-denied') !== null) return new Response('denied', { status: 401 })

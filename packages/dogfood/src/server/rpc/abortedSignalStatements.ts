@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 
 export const getStatement = GET(
     async ({ id }: { id: string }) => {

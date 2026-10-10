@@ -27,7 +27,7 @@ test('a page checked through a symlinked root is held to its component props', a
     const app = appFixture({
         'ui/pages/page.abide': PAGE,
         'ui/components/Card.abide': `<script>
-import { props } from 'abide'
+import { props } from '@abide/abide'
 const { title } = props<{ title: string }>()
 </script>
 <p>{title}</p>`,

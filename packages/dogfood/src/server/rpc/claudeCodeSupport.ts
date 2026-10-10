@@ -4,7 +4,7 @@ import {
     claudeCode,
     GET,
     POST,
-} from 'abide/server'
+} from '@abide/abide/server'
 
 export const bridge = GET(() => claudeCode.bridge(), {
     timeout: Infinity,

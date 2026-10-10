@@ -44,7 +44,7 @@ browser nobody was testing in.
 
 ```abide #ui/pages/layout.abide — excerpt
 <script>
-import { csp } from 'abide'
+import { csp } from '@abide/abide'
 </script>
 
 <head>

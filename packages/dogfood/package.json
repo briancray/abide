@@ -30,7 +30,7 @@
         "typecheck": "tsc -p tsconfig.json"
     },
     "dependencies": {
-        "abide": "workspace:*",
+        "@abide/abide": "workspace:*",
         "zod": "^4.6.5"
     },
     "devDependencies": {

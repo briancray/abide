@@ -1,5 +1,5 @@
 <script>
-import { log } from 'abide'
+import { log } from '@abide/abide'
 
 const billing = log.named('billing')
 const sync = log.named('sync')

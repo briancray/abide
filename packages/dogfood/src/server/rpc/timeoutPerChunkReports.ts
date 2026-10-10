@@ -1,4 +1,4 @@
-import { GET } from 'abide/server'
+import { GET } from '@abide/abide/server'
 import { timeoutPerChunkDatabase } from '#server/timeoutPerChunkDatabase'
 
 export const salesByRegion = GET(

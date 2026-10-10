@@ -1,6 +1,6 @@
 <script>
 // The seal is ambient, so this reads it with nothing handed down.
-import { principal } from 'abide'
+import { principal } from '@abide/abide'
 </script>
 
 <ul class="fields">

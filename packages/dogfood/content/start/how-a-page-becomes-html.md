@@ -35,7 +35,7 @@ without a page. That route is asked only where no page, handler or public file a
 returning nothing hands the request on to the 404.
 
 ```ts server
-import { csp, middleware, onStart } from 'abide/server'
+import { csp, middleware, onStart } from '@abide/abide/server'
 
 middleware(csp(), requireSignIn())
 onStart(async (start) => { await database.connect(); await start() })
@@ -110,7 +110,7 @@ a **sink**, and the hole fills when the value lands. The markup after it keeps g
 
 ```abide #ui/pages/invoices/[id]/page.abide — excerpt
 <script>
-import { reactive, route } from 'abide'
+import { reactive, route } from '@abide/abide'
 import { getInvoice } from '#server/rpc/invoices'
 
 const invoice = reactive(() => getInvoice({ id: route.params.id }))

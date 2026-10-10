@@ -1,5 +1,5 @@
 <script>
-import { reactive, refresh } from 'abide'
+import { reactive, refresh } from '@abide/abide'
 import { getInvoice } from '#server/rpc/rpcReactiveInvoices'
 
 // The call hands back a `Reactive`, so probes and triggers are on the RESULT.

@@ -19,7 +19,7 @@ const REPO = new URL('../../../', import.meta.url).pathname
 // nothing at all. `#parent` and `#rows` hold a `{#if}` and a `{#for}`, the dynamic boundaries,
 // and there a comment pair is what it is allowed to add.
 const PAGE_SOURCE = `<script>
-import { reactive } from 'abide'
+import { reactive } from '@abide/abide'
 
 let first = reactive('one')
 let text = reactive('text')

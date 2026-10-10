@@ -8,8 +8,8 @@ import { chunksOfStream } from '#shared/reactive/index.ts'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { reactive, refuse } from 'abide'
-import { GET, json, page, POST, redirect, request, response, sse } from 'abide/server'
+const HANDLERS = `import { reactive, refuse } from '@abide/abide'
+import { GET, json, page, POST, redirect, request, response, sse } from '@abide/abide/server'
 import { reported } from '../reported.ts'
 
 export const shared = GET(reactive(() => ({ n: 1 }), { global: true, ttl: 90_500 }))
@@ -108,7 +108,7 @@ beforeAll(async () => {
         'ui/pages/page.abide': '<main>home</main>',
         'server/rpc/answers.ts': HANDLERS,
         'server/reported.ts': 'export const reported = { count: 0 }\n',
-        'server/app.ts': `import { onError } from 'abide/server'
+        'server/app.ts': `import { onError } from '@abide/abide/server'
 import { reported } from './reported.ts'
 
 onError(() => {
