@@ -789,11 +789,11 @@ test('an interpolated style lowers to one attribute per property', async () => {
 // biome-ignore-end lint/suspicious/noTemplateCurlyInString: the emitted template literal IS the
 // subject.
 
-// 34.2 — A `<script module>` IS REQUEST-LOCAL ON A SERVER AND PROCESS-WIDE IN A BROWSER, which is
-// two different places to emit it and neither is where a `<script>` goes. THE REVERT: have
-// `scriptBlock` hand back `scripts` for the `module` attribute too; both bodies then land in the
-// per-instance block and the browser runs the module body once per `mount` — a counter that resets
-// on every mount, with the right value on the first one and nothing saying so after.
+// 34.2 — A `<script module>` IS MODULE SCOPE ON BOTH SIDES, which is not where a `<script>` goes.
+// THE REVERT: have `scriptBlock` hand back `scripts` for the `module` attribute too; both bodies
+// then land in the per-instance block and each side runs the module body once per instance — a
+// counter that resets on every mount, with the right value on the first one and nothing saying so
+// after.
 test('a script module is a block of its own on each side', async () => {
     const source =
         '<script module>let hits = 0</script><script>let n = reactive(0)</script><p>{n}</p>'
@@ -801,15 +801,16 @@ test('a script module is a block of its own on each side', async () => {
     expect(file.modules).toEqual(['let hits = 0'])
     expect(file.scripts).toEqual(['let n = reactive(0)'])
 
-    // REQUEST-LOCAL is the head of the component, ahead of the per-instance body.
+    // MODULE SCOPE on the server, ahead of the component.
     const server = await serverOf(source, ['n'])
-    const component = server.indexOf('export default function Component() {')
-    expect(server.indexOf('let hits = 0')).toBeGreaterThan(component)
+    expect(server).toContain(
+        'let hits = 0\nexport default function Component() {',
+    )
     expect(server.indexOf('let n = reactive(0)')).toBeGreaterThan(
-        server.indexOf('let hits = 0'),
+        server.indexOf('export default function Component'),
     )
 
-    // PROCESS-WIDE is module scope, ahead of `mount`.
+    // And in the browser, ahead of `mount`.
     const client = await clientOf(source, ['n'])
     expect(client).toContain(
         'let hits = 0\nexport default function mount(__root) {',
@@ -820,6 +821,20 @@ test('a script module is a block of its own on each side', async () => {
     expect(client.indexOf('let n = reactive(0)')).toBeGreaterThan(
         client.indexOf('export default function mount'),
     )
+})
+
+// 34.17 — AN EXPORT FROM A `<script module>` IS THE MODULE'S, ON BOTH SIDES. A layout or a page
+// exports `menu` there (38.89), and another file imports a helper from it. THE REVERT: emit the
+// module body inside `Component` again; the server module then fails to load with `Unexpected
+// export`, and the page renders nothing at all.
+test('a script module export is exported from the module on both sides', async () => {
+    const source =
+        "<script module>export const label = 'Export…'</script><script>let n = reactive(0)</script><p>{label}{n}</p>"
+    const client = await clientOf(source, ['n'])
+    expect(client).toContain("export const label = 'Export…'")
+    const server = await serverOf(source, ['n'])
+    expect(server).toContain("export const label = 'Export…'")
+    expect(await renderPage(source)).toContain('Export…')
 })
 
 // 34.1 AND 34.2 ARE THE TWO FORMS, AND EVERY OTHER `<script>` IS MARKUP. THE REVERT: have

@@ -18,15 +18,19 @@ from, because the block **is** the hook.
 | You write | Runs |
 | --- | --- |
 | `<script>` | once per instance of the component |
-| `<script module>` | once for the module — request-local on a server, process-wide in a browser |
+| `<script module>` | once for the module, on a server as in a browser |
 
 The difference is what a variable declared in each belongs to. One row's `calls` is that row's;
 a lookup table every row shares belongs to the module and is built once however many rows there
 are.
 
-`<script module>` being **request-local on a server** is the half worth stating out loud: a
-module-scope variable on a server is not shared between two callers, which is what would make
-it a place one request's data leaks into another's.
+A `<script module>` is module scope, the same as the top of a `.ts` file, so what it exports is
+the module's: another file imports a helper from it as from any module. A `<script>` cannot
+export, because it runs once per instance and an export belongs to no one instance.
+
+On a server, module scope is shared by every request. A `reactive` there is still one per
+request, as a `reactive` is wherever it is declared. A plain `let` is the process's, so state that
+changes while a page renders belongs in a `reactive`, as `opened` is below.
 
 ## Per instance, and once
 

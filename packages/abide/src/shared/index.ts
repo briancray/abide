@@ -36,6 +36,13 @@ export { listOf } from './listOf.ts'
 export { type Logger, type LogRecord, log } from './log.ts'
 export type { Middleware } from './Middleware.ts'
 export type { Params } from './matchRoute.ts'
+// 38.89 — a desktop app's menu items, exported by the route's layouts and page.
+export {
+    type MenuEntry,
+    type MenuItem,
+    type MenuRole,
+    menuItem,
+} from './menuItem.ts'
 // `navigate` ALONE, of everything routing needs. This barrel is what an app resolves through the
 // bare `abide` specifier, and the matcher, the pattern grammar and `routeOf` are reached by path
 // from the two places that have them — the build and the client router. Putting them here would

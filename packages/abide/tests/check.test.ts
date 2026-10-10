@@ -66,6 +66,26 @@ const stale = url('/routed/[id]', { id: 1 })
 
 <a href={good}>{home}</a><a href={stale}>stale</a>`
 
+// 34.19 — a plain `let` the setup writes, beside one only a handler writes and one that is a
+// `reactive`: the first is the leak, and the other two are not.
+const SHARED = `<script module>
+import { reactive } from 'abide'
+
+let opened = 0
+let clicks = 0
+let counted = reactive(0)
+</script>
+
+<script>
+opened += 1
+counted += 1
+const seat = opened
+function bump() { clicks += 1 }
+</script>
+
+<span onclick={bump}>row {seat} {counted}</span>
+`
+
 const WARNED = `<script>
 import { reactive } from 'abide'
 
@@ -228,6 +248,7 @@ beforeAll(async () => {
         'ui/pages/page.abide': CLEAN,
         'ui/pages/broken/page.abide': BROKEN,
         'ui/pages/warned/page.abide': WARNED,
+        'ui/pages/shared/page.abide': SHARED,
         'ui/pages/echoed/page.abide': ECHOED,
         'ui/components/Card.abide': CARD,
         'ui/pages/props/page.abide': PROPS,
@@ -458,6 +479,16 @@ test('each tracking warning lands on its read and on no near miss — 14.14, 14.
         place(WARNED, 'optional?.refresh'),
     ])
     expect(warnings.length).toBe(8)
+})
+
+// THE REVERT: drop the `sharedModuleWrites` call in `readsIn`; nothing lands (0 against 1). Drop
+// `insideFunction` and the handler's `clicks += 1` warns too (2 against 1); drop the `reactive`
+// test and `counted += 1` does (2 against 1).
+test('a plain let the setup writes in a script module is warned on — 34.19', () => {
+    const warned = inFile('shared/page.abide')
+        .filter((diagnosis) => diagnosis.message.includes('34.19'))
+        .map(({ line, column }) => ({ line, column }))
+    expect(warned).toEqual([place(SHARED, 'opened += 1')])
 })
 
 // 32.14 — UNKEYED, OVER STATE, OVER A LIST THAT CAN CHANGE: the loops that are all three, less the one

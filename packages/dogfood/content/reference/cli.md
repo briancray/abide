@@ -58,7 +58,7 @@ abide --help
 | `abide logs` | A live subscription to `log.records`. |
 | `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. |
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. |
-| `abide bundle` | A desktop launcher for the host platform. |
+| `abide bundle [--out]` | A desktop app for the host platform, with a window on the app. |
 | `abide lsp` | The `.abide` language server, over stdio. |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. |
 

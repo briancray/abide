@@ -4,7 +4,7 @@ nav: Overview
 intent: Every command between an empty directory and a deployed app.
 ---
 
-Six commands cover the distance from an empty directory to a deployed app.
+Seven commands cover the distance from an empty directory to a deployed app.
 
 | Command | Does |
 | --- | --- |
@@ -13,6 +13,7 @@ Six commands cover the distance from an empty directory to a deployed app.
 | `abide check` | type-checks the templates as well as the TypeScript |
 | `abide build` then `abide start` | what you deploy |
 | `abide compile` | one binary with the app inside it |
+| `abide bundle` | the app as a desktop app |
 
 ```
 abide scaffold my-app        # starter project, then install and abide dev
@@ -37,10 +38,11 @@ Read on: [Checks](catch-mistakes-before-you-ship.md)
 ## Builds, and a single binary
 
 A build produces content-hashed chunks and a manifest, and `abide start` serves them.
-`abide compile` puts the whole app inside one executable instead.
+`abide compile` puts the whole app inside one executable instead, and `abide bundle` puts that
+executable in a window.
 
 Read on: [Build & start](build-and-serve-the-app.md) ·
-[Compile](ship-a-single-binary.md)
+[Compile](ship-a-single-binary.md) · [Desktop](ship-a-desktop-app.md)
 
 ## Watching what you deployed
 

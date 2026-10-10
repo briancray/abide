@@ -30,7 +30,7 @@ type Command = (given: Given) => Promise<number | undefined>
 
 /** The commands that need the app's source and the compiler, which only `abide` holds. */
 type SourceCommands = Record<
-    'scaffold' | 'dev' | 'build' | 'check' | 'compile' | 'lsp',
+    'scaffold' | 'dev' | 'build' | 'check' | 'compile' | 'bundle' | 'lsp',
     Command
 >
 
@@ -155,16 +155,11 @@ function commandsOf(host: Host): Row[] {
             'the build, as one executable named after the app',
             'compile',
         ),
-        [
+        fromSource(
             'bundle',
-            'not built yet',
-            async () => {
-                console.error(`${host.name} bundle: not built yet.`)
-                return 1
-            },
-            // Wraps a build, so an executable is no more a place for it than for `build`.
-            true,
-        ],
+            'the build, as a desktop app for this platform',
+            'bundle',
+        ),
         fromSource('lsp', 'the .abide language server, over stdio', 'lsp'),
     ]
 }
@@ -200,8 +195,8 @@ function usage(host: Host, commands: Row[]): string {
     text += `
   --root       the app's source directory, the one ui/ sits under —
                src/ where you stand, or where you stand, whichever has one
-  --out        where the build goes, beside the app by default; the file openapi and
-               compile write — compile's is the app's name, where you stand
+  --out        where the build goes, beside the app by default; the file openapi,
+               compile and bundle write — named after the app, where you stand
   --port       the listen port for dev, start and the shell's app
   --url        the running app the shell, call, logs, openapi and mcp talk to
   --target     the platform compile builds for — linux-x64, darwin-arm64, windows-x64…

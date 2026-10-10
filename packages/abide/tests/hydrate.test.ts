@@ -592,13 +592,13 @@ let shown = reactive('waiting')
 // function body on both sides, so nothing holds the render: every value a page reads is a hole the
 // document is written around (41.4, 32.23).
 //
-// BOTH BLOCKS, AND THE SERVER IS WHY. `<script module>` is request-local there (34.2), so the
-// emitted component carries its body too — in a browser that same block IS module scope, where the
-// line is legal, and a source that compiles on one side and not the other is what this refuses.
+// BOTH BLOCKS, for two reasons. A `<script>` is a function body on both sides, where the line does
+// not parse. A `<script module>` is module scope (34.2), where it does — and holds the import of
+// every file that reaches it until it settles, which is the render waiting in all but name.
 //
-// THE REVERT: drop the two `refuseTopLevelAwait` calls in `projectShadow`. Both compiles succeed
-// and the import reports `AggregateError: 2 errors building …/Page.ts` — a bundler error against a
-// file the author never wrote.
+// THE REVERT: drop the two `refuseTopLevelAwait` calls in `projectShadow`. The `<script>` row
+// reports a bundler error against a file the author never wrote, and the `<script module>` row
+// renders with nothing refused.
 test('a script block cannot await at its top level — 34.3', async () => {
     for (const block of ['<script>', '<script module>']) {
         let thrown = ''
@@ -613,6 +613,24 @@ const rows = await Promise.resolve(1)
         }
         expect(thrown).toContain(`a ${block} cannot await at its top level`)
     }
+})
+
+// 34.18 — A `<script>` CANNOT EXPORT. It runs once per instance and an export is the module's, so
+// there is no one instance an importer could read. THE REVERT: drop `refuseInstanceExport` in
+// `projectShadow`; the compile succeeds and the import reports `Unexpected export` from the bundler,
+// naming neither the page nor the fix.
+test('a script block cannot export — 34.18', async () => {
+    let thrown = ''
+    try {
+        await renderPage(`<script>
+export const rows = 1
+</script>
+
+<p id="out">{rows}</p>`)
+    } catch (error) {
+        thrown = String(error)
+    }
+    expect(thrown).toContain('a <script> cannot export')
 })
 
 // 32.57 — A TEMPLATE EXPRESSION CANNOT AWAIT EITHER, and for its own reason: each is lowered into

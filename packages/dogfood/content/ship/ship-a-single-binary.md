@@ -69,10 +69,10 @@ An app somebody else operates. A tool that runs on a machine you do not administ
 dropped into an image with nothing else in it, an internal utility handed to a colleague who
 should not have to know what a package manager is.
 
-`abide bundle` is the neighbouring answer for a desktop app — the same built app, wrapped as a
-launcher for the host platform.
+`abide bundle` is the neighbouring answer for a desktop app — the same executable, inside a
+`.app` that opens it in a window.
 
-Read on: [Build & start](build-and-serve-the-app.md)
+Read on: [Desktop](ship-a-desktop-app.md)
 
 ## Next
 

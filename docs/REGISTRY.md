@@ -580,8 +580,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15 |
-| `<script module>` | Module scope. | 34.2, 34.3, 34.12, 34.14, 34.15 |
+| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15, 34.18 |
+| `<script module>` | Module scope. | 34.2, 34.3, 34.12, 34.14, 34.15, 34.17, 34.19 |
 | `<style>` | Component-scoped styles. | 34.4, 34.5, 34.10, 34.11 |
 | `import './app.css'` | A stylesheet the component depends on. | 34.6 |
 | `:global(…)` | The per-selector escape from scoping. | 34.5 |
@@ -654,6 +654,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `src/ui/**` | Browser-related source. | 36.10 |
 | `src/shared/**` | Source shared by both. | 36.10 |
 | `src/server/app.ts` | The lifecycle hooks. | 37.1 |
+| `src/bundle/icon.png` · `src/bundle/icon.icns` | The desktop app's icon. | 38.80 |
+| `src/bundle/launch.abide` | The desktop launcher's page, in place of its own. | 38.83, 38.85, 38.86 |
+| `src/bundle/launch.html` | The document the launcher's page renders into. | 38.85 |
 | `src/ui/app.html` | The document its pages are served in. | 35.6, 39.4 |
 | `src/ui/public/**` | The files answered as authored, at their path below that directory. | 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.19, 38.20 |
 | `src/ui/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
@@ -677,6 +680,20 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.2 |
 | `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns claims into the app's half of a principal. | 26.4, 37.7 |
 
+## The desktop app
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `src/bundle/launcher.json` | `{ name?: string; width?: number; height?: number; minWidth?: number; minHeight?: number; start?: boolean; connect?: boolean }` | The window the desktop app opens and the forms its launcher offers. | 38.81, 38.82, 38.84, 38.87, 38.88 |
+| `menu` | `MenuItem[]` | The menus a layout or a page adds to the desktop app's menu bar, exported from its `<script module>`. | 38.89, 38.93 |
+| `MenuItem` | `'separator' \| MenuEntry \| { label: string; key?: string; role?: MenuRole; href?: string; items?: MenuItem[] }` | One entry in the menu bar or in a menu under it. | 38.90, 38.91 |
+| `MenuRole` | `'about' \| 'hide' \| 'hideOthers' \| 'showAll' \| 'quit' \| 'connect' \| 'disconnect' \| 'close' \| 'undo' \| 'redo' \| 'cut' \| 'copy' \| 'paste' \| 'selectAll' \| 'reload' \| 'fullscreen' \| 'minimize' \| 'zoom' \| 'front'` | What a menu item does natively. | 38.75, 38.90 |
+| `menuItem` | `(item: { label: string; key?: string; href?: string }) => MenuEntry` | A menu item the page that exports it answers. | 38.92 |
+| `MenuEntry` | `class MenuEntry { label: string; key: string \| undefined; href: string \| undefined }` | What `menuItem` makes. | 38.92 |
+| `MenuEntry.on` | `(answer: () => unknown) => () => void` | Files a function run each time the item is picked. | 38.92 |
+| `Launch` | `{ name: string; start: string \| undefined; connect: string \| undefined; fields: ConfigField[]; url: string; failure: { form: 'start' \| 'connect'; message: string; issues: Record<string, string[]> } \| undefined; focus: 'start' \| 'connect' }` | The props a launch page is rendered with. | 38.83, 38.84 |
+| `ConfigField` | `{ name: string; label: string; description: string \| undefined; input: 'text' \| 'number' \| 'checkbox' \| 'password' \| 'url' \| 'select'; options: string[] \| undefined; required: boolean; value: string }` | One input the start form asks for. | 38.73 |
+
 # The app object
 
 | Name | Signature | Meaning | Rules |
@@ -685,7 +702,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
 | `App.fetch` | `(request: Request) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6 |
 | `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 11.38 |
-| `App.listen` | `(options?: { port?: number; unix?: string }) => Promise<void>` | The socket, bound. | 42.9 |
+| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9 |
 | `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 37.4 |
 | `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
 
@@ -708,6 +725,6 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `abide logs` | A live subscription to `log.records`. | 38.10 |
 | `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. | 38.70 |
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.11, 38.26, 38.27, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.53, 38.57 |
-| `abide bundle` | A desktop launcher for the host platform. | 38.11 |
+| `abide bundle [--out]` | A desktop app for the host platform, with a window on the app. | 38.11, 38.26, 38.27, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.93 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.12, 38.35, 38.40 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.13 |

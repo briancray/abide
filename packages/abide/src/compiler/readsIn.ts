@@ -59,12 +59,16 @@ import {
     unionMembers,
     valueTypeOf,
 } from './reactiveTypes.ts'
+import { sharedModuleWrites } from './sharedModuleWrites.ts'
 import { trackingWarnings } from './trackingWarnings.ts'
 
 /** Where in a `.abide`'s shadow each kind of question is asked (`projectShadow`). */
 export type ShadowSpans = {
     /** Where the shadow's scripts end and its template begins. */
     scriptsEnd: number
+    /** The `<script module>` bodies, and the `<script>` bodies, in the shadow. */
+    modules: Span
+    scripts: Span
     positions: PositionTable
 }
 
@@ -266,10 +270,19 @@ export async function readsIn(
     }
     await proveSlots(checker, expressions, reads, statics)
     reads.sort(byPosition)
-    return {
-        answer: new CheckerAnswer(reads, statics),
-        warnings: await warningsFor(checker, located, spans.positions),
-    }
+    const warnings = await warningsFor(checker, located, spans.positions)
+    // 34.19.
+    for (const warning of await sharedModuleWrites(
+        checker,
+        shadowPath,
+        names.slice(0, topLevel),
+        symbols,
+        reactive,
+        spans.modules,
+        spans.scripts,
+    ))
+        warnings.push(warning)
+    return { answer: new CheckerAnswer(reads, statics), warnings }
 }
 
 /**

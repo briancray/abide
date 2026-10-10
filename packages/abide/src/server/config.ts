@@ -119,7 +119,8 @@ function derived(): Record<string, string> {
     }
 }
 
-function dataDirectory(name: string): string {
+/** 27.3's `APP_DATA_DIR` for an app named `name`, on this platform. */
+export function dataDirectory(name: string): string {
     const home = homedir()
     if (process.platform === 'darwin')
         return `${home}/Library/Application Support/${name}`

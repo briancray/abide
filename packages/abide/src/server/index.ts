@@ -60,6 +60,9 @@ export {
 // 23.10 — whether a host answers, asked before a call to it.
 export { reachable } from './reachable.ts'
 export { type Component, render, type Shell } from './render.ts'
+// 38.83 — the props `src/bundle/launch.abide` is rendered with.
+export type { ConfigField } from './configFields.ts'
+export type { Launch } from './launcherPage.ts'
 // 32.17's run-time half: one invocation, rendered where it stands, with the anchors that make the
 // child's markup one thing for the client to walk to.
 export { renderComponent } from './renderComponent.ts'

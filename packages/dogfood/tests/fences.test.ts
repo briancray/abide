@@ -105,6 +105,9 @@ const FENCE_ONLY_SECTIONS = new Map<string, number>([
     ['server/refuse-a-request-and-say-why', 3],
     ['server/send-data-as-it-arrives', 2],
     ['ship/call-your-app-from-a-test', 1],
+    // A native menu bar, a bundle's settings and a page rendered before the app runs have no
+    // browser to render in, so no `{% example %}` can run them.
+    ['ship/ship-a-desktop-app', 3],
     ['start/how-a-page-becomes-html', 4],
     ['start/what-abide-is-for', 1],
     ['templates/bind-a-form-to-state', 4],

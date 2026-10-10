@@ -33,9 +33,8 @@ export type AbideFile = {
     /** `<script>` bodies in source order — per-instance setup, 34.1. */
     scripts: string[]
     /**
-     * `<script module>` bodies in source order — 34.2, request-local on a server and process-wide
-     * in a browser. Apart from `scripts` because the two run a different number of times, which is
-     * the whole of the clause.
+     * `<script module>` bodies in source order — 34.2, module scope on both sides. Apart from
+     * `scripts` because the two run a different number of times, which is the whole of the clause.
      */
     modules: string[]
     /**

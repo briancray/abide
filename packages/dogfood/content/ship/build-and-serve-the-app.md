@@ -5,7 +5,6 @@ intent: What a build produces and what serves it.
 covers:
   - `abide build`
   - `abide start [--port <n>]`
-  - `abide bundle`
   - `src/ui/public/**`
   - `src/ui/public/favicon.ico`
   - `src/ui/public/robots.txt`
@@ -101,24 +100,9 @@ it serving.
 Read on: [Lifecycle](../app/run-code-at-start-and-stop.md) ·
 [Config](../app/configure-the-app.md)
 
-## `abide bundle` is a desktop launcher
-
-```
-abide bundle
-```
-
-A launcher for the host platform, around the same built app. It is the shape for an app that
-happens to be local — a tool somebody runs on their own machine, where a browser tab and a URL
-to remember are the friction rather than the point.
-
-`APP_DATA_DIR` is the platform's per-user data directory, derived rather than configured, which
-is where a local app's store belongs.
-
-Read on: [Compile](ship-a-single-binary.md) ·
-[Persistence](../values/keep-a-value-outside-the-process.md)
-
 ## Next
 
 * [Compile](ship-a-single-binary.md) — the same app as one executable
+* [Desktop](ship-a-desktop-app.md) — the same app in a window of its own
 * [Lifecycle](../app/run-code-at-start-and-stop.md) — what runs around the boot
 * [CLI](../reference/cli.md) — every command and flag

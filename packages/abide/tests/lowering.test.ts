@@ -956,9 +956,10 @@ test('an enum body names its members', async () => {
     // An enum member is a name, not a read.
     expect(await lower('enum E { n }', N)).toBe('enum E { n }')
     expect(await lower('enum E { a, n, b }', N)).toBe('enum E { a, n, b }')
-    expect(await lower('export enum E { n = 1 }', N)).toBe(
-        'export enum E { n = 1 }',
-    )
+    // 34.18 — an export is a `<script module>`'s.
+    expect(
+        await lower('export enum E { n = 1 }', N, new Set(), 'script module'),
+    ).toBe('export enum E { n = 1 }')
 })
 
 test('a comma inside a type annotation is not a declarator separator', async () => {

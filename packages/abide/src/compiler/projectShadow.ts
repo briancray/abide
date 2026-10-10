@@ -406,13 +406,12 @@ function project(file: AbideFile): Projection {
     if (subjects > 0) text += ROWS_OF_DECLARATION
     if (inlineProps) text += INLINE_PROPS_IMPORT
     text += POSITION_DECLARATIONS
-    // 34.3 — BOTH BLOCKS, and the reason is the SERVER. `<script module>` is request-local there
-    // (34.2), so the emitted component carries its body as well as the `<script>`'s — an `await`
-    // at the top of either stands in an ordinary function and the module does not parse. In a
-    // browser that same block IS module scope, where the line is legal, and a source that compiles
-    // on one side and not the other is the one thing this seam may not produce.
+    // 34.3 — BOTH BLOCKS. A `<script>` is a function body on both sides, where an `await` at its top
+    // does not parse; a `<script module>` is module scope, where it would, and holds the import of
+    // every file that reaches it until it settles — the render waiting on it in all but name.
     refuseTopLevelAwait(file.modules.join('\n'), '<script module>')
     refuseTopLevelAwait(scriptsText, '<script>')
+    refuseInstanceExport(scriptsText)
     return {
         text,
         modules,
@@ -504,6 +503,7 @@ export {}
 `
 
 const AWAIT = 'await'
+const EXPORT = 'export'
 
 /** The prefix of the `const` a `{#for}`'s subject is held in, numbered per block. */
 const SUBJECT = '__subject'
@@ -546,6 +546,30 @@ function refuseTopLevelAwait(source: string, block: string): void {
             throw new Error(
                 `abide: a ${block} cannot await at its top level — setup is a function body, and nothing holds the render. Await inside a handler or a reactive body, or read the value and let the position fill. RULEBOOK 34.3.`,
             )
+    }
+}
+
+/**
+ * Throws where a `<script>` exports.
+ *
+ * 34.18 — AN EXPORT IS THE MODULE'S, and a `<script>` runs once per instance: there is no one
+ * instance an importer could be reading from. Refused rather than emitted, as 34.3's `await` is —
+ * the block is a function body on both sides, and the bundler's own error names neither the page
+ * nor the fix.
+ */
+function refuseInstanceExport(source: string): void {
+    if (!source.includes(EXPORT)) return
+    let depth = 0
+    let previous = ''
+    for (const token of tokenize(source)) {
+        const text = token.text
+        if (text === '{' || text === '(' || text === '[') depth += 1
+        else if (text === '}' || text === ')' || text === ']') depth -= 1
+        else if (depth === 0 && text === EXPORT && previous !== '.')
+            throw new Error(
+                "abide: a <script> cannot export — it runs once per instance, and an export is the module's. Move the declaration to <script module>. RULEBOOK 34.18.",
+            )
+        previous = text
     }
 }
 

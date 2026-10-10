@@ -60,6 +60,9 @@ being the one that knows what the work costs.
 | `src/ui/**` | Browser-related source. |
 | `src/shared/**` | Source shared by both. |
 | `src/server/app.ts` | The lifecycle hooks. |
+| `src/bundle/icon.png` · `src/bundle/icon.icns` | The desktop app's icon. |
+| `src/bundle/launch.abide` | The desktop launcher's page, in place of its own. |
+| `src/bundle/launch.html` | The document the launcher's page renders into. |
 | `src/ui/app.html` | The document its pages are served in. |
 | `src/ui/public/**` | The files answered as authored, at their path below that directory. |
 | `src/ui/public/favicon.ico` | The file answered at `/favicon.ico`. |

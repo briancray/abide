@@ -111,18 +111,22 @@ export async function typed(
     }
 }
 
-// A `<script>` body lowered with `names` reactive, the declarations `typed` added cut back off.
+// A `<script>` body — or a `<script module>` one — lowered with `names` reactive, the declarations
+// `typed` added cut back off.
 export async function lower(
     script: string,
     names: Iterable<string> = [],
     used: Set<string> = new Set(),
+    block: 'script' | 'script module' = 'script',
 ): Promise<string> {
     const { prelude, file, answer } = await typed(
-        `<script>${script}</script>`,
+        `<${block}>${script}</script>`,
         names,
     )
     const lowering = new Lowering(file, answer)
-    const lowered = lowering.scripts().slice(prelude.length)
+    const lowered = (
+        block === 'script' ? lowering.scripts() : lowering.modules()
+    ).slice(prelude.length)
     for (const name of lowering.used) used.add(name)
     return lowered
 }

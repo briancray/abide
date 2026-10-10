@@ -45,7 +45,11 @@ export interface App {
         fn: () => Result | Promise<Result>,
         options?: { request?: Request },
     ): Promise<Result>
-    listen(options?: { port?: number; unix?: string }): Promise<void>
+    listen(options?: {
+        port?: number
+        hostname?: string
+        unix?: string
+    }): Promise<void>
     stop(): Promise<void>
     [Symbol.asyncDispose](): Promise<void>
 }
@@ -303,9 +307,12 @@ export async function bootApp(
             const server = Bun.serve<Upgraded>({
                 ...(options?.unix !== undefined
                     ? { unix: options.unix }
-                    : port !== undefined
-                      ? { port }
-                      : {}),
+                    : {
+                          ...(port === undefined ? {} : { port }),
+                          ...(options?.hostname === undefined
+                              ? {}
+                              : { hostname: options.hostname }),
+                      }),
                 // 16.54 — THE CEILING IS THE HANDLER'S, and bun's own 128 MB would refuse a body
                 // before one that declared none could accept it.
                 maxRequestBodySize: Number.MAX_SAFE_INTEGER,

@@ -66,15 +66,12 @@ export function emitComponent(
     // 31.1 and 31.4 hold INSIDE a `.abide` file, not just in its template, so the script block is
     // lowered with the same rewrite the slots get.
     //
-    // 34.2 — A `<script module>` IS REQUEST-LOCAL ON A SERVER, which is the head of the component
-    // rather than module scope: at module scope it is evaluated once per PROCESS and every request
-    // after the first sees the first one's values. One `Component()` call is one request today,
-    // and this moves the moment 32.17 lets a component be invoked more than once inside one.
+    // 34.2 — A `<script module>` IS MODULE SCOPE, here as in the browser, so what it exports is the
+    // module's (34.17). What must stay per request is a `reactive`, which is by 11.32 wherever it
+    // is declared.
     const moduleSetup = splitImports(lowering.modules(), '', landed)
     const setup = splitImports(lowering.scripts(), '', landed)
-    const componentBody = [moduleSetup.body, setup.body]
-        .filter((part) => part !== '')
-        .join('\n')
+    const componentBody = setup.body
 
     // A child invoked inside `<head>` pushes to the same array from the head expression.
     const heads =
@@ -118,7 +115,7 @@ export function emitComponent(
     }`
         : build
     return `${moduleImports(lowering, () => SERVER_SPECIFIER, [moduleSetup, setup])}
-export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
+${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
 ${opened}${componentBody}
 ${level}${closed}
 }

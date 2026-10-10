@@ -1,9 +1,22 @@
 import type { AppPackage } from '#server/config.ts'
+import type { LauncherOptions } from '#server/launcherOptions.ts'
 import abidePackage from '../../package.json' with { type: 'json' }
 
-const RUN_COMPILED = Bun.fileURLToPath(
-    new URL('../server/runCompiled.ts', import.meta.url),
-)
+// What the executable starts from: `abide compile`'s, and `abide bundle`'s window over it (38.71).
+const RUNNERS = {
+    compiled: {
+        name: 'runCompiled',
+        path: Bun.fileURLToPath(
+            new URL('../server/runCompiled.ts', import.meta.url),
+        ),
+    },
+    desktop: {
+        name: 'runDesktop',
+        path: Bun.fileURLToPath(
+            new URL('../server/runDesktop.ts', import.meta.url),
+        ),
+    },
+}
 const PACKAGE = Bun.fileURLToPath(new URL('../../', import.meta.url))
 
 /**
@@ -38,6 +51,17 @@ function abideEntries(): Map<string, string> {
  * absolute, so the entry means the same thing wherever `--out` put it.
  */
 export function compiledEntry(app: {
+    /**
+     * 38.71 — what `abide bundle` read out of `src/bundle/`, and `launch` the path of its
+     * `launch.abide`; `undefined` for `abide compile`.
+     */
+    desktop:
+        | {
+              options: LauncherOptions
+              launch: string | undefined
+              shell: string
+          }
+        | undefined
     out: string
     /** 37.1 — `src/server/app.ts`, where the app has one. */
     hooks: string | undefined
@@ -51,7 +75,8 @@ export function compiledEntry(app: {
     /** Every file under the build's `public/`, by name to the file. */
     published: Map<string, string>
 }): string {
-    let imports = `import { runCompiled } from ${JSON.stringify(RUN_COMPILED)}
+    const runner = RUNNERS[app.desktop === undefined ? 'compiled' : 'desktop']
+    let imports = `import { ${runner.name} } from ${JSON.stringify(runner.path)}
 import * as table from ${JSON.stringify(`${app.out}/server.ts`)}
 import { handlers } from ${JSON.stringify(`${app.out}/rpc.ts`)}
 `
@@ -84,12 +109,21 @@ import { handlers } from ${JSON.stringify(`${app.out}/rpc.ts`)}
         app.hooks === undefined
             ? 'undefined'
             : `() => import(${JSON.stringify(app.hooks)})`
+    const desktop =
+        app.desktop === undefined
+            ? ''
+            : `
+    {
+        options: ${JSON.stringify(app.desktop.options)},
+        launch: ${app.desktop.launch === undefined ? 'undefined' : `() => import(${JSON.stringify(app.desktop.launch)})`},
+        shell: ${JSON.stringify(app.desktop.shell)},
+    },`
     return `// Written by \`abide compile\`. The whole app, as what one executable holds.
 ${imports}
 const handlerModules = {${modules}
 }
 
-await runCompiled(
+await ${runner.name}(
     { hooks: ${hooks}, package: ${JSON.stringify(app.package)} },
     {
         table,
@@ -101,7 +135,7 @@ await runCompiled(
         published: ${published},
     },
     {${specifiers}
-    },
+    },${desktop}
 )
 `
 }

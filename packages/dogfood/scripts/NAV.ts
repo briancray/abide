@@ -117,6 +117,7 @@ export const NAV = [
             'ship/build-and-serve-the-app',
             'ship/catch-mistakes-before-you-ship',
             'ship/ship-a-single-binary',
+            'ship/ship-a-desktop-app',
             'ship/watch-a-running-app',
             'ship/call-a-handler-from-the-terminal',
             'ship/watch-a-room-from-the-terminal',

@@ -467,6 +467,8 @@ export class TypeSession {
                 map,
                 spans: {
                     scriptsEnd: projection.scripts.end,
+                    modules: projection.modules,
+                    scripts: projection.scripts,
                     positions: projection.positions,
                 },
             })

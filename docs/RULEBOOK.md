@@ -1775,7 +1775,7 @@ element.
 
 34.1 A `<script>` block MUST be per-instance component setup.
 
-34.2 A `<script module>` block MUST be request-local on a server and process-wide in a browser.
+34.2 A `<script module>` block MUST be module scope, on a server as in a browser.
 
 34.3 A `<script>` or a `<script module>` MUST NOT await at its top level, and one that does MUST be
 a compile error.
@@ -1815,6 +1815,14 @@ module that file compiles to, as a static import of it does.
 
 34.16 A `.abide` file a server module imports MUST resolve to a function that binds its props and
 answers a `Component`, under `abide dev`, `abide start` and `abide compile` alike.
+
+34.17 A name a `<script module>` exports MUST be exported from the module the file compiles to, on a
+server as in a browser.
+
+34.18 A `<script>` that exports MUST be a compile error.
+
+34.19 A write a `<script>` makes outside any function to a `let` or `var` its file's
+`<script module>` declares, holding no `Reactive`, MUST be warned on.
 
 # 35. Pages, rendering and sinks
 
@@ -2104,6 +2112,77 @@ its output only a file it did not produce that was written before it began.
 
 38.70 `abide watch` MUST follow a `GET` per 18.20, and print its value and its value after each
 `s.patch`.
+
+38.71 The executable `abide bundle` writes, started on macOS with no command, MUST open a window on
+the app rather than 38.54's shell, and given a command MUST answer it as 38.51 does.
+
+38.72 The window `abide bundle`'s executable opens MUST show the launcher page where nothing is
+remembered, offering to start the app in the process and to connect to one running at a URL.
+
+38.73 The launcher's start form MUST ask for each field the `onConfig` schema's JSON Schema
+declares, or each field `onConfig`'s defaults return where the schema has none, and MUST boot the
+app with its values as the environment, showing a refusal by field.
+
+38.74 The launcher MUST remember a start's values or a connect's URL under `APP_DATA_DIR`, and MUST
+start or connect the same way at the next launch.
+
+38.75 The `disconnect` role MUST stop the app the launcher serves, forget what 38.74 remembered, and
+show the launcher page.
+
+38.76 The app `abide bundle`'s launcher serves MUST listen on loopback alone, on the port the last
+launch served it on where that port is free.
+
+38.77 Quitting the launcher MUST stop the app it serves through `App.stop` before the process exits.
+
+38.78 `abide bundle` MUST refuse on a platform other than macOS, naming `abide compile`.
+
+38.79 `abide bundle` given no `--out` MUST write the `.app` into the directory it was run from, named
+as 38.47 names the executable.
+
+38.80 `abide bundle` MUST give the `.app` the icon `src/bundle/icon.icns` holds, or one drawn at
+every size from `src/bundle/icon.png` where there is no `.icns`.
+
+38.81 `abide bundle` MUST read `src/bundle/launcher.json` as it runs, and MUST refuse a key it does
+not take, or a value of a type the key does not take, before it builds anything.
+
+38.82 `abide bundle` MUST refuse a `src/bundle/launcher.json` turning off both `start` and
+`connect`.
+
+38.83 Where the app has `src/bundle/launch.abide`, the launcher MUST render it through `render`,
+bound to the `Launch` it would show, in place of its own page.
+
+38.84 A form `src/bundle/launcher.json` turns off MUST have no address in `Launch`, MUST NOT be
+answered, and MUST NOT be done again at launch, and turning `connect` off MUST take the `connect`
+item out of the default menu bar.
+
+38.85 The page `src/bundle/launch.abide` renders MUST carry its own `<style>` in the head of
+`src/bundle/launch.html`, or of a bare document where there is none.
+
+38.86 A `src/bundle/launch.abide` that fails to render MUST reach `onError`, and the launcher MUST
+show its own page in its place.
+
+38.87 The window MUST open at `src/bundle/launcher.json`'s `width` and `height` where no launch
+before it left a size, and MUST NOT be resized below its `minWidth` and `minHeight`.
+
+38.88 `src/bundle/launcher.json`'s `name` MUST name the app in its bundle, its menu bar and its
+`Launch`.
+
+38.89 The desktop app's menu bar MUST be the application, File, Edit, View and Window menus, with
+the `menu` each layout and the page of the route the window shows exports from its
+`<script module>`, outermost first: a menu whose `label` names one already standing appends its
+items to that one, and any other stands before Window.
+
+38.90 A `MenuItem` whose `MenuRole` AppKit answers MUST be sent down the responder chain, and MUST
+be disabled where nothing in the chain answers it.
+
+38.91 Picking a `MenuItem` with an `href` MUST `navigate` to it in the page that exported it.
+
+38.92 Picking a `menuItem` MUST run every function its `on` filed, in the page that exported it,
+whether the launcher serves that app or connected to it, and a throw from one MUST NOT stop the
+rest.
+
+38.93 The menu bar MUST be told again after every navigation the page makes, and MUST be the
+default alone from each load the launcher starts until the page loaded tells it its route's `menu`.
 
 # 39. Head and view transitions
 
