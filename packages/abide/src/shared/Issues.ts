@@ -16,7 +16,7 @@ type Down = [0, 0, 1, 2, 3, 4]
 /**
  * Every dot-joined path into `T`, widened to `string` past five levels.
  *
- * 19.6: DOT-JOINED, DEPTH-LIMITED, AND WIDENED TO `string` PAST THE LIMIT. The limit is
+ * 19.5: DOT-JOINED, DEPTH-LIMITED, AND WIDENED TO `string` PAST THE LIMIT. The limit is
  * not a style choice — a recursive path type over a self-referential shape (a tree node
  * whose children are tree nodes) expands forever, and TypeScript answers that with
  * "excessively deep" on the whole file rather than on the type that caused it. Five levels

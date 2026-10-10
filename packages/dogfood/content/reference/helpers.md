@@ -26,9 +26,9 @@ says whether a host is there to call.
 | `Logger` | `typeof log` | What `log.named` hands back. |
 | `log.enabled` | `() => boolean` | Whether a gated line under this namespace would be written. |
 | `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string }` | One line, as a value. |
-| `log.records` | `Reactive<LogRecord>` | The channel every line is published to. |
+| `log.records` | `Reactive<LogRecord[]>` | The lines kept, appended to as each is written. |
 | `abide:request` | `debug` | One line per request. |
-| `abide:socket` | `debug` | One line per socket event. |
+| `abide:socket` | `debug` | One line per frame on the socket mux. |
 | `abide:lifecycle` | `debug` `error` | A lifecycle that ran. |
 | `abide:principal` | `debug` `warning` | A principal set or cleared. |
 | `abide:health` | `warning` | An `onHealth` that threw or answered a non-object. |
@@ -41,11 +41,12 @@ says whether a host is there to call.
 | `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. |
 | `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. |
 
-`log` publishes into a **channel** underneath, which is what makes its records readable the way
-any channel is readable. `log.records` is an ordinary `reactive` declaring `history`, so a page
-showing the last hundred lines reads `log.records.history(100)` and subscribes rather than polls.
-`abide logs` is a live subscription to that same channel, as the shell makes one: a client
-reading the `GET` over it is subscribed to every line.
+Every line is appended to `log.records`, an ordinary `reactive` holding the lines kept as an array
+(28.1). It is trimmed back to `ABIDE_MAX_LOG_BUFFER_COUNT` lines, 1000 by default, once it holds
+twice that. It is read the way any value is
+read, so a page showing the latest lines subscribes rather than polls. In a template it is a member
+access, so the read is spelled out: `{#for line of log.records()}`. `abide logs` follows the `GET` over
+it at `/__abide/logs`: the lines held, then each line written as an `add` (28.2).
 
 ### Namespaces and gating
 

@@ -12,7 +12,7 @@ let pushed = null
 
 const readers = new Set()
 
-function publish(note) {
+function push(note) {
     pushed = note
     for (const reader of readers) reader()
 }
@@ -45,7 +45,7 @@ draft.addEventListener('input', () => {
 })
 
 document.querySelector('#add').addEventListener('click', () => {
-    publish({ text: owned })
+    push({ text: owned })
     owned = ''
     draft.value = ''
     render()

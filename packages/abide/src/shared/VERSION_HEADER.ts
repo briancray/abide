@@ -1,6 +1,6 @@
 /**
- * The header a `GET`'s answer names its version in.
+ * The header a `GET`'s answer names its version in: the standard `ETag`, the version quoted.
  *
- * 18.20 — the server writes it and a browser's wire reads it, the early-call script included.
+ * 18.5 — the server writes it and a browser's wire reads it, the early-call script included.
  */
-export const VERSION_HEADER = 'abide-version'
+export const VERSION_HEADER = 'etag'

@@ -4,7 +4,7 @@
  * Section 33. NOTHING HERE RUNS IN A COMPILED PAGE. `props<Props>()` is LOWERED: the compiler
  * replaces the call with the record of accessors the caller passed, and every name the pattern
  * binds becomes a read of its accessor (33.4, 33.5, 33.9). The export exists because the import an
- * author writes has to resolve — 19.12 has valid TypeScript go on compiling — and because the TYPE
+ * author writes has to resolve — 19.11 has valid TypeScript go on compiling — and because the TYPE
  * is what makes a prop's shape the one the child declared.
  *
  * THE RETURN TYPE IS THE PLAIN SHAPE, not one accessor per key, and that is the point of the

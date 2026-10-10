@@ -2,7 +2,7 @@
 // the literal the way `parseRoutePattern` reads it at run time, so a call that leaves a required
 // segment out is a compile error naming it (30.2, 30.3) rather than an address with a hole in it.
 //
-// 16.11 — RESOLVED AGAINST THE MOUNT at the call, so the same build serves at the root and below it.
+// 16.10 — RESOLVED AGAINST THE MOUNT at the call, so the same build serves at the root and below it.
 
 import { mounted } from './mount.ts'
 import { queryText } from './queryText.ts'

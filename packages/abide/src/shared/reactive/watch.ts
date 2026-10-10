@@ -127,9 +127,9 @@ export function owning(): boolean {
 /**
  * Runs `open`, and answers what it answers, with every watch it opens owned by its caller alone.
  *
- * FOR A WATCH OR A VALUE WHOSE LIFE IS ALREADY HELD — a socket's feed, stopped when its last
- * follower leaves, or a keyed entry, which its value's cache holds — and which a request or a setup
- * it happened to start in would otherwise stop when that one ends.
+ * FOR A WATCH WHOSE LIFE IS ALREADY HELD — a followed `GET`'s feed, stopped when its last follower
+ * leaves — and which a request or a setup it happened to start in would otherwise stop when that
+ * one ends.
  */
 export function unowned<Result>(open: () => Result): Result {
     const previous = OWNING.free
@@ -262,7 +262,7 @@ export function watchTracked(effect: Effect): Disposer {
     const reader: Subscriber = newSubscriber([], null)
     // 11.32 — A RERUN READS THROUGH THE SCOPE THE WATCH WAS OPENED IN, not the ambient one. The
     // drain that reruns it runs in whichever request's turn scheduled it, so without this an
-    // effect a load aborted (11.64) reruns reading — and subscribing to — another request's
+    // effect a load aborted (11.63) reruns reading — and subscribing to — another request's
     // values. The same move `run` makes for a body.
     const scope = currentScope()
     reader.notify = (): void => {

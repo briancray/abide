@@ -310,7 +310,7 @@ export function dropRow(row: Row): void {
  *
  * `abide:hydrate` RATHER THAN A CHANNEL OF ITS OWN. A repeated key is not a hydration mismatch —
  * it survives a reconcile that no hydration was anywhere near — but the registry's meaning for
- * that namespace is THE BROWSER LANE, not a mismatch, and it is the only namespace 28.8 gives the
+ * that namespace is THE BROWSER LANE, not a mismatch, and it is the only namespace 28.9 gives the
  * client runtime. A second one buys an app a second name to learn and silence for one warning,
  * where widening the lane's one meaning costs nothing that has to be taught.
  */

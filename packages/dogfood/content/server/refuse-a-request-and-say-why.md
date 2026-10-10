@@ -147,12 +147,12 @@ Read on: [Schemas](check-what-callers-send-you.md)
 {% example aborted-signal %}
 
 A call handed a `signal` is one caller saying it can stop waiting. Where every call that reached
-the load passed one and every one of them aborted, the load ends (16.52): `busy()` goes false, the
+the load passed one and every one of them aborted, the load ends (16.48): `busy()` goes false, the
 request to the server is aborted, and the value refuses with `aborted` at 499 rather than throwing
-(16.53). `aborted.is` narrows it like any other factory's refusal, so the page tells "you cancelled
+(16.49). `aborted.is` narrows it like any other factory's refusal, so the page tells "you cancelled
 this" apart from "this failed".
 
-The next call starts a new load under its own signal (16.66), which is why Load works again after a
+The next call starts a new load under its own signal (16.62), which is why Load works again after a
 cancel. See [Limits](put-a-ceiling-on-a-request.md) for the signal itself.
 
 ## A bare failure narrows through the factory's own `is`

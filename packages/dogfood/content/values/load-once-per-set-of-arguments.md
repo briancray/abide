@@ -33,7 +33,7 @@ There is a cache at all because the body takes args, and the discriminant is exa
 
 A keyed value does not re-run because something its body read moved — its ways back are `ttl`, an
 explicit `invalidate` or `refresh`, and eviction (11.6, 14.4). Its `ttl` is the life of an entry,
-counted from that entry's latest production (11.46, 11.50). The two are different shapes rather
+counted from that entry's latest production (11.45, 11.49). The two are different shapes rather
 than one shape with an option, and every signature is in the
 [`reactive` reference](../reference/reactive.md).
 
@@ -93,7 +93,7 @@ Args are always plain args. A reactive value in an argument position **reads**; 
 follow that value is the enclosing derived value's job.
 
 An `args` schema never decides the key. The key is taken before it runs (11.26), so it never
-moves a call onto another entry (11.28), and the body gets what it returned (11.69).
+moves a call onto another entry (11.28), and the body gets what it returned (11.68).
 
 ## A keyed value's cache is request-local on a server, process-local in a browser
 
@@ -145,10 +145,10 @@ unbounded cache — unbounded because the app asked for it, the bound being a nu
 and abide does not.
 
 A global value over a stream fans one producer out to many readers, and it needs no retention to do
-it. A reader arriving mid-stream gets the run in flight from its start and then goes live (2.7), and
-a reader leaving does not cancel the producer for the ones that remain (11.40).
+it. A reader arriving mid-stream gets the run in flight from its start and then goes live (2.5), and
+a reader leaving does not cancel the producer for the ones that remain (11.39).
 
-Read on: [History](keep-the-last-few-values.md) ·
+Read on: [Recent values](keep-the-last-few-values.md) ·
 [Auth & principal](../app/know-who-is-calling.md) ·
 [Authorization](../server/decide-who-may-call-what.md) ·
 [Response types](../server/answer-with-something-other-than-json.md)

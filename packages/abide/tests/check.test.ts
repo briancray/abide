@@ -673,22 +673,22 @@ import { shared as renamed } from '#ui/rows.ts'
 // A REFUSAL ONLY THE WHOLE APP CAN SEE is a finding too: a module under `server/rpc` exporting what
 // no handler declares type-checks, and only the emit refuses it. THE REVERT: skip `emitApp` in
 // `checkApp`; the check reads 0 refusals where 1 is due.
-test('a check reports what only building the whole app refuses — 19.16', async () => {
+test('a check reports what only building the whole app refuses — 19.15', async () => {
     const stray = appFixture({
         'ui/pages/page.abide': '<p>hello</p>',
         'server/rpc/things.ts': 'export const answer = 42\n',
     })
     const refused = (await checkApp(stray)).filter((diagnosis) =>
-        diagnosis.message.includes('19.16'),
+        diagnosis.message.includes('19.15'),
     )
     expect(refused.length).toBe(1)
 }, 60_000)
 
-// 16.40 — A `Reactive` NESTED IN WHAT A HANDLER RETURNS is refused, by the handler and the path to
+// 16.39 — A `Reactive` NESTED IN WHAT A HANDLER RETURNS is refused, by the handler and the path to
 // it; one returned whole is adopted (11.12) and is not — `getUser` is declared first, so a refusal
 // of it would be the one read. THE REVERT: skip `nestedReactiveIn` in `declaredExports`; the check reads
 // 0 refusals where 1 is due, in each app.
-test('a handler returning a Reactive nested in its value is refused by path — 16.40', async () => {
+test('a handler returning a Reactive nested in its value is refused by path — 16.39', async () => {
     const refusals = async (handlers: string) => {
         const said: string[] = []
         const app = appFixture({
@@ -702,7 +702,7 @@ export const getUser = GET(() => user)
 ${handlers}`,
         })
         for (const diagnosis of await checkApp(app))
-            if (diagnosis.message.includes('16.40'))
+            if (diagnosis.message.includes('16.39'))
                 said.push(diagnosis.message)
         return said
     }

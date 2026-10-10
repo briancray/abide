@@ -40,9 +40,15 @@ and a reader list, because the header the form never names has to be told.
 `principal.clear()` signs them out. What you put in is yours — an id, a tenant, a role — and
 abide's part is that it comes back unforged.
 
+The seal is an ordinary JWT, signed HS256 (26.11): the claims are its payload's own members beside
+`exp` and `iat`, which are abide's. So another service holding the same secret verifies the cookie
+with any JWT library, and a token that names another algorithm is no seal at all.
+
 Both run in a handler, because the cookie is written on the answer. The answer also tells the
 browser the principal moved, and the browser loads the document again under the new cookie — so
-the header above the form reads the new name when `signIn` returns, with nothing passed to it.
+the header above the form reads the new name when `signIn` returns, with nothing passed to it. The
+tab that signed in tells the browser's other tabs over a `BroadcastChannel`, and each reloads from
+the cookie they share (26.24), so signing out in one signs out the page in all of them.
 
 ## The five reads
 

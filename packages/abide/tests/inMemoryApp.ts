@@ -1,7 +1,7 @@
 // AN APP BOOTED IN THIS PROCESS OVER MODULES THE TEST ALREADY HOLDS — `bootApp` and `appSources`, the
 // path `abide start`, a compiled app and `abide dev` all boot through, with no build ahead of it. What
 // the build would have supplied is the handler table, and that is derived here off each export's
-// method: the address `handlersUnder` writes, and no type-derived `args` schema (19.10) unless a row
+// method: the address `handlersUnder` writes, and no type-derived `args` schema (19.9) unless a row
 // passes one. So a test of what a handler's ANNOTATION does to the wire stays on `builtApp.ts`.
 //
 // No socket is bound — `App.fetch` answers (42.5) — so the DOM preload's `Response` never meets

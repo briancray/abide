@@ -4,7 +4,7 @@
 // is what aborts and never the document.
 //
 // A THUNK, BECAUSE THE READ IS THE BODY. On the client every binding is already its own `watch`,
-// so 2.13 gives each slot an abortable body for free and a `NotLanded` takes down exactly the one
+// so 2.12 gives each slot an abortable body for free and a `NotLanded` takes down exactly the one
 // that read it. The server has no such body — `emitComponent` builds the markup as ONE
 // concatenation — so the first unlanded read threw out of `Component()` and `render` died on its
 // first `next()`, losing the static markup, every other slot and the `<head>` with them. Passing
@@ -26,7 +26,7 @@ export function slotValue(read: () => unknown): unknown {
     try {
         return read()
     } catch (thrown) {
-        // 2.15 — a `NotLanded` and a `Failed` are distinguishable by brand, and only the first is
+        // 2.14 — a `NotLanded` and a `Failed` are distinguishable by brand, and only the first is
         // "not yet". A producer that FAILED is 2.2's throw and belongs to whoever is rendering.
         if (thrown instanceof NotLanded) return undefined
         throw thrown

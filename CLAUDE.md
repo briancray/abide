@@ -53,7 +53,7 @@ is all there is.
 * uses typescript 7 for compiler
 * valid typescript or javascript should always compile — in a `.abide`. what the compiler refuses
 is a numbered clause (RULEBOOK 34.3's top-level await is one), and where it cannot infer a type it
-reads rather than refuses — RULEBOOK 19.12
+reads rather than refuses — RULEBOOK 19.11
 * a reactive value is read and written BY NAME inside a `.abide` file, and the explicit `x()` / `x.set(v)`
 spelling keeps compiling — the sugar is over it, never instead of it. RULEBOOK 31.1, 31.3 and 31.7
 * small and low level client bundle built from compiled .abide
@@ -117,7 +117,7 @@ these fail SILENTLY — the output stays right while the work goes wrong, so a c
 
 * a freshly built wrapper defeats an identity check — when a value is re-wrapped per run (a state envelope, a result record), `oldValue !== value` is always true and every propagation cutoff downstream of it silently stops working
 * the inverse costs too: when a value's IDENTITY is what wakes readers, rebuilding it is how the change gets signalled, and an accumulating value then pays a full copy per write — `concat` per chunk is O(n²) over a stream. separate the signal from the payload: push into a buffer, bump a VERSION for readers to subscribe to, and materialise the snapshot on the read that follows. which of the three variants is right is decided by the read/write ratio — version + lazy snapshot when writes dominate, structural compare that KEEPS the old identity when reads dominate, a cursor when the reader consumes in order
-* a cap on what is REMEMBERED must not become a cost per write — if raising `history`, a scrollback or a buffer size makes every write dearer, the retention is being rebuilt rather than appended to. assert it: a ratio between two sizes of the same structure, which is the one timing claim that stays honest across substrates
+* a cap on what is REMEMBERED must not become a cost per write — if raising a scrollback or a buffer size makes every write dearer, the retention is being rebuilt rather than appended to. assert it: a ratio between two sizes of the same structure, which is the one timing claim that stays honest across substrates
 
 # performance and measurement
 

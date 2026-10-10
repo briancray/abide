@@ -7,12 +7,15 @@ let sent = 0
 
 function emit() {
     sent += 1
-    token.publish({ at: sent, text: WORDS[sent % WORDS.length] ?? '…' })
+    token.patch((tokens) => {
+        tokens.push({ at: sent, text: WORDS[sent % WORDS.length] ?? '…' })
+        if (tokens.length > 4) tokens.shift()
+    })
 }
 </script>
 
 <ul class="chat">
-{#for line of token.history(50)}
+{#for line of token}
     <li><span>{line.at}</span><p>{line.text}</p></li>
 {/for}
 </ul>

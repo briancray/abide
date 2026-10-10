@@ -1,4 +1,4 @@
-// 18.2, 37.3 — THE MUX'S UPGRADE, both halves of it: the app lane admitting it, and a listener — `App.listen`,
+// 18.1, 37.3 — THE MUX'S UPGRADE, both halves of it: the app lane admitting it, and a listener — `App.listen`,
 // or `abide dev`'s worker telling its listener — reading that admission off the lane's answer and
 // performing it.
 //
@@ -14,8 +14,8 @@ import { plainAnswer } from './plainAnswer.ts'
 
 const MUX_ADMITTED = 204
 
-// What the mux carries: an app with neither table has no mux to open.
-type Carried = { sockets: { size: number }; handlers: { size: number } }
+// What the mux carries: an app with no handler has no mux to open.
+type Carried = { handlers: { size: number } }
 
 /** Whether `request` is the mux's upgrade, at `pathname` below the mount. */
 function asksForMux(
@@ -26,7 +26,7 @@ function asksForMux(
     return (
         pathname === SOCKET_ADDRESS &&
         request.headers.get('upgrade') === 'websocket' &&
-        (carried.sockets.size > 0 || carried.handlers.size > 0)
+        carried.handlers.size > 0
     )
 }
 
@@ -48,7 +48,7 @@ export function muxAdmission(
 /**
  * Whether the request is upgraded to the socket mux, given what the app lane answered it.
  *
- * 16.11 — read below the mount, as every other request's address is.
+ * 16.10 — read below the mount, as every other request's address is.
  */
 export function admitsMux(
     request: Request,

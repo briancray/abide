@@ -205,38 +205,33 @@ Read on: [Offline](../app/know-when-the-browser-goes-offline.md) ·
 
 {% example reload-ttl %}
 
-`ttl` is the life of a **retained production** — one definition reaching every producer. At
-the default retention a value holds one production, so past its `ttl` the producer recomputes on
-the next read. A value declaring `history: 100` holds a hundred and one, each on its own clock.
+`ttl` is the life of the production a value serves, or of a keyed entry (11.45) — one definition
+reaching every producer. Past it the production is released (6.7), and the next read runs the
+producer (6.6).
 
-Expiry **wakes nobody**. Entries past it are dropped on the read that follows — no timer per
-entry, no version bump — because a timer that moved the version would put the cost of retention
-back on the write.
+Expiry **wakes nobody** (6.1). One timer per value is armed at the deadline of the production it
+serves (6.3), and it does not hold the process open (6.4).
 
-**A lapsed `ttl` lands almost where an `invalidate()` lands.** Nothing loads, nobody is woken (6.4,
+**A lapsed `ttl` lands almost where an `invalidate()` lands.** Nothing loads, nobody is woken (6.1,
 7.14), and the read that follows fetches with nothing to serve underneath it. The difference is
-what is held meanwhile: a lapse releases the production (6.13) and reads as not ready (6.14), where
-an invalidated value goes on being served until a read or a probe runs the producer (7.17). Come back to a page after an idle spell and
-find it pending: that is a lapsed `ttl`, not a bug.
+what is held meanwhile: a lapse releases the production (6.7) and reads as not ready (6.8), where
+an invalidated value goes on being served until a read or a probe runs the producer (7.17). Come
+back to a page after an idle spell and find it pending: that is a lapsed `ttl`, not a bug.
 
-They separate on the **unit**. `ttl` is per retained production, each on its own clock. So on a
-value at `history: 100` it can drop part of a ring and keep the rest — where a trigger is over a
-value, or a selection of them, and never over part of one. And a `ttl`
-is declared rather than called, so no pattern narrows it and no tag carries it across values.
+They separate on how they are reached. A trigger is called, over a value or a selection of them; a
+`ttl` is declared, so no pattern narrows it and no tag carries it across values.
 
-On an owned value there is no producer, so `ttl` expires only the past productions and keeps the
-standing one (6.8): it never drops what an app put there. A value **given** a load is the same
-case, the load being one answer rather than a producer. A value with a `store` is not, having
-somewhere to get the dropped value back from (8.2).
+On an owned value there is no producer, and `ttl` is inert (6.2): it never drops what an app put
+there. A value **given** a load is the same case, the load being one answer rather than a producer.
+A value with a `store` is not, having somewhere to get the dropped value back from (8.2).
 
 Read on: [Local state](show-a-value-that-changes.md) ·
-[History](keep-the-last-few-values.md) ·
 [Persistence](keep-a-value-outside-the-process.md)
 
 ## `peek` reads without subscribing
 
 Reading subscribes, so a read from somewhere that only wants to look is a subscription you did not
-want. `peek` is the read that does not join the flow (2.12) — same value, no subscription:
+want. `peek` is the read that does not join the flow (2.11) — same value, no subscription:
 
 ```ts shared
 watch(() => {
@@ -249,8 +244,8 @@ That effect is tracked, so the route wakes it. The level is read through `peek`,
 never does.
 
 It is otherwise a read. It runs the reload a read would run, after an `invalidate` (7.12) or a
-lapsed `ttl` (6.12), and where nothing has landed it answers `undefined` rather than throwing
-`NotLanded` (2.11). A probe runs the same reload, since it answers about the value a read would
+lapsed `ttl` (6.6), and where nothing has landed it answers `undefined` rather than throwing
+`NotLanded` (2.10). A probe runs the same reload, since it answers about the value a read would
 serve (3.2), so `ready()` in front of a read never admits one that throws.
 
 `watch(sources, effect)` is the other way to the same place, and a `reactive` body has only this

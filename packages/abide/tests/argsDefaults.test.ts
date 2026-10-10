@@ -11,6 +11,7 @@ import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const QUERIES = `import { jsonSchema, reactive, type StandardSchemaV1 } from 'abide'
+import { GET } from 'abide/server'
 
 export const unwritten = reactive(({ page }: { page?: number }) => page, {
     args: jsonSchema({ type: 'object', properties: { page: { type: 'integer', default: 1 } } }),
@@ -30,6 +31,11 @@ export const standard = reactive(({ size, q }: { size?: number; q: string }) => 
 
 export const checked = reactive(({ page }: { page?: number }) => page, {
     args: (value: unknown) => value as { page?: number },
+})
+
+export const handled = GET(({ per }: { per?: number }) => per, {
+    args: jsonSchema({ type: 'object', properties: { per: { type: 'integer', default: 10 } } }),
+    description: 'A page size.',
 })
 `
 
@@ -72,9 +78,10 @@ function place(text: string, needle: string): { line: number; column: number } {
     }
 }
 
-// THE REVERTS: drop `documentDefaults` and neither document default is found (1 against 3); drop
-// `standardDefaults` and `size` goes unfound (2 against 3). `written` defaults in the parameter too
-// and `checked` is a function that says nothing, so neither is warned on.
+// THE REVERTS: drop `documentDefaults` and no document default is found (1 against 4); drop
+// `standardDefaults` and `size` goes unfound (3 against 4); read `reactive(…)` alone in
+// `reactiveOptions` and the `GET`'s `per` goes unfound (3 against 4). `written` defaults in the
+// parameter too and `checked` is a function that says nothing, so neither is warned on.
 test('an args default the parameter does not write is warned on at the args — 11.30', () => {
     expect(
         found.map(({ path, line, column, category }) => ({
@@ -95,6 +102,11 @@ test('an args default the parameter does not write is warned on at the args — 
             category: 'warning',
         },
         {
+            file: 'shared/queries.ts',
+            ...place(QUERIES, "jsonSchema({ type: 'object', properties: { per"),
+            category: 'warning',
+        },
+        {
             file: 'ui/pages/page.abide',
             ...place(PAGE, 'jsonSchema({'),
             category: 'warning',
@@ -102,7 +114,8 @@ test('an args default the parameter does not write is warned on at the args — 
     ])
     expect(found[0]?.message).toContain('`page`')
     expect(found[1]?.message).toContain('`size`')
-    expect(found[2]?.message).toContain('`limit`')
+    expect(found[2]?.message).toContain('`per`')
+    expect(found[3]?.message).toContain('`limit`')
 })
 
 // A WARNING, AND THE BUILD GOES ON. THE REVERT: drop `unkeyed` from `compileApp`'s warnings; the
@@ -114,6 +127,7 @@ test('a build warns on an args default the parameter does not write, and compile
         if (warning.message.includes('11.30'))
             warned.push(warning.path.slice(app.length + 1))
     expect(warned).toEqual([
+        'shared/queries.ts',
         'shared/queries.ts',
         'shared/queries.ts',
         'ui/pages/page.abide',

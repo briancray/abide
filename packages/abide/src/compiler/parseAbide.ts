@@ -25,7 +25,7 @@ import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 // A `.abide` file is a script, a style and a template, and this splits it into the three
 // and parses the third. The expression grammar is NOT parsed here: `{expr}` is captured as
-// source text and handed to the emitter verbatim, which is what keeps 19.12 a property of
+// source text and handed to the emitter verbatim, which is what keeps 19.11 a property of
 // the file rather than a promise this parser has to keep.
 
 /** A `.abide` file split into its script, module, style and head blocks and its parsed template. */

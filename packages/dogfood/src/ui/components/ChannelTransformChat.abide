@@ -10,7 +10,8 @@ let draft = reactive(
 )
 
 function send() {
-    const answer = onboarding.publish({ speaker: 'you', text: draft })
+    onboarding = [...onboarding, { speaker: 'you', text: draft }]
+    const answer = onboarding.error()
     if (!tooLong.is(answer)) {
         refusal = ''
         return
@@ -22,7 +23,7 @@ function send() {
 <ul class="fields stacked">
     <li><span>last sent</span>
         <strong>
-            {onboarding ? onboarding.text : 'nothing sent yet'}
+            {onboarding.at(-1)?.text ?? 'nothing sent yet'}
         </strong>
     </li>
 </ul>

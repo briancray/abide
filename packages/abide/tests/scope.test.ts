@@ -17,7 +17,6 @@ import {
 import { flushSync, invalidate, reactive, refresh, watch } from '#shared'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { GET } from '#shared/rpc.ts'
-import { socket } from '#shared/socket.ts'
 
 installServer()
 
@@ -97,11 +96,11 @@ test("a value derived in a request lets go of a global at the request's teardown
     expect(readers.length).toBe(0)
 })
 
-// 16.68 — A HANDLER DECLARING NO PARAMETER IS NOT RUN WHERE IT IS DECLARED. Its value is unkeyed, and
+// 16.64 — A HANDLER DECLARING NO PARAMETER IS NOT RUN WHERE IT IS DECLARED. Its value is unkeyed, and
 // building one starts its body (1.7), so the home is left unbuilt until a call outside every
 // request reaches it. THE REVERT: have `declare` build its value with `reactive`; the body has run
 // 1 time before anything called it, where 0 are due.
-test('a handler declaring no parameter does not run at its declaration — 16.68', async () => {
+test('a handler declaring no parameter does not run at its declaration — 16.64', async () => {
     let runs = 0
     const visit = GET(() => {
         runs += 1
@@ -115,6 +114,44 @@ test('a handler declaring no parameter does not run at its declaration — 16.68
     expect(runs).toBe(1)
     // Outside a request the call builds the home, which no request reached.
     expect(await visit()).toBe(2)
+})
+
+// 11.34 THROUGH 16.6 — A HANDLER DECLARING `global` IS ONE VALUE FOR EVERY REQUEST, and still not run
+// where it is declared (16.64). THE REVERT: file the handler's value without `global` in
+// `handlerValue`; each request builds its own and the body runs 2 times where 1 is due.
+test('a plain handler declaring global is built once, on its first call — 11.34, 16.64', async () => {
+    let runs = 0
+    const visit = GET(
+        () => {
+            runs += 1
+            return runs
+        },
+        { global: true },
+    )
+    await tick()
+    expect(runs).toBe(0)
+    for (const path of ['a', 'b'])
+        await inScope(new Request(`http://app/${path}`), async () => {
+            expect(await visit()).toBe(1)
+        })
+    expect(await visit()).toBe(1)
+    expect(`body runs: ${runs}`).toBe('body runs: 1')
+})
+
+// 16.1 THROUGH 16.6 — A HANDLER THAT IS A VALUE IS FILED AS A BODY IS: one value per request, and one
+// for every request where it declares `global`. THE REVERT: have `handlerValue` hand a value to
+// `reactive` unfiled — request b reads request a's write, 5 where 0 is due.
+test('a value handler is one value per request, and one value under global — 16.1, 16.6', async () => {
+    const count = GET(0)
+    const shared = GET(0, { global: true })
+    await inScope(new Request('http://app/a'), async () => {
+        count().set(5)
+        shared().set(5)
+    })
+    await inScope(new Request('http://app/b'), async () => {
+        expect(await count()).toBe(0)
+        expect(await shared()).toBe(5)
+    })
 })
 
 // 11.38 — COALESCED WITHIN A SCOPE: two reaches of one key in one request share one load, and two
@@ -182,7 +219,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
     expect(totals).toEqual({ a: 30, b: 20 })
 })
 
-// 11.64, 11.32 — AN EFFECT A LOAD ABORTED RERUNS UNDER ITS OWN REQUEST, whichever request's landing
+// 11.63, 11.32 — AN EFFECT A LOAD ABORTED RERUNS UNDER ITS OWN REQUEST, whichever request's landing
 // drained it. Each request's `watch` reads the module-level `tenant` and then `profile`, a load still
 // in flight, so its first run aborts. B lands first and schedules the one drain that reruns both, and
 // A's effect run under B's scope reads B's `tenant` and B's `profile` — and SUBSCRIBES to them, so
@@ -191,7 +228,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
 // directly in `watchTracked` rather than through `runInScope`; A's rerun reads `a:b:b` where `a:a:a`
 // is due, and B's later write wakes A's watch — 2 runs where 1 is due. The same in `watchOver`: its
 // rerun reads `a:b:b`.
-test('an effect a load aborted reruns under its own request, whichever request drained it — 11.64', async () => {
+test('an effect a load aborted reruns under its own request, whichever request drained it — 11.63', async () => {
     const tenant = reactive('none')
     const opens: Record<string, (answer: string) => void> = {}
     const profile = reactive(
@@ -410,24 +447,10 @@ test('request and response read the request being served, and throw outside one 
     expect(url).toBe('http://app/invoices')
 })
 
-// 9.16, 18.18 — A SOCKET CARRIES A PROCESS-WIDE VALUE, and one built without `global` is refused where
-// it is declared rather than quietly filed per request. THE REVERT: drop the refusal from `socket`;
-// the request-local value is carried, and a publish inside a request reaches none of its subscribers.
-test('socket refuses a value built without global — 18.18', () => {
-    let refusal: unknown
-    try {
-        socket(reactive<string>(undefined))
-    } catch (thrown) {
-        refusal = thrown
-    }
-    expect(String(refusal)).toContain('RULEBOOK 9.16, 18.18')
-    expect(socket(reactive<string>(undefined, { global: true }))).toBeDefined()
-})
-
-// 11.26, 11.69 — A HANDLER WITH RUNGS KEYS ITS VALUE BY THE ARGS AS SENT, and its body gets what the
+// 11.26, 11.68 — A HANDLER WITH RUNGS KEYS ITS VALUE BY THE ARGS AS SENT, and its body gets what the
 // gate made of them, as one with no rungs does. THE REVERT: reach the value with `ctx.args()` at
 // the onion's centre; the two spellings land on 1 entry rather than 2.
-test('a handler with rungs keys its value by the args as sent — 11.26, 11.69', async () => {
+test('a handler with rungs keys its value by the args as sent — 11.26, 11.68', async () => {
     const seen: string[] = []
     const invoice = reactive(
         (args: { id: string }) => {
@@ -450,12 +473,12 @@ test('a handler with rungs keys its value by the args as sent — 11.26, 11.69',
     expect(seen).toEqual(['abc', 'abc'])
 })
 
-// 16.19, 16.20 — `ctx.args()` ASKED AGAIN AFTER A REFUSAL IS REFUSED AGAIN, not handed nothing. A rung
+// 16.18, 16.19 — `ctx.args()` ASKED AGAIN AFTER A REFUSAL IS REFUSED AGAIN, not handed nothing. A rung
 // may catch the refusal and ask a second time, and the answer kept for later asks is only one the
 // gate accepted. THE REVERT: mark the ask asked before validating, in `argsOnce`; the second ask
 // hands back `undefined` rather than throwing — 1 refusal where 2 are due. And the value is built
 // outside every request, so it is `scoped`'s keyed face that carries the gate: dropped there, 0.
-test('a rung that caught the args refusal and asks again is refused again — 16.19, 16.20', async () => {
+test('a rung that caught the args refusal and asks again is refused again — 16.18, 16.19', async () => {
     const refusals: string[] = []
     const invoice = reactive((args: { id: string }) => args.id, {
         args: (given: unknown) => {

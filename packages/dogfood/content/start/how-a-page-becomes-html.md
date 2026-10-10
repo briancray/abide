@@ -177,7 +177,7 @@ to seed for a pure computation. That is the case that belongs behind a handler, 
 the server and arrives as data.
 
 Read on: [Reading data](../server/read-data-without-writing-an-api.md) ·
-[Sockets](../server/keep-a-room-of-callers-in-sync.md)
+[Live updates](../server/keep-a-room-of-callers-in-sync.md)
 
 ## 7. The next navigation
 

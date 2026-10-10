@@ -1,4 +1,4 @@
-// 16.11, 36.11 — WHERE THE APP IS MOUNTED, read at run time and never baked into a build: a browser
+// 16.10, 36.11 — WHERE THE APP IS MOUNTED, read at run time and never baked into a build: a browser
 // reads it from the `<meta>` the document carries, and a server from `config().APP_URL`, which fills
 // the slot. `''` is the root.
 //

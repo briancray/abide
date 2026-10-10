@@ -24,7 +24,7 @@ const MIN_CLOCK_MULTIPLE = 100
 // CLEARING THE CLOCK IS NOT THE SAME AS BEING WARM, and the bar only knows about the
 // clock. Bun's is ~41 ns, so the bar is ~4 µs a sample and a 40 ns op clears it at
 // n in the hundreds — which is below where JSC promotes the body out of its baseline
-// tier. Measured on one publish into a capped ring: 85.5 ns a call at n=488 and 4.4 at
+// tier. Measured on one publish into a capped ring (a case since removed with the ring): 85.5 ns a call at n=488 and 4.4 at
 // n=2,000,000, the SAME code, a 19x spread chosen by the sample size.
 //
 // IT IS NOT A UNIFORM BIAS, so it cannot be divided out. Swept across n, a write with one

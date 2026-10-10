@@ -1,5 +1,5 @@
 // WHAT A KEYED VALUE'S ARGS ARE HELD TO, past the face an app is handed: the `args` schema it was
-// declared with (19.8) and the defaults its body's parameter writes (11.29). A `Keyed` is where the
+// declared with (19.7) and the defaults its body's parameter writes (11.29). A `Keyed` is where the
 // contract starts; a server's forwarder and an `Rpc` are faces built over one, and each carries it
 // through `contractOf` so a transport reads it off whichever face it was handed.
 //
@@ -41,7 +41,7 @@ export function contractOf(
     }
 }
 
-/** The `args` schema `face` carries, for a transport to coerce by (19.8). */
+/** The `args` schema `face` carries, for a transport to coerce by (19.7). */
 export function gateOf(
     face: Pick<Gated<unknown>, typeof ARGS_GATE>,
 ): Schema<unknown> | undefined {

@@ -19,13 +19,11 @@ reorder moves the nodes that were already there, or builds new ones that look th
 | You write | Over |
 | --- | --- |
 | `{#for item, index of list by key}` | a collection you hold |
-| `{#for item of source.history(n) by key}` | a cursor that produces over time |
+| `{#for item of iterable}` | an async iterable, as it produces |
 
 `index` and `by` are both optional, and the second is the one worth spelling. The subject is
-read like any other name, so `{#for row of rows}` walks the value `rows` holds. Walking what a
-value **produces** is spelled with a cursor. The block replays from the depth the cursor was handed
-— `history(50)`, `history(0)` — follows each production live from there, and drops a row once the
-value's own retention does, so its length is bounded by the value rather than by the block.
+read like any other name, so `{#for row of rows}` walks the array `rows` holds, and walks it again
+each time that array changes — a value a followed `GET` keeps current included.
 
 It iterates **zero times** over an absent subject. A list still loading is not an error and
 not a special case; it is a block with nothing in it yet.
@@ -80,10 +78,16 @@ the one that catches the bug. Both, or neither is worth running.
 
 Read on: [Loading states](../values/show-a-value-that-isnt-there-yet.md)
 
-## Over a cursor, the same block appends
+## Over an async iterable, the same block appends
 
-A cursor — `chat.history(50)`, `log.records.history(20)` — produces over time, and the block appends as
-each item lands rather than waiting for the last.
+A subject that is an async iterable and not also iterable — an async generator, say — produces over
+time, and the block appends each item as it lands rather than waiting for the last, reconciling
+nothing (32.15).
+
+A channel is not that case. It is a `reactive` holding an array, so `{#for m of room}` reads the
+array and reconciles it as messages are appended and the front is trimmed. With `by: 'id'` on the
+value, each message moves one row (32.32); without it the rows are positional, and trimming the
+front rebuilds every one.
 
 Read on: [Streaming data](../server/send-data-as-it-arrives.md) ·
 [Channels](../values/let-anything-publish-and-anything-read.md)

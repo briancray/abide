@@ -107,17 +107,50 @@ test('set authenticates, the baseline wins, and the caller survives — 26.4, 26
     expect(`abide-caller=${body.caller}`).toBe(caller)
 })
 
-// 26.13 — A TAMPERED SEAL IS AN ANONYMOUS CALLER, not an error. THE REVERT: skip the signature check
-// in `unseal`; the forged claims are served as authenticated.
+// 26.11 — THE SEAL IS A STANDARD JWT: three parts, an HS256 header, the claims as the payload's own
+// members beside \`exp\` in seconds, and a signature any HMAC over the secret reproduces — so another
+// service holding the secret verifies it with no abide in it. THE REVERT: seal the claims under one
+// private member as before; \`name\` is not a member of the payload.
+test('the seal is an HS256 JWT another service can verify — 26.11', async () => {
+    const { principal } = await signedIn()
+    const token = principal.slice('abide-principal='.length)
+    const [header, payload, signature] = token.split('.') as [
+        string,
+        string,
+        string,
+    ]
+    expect(JSON.parse(Buffer.from(header, 'base64url').toString())).toEqual({
+        alg: 'HS256',
+        typ: 'JWT',
+    })
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString())
+    expect(claims.name).toBe('ada')
+    expect(claims.exp).toBeGreaterThan(Date.now() / 1000)
+    expect(claims.exp).toBeLessThan(Date.now() / 1000 + 8 * 24 * 60 * 60)
+    const expected = new Bun.CryptoHasher('sha256', 'new-secret')
+        .update(`${header}.${payload}`)
+        .digest('base64url')
+    expect(signature).toBe(expected)
+})
+
+// 26.13 — A TAMPERED SEAL IS AN ANONYMOUS CALLER, not an error: a payload signed by nobody, a token
+// naming \`alg: none\`, one cut short and one that will not decode. THE REVERT: skip the signature
+// check in \`unseal\`; the forged claims are served as authenticated.
 test('a seal with a bad signature reads as anonymous — 26.13', async () => {
     const { principal } = await signedIn()
-    const [payload] = principal.slice('abide-principal='.length).split('.')
-    const forged = Buffer.from(
-        JSON.stringify({ c: { name: 'mallory' }, e: Date.now() + 60_000 }),
-    ).toString('base64url')
+    const [header, , signature] = principal
+        .slice('abide-principal='.length)
+        .split('.')
+    const encode = (value: unknown): string =>
+        Buffer.from(JSON.stringify(value)).toString('base64url')
+    const forged = encode({
+        name: 'mallory',
+        exp: Math.floor(Date.now() / 1000) + 60,
+    })
     for (const cookie of [
-        `abide-principal=${forged}.${principal.split('.')[1]}`,
-        `abide-principal=${payload}`,
+        `abide-principal=${header}.${forged}.${signature}`,
+        `abide-principal=${encode({ alg: 'none', typ: 'JWT' })}.${forged}.`,
+        `abide-principal=${header}.${forged}`,
         'abide-principal=%%%',
     ]) {
         const answer = await Bun.fetch(`${base}/__abide/principal`, {

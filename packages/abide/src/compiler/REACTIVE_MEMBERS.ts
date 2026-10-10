@@ -21,12 +21,10 @@
 export const REACTIVE_MEMBERS: ReadonlySet<string> = new Set([
     'busy',
     'error',
-    'history',
     'invalidate',
     'isError',
     'patch',
     'peek',
-    'publish',
     'ready',
     'refresh',
     'set',

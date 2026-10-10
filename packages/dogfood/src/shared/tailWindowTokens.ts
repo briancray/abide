@@ -2,5 +2,5 @@ import { reactive } from 'abide'
 
 export type Token = { at: number; text: string }
 
-/** A number on the value, not an array beside it. */
-export const token = reactive<Token>(undefined, { history: 3 })
+/** The last four tokens; the array is the window. */
+export const token = reactive<Token[]>([], { by: 'at' })

@@ -1,4 +1,4 @@
-// 16.29 AND 16.30 — WHAT THE BROWSER'S BUNDLE SEES OF `server/`. A page imports a handler from the
+// 16.28 AND 16.29 — WHAT THE BROWSER'S BUNDLE SEES OF `server/`. A page imports a handler from the
 // module the app wrote it in, and the server's render reaches that module as written; the bundle a
 // browser loads reaches it through here instead, and gets the wrapper the build wrote in its place
 // (`WIRE_DIRECTORY`). Anything else under `server/` is refused, so a secret, a database client or
@@ -38,7 +38,7 @@ export function fenceServer(
                         )
                         if (wrapper === undefined)
                             throw new Error(
-                                `abide: ${source} is server code, and the browser's bundle imports it. A browser may import a handler from a module under server/rpc and nothing else under server/. RULEBOOK 16.30.`,
+                                `abide: ${source} is server code, and the browser's bundle imports it. A browser may import a handler from a module under server/rpc and nothing else under server/. RULEBOOK 16.29.`,
                             )
                         return { contents: wrapper, loader: 'ts' }
                     },

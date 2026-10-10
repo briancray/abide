@@ -3,10 +3,10 @@
 // every reload, so a browser holding a connection open meets a server that is still there when
 // the app behind it has been thrown away and rebuilt.
 //
-// 18.2 — THE APP'S MUX IS HELD HERE TOO, and its frames relayed: the browser's web socket is bound
+// 18.1 — THE APP'S MUX IS HELD HERE TOO, and its frames relayed: the browser's web socket is bound
 // in this process, tagged with a connection id, and the app's mux answers each frame through it.
 // A reload closes these with the reload client's, and a follower reconnects naming the version it
-// holds (18.24), so the rebuilt app sends it only what moved.
+// holds (18.9), so the rebuilt app sends it only what moved.
 //
 // THE COMPILE IS HERE AND THE APP IS THERE. The compiler stays loaded in this process across every
 // reload, where a compiler imported into each new app cost 4.5 s a save against the 80 ms the
@@ -44,7 +44,7 @@ export type DevOptions = {
 // nothing, and the ask has to be put to the app that exists (38.25) — and, once its head has come
 // back, the stream the body is fed into and the pull waiting on the worker's next chunk (38.36).
 type InFlight = Omit<Ask, 'id' | 'method' | 'url'> & {
-    // 16.23 — the request bun handed the listener, which is the one its idle timeout is raised on.
+    // 16.22 — the request bun handed the listener, which is the one its idle timeout is raised on.
     request: Request
     settle: (response: Response) => void
     stream: ReadableStreamDefaultController<Uint8Array> | null
@@ -402,7 +402,7 @@ export async function serveDev(
     const listen = (port: number | undefined) =>
         Bun.serve<Carried>({
             ...(port === undefined ? {} : { port }),
-            // 16.58, as `App.listen` lifts it: the worker behind this is where the ceiling is read.
+            // 16.54, as `App.listen` lifts it: the worker behind this is where the ceiling is read.
             maxRequestBodySize: Number.MAX_SAFE_INTEGER,
             async fetch(request, listening) {
                 const asked = new URL(request.url).pathname

@@ -1,5 +1,6 @@
 // SECTION 26 — THE PRINCIPAL, RESOLVED ON A SERVER. The claims ride in a cookie the server sealed —
-// an HMAC over the claims and their expiry, signed rather than encrypted (26.11) — so there is no
+// a JWT signed HS256, the claims its payload beside `exp` and `iat`, signed rather than encrypted
+// (26.11), so any service holding the secret can verify it — and so there is no
 // store to look them up in and nothing to revoke (26.16). Resolved at most once per request (26.14),
 // by `onPrincipal` where the app registered one, and the baseline is laid over what it answered (26.4).
 
@@ -56,11 +57,26 @@ function signature(secret: string, payload: string): string {
         .digest('base64url')
 }
 
-function seal(claims: unknown, expires: number, secret: string): string {
+/** The JWT header every seal carries, and the only one a seal is read under: HS256, never `none`. */
+const JWT_HEADER = Buffer.from(
+    JSON.stringify({ alg: 'HS256', typ: 'JWT' }),
+).toString('base64url')
+
+/** The claims as a JWT (RFC 7519): their own members, with `exp` and `iat` in seconds. */
+function seal(
+    claims: Record<string, unknown>,
+    expires: number,
+    secret: string,
+): string {
     const payload = Buffer.from(
-        JSON.stringify({ c: claims, e: expires }),
+        JSON.stringify({
+            ...claims,
+            iat: Math.floor(Date.now() / 1000),
+            exp: Math.floor(expires / 1000),
+        }),
     ).toString('base64url')
-    return `${payload}.${signature(secret, payload)}`
+    const signed = `${JWT_HEADER}.${payload}`
+    return `${signed}.${signature(secret, signed)}`
 }
 
 /**
@@ -70,15 +86,19 @@ function seal(claims: unknown, expires: number, secret: string): string {
  */
 function unseal(
     sealed: string | null,
-): { claims: unknown; expires: number } | undefined {
+): { claims: Record<string, unknown>; expires: number } | undefined {
     if (sealed === null) return undefined
-    const at = sealed.lastIndexOf('.')
-    if (at === -1) return undefined
-    const payload = sealed.slice(0, at)
-    const given = Buffer.from(sealed.slice(at + 1), 'base64url')
+    const [header, payload, signed, ...rest] = sealed.split('.')
+    // ONE HEADER IS READ, abide's own: a token naming another `alg` — `none` above all — is no seal.
+    if (header !== JWT_HEADER || payload === undefined || rest.length > 0)
+        return undefined
+    const given = Buffer.from(signed ?? '', 'base64url')
     let verified = false
     for (const secret of secrets()) {
-        const expected = Buffer.from(signature(secret, payload), 'base64url')
+        const expected = Buffer.from(
+            signature(secret, `${header}.${payload}`),
+            'base64url',
+        )
         if (
             expected.length === given.length &&
             crypto.timingSafeEqual(expected, given)
@@ -87,21 +107,20 @@ function unseal(
     }
     if (!verified) return undefined
     try {
-        const opened = JSON.parse(
+        const opened: unknown = JSON.parse(
             Buffer.from(payload, 'base64url').toString(),
-        ) as {
-            c: unknown
-            e: number
-        }
-        if (typeof opened.e !== 'number' || opened.e <= Date.now())
+        )
+        if (!isRecord(opened)) return undefined
+        const { exp, iat: _, ...claims } = opened
+        if (typeof exp !== 'number' || exp * 1000 <= Date.now())
             return undefined
-        return { claims: opened.c, expires: opened.e }
+        return { claims, expires: exp * 1000 }
     } catch {
         return undefined
     }
 }
 
-function writeSeal(claims: unknown, expires: number): void {
+function writeSeal(claims: Record<string, unknown>, expires: number): void {
     const [secret] = secrets()
     if (secret === undefined)
         throw new Error(
@@ -179,8 +198,13 @@ function resolvePrincipal(): Promise<Principal> {
  * the document again: the cookie it rides in is `HttpOnly`, and a `set-cookie` is a header no
  * `fetch` may read.
  */
-async function set(claims: unknown): Promise<void> {
+async function set(claims: Record<string, unknown>): Promise<void> {
     const scope = within('principal.set')
+    // 26.11 — THE CLAIMS ARE A JWT's PAYLOAD, so they are its members: an object, and nothing else.
+    if (!isRecord(claims))
+        throw new Error(
+            'abide: principal.set takes an object of claims, which become the JWT payload. RULEBOOK 26.11.',
+        )
     if (scope.applied)
         throw new Error(
             'abide: principal.set was called after the response headers went out, so the cookie cannot be written. RULEBOOK 26.21.',

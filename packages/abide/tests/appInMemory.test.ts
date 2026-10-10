@@ -1,4 +1,4 @@
-// 16.23, 16.60, 16.61, 20.10, 42.12 — WHAT AN `App` DOES WITH A CALL, held in this process over
+// 16.22, 16.56, 16.57, 20.10, 42.12 — WHAT AN `App` DOES WITH A CALL, held in this process over
 // modules already loaded (`inMemoryApp.ts`): the same `bootApp` and `appSources` every command boots
 // through, with no `abide build` and no child process ahead of it.
 
@@ -41,12 +41,12 @@ afterAll(() => {
     config.invalidate()
 })
 
-// 16.23, 16.60, 16.61 — WHAT A CALL RAISES THE REQUEST'S IDLE TIMEOUT TO, read off a recording server:
+// 16.22, 16.56, 16.57 — WHAT A CALL RAISES THE REQUEST'S IDLE TIMEOUT TO, read off a recording server:
 // nothing where no `timeout` is named, the seconds where one is, and bun's 0 — never reaped — for
 // `Infinity`. In process, because the idle timeout a socket was given is not observable from the
 // far end short of waiting it out. THE REVERT: fall back to 30_000 for `ABIDE_RPC_TIMEOUT`; the
 // untimed call raises to 30.
-test('a call raises the idle timeout only as far as its timeout says — 16.60, 16.61', async () => {
+test('a call raises the idle timeout only as far as its timeout says — 16.56, 16.57', async () => {
     const raised: Record<string, number[]> = {}
     const answered: Record<string, number> = {}
     let calling = ''
@@ -99,11 +99,11 @@ test('an MCP call is answered by its own App, not the last one built — 20.10, 
     expect(called.isError).toBe(false)
 })
 
-// 16.23, 16.11 — THE TIMEOUT IS RAISED ON THE REQUEST THE LISTENER RECEIVED. Under a mount the app
+// 16.22, 16.10 — THE TIMEOUT IS RAISED ON THE REQUEST THE LISTENER RECEIVED. Under a mount the app
 // answers a copy below it, and bun's `timeout` does nothing for a request it was not handed itself.
 // THE REVERT: raise it on the request `answerRpc` answers; the recording server is handed the copy,
 // and reads `[false, 40]`.
-test('a call under a mount raises the idle timeout on the request the listener received — 16.23, 16.11', async () => {
+test('a call under a mount raises the idle timeout on the request the listener received — 16.22, 16.10', async () => {
     const received = new Request(`http://app.test/app${RPC}/slow`)
     const raised: [boolean, number][] = []
     LISTENING.server = {

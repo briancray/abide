@@ -47,16 +47,12 @@ const TABLE: Mount[] = [
     }),
     row('invoices/listInvoices'),
     row('invoices/audit', { method: 'POST', cli: false }),
-    row('chat/room', {
-        method: 'SOCKET',
-        address: '/__abide/socket/chat/room',
-    }),
 ]
 
 const plain = (_code: string, text: string): string => text
 
-// 20.3, 38.63 — A ROW WITHHOLDING ITSELF FROM THE COMMAND LINE IS NOT LISTED, COMPLETED OR SUGGESTED,
-// and a socket is no surface's. THE REVERT: drop the `clients[surface] === false` test in `surfaceOf`;
+// 20.3, 38.63 — A ROW WITHHOLDING ITSELF FROM THE COMMAND LINE IS NOT LISTED, COMPLETED OR SUGGESTED.
+// THE REVERT: drop the `clients[surface] === false` test in `surfaceOf`;
 // `invoices/audit` is listed and completed, and this reads three paths.
 test('the shell lists and completes no handler whose clients.cli is false — 20.3, 38.63', () => {
     const listed = cliListing(TABLE)
@@ -104,9 +100,9 @@ test('a mounted handler is projected off the handler, a row off the build — 20
     )
 })
 
-// 16.38 — THE BUILD'S DEFAULT HOLDS WHERE THE HANDLER'S `clients` IS SILENT, and gives way where it
+// 16.37 — THE BUILD'S DEFAULT HOLDS WHERE THE HANDLER'S `clients` IS SILENT, and gives way where it
 // speaks. THE REVERT: read only the handler's `clients` for a mounted handler; `silent` is published.
-test("a Response handler's row keeps it off MCP unless its clients puts it back — 16.38", () => {
+test("a Response handler's row keeps it off MCP unless its clients puts it back — 16.37", () => {
     const mountedAs = (clients: { mcp?: boolean }): Mounted => ({
         ...row('media/playlist', { mcp: false }),
         method: 'GET',

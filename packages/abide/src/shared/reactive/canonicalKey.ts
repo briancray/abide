@@ -9,7 +9,7 @@ import { putOwn } from '../putOwn.ts'
  * key taken after normalising is computed one way on a server and another in a browser, and every
  * handler with a normalising schema would miss its seed buffer and re-issue the call on hydration.
  *
- * 11.65: WHAT THE WIRE FORM CANNOT WRITE IS REFUSED AT THE REACH. `JSON.stringify` does not fail
+ * 11.64: WHAT THE WIRE FORM CANNOT WRITE IS REFUSED AT THE REACH. `JSON.stringify` does not fail
  * on any of it — a `Set`, a `Map` and a class instance each have no own enumerable keys and
  * canonicalise to `{}`, and a non-finite number is written `null` — so two different reaches
  * produced one key and 1.8 joined the second to the first's standing work. The value was right
@@ -90,6 +90,6 @@ function outside(what: string, steps: Steps): Error {
     return new Error(
         `An Args key cannot carry ${what} at ${
             path === '' ? 'the arguments themselves' : `"${path}"`
-        }: the canonical wire form writes it as another entry's key (RULEBOOK 11.65).`,
+        }: the canonical wire form writes it as another entry's key (RULEBOOK 11.64).`,
     )
 }

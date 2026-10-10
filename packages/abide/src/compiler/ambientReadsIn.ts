@@ -4,16 +4,18 @@ import {
     SyntaxKind,
 } from 'typescript/unstable/ast'
 import {
-    isArrowFunction,
     isCallExpression,
-    isFunctionExpression,
     isIdentifier,
     isPropertyAccessExpression,
     isPropertyAssignment,
 } from 'typescript/unstable/ast/is'
 import type { Checker } from 'typescript/unstable/async'
 import { aliasedSymbol } from './aliasedSymbol.ts'
-import { optionNamed, reactiveOptions } from './reactiveOptions.ts'
+import {
+    isWrittenInPlace,
+    optionNamed,
+    reactiveOptions,
+} from './reactiveOptions.ts'
 
 // 11.37 — A `global` VALUE'S BODY READING WHAT ONLY A REQUEST HAS. A `global` value is one for the
 // whole process (11.34), so a body reading the request it happened to be built in answers every
@@ -114,14 +116,15 @@ export async function ambientReadsIn(
     return found
 }
 
-/** Whether a call is `reactive(() => …, { global: true })`, the option a literal `true`. */
+/**
+ * Whether a call builds a `global` value over a body written in place: `reactive(() => …, { global:
+ * true })` or `GET(() => …, { global: true })`, the option a literal `true`.
+ */
 function isGlobalReactive(call: CallExpression): boolean {
+    if (!isWrittenInPlace(call.arguments[0])) return false
     const options = reactiveOptions(call)
-    const body = call.arguments[0]
     return (
         options !== undefined &&
-        body !== undefined &&
-        (isArrowFunction(body) || isFunctionExpression(body)) &&
         optionNamed(options, 'global')?.kind === SyntaxKind.TrueKeyword
     )
 }

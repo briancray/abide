@@ -1,10 +1,10 @@
-// 16.19 — THE REQUEST A CALL IS, WRITTEN ONCE FOR BOTH ENDS. The browser's `wire` sends it, and the
+// 16.18 — THE REQUEST A CALL IS, WRITTEN ONCE FOR BOTH ENDS. The browser's `wire` sends it, and the
 // server writes the same request into a page's early-call script (41.20) — so the two have to agree
 // to the byte, or the browser's call misses the request that was already started for it. `key` is
 // that agreement: method, URL and body, which is what makes two requests the same one.
 //
 // A `GET` or `DELETE` carries its args in the URL, in `queryText`'s spelling, and a mutation in its
-// body; 19.8 is where text becomes the declared type again.
+// body; 19.7 is where text becomes the declared type again.
 
 import { queryText } from './queryText.ts'
 import type { Method } from './rpc.ts'
@@ -22,7 +22,7 @@ export type RpcRequest = {
 /**
  * Whether a method carries its args in the URL.
  *
- * The half of 16.19 both ends read.
+ * The half of 16.18 both ends read.
  */
 export function argsInURL(method: Method): boolean {
     return method === 'GET' || method === 'DELETE'
@@ -40,7 +40,7 @@ export function rpcRequest(
         if (args !== undefined) {
             let text = queryText(args)
             // AN EMPTY LIST IS ITS NAME WITH NO `=`, which no text value spells — `tags=` is the
-            // one-member list `['']` — so 19.8 reads it back as `[]` rather than losing the member.
+            // one-member list `['']` — so 19.7 reads it back as `[]` rather than losing the member.
             for (const name in args) {
                 const value = args[name]
                 if (!Array.isArray(value) || value.length !== 0) continue
@@ -50,7 +50,7 @@ export function rpcRequest(
             if (text !== '') url = `${address}?${text}`
         }
     } else if (args !== undefined) body = JSON.stringify(args)
-    // 18.29 — A COPY IS ITS OWN CACHE and keeps its own `max-age`. What it asks the server is asked
+    // 18.14 — A COPY IS ITS OWN CACHE and keeps its own `max-age`. What it asks the server is asked
     // because it went stale or was invalidated, and the browser's HTTP cache, which hears neither,
     // would answer it with the value it was dropping. `rpc.raw` is handed the same, under whatever
     // `init` its caller passes. `no-cache` rather than `no-store`: a `fetch` the app writes itself to

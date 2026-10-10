@@ -1,4 +1,4 @@
-// 16.33 TO 16.37 AND SECTION 17 — WHAT A HANDLER'S VALUE IS ANSWERED AS, over a served app (spawned,
+// 16.32 TO 16.36 AND SECTION 17 — WHAT A HANDLER'S VALUE IS ANSWERED AS, over a served app (spawned,
 // for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -123,18 +123,18 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-// 16.32, 16.56 — nothing to say is a 204 with no type for the nothing. THE REVERT: drop the
+// 16.31, 16.52 — nothing to say is a 204 with no type for the nothing. THE REVERT: drop the
 // `delete('content-type')` in `answerValue`; the 204 reads `application/json`.
-test('a handler returning undefined answers 204 with no content-type — 16.32, 16.56', async () => {
+test('a handler returning undefined answers 204 with no content-type — 16.31, 16.52', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/nothing`, { method: 'POST' })
     expect(answer.status).toBe(204)
     expect(answer.headers.get('content-type')).toBeNull()
 })
 
-// 16.56 — A BODILESS ANSWER CARRIES NO TYPE AT ANY STATUS, a redirect's as much as a 204's: the
+// 16.52 — A BODILESS ANSWER CARRIES NO TYPE AT ANY STATUS, a redirect's as much as a 204's: the
 // handler headers default to `application/json`, and only the 204 used to drop it. THE REVERT: guard
 // `answerValue`'s `delete('content-type')` with `status === 200`; the 303 reads `application/json`.
-test('a redirect answers with no content-type — 16.56', async () => {
+test('a redirect answers with no content-type — 16.52', async () => {
     const moved = await Bun.fetch(`${base}${RPC}/moved`, {
         method: 'POST',
         redirect: 'manual',
@@ -144,9 +144,9 @@ test('a redirect answers with no content-type — 16.56', async () => {
     expect(await moved.text()).toBe('')
 })
 
-// 16.58 — NO CEILING WHERE NOTHING NAMES ONE, bun's own included. THE REVERT: fall back to
+// 16.54 — NO CEILING WHERE NOTHING NAMES ONE, bun's own included. THE REVERT: fall back to
 // `1024 * 1024` in `answerRpc`'s ceiling; the body is refused 413.
-test('a mutation with no ceiling named takes a body of any size — 16.58', async () => {
+test('a mutation with no ceiling named takes a body of any size — 16.54', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/nothing`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -155,21 +155,21 @@ test('a mutation with no ceiling named takes a body of any size — 16.58', asyn
     expect(answer.status).toBe(204)
 })
 
-// 16.54 — A `HEAD` IS THE `GET`'S ANSWER without its body. THE REVERT: match `found.method` against
+// 16.50 — A `HEAD` IS THE `GET`'S ANSWER without its body. THE REVERT: match `found.method` against
 // `request.method` alone in `answerRpc`; the `HEAD` is refused 404.
-test('a HEAD is answered by the GET handler at its address — 16.54', async () => {
+test('a HEAD is answered by the GET handler at its address — 16.50', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/shared`, { method: 'HEAD' })
     expect(answer.status).toBe(200)
     expect(answer.headers.get('content-type')).toBe('application/json')
     expect(await answer.text()).toBe('')
 })
 
-// 16.33, 16.45 — A STREAMING HANDLER IS ANSWERED AS IT PRODUCES, jsonl by default, one line a chunk:
+// 16.32, 16.44 — A STREAMING HANDLER IS ANSWERED AS IT PRODUCES, jsonl by default, one line a chunk:
 // the first line is read while the handler is still waiting to produce the second — which waits on
 // a release this test sends only once it has the first, so no clock is read. THE REVERT: settle
 // `reached` itself in `outcomeOf` in place of `streamingOrSettled`; the stream settles to one
 // snapshot that waits on a release never sent, and the first read reports 'timed out'.
-test('a streaming handler is framed as jsonl, a chunk per line, as it produces — 16.33, 16.45', async () => {
+test('a streaming handler is framed as jsonl, a chunk per line, as it produces — 16.32, 16.44', async () => {
     const answering = Bun.fetch(`${base}${RPC}/held`)
     const reading = answering.then((answer) =>
         (answer.body as ReadableStream<Uint8Array>).getReader(),
@@ -199,7 +199,7 @@ test('a streaming handler is framed as jsonl, a chunk per line, as it produces �
     expect(rest).toBe('{"n":2}\n')
 })
 
-// 16.33 — A STREAMED ANSWER COPIES EACH CHUNK ONCE, not the accumulation per chunk. The count is every
+// 16.32 — A STREAMED ANSWER COPIES EACH CHUNK ONCE, not the accumulation per chunk. The count is every
 // element `Array.prototype.slice` hands back while the answer drains, at two lengths woken a chunk a
 // task; the claim is the RATIO, which is 2 for a linear drain and 4 for a quadratic one. THE REVERT
 // reads every wake through `peek()` — the arm a gated value still takes, so a `transform` that
@@ -240,7 +240,7 @@ async function elementsCopied(chunks: number): Promise<number> {
 }
 
 gate(
-    'a streamed answer copies each chunk once — 16.33',
+    'a streamed answer copies each chunk once — 16.32',
     {
         revert: () => {
             ;(globalThis as { REVERT_PEEK?: boolean | undefined }).REVERT_PEEK =
@@ -274,8 +274,8 @@ test('a streaming answer times its handler to the first chunk — 21.15', async 
     await answer.text()
 })
 
-// 16.46, 16.47 — sse WHERE `Accept` ASKS FOR IT, with its three headers.
-test('Accept naming event-stream frames as sse — 16.46, 16.47', async () => {
+// 16.45, 16.46 — sse WHERE `Accept` ASKS FOR IT, with its three headers.
+test('Accept naming event-stream frames as sse — 16.45, 16.46', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/feed`, {
         headers: { accept: 'text/event-stream' },
     })
@@ -285,8 +285,19 @@ test('Accept naming event-stream frames as sse — 16.46, 16.47', async () => {
     expect(await answer.text()).toBe(':\n\ndata: {"n":1}\n\ndata: {"n":2}\n\n')
 })
 
-// 16.47, 16.48 — binary chunks admit bytes alone, read off the first chunk.
-test('binary chunks are answered as octet-stream — 16.47, 16.48', async () => {
+// 16.46, 16.47 — binary chunks admit bytes alone, read off the first chunk.
+// 16.44 — ONE JSON VALUE PER LINE, NAMED AS THE READER ASKED: NDJSON's type where it asks for that, the
+// same bytes either way. THE REVERT: answer `application/jsonl` whatever `linesType` read; the reader
+// asking for NDJSON is handed a type it did not ask for.
+test('a reader asking for NDJSON is answered it, the same lines as jsonl — 16.44', async () => {
+    const answer = await Bun.fetch(`${base}${RPC}/feed`, {
+        headers: { accept: 'application/x-ndjson' },
+    })
+    expect(answer.headers.get('content-type')).toBe('application/x-ndjson')
+    expect((await answer.text()).split('\n').filter(Boolean).length).toBeGreaterThan(0)
+})
+
+test('binary chunks are answered as octet-stream — 16.46, 16.47', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/binary`, {
         headers: { accept: 'text/event-stream' },
     })
@@ -334,12 +345,12 @@ test('json answers its value as JSON, and undefined as null — 17.9, 17.10', as
     expect(await empty.text()).toBe('null')
 })
 
-// 16.36 — A FILE ON DISK IS ANSWERED WITHOUT READING IT INTO MEMORY: its etag is a stat, and the body
+// 16.35 — A FILE ON DISK IS ANSWERED WITHOUT READING IT INTO MEMORY: its etag is a stat, and the body
 // the file or a slice of it. A slice of a file, and a blob in memory, are still named by their bytes.
 // Run in a script of its own, for `serve.test.ts`'s reason, counting what `Blob.prototype.bytes`
 // reads. THE REVERT: derive every etag from `await blob.bytes()` in `answerValue`'s blob arm; each
 // of the three answers reads the whole file, 3 x 65536 bytes.
-test('a returned file is answered off a stat, a slice and a blob off their bytes — 16.36', async () => {
+test('a returned file is answered off a stat, a slice and a blob off their bytes — 16.35', async () => {
     const dir = temporaryModule({
         'probe.ts': `import { answerValue } from '${new URL('../src/server/answerValue.ts', import.meta.url).pathname}'
 
@@ -394,16 +405,16 @@ console.log(JSON.stringify({
     })
 }, 30_000)
 
-// 16.37 — a `Response` the handler built is the answer.
-test('a returned Response is answered as it stands — 16.37', async () => {
+// 16.36 — a `Response` the handler built is the answer.
+test('a returned Response is answered as it stands — 16.36', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/raw`)
     expect(answer.status).toBe(418)
     expect(await answer.text()).toBe('teapot')
 })
 
-// 16.35, 16.36 — A BLOB AT ITS OWN TYPE, RANGE-AWARE: 206 for a range, 416 past the end, 304 for its
+// 16.34, 16.35 — A BLOB AT ITS OWN TYPE, RANGE-AWARE: 206 for a range, 416 past the end, 304 for its
 // own etag, and the whole body where `If-Range` names another version.
-test('a Blob is answered at its type and honors Range — 16.35, 16.36', async () => {
+test('a Blob is answered at its type and honors Range — 16.34, 16.35', async () => {
     const whole = await Bun.fetch(`${base}${RPC}/file`)
     expect(whole.headers.get('content-type')).toContain('text/plain')
     const etag = whole.headers.get('etag') as string
@@ -485,12 +496,12 @@ test('a GET over a global value answers the life its production has left — 21.
     }
 }, 10_000)
 
-// 16.67 — A CLIENT THAT LEFT IS NOT A FAULT. A handler waiting on work the request's signal cancels
+// 16.63 — A CLIENT THAT LEFT IS NOT A FAULT. A handler waiting on work the request's signal cancels
 // throws once the client goes, and that throw is the cancellation arriving rather than something
 // broken. A raw socket, because a `fetch` abort can leave a pooled connection open and the server
 // never learns the client left. THE REVERT: drop the signal check in `failureOf`; the throw is
 // reported, and `onError` counts 1 where 0 is due.
-test('a handler that throws after its client left is not reported — 16.67', async () => {
+test('a handler that throws after its client left is not reported — 16.63', async () => {
     const count = async (): Promise<number> =>
         (await Bun.fetch(`${base}${RPC}/reports`, { method: 'POST' })).json()
     const before = await count()

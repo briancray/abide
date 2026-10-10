@@ -89,7 +89,7 @@ limitation to work around: what a dynamic key would reach for is a keyed value, 
 entry per args key. It also keeps the set of shared keys fixed by the source, so there is no runtime bound to enforce and nothing to refuse.
 
 Read on: [Channels](let-anything-publish-and-anything-read.md) ·
-[Sockets](../server/keep-a-room-of-callers-in-sync.md)
+[Live updates](../server/keep-a-room-of-callers-in-sync.md)
 
 ## A shared value lives in the component that created it, and below
 
@@ -117,6 +117,6 @@ Read on: [Caching](load-once-per-set-of-arguments.md)
 
 ## Next
 
-* [Sockets](../server/keep-a-room-of-callers-in-sync.md) — sharing across callers rather than components
+* [Live updates](../server/keep-a-room-of-callers-in-sync.md) — sharing across callers rather than components
 * [Caching](load-once-per-set-of-arguments.md) — `global`, and why its rule runs the other way
 * [Watching values](do-something-when-a-value-changes.md) — reacting to a shared value from anywhere

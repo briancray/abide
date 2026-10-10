@@ -1,10 +1,10 @@
-// 19.10 — A HANDLER'S ARGS, AS THE JSON SCHEMA ITS TYPESCRIPT ANNOTATION SAYS, derived at build by
+// 19.9 — A HANDLER'S ARGS, AS THE JSON SCHEMA ITS TYPESCRIPT ANNOTATION SAYS, derived at build by
 // the checker the build already holds. A URL carries text and a caller outside the process carries
 // whatever it likes, so `({ id }: { id: number })` is a promise only the in-process call keeps; this
-// is what lets the wire keep it too — coerced (19.8), validated, and published (20.11) with no
+// is what lets the wire keep it too — coerced (19.7), validated, and published (20.11) with no
 // schema written twice.
 //
-// 19.12 — THE DIALECT IS `validateJson`'s, and a type it cannot say is `{}` — no constraint — rather than a
+// 19.11 — THE DIALECT IS `validateJson`'s, and a type it cannot say is `{}` — no constraint — rather than a
 // guess: a function, a class, a generic still open. Narrower than the type is a refusal an author
 // never wrote; wider is the handler's own concern, which is where it was before.
 
@@ -27,7 +27,7 @@ type Schema = { [keyword: string]: JsonValue }
  *
  * ONE WALK'S MEMORY: each object type walked once, whatever reaches it again, and a depth past which
  * a type is `{}`. An args record is JSON a few levels deep; a type that reaches the DOM or the lib's
- * class graph instead is wide enough to walk for minutes, and widening it is 19.12's answer.
+ * class graph instead is wide enough to walk for minutes, and widening it is 19.11's answer.
  */
 export type Walk<Seen = Map<number, Schema>> = { seen: Seen; depth: number }
 /** The depth a walk stops at: an object type this deep or deeper is not walked. */
@@ -37,7 +37,7 @@ export const DEEPEST = 8
  * The JSON Schema of a handler's args record, or `undefined` where it takes no record.
  *
  * What the first parameter of the `Rpc`'s call takes, or `undefined` where it takes no record —
- * with each member the handler defaults made optional (19.11).
+ * with each member the handler defaults made optional (19.10).
  */
 export async function argsSchemaOf(
     checker: Checker,
@@ -134,7 +134,7 @@ async function objectOf(
     }
     const schema: Schema = { type: 'object', properties }
     if (required.length > 0) schema.required = required
-    // 19.21 — A MEMBER THE TYPE DOES NOT DECLARE IS REFUSED, where no index signature declares the
+    // 19.20 — A MEMBER THE TYPE DOES NOT DECLARE IS REFUSED, where no index signature declares the
     // rest: a caller outside the process sends whatever it likes, and a body writing its args to a
     // row would write that too. An author who wants the rest declares a schema of their own.
     schema.additionalProperties = false
@@ -151,7 +151,7 @@ async function objectOf(
 /**
  * A union, with what JSON cannot carry dropped: `undefined` is an absent member rather than a value.
  * `true | false` is `boolean`, a run of one kind's literals is an `enum` under that kind's `type` —
- * the `type` is what 19.8 coerces text by — and bare kinds merge into one `type` list.
+ * the `type` is what 19.7 coerces text by — and bare kinds merge into one `type` list.
  */
 async function unionOf(
     checker: Checker,

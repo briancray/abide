@@ -12,7 +12,7 @@ test('every seam entry resolves', async () => {
     await expect(import('#server')).resolves.toBeDefined()
 })
 
-// 19.14 — WHAT A PAGE CARRIES IS THE CLOSURE, NOT THE IMPORT LINE. CLAUDE.md prices an import edge
+// 19.13 — WHAT A PAGE CARRIES IS THE CLOSURE, NOT THE IMPORT LINE. CLAUDE.md prices an import edge
 // by the module it LANDS on, and `Schema.ts` is landed on by every page: `Reactive.ts` names it for
 // the gates 4.3 puts in front of every write. So one name in it — `validateJson` — put the whole
 // JSON Schema validator in every client bundle in the build.

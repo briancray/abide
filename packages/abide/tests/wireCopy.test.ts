@@ -1,6 +1,6 @@
-// 18.19, 18.29 — WHAT A `GET`'s VALUE DECLARES REACHES THE BROWSER'S COPY. The build reads it off the
+// 18.4, 18.14 — WHAT A `GET`'s VALUE DECLARES REACHES THE BROWSER'S COPY. The build reads it off the
 // `reactive(…)` the handler is declared over and writes it into the wrapper the browser imports in
-// place of the module (16.29), and the wrapper builds its copy by it; the answer's own `max-age` is
+// place of the module (16.28), and the wrapper builds its copy by it; the answer's own `max-age` is
 // how long the copy may serve what it was answered.
 
 import { afterAll, expect, test } from 'bun:test'
@@ -50,7 +50,6 @@ const shelf = reactive([{ id: 'a' }], {
     global: true,
     by: 'id',
     tags: ['shelf', 'library'],
-    history: 3,
     identity: structural,
 })
 
@@ -64,11 +63,16 @@ export const computed = GET(
     }),
 )
 export const plain = GET(() => [1])
+export const optioned = GET(() => [{ isbn: '1' }], {
+    by: 'isbn',
+    description: 'Books.',
+})
 export const change = POST(() => undefined)
 `
 
-// THE REVERT: hand back `undefined` from `declaredCopy`; every wrapper is written without a record,
-// and `bound` and `inline` lose theirs.
+// THE REVERTS: hand back `undefined` from `declaredCopy`; every wrapper is written without a record,
+// and `bound`, `inline` and `optioned` lose theirs. Read the options off a `reactive(…)` alone and
+// `optioned` loses its — the plain handler's are the `GET`'s own (16.6).
 test('the build writes what a GET declares for its copy into the wrapper, and no more', async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<main>home</main>',
@@ -83,35 +87,35 @@ test('the build writes what a GET declares for its copy into the wrapper, and no
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
         ''
     expect(line('bound')).toContain(
-        '{"by":"id","tags":["shelf","library"],"history":3,"identity":"structural"}',
+        '{"by":"id","tags":["shelf","library"],"identity":"structural"}',
     )
     expect(line('inline')).toContain('{"by":"isbn"}')
+    expect(line('optioned')).toContain('{"by":"isbn"}')
     // Functions have no serialisation, a plain handler declares nothing, and a mutation walks nothing.
     for (const name of ['computed', 'plain', 'change'])
         expect(line(name)).not.toContain('{"')
-    // …and a function form is the server's by design, which is nothing to warn on (18.30).
-    expect(built.stderr).not.toContain('18.30')
+    // …and a function form is the server's by design, which is nothing to warn on (18.15).
+    expect(built.stderr).not.toContain('18.15')
 })
 
-// 18.19 OFF THE TYPE, 18.30 FOR THE REST. THE REVERT: read `history`, `by` and `tags` off literal
-// syntax alone; `named` and `handed` are written without a record, and nothing warns on `grown`.
+// 18.4 OFF THE TYPE, 18.15 FOR THE REST. THE REVERT: read `by` and `tags` off literal syntax alone;
+// `named` and `handed` are written without a record, and nothing warns on `grown`.
 test('an option bound to a const carries its literal, and one the build cannot read is warned on', async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<main>home</main>',
         'server/rpc/named.ts': `import { GET, reactive } from 'abide/server'
 
-const SIZE = 3
 const KEY = 'isbn'
 const TAGS = ['shelf', 'named'] as const
-const OPTIONS = { by: KEY, history: SIZE, tags: TAGS }
-let grown = 2
-grown += 1
+const OPTIONS = { by: KEY, tags: TAGS }
+let grown = 'is'
+grown += 'bn'
 
 export const named = GET(
-    reactive(() => [{ isbn: '1' }], { by: KEY, history: SIZE, tags: TAGS }),
+    reactive(() => [{ isbn: '1' }], { by: KEY, tags: TAGS }),
 )
 export const handed = GET(reactive(() => [{ isbn: '1' }], OPTIONS))
-export const unread = GET(reactive(() => [{ isbn: '1' }], { history: grown }))
+export const unread = GET(reactive(() => [{ isbn: '1' }], { by: grown }))
 `,
     })
     const built = await buildApp(app)
@@ -124,11 +128,11 @@ export const unread = GET(reactive(() => [{ isbn: '1' }], { history: grown }))
         ''
     for (const name of ['named', 'handed'])
         expect(line(name)).toContain(
-            '{"by":"isbn","history":3,"tags":["shelf","named"]}',
+            '{"by":"isbn","tags":["shelf","named"]}',
         )
     expect(line('unread')).not.toContain('{"')
-    expect(built.stderr).toContain('`history: grown`')
-    expect(built.stderr).toContain('RULEBOOK 18.30')
+    expect(built.stderr).toContain('`by: grown`')
+    expect(built.stderr).toContain('RULEBOOK 18.15')
 })
 
 // 32.32 — THE KEY. THE REVERT: build the copy without its record in `wire`; the list over it is
@@ -141,7 +145,7 @@ test('a copy the wrapper keys is what a {#for} over it keys by', () => {
     expect(key({ id: 'dune' }, 3)).toBe('dune')
 })
 
-// 11.44 — THE TAGS. A selection by tag reaches the copy, so the next read loads again. THE REVERT: drop
+// 11.43 — THE TAGS. A selection by tag reaches the copy, so the next read loads again. THE REVERT: drop
 // `tags` from `copyOptions`; the selection matches nothing and 0 loads are made where 1 is due.
 test('a selection by the tags a GET declares reaches its copy', async () => {
     answer = { body: ['dune'], life: 'private, no-store' }
@@ -180,24 +184,7 @@ test('a copy compared structurally wakes nobody for a load that answers the same
     stop()
 })
 
-// 6.1 — THE RETENTION. THE REVERT: drop `history` from `copyOptions`; the copy retains nothing
-// beside what stands, and nothing is replayed where 2 productions are due.
-test('a copy retains the history its value declares', async () => {
-    answer = { body: ['first'], life: 'private, no-store' }
-    const kept = wire('GET', '/__abide/rpc/library/kept', {
-        history: 2,
-    }) as (args?: unknown) => (() => unknown) & {
-        refresh(): void
-        history(n?: number): Iterable<unknown>
-    } & PromiseLike<unknown>
-    await kept()
-    answer = { body: ['second'], life: 'private, no-store' }
-    kept().refresh()
-    await settle()
-    expect([...kept().history(2)]).toEqual([['first'], ['second']])
-})
-
-// 18.29 — THE LIFE. An answer carrying `max-age=1` is served for a second and then goes stale, so the
+// 18.14 — THE LIFE. An answer carrying `max-age=1` is served for a second and then goes stale, so the
 // read after it loads again. THE REVERT: skip `expireAfter` in `followRpc`; the copy is served for
 // good and 0 loads are made where 1 is due.
 test('a copy goes stale when the max-age its answer carried runs out', async () => {

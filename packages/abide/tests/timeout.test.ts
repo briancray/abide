@@ -1,4 +1,4 @@
-// 16.13, 16.62 TO 16.65 — `timeout` ON EVERY CALL, in process as over the wire: a load that goes that
+// 16.12, 16.58 TO 16.61 — `timeout` ON EVERY CALL, in process as over the wire: a load that goes that
 // long without progress — its answer, or a stream's next chunk — is ended where it stands and refuses
 // 504, keeping what the value held. One clock per load, which a joining call does not wind back.
 
@@ -29,7 +29,7 @@ afterEach(() => {
 
 // THE REVERT: drop the `timeLoad` call from `callLoad` in `#shared/reactive/callLoad.ts`; the load never settles and
 // `busy` still reads true.
-test('a load that goes its timeout without settling refuses 504 — 16.63', async () => {
+test('a load that goes its timeout without settling refuses 504 — 16.59', async () => {
     const never = GET(() => new Promise<string>(() => {}), {
         timeout: 40,
     }) as unknown as () => Loading
@@ -42,7 +42,7 @@ test('a load that goes its timeout without settling refuses 504 — 16.63', asyn
 
 // PER CHUNK, NOT PER RUN: four chunks 25 ms apart run 100 ms under a 60 ms timeout. THE REVERT: drop
 // the `arm()` in the cursor loop; the clock runs from the first call and the run is ended at 60 ms.
-test('a stream that keeps producing outlives its timeout — 16.63', async () => {
+test('a stream that keeps producing outlives its timeout — 16.59', async () => {
     const rows = GET(
         async function* () {
             for (let row = 0; row < 4; row += 1) {
@@ -58,9 +58,9 @@ test('a stream that keeps producing outlives its timeout — 16.63', async () =>
     expect(value.peek()).toEqual([0, 1, 2, 3])
 })
 
-// AND BEHIND A RUNG, where the value only turns out to stream once the onion resolves (9.20). THE
+// AND BEHIND A RUNG, where the value only turns out to stream once the onion resolves (9.6). THE
 // REVERT: ask `isStreaming` once, synchronously, in `timeLoad`; the run is ended 504 at 60 ms.
-test('a stream behind a rung that keeps producing outlives its timeout — 16.63, 9.20', async () => {
+test('a stream behind a rung that keeps producing outlives its timeout — 16.59, 9.6', async () => {
     const outside = RPC_SERVER.request
     RPC_SERVER.request = () => new Request('http://timeout.example/')
     try {
@@ -82,9 +82,9 @@ test('a stream behind a rung that keeps producing outlives its timeout — 16.63
     }
 })
 
-// 16.64 — WHAT THE RUN HAD SAID STAYS, and the generator is stopped. THE REVERT: drop `timeLoad`; the
+// 16.60 — WHAT THE RUN HAD SAID STAYS, and the generator is stopped. THE REVERT: drop `timeLoad`; the
 // stream never ends and `busy` still reads true.
-test('a stream that stops producing is ended with the chunks it had — 16.63, 16.64', async () => {
+test('a stream that stops producing is ended with the chunks it had — 16.59, 16.60', async () => {
     let after = false
     const rows = GET(
         async function* () {
@@ -105,9 +105,9 @@ test('a stream that stops producing is ended with the chunks it had — 16.63, 1
     expect(after).toBe(true)
 })
 
-// 16.64 — A RELOAD THAT TIMES OUT KEEPS SERVING WHAT THE VALUE HELD, as 16.53's abort does. THE
+// 16.60 — A RELOAD THAT TIMES OUT KEEPS SERVING WHAT THE VALUE HELD, as 16.49's abort does. THE
 // REVERT: clear the value in `abandonLoad` rather than refusing over it; the read then throws.
-test('a reload that times out keeps serving what the value held — 16.64', async () => {
+test('a reload that times out keeps serving what the value held — 16.60', async () => {
     let calls = 0
     const invoice = GET(
         () => {
@@ -128,7 +128,7 @@ test('a reload that times out keeps serving what the value held — 16.64', asyn
     expect(statusOf(value)).toBe(504)
 })
 
-// 16.65 — ONE CLOCK PER LOAD. A call joining at 150 ms does not start the 200 ms over: the refusal
+// 16.61 — ONE CLOCK PER LOAD. A call joining at 150 ms does not start the 200 ms over: the refusal
 // lands at 200, where a joined call's own clock would have held it to 350. ORDERED BY THE TIMER
 // QUEUE rather than read off the wall clock: a timer armed at the join for 100 ms is due at 250 or
 // later — after the load's clock at 200, before a re-armed one at 350 — and timers fire in the
@@ -137,7 +137,7 @@ test('a reload that times out keeps serving what the value held — 16.64', asyn
 // the call before it armed; the load is still busy at the checkpoint. Dropping the `timed` test in
 // `callLoad` alone is not that revert: each call then arms a clock of its own, and the first still
 // ends the load at 200.
-test('a call joining a load does not extend its timeout — 16.65', async () => {
+test('a call joining a load does not extend its timeout — 16.61', async () => {
     const never = GET(() => new Promise<string>(() => {}), {
         timeout: 200,
     }) as unknown as () => Loading
@@ -154,9 +154,9 @@ test('a call joining a load does not extend its timeout — 16.65', async () => 
     expect(statusOf(value)).toBe(504)
 })
 
-// 16.62 — the environment's `timeout`, which a server fills through `RPC_SERVER`, for a handler that
+// 16.58 — the environment's `timeout`, which a server fills through `RPC_SERVER`, for a handler that
 // names none. THE REVERT: time the load by `rpc.timeout` alone in `call`; nothing ends it.
-test('a handler naming no timeout takes the environment one — 16.62', async () => {
+test('a handler naming no timeout takes the environment one — 16.58', async () => {
     RPC_SERVER.timeout = () => 40
     const never = GET(
         () => new Promise<string>(() => {}),

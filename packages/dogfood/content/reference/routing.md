@@ -12,9 +12,8 @@ examples:
 ---
 
 Every address an abide app answers on comes from a **file path**. A page is a `page.abide`
-under `src/ui/pages`, a handler is an export under `src/server/rpc`, and a socket is an export
-under `src/server/sockets` — so there is no route table, and nothing to keep in step with the
-filesystem.
+under `src/ui/pages` and a handler is an export under `src/server/rpc` — so there is no route
+table, and nothing to keep in step with the filesystem.
 
 ## Page patterns
 
@@ -39,8 +38,6 @@ match against.
 | `server/rpc/name.ts` | `default` | `/__abide/rpc/name` |
 | `server/rpc/users.ts` | `getUser` | `/__abide/rpc/users/getUser` |
 | `server/rpc/admin/audit.ts` | `recent` | `/__abide/rpc/admin/audit/recent` |
-| `server/sockets/chat.ts` | `default` | `/__abide/socket/chat` |
-| `server/sockets/feed.ts` | `ticks` | `/__abide/socket/feed/ticks` |
 
 A `default` export takes the file's own name and a named export appends its name, so a file with
 one handler reads as an address and a file with five reads as five. A directory nests the

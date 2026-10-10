@@ -126,7 +126,7 @@ beforeAll(async () => {
         'ui/public/img/dot.svg':
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
         // THE APP'S OWN, rather than whatever the walk up from here finds. The compiler reads
-        // props off the checker (19.10), so a fixture with no project of its own is one where
+        // props off the checker (19.9), so a fixture with no project of its own is one where
         // `params` never lowers and this file passes for the wrong reason.
         'tsconfig.json': JSON.stringify({
             compilerOptions: {
@@ -322,7 +322,7 @@ test('nothing of a page is on the wire before it is built — 41.1', async () =>
 })
 
 // 41.1 — A PAGE THAT FAILS BEFORE IT IS BUILT is answered at the failure's status, which for a throw
-// is the server's 500 (16.42), and this app has no error page to paint it. THE REVERT: construct the
+// is the server's 500 (16.41), and this app has no error page to paint it. THE REVERT: construct the
 // `Response` in `answerRequest` before pulling the first chunk; it answers 200 and the stream errors.
 test('a page that fails before it is built answers at its status — 41.1', async () => {
     const response = await Bun.fetch(`${base}/broken`)
@@ -480,7 +480,7 @@ test('the document links the stylesheet the build bundled — 34.6, 38.24', asyn
 // 36.15. THE REVERT: drop `external` from `bundleClient` and the build fails on
 // `Could not resolve: "/img/dot.svg"` — every test in this file with it.
 //
-// 16.11 — WRITTEN RELATIVE TO THE SHEET, so it is the public file's address below any mount; read
+// 16.10 — WRITTEN RELATIVE TO THE SHEET, so it is the public file's address below any mount; read
 // the way the browser reads it, against the sheet's own address. `mount.test.ts` is the mount.
 test('a stylesheet URL naming a public file is left as its address — 36.15', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
@@ -583,10 +583,10 @@ test('a public file and the bundle refuse another method 405 — 15.17', async (
     }
 })
 
-// 16.36's range, on a public file, answered by the `answerBlobTagged` a returned `Blob` is. NOT A
+// 16.35's range, on a public file, answered by the `answerBlobTagged` a returned `Blob` is. NOT A
 // GATE ON THAT: Bun.serve ranges a file body of its own, so a public branch answering a bare
 // `Bun.file` passes this too. What it holds is that the range keeps the public headers.
-test('a public file answers a range 206 with the public headers — 16.36, 21.12', async () => {
+test('a public file answers a range 206 with the public headers — 16.35, 21.12', async () => {
     const { headers } = await Bun.fetch(`${base}/robots.txt`)
     const ranged = await Bun.fetch(`${base}/robots.txt`, {
         headers: { range: 'bytes=0-9' },
@@ -602,7 +602,7 @@ test('a public file answers a range 206 with the public headers — 16.36, 21.12
 
 // THE REVERT: answer a declined range with the blob itself, and Bun.serve — which reads no
 // `If-Range` — sends 206 and the ten bytes of a version the reader does not have.
-test('a public file answers a stale if-range in full — 16.36', async () => {
+test('a public file answers a stale if-range in full — 16.35', async () => {
     const stale = await Bun.fetch(`${base}/robots.txt`, {
         headers: { range: 'bytes=0-9', 'if-range': '"not-the-etag"' },
     })

@@ -20,7 +20,7 @@ export const runTests = GET(
     }: {
         scope: string
         filter: string
-        // A URL's text where no args schema coerces it (19.8), so `false` arrives as `'false'`.
+        // A URL's text where no args schema coerces it (19.7), so `false` arrives as `'false'`.
         gates: boolean | string
     }) {
         if (scope === '') return

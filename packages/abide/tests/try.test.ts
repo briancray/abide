@@ -142,7 +142,7 @@ test('the finally markup is not rebuilt when the body fails — 32.16', async ()
 // NEITHER A MISMATCH NOR A VALUE IN FLIGHT IS A FAILURE OF THE BODY, on the mount path or in a
 // binding. THE REVERT: rethrow only `NotLanded` from a bound watch and only `Mismatch` from a mount;
 // each case then reads the other one as the boundary's failure, and the catch arm shows it.
-test('a mismatch or an unlanded value passes through the boundary — 2.13, 41.10', () => {
+test('a mismatch or an unlanded value passes through the boundary — 2.12, 41.10', () => {
     const escaped = (run: () => unknown): unknown => {
         try {
             run()

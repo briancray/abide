@@ -7,7 +7,7 @@ import { createScanner, type Scanner } from 'typescript/unstable/ast/scanner'
 // by construction rather than case by case.
 //
 // A SCANNER SAYS WHERE THE TOKENS ARE, NOT WHAT THEY MEAN, and that is the whole contract — the
-// expression grammar is never parsed, which is what keeps 19.12 a property of the file.
+// expression grammar is never parsed, which is what keeps 19.11 a property of the file.
 
 export type Token = {
     kind: SyntaxKind

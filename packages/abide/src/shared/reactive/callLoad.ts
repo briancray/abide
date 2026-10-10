@@ -1,6 +1,6 @@
-// A CALL REACHING A LOAD, and what the calls waiting on it decide about it: who may end it (16.52),
-// how long it may go without progress (16.63), and whether the call after an ended one starts
-// another (16.66, 15.19). The policy the core's load primitives — `loadOf`, `abandonLoad`,
+// A CALL REACHING A LOAD, and what the calls waiting on it decide about it: who may end it (16.48),
+// how long it may go without progress (16.59), and whether the call after an ended one starts
+// another (16.62, 15.19). The policy the core's load primitives — `loadOf`, `abandonLoad`,
 // `streamingOrSettled` — are spent on, kept beside them rather than inside `Reactive.ts`: the core
 // is in every page's static closure, and only a page holding a handler calls a load.
 //
@@ -22,10 +22,10 @@ import {
 /**
  * Who is waiting on one value's load, and what the last one came to.
  *
- * 16.52 — WHO IS WAITING ON A LOAD. Calls with the same args join one load (1.8), so one caller's
+ * 16.48 — WHO IS WAITING ON A LOAD. Calls with the same args join one load (1.8), so one caller's
  * signal is not the load's to end: a call with no signal pins it, and a load no call pinned ends
  * once every signal handed to it has aborted. Replaced per load, so a refresh starts the count
- * again — and kept past an abort, which is what 16.66 reads.
+ * again — and kept past an abort, which is what 16.62 reads.
  *
  * The abort LISTENER is the record itself (`handleEvent`), so a load is one record and no
  * closure over the call that started it. `declare`d fields, every one set in the constructor in one
@@ -37,9 +37,9 @@ class Attended {
     declare pinned: boolean
     declare signals: Set<AbortSignal> | null
     declare ending: AbortController | undefined
-    /** 16.65 — whether this load's clock is running, so a join starts none. */
+    /** 16.61 — whether this load's clock is running, so a join starts none. */
     declare timed: boolean
-    /** 16.66 — whether 16.52 ended this load, until a call reaches the value again. */
+    /** 16.62 — whether 16.48 ended this load, until a call reaches the value again. */
     declare abandoned: boolean
 
     constructor(
@@ -73,7 +73,7 @@ const ATTENDED = new WeakMap<object, Attended>()
 /**
  * Reaches `args` through `reach` as a call does, under that call's `signal` and `timeout`.
  *
- * 16.53 — a load this call starts may be ended by it, so its transport is handed a signal of the
+ * 16.49 — a load this call starts may be ended by it, so its transport is handed a signal of the
  * load's own (`LOAD_SIGNAL`, read by the body as it starts) — the caller's is only one vote.
  */
 export function callLoad(
@@ -89,7 +89,7 @@ export function callLoad(
     try {
         reached = reach(args)
         attended = ATTENDED.get(reached as object)
-        // 16.66 — the callers of an aborted load stopped waiting, and this one has not.
+        // 16.62 — the callers of an aborted load stopped waiting, and this one has not.
         // 15.19 — and of one whose last answer failed transiently, which runs again here where an
         // unkeyed handler has no reach of its own to run it.
         let again = false
@@ -117,7 +117,7 @@ export function callLoad(
     return reached
 }
 
-/** Files a call's signal, or its pin, against the load it reached (16.52). */
+/** Files a call's signal, or its pin, against the load it reached (16.48). */
 function attend(attended: Attended, signal: AbortSignal | undefined): void {
     if (signal === undefined) {
         attended.pinned = true
@@ -143,8 +143,8 @@ function attend(attended: Attended, signal: AbortSignal | undefined): void {
 /**
  * Ends a load that goes `milliseconds` without progress, refusing it 504.
  *
- * 16.13, 16.62, 16.63 — `timeout` ON EVERY CALL: a load that goes that long without progress — its
- * answer, or a stream's next chunk — is ended where it stands, as 16.53 ends one, and refuses 504.
+ * 16.12, 16.58, 16.59 — `timeout` ON EVERY CALL: a load that goes that long without progress — its
+ * answer, or a stream's next chunk — is ended where it stands, as 16.49 ends one, and refuses 504.
  * ONE CLOCK PER LOAD: a call joining a load (1.8) is not a reason to give it longer, and the first
  * clock would end the load at its own time whatever a second one did — so a join starts none.
  */
@@ -190,7 +190,7 @@ function timeLoad(attended: Attended, milliseconds: number | undefined): void {
         }
     }
     arm()
-    // 9.20 — a value behind rungs only turns out to stream once the onion resolves, so the question
+    // 9.6 — a value behind rungs only turns out to stream once the onion resolves, so the question
     // is asked then, by the one wait that also hears a value settle or refuse.
     streamingOrSettled(reached).then((settled) => {
         if (settled !== STREAMING) return end()

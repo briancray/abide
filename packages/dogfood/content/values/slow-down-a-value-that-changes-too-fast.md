@@ -33,7 +33,7 @@ of them. Each value below takes them, and what drives the change is the producer
 | --- | --- | --- |
 | a derived value over a load | a trigger — a dependency, an `invalidate`, a `refresh`, a `ttl` lapsing | reloads |
 | a value you write | a write | wakes |
-| a channel | a publish | wakes |
+| a channel | an append | wakes |
 | a stream — an `async function*` body | a chunk | wakes |
 | a keyed value — a body with a parameter | a key reached for the first time | starts |
 
@@ -73,21 +73,22 @@ never goes quiet shows nothing at all.
 arrival. That is why the card's spec counts paints rather than comparing the two numbers — the
 value is identical either way, and the work is the whole claim.
 
-A window **delays**, and does not itself drop. It collapses a batch into one delivery, so a cursor
-over a capped channel gets what the ring held in one go rather than one per frame, and a
-`{#for}` over that cursor, keyed on the sequence number, stays sound. For a plain read the batch is the
-latest value, which is why the same rule looks like two behaviours.
+A window **delays**, and does not itself drop (5.9). It collapses a batch into one wake, so a
+capped channel tells its readers once per window, and a `{#for}` over it keyed with `by` paints
+every message the window held in one go rather than one per frame (5.23). For a value that is
+replaced rather than appended to, the batch is the latest value, which is why the same rule looks
+like two behaviors.
 
-`history` decides what survives the batch, never the window. There is no second buffer behind a
-cap, so a capped channel with no `history` serves the latest production and loses the ones between it.
-Raise `history` where the ones between are the point.
+What survives the batch is what the value holds, never the window. There is no second buffer behind
+a cap, so a capped value written three times in one window serves the third and the first two are
+gone. Where the ones between are the point, append them to an array and trim it.
 
 A stream takes either cap too, and the window is over how often its **readers** wake (5.17). A read
 serves the accumulation as the last release left it, not the chunks the window is still holding
 (5.18), while a cursor still gets every chunk (5.10). The close releases what the window holds, so
-`await` resolves with the whole accumulation (2.8).
+`await` resolves with the whole accumulation (2.7).
 
-Read on: [History](keep-the-last-few-values.md) ·
+Read on: [Recent values](keep-the-last-few-values.md) ·
 [Streaming data](../server/send-data-as-it-arrives.md) ·
 [Channels](let-anything-publish-and-anything-read.md)
 
@@ -106,7 +107,7 @@ goes out for `no`, and there is no entry for it left to hold. The key being held
 A key already started is an ordinary entry. Reaching it again is a cache hit and does not wait.
 What moves it after that — a dependency, an `invalidate`, a `ttl` — is capped as any value is. A keyed
 channel is a keyed value, so reaching its key is held the same way, and after that the window is
-over its publishes, as the table says.
+over its appends, as the table says.
 
 Read on: [Caching](load-once-per-set-of-arguments.md)
 
@@ -156,16 +157,16 @@ keystroke, a `refresh()` on `reactive(() => fetchUser())` returns a structurally
 write through a member path copies down the path. Each of them is a new reference for a value that
 did not move.
 
-**A publish is not gated at all** (9.6), and that is a fact about what a production means there
-rather than an exception. A publish is an EVENT, and two identical events are two events. A write
-and a body's production are VALUES, and `identity` decides when two of them are one.
+Every write is gated, a channel's included (5.2). A message said twice is still a change there:
+it is a second element in the array rather than the same value written again. `identity` decides
+when two values are one, and an append is never the same value as the array before it.
 
 Read on: [Channels](let-anything-publish-and-anything-read.md) ·
 [Derived values](derive-a-value-from-other-values.md)
 
 ## `identity` costs O(size) per production
 
-Walking is O(size) per production — per `set`, per recompute, per publish — and it is the cost the
+Walking is O(size) per production — per `set`, per recompute — and it is the cost the
 default accepts. A four-key record is 48 ns, and a hundred rows rebuilt over the same row
 references is 373 ns because every shared element settles on the first check. Five thousand rows
 all freshly built and all equal is 0.31 ms, which is the pathological end and still under 2% of a
@@ -173,12 +174,12 @@ frame. The walk that finds its difference at the last row is the one that pays w
 
 It compares the **stored** value against the previous one, which is why it never runs per chunk — a
 streaming producer has one stored value, the accumulation, materialised on the read that asks for
-it (9.2). It holds one token and not a
-set, so uniqueness is against the previous stored value rather than against a channel's ring, and
-raising `history` never makes a write dearer (6.2).
+it (9.1). It holds one token and not a set, so it compares against the previous stored value
+alone (9.3), and a value that keeps a long array is compared against one array, not against every
+value it ever held.
 
 ## Next
 
 * [Caching](load-once-per-set-of-arguments.md) — the entries a cap applies to
-* [History](keep-the-last-few-values.md) — the other way an accumulating value gets expensive
+* [Recent values](keep-the-last-few-values.md) — an array appended to and trimmed in one patch
 * [Form binding](../templates/bind-a-form-to-state.md) — the input the filter came from

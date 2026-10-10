@@ -165,7 +165,7 @@ test('refuse with no message takes the reason phrase for its status — 17.8', (
     ).toBe('Not Found | Service Unavailable | HttpError')
 })
 
-// 15.7, 15.8 and 16.53 — the only three refusals the framework declares beyond the one 17.4
+// 15.7, 15.8 and 16.49 — the only three refusals the framework declares beyond the one 17.4
 // names, and 15.9 caps it there. The statuses are not interchangeable: a 422 says the request
 // parsed and its contents are wrong, which is what a schema that ran and refused found out.
 test('abide declares four refusal names and no more', () => {
@@ -252,7 +252,7 @@ test('a refusal schema runs before the message function', () => {
 // took the `Failed` with them.
 //
 // THE REVERT: remove the try/catch around `runSchema` in `make`. This test then reports
-// `built: no` where `built: yes` is due for a predicate (19.4) and an async schema (19.13). A JSON
+// `built: no` where `built: yes` is due for a predicate (19.3) and an async schema (19.12). A JSON
 // Schema keyword the validator does not implement is the third case, and it is refused inside
 // `jsonSchema`'s own `validate` rather than thrown past it.
 test('a refusal survives a schema that is itself wrong', () => {

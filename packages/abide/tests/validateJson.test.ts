@@ -1,6 +1,6 @@
-// THE NATIVE VALIDATOR. It is the form abide generates and reads back (19.8, 20.6), so it
+// THE NATIVE VALIDATOR. It is the form abide generates and reads back (19.7, 20.6), so it
 // is the one a library cannot be handed. What it answers is WHERE, keyed by dot-joined
-// path (19.6), which is what `jsonSchema` carries into the Standard form of `Schema`.
+// path (19.5), which is what `jsonSchema` carries into the Standard form of `Schema`.
 
 import { expect, test } from 'bun:test'
 import type { JsonValue, StandardSchemaV1 } from '#shared'
@@ -9,7 +9,7 @@ import { jsonSchema, reactive, validateJson } from '#shared'
 // THE TYPE ARGUMENT IS NOT DECORATION. `Issues<T>` answers a bare `string[]` where `T` is
 // not an object, and `unknown` is not — so `validateJson(…)` with none types its own result
 // as a list, and every keyed expectation below it reads as a mistake. `Paths` of this one
-// widens to `string` (19.6), which is right here: what is under test is the report's shape,
+// widens to `string` (19.5), which is right here: what is under test is the report's shape,
 // not the shape it is a report about. A SCALAR is checked as `<unknown>` for the same reason
 // turned round: its report is the bare list, and `Anywhere` would type it as a record.
 type Anywhere = Record<string, unknown>
@@ -174,14 +174,14 @@ test('additionalProperties false names the member that was not known', () => {
     })
 })
 
-// 19.13, AND IT IS A DECISION RATHER THAN A GAP — which is why the message says so. The
+// 19.12, AND IT IS A DECISION RATHER THAN A GAP — which is why the message says so. The
 // machinery to await one is already there: `absorb` turns a write into a load, captures a
 // `generation` and resumes when the promise settles. What is refused is a GATE making a
 // synchronous write asynchronous, because `s.set(5); s()` would stop answering 5 and
 // `s.busy()` would flicker on a settled write.
 test('an async schema is refused rather than awaited', () => {
     // TYPED AS THE CONTRACT, not cast past it: `validate` may answer a promise by the
-    // Standard Schema spec, so this is a schema the TYPE accepts and 19.13 refuses at run
+    // Standard Schema spec, so this is a schema the TYPE accepts and 19.12 refuses at run
     // time. Casting here would test the cast.
     const asyncSchema: StandardSchemaV1<number> = {
         '~standard': {
@@ -377,7 +377,7 @@ test('const compares by value, not by serialisation', () => {
     expect(validateJson<Anywhere>({ const: { a: 1 } }, cyclic)).not.toBeNull()
 })
 
-// 19.15: A BARE DOCUMENT IS REFUSED, NEVER ACCEPTED. A document is data and needs a validator to
+// 19.14: A BARE DOCUMENT IS REFUSED, NEVER ACCEPTED. A document is data and needs a validator to
 // read it, which `jsonSchema` brings; a gate that shrugged at one handed over bare would be a
 // declared constraint silently not applied, which is the failure this file's header refuses for an
 // unknown keyword, one rung up.

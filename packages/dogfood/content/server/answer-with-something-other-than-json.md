@@ -84,7 +84,7 @@ Read on: [Reading data](read-data-without-writing-an-api.md) · [Streaming data]
 *1 helper, 0 special cases* — the arm spells the `?? null` out, and a route that forgets it
 answers an empty body the script's `json()` throws on.
 
-A bare `undefined` is a 204 with no body (16.32), which is right for a write with nothing to report
+A bare `undefined` is a 204 with no body (16.31), which is right for a write with nothing to report
 and wrong for a read whose answer is "nobody". `json` sends `null` at the status written through
 `response`, 200 unless something wrote another (17.10). It is the same serialization a bare return
 gets otherwise, fixed, so nothing a caller's `Accept` asks for moves it off JSON.

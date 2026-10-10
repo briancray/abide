@@ -22,7 +22,7 @@ description and examples. A page you have read is a page you can navigate.
 | [`watch`](watch.md) | The effect, its disposer, and what a server does with one |
 | [Selections](selections.md) | `busy`, `ready`, `refresh` and `invalidate` over many entries |
 | [Refusals](refusals.md) | `refuse.named`, `Failed`, and the two abide declares |
-| [Transports](transports.md) | `rpc`, `socket`, response helpers, and the headers abide sends |
+| [Transports](transports.md) | `rpc`, the follow, response helpers, and the headers abide sends |
 | [Ambient values](ambient-values.md) | `request`, `route`, `cookies`, `principal`, `config`, `trace`, `health` |
 | [Helpers](helpers.md) | `log`, `csp`, `url`, `navigate` |
 | [`.abide` files](abide-files.md) | The template grammar, and the rules that let a reactive value be read and written by name |

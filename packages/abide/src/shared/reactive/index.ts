@@ -15,9 +15,10 @@
 
 import type { Failed } from '../Failed.ts'
 import type { Issues } from '../Issues.ts'
+import { RPC_SERVER } from '../RPC_SERVER.ts'
 import type { Schema } from '../Schema.ts'
 import { isReactive } from './isReactive.ts'
-import { createKeyed, type Keyed } from './Keyed.ts'
+import { createKeyed, isKeyed, type Keyed } from './Keyed.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { declaresParameter } from './parameterDefaults.ts'
 import {
@@ -33,7 +34,6 @@ import { outsideScope, scoped } from './scoped.ts'
 import { share } from './share.ts'
 
 export { chunksOfStream } from './chunksOfStream.ts'
-export type { History } from './History.ts'
 export { isReactive } from './isReactive.ts'
 export { isKeyed, type Keyed } from './Keyed.ts'
 export { NotLanded } from './NotLanded.ts'
@@ -49,7 +49,7 @@ export {
     type Identity,
     isStreaming,
     loadOf,
-    pastOf,
+    servedCellOf,
     type Reactive,
     type ReactiveOptions,
     type Store,
@@ -122,7 +122,7 @@ export type Refused<Shaped> = Extract<Shaped, Refusal>
 // leaves `Accepted` inferred from `Schema<Accepted>` exactly as before, and `Gate` stays `never`
 // at its default where no schema is passed — which is what `Gated` turns into the refusal 1.3 adds.
 // `args` is read for `ArgsGate` the same way: its refusal is a `ValidationError` too (15.8).
-type Shaping<
+export type Shaping<
     Accepted,
     Shaped,
     Args = never,
@@ -149,9 +149,17 @@ type Shaping<
  * `schema` infers, and what every call with explicit type arguments gets — `never` there would
  * make `schema` itself unspellable, so those calls keep the gate and lose only this refusal's type.
  */
-type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate]
+export type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate]
     ? never
     : Failed<'ValidationError', Issues<Accepted>>
+/** What a built value refuses with: its `transform`'s refusals, and each gate's that was declared. */
+export type Refusals<
+    Shaped,
+    Gate,
+    Stored,
+    ArgsGate = Schema<never>,
+    Args = never,
+> = Refused<Shaped> | Gated<Gate, Stored> | Gated<ArgsGate, Args>
 /**
  * `unknown` where `Body`'s one parameter is optional, and `never` otherwise — `any` included, which
  * would otherwise distribute to both and take every `reactive(x as any)` for a keyed body.
@@ -200,7 +208,7 @@ export function reactive<
 >(
     initial: undefined,
     options?: Shaping<Accepted, Shaped, never, Gate>,
-): Reactive<Kept<Shaped>, Accepted, Refused<Shaped> | Gated<Gate, Accepted>>
+): Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>
 /**
  * A streaming value: an `async function*` body whose chunks accumulate as it runs.
  *
@@ -208,7 +216,7 @@ export function reactive<
  * the first is the keyed stream whose parameter is optional, for the reason given at the
  * optional-parameter overload below.
  * `() => AsyncGenerator<Chunk>` is a `() => Computed`, so the general form would type a stream as
- * holding its generator. The TYPE reads the return, and so does 9.20: an arrow handing back a
+ * holding its generator. The TYPE reads the return, and so does 9.6: an arrow handing back a
  * generator, or a promise of one, is promoted to a stream by the run that hands it back.
  */
 export function reactive<
@@ -233,21 +241,14 @@ export function reactive<
     Kept<Shaped>,
     Parameters<Body>[0],
     ChunkOf<Body>[],
-    | Refused<Shaped>
-    | Gated<Gate, ChunkOf<Body>[]>
-    | Gated<ArgsGate, Parameters<Body>[0]>,
+    Refusals<Shaped, Gate, ChunkOf<Body>[], ArgsGate, Parameters<Body>[0]>,
     ChunkOf<Body>
 >
 /** A stream whose body declares no parameter. */
 export function reactive<Chunk, Shaped = Chunk[], Gate = Schema<Chunk[]>>(
     body: () => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>,
     options?: Shaping<Chunk[], Shaped, never, Gate>,
-): Reactive<
-    Kept<Shaped>,
-    Chunk[],
-    Refused<Shaped> | Gated<Gate, Chunk[]>,
-    Chunk
->
+): Reactive<Kept<Shaped>, Chunk[], Refusals<Shaped, Gate, Chunk[]>, Chunk>
 /** A keyed stream: one streaming entry per `Args` key. */
 export function reactive<
     Chunk,
@@ -264,7 +265,7 @@ export function reactive<
     Kept<Shaped>,
     Args,
     Chunk[],
-    Refused<Shaped> | Gated<Gate, Chunk[]> | Gated<ArgsGate, Args>,
+    Refusals<Shaped, Gate, Chunk[], ArgsGate, Args>,
     Chunk
 >
 /**
@@ -298,9 +299,13 @@ export function reactive<
     Parameters<Body>[0],
     Awaited<ReturnType<Body>>,
     | AdoptedFailures<ReturnType<Body>>
-    | Refused<Shaped>
-    | Gated<Gate, Awaited<ReturnType<Body>>>
-    | Gated<ArgsGate, Parameters<Body>[0]>,
+    | Refusals<
+          Shaped,
+          Gate,
+          Awaited<ReturnType<Body>>,
+          ArgsGate,
+          Parameters<Body>[0]
+      >,
     AdoptedProduced<ReturnType<Body>, Kept<Shaped>>
 >
 /** A computed value: `body` produces it, and runs again when a value it read changes. */
@@ -314,9 +319,7 @@ export function reactive<
 ): Reactive<
     Kept<Shaped>,
     Awaited<Computed>,
-    | AdoptedFailures<Computed>
-    | Refused<Shaped>
-    | Gated<Gate, Awaited<Computed>>,
+    AdoptedFailures<Computed> | Refusals<Shaped, Gate, Awaited<Computed>>,
     AdoptedProduced<Computed, Kept<Shaped>>
 >
 /** A keyed value: `body` declares a parameter, and each `Args` key reached is its own entry. */
@@ -334,9 +337,7 @@ export function reactive<
     Args,
     Awaited<Computed>,
     | AdoptedFailures<Computed>
-    | Refused<Shaped>
-    | Gated<Gate, Awaited<Computed>>
-    | Gated<ArgsGate, Args>,
+    | Refusals<Shaped, Gate, Awaited<Computed>, ArgsGate, Args>,
     AdoptedProduced<Computed, Kept<Shaped>>
 >
 /** A value the scope owns outright, opening at `initial`. */
@@ -346,8 +347,8 @@ export function reactive<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(
     // `reactive({ handler })` — since a function here is a body.
     initial: Accepted | PromiseLike<Accepted>,
     options?: Shaping<Accepted, Shaped, never, Gate>,
-): Reactive<Kept<Shaped>, Accepted, Refused<Shaped> | Gated<Gate, Accepted>>
-/** A value nothing has written yet: `reactive<User>()`, not ready until the first `set` (2.10). */
+): Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>
+/** A value nothing has written yet: `reactive<User>()`, not ready until the first `set` (2.9). */
 export function reactive<Accepted>(): Reactive<
     Kept<Accepted>,
     Accepted,
@@ -392,16 +393,26 @@ export const ambient = ((...given: [first?: unknown, options?: unknown]) => {
 }) as unknown as typeof reactive
 
 /**
- * `reactive` over a handler's plain function, for `declare`.
+ * `reactive` over a handler's plain function or value, for `declare` — or the
+ * `Reactive` itself, where it is one already.
  *
- * 16.68 — a body declaring no parameter is not started where the handler is declared: outside a
- * request its value is built by the first call rather than by the import.
+ * 16.5 — THE ARM IS READ OFF A BRAND. A `Keyed` and a one-parameter plain function have the same
+ * shape, and only the first has already decided its own keying.
+ *
+ * 16.64 — a body declaring no parameter is not started where the handler is declared: outside a
+ * request its value is built by the first call rather than by the import — and where it declares
+ * `global`, built once for every request rather than once per request (11.34).
  */
 export function handlerValue(body: unknown, options: unknown): unknown {
+    if (isReactive(body) || isKeyed(body)) return body
     const given: [unknown, unknown] = [body, options]
     const keyed = isKeyedBody(body)
     if (!keyed && outsideScope(false))
-        return scoped(() => build(given, keyed), true)
+        return scoped(
+            () => build(given, keyed),
+            true,
+            (options as { global?: boolean } | undefined)?.global === true,
+        )
     return reactive(body as () => unknown, options as undefined)
 }
 
@@ -492,14 +503,23 @@ export function ready<Chosen extends Selection>(
     if (sweep !== undefined) return readyOver(sweep)
     return (selection as { ready(pattern: unknown): boolean }).ready(pattern)
 }
-/** Stale-while-revalidate over the selection: reloads it while serving what it holds. */
+/**
+ * Stale-while-revalidate over the selection: reloads it while serving what it holds.
+ *
+ * 13.15 — ON A SERVER A SWEEP REACHES THE COPIES BROWSERS FOLLOW TOO, bare or by tag: a handler built
+ * per request holds no value here for the sweep to find, and its copies are the point.
+ */
 export function refresh<Chosen extends Selection>(
     selection?: Chosen,
     pattern?: PatternOf<Chosen, 'refresh'>,
 ): void {
     const sweep = sweepOf(selection)
-    if (sweep !== undefined) refreshOver(sweep)
-    else (selection as { refresh(pattern: unknown): void }).refresh(pattern)
+    if (sweep === undefined)
+        (selection as { refresh(pattern: unknown): void }).refresh(pattern)
+    else {
+        refreshOver(sweep)
+        RPC_SERVER.swept?.('refresh', sweep)
+    }
 }
 /** Marks the selection stale: drops the cache behind it, never the value. */
 export function invalidate<Chosen extends Selection>(
@@ -507,11 +527,14 @@ export function invalidate<Chosen extends Selection>(
     pattern?: PatternOf<Chosen, 'invalidate'>,
 ): void {
     const sweep = sweepOf(selection)
-    if (sweep !== undefined) invalidateOver(sweep)
-    else
+    if (sweep === undefined)
         (selection as { invalidate(pattern: unknown): void }).invalidate(
             pattern,
         )
+    else {
+        invalidateOver(sweep)
+        RPC_SERVER.swept?.('invalidate', sweep)
+    }
 }
 
 // 10.1 — `reactive.share` is a static on the factory rather than a free name, the registry's own

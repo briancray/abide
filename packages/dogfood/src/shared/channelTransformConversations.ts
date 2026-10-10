@@ -5,11 +5,11 @@ export type Turn = { speaker: string; text: string }
 
 const LIMIT = 120
 
-/** Runs on every publish, the app's own included. */
-export const onboarding = reactive(undefined, {
-    history: 50,
-    transform: (turn: Turn) => {
-        if (turn.text.length <= LIMIT) return turn
-        return tooLong({ length: turn.text.length })
+/** Runs on every write: the turn just added is the one it checks. */
+export const onboarding = reactive([] as Turn[], {
+    transform: (turns: Turn[]) => {
+        const last = turns.at(-1)
+        if (last === undefined || last.text.length <= LIMIT) return turns
+        return tooLong({ length: last.text.length })
     },
 })

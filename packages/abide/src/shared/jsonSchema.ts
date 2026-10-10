@@ -6,9 +6,9 @@ import { validateJson } from './validateJson.ts'
  * A JSON Schema document as a Standard Schema, carrying its own validator.
  *
  * A document is data and something has to read it, so the edge to `validateJson` is made HERE, by
- * the call that declares one — a page that never calls this never carries the validator (19.14),
+ * the call that declares one — a page that never calls this never carries the validator (19.13),
  * with no slot to fill and nothing for the compiler to spot. A bare document handed as a `Schema`
- * is refused (19.15).
+ * is refused (19.14).
  *
  * A STANDARD SCHEMA, because that is the form that already reports WHERE: each issue's path is
  * `validateJson`'s own, split at the dots `runSchema` joins it back at. And the document is

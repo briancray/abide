@@ -211,11 +211,11 @@ test('App.stop drops the seed entries its renders left — 42.11', async () => {
     expect(takeSeed('caller', handler, { id: 1 })).toBeUndefined()
 })
 
-// 16.43 — A STOPPED APP ANSWERS NO `raw` CALL: one made outside every request after the app built last
+// 16.42 — A STOPPED APP ANSWERS NO `raw` CALL: one made outside every request after the app built last
 // has stopped goes over the wire rather than in process to an app that refuses it. THE REVERT: drop
 // the `RPC_SERVER.raw = null` line from `stopOnce` in `createApp.ts`; the stopped app refuses the
 // call with its 503 and the wire is reached 0 times, where 1 is due.
-test('a raw call outside every request after App.stop does not reach the stopped app — 16.43', async () => {
+test('a raw call outside every request after App.stop does not reach the stopped app — 16.42', async () => {
     let answered = 0
     const greeting = GET(() => {
         answered += 1

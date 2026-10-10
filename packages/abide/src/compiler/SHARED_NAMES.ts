@@ -19,7 +19,7 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     'writePath',
     'listOf',
     // 32.23's abort, which only the server lane can need: a client binding is its own `watch`
-    // and gets one from 2.13. Emitted on both sides because `renderMarkup` is both sides.
+    // and gets one from 2.12. Emitted on both sides because `renderMarkup` is both sides.
     'slotValue',
     // 32.5, 32.8 — what a `bind:` operand holds, which the markup writes into the tag.
     'boundValue',

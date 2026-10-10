@@ -1,5 +1,6 @@
-// THE ORIGIN GATE, for every lane a browser on another origin can reach: a handler's (16.14, 21.19), a
-// socket's (18.5) and the MCP endpoint's (20.12), all against the one own origin (36.2).
+// THE ORIGIN GATE, for every lane a browser on another origin can reach: a handler's over http
+// (16.13, 21.19) and over the mux (18.2), and the MCP endpoint's (20.12), all against the one own
+// origin (36.2).
 
 import type { Failed } from '#shared/Failed.ts'
 import { refuse } from '#shared/refuse.ts'
@@ -20,7 +21,7 @@ export function crossingOrigin(
     return origin === own ? null : origin
 }
 
-/** Whether a handler's or a socket's `crossOrigin` admits `origin`. */
+/** Whether a handler's `crossOrigin` admits `origin`. */
 export function allows(
     crossOrigin: boolean | string[],
     origin: string,
@@ -31,7 +32,7 @@ export function allows(
     )
 }
 
-/** Whether `crossing` is another origin, and one `crossOrigin` does not admit. 16.14, 18.5. */
+/** Whether `crossing` is another origin, and one `crossOrigin` does not admit. 16.13, 18.2. */
 export function closedTo(
     crossOrigin: boolean | string[],
     crossing: string | null,

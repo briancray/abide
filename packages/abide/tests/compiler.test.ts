@@ -132,8 +132,8 @@ test('the compiler is not reachable from the server seam', async () => {
     // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
     // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's,
     // `request`, `response` and `server` are 22.1's, `createApp` is 42's, the seven hooks are 37's,
-    // `trace` is 24's and `config` is 27's; the six response helpers are 17's,
-    // `socket` is 18's, `reachable` is 23's, and `assistant`, `claudeApi` and `claudeCode` are 45's.
+    // `trace` is 24's and `config` is 27's; the six response helpers are 17's, `reachable` is
+    // 23's, and `assistant`, `claudeApi` and `claudeCode` are 45's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
         [
@@ -166,7 +166,6 @@ test('the compiler is not reachable from the server seam', async () => {
             'request',
             'response',
             'server',
-            'socket',
             'sse',
             'trace',
         ].sort(),
@@ -1594,7 +1593,7 @@ test('a component invoked inside the head contributes to it', async () => {
     expect(out).toContain('<p>x</p>')
 })
 
-// 19.12 — A SLOT IS ONE EXPRESSION, whatever it holds, and the emit splices it into an argument list
+// 19.11 — A SLOT IS ONE EXPRESSION, whatever it holds, and the emit splices it into an argument list
 // and an initializer. A comma expression spliced bare is two arguments, or a second declarator;
 // a trailing line comment spliced bare comments out the parentheses after it.
 //

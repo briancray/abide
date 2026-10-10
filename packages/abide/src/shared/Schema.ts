@@ -1,15 +1,15 @@
 // THE TWO FORMS A SHAPE MAY BE DECLARED IN, and one place that runs them. RULEBOOK 4.3
 // puts a schema first on every way in, so this is reached from a write, a publish, a body's
-// production (11.47) and an adoption (11.48) alike — one statement of what "the schema
+// production (11.46) and an adoption (11.47) alike — one statement of what "the schema
 // refused" means, rather than four that drift apart.
 //
-// 19.3 IS WHAT MAKES THE FORMS ONE THING: a `Schema` returns what it ACCEPTS. Not a
+// 19.2 IS WHAT MAKES THE FORMS ONE THING: a `Schema` returns what it ACCEPTS. Not a
 // boolean, not a report — the value, so the pipeline downstream of it (4.4, `transform`)
 // receives something already checked and already typed. A form that could only answer
 // yes/no would leave the value untyped on the other side.
 //
-// 19.7 IS THE OTHER HALF: coercion belongs to the pipeline and is never asked of a schema.
-// Together they are what lets 19.4 be enforced at all — see `runSchema`.
+// 19.6 IS THE OTHER HALF: coercion belongs to the pipeline and is never asked of a schema.
+// Together they are what lets 19.3 be enforced at all — see `runSchema`.
 
 import type { Issues } from './Issues.ts'
 import { issuesOf } from './issuesOf.ts'
@@ -98,7 +98,7 @@ function refusedAs(found: Record<string, string[]>, value: unknown): Checked {
 /**
  * A throw from a schema, as the `''` issue entry.
  *
- * 19.5: the plain-function form throws what it refuses, and the throw becomes the `''`
+ * 19.4: the plain-function form throws what it refuses, and the throw becomes the `''`
  * entry — the key for "about the value itself", which is all a bare throw can say. Over a
  * value that is not an object the entry IS the issues: `Issues<T>` is the bare list there.
  */
@@ -109,7 +109,7 @@ function fromThrow(thrown: unknown, value: unknown): Checked {
             : typeof thrown === 'string'
               ? thrown
               : 'was refused'
-    // EVERY THROW BECOMES THE `''` ENTRY, a `Failed` included — 19.5 says so without
+    // EVERY THROW BECOMES THE `''` ENTRY, a `Failed` included — 19.4 says so without
     // carving one out, and the carve-out was worth trying and dropping: a schema that
     // throws a named refusal reads as though the name should survive, but then a `schema`
     // and a `transform` refuse in two different shapes and 4.4's pipeline has two kinds of
@@ -117,7 +117,7 @@ function fromThrow(thrown: unknown, value: unknown): Checked {
     return refusedAs({ '': [said] }, value)
 }
 
-/** A Standard Schema issue's path as a dotted key — 19.6's `''` where it has none. */
+/** A Standard Schema issue's path as a dotted key — 19.5's `''` where it has none. */
 function pathOf(
     path: readonly (PropertyKey | { readonly key: PropertyKey })[] | undefined,
 ): string {
@@ -153,15 +153,15 @@ function runSchemaTracked(schema: unknown, value: unknown): Checked {
         } catch (thrown) {
             return fromThrow(thrown, value)
         }
-        // 19.4: A PREDICATE IS NOT A `Schema`, and this is where it is caught rather than
+        // 19.3: A PREDICATE IS NOT A `Schema`, and this is where it is caught rather than
         // in the type — `Schema<boolean>` and a predicate are the same function type, so
-        // no annotation can separate them. What separates them at runtime is 19.3 plus
-        // 19.7: a schema returns what it ACCEPTS and never coerces, so a function handed a
+        // no annotation can separate them. What separates them at runtime is 19.2 plus
+        // 19.6: a schema returns what it ACCEPTS and never coerces, so a function handed a
         // non-boolean and answering a boolean has answered a QUESTION about the value
         // rather than returning it. A real `Schema<boolean>` only ever sees booleans.
         if (typeof returned === 'boolean' && typeof value !== 'boolean')
             throw new Error(
-                'A predicate is not a Schema: it answered true/false where the value was expected. A Schema returns what it accepts (RULEBOOK 19.3) and throws what it refuses (19.5).',
+                'A predicate is not a Schema: it answered true/false where the value was expected. A Schema returns what it accepts (RULEBOOK 19.2) and throws what it refuses (19.4).',
             )
         return accepted(returned)
     }
@@ -171,13 +171,13 @@ function runSchemaTracked(schema: unknown, value: unknown): Checked {
         if (standard !== undefined) return runStandard(standard, value)
     }
 
-    // 19.15: A BARE DOCUMENT IS REFUSED, never accepted. Accepting would be a declared constraint
+    // 19.14: A BARE DOCUMENT IS REFUSED, never accepted. Accepting would be a declared constraint
     // that silently does not apply — `validateJson`'s own header calls that the one failure a
     // validation layer must not have — and the sentence reaches the author the way every other
     // bad schema does, on the `''` entry.
     return fromThrow(
         new Error(
-            'A JSON Schema document is not a Schema on its own: wrap it as `jsonSchema(document)`, which brings the validator that reads it (RULEBOOK 19.15).',
+            'A JSON Schema document is not a Schema on its own: wrap it as `jsonSchema(document)`, which brings the validator that reads it (RULEBOOK 19.14).',
         ),
         value,
     )
@@ -193,7 +193,7 @@ function runStandard(
     } catch (thrown) {
         return fromThrow(thrown, value)
     }
-    // 19.13: AN ASYNC SCHEMA IS REFUSED, and this is a decision rather than a gap. The
+    // 19.12: AN ASYNC SCHEMA IS REFUSED, and this is a decision rather than a gap. The
     // machinery to await one exists and is not the obstacle — `absorb` already turns a
     // write into a load (4.2), captures a `generation` and resumes the pipeline when the
     // promise settles, so a second suspension point here would reuse it.
@@ -216,7 +216,7 @@ function runStandard(
         )
     if (isThenable(result))
         throw new Error(
-            `The schema from "${standard.vendor}" answered asynchronously. A Schema must be synchronous (RULEBOOK 19.13): validate what is already settled, or make the write a load by passing a promise.`,
+            `The schema from "${standard.vendor}" answered asynchronously. A Schema must be synchronous (RULEBOOK 19.12): validate what is already settled, or make the write a load by passing a promise.`,
         )
     const settled = result as StandardResult<unknown>
     if (settled.issues === undefined) return accepted(settled.value)

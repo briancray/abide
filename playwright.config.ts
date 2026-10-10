@@ -10,7 +10,7 @@ import { defineConfig, devices } from '@playwright/test'
 // by project name rather than by a config each.
 const PORT = 3131
 const BASE = `http://localhost:${PORT}`
-// THE SUB-PATH ARM IS A SERVER OF ITS OWN. `APP_URL`'s path is the mount (36.2, 16.11), and one
+// THE SUB-PATH ARM IS A SERVER OF ITS OWN. `APP_URL`'s path is the mount (36.2, 16.10), and one
 // process has one — so the same build is served twice, the second below `/docs`.
 const SUB_PORT = 3132
 const SUB_BASE = `http://localhost:${SUB_PORT}/docs`
@@ -61,7 +61,7 @@ export default defineConfig({
         {
             // THE SAME BUILD, STARTED ONLY: playwright starts its servers in order and waits on
             // each, so this boots what the one above has just built — and the build is the one
-            // artifact both serve, which is 16.11's whole claim.
+            // artifact both serve, which is 16.10's whole claim.
             command: `bun ../abide/bin/abide.ts start --port ${SUB_PORT}`,
             cwd: 'packages/dogfood',
             env: { APP_URL: SUB_BASE },

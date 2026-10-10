@@ -16,7 +16,7 @@ import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 import { reachedInRender } from './answerRequest.ts'
 import { environmentTimeout } from './answerRpc.ts'
-import { broadcast, feedFromServed } from './answerSocket.ts'
+import { broadcast, feedFromServed, swept } from './answerSocket.ts'
 import { configuredMount, derivedAppName } from './config.ts'
 import { cspRung, nonce } from './csp.ts'
 import { handOnError } from './hooks.ts'
@@ -36,11 +36,12 @@ export function installServer(): void {
     CSP.rung = cspRung
     CSP.nonce = nonce
     Object.assign(PRINCIPAL, SERVER_PRINCIPAL)
-    // 16.12 — the request a handler's rung is handed.
+    // 16.11 — the request a handler's rung is handed.
     RPC_SERVER.request = request
     RPC_SERVER.timeout = environmentTimeout
     RPC_SERVER.reached = reachedInRender
     RPC_SERVER.broadcast = broadcast
+    RPC_SERVER.swept = swept
     RPC_SERVER.served = feedFromServed
     RPC_SERVER.handled = handlerTook
 }

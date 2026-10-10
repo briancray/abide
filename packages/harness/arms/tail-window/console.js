@@ -2,7 +2,7 @@ const TAIL = 4
 
 const WORDS = ['Rotate', 'the', 'key', 'in', 'Settings', 'then', 'Keys.']
 
-// THE RING, WRITTEN BY HAND — and the trim is the part that is
+// THE WINDOW, WRITTEN BY HAND — and the trim is the part that is
 // easy to leave out, because nothing about a growing array looks
 // wrong until the tab has been open all afternoon.
 const held = []
@@ -15,11 +15,9 @@ function produce(line) {
 
 const list = document.querySelector('#console')
 
-// The reader asks for fifty and gets what the ring kept — what a
-// reader may ask for is capped by the value, not by the reader.
 function render() {
     list.replaceChildren(
-        ...held.slice(-50).map((line) => {
+        ...held.map((line) => {
             const row = document.createElement('li')
             const at = document.createElement('span')
             at.textContent = String(line.at)

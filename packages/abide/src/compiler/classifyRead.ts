@@ -240,8 +240,8 @@ export function classifyRead(node: Node): Read | undefined {
     const read = newRead(node.getStart(), node.end)
 
     // 31.3 — AN `await` OPERAND HOLDS THE `Reactive`. A `Reactive` is thenable (1.4), so `await n`
-    // is already the spelling for its settling (2.8) in every `.ts` file; lowered to `await n()`
-    // it became a READ instead, which takes what has landed and throws where nothing has (2.10) —
+    // is already the spelling for its settling (2.7) in every `.ts` file; lowered to `await n()`
+    // it became a READ instead, which takes what has landed and throws where nothing has (2.9) —
     // the one position where a read is never what was meant.
     //
     // NOTHING IS SCHEDULED BY THIS. The `await` is the author's own, the component is `async`

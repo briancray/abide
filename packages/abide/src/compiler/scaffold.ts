@@ -3,6 +3,7 @@
 // A file that is already there is left as it is and reported skipped, so a scaffold run over a
 // half-made project finishes it rather than overwriting it.
 
+import { withoutTrailingSlash } from '#server/withoutTrailingSlash.ts'
 import abidePackage from '../../package.json' with { type: 'json' }
 import { COMPILER_OPTIONS } from './writeDefaultProject.ts'
 
@@ -13,9 +14,9 @@ const STARTER = Bun.fileURLToPath(new URL('../../scaffold/', import.meta.url))
 // THE ABIDE THAT WROTE THE PROJECT is the one it depends on. Installed from a registry, that is its
 // version; run from a checkout, no registry has that version, and the only spelling that installs
 // is the checkout's own path.
-const PACKAGE_ROOT = Bun.fileURLToPath(
-    new URL('../../', import.meta.url),
-).replace(/\/$/, '')
+const PACKAGE_ROOT = withoutTrailingSlash(
+    Bun.fileURLToPath(new URL('../../', import.meta.url)),
+)
 const ABIDE_DEPENDENCY = PACKAGE_ROOT.includes('/node_modules/')
     ? `^${abidePackage.version}`
     : `file:${PACKAGE_ROOT}`

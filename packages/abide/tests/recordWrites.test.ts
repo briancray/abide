@@ -1,11 +1,11 @@
-// 18.26, 18.28 — WHAT A PATCH WROTE, KEPT AS DATA. The one property that matters: the ops, replayed on
+// 18.11, 18.13 — WHAT A PATCH WROTE, KEPT AS DATA. The one property that matters: the ops, replayed on
 // a copy of the value as it stood, make the value as the patch left it — or the sink says it could
 // not keep them. Anything else is writes landing somewhere else on a browser, silently.
 
 import { expect, test } from 'bun:test'
 import type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
 import { recordWrites } from '#shared/reactive/recordWrites.ts'
-import { applyPatch } from '#ui/applyPatch.ts'
+import { applyPatch } from '#shared/applyPatch.ts'
 
 type Row = { id: string; name: string; place: { city: string } }
 
@@ -48,17 +48,59 @@ test('a nested write is kept at its path', () => {
     })
     expect(result).toMatchObject({ kept: true, same: true })
     expect(result.ops).toEqual([
-        { path: [1, 'place', 'city'], set: 'Arlington' },
+        { op: 'add', path: '/1/place/city', value: 'Arlington' },
     ])
 })
 
-// A SPLICE IS ONE CALL, not a write for every element that moved up.
-test('a reshape is kept as the one call it was', () => {
+// A SPLICE IS THE REMOVES AND ADDS IT MAKES, at the indices it touches, not a write for every element
+// that moved up.
+test('a reshape is kept as the JSON Patch it makes', () => {
     const result = replayed((list) => {
         list.splice(0, 1)
     })
     expect(result).toMatchObject({ kept: true, same: true })
-    expect(result.ops).toEqual([{ path: [], call: 'splice', args: [0, 1] }])
+    expect(result.ops).toEqual([{ op: 'remove', path: '/0' }])
+})
+
+// 18.11 — EACH KIND OF WRITE AS THE JSON PATCH OP RFC 6902 HAS FOR IT, read off the value before it
+// lands, and replayed to the same result. A reorder is one `replace` of the array as it stands at the
+// end, so the push after it rides in that copy rather than replaying twice. THE REVERT: drop the
+// `placed` mark a reorder sets; the push replays a second time over the replace, `same: false`.
+test('each write is kept as the JSON Patch op RFC 6902 has for it', () => {
+    const result = replayedOver(
+        { items: ['b', 'a', 'c'], name: 'shelf' } as {
+            items: string[]
+            name?: string
+        },
+        (value) => {
+            value.items.push('d')
+            value.items[0] = 'B'
+            value.items.unshift('z')
+            value.items.pop()
+            value.items.length = 3
+            delete value.name
+            value.items.sort()
+            value.items.push('e')
+        },
+    )
+    expect(result).toMatchObject({ kept: true, same: true })
+    expect(result.ops).toEqual([
+        { op: 'add', path: '/items/-', value: 'd' },
+        { op: 'replace', path: '/items/0', value: 'B' },
+        { op: 'add', path: '/items/0', value: 'z' },
+        { op: 'remove', path: '/items/4' },
+        { op: 'remove', path: '/items/3' },
+        { op: 'remove', path: '/name' },
+        { op: 'replace', path: '/items', value: ['B', 'a', 'z', 'e'] },
+    ])
+})
+
+// A HOLE IN AN ARRAY HAS NO JSON SPELLING, so a write that makes one is sent as the value.
+test('a write that leaves a hole in an array is sent as the value', () => {
+    const result = replayed((list) => {
+        ;(list as unknown[])[10] = 'far'
+    })
+    expect(result.kept).toBe(false)
 })
 
 // A PLACED ROW IS SENT AS IT STANDS WHEN THE CALLBACK RETURNS, so a write under it is in the push and
@@ -254,7 +296,7 @@ test('a value built from what the patch read is stored without its proxies', () 
     ).toBe('same row: true, same place: true')
 })
 
-// 18.28 — A RAW ROW THE CALLBACK PLACED IS WRITTEN THROUGH NO PROXY, and is in the push because the
+// 18.13 — A RAW ROW THE CALLBACK PLACED IS WRITTEN THROUGH NO PROXY, and is in the push because the
 // push is copied when the callback returns. THE REVERT: snapshot each op's value at its write; the
 // push carries the name the row was pushed with, and the replay leaves Dorothy unrenamed
 // (`same: false`).
@@ -312,4 +354,48 @@ test('two pushes to one nested list are both kept', () => {
     })
     expect(result).toMatchObject({ kept: true, same: true })
     expect(result.ops.length).toBe(2)
+})
+
+// 18.9 — A BROWSER'S OPS ARE A STRANGER'S, so the replay walks own properties alone, an array step
+// is an index, and an op RFC 6902 does not name is refused. THE REVERT, run: drop the
+// `Object.hasOwn` check in `stepInto`; the first write lands on `Object.prototype`.
+test('a replay refuses a path through __proto__, a non-index array step and an unknown op', () => {
+    const outcomes: string[] = []
+    for (const ops of [
+        [{ op: 'add', path: '/__proto__/polluted', value: true }],
+        [{ op: 'add', path: '/constructor/prototype/polluted', value: true }],
+        [{ op: 'copy', from: '/items/length', path: '/stolen' }],
+        [{ op: 'call', path: '/items' }],
+    ] as unknown as PatchOp[][]) {
+        try {
+            applyPatch({ items: [] }, ops)
+            outcomes.push('applied')
+        } catch {
+            outcomes.push('refused')
+        }
+    }
+    expect(outcomes).toEqual(['refused', 'refused', 'refused', 'refused'])
+    expect(({} as { polluted?: unknown }).polluted).toBeUndefined()
+})
+
+// RFC 6902's other three ops, which a client may send: `move` and `copy` by pointer, and `test` as a
+// precondition that refuses the whole patch at 409 rather than writing part of it.
+test('a replay applies move and copy, and a failed test refuses at 409', () => {
+    const value = { items: ['a', 'b'], kept: { n: 1 } }
+    applyPatch(value, [
+        { op: 'move', from: '/items/0', path: '/items/-' },
+        { op: 'copy', from: '/kept', path: '/copied' },
+    ])
+    expect(value as unknown).toEqual({
+        items: ['b', 'a'],
+        kept: { n: 1 },
+        copied: { n: 1 },
+    })
+    let status: unknown
+    try {
+        applyPatch(value, [{ op: 'test', path: '/kept/n', value: 2 }])
+    } catch (refusal) {
+        status = (refusal as { status: number }).status
+    }
+    expect(status).toBe(409)
 })

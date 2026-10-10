@@ -19,7 +19,7 @@ reactive(body, options)
 reactive((args) => …)          // one parameter — keyed and untracked
 reactive(async function* () {})
 reactive(initial)              // a value the scope owns
-reactive(initial, { history }) // a channel: live state the system publishes
+reactive(initial, options)
 ```
 
 ### Parameters
@@ -92,16 +92,15 @@ Every `Reactive` takes these, whichever overload made it.
 | --- | --- | --- |
 | `schema` | `Schema<Accepted>` | The gate on the way in. Refuses by throwing, and the throw is converted rather than escaping. |
 | `transform` | `(value: Accepted) => Shaped` | The shaping on the way to storage. Runs untracked, on the settled value, once per stored value. |
-| `store` | `Store<Stored> \| ((args: Args) => Store<Stored>)` | Where the value lives when the process does not. Answers before the initial value, and `undefined` from `get` is a miss. Round-trips the latest production, never the ring. On a value with a body, a trigger runs the body. |
+| `store` | `Store<Stored> \| ((args: Args) => Store<Stored>)` | Where the value lives when the process does not. Answers before the initial value, and `undefined` from `get` is a miss. Round-trips the latest production. On a value with a body, a trigger runs the body. |
 | `identity` | `(next: Stored, previous: Stored) => unknown` | What makes it the same value. A projection compared by `!==`, or a comparator answering directly. |
 | `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator an app declares on `identity`, whose default is the reference. Answers "not equal" wherever it cannot decide. |
 | `by` | `(keyof Element & string) \| ((element: Element) => unknown)`, over the `Element` a `Stored` array holds | What tells one element of the value from another: the property it names, or what the function returns. The key of a `{#for}` over the value named alone, where the block writes none. Only the property-name form reaches a subscriber's copy over the wire. Separate from `identity`, which compares the whole value. |
-| `history` | `number` | How many past productions a value retains beside the standing one. Default 0, the standing production alone. Per entry on a keyed value, and refused at construction on a stream. |
-| `ttl` | `number` | The life of a production, in ms. Default infinity. At the deadline the production is released and the value reads as neither ready nor busy; nothing reloads until a read, which runs the producer. On a `Keyed` it is the life of the entry. On a value with no producer it expires past productions and keeps the standing one. |
+| `ttl` | `number` | The life of a production, or of a keyed entry, in ms. Default infinity. At the deadline the production is released and the value reads as neither ready nor busy; nothing reloads until a read, which runs the producer. On a `Keyed` it is the life of the entry, and a `set` or a `patch` on the entry starts it again. On a value with no producer it is inert. |
 | `args` | `Schema<Args>` | The gate on a keyed value's args. It never decides which entry a key lands on, and the body gets what it returned. Refused at construction on a value with no parameter. |
 | `global` | `boolean` | One cache shared by every caller in the process, outliving every request. |
 | `tags` | `string[] \| ((args: Args) => string[])` | What a [Selections](selections.md) entry matches on, and the only thing that reaches across values. |
-| `throttle` | `number` | A change lands immediately, then at most once per window. What a window collapses depends on what moves the value — a write, a publish, a chunk, a reload. On a stream a read serves what the window last released. On a `Keyed` it holds back starting a newly reached entry, which reports busy meanwhile. |
+| `throttle` | `number` | A change lands immediately, then at most once per window. What a window collapses depends on what moves the value — a write, a patch, a chunk, a reload. On a stream a read serves what the window last released. On a `Keyed` it holds back starting a newly reached entry, which reports busy meanwhile. |
 | `debounce` | `number` | A change waits until the changes stop. Declaring both is a build error. |
 
 ### Supporting types
@@ -110,7 +109,6 @@ Every `Reactive` takes these, whichever overload made it.
 | --- | --- | --- |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | What a `transform` is. Returning a `Failed` refuses the write. |
 | `Store` | `{ get: () => Stored \| undefined \| Promise<Stored \| undefined>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void> }` | Both halves, and there is no way to spell either alone. A restore runs neither gate, so what it cannot read is a miss. |
-| `History<Stored>` | `Iterable<Stored> & AsyncIterable<Stored>` | What `s.history` hands back. Nothing is allocated until one of the two faces is pulled. |
 
 ## Reads
 
@@ -119,20 +117,18 @@ Every `Reactive` takes these, whichever overload made it.
 | `s` | `() => Stored` | Reads the current value. Returns what it has and never awaits, and throws `NotLanded` where none has landed. |
 | `s.peek` | `() => Stored \| undefined` | Reads what is held without joining the flow. Answers `undefined` exactly where `s` throws. |
 | `NotLanded` | `Error & { name: 'NotLanded'; source: object }` | What a read throws where nothing has landed. It carries the value it was thrown for, so a tracked body that meets one re-runs when that value lands. A refusal is a different throw and a different catch. |
-| `s.history` | `(n?: number) => History<Stored>` | A cursor over the productions a value retains. Replays them to depth `n`, bounded by `history`, then goes live from where the replay ended. With no `history` it replays the standing production. An adopting value forwards it to the value it adopted. |
 | `s.then` | `<Result>(onSettled?: (value: Stored) => Result \| PromiseLike<Result>, onFailed?: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Result>` | The settling, as a promise. Resolves when `busy()` goes false, and rejects with what a read would throw. |
 | `s.catch` | `<Result>(onFailed: (error: unknown) => Result \| PromiseLike<Result>) => Promise<Stored \| Result>` | The settling's refusal path, derived from `then`. Fires for a producer that failed with nothing landed, and for nothing else. |
 | `s.finally` | `(onSettled: () => void) => Promise<Stored>` | The settling's end, whichever way it went. What ends is the settling, not the value — a subscriber's copy of a channel settles at its first production and goes on. |
-| `for await (… of s)` | `AsyncIterable<Produced>` | The live cursor face of a read. |
-| `s[Symbol.asyncIterator]` | `() => AsyncIterator<Produced>` | The production in flight from its start, and then what follows it. A chunk is a piece of one value, where the ring holds past ones. |
+| `for await (… of s)` | `AsyncIterable<Produced>` | The live cursor face of a read. On a stream, one turn per chunk. On any other value, the standing value once per turn — a burst collapses to the latest, and an in-place `patch` is a turn of its own. |
+| `s[Symbol.asyncIterator]` | `() => AsyncIterator<Produced>` | The production in flight from its start, and then what follows it. A chunk is a piece of one value, so a stream's cursor sees every chunk; any other value's cursor sees where the value stands. |
 
 ## Writes
 
 | Name | Signature | Description |
 | --- | --- | --- |
-| `s.set` | `(value: Accepted \| Promise<Accepted> \| Reactive<Accepted, unknown, Failures, unknown>) => void \| Failures` | Writes here, gated by `identity`. Takes a settled value, a load, or a `Reactive` it adopts, and hands back only a refusal. Never sent to a subscriber. On an adopting value it reaches the adopted one; on a stream it stands until the next chunk. |
-| `s.publish` | `(value: Accepted \| Promise<Accepted>) => number \| Failures` | Mints a production whatever `identity` says, handing back the sequence number. Sent to every subscriber where a socket or an rpc carries the value, and to its own readers where nothing does. |
-| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutates in place and mints one production for it, replacing the head rather than appending. On a stream it mutates the chunks themselves. |
+| `s.set` | `(value: Accepted \| Promise<Accepted> \| Reactive<Accepted, unknown, Failures, unknown>) => void \| Failures` | Writes here, gated by `identity`. Takes a settled value, a load, or a `Reactive` it adopts, and hands back the refusal a gate refused it with, or nothing. On a subscriber's copy it stands until the next production from the connection; on an adopting value it reaches the adopted one; on a stream it stands until the next chunk. |
+| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutates the value it serves in place, and runs neither `schema` nor `transform`. Where a `GET` serves the value, what it wrote is sent to every subscriber as the writes rather than as the value. On a stream it mutates the chunks themselves. |
 
 ## Probes
 
@@ -147,7 +143,7 @@ A probe never throws and never starts work, and reading one subscribes to that p
 
 ## Triggers
 
-Both are inert on a value with no producer, so neither can discard what an app put there. On a value a socket or an rpc carries, both reach every subscriber's copy.
+Both are inert on a value with no producer, so neither can discard what an app put there. On a value an rpc carries, both reach every subscriber's copy.
 
 | Name | Signature | Description |
 | --- | --- | --- |
@@ -174,6 +170,12 @@ back an async generator also hands back something, so the general form would typ
 holding its generator. And `() => C` is assignable to `(args: A) => C` and not the reverse, so a
 keyed-first reading would swallow the unkeyed form whole. Value last is why a function argument
 never reaches it — a function the app wants to hold goes inside a record, `reactive({ handler })`.
+
+A channel is a use of this one value rather than a kind of it: a `reactive` holding an array that a
+`GET` keeps sending to everyone connected. A message is appended with
+`room.patch((list) => list.push(message))`, the app trims in the same patch, and the latest message
+is `room.at(-1)`. Declaring `by` on it is what lets a `{#for}` over it move one row per message;
+without it the rows are positional, and trimming the front rebuilds every one.
 
 ## See also
 

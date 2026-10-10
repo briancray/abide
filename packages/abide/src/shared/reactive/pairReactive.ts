@@ -1,6 +1,6 @@
 // 32.6 — A `{ get, set }` PAIR AS A `Reactive`, for the one place a pair has to be one: a `bind:` on
 // a component, whose child's prop cell adopts what it is bound to (11.12) and writes through it
-// (11.60). Its value is what `get` answers, recomputed as whatever `get` reads changes; its `set` is
+// (11.59). Its value is what `get` answers, recomputed as whatever `get` reads changes; its `set` is
 // the pair's, and nothing stands here — the value moves when what `get` reads does, as an element's
 // `bind:value={{get, set}}` does.
 //

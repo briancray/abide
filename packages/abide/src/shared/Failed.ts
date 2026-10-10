@@ -1,6 +1,6 @@
 // THE ONE REFUSAL TYPE, in-process and over a wire alike. RULEBOOK 15.1: a refusal is a
 // declared VALUE, not a status code and not a transport concern — so the same object a
-// `transform` returns (4.6) is the one a handler answers with (16.41) and the one a client
+// `transform` returns (4.6) is the one a handler answers with (16.40) and the one a client
 // narrows on (3.1), with nothing converting between three spellings on the way.
 //
 // IT IS AN `Error` AND IT IS NEVER THROWN, which is the pairing that takes the most
@@ -8,6 +8,8 @@
 // so the `Error` base is not there to be thrown — it is there for the stack, for
 // `console` rendering it as a failure rather than as a bag, and so that a `catch` that
 // caught one from somewhere else still finds the shape it expects.
+
+import { FAILURE_STATUS_TEXT } from './FAILURE_STATUS_TEXT.ts'
 
 /**
  * A refusal: a named, status-carrying `Error` that is returned, never thrown.
@@ -88,23 +90,57 @@ export function failed<Name extends string, Data>(
 }
 
 /**
- * A refusal as it crosses a wire: a plain object of the four fields and nothing else.
+ * A refusal as it crosses a wire: a Problem Details object (RFC 9457).
  *
- * 15.1 — whatever else the object carried is dropped. `isFailed` admits another library's error,
- * whose `message` the constructor left unenumerable.
+ * 15.1 — `type` is the refusal's name, or `about:blank` for an undeclared one, whose `title` is then
+ * its status's reason phrase; `detail` is the message, and `data` rides as an extension member.
  */
-export function wireFailure(
-    failure: Failed<string, unknown>,
-): Failed<string, unknown> {
-    return {
-        name: failure.name,
-        status: failure.status,
-        message: failure.message,
-        data: failure.data,
-    } as Failed<string, unknown>
+export type Problem = {
+    type: string
+    title: string
+    status: number
+    detail: string
+    data?: unknown
 }
 
-/** Whether a value is the refusal of that name: `Rpc.isError` and a socket's alike (3.1). */
+/**
+ * The Problem Details a refusal crosses a wire as.
+ *
+ * 15.1 — whatever else the refusal carried is dropped. `isFailed` admits another library's error,
+ * whose `message` the constructor left unenumerable, so the fields are read rather than spread.
+ */
+export function problemOf(failure: Failed<string, unknown>): Problem {
+    const undeclared = failure.name === 'HttpError'
+    const problem: Problem = {
+        type: undeclared ? 'about:blank' : failure.name,
+        title: undeclared
+            ? (FAILURE_STATUS_TEXT[failure.status] ?? failure.name)
+            : failure.name,
+        status: failure.status,
+        detail: failure.message,
+    }
+    if (failure.data !== undefined) problem.data = failure.data
+    return problem
+}
+
+/** Whether a value read off a wire is Problem Details: a `type` and a numeric `status`. */
+export function isProblem(value: unknown): value is Problem {
+    if (value === null || typeof value !== 'object') return false
+    const held = value as { type?: unknown; status?: unknown }
+    return typeof held.type === 'string' && typeof held.status === 'number'
+}
+
+/** The refusal Problem Details names, rebuilt: `about:blank` is an undeclared `HttpError`. */
+export function failedFrom(problem: Problem): Failed<string, unknown> {
+    return failed(
+        problem.type === 'about:blank' ? 'HttpError' : problem.type,
+        problem.status,
+        problem.detail ?? problem.title ?? '',
+        problem.data,
+    )
+}
+
+/** Whether a value is the refusal of that name: `Rpc.isError` and a value's alike (3.1). */
 export function isFailedNamed(error: unknown, name: string): boolean {
     return isFailed(error) && error.name === name
 }

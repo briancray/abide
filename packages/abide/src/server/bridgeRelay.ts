@@ -208,7 +208,7 @@ function pair(request: Request): Response {
     BY_CALLER.set(bridge.caller, bridge)
     BY_TOKEN.set(bridge.token, bridge)
     bridge.frames.push({ type: 'paired', token: bridge.token })
-    // 16.61 — a pairing stays open for as long as the bridge holds it.
+    // 16.57 — a pairing stays open for as long as the bridge holds it.
     raiseTimeout(Number.POSITIVE_INFINITY)
     request.signal.addEventListener('abort', () => dropBridge(bridge))
     wakeWatchers(bridge.caller)

@@ -485,24 +485,17 @@ function derivedUnchanged(): Case {
 }
 
 /**
- * Case: append to a capped log and walk its retained window.
+ * Case: append to a capped array and walk it.
  *
- * WALKING THE RETAINED WINDOW, which is what `s.history()`'s sync face is FOR — 2.5 calls it
- * the snapshot, now, and a template spells it `{#for m of s.history(n)}`. `s()` answers the
- * latest production whatever is retained (9.1), so this is the only shape that reads
- * history at all.
- *
- * IT ITERATES RATHER THAN SPREADING, and the difference is the whole reason the case was
- * rewritten. `[...s.history()]` against `rows.slice()` measured 10.75x and priced almost none
- * of it on abide: JSC spreads an ARRAY in 44 ns and an explicit iterator in 387, so the
- * ratio was a fast path the hand-written arm happens to sit on and the lazy face cannot.
- * A raw array iterator costs 387 where this `Tail` costs 352 — there is nothing of abide's
- * in the number. What both arms do here is walk what is held.
+ * A CHANNEL IS AN ARRAY: an app that keeps the last hundred messages pushes into one with `patch`
+ * and trims it, and a reader walks what is held. Both arms do the same job — push, shift past the
+ * cap, walk — so what is left is the cost of `patch`'s write recording and wake against the bare
+ * array.
  */
-function logAppendAndRead(): Case {
+function appendToCappedArrayAndWalk(): Case {
     const DEPTH = 100
     const rows: number[] = []
-    const room = reactive<number>(undefined, { history: DEPTH - 1 })
+    const room = reactive<number[]>([])
     let at = 0
     let handWalked = 0
     let abideWalked = 0
@@ -515,10 +508,13 @@ function logAppendAndRead(): Case {
         sink = total
     }
     const abide = (): void => {
-        room.publish(at++)
+        room.patch((list) => {
+            list.push(at++)
+            if (list.length > DEPTH) list.shift()
+        })
         let total = 0
         let walked = 0
-        for (const row of room.history()) {
+        for (const row of room()) {
             total += row
             walked += 1
         }
@@ -526,9 +522,9 @@ function logAppendAndRead(): Case {
         sink = total
     }
     return {
-        name: 'append to a capped log and walk it',
+        name: 'append to a capped array and walk it',
         distinguishes:
-            'retention read end to end — an append that must not cost the depth, and a window walked by the consumer that wants it rather than materialised per write',
+            'a channel kept as an array — a patch that must not cost more than the push it records, and the array walked by the consumer that wants it',
         vanilla,
         abide,
         // Both arms walk the same window, or the timings price two different jobs. Run past
@@ -541,116 +537,6 @@ function logAppendAndRead(): Case {
             return {
                 vanilla: { walked: handWalked },
                 abide: { walked: abideWalked },
-            }
-        },
-    }
-}
-
-/**
- * Case: the write half of retention — publishing into a capped ring.
- *
- * THE WRITE HALF OF RETENTION, ON ITS OWN. `append to a capped log and walk it` bundles
- * the read with it, and the read is the larger number — so the one place abide BEATS the
- * hand-written arm was invisible. `shift()` moves every remaining element, so a
- * hand-written cap is linear in the depth on every write; growing to twice the depth and
- * trimming in one bulk move is the same memmove once per `history` writes. 6.2 is the clause
- * and this is the ratio it makes against code somebody actually writes.
- */
-function publishIntoCappedRing(): Case {
-    const DEPTH = 100
-    const rows: number[] = []
-    const room = reactive<number>(undefined, { history: DEPTH - 1 })
-    let handAt = 0
-    let abideAt = 0
-    const vanilla = (): void => {
-        rows.push(handAt++)
-        if (rows.length > DEPTH) rows.shift()
-    }
-    const abide = (): void => {
-        room.publish(abideAt++)
-    }
-    return {
-        name: 'publish into a capped ring',
-        distinguishes:
-            'the write path under retention — a cap maintained by shifting every element against one trimmed in bulk, which is the difference between linear in the depth and amortised constant',
-        vanilla,
-        abide,
-        // Both arms hold the same window afterwards, which is what makes the timings
-        // comparable at all: a cap that retained less would be a cheaper different job.
-        // Read off the timed structures once the arms have run past the cap.
-        work: () => {
-            for (let index = 0; index <= DEPTH; index += 1) {
-                vanilla()
-                abide()
-            }
-            return {
-                vanilla: { retained: rows.length },
-                abide: { retained: [...room.history()].length },
-            }
-        },
-    }
-}
-
-/**
- * Case: a burst of productions taken from a cursor, one turn each.
- *
- * THE CURSOR, PRICED PER TURN. RULEBOOK 5.10 has a cursor deliver every production
- * retention still holds, so the arms are BALANCED — k productions in, k turns out — and
- * what is left is the cost of finding a production by ordinal against finding it by index
- * in an array somebody trimmed themselves.
- *
- * A BURST rather than one at a time, and that is the whole point of the case: one at a
- * time cannot tell a cursor that indexes retention from one that answers with the head,
- * because with one outstanding production those are the same answer. Eight can.
- */
-function cursorBurst(): Case {
-    const BURST = 8
-    const DEPTH = 100
-    const rows: number[] = []
-    let handBase = 0
-    let handCursor = 0
-    let handAt = 0
-    const room = reactive<number>(undefined, { history: DEPTH - 1 })
-    const cursor = room.history(0)[Symbol.asyncIterator]()
-    let abideAt = 0
-    const vanilla = (): void => {
-        for (let index = 0; index < BURST; index += 1) {
-            rows.push(handAt++)
-            if (rows.length > DEPTH) {
-                rows.shift()
-                handBase += 1
-            }
-        }
-        for (let index = 0; index < BURST; index += 1) {
-            if (handCursor < handBase) handCursor = handBase
-            sink = Promise.resolve(rows[handCursor - handBase])
-            handCursor += 1
-        }
-    }
-    const abide = (): void => {
-        for (let index = 0; index < BURST; index += 1) room.publish(abideAt++)
-        // Balanced with the publishes on purpose: a `next` with nothing outstanding
-        // hands back a promise that is never settled, and a batch of those is a
-        // measurement of an allocator rather than of a cursor.
-        for (let index = 0; index < BURST; index += 1) sink = cursor.next()
-    }
-    return {
-        name: `take a burst of ${BURST} from a cursor`,
-        distinguishes:
-            'a cursor over retention: several productions landing between two turns must be several turns, so the arms are balanced and the ratio is the cost of finding one by ordinal against one by index',
-        vanilla,
-        abide,
-        // WHAT EACH ARM RETAINS once it has run past the cap, read off the timed structures. A
-        // take is a promise on both arms, so what it settles to is not a count a synchronous
-        // pass can read — the window the takes index into is.
-        work: () => {
-            for (let index = 0; index <= DEPTH / BURST; index += 1) {
-                vanilla()
-                abide()
-            }
-            return {
-                vanilla: { retained: rows.length },
-                abide: { retained: [...room.history()].length },
             }
         },
     }
@@ -1332,8 +1218,7 @@ function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
  * reading that function's header before touching either: a first attempt at it compared against
  * what a COMPLEXITY CLASS predicts (4x linear, 16x quadratic) and reported the mechanism out as
  * holding, because at any priceable width `watch` construction dominates and the n² term is a
- * minority of the op. The bar has to be set by what the fixed mechanism measures, which is what
- * 6.2 does.
+ * minority of the op. The bar has to be set by what the fixed mechanism measures.
  *
  * THE PER-READER FIGURES in `track`'s own comment are the third record and the widest — 446 ns
  * rising to 3,872 ns against ~60 ns flat, measured directly at n=500 through n=8000, where
@@ -1555,9 +1440,7 @@ export const reactiveCases = (): Case[] => [
     writeEqualObjectStructural(),
     derived(),
     derivedUnchanged(),
-    logAppendAndRead(),
-    publishIntoCappedRing(),
-    cursorBurst(),
+    appendToCappedArrayAndWalk(),
     mountReaders(50),
     fanOut(10),
     fanOut(100),

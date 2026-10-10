@@ -18,7 +18,7 @@ A rung sits in front of the operation, decides, and either calls the next one or
 declared on the handler it guards, so neither can be moved without the other, and there is no
 route table to keep in step with either.
 
-## `Middleware` is one type, in three lanes
+## `Middleware` is one type, in two lanes
 
 ```ts shared
 type Middleware<Ctx, Result> = (
@@ -34,9 +34,8 @@ rung, `next` runs the operation itself.
 | --- | --- | --- | --- |
 | app | `{ request }` | `Response` | pre-routing, on every request |
 | rpc | `{ request, args }` | `Value \| Failures` | on every call to that handler |
-| socket | `SocketEvent` | `void` | on subscribe and on publish |
 
-Three lanes, one type. `Ctx` is a record naming what that lane actually **has** — the app lane
+Two lanes, one type. `Ctx` is a record naming what that lane actually **has** — the app lane
 runs before the route resolves, so it has a request and no arguments; the rpc lane is typed to
 one handler's own arguments.
 
@@ -50,7 +49,11 @@ where a rung that must set a header belongs.
 A rung's refusals join the handler's own in what the caller can narrow, so `rpc.isError(error,
 'NotYours')` reaches a name the rung declared and never the handler.
 
-Read on: [Sockets](keep-a-room-of-callers-in-sync.md)
+A page following a `GET` is a call too. The `GET`'s rungs run once as the subscription opens, and
+a subscription they did not admit is sent no productions (18.8), so the rung that guards the read
+guards the follow.
+
+Read on: [Live updates](keep-a-room-of-callers-in-sync.md)
 
 ## Refusing is returning without calling `next`
 

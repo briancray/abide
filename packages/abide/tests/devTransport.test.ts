@@ -1,6 +1,6 @@
-// WHAT CROSSES THE WORKER UNDER `abide dev`: the app's mux (18.2, 18.17), which the listener holds
+// WHAT CROSSES THE WORKER UNDER `abide dev`: the app's mux (18.1, 18.3), which the listener holds
 // and the worker answers, and a response body, streamed a chunk per read (38.36, 38.37). Spawned for
-// `dev.test.ts`'s reasons, and the client is a spawned bun script for `socket.test.ts`'s: happy-dom's
+// `dev.test.ts`'s reasons, and the client is a spawned bun script for `follow.test.ts`'s: happy-dom's
 // `WebSocket` is not bun's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -32,8 +32,8 @@ export const release = POST(() => {
     open()
 })
 
-// Counts a 64 KB chunk per pull, forever — large, so the socket's own buffer fills in a few — and says how far it got. A \`Response\` of its own (16.37) rather
-// than a generator: a streaming \`reactive\` pumps its body to accumulate it (9.2) whoever reads it,
+// Counts a 64 KB chunk per pull, forever — large, so the socket's own buffer fills in a few — and says how far it got. A \`Response\` of its own (16.36) rather
+// than a generator: a streaming \`reactive\` pumps its body to accumulate it (9.1) whoever reads it,
 // and what 38.37 is about is the body the connection pulls.
 let counted = 0
 export const count = GET(
@@ -95,7 +95,7 @@ test('a GET is followed over the mux under abide dev', async () => {
     expect((frames[0] as { value: string[] }).value).toEqual(['dune', 'emma'])
 }, 20_000)
 
-// 16.11 — THE MUX STANDS UNDER THE MOUNT, which only the worker's configuration knows. THE REVERT:
+// 16.10 — THE MUX STANDS UNDER THE MOUNT, which only the worker's configuration knows. THE REVERT:
 // compare the pathname itself rather than `unmounted`'s in `admitsMux`; the worker says the upgrade
 // is not the mux's, the client never opens, and it prints no frames.
 test('a GET is followed over the mux under abide dev on a sub-path', async () => {
@@ -177,7 +177,7 @@ async function followed(
         'client.ts': `const base = process.argv[2] + process.argv[3]
 const frames: { op: string }[] = []
 const answered = await fetch(base + '/__abide/rpc/library/books')
-const version = Number(answered.headers.get('abide-version'))
+const version = Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, ''))
 const ws = new WebSocket(base.replace('http', 'ws') + '/__abide/socket')
 // A subscription to an address nothing answers is refused as the mux reads it, so the refusal
 // says the follow sent before it has been taken.
@@ -260,7 +260,7 @@ reader.cancel()
     expect(Number(said)).toBeLessThan(64)
 }, 20_000)
 
-// 16.23 UNDER `abide dev` — THE CONNECTION IS THE LISTENER'S, and the worker answering the call has no
+// 16.22 UNDER `abide dev` — THE CONNECTION IS THE LISTENER'S, and the worker answering the call has no
 // server to raise its idle timeout on: it asks the listener to, naming the request by its ask. The
 // listener's own `timeout` is recorded rather than waited out, because bun closes a pending request
 // only at about twice its 10 s idle timeout. THE REVERT: leave `LISTENING.timeout` unset in

@@ -12,10 +12,10 @@ test('an Origin crosses only where it is not the own origin — 36.2', () => {
     )
 })
 
-// 16.14, 18.5, 21.19 — ONE GATE FOR A HANDLER AND A SOCKET: closed to another origin unless
+// 16.13, 18.2, 21.19 — ONE GATE FOR A HANDLER AND A SOCKET: closed to another origin unless
 // `crossOrigin` names it or is `true`, and never closed to the own one. THE REVERT: drop the
 // `crossing !== null` arm; the own origin reads closed to every handler that declared nothing.
-test('closedTo admits the own origin and what crossOrigin names — 16.14, 18.5', () => {
+test('closedTo admits the own origin and what crossOrigin names — 16.13, 18.2', () => {
     expect(closedTo(false, null)).toBe(false)
     expect(closedTo(false, 'http://other.test')).toBe(true)
     expect(closedTo(true, 'http://other.test')).toBe(false)

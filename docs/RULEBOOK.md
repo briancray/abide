@@ -46,10 +46,10 @@ REGISTRY.md because none of them is a name an app author writes.
 | --- | --- |
 | read | A call to `s` or to `s.peek`. |
 | write | A call to `s.set` or to `s.patch`. |
-| gated | A production the `identity` comparison may collapse: one `s.set` or a body mints, and not one `publish` does. |
+| gated | A production the `identity` comparison may collapse: one a write or a body mints, and not a chunk a stream lands. |
 | probe | Any of `s.busy`, `s.ready`, `s.error`. |
 | trigger | `s.refresh` or `s.invalidate`. |
-| producer | A source a value can ask for a value: a body, a `store`, or the connection a subscriber's copy is carried over. A `publish` is not one. |
+| producer | A source a value can ask for a value: a body, a `store`, or the connection a subscriber's copy is carried over. |
 | materialisation | The making of a `Stored` from what a producer has yielded. |
 | production | One materialisation of a `Stored` that a reader may observe. |
 | provisional | A body run that read a value which had not landed. |
@@ -60,7 +60,6 @@ REGISTRY.md because none of them is a name an app author writes.
 | subscriber | A far end of a connection a wired `Reactive` is carried to. |
 | version | The number one production of a `global` value a `GET` serves is named by on the wire. |
 | namespace | The name a log line is written under, and what `DEBUG` selects. |
-| ring | The productions retained under `history`. |
 | entry | One key's slot in a `Keyed`. |
 | scope | The lifetime a value is filed under and dropped with. |
 | adoption | What a `reactive` body does with a `Reactive` it returned. |
@@ -103,29 +102,27 @@ second.
 
 2.4 A failed revalidation MUST NOT cause a read to throw.
 
-2.5 `s.history` MUST replay the retained snapshot and then continue live from where that snapshot
-ended, with no gap and no repeat.
-
-2.6 The argument to `s.history` MUST be replay depth alone, bounded above by what is retained.
-
-2.7 `s[Symbol.asyncIterator]` MUST yield the production in flight from its start, and MUST then
+2.5 `s[Symbol.asyncIterator]` MUST yield the production in flight from its start, and MUST then
 continue live.
 
-2.8 `s.then` MUST resolve with the value where `s.busy` becomes false and 2.2 would not throw.
+2.6 On a value that is not a streaming producer, `s[Symbol.asyncIterator]` MUST hand back the
+standing value once per turn, however many productions or patches landed since the last.
 
-2.9 `s.then` MUST reject with what 2.2 throws, where 2.2 would throw.
+2.7 `s.then` MUST resolve with the value where `s.busy` becomes false and 2.2 would not throw.
 
-2.10 A read MUST throw `NotLanded` where nothing has landed and no producer has failed.
+2.8 `s.then` MUST reject with what 2.2 throws, where 2.2 would throw.
 
-2.11 `s.peek` MUST return `undefined` where 2.10 would throw.
+2.9 A read MUST throw `NotLanded` where nothing has landed and no producer has failed.
 
-2.12 `s.peek` MUST NOT join the flow.
+2.10 `s.peek` MUST return `undefined` where 2.9 would throw.
 
-2.13 A `NotLanded` thrown into a tracked body MUST abort that body.
+2.11 `s.peek` MUST NOT join the flow.
 
-2.14 A body a `NotLanded` aborted MUST re-run when the value it names lands.
+2.12 A `NotLanded` thrown into a tracked body MUST abort that body.
 
-2.15 A `NotLanded` and a `Failed` MUST be distinguishable by brand.
+2.13 A body a `NotLanded` aborted MUST re-run when the value it names lands.
+
+2.14 A `NotLanded` and a `Failed` MUST be distinguishable by brand.
 
 # 3. Probes
 
@@ -189,12 +186,14 @@ escape the write.
 
 4.17 `s.set` MUST store a `Failed` it is given as a value rather than refuse the write.
 
+4.18 `s.set` MUST hand back the refusal a gate refused it with, and nothing where it was accepted.
+
 # 5. Productions and identity
 
 5.1 A reader MUST be woken only when read identity changes.
 
-5.2 A gated production whose identity matches the previous `Stored` MUST NOT be retained, and MUST
-wake no reader.
+5.2 A production whose identity matches the previous `Stored` MUST mint nothing, and MUST wake no
+reader.
 
 5.3 `identity` MUST be discriminated by arity: one parameter is a projection compared by `!==`, and
 two is a comparator answering directly.
@@ -203,15 +202,15 @@ two is a comparator answering directly.
 
 5.5 `structural` MUST answer "not equal" wherever it cannot decide.
 
-5.6 A production MUST be pushed rather than replace the head production.
+5.6 A write MUST mint a production of its own.
 
-5.7 `s.patch` MUST replace the head production rather than append one.
+5.7 `s.patch` MUST mutate the production it serves in place rather than mint one.
 
 5.8 `throttle` and `debounce` MUST cap how often a value changes for a reader.
 
 5.9 A capped window MUST cap the wake, and MUST NOT itself drop a production.
 
-5.10 A cursor MUST deliver every production a window collapsed that retention still holds.
+5.10 A cursor over a streaming producer MUST deliver every chunk a window collapsed.
 
 5.11 An implementation MUST NOT start work a window would discard.
 
@@ -246,52 +245,30 @@ that element.
 5.24 `throttle` and `debounce` MUST hold an `s.refresh` as they hold a production, and a refresh a
 window held MUST start one reload when the window closes.
 
-# 6. Retention
+# 6. Expiry
 
-6.1 Retention of `history` entries MUST be append-only.
+6.1 A `ttl` expiry MUST wake no reader.
 
-6.2 Raising `history` MUST NOT make a write dearer.
+6.2 `ttl` on a value with no producer MUST be inert.
 
-6.3 The unit of `history` MUST be `Stored`.
+6.3 An implementation MUST hold one expiry timer per value declaring `ttl`, armed at the deadline of
+the production it serves.
 
-6.4 A `ttl` expiry MUST wake no reader.
+6.4 A `ttl` expiry timer MUST NOT hold the process open.
 
-6.5 A production past its `ttl` MUST be dropped on the read that follows.
+6.5 A read finding the standing production past its `ttl` MUST NOT serve it.
 
-6.6 An implementation MUST NOT hold a timer per retained production.
+6.6 A read finding the standing production past its `ttl` MUST run the producer.
 
-6.7 A live cursor over `s.history` MUST NOT observe an expiry.
+6.7 A standing production past its `ttl` MUST be released.
 
-6.8 `ttl` on a value with no producer MUST reach its past productions alone.
+6.8 A value whose standing production is past its `ttl` MUST report `s.ready` false.
 
-6.9 An implementation MUST hold one expiry timer per value declaring `ttl`, armed at the nearest deadline that value holds.
+6.9 An expiry MUST NOT report `s.busy` true.
 
-6.10 A `ttl` expiry timer MUST NOT hold the process open.
+6.10 A cursor MUST NOT be handed an `undefined` production.
 
-6.11 A read finding the standing production past its `ttl` MUST NOT serve it.
-
-6.12 A read finding the standing production past its `ttl` MUST run the producer.
-
-6.13 A standing production past its `ttl` MUST be released.
-
-6.14 A value whose standing production is past its `ttl` MUST report `s.ready` false.
-
-6.15 An expiry MUST NOT report `s.busy` true.
-
-6.16 A `history` of 0 MUST retain the standing production alone.
-
-6.17 A streaming producer's production MUST enter the ring when its run closes, as the
-accumulation at close.
-
-6.18 An `undefined` production MUST NOT enter the ring.
-
-6.19 A cursor MUST NOT be handed an `undefined` production.
-
-6.20 A streaming run that failed, or that a trigger replaced before it closed, MUST enter nothing.
-
-6.21 A cursor's replay over a streaming producer MUST end at the last run that closed.
-
-6.22 A streaming producer's `ttl` MUST run from its run's close, and MUST NOT reach the run in
+6.11 A streaming producer's `ttl` MUST run from its run's close, and MUST NOT reach the run in
 flight.
 
 # 7. Triggers
@@ -348,7 +325,7 @@ miss falls back to.
 
 8.5 A restore MUST mint a production without running `schema` or `transform`.
 
-8.6 A restore of a streaming producer MUST seed the ring with the accumulation.
+8.6 A restore of a streaming producer MUST seed its accumulation with what was stored.
 
 8.7 A restored stream MUST report `s.ready` true and `s.busy` false.
 
@@ -378,75 +355,41 @@ the value of that write standing in its place.
 
 8.19 A `Store`'s `get` answering a miss with nothing left to serve MUST land an error on `s.error`.
 
-# 9. History and streams
+# 9. Streams and wired values
 
-9.1 `s.publish` on a wired `Reactive` MUST send the production to every subscriber.
-
-9.2 A streaming producer's `Stored` MUST be the chunks accumulated so far, materialised on the
+9.1 A streaming producer's `Stored` MUST be the chunks accumulated so far, materialised on the
 read that asks for it.
 
-9.3 An implementation MUST NOT accumulate chunks by copying the accumulation per chunk.
+9.2 An implementation MUST NOT accumulate chunks by copying the accumulation per chunk.
 
-9.4 `s.set` on a wired `Reactive` MUST NOT be sent to a subscriber as it lands.
+9.3 `identity` MUST compare against the previous production alone.
 
-9.5 `s.publish` MUST hand back the sequence number it minted, or the `Failed` a `transform` refused
-it with.
+9.4 A production arriving over a connection MUST replace a write standing on the subscriber's copy.
 
-9.6 A publish MUST mint a production whatever `identity` says.
+9.5 A `store` MUST round-trip the latest production.
 
-9.7 `identity` MUST compare against the previous production alone, and MUST NOT scan the ring.
-
-9.8 A `schema` MUST gate what `s.publish` takes.
-
-9.9 A production arriving over a connection MUST replace a write standing on the subscriber's copy.
-
-9.10 `history` MUST be how far back a reconnect resumes, and a cursor older than it MUST be answered
-with the whole ring rather than with a gap.
-
-9.11 A `store` MUST round-trip the latest production, and MUST NOT persist the ring.
-
-9.12 A `transform` and a `schema` MUST run on every publish, the server's own included.
-
-9.13 `s.publish` on a `Reactive` nothing carries MUST reach its own readers alone.
-
-9.14 A production arriving over a connection MUST carry the sequence number its owner minted, and the
-subscriber MUST NOT renumber it.
-
-9.15 `s.history` on an adopting `Reactive` MUST forward to the adopted `Reactive`.
-
-9.16 A `Reactive` a `socket` carries MUST be process-wide.
-
-9.17 An implementation MUST NOT provide a revoke or a clear over what a `Reactive` retains.
-
-9.18 A ring MUST NOT be where a removal is enforced.
-
-9.19 A `Reactive`'s history epoch MUST be minted when that `Reactive` is constructed, and MUST NOT
-change while it lives.
-
-9.20 A `reactive` body declared as an async generator function MUST be a streaming producer from
+9.6 A `reactive` body declared as an async generator function MUST be a streaming producer from
 construction, and a body whose run hands back an async generator, or a promise resolving to one,
 MUST be one from that run on.
 
-9.21 `s.refresh` on a streaming producer MUST serve the held accumulation until the new stream's
+9.7 `s.refresh` on a streaming producer MUST serve the held accumulation until the new stream's
 first chunk, and that stream's accumulation from then on.
 
-9.22 A `schema` and a `transform` on a streaming producer MUST run on the accumulation a read
+9.8 A `schema` and a `transform` on a streaming producer MUST run on the accumulation a read
 materialises, at most once per chunk the accumulation holds.
 
-9.23 A streaming producer MUST wake its readers at most once per task.
+9.9 A streaming producer MUST wake its readers at most once per task.
 
-9.24 `flushSync` MUST deliver the wakes a streaming producer is holding.
+9.10 `flushSync` MUST deliver the wakes a streaming producer is holding.
 
-9.25 A write to a streaming producer MUST stand until its accumulation next changes, and an adoption
-made by one (11.62) MUST end with it.
+9.11 A write to a streaming producer MUST stand until its accumulation next changes, and an adoption
+made by one (11.61) MUST end with it.
 
-9.26 A write to a streaming producer MUST NOT move a cursor over it.
+9.12 A write to a streaming producer MUST NOT move a cursor over it.
 
-9.27 `s.patch` on a streaming producer MUST mutate its accumulation in place.
+9.13 `s.patch` on a streaming producer MUST mutate its accumulation in place.
 
-9.28 A keyed `reactive`'s `history` MUST be retained per entry.
-
-9.29 A subscriber's copy of a wired `Reactive` MUST report `s.busy` true until the first production
+9.14 A subscriber's copy of a wired `Reactive` MUST report `s.busy` true until the first production
 arrives.
 
 # 10. Sharing
@@ -556,83 +499,81 @@ both sides, and an absent `Args` MUST be keyed as `{}` where the parameter write
 11.38 Coalescing of a `reactive` load MUST be within a scope: two reads of one key in one scope share
 one load, and two scopes load twice.
 
-11.39 `history` MUST be accepted by every `reactive` form.
-
-11.40 A reader detaching from a `global` streaming `reactive` MUST NOT cancel the producer for the
+11.39 A reader detaching from a `global` streaming `reactive` MUST NOT cancel the producer for the
 readers that remain.
 
-11.41 `args` on a `reactive` MUST check `Args`.
+11.40 `args` on a `reactive` MUST check `Args`.
 
-11.42 `args` MUST be unspellable on the unkeyed `reactive` overload, and spelling it MUST be a compile
+11.41 `args` MUST be unspellable on the unkeyed `reactive` overload, and spelling it MUST be a compile
 error naming the overload.
 
-11.43 `store` on a `Keyed` MUST accept a function of the `Args`.
+11.42 `store` on a `Keyed` MUST accept a function of the `Args`.
 
-11.44 `tags` MUST be what a `Selection` matches on, and MUST be the only selector reaching across
+11.43 `tags` MUST be what a `Selection` matches on, and MUST be the only selector reaching across
 values.
 
-11.45 The function form of `tags` MUST receive the value's `Args`.
+11.44 The function form of `tags` MUST receive the value's `Args`.
 
-11.46 A `Keyed`'s `ttl` MUST be the life of the entry, and the ring MUST be discarded with it.
+11.45 A `Keyed`'s `ttl` MUST be the life of the entry.
 
-11.47 A `reactive` MUST accept a `schema`, gating what its body produced.
+11.46 A `reactive` MUST accept a `schema`, gating what its body produced.
 
-11.48 An adopting `reactive` MUST run its own `schema` on the way in, as 11.14 has it run its
+11.47 An adopting `reactive` MUST run its own `schema` on the way in, as 11.14 has it run its
 `transform`.
 
-11.49 A `Keyed` MUST hold one expiry timer, armed at its oldest entry.
+11.48 A `Keyed` MUST hold one expiry timer, armed at its oldest entry.
 
-11.50 An entry MUST take the newest position on every production.
+11.49 An entry MUST take the newest position on every production and every `s.patch`.
 
-11.51 Every probe MUST forward from the adopted `Reactive` to the adopting one.
+11.50 Every probe MUST forward from the adopted `Reactive` to the adopting one.
 
-11.52 Every trigger on an adopting `Reactive` MUST reach the adopted one.
+11.51 Every trigger on an adopting `Reactive` MUST reach the adopted one.
 
-11.53 A provisional run MUST mint no production.
+11.52 A provisional run MUST mint no production.
 
-11.54 A reader joining a `global` `reactive`'s stream after it began MUST NOT be answered with a
+11.53 A reader joining a `global` `reactive`'s stream after it began MUST NOT be answered with a
 refusal.
 
-11.55 A `reactive` MUST NOT report `s.ready` before its body has run for the value being probed.
+11.54 A `reactive` MUST NOT report `s.ready` before its body has run for the value being probed.
 
-11.56 A probe over a key a `Keyed` has not computed MUST allocate no entry.
+11.55 A probe over a key a `Keyed` has not computed MUST allocate no entry.
 
-11.57 An implementation MUST NOT warn where two `Args` keys differ only in the case of a value.
+11.56 An implementation MUST NOT warn where two `Args` keys differ only in the case of a value.
 
-11.58 An unkeyed `reactive` MUST NOT recompute before a read or an `Effect` asks for its value.
+11.57 An unkeyed `reactive` MUST NOT recompute before a read or an `Effect` asks for its value.
 
-11.59 An unkeyed `reactive` MUST report `s.ready` only where every value its body read reports it.
+11.58 An unkeyed `reactive` MUST report `s.ready` only where every value its body read reports it.
 
-11.60 `s.set`, `s.publish` and `s.patch` on an adopting `Reactive`, given anything but a `Reactive`, MUST
-reach the adopted `Reactive`.
+11.59 `s.set` and `s.patch` on an adopting `Reactive`, given anything but a `Reactive`, MUST reach the
+adopted `Reactive`.
 
-11.61 `args` spelled on a `reactive` whose body declares no parameter MUST refuse at construction.
+11.60 `args` spelled on a `reactive` whose body declares no parameter MUST refuse at construction.
 
-11.62 `s.set` given a `Reactive` MUST adopt it per 11.12, and MUST NOT store it as a value — on a
-streaming producer, as a write that 9.15 and 11.60 do not reach through.
+11.61 `s.set` given a `Reactive`, and `reactive` opened on one, MUST adopt it per 11.12, and MUST NOT
+store it as a value — on a streaming producer, as a write that 11.59 does not reach through.
 
-11.63 A body answering `undefined` MUST land `undefined`.
+11.62 A body answering `undefined` MUST land `undefined`.
 
-11.64 A body a `NotLanded` aborted that something probes MUST re-run in the turn that lands the
+11.63 A body a `NotLanded` aborted that something probes MUST re-run in the turn that lands the
 value it named.
 
-11.65 Reaching a `Keyed` with an `Args` member 11.24 cannot write — anything outside `JsonValue`
+11.64 Reaching a `Keyed` with an `Args` member 11.24 cannot write — anything outside `JsonValue`
 but a `Date`, or a number that is not finite — MUST throw, naming the path to the member.
 
-11.66 An adoption that would close a cycle of adopting `Reactive`s MUST be refused where it forms,
+11.65 An adoption that would close a cycle of adopting `Reactive`s MUST be refused where it forms,
 naming the cycle.
 
-11.67 `s.set` MUST throw 11.66's refusal, and a body whose answer 11.66 refuses MUST fail with it.
+11.66 `s.set` MUST throw 11.65's refusal, and a body whose answer 11.65 refuses MUST fail with it.
 
-11.68 A `reactive` without `global` MUST be built afresh in each request that reaches it, from its
+11.67 A `reactive` without `global` MUST be built afresh in each request that reaches it, from its
 declaration and never from what a write outside every request left.
 
-11.69 A keyed value's body MUST be handed what its `args` gate returned.
+11.68 A keyed value's body MUST be handed what its `args` gate returned.
 
-11.70 A `Keyed` entry whose load is in flight MUST NOT be evicted by its `ttl`, and its life MUST
+11.69 A `Keyed` entry whose load is in flight MUST NOT be evicted by its `ttl`, and its life MUST
 start again when the load ends.
 
-11.71 `s.set` MUST take only a `Reactive` whose `Failures` are this value's.
+11.70 `s.set` MUST take only a `Reactive` whose `Failures` are this value's.
 
 # 12. Effects
 
@@ -710,6 +651,17 @@ entry of a `global` `Keyed` it matches.
 
 13.14 A bare `refresh` MUST NOT re-run a synchronous derivation, which MUST recompute from the
 load it reads.
+
+13.15 On a server, a bare `invalidate` or `refresh`, or one over a set of `tags`, MUST also send the
+same trigger to every copy a browser follows over the mux that the selection matches by the `tags`
+its build copied, whether or not the server holds a value it matches, and MUST NOT send it to a copy
+fed from a value the server holds.
+
+13.16 A bare `refresh`, and `refresh` over a set of `tags`, MUST invalidate, and MUST NOT reload,
+every value a mutation's `declare` built.
+
+13.17 A bare `invalidate` or `refresh`, or one over a set of `tags`, MUST NOT invalidate a value a
+mutation's `declare` built while its write is in flight.
 
 # 14. Tracking
 
@@ -808,9 +760,13 @@ MUST run its body again for the next reach rather than serve that answer.
 15.20 A refusal below status 500 MUST be held for the next reach as a production is, until its
 `ttl` ends.
 
+15.21 A refusal MUST cross a wire as Problem Details (RFC 9457) under `application/problem+json`: its
+name as `type`, or `about:blank` titled by its status's reason phrase where it was not declared, its
+message as `detail`, and its data as a `data` member.
+
 # 16. Handlers and transports
 
-16.1 A handler MUST be a `reactive`, or a plain function.
+16.1 A handler MUST be a `reactive`, a plain function, or a value.
 
 16.2 `GET`, `POST`, `PUT`, `PATCH` and `DELETE` MUST give a handler an address over http, mounted by
 file path and export name.
@@ -822,173 +778,163 @@ file path and export name.
 16.5 Which arm `GET` takes MUST be read off a brand the factory stamped, and MUST NOT be inferred
 from the shape.
 
-16.6 `GET` over a plain function MUST behave as `GET` over a `reactive` of that function.
+16.6 `GET` over a plain function or a value MUST behave as `GET` over a `reactive` of it, built with
+the options `GET` was handed; a `reactive` or a `Keyed` handed in MUST take the address's options
+alone.
 
-16.7 A `reactive` handed to a mutation MUST have its `ttl` default to 0 unless it declared one.
+16.7 A mutation over a plain function or a value MUST have its value's `ttl` default to 0 unless its
+options declare one.
 
-16.8 A mutation over a `Reactive` with no producer MUST publish into it, and declaring that handler
-MUST be the authorisation for it.
-
-16.9 `Failures` on an `Rpc` MUST be the union of what the handler declared, what its rungs
+16.8 `Failures` on an `Rpc` MUST be the union of what the handler declared, what its rungs
 declared, and the undeclared `Failed` named `HttpError` per 17.4, with no data, which the transport
 may answer any call with.
 
-16.10 `rpc.url` MUST take the `Args` on a `GET` or a `DELETE`, and MUST take none on a mutation.
+16.9 `rpc.url` MUST take the `Args` on a `GET` or a `DELETE`, and MUST take none on a mutation.
 
-16.11 `rpc.url` MUST resolve a mount-relative address at run time, and the build MUST NOT bake an
+16.10 `rpc.url` MUST resolve a mount-relative address at run time, and the build MUST NOT bake an
 absolute one.
 
-16.12 A `Middleware` rung MUST run on every call, in process as much as over the wire.
+16.11 A `Middleware` rung MUST run on every call, in process as much as over the wire.
 
-16.13 The rungs in registration order, the `ctx.args()` coerce-then-validate, and `timeout` MUST run
+16.12 The rungs in registration order, the `ctx.args()` coerce-then-validate, and `timeout` MUST run
 on every call.
 
-16.14 The `Origin` gate on a mutation, `maxBodySize`, the `crossOrigin` preflight, the framing, the
+16.13 The `Origin` gate on a mutation, `maxBodySize`, the `crossOrigin` preflight, the framing, the
 `cache-control`, a status written through `response` and the seed buffer write MUST be wire-only.
 
-16.15 `Middleware` rungs MUST be composed once at route-table construction, and MUST NOT be folded per call.
+16.14 `Middleware` rungs MUST be composed once at route-table construction, and MUST NOT be folded per call.
 
-16.16 A composed `Middleware` chain MUST capture the rung and the next link, and MUST NOT capture anything
+16.15 A composed `Middleware` chain MUST capture the rung and the next link, and MUST NOT capture anything
 per-request.
 
-16.17 A `Middleware` rung MUST short-circuit by returning what the handler would have returned.
+16.16 A `Middleware` rung MUST short-circuit by returning what the handler would have returned.
 
-16.18 `ctx.args()` MUST parse on first call and cache for the request.
+16.17 `ctx.args()` MUST parse on first call and cache for the request.
 
-16.19 `ctx.args()` MUST hand back `Args` coerced and validated against the `args` the value
+16.18 `ctx.args()` MUST hand back `Args` coerced and validated against the `args` the value
 declared.
 
-16.20 Validation MUST be lazy, on that first `ctx.args()` call.
+16.19 Validation MUST be lazy, on that first `ctx.args()` call.
 
-16.21 A body that will not parse as `Args` MUST be answered 400.
+16.20 A body that will not parse as `Args` MUST be answered 400.
 
-16.22 A throw from a `Middleware` rung MUST escape the whole onion rather than unwind through it.
+16.21 A throw from a `Middleware` rung MUST escape the whole onion rather than unwind through it.
 
-16.23 `timeout` MUST raise the request's idle timeout, and MUST only raise it.
+16.22 `timeout` MUST raise the request's idle timeout, and MUST only raise it.
 
-16.24 A request's `timeout` floor MUST be the maximum over every handler that ran in it.
+16.23 A request's `timeout` floor MUST be the maximum over every handler that ran in it.
 
-16.25 `crossOrigin` MUST default to false, and where it is declared abide MUST answer the `OPTIONS`
+16.24 `crossOrigin` MUST default to false, and where it is declared abide MUST answer the `OPTIONS`
 preflight itself.
 
-16.26 A handler MUST be request-bound where its rungs or its body read the request scope, and
+16.25 A handler MUST be request-bound where its rungs or its body read the request scope, and
 calling one from a scope that has none MUST be a build error, per 11.37.
 
-16.27 Shape MUST belong to the `Reactive` and MUST NOT be declared at the transport; a transport MUST
+16.26 Shape MUST belong to the `Reactive` and MUST NOT be declared at the transport; a transport MUST
 read it.
 
-16.28 A `schema` MUST run where its `Reactive` lives.
+16.27 A `schema` MUST run where its `Reactive` lives.
 
-16.29 A browser MUST receive a generated `Rpc` wrapper carrying the method, the mount-relative address and
+16.28 A browser MUST receive a generated `Rpc` wrapper carrying the method, the mount-relative address and
 the description, and MUST NOT receive the server module.
 
-16.30 Importing a name from `#server` that is not a handler MUST be a compile error from the client
+16.29 Importing a name from `#server` that is not a handler MUST be a compile error from the client
 graph, and MUST NOT be a silent stub.
 
-16.31 An `Rpc` returning a raw `Value` MUST transport as `application/json`.
+16.30 An `Rpc` returning a raw `Value` MUST transport as `application/json`.
 
-16.32 An `Rpc` returning `undefined` MUST answer 204 where no status was written through
+16.31 An `Rpc` returning `undefined` MUST answer 204 where no status was written through
 `response`.
 
-16.33 An `Rpc` returning an async generator MUST stream in the framing `Accept` names, and MUST
+16.32 An `Rpc` returning an async generator MUST stream in the framing `Accept` names, and MUST
 default to the first framing its chunk type admits.
 
-16.34 The seed buffer MUST hold an `Rpc`'s transcript in the chunk type's default framing,
+16.33 The seed buffer MUST hold an `Rpc`'s transcript in the chunk type's default framing,
 whichever framing the caller asked for.
 
-16.35 An `Rpc` returning a binary MUST transport as `application/octet-stream`, or as a `Blob`'s own
+16.34 An `Rpc` returning a binary MUST transport as `application/octet-stream`, or as a `Blob`'s own
 type where it has one.
 
-16.36 A returned `Blob` MUST be range-aware: abide MUST read `Range`, honour `If-Range` against the
+16.35 A returned `Blob` MUST be range-aware: abide MUST read `Range`, honour `If-Range` against the
 ETag it derives, and answer 206, 416 and 304 as the protocol requires.
 
-16.37 A handler MAY return a `Response`, and an in-process caller MUST receive it unconverted.
+16.36 A handler MAY return a `Response`, and an in-process caller MUST receive it unconverted.
 
-16.38 Where a handler returns a `Response`, `clients.mcp` and `clients.cli` MUST default to false.
+16.37 Where a handler returns a `Response`, `clients.mcp` and `clients.cli` MUST default to false.
 
-16.39 A mutation MUST answer a request preferring `text/html` as a navigation: a returned
+16.38 A mutation MUST answer a request preferring `text/html` as a navigation: a returned
 `redirect` passes through, a returned value becomes 303 back to the referrer, and a failure renders
 `error.abide` at its own status.
 
-16.40 A handler whose value carries a `Reactive` below its top level MUST be a compile error naming
+16.39 A handler whose value carries a `Reactive` below its top level MUST be a compile error naming
 the handler and the path to it.
 
-16.41 A `Failed` escaping a handler MUST be answered at its own `status`.
+16.40 A `Failed` escaping a handler MUST be answered at its own `status`.
 
-16.42 A throw that is not a `Failed` MUST be answered 500.
+16.41 A throw that is not a `Failed` MUST be answered 500.
 
-16.43 `rpc.raw` MUST issue the call the `Rpc` issues, differing only in handing back the
+16.42 `rpc.raw` MUST issue the call the `Rpc` issues, differing only in handing back the
 `Response`. On a server it MUST be answered in process by the `App` answering the request it is made
 in, and by the `App` built last only outside every request, until that `App` stops, after which
 such a call MUST NOT reach it.
 
-16.44 An `Rpc` call MUST evaluate its `Args` at the call, and MUST NOT re-evaluate them.
+16.43 An `Rpc` call MUST evaluate its `Args` at the call, and MUST NOT re-evaluate them.
 
-16.45 A jsonl answer MUST write one JSON value per line, per pull.
+16.44 A jsonl answer MUST write one JSON value per line, per pull, typed `application/x-ndjson` where
+the reader asks for that type and `application/jsonl` otherwise.
 
-16.46 An sse answer MUST frame each value as `data: <json>` followed by a blank line, with
+16.45 An sse answer MUST frame each value as `data: <json>` followed by a blank line, with
 `text/event-stream`, `no-cache` and `X-Accel-Buffering: no`.
 
-16.47 A stream of value chunks MUST admit jsonl and then sse, and a stream of binary chunks MUST
+16.46 A stream of value chunks MUST admit jsonl and then sse, and a stream of binary chunks MUST
 admit `application/octet-stream` alone.
 
-16.48 Where no handler fixed the framing, the chunk type MUST be read from the first chunk
+16.47 Where no handler fixed the framing, the chunk type MUST be read from the first chunk
 produced.
 
-16.49 An `Rpc` over a `Reactive` declaring `history` MUST frame each production with the sequence
-number and the epoch 18.10 and 18.11 mint where the reader asks for jsonl or sse over JSON, on the
-wire and in the seed buffer alike, and MUST answer a reader asking for JSON the standing production.
-
-16.50 An sse answer over a `Reactive` declaring `history` MUST carry each production's sequence
-number and epoch as `id: <seq>:<epoch>`, and a moved epoch as one `event: reset` whose data is the
-ring.
-
-16.51 `Last-Event-ID` MUST be read as the sequence number and epoch a reconnect carries, per 18.13,
-and one naming no epoch MUST be compared as a moved epoch.
-
-16.52 A call's `signal` MUST end the load the call reached only where every call that reached that
+16.48 A call's `signal` MUST end the load the call reached only where every call that reached that
 load passed a `signal`, and every one of those has aborted.
 
-16.53 A load ended under 16.52 MUST keep serving what its value held, MUST report `s.busy` false,
+16.49 A load ended under 16.48 MUST keep serving what its value held, MUST report `s.busy` false,
 MUST refuse with `aborted` at status 499, and MUST abort the request carrying it where one does.
 
-16.54 A `HEAD` MUST be answered by the `GET` handler mounted at its address.
+16.50 A `HEAD` MUST be answered by the `GET` handler mounted at its address.
 
-16.55 A `HEAD` MUST NOT take from the seed buffer.
+16.51 A `HEAD` MUST NOT take from the seed buffer.
 
-16.56 An `Rpc` answer with no body — a 204, or a status `response` writes with nothing returned, a
+16.52 An `Rpc` answer with no body — a 204, or a status `response` writes with nothing returned, a
 `redirect` included — MUST NOT carry `content-type`.
 
-16.57 The 303 16.39 answers MUST go to the mount's root where the referrer is absent or is not of
+16.53 The 303 16.38 answers MUST go to the mount's root where the referrer is absent or is not of
 `APP_URL`'s origin, per 36.2.
 
-16.58 `maxBodySize` and `ABIDE_MAX_REQUEST_BODY_SIZE` MUST default to no ceiling.
+16.54 `maxBodySize` and `ABIDE_MAX_REQUEST_BODY_SIZE` MUST default to no ceiling.
 
-16.59 A mutation's body over the ceiling `maxBodySize` or `ABIDE_MAX_REQUEST_BODY_SIZE` sets MUST
+16.55 A mutation's body over the ceiling `maxBodySize` or `ABIDE_MAX_REQUEST_BODY_SIZE` sets MUST
 be refused 413, whether its length was declared or streamed.
 
-16.60 Where neither `timeout` nor `ABIDE_RPC_TIMEOUT` is set, a call MUST NOT raise the request's
+16.56 Where neither `timeout` nor `ABIDE_RPC_TIMEOUT` is set, a call MUST NOT raise the request's
 idle timeout.
 
-16.61 A `timeout` of `Infinity` MUST leave the request's idle timeout off.
+16.57 A `timeout` of `Infinity` MUST leave the request's idle timeout off.
 
-16.62 Where a handler names no `timeout`, `ABIDE_RPC_TIMEOUT` MUST be its `timeout`.
+16.58 Where a handler names no `timeout`, `ABIDE_RPC_TIMEOUT` MUST be its `timeout`.
 
-16.63 A load that goes `timeout` milliseconds without settling, or without a stream's next chunk,
+16.59 A load that goes `timeout` milliseconds without settling, or without a stream's next chunk,
 MUST be ended and MUST refuse with `refuse(504)`.
 
-16.64 A load ended under 16.63 MUST keep serving what its value held, a stream's chunks so far
+16.60 A load ended under 16.59 MUST keep serving what its value held, a stream's chunks so far
 included, and MUST report `s.busy` false.
 
-16.65 A call joining a load MUST NOT extend that load's `timeout`.
+16.61 A call joining a load MUST NOT extend that load's `timeout`.
 
-16.66 A call reaching a value whose last load ended under 16.52 MUST start a new load, under the `signal`
+16.62 A call reaching a value whose last load ended under 16.48 MUST start a new load, under the `signal`
 that call passed.
 
-16.67 A throw answered once its request's signal has aborted — a handler's, a page render's, or a
-`SocketEvent` rung's — MUST answer `aborted` at 499, and MUST NOT report the throw as unexpected.
+16.63 A throw answered once its request's signal has aborted — a handler's or a page render's — MUST
+answer `aborted` at 499, and MUST NOT report the throw as unexpected.
 
-16.68 An `Rpc` over a plain function MUST NOT run that function before the first call reaches it.
+16.64 An `Rpc` over a plain function MUST NOT run that function before the first call reaches it.
 
 # 17. Response helpers
 
@@ -1020,147 +966,133 @@ serialized as a bare return is.
 17.10 `json` given `undefined` MUST answer `null` at the status written through `response`, and MUST
 NOT answer 204.
 
-# 18. Sockets
+# 18. Following a `GET`
 
-18.1 A `Socket` called with `Args` MUST hand back the same `Reactive` the `Keyed` it wraps hands back
+18.1 Every `GET` a page follows MUST be carried over a single web socket mux.
+
+18.2 A subscription over the mux from another origin MUST be refused unless the handler's
+`crossOrigin` admits that origin.
+
+18.3 A client reading a `GET` MUST be subscribed over the socket mux to that handler's productions
 for those `Args`.
 
-18.2 Every `socket` MUST be carried over a single web socket mux.
+18.4 A subscriber's copy of a wired `Reactive` MUST carry what that `Reactive` declares of `by` as a
+property name, `tags` as a list of names, and `identity` as `structural`.
 
-18.3 An upgrade MUST pass the `socket` lane's `middleware`.
+18.5 A `GET` answered from a `global` value MUST carry the version of the production it answered
+with as its `etag`.
 
-18.4 A `SocketEvent` rung MUST refuse by throwing.
-
-18.5 `crossOrigin` on a `socket` MUST be closed unless declared.
-
-18.6 `clientPublish` MUST default to false.
-
-18.7 `clientPublish` MUST gate this transport alone.
-
-18.8 A `transform` MUST still run on a publish `clientPublish` admits.
-
-18.9 `SocketOptions` MUST carry no schema, per 16.27.
-
-18.10 Every production of a wired `Reactive` MUST carry a sequence number, monotonic per `Reactive` and
-minted with the production.
-
-18.11 A wired `Reactive` MUST carry the epoch 9.19 mints, and an implementation MUST compare epochs for
-equality rather than for order.
-
-18.12 The sequence number and the epoch MUST be internal, and an app MUST NOT write either.
-
-18.13 A reconnect to a wired `Reactive` MUST carry the last sequence number rendered and compare epochs.
-
-18.14 A moved epoch MUST deliver the ring marked as a reset.
-
-18.15 A block receiving a reset MUST clear its accumulated rows and repaint from the ring.
-
-18.16 The sequence number MUST be the default key of a `{#for}` block over a cursor of a wired
-`Reactive`.
-
-18.17 A client reading a `GET` MUST be subscribed over the socket mux to that handler's productions
-for those `Args`.
-
-18.18 `socket` MUST refuse a `Reactive` built without `global`.
-
-18.19 A subscriber's copy of a wired `Reactive` MUST carry what that `Reactive` declares of `by` as a
-property name, `tags` as a list of names, `history`, and `identity` as `structural`.
-
-18.20 A `GET` answered from a `global` value that declares no `middleware` MUST carry the version of
-the production it answered with in `abide-version`.
-
-18.21 A subscription to a `GET` MUST be sent the value standing where the version it names is not
+18.6 A subscription to a `GET` MUST be sent the value standing where the version it names is not
 that value's version, and MUST NOT be sent it where it is.
 
-18.22 A version MUST name one production or one `s.patch` of one value, and no other production or
+18.7 A version MUST name one production or one `s.patch` of one value, and no other production or
 patch in this process or in any earlier one.
 
-18.23 A production MUST NOT be sent to a subscription to a `GET` that declares `middleware`.
+18.8 A subscription to a `GET` that declares `middleware` MUST run that `middleware` once as it opens,
+in the request it opens in, and MUST be sent productions only where the `middleware` admitted it.
 
-18.24 A client subscribing to a `GET` MUST name the version the answer it holds carried.
+18.9 A client subscribing to a `GET` MUST name the version the answer it holds carried.
 
-18.25 A subscriber's copy of a `GET` MUST take every value sent to it.
+18.10 A subscriber's copy of a `GET` MUST take every value sent to it.
 
-18.26 An `s.patch` of a value a `GET` serves MUST be sent to a subscription standing at the version it
-was made over as what it wrote, and MUST NOT be sent as the value.
+18.11 An `s.patch` of a value a `GET` serves MUST be sent to a subscription standing at the version it
+was made over as what it wrote, as JSON Patch (RFC 6902), and MUST NOT be sent as the value.
 
-18.27 A subscriber's copy of a `GET` sent what a patch wrote over a version it does not hold MUST read
+18.12 A subscriber's copy of a `GET` sent what a patch wrote over a version it does not hold MUST read
 the value again.
 
-18.28 An `s.patch` whose writes cannot be sent as data MUST be sent as the value.
+18.13 An `s.patch` whose writes cannot be sent as data MUST be sent as the value.
 
-18.29 A subscriber's copy of a `GET` MUST go stale when the `max-age` its answer carried runs out.
+18.14 A subscriber's copy of a `GET` MUST go stale when the `max-age` its answer carried runs out.
 
-18.30 The build MUST warn where a `GET`'s `Reactive` declares `by`, `tags` or `history` by a value
-that is not a function and whose type is not the one 18.19 carries.
+18.15 The build MUST warn where a `GET`'s `Reactive` declares `by` or `tags` by a value that is not a
+function and whose type is not the one 18.4 carries.
 
-18.31 Every frame on one connection to the socket mux MUST be answered in one request scope, whose
+18.16 Every frame on one connection to the socket mux MUST be answered in one request scope, whose
 `request` is the upgrade's.
 
-18.32 A connection's request scope MUST be torn down when the connection closes.
+18.17 A connection's request scope MUST be torn down when the connection closes.
 
-18.33 The signal of a connection's `request` MUST abort when the connection closes.
+18.18 The signal of a connection's `request` MUST abort when the connection closes.
+
+18.19 A `GET` 18.5 versions MUST answer `304 Not Modified`, with no body, where its `If-None-Match`
+names the version standing.
+
+18.20 A `GET` 18.5 versions MUST answer a reader preferring `text/event-stream` with a follow of the
+value as server-sent events: each frame 18.6 through 18.13 would send it, its op as the `event`, its
+version as the `id` and its value or JSON Patch as the `data`, from the version `Last-Event-ID`
+names.
+
+18.21 A subscriber's copy of a `GET` written to since it last took what the server sent MUST read the
+value again rather than apply what a patch wrote, as 18.12 has it for a version it does not hold.
+
+18.22 A `GET` answered with a production its `global` value no longer stands at MUST carry no version.
+
+18.23 A `GET` answered with a binary MUST carry no version.
+
+18.24 A client MUST NOT subscribe to a `GET` whose answer was a binary or a refusal.
+
+18.25 A browser's connection to the socket mux MUST be opened again, in every tab, on the
+`abide-principal` header 26.24 has an answer carry.
 
 # 19. Mount paths and schemas
 
-19.1 A handler declared with `socket` MUST be mounted as 16.2 mounts one declared over http.
+19.1 A mount path MUST be owned by exactly one handler, and a collision MUST be a build error
+naming both files that declared a `GET`, `POST`, `PUT`, `PATCH` or `DELETE` there.
 
-19.2 A mount path MUST be owned by exactly one handler, and a collision MUST be a build error
-naming both files that declared a `GET` or a `socket` there.
+19.2 A `Schema` MUST return what it accepts.
 
-19.3 A `Schema` MUST return what it accepts.
+19.3 An implementation MUST NOT accept a predicate as a `Schema`.
 
-19.4 An implementation MUST NOT accept a predicate as a `Schema`.
+19.4 The plain-function `Schema` form MUST throw what it refuses, and that throw MUST be caught where
+the schema runs and become the `''` entry of `Issues<T>`, or the whole of it per 19.21.
 
-19.5 The plain-function `Schema` form MUST throw what it refuses, and that throw MUST be caught where
-the schema runs and become the `''` entry of `Issues<T>`, or the whole of it per 19.22.
+19.5 `Paths<T>` MUST be dot-joined, MUST be depth-limited, and MUST widen to `string` past the limit.
 
-19.6 `Paths<T>` MUST be dot-joined, MUST be depth-limited, and MUST widen to `string` past the limit.
+19.6 Coercion MUST belong to the pipeline, and MUST NOT be asked of a `Schema`.
 
-19.7 Coercion MUST belong to the pipeline, and MUST NOT be asked of a `Schema`.
-
-19.8 A `GET` or `DELETE`'s text args MUST be coerced from the type the `JsonSchema` declares, before
+19.7 A `GET` or `DELETE`'s text args MUST be coerced from the type the `JsonSchema` declares, before
 validation.
 
-19.9 Coercion MUST happen at the `ctx.args()` that first asks, and every rung after it MUST see the
+19.8 Coercion MUST happen at the `ctx.args()` that first asks, and every rung after it MUST see the
 coerced value.
 
-19.10 Where no `schema` is given it MUST be derived from the type annotation and the argument
+19.9 Where no `schema` is given it MUST be derived from the type annotation and the argument
 defaults.
 
-19.11 A default MUST make a member optional, and a defaulted parameter MUST make `Args` itself
+19.10 A default MUST make a member optional, and a defaulted parameter MUST make `Args` itself
 optional.
 
-19.12 Where inference fails the compiler MUST read rather than refuse the file, and the derived
+19.11 Where inference fails the compiler MUST read rather than refuse the file, and the derived
 `Schema` MUST widen.
 
-19.13 A `Schema` that answers asynchronously MUST be refused.
+19.12 A `Schema` that answers asynchronously MUST be refused.
 
-19.14 A page that does not call `jsonSchema` MUST NOT carry `validateJson`.
+19.13 A page that does not call `jsonSchema` MUST NOT carry `validateJson`.
 
-19.15 A `JsonSchema` given as a `Schema` without `jsonSchema` MUST be refused, naming
+19.14 A `JsonSchema` given as a `Schema` without `jsonSchema` MUST be refused, naming
 `jsonSchema`.
 
-19.16 Every value a module under `src/server/rpc` exports MUST be declared by a call of abide's
+19.15 Every value a module under `src/server/rpc` exports MUST be declared by a call of abide's
 `GET`, `POST`, `PUT`, `PATCH` or `DELETE` — however the language spells the export, the call or its
 import — and an export that is not MUST be a build error naming it.
 
-19.17 A default in a keyed body's parameter or a handler's parameter that is not a literal MUST
+19.16 A default in a keyed body's parameter or a handler's parameter that is not a literal MUST
 be refused at construction, naming its `Args` member, and the build MUST refuse one on a handler.
 
-19.18 `route.url` MUST hold the address a page is served at, the path `APP_URL` names included, on
+19.17 `route.url` MUST hold the address a page is served at, the path `APP_URL` names included, on
 the server as in the browser.
 
-19.19 A root-absolute `href` or `src` in the `Shell` MUST be answered below the path `APP_URL`
+19.18 A root-absolute `href` or `src` in the `Shell` MUST be answered below the path `APP_URL`
 names.
 
-19.20 A request for the path `APP_URL` names, without its trailing `/`, MUST be redirected 308 to
+19.19 A request for the path `APP_URL` names, without its trailing `/`, MUST be redirected 308 to
 that path with one, by path alone.
 
-19.21 A `Schema` derived per 19.10 MUST refuse a member its type does not declare, wherever the type
+19.20 A `Schema` derived per 19.9 MUST refuse a member its type does not declare, wherever the type
 carries no index signature.
 
-19.22 An `Issues<T>` over a value that is not an object MUST be the bare list of messages, not a
+19.21 An `Issues<T>` over a value that is not an object MUST be the bare list of messages, not a
 record keyed by `''`.
 
 # 20. Generated surfaces
@@ -1168,12 +1100,12 @@ record keyed by `''`.
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored
 beside it.
 
-20.2 Every key of `Clients` MUST default to true, but where 16.38 defaults it to false.
+20.2 Every key of `Clients` MUST default to true, but where 16.37 defaults it to false.
 
 20.3 `Clients` MUST decide what is generated and listed, and MUST NOT decide who may call.
 
 20.4 `ui: false` MUST generate no client wrapper, and importing that handler from `#ui` or a `.abide`
-file MUST then be the compile error 16.30 states.
+file MUST then be the compile error 16.29 states.
 
 20.5 `/__abide/openapi.json` and `/__abide/mcp` MUST be served from a `reactive` over the route table,
 and MUST take no `ttl`.
@@ -1355,8 +1287,9 @@ name, where it closed before the head was sent.
 
 26.10 `Principal` MUST never be null, and an anonymous visitor MUST be `authenticated` false.
 
-26.11 The `principal` seal MUST be an HMAC over the claims and their expiry, and MUST be signed
-rather than encrypted.
+26.11 The `principal` seal MUST be a JWT (RFC 7519) signed HS256 rather than encrypted, its payload
+the claims' own members beside `exp` and `iat`, and a token naming any other `alg` MUST read as no
+seal.
 
 26.12 The principal cookie MUST be set `HttpOnly` and `SameSite=Lax`, and `Secure` in production.
 
@@ -1386,8 +1319,8 @@ naming the byte count.
 unauthenticated caller carrying that refusal as `principal.error`.
 
 26.24 Where a handler's `principal.set` or `principal.clear` ran, its answer MUST say so in an
-`abide-principal` header, and a browser that reads `principal` MUST reload the document on it,
-serving the one it holds until the new one lands per 7.4.
+`abide-principal` header, and a browser that reads `principal` MUST reload the document on it in
+every tab, serving the one it holds until the new one lands per 7.4.
 
 26.25 `Principal` MUST admit a field an app declares on it, of any type.
 
@@ -1423,32 +1356,35 @@ module ran is not the one served after it.
 
 # 28. Logging
 
-28.1 Every line MUST be published to `log.records`, which MUST be an ordinary `reactive` declaring
-`history`.
+28.1 Every line MUST be appended to `log.records`, an ordinary `reactive` holding the lines kept as an
+array.
 
-28.2 `log` MUST always write.
+28.2 `/__abide/logs` MUST be a `GET` over `log.records`, and a line written MUST reach its followers
+as an `add` at `/-`.
 
-28.3 `log.warning` and `log.error` MUST always write.
+28.3 `log` MUST always write.
 
-28.4 `log.named` MUST prefix the app name, and calling it again MUST append another segment.
+28.4 `log.warning` and `log.error` MUST always write.
 
-28.5 A `Logger` MUST carry the same levels and the same `log.enabled` as `log`.
+28.5 `log.named` MUST prefix the app name, and calling it again MUST append another segment.
 
-28.6 `log.enabled` MUST answer whether a gated line on that namespace would be written.
+28.6 A `Logger` MUST carry the same levels and the same `log.enabled` as `log`.
 
-28.7 A namespace `log.enabled` reports closed MUST NOT run the measurement a gated line would report.
+28.7 `log.enabled` MUST answer whether a gated line on that namespace would be written.
 
-28.8 A correctness or a configuration failure MUST report on a namespace `abide:` names.
+28.8 A namespace `log.enabled` reports closed MUST NOT run the measurement a gated line would report.
 
-28.9 `DEBUG` MUST gate namespaces in debug-npm grammar, and MUST be read from the environment
+28.9 A correctness or a configuration failure MUST report on a namespace `abide:` names.
+
+28.10 `DEBUG` MUST gate namespaces in debug-npm grammar, and MUST be read from the environment
 on a server.
 
-28.10 `DEBUG` MUST reach a browser through the document rather than through the bundle.
+28.11 `DEBUG` MUST reach a browser through the document rather than through the bundle.
 
-28.11 A browser's own stored `DEBUG` setting MUST answer only where the document carries none, and
+28.12 A browser's own stored `DEBUG` setting MUST answer only where the document carries none, and
 MUST NOT override it.
 
-28.12 The app name `log.named` prefixes MUST be read per line, so a logger named before the app's
+28.13 The app name `log.named` prefixes MUST be read per line, so a logger named before the app's
 identity resolved writes under it once it has.
 
 # 29. Content security policy
@@ -1961,9 +1897,9 @@ answered per 41.12.
 37.2 The `default` export MUST be the app's own route, answering where it returns a `Response`.
 
 37.3 `middleware` MUST run pre-routing, over the request and the response, and over the upgrade to the
-socket mux, which MUST open only at its own address below the mount, only in an app with a socket or a
-handler to carry, and MUST NOT open where a rung answered in the lane's place — under `abide dev` as
-under `abide start`.
+socket mux, which MUST open only at its own address below the mount, only in an app with a handler
+to carry, and MUST NOT open where a rung answered in the lane's place — under `abide dev` as under
+`abide start`.
 
 37.4 `onStart` MUST wrap `createApp` and `onStop` MUST wrap `App.stop`.
 
@@ -2145,7 +2081,7 @@ the local one first.
 nor the line being typed — `log` or the console alike.
 
 38.62 `abide call`'s args MUST be `name=value` words, each value coerced by the app it reaches as
-19.8 coerces a query's and a name given twice a list, or one JSON object where the first word opens
+19.7 coerces a query's and a name given twice a list, or one JSON object where the first word opens
 one.
 
 38.63 38.7's shell MUST list and complete each handler `call` reaches that `clients.cli` does not
@@ -2165,6 +2101,9 @@ its output only a file it did not produce that was written before it began.
 38.68 `abide start` and the executable's `start` MUST NOT read their input.
 
 38.69 An `Rpc`'s JSON answer under 1024 bytes MUST be answered in the identity encoding.
+
+38.70 `abide watch` MUST follow a `GET` per 18.20, and print its value and its value after each
+`s.patch`.
 
 # 39. Head and view transitions
 
@@ -2311,8 +2250,8 @@ again, and a serialized setup result MUST NOT be adopted.
 
 41.7 The `Rpc` calls that re-execution makes MUST be answered from the seed buffer.
 
-41.8 A `{#for}` block over a cursor the server already painted MUST be reconciled against the replayed
-productions by the block's key, and MUST NOT be appended to.
+41.8 A `{#for}` block over a value the server already painted MUST be reconciled against that value by
+the block's key once it lands, and MUST NOT be appended to.
 
 41.9 `render` MUST delimit a dynamic region with a comment anchor, and MUST NOT add a node, an
 attribute or a wrapper to the document for any other purpose than 41.20's script.
@@ -2369,7 +2308,7 @@ adopts the page, however early its answer arrived.
 
 # 42. The app object
 
-42.1 `createApp` MUST build the route table and compose every `Middleware` rung, per 16.15.
+42.1 `createApp` MUST build the route table and compose every `Middleware` rung, per 16.14.
 
 42.2 `createApp` MUST read `config` where it builds the app, and MUST NOT leave that read to the
 first request.
@@ -2395,8 +2334,8 @@ and 22.8 throw in.
 42.11 `App.stop` MUST end every stream it is still answering, close every open socket, and drop every
 seed entry its renders left, with its timer.
 
-42.12 A second `App` in one process MUST share the first's socket-carried values, `config` and `global`
-entries, per 9.16, 27.9 and 11.34.
+42.12 A second `App` in one process MUST share the first's `config` and `global` entries, per 27.9 and
+11.34.
 
 42.13 A test MUST reach a handler through the same `App` a host holds, and abide MUST NOT generate a
 client of its own for one.

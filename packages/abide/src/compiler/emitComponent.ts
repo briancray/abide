@@ -24,7 +24,7 @@ const BUILD = '__build'
 /**
  * The server module for a parsed `.abide` file: one ESM module exporting its component.
  *
- * The `<script>` body is copied VERBATIM into the component function, which is the whole of 19.12
+ * The `<script>` body is copied VERBATIM into the component function, which is the whole of 19.11
  * at this stage: the compiler does not read the expression grammar, so anything TypeScript accepts
  * survives.
  *

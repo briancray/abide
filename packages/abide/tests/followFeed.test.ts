@@ -1,4 +1,4 @@
-// 18.21 — ONE FEED PER VALUE SERVED. However many connections follow a `global` GET, a change is
+// 18.6 — ONE FEED PER VALUE SERVED. However many connections follow a `global` GET, a change is
 // watched once and its frame body serialized once, and each follower is sent it under its own id.
 //
 // THE REVERT is a watch per follower, each stringifying the whole value: 20 serializations of the
@@ -11,7 +11,7 @@ import { GET } from '#shared/rpc.ts'
 
 const FOLLOWERS = 20
 
-test('a change is serialized once for every follower of a value, and each is sent it under its own id — 18.21', async () => {
+test('a change is serialized once for every follower of a value, and each is sent it under its own id — 18.6', async () => {
     let serialized = 0
     const shelf = (titles: string[]) => ({
         titles,
@@ -24,7 +24,6 @@ test('a change is serialized once for every follower of a value, and each is sen
     const rpc = GET(value as never) as unknown as { address: string }
     rpc.address = '/__abide/rpc/shelf'
     const mux = new Mux(
-        new Map(),
         new Map([[rpc.address, { handler: rpc, ui: true } as never]]),
         undefined,
     )
@@ -95,7 +94,6 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
     const rpc = GET(value as never) as unknown as { address: string }
     rpc.address = '/__abide/rpc/stock'
     const mux = new Mux(
-        new Map(),
         new Map([[rpc.address, { handler: rpc, ui: true } as never]]),
         undefined,
     )

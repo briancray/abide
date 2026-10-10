@@ -43,6 +43,12 @@ compile error rather than a lint.
 raises — 403 on an origin mismatch, 413 over-size, 504 on a timeout — has no data to narrow to,
 so it stays the undeclared `HttpError` at its status that `refuse(status)` means.
 
+**On a wire it is Problem Details (RFC 9457).** An answer refusing is `application/problem+json` at
+the refusal's own status: its name is the `type`, its message the `detail`, and its data a `data`
+member. An undeclared `HttpError` is `type: "about:blank"` titled by its reason phrase, as the RFC
+has it (15.21). A browser's `Rpc` rebuilds the same `Failed` from it, so `isError` narrows by name
+there exactly as in process; any other client reads a format it already knows.
+
 A declared refusal defaults to 400 because it is by construction an expected answer, and 500
 is the one status certainly wrong for it: a generated client reads it as a server fault, and a
 model retries instead of re-planning.

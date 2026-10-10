@@ -29,7 +29,7 @@ the staying in step.
 | `reactive(v, options)` | either, with a gate or a shape on the way in |
 | `reactive<T>()` | an empty value, with nothing landed until the first `set` |
 
-The options are `schema`, `transform`, `store`, `identity`, `history`, `ttl`, `throttle` and
+The options are `schema`, `transform`, `store`, `identity`, `by`, `ttl`, `throttle` and
 `debounce`, and what comes back is a `Reactive` — the same one a body, a channel and every rpc handler hand back, so a member
 learned here is a member everywhere. Every signature is in the
 [`reactive` reference](../reference/reactive.md).
@@ -61,7 +61,7 @@ is `contact.name` at every site rather than an await. One rule at construction a
 after it: `s.set` takes what `reactive` took, a settled value or a load.
 
 `reactive<Contact>()` with no argument is a value nothing has written yet. It is neither busy nor
-ready, a read throws `NotLanded` (2.10) and `s.peek` answers `undefined` (2.11), until the first
+ready, a read throws `NotLanded` (2.9) and `s.peek` answers `undefined` (2.10), until the first
 `set` lands one. Where `undefined` is itself a value the page holds, say so —
 `reactive<Contact | undefined>(undefined)` has landed from the moment it exists. A function to hold
 rather than run goes inside a record, `reactive({ handler })`, since a function given to `reactive`

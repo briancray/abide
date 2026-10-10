@@ -45,9 +45,9 @@ everywhere else:
 theme.refresh()      // re-reads the store — another tab may have written it
 ```
 
-`ttl` reaches it for the same reason. On a plain owned value `ttl` expires past productions
-and keeps the standing one (6.8), because dropping it would lose something nothing can rebuild; with a store there is
-somewhere to get it back from.
+`ttl` reaches it for the same reason. On a plain owned value `ttl` is inert (6.2), because
+dropping the value would lose something nothing can rebuild; with a store there is somewhere to get
+it back from (8.2).
 
 An unsettled `get` is a load like any other — busy with nothing to serve, a sink opened,
 the value served when it lands, which is what the card's store does. A **synchronous** `get`,
@@ -126,10 +126,10 @@ seeds:
 ```
 
 A restored stream **finished**: `ready()` is true and `busy()` is false (8.7). It is a value that
-has arrived rather than one arriving, so it is read as one — a `{#for}` over a cursor on it is watching
-for tokens that are all already in.
+has arrived rather than one arriving, so it is read as one — a `{#for}` over it paints every token at
+once, there being none still to come.
 
-Read on: [History](keep-the-last-few-values.md)
+Read on: [Streaming data](../server/send-data-as-it-arrives.md)
 
 ## Two processes, one cache — and what does not cross
 
@@ -140,24 +140,24 @@ A **settled value** crosses and never a production. An answer one instance finis
 served to one that never computed it; an in-flight stream's chunks do not reach it at all, `set`
 running once at close. So it removes the duplicate work, not the duplicate connection.
 
-## A channel's store is its latest message
+## A channel's store is the array it holds
 
-A channel's `Stored` is one `Message`, so a store round-trips the latest message and never the
-ring (9.11). For a roster or a status that is exactly right — a restart restores the last one instead of
-showing an empty channel until somebody publishes.
+A channel is a `reactive` over an array, so its `Stored` is the whole array and a store round-trips
+all of it (9.5). For a roster or a status that is exactly right — a restart restores who was there
+instead of showing an empty channel until somebody writes.
 
-`identity: structural` and the store read together where the roster is `set`: an identical roster
-set again is not a production, so it is not written either (5.2, 8.8). A `publish` is a production
-whatever `identity` says (9.6), so it is written every time.
+A store's `set` runs once per production (8.8), and a production `identity` matches mints nothing
+(5.2), so an identical roster `set` again is not written. Every append is a change, so it is.
 
-A transcript is the case this is **not** for. Putting a store on a chat channel persists one
-message. History past the ring is app data behind an ordinary rpc, and the cursor joins
-the two without a gap — `history()` replays the ring before it goes live, so the two overlap.
+A long transcript is the case to think twice about: every write hands the store the whole array, and
+the store holds whatever the trim left. Messages older than the window are app data behind an
+ordinary rpc, read once, rather than a growing value written on every message.
 
-Read on: [Channels](let-anything-publish-and-anything-read.md)
+Read on: [Channels](let-anything-publish-and-anything-read.md) ·
+[Recent values](keep-the-last-few-values.md)
 
 ## Next
 
 * [Reloading](decide-when-a-value-reloads.md) — the triggers a store makes live
 * [Caching](load-once-per-set-of-arguments.md) — the entries a store sits in front of
-* [Channels](let-anything-publish-and-anything-read.md) — why a transcript is not a stored value
+* [Channels](let-anything-publish-and-anything-read.md) — the array a channel's store round-trips

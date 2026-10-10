@@ -286,10 +286,9 @@ export async function emitApp(
         // from a build and `entry.js` in dev — and its key in the manifest (38.23, 38.5).
         modules.set(`${CLIENT_ENTRY}.ts`, ENTRY_MODULE)
     }
-    // 16.2 AND 16.29 — THE HANDLERS, TWICE OFF ONE READ: the table the server mounts them
+    // 16.2 AND 16.28 — THE HANDLERS, TWICE OFF ONE READ: the table the server mounts them
     // from, and the module a browser is handed in place of each one's source. Written whether
     // or not there is a page: a handler is answered over http to a caller that has none.
-    // 18.2 — and every socket, written into the same table and wrapped the same way.
     const { mounts, warnings } = await handlersUnder(root, session)
     modules.set('rpc.ts', mountTable(mounts))
     for (const [source, wrapper] of wrappersOf(mounts))
@@ -487,8 +486,7 @@ function clientModules(route: AppRoute): string {
 
 /** The source of `rpc.ts`: the handler rows `mountHandlers` answers from. */
 function mountTable(mounts: Mount[]): string {
-    return `// Written by \`abide build\`. Every handler this app answers over http and every socket it carries
-// over the mux, and where each is.
+    return `// Written by \`abide build\`. Every handler this app answers over http, and where each is.
 export const handlers = ${JSON.stringify(mounts, null, 4)}
 `
 }
@@ -496,22 +494,18 @@ export const handlers = ${JSON.stringify(mounts, null, 4)}
 /**
  * The browser's stand-in module for each handler module, by source path.
  *
- * 16.29 — WHAT A BROWSER IMPORTS WHERE THE APP WROTE A HANDLER'S MODULE: the same export names,
+ * 16.28 — WHAT A BROWSER IMPORTS WHERE THE APP WROTE A HANDLER'S MODULE: the same export names,
  * each the same call over the wire. The address is written RELATIVE to the bundle's own directory
- * and resolved against the chunk at run time (16.11), so an app mounted under a sub-path calls its
+ * and resolved against the chunk at run time (16.10), so an app mounted under a sub-path calls its
  * own handlers rather than the root's.
  */
 function wrappersOf(mounts: Mount[]): Map<string, string> {
-    // IMPORTED BY WHAT THE MODULE USES: a handler module's page pays for no socket client.
-    const modules = new Map<string, { body: string; uses: Set<string> }>()
+    const modules = new Map<string, string>()
     for (const mount of mounts) {
-        // 20.4 — withheld from the browser: no wrapper, so an import of it is 16.30's refusal.
+        // 20.4 — withheld from the browser: no wrapper, so an import of it is 16.29's refusal.
         if (!mount.ui) continue
         const at = JSON.stringify(posix.relative(CLIENT_ADDRESS, mount.address))
-        const name = mount.method === 'SOCKET' ? 'socketWire' : 'wire'
-        const method =
-            mount.method === 'SOCKET' ? '' : `${JSON.stringify(mount.method)}, `
-        // 18.19 — what the handler's value declares that the browser's copy behaves by.
+        // 18.4 — what the handler's value declares that the browser's copy behaves by.
         // 11.29 — and the defaults its parameter writes, which the copy keys by.
         const copy =
             mount.defaults !== undefined
@@ -519,25 +513,19 @@ function wrappersOf(mounts: Mount[]): Map<string, string> {
                 : mount.copy === undefined
                   ? ''
                   : `, ${JSON.stringify(mount.copy)}`
-        const call = `${name}(${method}new URL(${at}, import.meta.url).pathname${copy})`
+        const call = `wire(${JSON.stringify(mount.method)}, new URL(${at}, import.meta.url).pathname${copy})`
         const line =
             mount.name === 'default'
                 ? `export default ${call}\n`
                 : `export const ${mount.name} = ${call}\n`
-        const module = modules.get(mount.source)
-        if (module === undefined)
-            modules.set(mount.source, { body: line, uses: new Set([name]) })
-        else {
-            module.body += line
-            module.uses.add(name)
-        }
+        modules.set(mount.source, (modules.get(mount.source) ?? '') + line)
     }
     const wrappers = new Map<string, string>()
-    for (const [source, { body, uses }] of modules)
+    for (const [source, body] of modules)
         wrappers.set(
             source,
-            `// Written by \`abide build\`. What a browser holds in place of ${source} (16.29).
-import { ${[...uses].sort().join(', ')} } from '${WIRE_SPECIFIER}'
+            `// Written by \`abide build\`. What a browser holds in place of ${source} (16.28).
+import { wire } from '${WIRE_SPECIFIER}'
 
 ${body}`,
         )

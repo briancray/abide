@@ -13,7 +13,7 @@ function produce(value) {
 }
 
 // THE POSITION LIVES OUT HERE, over a snapshot, because the write
-// below appends to the same ring the walk is reading.
+// below appends to the same stack the walk is reading.
 let history = []
 let at = 0
 let handed

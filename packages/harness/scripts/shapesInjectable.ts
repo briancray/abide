@@ -13,7 +13,6 @@ for (const name of [
     'ready',
     'error',
     'set',
-    'publish',
     'patch',
     'refresh',
     'invalidate',

@@ -5,6 +5,7 @@ import { turns } from '#shared/channelRoomsConversations'
 let here = reactive('onboarding')
 // Follows the room: switching is changing one value and nothing else.
 const thread = reactive(() => turns({ conversation: here }))
+const last = reactive(() => thread.at(-1))
 const draft = reactive('Does the old key keep working?')
 </script>
 
@@ -18,7 +19,7 @@ const draft = reactive('Does the old key keep working?')
 <ul class="fields stacked">
     <li><span>conversation</span><strong>{here}</strong></li>
     <li><span>last turn</span>
-        <strong>{thread ? thread.text : 'nothing here yet'}</strong>
+        <strong>{last ? last.text : 'nothing here yet'}</strong>
     </li>
 </ul>
 
@@ -26,6 +27,7 @@ const draft = reactive('Does the old key keep working?')
     <label>message
         <input bind:value={draft}>
     </label>
-    <button onclick={() => turns({ conversation: here })
-        .publish({ speaker: 'you', text: draft })}>Send</button>
+    <button onclick={() => turns({ conversation: here }).patch((list) => {
+        list.push({ id: list.length + 1, speaker: 'you', text: draft })
+    })}>Send</button>
 </div>

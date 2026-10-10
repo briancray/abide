@@ -23,13 +23,8 @@ export {
     type Rpc,
     type RpcOptions,
 } from '#shared/rpc.ts'
-// 18 — a value carried over a web socket.
-export {
-    type Socket,
-    type SocketEvent,
-    type SocketOptions,
-    socket,
-} from '#shared/socket.ts'
+// 18.11 — one write a patch made, as a followed `GET`'s `patch` carries it.
+export type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
 // 45 — a conversation with a model, piped through a handler, and the two providers abide ships.
 export {
     type AssistantEvent,

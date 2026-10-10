@@ -49,7 +49,7 @@ export const PUBLIC_DIRECTORY = 'public'
 /**
  * Where the build puts the module a browser gets in place of each handler module.
  *
- * 16.29 — below the build's own output: the source's path, with this in front. One lookup for the
+ * 16.28 — below the build's own output: the source's path, with this in front. One lookup for the
  * client bundle to make (`fenceServer`), and a place a reader can open to see exactly what the
  * browser was handed.
  */

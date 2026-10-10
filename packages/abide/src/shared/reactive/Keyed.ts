@@ -45,7 +45,6 @@ import {
     type Tracked,
     trackProbe,
 } from './tracking.ts'
-import { unowned } from './watch.ts'
 
 /**
  * The keyed face: one `Reactive` per `Args` key, plus the probes and triggers over its entries.
@@ -102,10 +101,10 @@ type Follower = {
 /**
  * The life of every entry of one `Keyed`, evicting each once `ttl` passes without a production.
  *
- * 11.46, 11.49, 11.50 — allocated only where a `ttl` was declared.
+ * 11.45, 11.48, 11.49 — allocated only where a `ttl` was declared.
  *
  * RECENCY IS THE ORDER OF A MAP. A production moves its key to the end by deleting and re-setting
- * it, so the oldest entry is always the first one and 11.49's "armed at the oldest" is one
+ * it, so the oldest entry is always the first one and 11.48's "armed at the oldest" is one
  * iterator step rather than a scan — and the sweep stops at the first entry still inside its
  * life, the way `dropExpired` stops at the first live production.
  *
@@ -142,7 +141,7 @@ class Lifetime {
                 this.touch(key, follower)
         }
         cell.readers.push(reader)
-        // 11.70 — AND ITS PROBES, so a load ending is heard as one: the sweep parks an entry whose
+        // 11.69 — AND ITS PROBES, so a load ending is heard as one: the sweep parks an entry whose
         // load is in flight, and this is what starts its life again once the load is over.
         trackProbe(cell, reader)
         // The life starts at the reach: an entry whose load never lands still ends.
@@ -175,7 +174,7 @@ class Lifetime {
         for (const [key, follower] of this.followed) {
             if (follower.at > deadline) break
             this.followed.delete(key)
-            // 11.70 — PARKED, NOT EVICTED: a call reaching it joins the load, and the load's end
+            // 11.69 — PARKED, NOT EVICTED: a call reaching it joins the load, and the load's end
             // touches it back into the order.
             if (follower.cell.loading) continue
             follower.reader.alive = false
@@ -243,9 +242,9 @@ class StartWindow {
  * 11.27's LAST TWO STEPS as one body. The gate runs on every run of the entry — a refresh
  * re-validates — and throws the refusal, which is what a body failing already does: the entry's
  * `error` holds it and its read throws it (2.2), and the body the gate stands in front of is never
- * called. What it accepts is what the body is handed (11.69).
+ * called. What it accepts is what the body is handed (11.68).
  *
- * A STREAM STAYS A STREAM FROM CONSTRUCTION. 9.20 reads the body's KIND, so the wrapper around an
+ * A STREAM STAYS A STREAM FROM CONSTRUCTION. 9.6 reads the body's KIND, so the wrapper around an
  * async generator is an async generator, or a gated keyed stream would be one only from its first
  * run.
  */
@@ -267,7 +266,7 @@ function gated<Args>(
  * 14.4, 11.6 AND 11.23: AN ENTRY KEEPS NOTHING IT READ past a run that completed, so a value its
  * body read changing neither recomputes it nor makes it busy — `ttl`, a trigger and eviction are
  * its only ways back. The run still TRACKS, and has to: a body aborted on a value that has not
- * landed is brought back by the subscription its read made (2.14), so an abort is the one exit
+ * landed is brought back by the subscription its read made (2.13), so an abort is the one exit
  * that keeps what it read.
  *
  * HERE RATHER THAN IN `run`. A test in `run` is paid by every recompute of every unkeyed value in
@@ -307,12 +306,11 @@ export function createKeyed<
     options: ReactiveOptions<Accepted, Stored, never, Args> | undefined,
 ): Keyed<Stored, Args, Accepted, Failures> & Gated<Args> {
     const entries = new Map<string, Reactive<Stored, Accepted, Failures>>()
-    // 11.46: A KEYED `ttl` IS THE LIFE OF AN ENTRY, not of a production inside one, so it is
+    // 11.45: A KEYED `ttl` IS THE LIFE OF AN ENTRY, not of a production inside one, so it is
     // taken off the options every entry is built from — forwarded, it would build the
     // unkeyed mechanism in every entry and evict nothing from this map.
     const { ttl, args, throttle, debounce, ...rest } = options ?? {}
     const gate = args as Schema<Args> | undefined
-    // 9.28: `history` is among what every entry is built from, so each entry keeps its own.
     const entryOptions = rest
     // 5.14, at the factory: a keyed value is capped one way or the other.
     refuseBothCaps(`${label}()`, throttle, debounce)
@@ -362,17 +360,14 @@ export function createKeyed<
             if (failedTransiently(standing)) standing.refresh()
             return standing
         }
-        // UNOWNED: an entry is its value's cache's, held for whoever reaches it next, and not the
-        // setup or the request that happened to reach it first (12.4, 12.5).
-        const created = unowned(() =>
-            createReactive<Stored, Accepted, Failures>(
-                `${label}(${key})`,
-                entryBody as (args: unknown) => unknown,
-                args,
-                undefined,
-                entryOptions as ReactiveOptions<Accepted, Stored, Failures>,
-                starts !== null,
-            ),
+        const created = createReactive<Stored, Accepted, Failures>(
+            `${label}(${key})`,
+            entryBody as (args: unknown) => unknown,
+            args,
+            undefined,
+            entryOptions as ReactiveOptions<Accepted, Stored, Failures>,
+            starts !== null,
+            true,
         )
         entries.set(key, created)
         if (lifetime !== null)

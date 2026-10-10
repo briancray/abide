@@ -277,7 +277,7 @@ test('state-transform: what is stored is not what was typed', async () => {
     ])
 })
 
-test('channel-shared: a component the publisher never names follows the publish', async () => {
+test('channel-shared: a component the writer never names follows the write', async () => {
     await mount('channel-shared', 'chat.js')
     expect([read('#speaker'), read('#text')]).toEqual(['nobody', 'nothing yet'])
 
@@ -302,7 +302,7 @@ test('channel-rooms: each args key is its own room, kept across a switch', async
         'Does the old key keep working?',
     ])
 
-    // A key nothing has published to lands `undefined` (11.63), which is the readout's
+    // A key nothing has published to lands `undefined` (11.62), which is the readout's
     // 'nothing here yet' rather than the other room's message.
     click('[data-conversation="billing"]')
     expect([read('#conversation'), read('#last')]).toEqual([
@@ -369,30 +369,6 @@ test('channel-transform: a message over the limit is refused under its own name'
     expect([read('#refusal'), read('#last')]).toEqual([
         '',
         'How do I rotate an API key?',
-    ])
-})
-
-test('channel-identity: a resend is minted, whatever identity says', async () => {
-    await mount('channel-identity', 'chat.js')
-    const draft = document.querySelector('#draft') as HTMLInputElement
-
-    click('#send')
-    expect([read('#cursor'), read('#last')]).toEqual([
-        '1',
-        'Resend me the key rotation steps.',
-    ])
-
-    // THE CLAIM. The second press is the same turn as the one standing, and a publish
-    // mints a production whatever `identity` says (9.6), so the cursor moves. An arm
-    // that collapsed the repeat reads '1' here with the screen otherwise identical.
-    click('#send')
-    expect(read('#cursor')).toBe('2')
-
-    draft.value = 'Resend me the billing steps.'
-    click('#send')
-    expect([read('#cursor'), read('#last')]).toEqual([
-        '3',
-        'Resend me the billing steps.',
     ])
 })
 
@@ -1159,7 +1135,7 @@ test('store-keyed: two args keys address two stores', async () => {
     expect(asked.sort()).toEqual(['settings:ada', 'settings:grace'])
 })
 
-test('tail-window: the ring caps what is kept, and the reader asks for more', async () => {
+test('tail-window: the window is what the app trims to, whatever the reader shows', async () => {
     await mount('tail-window', 'console.js')
     const rows = () =>
         [...document.querySelectorAll('#console li')].map(
@@ -1170,27 +1146,11 @@ test('tail-window: the ring caps what is kept, and the reader asks for more', as
     for (let press = 0; press < 3; press += 1) click('#emit')
     expect(rows()).toEqual(['1', '2', '3'])
 
-    // THE CLAIM. The reader asked for fifty and the value keeps four, so what is on
-    // screen is the VALUE's window — a fifth production does not make a fifth row, it
-    // moves the window, and the reader's number never enters into it.
+    // THE CLAIM. The writer trims to four, so what is on screen is the VALUE's window —
+    // a fifth token does not make a fifth row, it moves the window.
     click('#emit')
     click('#emit')
     expect(rows()).toEqual(['2', '3', '4', '5'])
-})
-
-test('tail-cursor: one reader replays the ring first and the other starts where it joined', async () => {
-    await mount('tail-cursor', 'panes.js')
-
-    // THE CLAIM. Both cursors are over one value and both see every arrival after they
-    // opened. The only difference is what each was handed to start with — `tail(3)`
-    // replays the ring, a bare cursor replays nothing.
-    expect([read('#replay'), read('#live')]).toEqual(['1 2 3', ''])
-
-    click('#emit')
-    expect([read('#replay'), read('#live')]).toEqual(['1 2 3 4', '4'])
-
-    click('#emit')
-    expect([read('#replay'), read('#live')]).toEqual(['1 2 3 4 5', '4 5'])
 })
 
 test('tail-undo: a second step back does not read the first step back', async () => {

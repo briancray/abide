@@ -58,10 +58,10 @@ The `Bun.Server` the app is running on, typed by its `WebSocketData`. It is the 
 limiter that needs one.
 
 Reaching for it is a signal worth noticing. Most of what an app wants from the server is
-already a name — a socket is `socket`, an address is `rpc.url` — so a `server()` call is either
-something genuinely outside the framework or a name that has not been found yet.
+already a name: a live value is a followed `GET`, and an address is `rpc.url`. So a `server()` call
+is either something genuinely outside the framework or a name that has not been found yet.
 
-Read on: [Sockets](../server/keep-a-room-of-callers-in-sync.md)
+Read on: [Live updates](../server/keep-a-room-of-callers-in-sync.md)
 
 ## Request-local means request-local
 

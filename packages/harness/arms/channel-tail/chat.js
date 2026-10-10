@@ -6,32 +6,29 @@ const OPENING = [
     { speaker: 'you', text: 'Does the old key keep working?' },
 ]
 
-// THE RING, WRITTEN BY HAND: appended to and trimmed on every
-// publish, so what a reader asks for is capped by the channel and not
-// by the reader.
+// THE ROOM, WRITTEN BY HAND: appended to and trimmed in the same
+// write, so every reader sees the window the room keeps.
 const rooms = new Map()
 
 function roomFor(conversation) {
     let held = rooms.get(conversation)
     if (!held) {
-        held = { messages: [], seq: 0, readers: new Set() }
+        held = { messages: [], readers: new Set() }
         rooms.set(conversation, held)
     }
     return held
 }
 
-function publish(conversation, turn) {
+function say(conversation, turn) {
     const room = roomFor(conversation)
-    room.seq += 1
     room.messages.push(turn)
     if (room.messages.length > TAIL) room.messages.shift()
     for (const reader of room.readers) reader(room)
-    return room.seq
 }
 
-function tail(conversation, want, reader) {
+function follow(conversation, reader) {
     const room = roomFor(conversation)
-    const send = () => reader(room.messages.slice(-want))
+    const send = () => reader(room.messages)
     room.readers.add(send)
     send()
     return () => room.readers.delete(send)
@@ -40,9 +37,9 @@ function tail(conversation, want, reader) {
 const transcript = document.querySelector('#transcript')
 const draft = document.querySelector('#draft')
 
-for (const turn of OPENING) publish('onboarding', turn)
+for (const turn of OPENING) say('onboarding', turn)
 
-tail('onboarding', 50, (messages) => {
+follow('onboarding', (messages) => {
     transcript.replaceChildren(
         ...messages.map((turn) => {
             const row = document.createElement('li')
@@ -58,5 +55,5 @@ tail('onboarding', 50, (messages) => {
 })
 
 document.querySelector('#send').addEventListener('click', () => {
-    publish('onboarding', { speaker: 'you', text: draft.value })
+    say('onboarding', { speaker: 'you', text: draft.value })
 })

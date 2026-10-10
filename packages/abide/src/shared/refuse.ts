@@ -6,7 +6,7 @@
 // `ValidationError`, `Aborted` and the `HttpError` 17.4 names — everything else is the app's,
 // through `refuse.named`. A fifth built-in here is a refusal an app cannot have predicted and
 // cannot narrow against a name it never wrote. `Aborted` is the one the app asks for itself: it
-// comes back only from a call the app handed a signal and then aborted (16.53).
+// comes back only from a call the app handed a signal and then aborted (16.49).
 
 import { FAILURE_STATUS_TEXT } from './FAILURE_STATUS_TEXT.ts'
 import { type Failed, failed, isFailed } from './Failed.ts'
@@ -15,7 +15,7 @@ import type { JsonValue } from './JsonValue.ts'
 import { namedLogger } from './log.ts'
 import { type Found, runSchema, type Schema } from './Schema.ts'
 
-/** The `abide:refuse` logger (28.8) — 15.13 and 15.15's namespace. */
+/** The `abide:refuse` logger (28.9) — 15.13 and 15.15's namespace. */
 const REFUSE_LOG = namedLogger('abide:refuse')
 
 /**
@@ -97,7 +97,7 @@ function named<Name extends string, Data>(
     const make = (data?: Data): Failed<Name, Data> => {
         // 15.11 AND 15.14: the data is checked at construction, and before the message
         // function — a formatter reading data the schema was about to refuse is a message
-        // about a value that never existed. Synchronously, but that is 19.13 rather than
+        // about a value that never existed. Synchronously, but that is 19.12 rather than
         // anything this call site arranges: no `Schema` may answer any other way.
         //
         // 15.15: A REFUSAL HERE WARNS RATHER THAN STOPPING THE `Failed` BEING BUILT, which
@@ -107,7 +107,7 @@ function named<Name extends string, Data>(
         // failure disappears behind a second one.
         //
         // 15.4 IS UNCONDITIONAL, so the call is wrapped. `runSchema` has two exits — a `Checked`
-        // for a bad VALUE and a THROW for a bad SCHEMA (a predicate, 19.4; an async one, 19.13;
+        // for a bad VALUE and a THROW for a bad SCHEMA (a predicate, 19.3; an async one, 19.12;
         // a `JsonSchema` keyword `validateJson` does not implement) — and only the first was
         // being handled here. The three that throw took the `Failed` with them, which is exactly
         // the harm 15.15 above says it exists to prevent.
@@ -181,7 +181,7 @@ export const notFound = named<'NotFound', { path: string; method: string }>(
 /**
  * The `Aborted` refusal, at 499.
  *
- * 16.53: a load every caller of which aborted. 499 is the status a server logs for a request its
+ * 16.49: a load every caller of which aborted. 499 is the status a server logs for a request its
  * client closed, and the one thing true of this refusal is that nobody is waiting for the answer.
  */
 export const aborted = named<'Aborted', undefined>('Aborted', 499)
@@ -213,7 +213,7 @@ export function validationError<T>(
 /**
  * Args run through their gate: the accepted value, or a thrown `ValidationError`.
  *
- * 11.27, 16.18 — THE `args` GATE, for both places it stands: a keyed entry's run and a rung's
+ * 11.27, 16.17 — THE `args` GATE, for both places it stands: a keyed entry's run and a rung's
  * `ctx.args()`. Here rather than in `Schema.ts` for that module's own reason — it cannot build the
  * refusal it throws.
  */

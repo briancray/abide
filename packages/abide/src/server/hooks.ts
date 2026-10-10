@@ -174,12 +174,12 @@ export function handOnError(error: unknown): void {
 /**
  * The `Failed` a thrown error answers with: a refusal as it is, anything else a reported 500.
  *
- * 16.41 — a refusal at its own status. 16.42 — anything else is the server's fault, and says
+ * 16.40 — a refusal at its own status. 16.41 — anything else is the server's fault, and says
  * nothing about itself to the caller: the log and `onError` get it (37.5).
  *
- * 16.67 — A CLIENT THAT LEFT IS NOT A FAULT: once the request's signal has aborted, what was thrown
- * is the cancellation arriving, so it answers `aborted` and is not reported — a handler's throw, a
- * page render's and a socket rung's alike, because all three answer here.
+ * 16.63 — A CLIENT THAT LEFT IS NOT A FAULT: once the request's signal has aborted, what was thrown
+ * is the cancellation arriving, so it answers `aborted` and is not reported — a handler's throw and a
+ * page render's alike, because both answer here.
  */
 export function failureOf(error: unknown): Failed<string, unknown> {
     if (isFailed(error)) return error

@@ -1,4 +1,4 @@
-// 16.11, 36.11 — AN APP SERVED UNDER A SUB-PATH, set by `APP_URL` alone: the same build, every address
+// 16.10, 36.11 — AN APP SERVED UNDER A SUB-PATH, set by `APP_URL` alone: the same build, every address
 // resolved against the mount at run time (spawned, for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -42,10 +42,10 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-// 16.11 — THE DOCUMENT NAMES THE MOUNT AND LOADS EVERYTHING FROM UNDER IT, and an address `url` built
+// 16.10 — THE DOCUMENT NAMES THE MOUNT AND LOADS EVERYTHING FROM UNDER IT, and an address `url` built
 // is under it too. THE REVERT: leave `clientTags` on `CLIENT_ADDRESS` bare; the entry is asked for at
 // the root, where nothing of this app's is.
-test('a page under the mount loads from under it — 16.11', async () => {
+test('a page under the mount loads from under it — 16.10', async () => {
     const answer = await Bun.fetch(`${base}/docs/`)
     expect(answer.status).toBe(200)
     const html = await answer.text()
@@ -80,9 +80,9 @@ test('routes, handlers and public files answer under the mount — 36.11', async
     )
 })
 
-// 18.2, 36.11 — THE MUX ANSWERS UNDER THE MOUNT, and an address named as the browser's wrapper resolved
+// 18.1, 36.11 — THE MUX ANSWERS UNDER THE MOUNT, and an address named as the browser's wrapper resolved
 // it — a path under the mount, or a whole URL — reaches the handler it names.
-test('the mux answers under the mount, for an address under it or a whole URL — 18.2, 36.11', async () => {
+test('the mux answers under the mount, for an address under it or a whole URL — 18.1, 36.11', async () => {
     const dir = temporaryModule({
         'client.ts': `const base = process.argv[2]
 const frames: unknown[] = []
@@ -113,21 +113,21 @@ console.log(JSON.stringify(frames))
     ])
 })
 
-// 16.11, 23.4 — A PAGE IS WHERE IT IS SERVED, on the server as in the browser: the request reaches the
+// 16.10, 23.4 — A PAGE IS WHERE IT IS SERVED, on the server as in the browser: the request reaches the
 // route with the mount taken off, and the browser's router arrives at `location`. THE REVERT: `arrive`
 // the request's own URL in `answerRequest`; the server renders `/invoices/4` and the browser hydrates
 // against `/docs/invoices/4`.
-test('a page reads the address it is served at — 16.11, 23.4', async () => {
+test('a page reads the address it is served at — 16.10, 23.4', async () => {
     const html = await (await Bun.fetch(`${base}/docs/invoices/4`)).text()
     expect(html).toMatch(/id="at">(<!--[^>]*-->)?\/docs\/invoices\/4</)
 })
 
-// 16.11, 36.11 — WHAT THE SHELL AND THE STYLESHEET NAME AT THE ROOT IS THE MOUNT'S. Neither is a
+// 16.10, 36.11 — WHAT THE SHELL AND THE STYLESHEET NAME AT THE ROOT IS THE MOUNT'S. Neither is a
 // template with a `url` to spell an address in, so the shell's `/…` is put under the mount as the
 // document is prepared and the stylesheet's is written relative to the bundle it is served from.
 // THE REVERTS: `shellUnderMount` returning the shell, and `stylesheetUnderMount` the sheet — both
 // then name `/fonts/face.woff2`, the origin's root, where nothing of this app's is.
-test('the shell and the stylesheet name a public file under the mount — 16.11, 36.11', async () => {
+test('the shell and the stylesheet name a public file under the mount — 16.10, 36.11', async () => {
     const html = await (await Bun.fetch(`${base}/docs/`)).text()
     expect(html).toContain(
         '<link rel="preload" href="/docs/fonts/face.woff2" as="font">',
@@ -143,11 +143,11 @@ test('the shell and the stylesheet name a public file under the mount — 16.11,
     expect(await (await Bun.fetch(resolved)).text()).toBe('a face')
 })
 
-// 16.11 — THE BARE MOUNT IS SENT TO ITS ROOT, which is where `url('/')` points: a document answered at
+// 16.10 — THE BARE MOUNT IS SENT TO ITS ROOT, which is where `url('/')` points: a document answered at
 // `/docs` resolves a relative address against `/`, outside the app. A path, not a URL, so a proxy's
 // origin is not the one written back. THE REVERT: drop the redirect from `belowMount`; `/docs` is a
 // 200.
-test('the bare mount is sent to its root — 16.11', async () => {
+test('the bare mount is sent to its root — 16.10', async () => {
     const answer = await Bun.fetch(`${base}/docs?from=bar`, {
         redirect: 'manual',
     })

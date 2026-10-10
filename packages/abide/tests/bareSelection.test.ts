@@ -250,7 +250,7 @@ test('refreshing on reconnect reloads what is read and marks the rest', async ()
 })
 
 // 13.7 OVER A KEYED `ttl` — AN ENTRY'S LIFETIME IS NOT A READER. The mirror `Lifetime.follow`
-// subscribes to every entry of a keyed value declaring `ttl` (11.46) hears its productions, and a
+// subscribes to every entry of a keyed value declaring `ttl` (11.45) hears its productions, and a
 // bare `refresh()` that counted it as something reading the entry reloaded an entry nothing reads.
 //
 // THE REVERT: count every reader in `refreshOver`'s subscribed test, the lifetime included —

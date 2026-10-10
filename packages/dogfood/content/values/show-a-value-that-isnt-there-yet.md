@@ -67,15 +67,15 @@ depends only on where the value has got to:
 | a producer failed with nothing landed | it throws, to the nearest `{#try}` or to `error.abide` |
 | holding a refusal over a value | the last accepted value; `error()` carries the refusal |
 
-A read of a value with nothing landed throws `NotLanded` (2.10), and inside a tracked body that
-throw **aborts the body** rather than letting it branch on an absence (2.13). The body runs again
-when the value lands (2.14). So `{data.name ?? 'Loading'}` never shows `Loading`: the read throws
+A read of a value with nothing landed throws `NotLanded` (2.9), and inside a tracked body that
+throw **aborts the body** rather than letting it branch on an absence (2.12). The body runs again
+when the value lands (2.13). So `{data.name ?? 'Loading'}` never shows `Loading`: the read throws
 before `??` is reached, and the compiler warns and names `ready()` (14.17). Ask the probe instead —
 `{data.ready() ? data.name : 'Loading'}`.
 
 The sink is opened by `busy()` with nothing to serve, rather than by an absent value, and the
-difference shows on a derived value. Its body aborts on a source still in flight (2.13) and mints
-nothing (11.53), so it is absent for a moment that says nothing about the answer — and `busy()` is
+difference shows on a derived value. Its body aborts on a source still in flight (2.12) and mints
+nothing (11.52), so it is absent for a moment that says nothing about the answer — and `busy()` is
 what says one is on its way (11.21).
 
 *By default* is the whole of it: nothing in a template holds, and a hole that has not filled is
@@ -90,7 +90,7 @@ Read on: [Streaming HTML](../pages/send-the-page-before-the-data-lands.md) ·
 
 Outside the render flow there is no hole to leave, so the throw reaches your code. A click handler
 reading `contact.email` before the address lands gets `NotLanded`, and catches it by brand — a
-`NotLanded` is "not yet" and a `Failed` is "no" (2.15), so the `instanceof` arm never swallows a
+`NotLanded` is "not yet" and a `Failed` is "no" (2.14), so the `instanceof` arm never swallows a
 refusal. Anything else is rethrown.
 
 `contact.busy()` is the probe the status line reads, and a probe never throws (3.1), which is why
@@ -130,10 +130,10 @@ Read on: [Reloading](decide-when-a-value-reloads.md)
 {% example probe-derived %}
 
 A derived value answers `busy()` for **its own load or any value its body read** (11.21). Its body
-never runs over nothing: reading `rows` before the list lands throws and abandons the run (2.13),
+never runs over nothing: reading `rows` before the list lands throws and abandons the run (2.12),
 so the count is absent rather than a confident "0 unpaid". Absent says nothing about why, and the
 probes do — `busy()` says an answer is on its way, and `ready()` holds off until everything the
-body read has landed (11.59).
+body read has landed (11.58).
 
 It is the same **any, not all** question a selection asks, over the set the body already tracks in
 order to recompute. The answer is taken on the read that asks for it, walking those sources — no
@@ -146,10 +146,10 @@ recompute reads false for the whole reload window. An `invalidate()` sends nothi
 window opens on the read of the derived value, which runs the source's producer first (7.13).
 
 `busy()` and `ready()` are the probes that propagate (11.20): a derived value is busy where anything
-it read is busy, and ready only where everything it read is (11.59). `error()` does not, because
+it read is busy, and ready only where everything it read is (11.58). `error()` does not, because
 `Failures` does not — a read inside a body widens no union, so a propagated refusal would sit
 unnarrowable at every reader. Adoption is the other case: a body handing back a `Reactive` forwards
-every probe, `error()` included (11.51).
+every probe, `error()` included (11.50).
 
 Two ways to ask for the hole instead of the wait. Read the **probe** rather than the value —
 `rows.busy()` subscribes to that probe and is not a read of the value, so it never makes its own
@@ -170,8 +170,8 @@ is how a page declines it: read the failure off the value and render a message i
 clears it, which is the half a hand-kept third variable forgets.
 
 `invoice` adopts the call, and every probe forwards through an adoption, `error()` included
-(11.51), so the handler's refusal is `invoice.error()`. The Retry reaches the load it adopted
-(11.52).
+(11.50), so the handler's refusal is `invoice.error()`. The Retry reaches the load it adopted
+(11.51).
 
 A **refused write** never throws, whatever is standing: the gates refused something going in, and a
 read waits on a producer. A **failed reload** leaves the held value being served, so it does not
@@ -207,17 +207,17 @@ Read on: [Conditionals](../templates/show-markup-conditionally.md)
 ## On a server the value carries its own `await`
 
 It is the same `await` a handler writes, the value carrying the wait itself. `await invoice`
-resolves where `invoice.busy()` becomes false (2.8), and `then`, `catch` and `finally` reach that
+resolves where `invoice.busy()` becomes false (2.7), and `then`, `catch` and `finally` reach that
 same promise by hand. Awaited mid-refresh it gets what the refresh lands, and awaited
 over a stream it gets the whole accumulation at close. Nothing about the read changes: `invoice()`
 still returns what has landed and never blocks. This is the only place waiting is spelled at all —
 there is no template form for it.
 
 `catch` fires for a producer that failed with nothing landed, which is the one failure a read
-throws (2.9). A refused write and a failed reload both fill `error()`, and neither reaches `catch`.
+throws (2.8). A refused write and a failed reload both fill `error()`, and neither reaches `catch`.
 
 `finally` is about the **settling**, not the value. A subscriber's copy of a channel settles at the
-first production to arrive and then keeps going (9.29, 2.8), so `finally` runs while it is still live.
+first production to arrive and then keeps going (9.14, 2.7), so `finally` runs while it is still live.
 
 The value is a promise in the places JavaScript looks for one, so returning it from a handler hands
 back what it settled to. Nested in a returned object it is still a `Reactive`, which the compiler

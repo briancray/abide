@@ -1,5 +1,5 @@
 {
-    "title": "`{ history: n }` — a window onto the recent past",
+    "title": "`patch` with a trim — a window onto the recent past",
     "summary": "A pane over an answer arriving one token at a time. Press Next token a few times and watch the top of the list.",
     "app": "chat",
     "files": [

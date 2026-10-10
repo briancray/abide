@@ -932,7 +932,7 @@ test('an optional chain is a member reach on both guards', async () => {
     expect(await lower('obj?.n + n', new Set(['n']))).toBe('obj?.n + n()')
 })
 
-// 19.12 — the shapes a scan of the tokens answered wrong, each of which emitted a module that does
+// 19.11 — the shapes a scan of the tokens answered wrong, each of which emitted a module that does
 // not parse or read the wrapper where its value was due. The checker answers every one of them;
 // THE REVERT for all of them is to take reads by SPELLING — every identifier whose text is a reactive name — rather than the references `readsIn` asks the checker for.
 test('a scope that is not a function body is not a var boundary', async () => {

@@ -16,7 +16,7 @@
 // is read no faster than the browser reads it. A request BODY is still collected, which is what
 // lets the listener re-ask a request of the replacement (38.25).
 //
-// 18.2, 18.17 — AND SO DOES A SOCKET. The listener holds the browser's web socket, which has to
+// 18.1, 18.3 — AND SO DOES A SOCKET. The listener holds the browser's web socket, which has to
 // outlive this worker; what crosses is each frame, tagged with the connection it came over, and
 // what goes back is each frame this worker's mux sends. The mux is the one `abide start` runs.
 
@@ -135,9 +135,9 @@ process.on('disconnect', () => process.exit(0))
 let opening: Promise<void> | undefined
 
 let app: BootedApp | undefined
-// 18.2 — the mux over this worker's handlers and sockets, and each connection the listener holds.
+// 18.1 — the mux over this worker's handlers, and each connection the listener holds.
 let mux: Mux | undefined
-// What the mux carries, which `admitsMux` reads: an app with neither table has no mux to open.
+// What the mux carries, which `admitsMux` reads: an app with no handler has no mux to open.
 let carried: LoadedSources | undefined
 const connections = new Map<number, MuxConnection>()
 // What stopped the app compiling, kept rather than thrown: 38.4 keeps the server up and 38.18
@@ -198,7 +198,7 @@ const bodies = new Map<
     { reader: ReadableStreamDefaultReader<Uint8Array>; html: boolean }
 >()
 
-// 16.23 — THE LISTENER HOLDS THE CONNECTION, so the idle timeout a call raises is raised there, on
+// 16.22 — THE LISTENER HOLDS THE CONNECTION, so the idle timeout a call raises is raised there, on
 // the request bun handed it: each request built here is known by the ask it was built from.
 const ASKS = new WeakMap<Request, number>()
 LISTENING.timeout = (received, seconds) => {
@@ -349,7 +349,7 @@ async function open(
             bundleInMemory(
                 root,
                 base,
-                // 16.29, 16.30 — the browser's view of `server/`, as `abide build` gives it.
+                // 16.28, 16.29 — the browser's view of `server/`, as `abide build` gives it.
                 [plugin, fenceServer(root, start.modules), ...own],
                 paged,
                 publicAddresses,
@@ -388,7 +388,7 @@ async function open(
         carried = sources
         // THE SAME `App` `abide start` boots, so an app's hooks and middleware run in dev too.
         app = await bootApp(originUnder(root), async () => sources)
-        // 18.2 — the mux `App.listen` would open, over the app's own record: a frame's `rpc.raw` and
+        // 18.1 — the mux `App.listen` would open, over the app's own record: a frame's `rpc.raw` and
         // MCP surface are this app's.
         mux = app.openMux()
     } catch (thrown) {

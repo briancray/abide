@@ -12,7 +12,7 @@ One factory, `reactive`, and four ways to use it. **One type back** — every on
 | `reactive(0)` | you | nothing — you write it yourself |
 | `reactive(() => a + b)` | other values | a value its body read, moving |
 | `reactive(() => getThing({ id }))` | your server | `refresh`, `invalidate`, a tag, a `ttl` |
-| `reactive<Message>(undefined, { history })` | the system, live | whoever publishes |
+| `reactive<Message[]>([], { by: 'id' })` | anything that reaches it, live | nothing — it is appended to |
 
 **The arrow makes the third row reloadable.** `reactive(getThing({ id }))` compiles and loads
 once, and then every trigger on it does nothing: a value handed in has no producer to re-run, so
@@ -88,7 +88,7 @@ Read on: [Watching values](do-something-when-a-value-changes.md)
 
 {% lead values/keep-the-last-few-values %}
 
-Read on: [History](keep-the-last-few-values.md)
+Read on: [Recent values](keep-the-last-few-values.md)
 
 ## Persistence
 

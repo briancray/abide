@@ -1,6 +1,6 @@
 import { reactive } from 'abide'
 
-export type Turn = { speaker: string; text: string }
+export type Turn = { id: number; speaker: string; text: string }
 
-/** `undefined` until somebody publishes, and anything that imports it may. */
-export const onboarding = reactive<Turn>(undefined, { history: 50 })
+/** Empty until somebody speaks, and anything that imports it may. */
+export const onboarding = reactive<Turn[]>([], { by: 'id' })

@@ -5,13 +5,13 @@
 //
 // KEYED BY WHO, WHAT AND WITH WHICH ARGS (41.18): the caller's cookie, the one thing the browser's
 // call carries that the render also saw, and the handler and the `Args` key 11.24 takes. A GET's
-// query arrives as text until 19.8 coerces it, so a render that passed a number misses here and
+// query arrives as text until 19.7 coerces it, so a render that passed a number misses here and
 // the handler runs — the answer is right and the saving is lost.
 //
 // ONE CALL PER ENTRY (41.16), and a bounded life for the entries nothing takes (41.17): a page read
 // with scripting off, or by a crawler, fills entries no call will ever come for.
 //
-// 16.34 — A STREAM'S TRANSCRIPT IS THE VALUE'S OWN ACCUMULATION, held as chunks and framed when the
+// 16.33 — A STREAM'S TRANSCRIPT IS THE VALUE'S OWN ACCUMULATION, held as chunks and framed when the
 // entry is taken, so it is one transcript whichever framing the call asks for. Where
 // `ABIDE_MAX_STREAM_BUFFER_SIZE` bounds it, the bytes are counted in the chunk type's default framing
 // as the chunks land, and an entry past the bound stops holding the stream — its call is then one the
@@ -22,13 +22,11 @@
 // past its life, or one past the transcript bound. A call for args an entry already answered is a
 // refresh, and says nothing.
 
-import { isFailed } from '#shared/Failed.ts'
 import { namedLogger } from '#shared/log.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
 import {
     chunksOfStream,
     isReactive,
-    pastOf,
     STREAMING,
     streamingOrSettled,
 } from '#shared/reactive/index.ts'
@@ -57,7 +55,7 @@ export type Outcome =
 type Entry = {
     rpc: object
     key: string
-    // `undefined` once a stream's transcript passed `ABIDE_MAX_STREAM_BUFFER_SIZE` (16.34).
+    // `undefined` once a stream's transcript passed `ABIDE_MAX_STREAM_BUFFER_SIZE` (16.33).
     outcome: Promise<Outcome> | undefined
     expires: number
     // Cleared when the entry is taken, so an answered entry's value is not held for the rest of its life.
@@ -144,7 +142,7 @@ export function seedFor(caller: string): PageRender['seed'] {
 /**
  * Counts a stream's transcript as it lands; calls `over` once it passes `bound` bytes.
  *
- * 16.34 — IN THE CHUNK TYPE'S DEFAULT FRAMING: a binary chunk's bytes, a value's jsonl line. Read
+ * 16.33 — IN THE CHUNK TYPE'S DEFAULT FRAMING: a binary chunk's bytes, a value's jsonl line. Read
  * through the reader an answer uses, so nothing is copied to count it. Returns what stops counting.
  */
 function boundTranscript(
@@ -156,7 +154,7 @@ function boundTranscript(
     void (async () => {
         let bytes = 0
         try {
-            // 9.20 — a value may only turn out to stream once its load resolves.
+            // 9.6 — a value may only turn out to stream once its load resolves.
             const settled = await streamingOrSettled(reached)
             if (!counting || settled !== STREAMING) return
             for await (const chunk of chunksOfStream(reached)) {
@@ -233,7 +231,7 @@ function missed(rpc: object, key: string, why: string): void {
     )
 }
 
-/** 11.24's key, or `undefined` where 11.65 refuses the args — which the call itself then says. */
+/** 11.24's key, or `undefined` where 11.64 refuses the args — which the call itself then says. */
 function seedKey(args: unknown): string | undefined {
     try {
         return canonicalKey(args)
@@ -267,7 +265,7 @@ function drop(caller: string, entry: Entry): void {
  */
 export function outcomeOf(reached: unknown): Promise<Outcome> {
     const started = performance.now()
-    // 9.20 — AND ONE THAT TURNS INTO A STREAM when its load resolves to a generator, as a handler
+    // 9.6 — AND ONE THAT TURNS INTO A STREAM when its load resolves to a generator, as a handler
     // behind rungs does: waited for as far as the turn, and never out to the run's close.
     return (
         isReactive(reached)
@@ -283,16 +281,7 @@ export function outcomeOf(reached: unknown): Promise<Outcome> {
                   }
                 : {
                       settled: true,
-                      // 16.49 — A VALUE DECLARING `history` IS HANDED ON AS ITSELF, settled, for the answer to
-                      // frame per production where the reader asks — so a seeded answer is framed as a run
-                      // one is. A refusal and nothing at all are answered as they are.
-                      value:
-                          value !== undefined &&
-                          !isFailed(value) &&
-                          isReactive(reached) &&
-                          pastOf(reached).ringDepth > 0
-                              ? reached
-                              : value,
+                      value,
                       duration: performance.now() - started,
                   },
         (error: unknown): Outcome => ({

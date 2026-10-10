@@ -74,7 +74,7 @@ export type Subscriber = {
      * The value an adoption's mirror mirrors into, and `null` on every other reader.
      *
      * A probe move on the adopted value mints nothing, so it never reaches the mirror as a value —
-     * this is the edge `markProbes` follows to reach the adopter's guards instead (11.51).
+     * this is the edge `markProbes` follows to reach the adopter's guards instead (11.50).
      */
     adopter: Tracked | null
     /** Read on the last run, in order. Rebuilt only from the point a run diverges. */
@@ -163,7 +163,7 @@ export function newSubscriber(
  *
  * Removal by swap-with-last: order in a reader list is not observable, and a splice is O(n)
  * copying where this is one write. Exported because readers are registered OUTSIDE the tracking
- * protocol too — a cursor in `History.ts`, an entry's lifetime in `Keyed.ts` — and a second copy
+ * protocol too — a cursor in `Cursor.ts`, an entry's lifetime in `Keyed.ts` — and a second copy
  * of the loop beside this one is what CLAUDE.md's sibling-seam rule refuses.
  */
 export function dropReader(source: Tracked, reader: Subscriber): void {
@@ -355,7 +355,7 @@ export function track(source: Tracked, reader: Subscriber): void {
     // constant, and the subscription count in `reactive.test.ts` holds the dedup this replaced.
     //
     // THE THREE READERS REGISTERED ON A VALUE EDGE OUTSIDE THE PROTOCOL are unaffected, and this
-    // asks nothing of them they were not already under: `History`'s cursor, `Keyed`'s lifetime
+    // asks nothing of them they were not already under: `Cursor`, `Keyed`'s lifetime
     // mirror and the narrowed `watch(sources, effect)` each DECLARE their sources and push
     // themselves onto those sources' readers, so the two agree by construction — `settled`'s
     // waiter is the fourth, and it is on the probe edge, which this never scans — and none of them

@@ -37,7 +37,7 @@ variable is what a deployment actually has.
 | `ABIDE_OPENAPI` | `boolean` | Opts in to declaring the OpenAPI address. |
 | `ABIDE_MCP` | `boolean` | Opts in to declaring the MCP address. |
 | `ABIDE_BRIDGE` | `boolean` | Opts in to relaying a visitor's Claude Code. |
-| `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | The `history` of `log.records`. |
+| `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. Default 1000. |
 | `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. |
 | `DEBUG` | `string \| null` | Log-namespace gating. |
 | `NO_COLOR` | `string \| null` | Refuses ansi anywhere. |
@@ -68,12 +68,11 @@ being the one that knows what the work costs.
 | `src/ui/pages/**/layout.abide` | A layout, rendering its child page through a slot. |
 | `src/ui/pages/**/error.abide` | The page a refusal renders in. |
 | `src/server/rpc/**/*.ts` | The rpc handlers. |
-| `src/server/sockets/**/*.ts` | The socket handlers. |
 | `bunfig.toml` | Under `[serve.static] plugins`, the bundler plugins the client is built with. |
 
 The three seams are `#server`, `#ui` and `#shared`, and an import across one uses the specifier
-rather than a relative path. `src/ui/pages/**` is the route tree; `src/server/rpc/**` and
-`src/server/sockets/**` are the two address trees.
+rather than a relative path. `src/ui/pages/**` is the route tree and `src/server/rpc/**` is the
+address tree.
 
 `page.abide`, `layout.abide`, `error.abide` and `app.ts` are **addresses rather than names** —
 the framework's own conventions, where every other file in an app is named after what it

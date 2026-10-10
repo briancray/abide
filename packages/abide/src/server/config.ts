@@ -128,7 +128,7 @@ function dataDirectory(name: string): string {
     return `${process.env.XDG_DATA_HOME ?? `${home}/.local/share`}/${name}`
 }
 
-// 28.4 — THE APP'S NAME IS `log`'s ROOT NAMESPACE, and the config is where the name is decided.
+// 28.5 — THE APP'S NAME IS `log`'s ROOT NAMESPACE, and the config is where the name is decided.
 // PEEKED, so a log line written inside an effect does not subscribe it to the configuration.
 export function derivedAppName(): string | undefined {
     const resolved = config.peek()
@@ -183,7 +183,7 @@ export function appOrigin(): string | undefined {
     return appUrl()?.origin
 }
 
-// 36.2, 16.11 — THE MOUNT IS `APP_URL`'s PATH, trailing slash dropped, and the root where there is
+// 36.2, 16.10 — THE MOUNT IS `APP_URL`'s PATH, trailing slash dropped, and the root where there is
 // none.
 export function configuredMount(): string {
     appUrl()

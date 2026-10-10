@@ -578,7 +578,7 @@ function isRawCallee(read: Read): boolean {
 /**
  * A template position's text, parenthesized only where splicing it as written would change it.
  *
- * 19.12 — A TEMPLATE POSITION IS ONE EXPRESSION, and the emit splices it into an argument list, an
+ * 19.11 — A TEMPLATE POSITION IS ONE EXPRESSION, and the emit splices it into an argument list, an
  * initializer or an arrow's body. So a top-level comma, a leading `{` (a block, as an arrow's
  * body) and a trailing line comment (which would comment out what the emit closes it with) are
  * parenthesized — and nothing else is, so the common slot is emitted as written.

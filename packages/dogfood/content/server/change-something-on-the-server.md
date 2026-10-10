@@ -30,9 +30,6 @@ same options. The method is the whole per-method difference, and what it changes
 how the arguments travel, and whether a browser may cache the answer. Every signature is in the
 [Transports](../reference/transports.md) reference.
 
-Handed a channel, a value with no producer, a mutation publishes the call's arguments into it, and
-declaring that handler is what authorises the publish (16.8).
-
 ## Two presses inside one flight are one write
 
 {% example write-coalesced %}

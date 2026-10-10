@@ -11,13 +11,14 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'
 
 const SESSION = `import { cookies as jar, principal, reactive } from 'abide'
-import { csp, request } from 'abide/server'
+import { csp, GET, request } from 'abide/server'
 
 export const who = reactive(() => principal, { global: true })
 export const crumbs = reactive(() => jar(), { global: true })
 export const nonce = reactive(() => csp.nonce, { global: true })
 export const policy = reactive(() => csp, { global: true })
 export const local = reactive(() => request().url)
+export const viewer = GET(() => principal.authenticated, { global: true })
 `
 
 const PAGE = `<script>
@@ -59,8 +60,9 @@ function place(text: string, needle: string): { line: number; column: number } {
 }
 
 // THE REVERTS: match the name as spelled rather than the symbol's own and the aliased `jar()` goes
-// unfound (2 against 3); drop `readsNonce` and the bare `csp` is found (4 against 3). The page's own
-// `route` is the near miss the declaration's path keeps out.
+// unfound (3 against 4); drop `readsNonce` and the bare `csp` is found (5 against 4); read
+// `reactive(…)` alone in `reactiveOptions` and the `GET`'s global body goes unfound (3 against 4).
+// The page's own `route` is the near miss the declaration's path keeps out.
 test('a global body reading an ambient is found at the read — 11.37', () => {
     expect(
         found.map(({ path, line, column }) => ({
@@ -72,6 +74,10 @@ test('a global body reading an ambient is found at the read — 11.37', () => {
         { file: 'shared/session.ts', ...place(SESSION, 'principal, {') },
         { file: 'shared/session.ts', ...place(SESSION, 'jar()') },
         { file: 'shared/session.ts', ...place(SESSION, 'csp.nonce') },
+        {
+            file: 'shared/session.ts',
+            ...place(SESSION, 'principal.authenticated'),
+        },
     ])
     expect(found[1]?.message).toContain('`cookies`')
     expect(found[2]?.message).toContain('`csp.nonce`')

@@ -27,7 +27,7 @@ A body comes in two forms, and its parameter picks between them.
 | `reactive(() => …)` | a `Reactive` — **tracked**, recomputing when what it read changes |
 | `reactive((args) => …)` | a `Keyed` — a factory, **untracked**, one entry per args key |
 
-Both take `schema`, `transform`, `store`, `history`, `global`, `tags`, `throttle` and `debounce`,
+Both take `schema`, `transform`, `store`, `global`, `tags`, `throttle` and `debounce`,
 and both hand back something a page reads by name. Every signature and every member is in the
 [`reactive` reference](../reference/reactive.md).
 
@@ -65,14 +65,14 @@ A `<script>` setup body is untracked, so the call written bare registers nothing
 than a matter of taste.
 
 It costs nothing, and that is **adoption**. A body returning another `Reactive` is adopted
-rather than stored: the outer subscribes to the inner and mirrors its productions into its own
-ring. Every probe forwards from the adopted value, `error()` included (11.51), and a trigger on the
-outer reaches the adopted one (11.52). So the reads reach the record rather than a box to be opened
+rather than stored: the outer subscribes to the inner and mirrors its productions as its
+own. Every probe forwards from the adopted value, `error()` included (11.50), and a trigger on the
+outer reaches the adopted one (11.51). So the reads reach the record rather than a box to be opened
 first, and `busy` belongs to the load. A wrapper that stored the call would settle the moment
 its body returned, and its `busy` would read false for the whole of the load it wraps.
 
 `transform` runs after that adoption rather than instead of it, on the settled payload (11.14). A
-write does not stop at the outer value, though: it reaches the one adopted (11.60), so a reshape you
+write does not stop at the outer value, though: it reaches the one adopted (11.59), so a reshape you
 mean to patch reads the load rather than adopting it — see
 [Patching a list](patch-a-list-from-a-live-feed.md).
 
@@ -97,7 +97,7 @@ That is also the trade. The reload is a new answer even where the fields are ide
 the cutoff compares identity, and the handler builds a record per call.
 
 That is a body computing its value. One handing back a `Reactive` passes the write through to the
-value it adopted instead (11.60).
+value it adopted instead (11.59).
 
 There is no warning on that write, and there could not be a useful one: `reactive(() =>
 structuredClone(upstream))` and `reactive(() => a + b)` are indistinguishable to a compiler, so a
@@ -142,8 +142,8 @@ Read on: [Reloading](decide-when-a-value-reloads.md)
 {% example memo-provisional %}
 
 The body never takes the wrong arm. Reading `viewer` before it lands throws `NotLanded`, which
-abandons the run (2.13), and the body runs again when the gate lands (2.14). The abandoned run is
-**provisional** and mints no production (11.53): nothing enters the ring, no `transform` sees it,
+abandons the run (2.12), and the body runs again when the gate lands (2.13). The abandoned run is
+**provisional** and mints no production (11.52): nothing is stored, no `transform` sees it,
 no `store` is written, and no reader is served. You write no `?.`, because nothing past the read
 runs.
 

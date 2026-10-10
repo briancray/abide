@@ -226,7 +226,7 @@ test('a claim an app declares on Principal is typed where principal.resolved rea
 
 // 7.4 — THE RELOAD A SIGN-IN STARTS KEEPS SERVING THE DOCUMENT IT REPLACES. A click handler reading
 // `principal.authenticated()` while the reload is in flight reads the caller as they were, rather
-// than throwing that the value has not landed. THE REVERT: have `PRINCIPAL_ROTATED` call
+// than throwing that the value has not landed. THE REVERT: have the listener `principalMembers` registers call
 // `document.invalidate()` again; the read during the reload throws `NotLanded`.
 test('a read while the sign-in reload is in flight answers the previous document — 7.4', async () => {
     let signedIn = false

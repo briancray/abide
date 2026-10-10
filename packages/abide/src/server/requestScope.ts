@@ -38,7 +38,7 @@ export type RequestScope = Scope & {
     /**
      * The longest `timeout` any handler that ran in this request asked for, in seconds.
      *
-     * 16.24 — and `Infinity` for one that is never reaped (16.61).
+     * 16.23 — and `Infinity` for one that is never reaped (16.57).
      */
     timeout: number
     /** This response's nonce, minted by the `csp` rung or on the first ask. 29.3. */
@@ -61,7 +61,7 @@ export type RequestScope = Scope & {
     /**
      * The request the listener was handed, before a mount or a rung made another.
      *
-     * 16.23 — bun raises the idle timeout only on the one it received itself.
+     * 16.22 — bun raises the idle timeout only on the one it received itself.
      */
     received: Request | undefined
     /** What a write through `response` is collected onto, for whoever answers to apply. 22.9. */
@@ -136,8 +136,8 @@ SCOPING.provider = {
 /**
  * A fresh request scope, for an opener that enters it more than once (`inOpenScope`).
  *
- * 18.31 — a connection to the socket mux, whose every frame is answered in the scope its upgrade
- * opened; the opener releases it (`releaseScope`) when the connection closes, 18.32.
+ * 18.16 — a connection to the socket mux, whose every frame is answered in the scope its upgrade
+ * opened; the opener releases it (`releaseScope`) when the connection closes, 18.17.
  */
 export function scopeFor(
     given: Request | undefined,
@@ -270,7 +270,7 @@ export function adoptRequest(given: Request): void {
 /**
  * What `App.listen` bound, and how a call raises the idle timeout on the received request.
  *
- * 42.9 — the server is for `server` to hand back. 16.23 — the timeout is raised on the server
+ * 42.9 — the server is for `server` to hand back. 16.22 — the timeout is raised on the server
  * bound here, or where the listener is in another process (`abide dev`), by a message to it.
  */
 export const LISTENING: {

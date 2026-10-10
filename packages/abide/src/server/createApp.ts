@@ -35,7 +35,7 @@ import {
 import { testBuild } from './testBuild.ts'
 import { traceResponse } from './trace.ts'
 
-// 28.8 — one line per request.
+// 28.9 — one line per request.
 const REQUEST_LOG = namedLogger('abide:request')
 
 /** The app object: what a host, a test or a script holds the app as. */
@@ -170,7 +170,7 @@ export async function bootApp(
         own: own === undefined ? undefined : ownRoute(own),
     }
 
-    // 16.15, 37.3 — THE APP LANE'S ONION, composed once over the whole request path. 21.20 — the
+    // 16.14, 37.3 — THE APP LANE'S ONION, composed once over the whole request path. 21.20 — the
     // centre takes its own time back out of what `fetch` counts for the whole onion.
     const answer = compose(HOOKS.rungs, async ({ request }) => {
         const began = performance.now()
@@ -202,7 +202,7 @@ export async function bootApp(
         try {
             // 42.6 — `run`, with dispatch over it — and the headers every answer carries stamped
             // inside it, where the trace the request was answered under is still the current one.
-            // 16.23 — the scope keeps `given` too, the one request bun will raise a timeout on.
+            // 16.22 — the scope keeps `given` too, the one request bun will raise a timeout on.
             return await inReleasedScope(
                 request,
                 async () => {
@@ -216,7 +216,7 @@ export async function bootApp(
                         answered = plainAnswer('internal server error', 500)
                     }
                     const stamped = stamp(answered)
-                    // 28.7 — a closed namespace does not pay for the line it would have written.
+                    // 28.8 — a closed namespace does not pay for the line it would have written.
                     if (REQUEST_LOG.enabled())
                         REQUEST_LOG.debug(
                             request.method,
@@ -242,14 +242,14 @@ export async function bootApp(
         held: new Set(),
     }
 
-    // 16.43, 42.12 — A `raw` CALL MADE ON THIS SERVER IS ANSWERED IN PROCESS, by the app answering the
+    // 16.42, 42.12 — A `raw` CALL MADE ON THIS SERVER IS ANSWERED IN PROCESS, by the app answering the
     // request it was made in; only a call made outside every request falls to the app built last.
     const answerRaw = (request: Request): Promise<Response> =>
         (currentRequestScope()?.app?.answer ?? fetch)(request)
     RPC_SERVER.raw = answerRaw
 
     const openMux = (): Mux => {
-        mux = new Mux(booted.sockets, booted.handlers, answering)
+        mux = new Mux(booted.handlers, answering)
         return mux
     }
 
@@ -282,7 +282,7 @@ export async function bootApp(
         // What the requests drained here left behind them.
         endHeld()
         if (LISTENING.server === bound) LISTENING.server = undefined
-        // 16.43 — a stopped app answers no `raw` call made outside every request.
+        // 16.42 — a stopped app answers no `raw` call made outside every request.
         if (RPC_SERVER.raw === answerRaw) RPC_SERVER.raw = null
         bound = undefined
         await compose(HOOKS.stops, async () => {})(undefined)
@@ -306,10 +306,10 @@ export async function bootApp(
                     : port !== undefined
                       ? { port }
                       : {}),
-                // 16.58 — THE CEILING IS THE HANDLER'S, and bun's own 128 MB would refuse a body
+                // 16.54 — THE CEILING IS THE HANDLER'S, and bun's own 128 MB would refuse a body
                 // before one that declared none could accept it.
                 maxRequestBodySize: Number.MAX_SAFE_INTEGER,
-                // 18.2, 37.3 — THE ONE MUX, upgraded where the app lane admitted it.
+                // 18.1, 37.3 — THE ONE MUX, upgraded where the app lane admitted it.
                 fetch: async (request, server) => {
                     const answered = await fetch(request)
                     return admitsMux(request, answered, booted)
@@ -386,7 +386,7 @@ function stamp(answered: Response): Response {
  * The request with the mount taken off its address, where it is under the mount — or the redirect
  * to the mount's root, where it asked for the mount with no `/` after it.
  *
- * 16.11 — A REQUEST UNDER THE MOUNT IS ANSWERED AS THE ADDRESS BELOW IT; one that is not — a proxy
+ * 16.10 — A REQUEST UNDER THE MOUNT IS ANSWERED AS THE ADDRESS BELOW IT; one that is not — a proxy
  * that already took the prefix off — is answered as it came.
  *
  * THE MOUNT'S ROOT IS `/docs/`, as `url('/')` writes it. A document answered at `/docs` resolves a

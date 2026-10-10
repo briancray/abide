@@ -1,4 +1,4 @@
-// 16.33 — A FRAMED ANSWER, read one JSON value per line: the whole line for jsonl, the `data:` line of
+// 16.32 — A FRAMED ANSWER, read one JSON value per line: the whole line for jsonl, the `data:` line of
 // each event for sse. A line that does not carry the prefix — an sse `event:` line, a blank line — is
 // skipped. One line reader behind both a body read to the end and one read as it lands.
 
@@ -7,7 +7,11 @@
  * the answer is not framed at all.
  */
 export function framingPrefix(type: string | null | undefined): string | null {
-    if (type?.startsWith('application/jsonl')) return ''
+    if (
+        type?.startsWith('application/jsonl') ||
+        type?.startsWith('application/x-ndjson')
+    )
+        return ''
     if (type?.startsWith('text/event-stream')) return 'data: '
     return null
 }
@@ -15,7 +19,7 @@ export function framingPrefix(type: string | null | undefined): string | null {
 /**
  * Whether an answer at `type` is read as bytes rather than as JSON: anything neither JSON nor framed.
  *
- * 16.35 — A BINARY IS `application/octet-stream`, OR A `Blob`'s OWN TYPE, so the bytes are named by
+ * 16.34 — A BINARY IS `application/octet-stream`, OR A `Blob`'s OWN TYPE, so the bytes are named by
  * what an answer is not rather than by one type. An answer naming no type is read as JSON.
  */
 export function carriesBytes(type: string | null | undefined): boolean {
@@ -27,7 +31,7 @@ export function carriesBytes(type: string | null | undefined): boolean {
 }
 
 /**
- * A streamed answer's chunks: each JSON value its framing carried, or, for bytes (16.47), each
+ * A streamed answer's chunks: each JSON value its framing carried, or, for bytes (16.46), each
  * `Uint8Array` as it was read — bytes have no framing to split them back into the chunks the
  * handler yielded.
  */
@@ -84,15 +88,16 @@ export async function* framedStream(
     try {
         for (;;) {
             const { done, value } = await reader.read()
-            buffered = readLines(
-                buffered +
-                    (done
-                        ? decoder.decode()
-                        : decoder.decode(value, { stream: true })),
-                prefix,
-                done,
-                chunks,
-            )
+            const decoded = done
+                ? decoder.decode()
+                : decoder.decode(value, { stream: true })
+            // A long line across many reads is held unscanned until its newline lands, or each read
+            // rescans everything before it.
+            if (!done && !decoded.includes('\n')) {
+                buffered += decoded
+                continue
+            }
+            buffered = readLines(buffered + decoded, prefix, done, chunks)
             yield* chunks
             chunks.length = 0
             if (done) return

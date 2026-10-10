@@ -56,8 +56,8 @@ operand hands over. Destructuring and spreading read once:
 A name on the right of `=` is read like any operand. A `Reactive` that arrives any other way is
 **adopted**: `paid = payInvoice({ id })` makes `paid` serve what the call serves, and go on
 following it as it produces — the same thing a body returning a `Reactive` does. From then on a
-settled value written to `paid` goes through to what it adopted (11.60), and only another
-`Reactive` re-points it (11.62).
+settled value written to `paid` goes through to what it adopted (11.59), and only another
+`Reactive` re-points it (11.61).
 
 `await foo` is the one other position that holds. Every `Reactive` is a promise for its own
 settling, so `await invoice` waits for the value and hands it to you — the same line you would

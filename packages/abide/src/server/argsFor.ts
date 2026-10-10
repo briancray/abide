@@ -1,5 +1,5 @@
 // WHAT A CALL'S ARGS ARE BEFORE ITS HANDLER SEES THEM, for every lane that lets a call to a handler in
-// off the wire: over http (16.2) and a `GET` followed over the socket mux (18.17). Each lane reads the
+// off the wire: over http (16.2) and a `GET` followed over the socket mux (18.3). Each lane reads the
 // args off its own transport and answers a refusal in its own form.
 
 import { normalised } from '#shared/reactive/argsContract.ts'
@@ -13,9 +13,9 @@ import { coerceArgs } from './coerceArgs.ts'
  * carried coerced where `query` says the args are text, the handler's parameter defaults laid in, and
  * the result held to the handler's annotation. Throws the refusal where it is not held.
  *
- * 19.8 — the text as the types the handler's `args` declares. 11.27 — then the defaults, ahead of
+ * 19.7 — the text as the types the handler's `args` declares. 11.27 — then the defaults, ahead of
  * every key taken after it: the seed a render filed and the `global` entry standing were both filed
- * under them (11.29). 19.10 — THE WIRE HELD TO THE ANNOTATION, where no `args` schema is declared to
+ * under them (11.29). 19.9 — THE WIRE HELD TO THE ANNOTATION, where no `args` schema is declared to
  * hold it; args that did not come are the handler's to answer.
  */
 export function argsFor(

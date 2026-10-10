@@ -20,26 +20,15 @@ import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
 import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
-import {
-    armTimer,
-    dropExpired,
-    type Expiry,
-    expiryFor,
-    headDeadline,
-    type Ringed,
-} from './Expiry.ts'
+import { armTimer, type Expiry, expiryFor } from './Expiry.ts'
 import { FOLLOWED } from './FOLLOWED.ts'
-import {
-    type History,
-    historyFrom,
-    type Retained,
-    retained,
-} from './History.ts'
+import { Cursor, hasCursorBehind, keepPlaces, type Retained } from './Cursor.ts'
 import { isReactive } from './isReactive.ts'
 import { isThenable } from './isThenable.ts'
+import { MUTATION } from './MUTATION.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
-import { PATCH_SINKS } from './PATCH_SINKS.ts'
+import { PATCH_SINKS, type PatchOp } from './PATCH_SINKS.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
 import { STREAMING } from './STREAMING.ts'
@@ -112,13 +101,13 @@ export type ReactiveOptions<
     // two halves of that union apart.
     Failures extends Failed<string, unknown> = never,
     // `never` on every overload but the keyed ones, which is what makes `args` unspellable
-    // on the unkeyed form (11.42): its field type collapses to `never` there.
+    // on the unkeyed form (11.41): its field type collapses to `never` there.
     Args = never,
 > = {
     /**
      * The schema gating a keyed value's args.
      *
-     * RULEBOOK 11.41, 11.28, 11.69: the gate on a keyed value's args — what it returns is what the
+     * RULEBOOK 11.40, 11.28, 11.68: the gate on a keyed value's args — what it returns is what the
      * body is handed, and the key was taken before it ran (11.26).
      */
     args?: [Args] extends [never] ? never : Schema<Args>
@@ -132,7 +121,7 @@ export type ReactiveOptions<
     /**
      * The life of a production, in milliseconds.
      *
-     * RULEBOOK 6.4 through 6.12. Inert on a value with no producer (6.8), which is decided
+     * RULEBOOK 6.1 through 6.6. Inert on a value with no producer (6.2), which is decided
      * once — see `expiryFor`.
      */
     ttl?: number
@@ -140,8 +129,8 @@ export type ReactiveOptions<
      * The gate on the way in, run before `transform` on every way in.
      *
      * RULEBOOK 4.3: THE GATE ON THE WAY IN, and it runs FIRST — before `transform`, on
-     * the settled value, on every way in alike: a write, a publish (9.8, 9.12), what a
-     * body produced (11.47) and what an adoption mirrors (11.48).
+     * the settled value, on every way in alike: a write, what a body produced (11.46) and
+     * what an adoption mirrors (11.47).
      */
     schema?: Schema<Accepted>
     /**
@@ -154,14 +143,6 @@ export type ReactiveOptions<
      */
     transform?: Transformer<Accepted, Stored, Failures>
     /**
-     * How many past productions `s.history` can replay beside the standing one.
-     *
-     * RULEBOOK 6.1 through 6.3, 6.16: how many past productions are retained beside the standing
-     * one, for `s.history` to replay. On a streaming producer it bounds the CLOSED runs a
-     * cursor can replay (6.17), which is the stream's own ring rather than this one.
-     */
-    history?: number
-    /**
      * Wakes a reader at once, then at most once per window.
      *
      * RULEBOOK 5.8, 5.12: a change reaches a reader immediately and then at most once per
@@ -173,7 +154,7 @@ export type ReactiveOptions<
     /**
      * What a `Selection` matches on; the function form is handed the entry's args.
      *
-     * RULEBOOK 11.44, 11.45: what a `Selection` matches on, and the one selector that reaches
+     * RULEBOOK 11.43, 11.44: what a `Selection` matches on, and the one selector that reaches
      * across values. The function form is handed the entry's args, and `undefined` on a value
      * that has none — which is the only value it is ever `undefined` on.
      */
@@ -181,7 +162,7 @@ export type ReactiveOptions<
     /**
      * Where the value lives when the process does not.
      *
-     * RULEBOOK 8, 9.11, 11.43: where the value lives when the process does not. The function form
+     * RULEBOOK 8, 9.5, 11.42: where the value lives when the process does not. The function form
      * is handed the entry's args, so each key of a `Keyed` has a store of its own.
      */
     store?: Store<Stored> | ((args: ArgsOf<Args>) => Store<Stored>)
@@ -196,7 +177,7 @@ export type ReactiveOptions<
      * What tells one array element from another.
      *
      * RULEBOOK 5.22, 32.32: what tells one element from another. The property-name form is the one
-     * that crosses a wire (18.19) — a function has no serialisation.
+     * that crosses a wire (18.4) — a function has no serialisation.
      */
     by?:
         | (keyof ElementOf<Stored> & string)
@@ -205,7 +186,7 @@ export type ReactiveOptions<
 
 /**
  * What a function-form option is handed: the entry's args, or `undefined` on a value whose body
- * takes none (11.45).
+ * takes none (11.44).
  */
 type ArgsOf<Args> = [Args] extends [never] ? undefined : Args
 
@@ -220,7 +201,7 @@ type ElementOf<Stored> =
  *
  * `Produced` is the fourth parameter and RULEBOOK 1.2 is what it means: the unit the
  * producer yielded, which is `Stored` for every producer but a stream, and one chunk for a
- * streaming producer (9.2). It defaults to `Stored`, so the parameter is invisible to
+ * streaming producer (9.1). It defaults to `Stored`, so the parameter is invisible to
  * everything that is not a stream.
  */
 export type Reactive<
@@ -254,43 +235,26 @@ export type Reactive<
      * Writes a value, gated by `identity`; returns the refusal where a gate refused it.
      *
      * Gated by `identity`, and local. The divergence that once split by PRODUCER
-     * splits by MEMBER instead. Hands back the refusal where a gate refused the write (9.5).
-     * A `Reactive` IS IN THE UNION because 11.62 adopts one rather than storing it, and it is
+     * splits by MEMBER instead. Hands back the refusal where a gate refused the write (4.18).
+     * A `Reactive` IS IN THE UNION because 11.61 adopts one rather than storing it, and it is
      * spelled out rather than left to `PromiseLike`: a `Reactive` satisfies that (1.4), and
      * taking it through that arm is exactly the settle-to-a-snapshot 1.6 refuses. Its failures are
      * this value's, since the adopted value's refusal becomes this one's: an `Rpc` call carries
-     * `HttpError` (16.9), so a value read through one is written through another.
+     * `HttpError` (16.8), so a value read through one is written through another.
      */
     set(
         value:
             | Accepted
             | PromiseLike<Accepted>
             | Reactive<Accepted, unknown, Failures, unknown>,
-        // biome-ignore lint/suspicious/noConfusingVoidType: same reason as `watch` below — a `set` that returns nothing infers `void`, and 9.5's refusal is the other arm.
+        // biome-ignore lint/suspicious/noConfusingVoidType: same reason as `watch` below — a `set` that returns nothing infers `void`, and 4.18's refusal is the other arm.
     ): void | Failures
-    /**
-     * Publishes a production ungated; returns its ordinal or the refusal.
-     *
-     * Ungated, and fans out. Returns the production's ordinal, or the standing one
-     * where the write collapsed (RULEBOOK 9.8 generalised), or the refusal (9.5). A load
-     * hands back the ordinal it started from: what it will be refused with is not known yet.
-     */
-    publish(value: Accepted | PromiseLike<Accepted>): number | Failures
     patch(mutate: (value: Stored) => void): void
     refresh(): void
     invalidate(): void
     // biome-ignore lint/suspicious/noConfusingVoidType: `void` is the RETURN POSITION of an author's effect, and it is load-bearing. `undefined` there refuses `(v) => { read(v) }` — a block body returning nothing infers `void`, which is not assignable to `undefined` — so the rule's fix would reject the ordinary effect.
     watch(effect: (value: Stored) => void | (() => void)): () => void
-    /**
-     * The retained productions, replayed to the depth asked for, then live.
-     *
-     * 2.5, 2.6: the retained productions, replayed to the depth asked for, and then live.
-     * `Stored` RATHER THAN `Produced`, which are the same type on every producer but a streaming
-     * one: 6.17 has a run enter the ring as its accumulation at close, so the past of a stream is
-     * its finished runs where a cursor over the VALUE walks chunks (2.7, 1.2).
-     */
-    history(replay?: number): History<Stored>
-    /** The production in flight, and then what follows it (2.7). */
+    /** The production in flight, and then what follows it (2.5). */
     [Symbol.asyncIterator](): AsyncIterator<Produced>
     then<Result>(
         onSettled?: (value: Stored) => Result | PromiseLike<Result>,
@@ -312,14 +276,13 @@ type Adoption = { source: Cell; stop: () => void }
  * cell rather than one per window field, allocated only where a value declared one — the
  * shape `adoption` already uses, and for the same reason.
  *
- * WHAT A WINDOW CAPS IS THE WAKE, NEVER THE PRODUCTION (5.9). Every write still mints:
- * the ordinal moves, the ring takes it, and a cursor walking retention is handed every one
- * of them (5.10). What waits is the value a READER sees and the cascade that tells it so,
+ * WHAT A WINDOW CAPS IS THE WAKE, NEVER THE PRODUCTION (5.9). Every write still mints and
+ * the ordinal moves. What waits is the value a READER sees and the cascade that tells it so,
  * which is the whole of 5.8's "how often a value changes for a reader".
  *
  * WHAT IT COSTS EVERY VALUE THAT NEVER CAPS: one field load and one branch on the write
  * path, plus `serve` as a frame rather than five stores inline. Measured at 0.99x -> 1.08x
- * against the hand-written arm on `publish into a capped ring`, consistent across three
+ * against the hand-written arm on the since-removed `publish into a capped ring` case, consistent across three
  * runs over a 0.7% floor — about 1.3 ns on a 14.7 ns op. Moving the comparison target
  * behind the gate did not recover it, so it is the frame and the branch rather than a
  * wasted load. Inlining `serve` into the uncapped arm would buy it back for a second copy
@@ -405,19 +368,19 @@ type Persisted = {
 /**
  * A streaming producer's own state; `null` on every value whose body is not an async generator.
  *
- * A STREAMING PRODUCER'S OWN STATE (9.2, 9.3, 9.20), and `null` on every value whose body is
+ * A STREAMING PRODUCER'S OWN STATE (9.1, 9.2, 9.6), and `null` on every value whose body is
  * not an async generator — the shape `cap` and `adoption` already use.
  *
  * THE ACCUMULATION IS PUSHED INTO AND MATERIALISED ON THE READ. A chunk is one push and one
  * cascade; the copy a reader is handed is taken by the read that follows, so a hundred
- * chunks between two reads are one copy rather than a hundred (9.3). The copy is FRESH per
+ * chunks between two reads are one copy rather than a hundred (9.2). The copy is FRESH per
  * chunk count and has to be: a reader holding an earlier snapshot still holds what it read,
  * and a value derived from this one compares by reference — the live buffer handed out would
  * be collapsed at every derived identity gate after the first chunk.
  *
  * WHAT THAT COSTS WHERE A READ FOLLOWS EVERY CHUNK is a copy of the accumulation per read,
  * and a reader woken per chunk made that a copy per chunk: twenty thousand chunks landing in
- * one task took 61 ms against 1.9 ms for the hand-written arm. 9.23 is what bounds it — the
+ * one task took 61 ms against 1.9 ms for the hand-written arm. 9.9 is what bounds it — the
  * wake is held to one per task, which is the unit a browser paints between, so the reads it
  * drops were never visible. A reader that reads per chunk on its own, unwoken, is still a
  * copy per read.
@@ -434,15 +397,15 @@ type Stream = {
      * Which accumulation `value` stands for, as a `version` rather than a chunk count.
      *
      * A version rather than a chunk count because a patch changes the accumulation without
-     * changing its length (9.27), and a write stands at the version it was made at until the
-     * accumulation moves past it (9.25). -1 where nothing has been materialised.
+     * changing its length (9.13), and a write stands at the version it was made at until the
+     * accumulation moves past it (9.11). -1 where nothing has been materialised.
      */
     materialisedAt: number
     /**
      * Whether `value` is a write rather than a materialisation.
      *
      * WHETHER `value` IS A WRITE rather than a materialisation, while `materialisedAt` stands. A value
-     * forwarding this stream serves the write the way it would have served a production (11.60).
+     * forwarding this stream serves the write the way it would have served a production (11.59).
      */
     written: boolean
     /**
@@ -460,13 +423,13 @@ type Stream = {
      *
      * WHICH RUN IS CURRENT, and only a new run moves it. Apart from `generation`, which every
      * write moves so that a load it overtook lands nowhere — a write over a stream stands beside
-     * the stream (9.25) rather than superseding it, and sharing the counter stopped the stream.
+     * the stream (9.11) rather than superseding it, and sharing the counter stopped the stream.
      */
     run: number
     /**
      * Whether a wake is already held for this task, so the next chunk only pushes.
      *
-     * 9.23: chunks have landed that the readers have not been told about, and the value is
+     * 9.9: chunks have landed that the readers have not been told about, and the value is
      * already in `WAKING` — so the next chunk in this task pushes and does nothing else.
      */
     waking: boolean
@@ -490,31 +453,13 @@ type Stream = {
      */
     ordinalOffset: number
     /**
-     * The accumulations of closed runs, one entry per run — not the chunk buffer.
-     *
-     * 6.17'S RING, AND IT IS NOT THE CHUNK BUFFER. `chunks` is the run being built and is what
-     * `ring` points at, so a cursor over the value walks chunks (2.7); this holds what CLOSED
-     * runs accumulated to, one entry per run. Two buffers because they count different things:
-     * `ordinal` counts chunks, `runs` counts productions, and a cursor reading either by ordinal
-     * needs its own base or it is handed `undefined` on its next turn.
-     */
-    past: unknown[]
-    runs: number
-    /**
      * Whether what is served is a run that closed.
      *
      * WHETHER WHAT IS SERVED IS A RUN THAT CLOSED, which is the only accumulation a deadline
-     * reaches (6.17). A run in flight has minted nothing, so `expiry.at` says nothing about it —
+     * reaches (6.11). A run in flight has minted nothing, so `expiry.at` says nothing about it —
      * without this the standing arm reads `at` as 0 and drops the value on its first read.
      */
     closed: boolean
-    /**
-     * The `Retained` a history cursor reads, made once per stream and mutated as runs close —
-     * cursors hold it, so a fresh object per close would leave every live one reading the old.
-     * Its `readers` are its own: a run closing wakes the cursors waiting on it and nothing else,
-     * where the cell's readers are woken per chunk by the wake a stream already holds (9.23).
-     */
-    view: Retained | null
 }
 
 function newStream(source: Cell | null): Stream {
@@ -530,10 +475,7 @@ function newStream(source: Cell | null): Stream {
         probesOwed: false,
         source,
         ordinalOffset: 0,
-        past: EMPTY_RING,
-        runs: 0,
         closed: false,
-        view: null,
     }
 }
 
@@ -549,87 +491,24 @@ function becomeStream(cell: Cell, source: Cell | null): Stream {
 }
 
 /**
- * The `Retained` over a stream's closed runs, made the first time something asks for it.
- *
- * 6.17: the accumulation a run closed with, entering the ring as one production. Made on first
- * use — the first close, or an earlier read of the past — rather than at construction, so a
- * stream that never closes and is never asked for its past allocates no view.
+ * Starts a closed run's clock: the close is a streaming producer's mint (6.11), as `produce` is
+ * every other producer's. A failed or superseded run never reaches here, so it starts no clock.
  */
-function historyView(cell: Cell, stream: Stream): Retained {
-    let view = stream.view
-    if (view === null) {
-        view = {
-            ordinal: 0,
-            probeReaders: [],
-            ring: stream.past,
-            ringBase: 0,
-            ringDepth: cell.ringDepth,
-            servable: false,
-            state: CLEAN,
-            // NULL THOUGH THIS IS A STREAM'S: `stream` on a `Retained` says "the ring is the
-            // accumulation being built", and this ring is the opposite of that — closed runs,
-            // bounded by `ringDepth` and read like any other value's past.
-            stream: null,
-            value: undefined,
-            readers: [],
-        }
-        stream.view = view
-    }
-    return view
-}
-
-/**
- * Enters a closed run's accumulation into the stream's ring as one production.
- *
- * A RUN HAS CLOSED, so what it accumulated is a production (6.17). 6.20 keeps a failed or
- * superseded run out by never reaching here, and 6.21 falls out of the same thing: the ring holds
- * closed runs alone, so a replay cannot run past the last one.
- */
-function retainRun(cell: Cell, stream: Stream): void {
-    const accumulated = heldValue(cell)
-    // 6.18: an `undefined` production never enters the ring, and a stream that closed with
-    // nothing to show is the shape that makes one.
-    if (accumulated === undefined) return
-    const view = historyView(cell, stream)
+function closeRun(cell: Cell, stream: Stream): void {
+    // Materialised here so 9.8's gates run on the accumulation the run closed with.
+    if (heldValue(cell) === undefined) return
     stream.closed = true
-    stream.runs += 1
-    view.ordinal = stream.runs
-    view.value = accumulated
-    view.servable = true
-    // 6.17 IS WHERE A STREAM'S CLOCK STARTS. The run in flight has produced nothing, so it has
-    // no deadline; the close is the mint, exactly as `produce` is on every other producer.
     const expiry = cell.expiry
-    const mintedAt = expiry === null ? 0 : Date.now()
-    if (cell.ringDepth > 0) {
-        if (stream.past === EMPTY_RING) stream.past = []
-        stream.past.push(accumulated)
-        if (expiry !== null) expiry.minted.push(mintedAt)
-        // The same amortised trim as a value's ring: grow to twice the depth and move once,
-        // rather than shifting every entry per close. THE TWO ARRAYS ARE ONE INDEX, so
-        // `minted[i]` pairs with `past[i]` through every trim.
-        if (stream.past.length >= cell.ringDepth * 2) {
-            const dropped = stream.past.length - cell.ringDepth
-            stream.past.splice(0, dropped)
-            if (expiry !== null) expiry.minted.splice(0, dropped)
-            view.ringBase += dropped
-        }
-        view.ring = stream.past
-    }
     if (expiry !== null) {
-        expiry.at = mintedAt
-        // A closed run replaces what 6.13 released, so the value is no longer waiting for one.
+        expiry.at = Date.now()
+        // A closed run replaces what 6.7 released, so the value is no longer waiting for one.
         expiry.dropped = false
         armNext(cell, expiry)
     }
-    // The readers of the PAST and nothing else — a cursor waiting on a run, and a tracked
-    // iteration of `s.history(n)` (a `{#for}` over it) — marked and drained like any value's.
-    // They are not on the cell, so no binding of the value is woken a second time by a close.
-    // `markReaders` asks of a source its `readers` and its `state`, which the view carries.
-    cascade(view as unknown as Cell)
 }
 
 /**
- * The prototype every `async function*` has, and so the declaration 9.20 reads at construction.
+ * The prototype every `async function*` has, and so the declaration 9.6 reads at construction.
  * Taken from a literal because the constructor has no global name.
  */
 const ASYNC_GENERATOR_FUNCTION = Object.getPrototypeOf(async function* () {})
@@ -637,7 +516,7 @@ const ASYNC_GENERATOR_FUNCTION = Object.getPrototypeOf(async function* () {})
 /** The prototype of every async generator function's own `prototype`, which its generators have. */
 const ASYNC_GENERATOR = ASYNC_GENERATOR_FUNCTION.prototype
 
-/** Whether a run handed back an async generator, which 9.20 makes the run's stream. */
+/** Whether a run handed back an async generator, which 9.6 makes the run's stream. */
 function isAsyncGenerator(value: unknown): value is AsyncGenerator {
     if (typeof value !== 'object' || value === null) return false
     const own = Object.getPrototypeOf(value)
@@ -760,17 +639,18 @@ class Cell {
      * path of everything that did not ask for one.
      */
     declare schema: Schema<unknown> | null
-    declare ringDepth: number
+    /**
+     * A streaming producer's chunk buffer, for a cursor to walk (2.5); `EMPTY_RING` on every
+     * other value, whose cursor answers the standing production from `value`.
+     */
     declare ring: unknown[]
     /**
-     * How many productions have fallen off the FRONT of the ring, so `ring[index]` carries
-     * ordinal `ringBase + index + 1`. A cursor holds an ordinal and finds its place from
-     * this, which is what lets the ring be trimmed without a cursor losing its position
-     * or repeating one (2.5, 9.10).
+     * The ordinal before `ring[0]`, so `ring[index]` carries ordinal `ringBase + index + 1` and a
+     * cursor finds its place from the ordinal it holds.
      */
     declare ringBase: number
     /**
-     * `null` on every value that declares no `ttl`, and on every value 6.8 makes it inert
+     * `null` on every value that declares no `ttl`, and on every value 6.2 makes it inert
      * for. Its presence is also what holds `direct` false — see `serve`.
      */
     declare expiry: Expiry | null
@@ -798,7 +678,7 @@ class Cell {
     /**
      * Whether the last run aborted on a value that had not landed.
      *
-     * 2.14: A RUN THAT ABORTED ON A VALUE THAT HAD NOT LANDED, and is owed the rest of itself
+     * 2.13: A RUN THAT ABORTED ON A VALUE THAT HAD NOT LANDED, and is owed the rest of itself
      * when that value arrives. Push-pull leaves a marked body for the read that wants it, and
      * that is right for a body which RAN — this one did not, so nothing downstream can pull it:
      * a reader guarding on `ready()` asks the probe edge and never the value, and the guard would
@@ -823,6 +703,8 @@ class Cell {
      * selection signal for any of them.
      */
     declare tags: string[] | null
+    /** Whether `declare` built this value for a mutation, which a sweep invalidates (13.16). */
+    declare mutation: boolean
     /** `null` on every value declaring no `store`, which is what keeps `serve` from persisting. */
     declare store: Persisted | null
     /**
@@ -854,7 +736,7 @@ class Cell {
      * Whether a settled write goes straight to `produce`, past no gate.
      *
      * NOTHING STANDS BETWEEN A SETTLED WRITE AND `produce`: no `schema`, no `transform`, and no
-     * stream whose writes stand apart from its chunks (9.25, 9.26). One field where the write and
+     * stream whose writes stand apart from its chunks (9.11, 9.12). One field where the write and
      * the recompute each tested two, maintained where a forwarded stream comes and goes.
      */
     declare bareWrite: boolean
@@ -862,7 +744,7 @@ class Cell {
      * Whether a gated write can take `SIMPLE_PROTOTYPE`'s short path.
      *
      * EVERYTHING A GATED WRITE WOULD OTHERWISE ASK, IN ONE FIELD: no cap holding the
-     * production back, no expiry, no ring to append to, no store to persist through, no
+     * production back, no expiry, no store to persist through, no
      * declared `identity`, and `bareWrite`'s own three. A value carrying none of them has a
      * `produce` -> `serve` -> `cascade` that reduces to three stores and a mark — which is
      * what `SIMPLE_PROTOTYPE.set` spells out rather than calls.
@@ -943,21 +825,15 @@ class Cell {
             | ((value: unknown) => unknown)
             | null
         this.schema = (options?.schema ?? null) as Schema<unknown> | null
-        // THE RING HOLDS THE STANDING PRODUCTION TOO, so `history: n` is a ring of n + 1. A value
-        // declaring none has no ring at all, and a cursor answers the standing production from
-        // `value` (6.16) — which is what keeps every write off the ring's push.
-        const history = options?.history ?? 0
-        this.ringDepth = history > 0 ? history + 1 : 0
-        this.ring = this.ringDepth > 0 ? [] : EMPTY_RING
+        this.ring = EMPTY_RING
         this.ringBase = 0
-        // 6.8 DECIDED ONCE, here rather than per production: a body or a ring is what makes
-        // a value a producer, and a plain state is the one this must not reach. See
-        // `expiryFor`.
+        // 6.2 DECIDED ONCE, here rather than per production: a body is what makes a value a
+        // producer, and a plain state is the one this must not reach. See `expiryFor`.
         this.expiry = expiryFor(
             options?.ttl,
             // A store is a producer too (8.2): there is somewhere to get the value back from, so
             // `ttl` on a value holding one drops rather than being inert.
-            body !== null || this.ringDepth > 0 || options?.store !== undefined,
+            body !== null || options?.store !== undefined,
         )
         this.ordinal = 0
         this.generation = 0
@@ -974,6 +850,8 @@ class Cell {
                 : typeof tags === 'function'
                   ? tags(args as never)
                   : tags
+        this.mutation =
+            (options as { [MUTATION]?: true } | undefined)?.[MUTATION] === true
         const store = options?.store
         this.store =
             store === undefined
@@ -1113,7 +991,6 @@ function simpleShape(cell: Cell): void {
         cell.plain &&
         cell.cap === null &&
         cell.store === null &&
-        cell.ringDepth === 0 &&
         cell.identityFn === null
     const callable = cell.callable
     if (callable === null) return
@@ -1131,7 +1008,7 @@ function simpleShape(cell: Cell): void {
  * THE EFFECT QUEUE. A mark walk runs no body, so something has to run the ones that
  * must: every EFFECT the walk reached lands here and is resolved by the drain at the end of
  * the turn. Derived values are NOT queued — nothing runs them until something reads them,
- * which is the whole of push-pull — save 2.14's aborted body, see `drainPending`.
+ * which is the whole of push-pull — save 2.13's aborted body, see `drainPending`.
  *
  * An array and a read cursor rather than `shift()`: an effect that writes appends to the
  * queue the drain is already walking, and shifting would move every remaining entry per
@@ -1196,7 +1073,7 @@ export function flushSync(): void {
     // same turn queue another one, and a write-then-flush loop pays `queueMicrotask` per
     // write rather than once per turn. Measured at 26.5 ns a write against 14.2 before the
     // flush was there at all.
-    // 9.24: a wake a stream is holding for the next task is one this turn ends too.
+    // 9.10: a wake a stream is holding for the next task is one this turn ends too.
     if (WAKING.length !== 0) wakeStreams()
     if (pendingCount === 0 || draining) return
     drainPending()
@@ -1209,9 +1086,9 @@ export function flushSync(): void {
  * and a fifth that forgot would serve an expired production with nothing about the output
  * saying so. `direct` is the one load and one branch the read path gets; an expiry cell
  * is never direct, so every read of it goes a frame in to `readIndirect` — which is
- * exactly where 6.5, 6.11 and 6.12 are answered, and is why a value declaring no `ttl`
+ * exactly where 6.5 and 6.6 are answered, and is why a value declaring no `ttl`
  * never reaches a clock. See `Expiry.ts`. A stream is never direct either, for the same
- * shape of reason: its read is where the accumulation is materialised (9.2).
+ * shape of reason: its read is where the accumulation is materialised (9.1).
  */
 function setDirect(cell: Cell, when: boolean): void {
     cell.direct = when && cell.plain
@@ -1228,8 +1105,8 @@ function setDirect(cell: Cell, when: boolean): void {
  *
  * This is the ordering fix too: without the walk, A -> B, A -> C, B + C -> D resolves D
  * from B while C still holds its old value, and the production D mints there carries
- * `b_new + c_old` — a value the system was never in, which reaches `watch`, the ordinal
- * and the ring. With it, D's read of C finds C marked and pulls it forward first.
+ * `b_new + c_old` — a value the system was never in, which reaches `watch` and the
+ * ordinal. With it, D's read of C finds C marked and pulls it forward first.
  */
 function markReaders(cell: Cell, wanted: number): void {
     const readers = cell.readers
@@ -1268,7 +1145,7 @@ function markReaders(cell: Cell, wanted: number): void {
         const below = reader as unknown as Cell
         // Marked is not directly servable, whatever it holds.
         below.direct = false
-        // 2.14, 3.2, AND THE ONLY PLACE PUSH-PULL RUNS A DERIVED BODY. What is asking is a GUARD: a
+        // 2.13, 3.2, AND THE ONLY PLACE PUSH-PULL RUNS A DERIVED BODY. What is asking is a GUARD: a
         // reader on the probe edge asks `ready()` and never the value, so no read of its will pull
         // this body forward, and what the probe answers is about the value a read WOULD serve
         // (3.2) — a body whose inputs moved to a load is not ready, whatever its last run held. So
@@ -1413,7 +1290,7 @@ function markProbes(cell: Cell, pass: number): void {
     if (EVERY_PRODUCER.probeReaders.length !== 0 && cell.filed)
         markAsked(EVERY_PRODUCER.probeReaders)
     // The floor of everything built from this one moved with it — what READ it, and what
-    // ADOPTED it (11.51), which is on this list as its mirror rather than as itself.
+    // ADOPTED it (11.50), which is on this list as its mirror rather than as itself.
     const readers = cell.readers
     for (let index = 0; index < readers.length; index += 1) {
         const reader = readers[index] as Subscriber
@@ -1543,7 +1420,7 @@ function drainPending(): void {
         // state the next write's mark can reach.
         //
         // AN EFFECT ONLY, THOUGH. The queue is not effects alone: `markReaders` also pushes a
-        // derived CELL on 2.14's aborted-body path, and for one of those `state` is not a
+        // derived CELL on 2.13's aborted-body path, and for one of those `state` is not a
         // reminder to run — it IS the pull the next read takes (`state !== CLEAN` is what sends
         // a read a frame in). Forced back to `CLEAN` it is not deaf, it is settled: the read
         // path skips `resolve`, the aborted body is never re-run and the `ready()` guard that
@@ -1563,21 +1440,15 @@ function drainPending(): void {
 /**
  * Mints one production and serves it, or collapses it as a repeat; returns the ordinal.
  *
- * One production. `gated` is the `set`/`publish` split: a gated write that `identity`
- * deems a repeat mints nothing and wakes nobody (5.2); an ungated one always mints,
- * because two identical messages are two events somebody sent on purpose.
+ * One production. A write that `identity` deems a repeat mints nothing and wakes nobody (5.2).
  */
-function produce(cell: Cell, produced: unknown, gated: boolean): number {
+function produce(cell: Cell, produced: unknown): number {
     // 7.9: AN ACCEPTED PRODUCTION SETTLES THE RELOAD AN INVALIDATE OWED — ahead of the gate, since
     // a write 5.2 collapses was still accepted. Left standing, the next read unserved this value
     // and reloaded over it. A look above (`OWES_ABOVE`) is not this value's mark and stays: 11.8
     // has a write stand without settling what it is built from.
     if (cell.owes === OWES_RELOAD) cell.owes = OWES_NOTHING
     const cap = cell.cap
-    // THE COMPARISON TARGET IS BEHIND THE GATE, not beside it: `publish` is ungated (5.5)
-    // and would otherwise load it and pick an arm on every message for a compare it never
-    // makes.
-    //
     // 5.9: the gate compares against the last production MINTED. That is the held value
     // on everything that never caps, and `cap.minted` is where a window has moved the two
     // apart.
@@ -1588,7 +1459,7 @@ function produce(cell: Cell, produced: unknown, gated: boolean): number {
     // capped derived value, so 5.2 collapsed nothing and every reader woke on a value that
     // had not moved.
     // The same test `produce` already picks `capped` by, one frame down.
-    if (gated && cell.landed) {
+    if (cell.landed) {
         const previous =
             cap === null || cell.body !== null ? cell.value : cap.minted
         if (
@@ -1630,38 +1501,16 @@ function produce(cell: Cell, produced: unknown, gated: boolean): number {
     const moved = settleProbes(cell)
     // ONE CLOCK READ PER PRODUCTION, AND ONLY WHERE ONE WAS ASKED FOR. The `null` test is
     // a load and a compare; the `Date.now()` behind it is the part a value declaring no
-    // `ttl` must not pay, and hoisting it here is what keeps it to one for a production
-    // that both appends to a ring and refreshes the standing deadline.
+    // `ttl` must not pay.
     const expiry = cell.expiry
     const mintedAt = expiry === null ? 0 : Date.now()
-    // 6.18 AND 6.19: AN `undefined` IS SERVED AND NEVER RETAINED. It moves no ordinal, so no cursor
-    // is handed one and the ring never holds one — it is not a message, and not a JSON value either.
+    // 6.10: AN `undefined` IS SERVED AND MOVES NO ORDINAL, so no cursor is handed one — it is not a
+    // message, and not a JSON value either.
     if (produced !== undefined) cell.ordinal += 1
-    if (cell.ringDepth > 0 && produced !== undefined) {
-        // 6.1 append-only, and 6.2 keeps the write O(1) in the depth: push, bump a
-        // version, and let the read materialise. Rebuilding the array here is the
-        // O(n^2)-over-a-stream shape CLAUDE.md names.
-        cell.ring.push(produced)
-        if (expiry !== null) expiry.minted.push(mintedAt)
-        // AMORTISED O(1), and 6.2 is the clause: raising `history` must not make a write
-        // dearer. `shift()` moves every remaining element, so at `history: 500` a publish
-        // moved 499 of them — linear in the depth, on every write. Growing to twice the
-        // depth and trimming in one bulk move is the same memmove once per `history`
-        // writes, and the read shape does not change.
-        if (cell.ring.length >= cell.ringDepth * 2) {
-            const dropped = cell.ring.length - cell.ringDepth
-            cell.ring.splice(0, dropped)
-            // THE TWO ARRAYS ARE ONE INDEX and every trim moves both, or `minted[i]`
-            // stops pairing with `ring[i]` and the sweep drops live productions by the
-            // deadline of ones that fell off years ago.
-            if (expiry !== null) expiry.minted.splice(0, dropped)
-            cell.ringBase += dropped
-        }
-    }
     if (expiry !== null) {
         expiry.at = mintedAt
-        // A production is what 6.13 released being replaced, so the value is no longer
-        // waiting for one (6.12). The timer is armed in `serve` rather than here, where
+        // A production is what 6.7 released being replaced, so the value is no longer
+        // waiting for one (6.6). The timer is armed in `serve` rather than here, where
         // the value is not servable yet and the deadline it holds cannot be read.
         expiry.dropped = false
     }
@@ -1707,7 +1556,7 @@ function serve(cell: Cell, value: unknown): void {
     // than assuming it: a write can land on a value a mark walk has already reached, and
     // 11.8 has that write STAND without clearing the recompute owed to it.
     setDirect(cell, cell.state === CLEAN)
-    // 6.9's ONE ARMING SITE, and it is here because this is the line that makes the value
+    // 6.3's ONE ARMING SITE, and it is here because this is the line that makes the value
     // servable — `armNext` reads the deadline off a production that has landed, and from
     // `produce` it would be reading one that had not.
     if (cell.expiry !== null) armNext(cell, cell.expiry)
@@ -1837,7 +1686,7 @@ function openWindow(cell: Cell, cap: Cap): void {
     // timer and the first to fire releases — a fixed delay from the FIRST change, which
     // reads identically to a debounce under any run of writes made in one turn.
     if (cap.timer !== null) clearTimeout(cap.timer)
-    // `armTimer` for 6.10's reason, which a window shares with a deadline: a timer never holds the
+    // `armTimer` for 6.4's reason, which a window shares with a deadline: a timer never holds the
     // process open. The keyed window already armed through it, so the two agree.
     armTimer(cap, cap.ms, () => {
         cap.timer = null
@@ -1868,8 +1717,8 @@ function openWindow(cell: Cell, cap: Cap): void {
         if (!cap.holding) return
         // A STREAM'S WINDOW HOLDS CHUNKS rather than a production, and closing it tells the readers
         // what landed meanwhile. Branched HERE, in the timer, rather than inside `release`: a stream
-        // call reachable from `release` sits on the path every `publish` walks through `capped`, and
-        // measured 8.4 ns -> 10.5 ns on `publish into a capped ring` under V8 with no stream in it.
+        // call reachable from `release` sits on the path every capped write walks through `capped`,
+        // and measured 8.4 ns -> 10.5 ns on a capped write under V8 with no stream in it.
         releaseHeld(cell, cap)
         // A write made by one of the effects this release woke has already opened the
         // next window, and opening a second here would leave `cap.timer` pointing at this
@@ -1884,10 +1733,10 @@ function openWindow(cell: Cell, cap: Cap): void {
  * THE WAY IN, AND THE ORDER IS 4.3 THEN 4.4: the schema gates, and what it RETURNS is
  * what `transform` receives — not the original value. A transform reading the raw input
  * where a schema had normalised it is a second answer to what this value holds.
- * What it hands back is the ordinal, or the refusal a gate answered with (9.5) — `unknown`
+ * What it hands back is the ordinal, or the refusal a gate answered with (4.18) — `unknown`
  * because the one caller that cares tells the two apart by type.
  */
-function accept(cell: Cell, value: unknown, gated: boolean): unknown {
+function accept(cell: Cell, value: unknown): unknown {
     let checked = value
     if (cell.schema !== null) {
         // 4.5: THE THROW IS CAUGHT AND CONVERTED rather than escaping the write. A schema
@@ -1902,7 +1751,7 @@ function accept(cell: Cell, value: unknown, gated: boolean): unknown {
         checked = answer.value
     }
     const transform = cell.transform
-    if (transform === null) return produce(cell, checked, gated)
+    if (transform === null) return produce(cell, checked)
     // 4.7 — A `transform` RUNS UNTRACKED: a write can be made from inside a tracked body
     // (`watch(() => target.set(…))`, a recompute that writes), and run tracked, the transform's
     // reads were attributed to that reader — which then re-ran on a value it never read, with
@@ -1912,26 +1761,21 @@ function accept(cell: Cell, value: unknown, gated: boolean): unknown {
     // stored, no production is minted, and the ordinal does not move. The test is behind
     // the `transform === null` arm, so a value that declares none never reaches it.
     if (isFailed(shaped)) return refused(cell, shaped)
-    return produce(cell, shaped, gated)
+    return produce(cell, shaped)
 }
 
 /**
  * `accept` for a stream: the same two gates, then `standWrite`.
  *
  * `accept` FOR A STREAM, AND A SECOND COPY OF THE GATES ON PURPOSE. The branch to `standWrite`
- * measured 8.4 ns -> 10.9 ns on `publish into a capped ring` under V8 wherever it sat on a
- * value's write path — in `accept`, at the top of `produce`, in the `publish` member — though no
+ * measured 8.4 ns -> 10.9 ns on a capped write under V8 wherever it sat on a value's write
+ * path — in `accept`, at the top of `produce`, in the write member — though no
  * value ever took it; a bare read of `cell.stream` in the same place cost nothing. So a stream's
  * writes are reached by a prototype of their own (`STREAM_PROTOTYPE`) and never share a call
  * site with a value's. The copy is the two gates in 4.3's order, and a change to either is a
  * change to both.
  */
-function acceptIntoStream(
-    cell: Cell,
-    stream: Stream,
-    value: unknown,
-    gated: boolean,
-): unknown {
+function acceptIntoStream(cell: Cell, stream: Stream, value: unknown): unknown {
     let checked = value
     if (cell.schema !== null) {
         const answer = runSchema(cell.schema, value)
@@ -1945,28 +1789,23 @@ function acceptIntoStream(
         shaped = untracked(transform, checked, undefined)
         if (isFailed(shaped)) return refused(cell, shaped)
     }
-    return standWrite(cell, stream, shaped, gated)
+    return standWrite(cell, stream, shaped)
 }
 
 /**
- * A write to a stream, from its own `set` and `publish`. A load handed to one lands through the
+ * A write to a stream, from its own `set`. A load handed to one lands through the
  * same gates when it settles, and a newer write supersedes it the way it would on a value.
  */
-function writeStream(cell: Cell, value: unknown, gated: boolean): unknown {
+function writeStream(cell: Cell, value: unknown): unknown {
     cell.generation += 1
-    // 9.25: a write replaces the write standing, and one following a `Reactive` lets go of it.
+    // 9.11: a write replaces the write standing, and one following a `Reactive` lets go of it.
     if (cell.adoption !== null) unfollow(cell)
     if (isThenable(value) && !isReactive(value)) {
         const generation = cell.generation
         value.then(
             (settled) => {
                 if (cell.generation === generation)
-                    acceptIntoStream(
-                        cell,
-                        cell.stream as Stream,
-                        settled,
-                        gated,
-                    )
+                    acceptIntoStream(cell, cell.stream as Stream, settled)
             },
             (failed: unknown) => {
                 if (cell.generation === generation) refused(cell, failed)
@@ -1974,29 +1813,24 @@ function writeStream(cell: Cell, value: unknown, gated: boolean): unknown {
         )
         return undefined
     }
-    const answer = acceptIntoStream(cell, cell.stream as Stream, value, gated)
+    const answer = acceptIntoStream(cell, cell.stream as Stream, value)
     return typeof answer === 'number' ? undefined : answer
 }
 
 /**
  * Stands a write over a stream as its value, without minting an ordinal.
  *
- * 9.25 AND 9.26: A WRITE OVER A STREAM IS A VALUE, NOT A CHUNK. It stands at the version of the
+ * 9.11 AND 9.12: A WRITE OVER A STREAM IS A VALUE, NOT A CHUNK. It stands at the version of the
  * accumulation it was made over, and the first chunk or patch that moves the version past it
  * puts the accumulation back on the next read — and it mints no ordinal, which is what a cursor
  * holds its place by: `ring[i]` is ordinal `ringBase + i + 1`, and an ordinal with nothing in the
  * ring behind it handed the cursor `undefined`.
  */
-function standWrite(
-    cell: Cell,
-    stream: Stream,
-    value: unknown,
-    gated: boolean,
-): number {
+function standWrite(cell: Cell, stream: Stream, value: unknown): number {
     // 7.9, as `produce` settles it.
     if (cell.owes === OWES_RELOAD) cell.owes = OWES_NOTHING
     // 5.2 against what is served now, which on a stream may not have been materialised yet.
-    if (gated && cell.servable) {
+    if (cell.servable) {
         const previous = heldValue(cell)
         if (
             cell.identityFn === null
@@ -2054,17 +1888,12 @@ function refused(cell: Cell, failure: unknown): unknown {
  * `answered` IS A BODY'S ANSWER, and 15.5 has one that settles to a `Failed` refuse. A write that
  * settles to one is not an answer, and 4.17 stores it as it would a settled one.
  */
-function absorb(
-    cell: Cell,
-    result: unknown,
-    gated: boolean,
-    answered: boolean,
-): void {
+function absorb(cell: Cell, result: unknown, answered: boolean): void {
     // THE BRAND IS READ BEFORE `then` (RULEBOOK 1.6). A `Reactive` is thenable by 1.4,
     // so a guard written the other way round settles a live value to one snapshot — a write
     // of `other` would hand back `other`'s current value instead of `other`.
     if (!isThenable(result) || isReactive(result)) {
-        accept(cell, result, gated)
+        accept(cell, result)
         return
     }
     const generation = cell.generation
@@ -2077,12 +1906,12 @@ function absorb(
         (settled) => {
             if (cell.generation !== generation) return
             if (answered && isFailed(settled)) refused(cell, settled)
-            // 9.20 — a run's promise resolving to an async generator hands one back too. Its
+            // 9.6 — a run's promise resolving to an async generator hands one back too. Its
             // probes move so `streamingOrSettled` hears the value turn.
             else if (isAsyncGenerator(settled)) {
                 promoteToStream(cell, settled)
                 probesMoved(cell)
-            } else accept(cell, settled, gated)
+            } else accept(cell, settled)
         },
         (failed) => {
             if (cell.generation !== generation) return
@@ -2102,10 +1931,10 @@ function absorb(
  * IT IS A `watch` OVER THE INNER VALUE, not a third subscriber mechanism: 12.3's narrowed
  * form is exactly "run this when that one changes", which is what mirroring is.
  *
- * 11.66 — THE ONE PLACE `adoption` IS SET, so it is the one place a cycle can form, and refusing
+ * 11.65 — THE ONE PLACE `adoption` IS SET, so it is the one place a cycle can form, and refusing
  * it here is what lets every walk of the chain be a plain loop to its end. The walk is over the
  * inner's chain, which cannot cycle for the same reason, and it runs per adoption rather than per
- * read. The refusal is handed back rather than thrown: 11.67 has the two callers answer it
+ * read. The refusal is handed back rather than thrown: 11.66 has the two callers answer it
  * differently.
  */
 function adopt(cell: Cell, inner: Cell): Error | undefined {
@@ -2140,7 +1969,7 @@ function adopt(cell: Cell, inner: Cell): Error | undefined {
         return undefined
     })
     cell.adoption = { source: inner, stop }
-    // 11.60: an adopting value's writes are the adopted value's, reached through a prototype of its
+    // 11.59: an adopting value's writes are the adopted value's, reached through a prototype of its
     // own rather than a branch on every value's write path — see `acceptIntoStream` for what such a
     // branch costs under V8 even where nothing takes it.
     Object.setPrototypeOf(cell.callable as object, ADOPTING_PROTOTYPE)
@@ -2148,7 +1977,7 @@ function adopt(cell: Cell, inner: Cell): Error | undefined {
     return undefined
 }
 
-/** The refusal where adopting `inner` would close a cycle through `cell` (11.66). */
+/** The refusal where adopting `inner` would close a cycle through `cell` (11.65). */
 function closesCycle(cell: Cell, inner: Cell): Error | undefined {
     for (
         let at: Cell | undefined = inner;
@@ -2157,7 +1986,7 @@ function closesCycle(cell: Cell, inner: Cell): Error | undefined {
     )
         if (at === cell)
             return new Error(
-                'An adoption would close a cycle: these values would adopt each other, so no one of them holds the value. RULEBOOK 11.66.',
+                'An adoption would close a cycle: these values would adopt each other, so no one of them holds the value. RULEBOOK 11.65.',
             )
     return undefined
 }
@@ -2165,12 +1994,12 @@ function closesCycle(cell: Cell, inner: Cell): Error | undefined {
 /**
  * Stands a `Reactive` written over a stream as a write that follows it.
  *
- * 11.62 ON A STREAM IS 9.25'S WRITE, FOLLOWING, and it is the standing write rather than a second
+ * 11.61 ON A STREAM IS 9.11'S WRITE, FOLLOWING, and it is the standing write rather than a second
  * mechanism: `written` over the version it was made at, with `value` re-landed through `standWrite`
- * each time the followed value moves, so it mints no ordinal (9.26). What it follows is held on
- * `adoption`, which is what the probes already walk (11.19, 11.51) and what `markProbes` reaches
+ * each time the followed value moves, so it mints no ordinal (9.12). What it follows is held on
+ * `adoption`, which is what the probes already walk (11.19, 11.50) and what `markProbes` reaches
  * through the mirror. The stream keeps its own prototype — a later write is a write over the stream
- * and replaces this one, where 11.60 would have handed it on — and `adoptedCellOf` stops here, so a
+ * and replaces this one, where 11.59 would have handed it on — and `adoptedCellOf` stops here, so a
  * cursor and a replay are the stream's.
  */
 function follow(cell: Cell, stream: Stream, inner: Cell): Error | undefined {
@@ -2197,7 +2026,7 @@ function follow(cell: Cell, stream: Stream, inner: Cell): Error | undefined {
         if (inner.owes !== OWES_NOTHING) settleOwed(inner)
         // 11.16: the followed value has nothing to serve, so neither has this.
         if (!inner.servable) unserve(cell)
-        else acceptIntoStream(cell, stream, heldValue(inner), true)
+        else acceptIntoStream(cell, stream, heldValue(inner))
         return undefined
     })
     cell.adoption = { source: inner, stop }
@@ -2216,7 +2045,7 @@ function unfollow(cell: Cell): void {
  * Stops serving the value, waking both its readers and its guards.
  *
  * LOSING WHAT THERE WAS TO SERVE, AND BOTH EDGES HEAR IT, whichever way it was lost: a trigger's
- * debt settling (7.8), a re-adoption onto nothing (11.16), or a run aborting (11.59). The readers
+ * debt settling (7.8), a re-adoption onto nothing (11.16), or a run aborting (11.58). The readers
  * hear it through `cascade` and the GUARDS through `probesMoved`. With only the first,
  * `{#if outer.ready()}{outer()}{:else}spinner{/if}` re-pointed onto an inner with nothing to serve
  * stays on the value branch permanently while the read under it throws, the inner never having
@@ -2256,7 +2085,7 @@ function mirror(cell: Cell, inner: Cell): void {
     // 11.13 mirrors the production into the outer value, and 11.14 runs the OUTER's own
     // `transform` on the way in — which is `accept`, and is why this does not call
     // `produce` directly.
-    accept(cell, value, true)
+    accept(cell, value)
 }
 
 /**
@@ -2273,7 +2102,7 @@ function dropAdoption(cell: Cell): void {
     if (cell.adoption === null) return
     unfollow(cell)
     const stream = cell.stream
-    // 9.25: AN OWN STREAM'S `adoption` IS A WRITE IT FOLLOWS, not a stream it forwards — the
+    // 9.11: AN OWN STREAM'S `adoption` IS A WRITE IT FOLLOWS, not a stream it forwards — the
     // discriminator `adoptedCellOf` reads. Letting go of the write is all there is: the stream is
     // its own, so is its prototype, and `follow` never touched `identityFn`. Stopping it as a
     // forward nulled the stream a queued `wakeStreams` was about to read.
@@ -2292,7 +2121,7 @@ function dropAdoption(cell: Cell): void {
  * Makes an adopter forward an adopted stream's buffer, ring and ordinals.
  *
  * 11.15 FOR A STREAM: the adopter takes the adopted value's buffer, ring and ordinals by
- * reference and materialises from them on its own reads, through its own gates (11.14, 9.22).
+ * reference and materialises from them on its own reads, through its own gates (11.14, 9.8).
  * Mirroring the value instead copied the accumulation once per wake whether or not anything
  * read it, and handed a cursor over the adopter whole accumulations where it wanted chunks.
  */
@@ -2303,7 +2132,7 @@ function forwardStream(cell: Cell, inner: Cell, adopted: Stream): void {
         stream.ordinalOffset = cell.ordinal - inner.ringBase
     }
     // The adopted version is this one's: a chunk or a patch of the stream moves both, and a write
-    // made on this value is made on the stream (11.60).
+    // made on this value is made on the stream (11.59).
     stream.chunks = adopted.chunks
     stream.version = adopted.version
     stream.visible = adopted.visible
@@ -2333,7 +2162,7 @@ function stopForwarding(cell: Cell): void {
     cell.plain = cell.expiry === null
     cell.bareWrite = cell.schema === null && cell.transform === null
     simpleShape(cell)
-    cell.ring = cell.ringDepth > 0 ? [] : EMPTY_RING
+    cell.ring = EMPTY_RING
     // The ring is empty and the next production is `ordinal + 1`, at index zero.
     cell.ringBase = cell.ordinal
 }
@@ -2385,10 +2214,10 @@ function run(cell: Cell): void {
         cell.running = false
         if (thrown instanceof NotLanded) {
             cell.loading = true
-            // 2.14: the mark a source's production makes is what finishes this run, and
+            // 2.13: the mark a source's production makes is what finishes this run, and
             // `markReaders` queues it rather than leaving it for a read that may never come.
             cell.aborted = true
-            // NOT EVERYTHING IT READS IS READY, so neither is this — 11.59, and the same
+            // NOT EVERYTHING IT READS IS READY, so neither is this — 11.58, and the same
             // sentence 11.16 makes for a re-adoption. It stops serving rather than handing
             // back a figure it computed from a source that has since gone away, and that
             // is a move its readers have to hear even though the aborted run minted
@@ -2426,20 +2255,20 @@ function run(cell: Cell): void {
     // derived value in the graph, so the frames are paid per edge.
     //
     // SPELLING `produce` OUT HERE WAS TRIED AND IS NOT WORTH IT: copying the identity
-    // gate, the seven stores and the ring into this branch took the recompute from
+    // gate and the seven stores into this branch took the recompute from
     // 23.58 ns to 22.42 ns and the chain of twenty from 583 to 563 — 5% and 3% — for
     // twenty-five duplicated lines of the most subtle logic in the file. A second copy
     // of the production rule is the drift every document here is arranged to stop.
     // BOTH GATES, NOT ONE. This arm exists to skip `absorb` -> `accept` -> `produce` for the
     // settled, ungated recompute — and `accept` is where 4.3 runs the schema, so testing
     // only `transform` here routed every body production straight past its own gate
-    // (11.47). The gate was written, the tests were written, and this path answered them
+    // (11.46). The gate was written, the tests were written, and this path answered them
     // without ever reaching it.
     const primitive =
         produced === null ||
         (typeof produced !== 'object' && typeof produced !== 'function')
     if (cell.bareWrite && primitive) {
-        produce(cell, produced, true)
+        produce(cell, produced)
         return
     }
     // 15.5 — A BODY THAT RETURNS A REFUSAL REFUSES. Past the primitive arm, so a recompute
@@ -2451,7 +2280,7 @@ function run(cell: Cell): void {
         refused(cell, produced)
         return
     }
-    // 9.20 — ON ANY RUN: `() => flag() ? rows() : 0` hands its generator back once the flag turns.
+    // 9.6 — ON ANY RUN: `() => flag() ? rows() : 0` hands its generator back once the flag turns.
     if (!primitive && isAsyncGenerator(produced)) {
         promoteToStream(cell, produced)
         return
@@ -2460,7 +2289,7 @@ function run(cell: Cell): void {
         cell.bareWrite &&
         typeof (produced as PromiseLike<unknown>).then !== 'function'
     ) {
-        produce(cell, produced, true)
+        produce(cell, produced)
         return
     }
     // 11.12 BEFORE `absorb`, and the order is the whole of it: a `Reactive` is thenable
@@ -2470,13 +2299,13 @@ function run(cell: Cell): void {
         adoptAnswer(cell, produced)
         return
     }
-    absorb(cell, produced, true, true)
+    absorb(cell, produced, true)
 }
 
 /**
  * Adopts what a body handed back, refusing the body where that would close a cycle.
  *
- * 11.67 — a body's answer that 11.66 refuses is the body's failure.
+ * 11.66 — a body's answer that 11.65 refuses is the body's failure.
  */
 function adoptAnswer(cell: Cell, produced: unknown): void {
     const cycle = adopt(cell, (produced as Callable)[CELL])
@@ -2488,7 +2317,7 @@ function adoptAnswer(cell: Cell, produced: unknown): void {
  *
  * 4.16: AN OPENING `undefined` IS LOADED AND IS NOT A PRODUCTION THROUGH THE PIPELINE. No `schema`
  * judges it, no `transform` shapes it, no window holds it and no `store` writes it — it is the value
- * being empty, and the first real production is what those are for. It mints no ordinal (6.19).
+ * being empty, and the first real production is what those are for. It mints no ordinal (6.10).
  */
 function landOpening(cell: Cell): void {
     const moved = settleProbes(cell)
@@ -2542,7 +2371,7 @@ function startStream(cell: Cell, stream: Stream): void {
 }
 
 /**
- * 9.20 — a value whose run handed back an async generator: a streaming producer from that run on,
+ * 9.6 — a value whose run handed back an async generator: a streaming producer from that run on,
  * the generator being the run's stream, and every start after it the body's next one.
  */
 function promoteToStream(cell: Cell, generator: AsyncIterable<unknown>): void {
@@ -2602,7 +2431,7 @@ async function pump(
     iterator: AsyncIterator<unknown>,
     run: number,
 ): Promise<void> {
-    // 9.21: nothing of this run is served until it says something, so the accumulation
+    // 9.7: nothing of this run is served until it says something, so the accumulation
     // being served is the previous run's until the first chunk replaces it.
     let begun = false
     for (;;) {
@@ -2628,7 +2457,7 @@ async function pump(
     stream.iterator = null
     // THE CLOSE RELEASES WHAT A WINDOW IS HOLDING. A stream that has finished has nothing left to
     // collapse, and an await resolving here would otherwise be handed the accumulation as the last
-    // release left it rather than the whole of it (2.8).
+    // release left it rather than the whole of it (2.7).
     const cap = cell.cap
     if (cap?.holding) {
         if (cap.timer !== null) clearTimeout(cap.timer)
@@ -2647,9 +2476,9 @@ async function pump(
     cell.loading = false
     // 3.7: `busy` held until the close, and this is the close.
     if (moved) probesMoved(cell)
-    // 6.17, AFTER THE CASCADE ABOVE: the entry is what a read would answer with, so it is taken
+    // 6.11, AFTER THE CASCADE ABOVE: the entry is what a read would answer with, so it is taken
     // once the last chunk has landed and the value is servable.
-    retainRun(cell, stream)
+    closeRun(cell, stream)
     // 8.9: a stream is written once, at the close, with the accumulation and never a partial.
     if (cell.store !== null) writeStore(cell, cell.store, heldValue(cell))
 }
@@ -2670,7 +2499,7 @@ function beginAccumulation(cell: Cell, stream: Stream): void {
  * Pushes one chunk into the accumulation, as one ungated production.
  *
  * ONE CHUNK IS ONE PRODUCTION, and ungated: an accumulation that grew is a different value
- * whatever `identity` says about its last element (9.6's reading, applied per chunk).
+ * whatever `identity` says about its last element.
  */
 function acceptChunk(cell: Cell, stream: Stream, chunk: unknown): void {
     stream.chunks.push(chunk)
@@ -2685,7 +2514,7 @@ function acceptChunk(cell: Cell, stream: Stream, chunk: unknown): void {
  * Tells readers of every chunk landed so far, waking them at most once per task.
  *
  * What a reader is told of: every chunk landed so far becomes what a read materialises, and the
- * wake goes out at most once per task (9.23).
+ * wake goes out at most once per task (9.9).
  */
 function releaseChunks(cell: Cell, stream: Stream): void {
     stream.visible = stream.chunks.length
@@ -2722,7 +2551,7 @@ function wakeStreams(): void {
         stream.waking = false
         let owed = stream.probesOwed
         stream.probesOwed = false
-        // 9.25: the chunk ended a write following a `Reactive`, whose probes were this one's.
+        // 9.11: the chunk ended a write following a `Reactive`, whose probes were this one's.
         if (cell.adoption !== null) {
             unfollow(cell)
             owed = true
@@ -2775,12 +2604,12 @@ function landChunks(cell: Cell): void {
 /**
  * Materialises a stream's visible chunks into `value`, through both gates.
  *
- * 9.2 AND 9.22: the read that asks is where the accumulation becomes a `Stored`, through both
+ * 9.1 AND 9.8: the read that asks is where the accumulation becomes a `Stored`, through both
  * gates, once per chunk count however many reads ask.
  */
 function materialise(cell: Cell, stream: Stream): void {
     if (stream.materialisedAt === stream.version || !cell.servable) return
-    // 9.25: the accumulation moved past a write following a `Reactive`, which lets go of it here
+    // 9.11: the accumulation moved past a write following a `Reactive`, which lets go of it here
     // where no chunk's wake did — a patch, or a run that closed empty. Only an own stream follows;
     // a forwarding one's `adoption` is what it forwards.
     if (cell.adoption !== null && stream.source === null) unfollow(cell)
@@ -2792,7 +2621,7 @@ function materialise(cell: Cell, stream: Stream): void {
 /**
  * Gates a forwarded slice or write into `value`, untracked.
  *
- * What a forwarding value's read takes in, through its own gates (11.14, 9.22): a slice of the
+ * What a forwarding value's read takes in, through its own gates (11.14, 9.8): a slice of the
  * accumulation, or a write standing on the stream it forwards.
  * 4.7: the gates run untracked, and this is reached from inside whatever read asked.
  */
@@ -2836,18 +2665,18 @@ function heldValue(cell: Cell): unknown {
 /**
  * Releases the standing production at its deadline, waking nobody.
  *
- * 6.13: THE DROP, AND IT IS THE WHOLE OF WHAT A DEADLINE DOES. The production is
+ * 6.7: THE DROP, AND IT IS THE WHOLE OF WHAT A DEADLINE DOES. The production is
  * RELEASED rather than merely stopped being served, and that is the difference between a
  * `ttl` that bounds memory and one that only bounds freshness: a body returning a large
  * payload holds it until something replaces it, and on a value nothing reads again that
  * is the life of the process.
  *
- * 6.15: `loading` IS NOT SET, because nothing has been started. 6.12 has the producer run
+ * 6.9: `loading` IS NOT SET, because nothing has been started. 6.6 has the producer run
  * on the READ that follows, so between the deadline and that read the value is neither
  * ready nor busy — which is exactly what those two probes mean, and is why `s.ready`
  * needs no clock of its own: it reads `servable`, and this is what moved it.
  *
- * 6.4: NOTHING IS WOKEN. A wake here would cause the read that runs the producer, and a
+ * 6.1: NOTHING IS WOKEN. A wake here would cause the read that runs the producer, and a
  * `ttl` would then reload every value on its deadline whether or not anything wanted it —
  * which is `s.refresh` (7.4) wearing a different name.
  */
@@ -2862,19 +2691,14 @@ function dropStanding(cell: Cell, expiry: Expiry): void {
 /**
  * Arms the timer for the nearest deadline this value holds.
  *
- * 6.9: THE NEAREST DEADLINE THIS VALUE HOLDS — the ring's head where it retains anything,
- * the standing production otherwise, and neither where it holds none. A value that has
- * nothing left to expire arms nothing, which is what stops the callback below keeping
- * every `ttl` value alive for the life of the process: it names its cell.
+ * 6.3: THE STANDING PRODUCTION'S DEADLINE, where a deadline reaches it. A value with nothing
+ * left to expire arms nothing, which is what stops the callback below keeping every `ttl` value
+ * alive for the life of the process: it names its cell.
  */
 function armNext(cell: Cell, expiry: Expiry): void {
     if (expiry.timer !== null) return
-    let deadline = headDeadline(expiry, standingKept(cell))
-    if (standingLive(cell, expiry)) {
-        const standing = expiry.at + expiry.ms
-        if (standing < deadline) deadline = standing
-    }
-    if (deadline === Number.POSITIVE_INFINITY) return
+    if (!standingLive(cell, expiry)) return
+    const deadline = expiry.at + expiry.ms
     armTimer(expiry, deadline - Date.now(), () => {
         sweepExpiry(cell)
     })
@@ -2885,7 +2709,7 @@ function armNext(cell: Cell, expiry: Expiry): void {
  *
  * WHETHER THERE IS A PRODUCER TO RUN AGAIN: a body, or a store (8.2), which is somewhere to get the
  * value back from. A value with neither holds what the app put there, and a deadline or a trigger
- * has nothing to reload it with (6.8, 7.6).
+ * has nothing to reload it with (6.2, 7.6).
  */
 function reloads(cell: Cell): boolean {
     return cell.body !== null || cell.store !== null
@@ -2895,8 +2719,8 @@ function reloads(cell: Cell): boolean {
  * Runs the producer again: the body, or a re-read of the store.
  *
  * RUN THE PRODUCER AGAIN, for a trigger (7.4), a debt a read settles (7.13) and a deadline a read
- * follows (6.12). `startProducer` rather than `run`: on a streaming producer the body is the
- * generator, and running it as a recompute would store the iterator it hands back (9.20).
+ * follows (6.6). `startProducer` rather than `run`: on a streaming producer the body is the
+ * generator, and running it as a recompute would store the iterator it hands back (9.6).
  */
 function reload(cell: Cell): void {
     if (cell.body !== null) startProducer(cell)
@@ -2924,13 +2748,13 @@ function beginLoad(cell: Cell): void {
 /**
  * Whether a deadline reaches the standing production.
  *
- * WHETHER A DEADLINE REACHES THE STANDING PRODUCTION: there is a producer to reload it (6.8), 6.13
+ * WHETHER A DEADLINE REACHES THE STANDING PRODUCTION: there is a producer to reload it (6.2), 6.7
  * has not already released it, and it is being served — which is what keeps a value whose load is
  * in flight from arming against the production that load is replacing.
  *
  * AND WHAT IS SERVED WAS MINTED, which every producer but a streaming one answers yes to the moment
- * it is servable. A stream serves the run it is building (9.2), and that run has minted nothing
- * until it closes (6.17) — so a deadline has nothing to measure from and must not drop it.
+ * it is servable. A stream serves the run it is building (9.1), and that run has minted nothing
+ * until it closes (6.11) — so a deadline has nothing to measure from and must not drop it.
  */
 function standingLive(cell: Cell, expiry: Expiry): boolean {
     if (!reloads(cell) || expiry.dropped || !cell.servable) return false
@@ -2939,42 +2763,17 @@ function standingLive(cell: Cell, expiry: Expiry): boolean {
 }
 
 /**
- * The ring a deadline trims: the cell's own, or a stream's closed-run view.
- *
- * WHICH RING A DEADLINE REACHES. On a streaming producer the cell's own ring is the chunk buffer
- * and its past is the closed runs (6.17), so an expiry trims the view rather than the cell —
- * one narrow face, picked here rather than tested at each of the three call sites.
- */
-function ringedOf(cell: Cell): Ringed {
-    const stream = cell.stream
-    return stream === null ? cell : historyView(cell, stream)
-}
-
-/**
- * How many standing productions a deadline must leave: none with a producer, one without.
- *
- * 6.8: on a value with no producer a deadline reaches the past productions alone, and the standing
- * one — what the app put there — stays in the ring as it stays served.
- */
-function standingKept(cell: Cell): number {
-    return reloads(cell) ? 0 : 1
-}
-
-/**
  * Drops what has expired and re-arms against the nearest deadline.
  *
- * 6.9's timer, fired — AND IT MAY BE EARLY. The standing deadline moves forward on every
- * production and re-arming per production would be a `setTimeout` per write, which is what
- * 6.6 refuses in the ring's shape and costs the same here. So the timer is left where it
- * was, and this re-arms against whatever is nearest now. An early fire drops nothing and
+ * 6.3's timer, fired — AND IT MAY BE EARLY. The standing deadline moves forward on every
+ * production and re-arming per production would be a `setTimeout` per write. So the timer is
+ * left where it was, and this re-arms against whatever is nearest now. An early fire drops nothing and
  * costs one re-arm per window.
  */
 function sweepExpiry(cell: Cell): void {
     const expiry = cell.expiry
     if (expiry === null) return
     expiry.timer = null
-    if (cell.ringDepth > 0)
-        dropExpired(expiry, ringedOf(cell), standingKept(cell))
     if (standingLive(cell, expiry) && Date.now() - expiry.at >= expiry.ms)
         dropStanding(cell, expiry)
     armNext(cell, expiry)
@@ -2985,13 +2784,12 @@ function sweepExpiry(cell: Cell): void {
  *
  * THE READ'S HALF. The timer above is what normally moves the probes, and this is the
  * backstop for one that fired late — a clamped background tab, a blocked loop, a `ttl`
- * under the clamp. 6.5 and 6.11 are written about the READ rather than about when the
+ * under the clamp. 6.5 is written about the READ rather than about when the
  * timer got there.
  *
  * A VALUE WITH NO BODY REACHES HERE AND TURNS ROUND, one frame per read, and that is
  * deliberate: `setDirect` tests one field, and telling one from a body value there would put a
- * second load on the path every value in the design walks. A retained value's per-row reader is
- * the cursor (2.5), not `s()`. 6.8 is the same sentence from the other side — with no body
+ * second load on the path every value in the design walks. 6.2 is the same sentence from the other side — with no body
  * there is nothing to call, so what the app put there stands.
  */
 function expire(cell: Cell): void {
@@ -2999,13 +2797,13 @@ function expire(cell: Cell): void {
     const expiry = cell.expiry as Expiry
     if (standingLive(cell, expiry) && Date.now() - expiry.at >= expiry.ms)
         dropStanding(cell, expiry)
-    // 6.12: THE PRODUCER RUNS ON THE READ THAT FOLLOWS, and `dropped` is what tells this
+    // 6.6: THE PRODUCER RUNS ON THE READ THAT FOLLOWS, and `dropped` is what tells this
     // from an `invalidate` whose load is still in flight. No combination of the cell's own
     // fields separates them — both are unservable with a body — and reading it wrong runs
     // the body again on every read for as long as the load takes.
     if (!expiry.dropped) return
     expiry.dropped = false
-    // Work is started NOW, which is the first moment 6.15 stops applying — and `busy` moves where
+    // Work is started NOW, which is the first moment 6.9 stops applying — and `busy` moves where
     // the load actually starts, not here (see `beginLoad`).
     reload(cell)
 }
@@ -3020,7 +2818,7 @@ function expire(cell: Cell): void {
 function readIndirect(cell: Cell): unknown {
     if (cell.owes !== OWES_NOTHING) settleOwed(cell)
     if (cell.state !== CLEAN) resolve(cell)
-    // 6.11: THE READ THAT FOLLOWS. Every value carrying an expiry arrives here and no
+    // 6.5: THE READ THAT FOLLOWS. Every value carrying an expiry arrives here and no
     // other value does, which is the whole of what `setDirect` buys.
     if (cell.expiry !== null) expire(cell)
     if (cell.stream !== null) materialise(cell, cell.stream)
@@ -3035,10 +2833,9 @@ function readIndirect(cell: Cell): unknown {
 }
 
 /**
- * Every value that declares no `history` shares this. The field stays monomorphically an
- * Array — CLAUDE.md's shape rule — and every site that pushes is already inside a
- * `ringDepth > 0` test, so nothing can reach it to mutate. Frozen so that if anything
- * ever does, it says so rather than corrupting every other value at once.
+ * Every value that is not streaming shares this as its `ring`. The field stays monomorphically an
+ * Array — CLAUDE.md's shape rule — and only a stream's own chunk buffer is ever pushed to. Frozen so
+ * that if anything ever does push here, it says so rather than corrupting every other value at once.
  */
 const EMPTY_RING = Object.freeze([]) as unknown as unknown[]
 
@@ -3109,7 +2906,7 @@ function isBusy(cell: Cell): boolean {
 /**
  * The standing refusal: the value's own, or the one on what it adopts.
  *
- * 11.51 FOR `error`: the standing refusal is the value's own, or else the one standing on what
+ * 11.50 FOR `error`: the standing refusal is the value's own, or else the one standing on what
  * it adopts. Unlike `busy` and `ready` it does not propagate from what a body READ (11.20) —
  * a derived value whose source failed has either a figure of its own or its own refusal.
  */
@@ -3204,20 +3001,20 @@ function readyNow(cell: Cell): boolean {
 /**
  * A promise of the value once it is servable and not busy, or of its failure.
  *
- * 2.8: SETTLED IS SERVABLE AND NOT BUSY, and it is both halves — `busy` as the probe answers
+ * 2.7: SETTLED IS SERVABLE AND NOT BUSY, and it is both halves — `busy` as the probe answers
  * it, through what the value read and what it adopted. Resolving on `servable` alone handed a
  * caller awaiting a refresh the value the refresh was replacing, and a caller awaiting a stream
  * its first chunk; reading the value's own `loading` alone did the same through an adoption.
  *
- * `untilStreaming` answers `STREAMING` the moment the value is a stream instead (9.20), for a
+ * `untilStreaming` answers `STREAMING` the moment the value is a stream instead (9.6), for a
  * reader that forwards its chunks rather than waiting out the run.
  */
 function settled(cell: Cell, untilStreaming = false): Promise<unknown> {
     // 1.7: awaiting a value is reaching it, so what a read would pull is pulled here too — a reload
-    // an invalidate owed, a recompute a write left marked, and a reload a `ttl` drop owes (6.12):
+    // an invalidate owed, a recompute a write left marked, and a reload a `ttl` drop owes (6.6):
     // with nothing served and nothing loading, the await would wait on a probe nothing moves.
     //
-    // ONLY ONCE THE TIMER HAS DROPPED IT. The read's half of 6.11 — a production still served past
+    // ONLY ONCE THE TIMER HAS DROPPED IT. The read's half of 6.5 — a production still served past
     // its deadline — is not taken here, because 16.7's `ttl` of 0 makes every mutation's production
     // past its deadline the moment it lands, and the await that answers the call ran it again.
     if (cell.owes !== OWES_NOTHING) settleOwed(cell)
@@ -3309,15 +3106,10 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
         // the window held was never seen.
         const head = cap?.holding && cell.body === null ? cap.held : cell.value
         recordWrites(head, mutate, PATCH_SINKS.get(cell))
-        // 5.7: REPLACES THE HEAD PRODUCTION RATHER THAN APPENDING ONE, and that is why no
-        // sequence number is minted here. The head is the object the callback just mutated, and
-        // the ring already holds that same reference — so retention needs no write and the
-        // ordinal must not move.
-        //
-        // IT USED TO MOVE, and the ordinal is what a cursor holds its place by: `ring[i]` carries
-        // ordinal `ringBase + i + 1`, so a bump with no push put the two out of step and the next
-        // turn read one past the end of the ring and handed over `undefined`. The wake was never
-        // the ordinal's doing — it is the cascade's.
+        // 5.7: REPLACES THE HEAD PRODUCTION RATHER THAN APPENDING ONE, so the ordinal does not
+        // move: the follow's version tells a patch from a production by exactly that, and sends a
+        // patch as its writes (18.11). A cursor reads the change off the object's patch epoch
+        // instead. The wake was never the ordinal's doing — it is the cascade's.
         //
         // 5.23 — AND THE CASCADE IS WHAT A WINDOW CAPS. The object has already changed, so what is
         // held is the wake alone: readers are told once per window, and `busy` stands meanwhile
@@ -3328,15 +3120,27 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
         wakePatched(cell, head)
         return
     }
-    // 9.27: the accumulation itself, so the next chunk lands after the change rather than
+    // 9.13: the accumulation itself, so the next chunk lands after the change rather than
     // rebuilding a snapshot from chunks the patch never saw.
     const before = stream.chunks.length
-    recordWrites(stream.chunks, mutate, PATCH_SINKS.get(cell))
+    // A CURSOR BEHIND needs where the patch wrote, which its ops say: the follow's own sink, or one
+    // of this patch's alone where nothing follows the value.
+    const followed = PATCH_SINKS.get(cell)
+    const sink =
+        followed ??
+        (hasCursorBehind(cell) ? { ops: [], lost: false } : undefined)
+    const from = sink === undefined ? 0 : sink.ops.length
+    recordWrites(stream.chunks, mutate, sink)
     // 5.7 AS THE VALUE BRANCH KEEPS IT: a patch mints no ordinal, so an accumulation it grew or
     // shrank moves the ring's base instead — `ring[i]` stays ordinal `ringBase + i + 1` and the
     // next chunk lands one past the ordinal a caught-up cursor holds. And what it added is shown.
     const grown = stream.chunks.length - before
     if (grown !== 0) {
+        const edited =
+            sink === undefined || sink.lost
+                ? undefined
+                : firstWritten(sink.ops, from, before)
+        if (edited !== undefined) keepPlaces(cell, edited, grown)
         cell.ringBase -= grown
         stream.visible = Math.min(
             Math.max(stream.visible + grown, 0),
@@ -3346,6 +3150,26 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
     stream.version += 1
     // 5.23, as for a chunk (5.17): the window's close is what tells the readers.
     if (tellsChunks(cell, cell.cap)) cascade(cell)
+}
+
+/**
+ * The lowest index of an accumulation the ops from `from` on wrote at, or `undefined` where they
+ * wrote none — a reorder is sent whole, and says nothing of where.
+ */
+function firstWritten(
+    ops: PatchOp[],
+    from: number,
+    length: number,
+): number | undefined {
+    let lowest: number | undefined
+    for (let at = from; at < ops.length; at += 1) {
+        const path = (ops[at] as PatchOp).path
+        const slash = path.indexOf('/', 1)
+        const step = path.slice(1, slash === -1 ? path.length : slash)
+        const index = step === '-' ? length : Number(step)
+        if (lowest === undefined || index < lowest) lowest = index
+    }
+    return lowest
 }
 
 function wakePatched(cell: Cell, head: unknown): void {
@@ -3373,9 +3197,9 @@ const OWES_RELOAD: number = 2
 /**
  * Visits a value and each value down its adoption chain.
  *
- * 11.52 IS EVERY TRIGGER AND EVERY ADOPTER, and the chain is walked rather than recursed
+ * 11.51 IS EVERY TRIGGER AND EVERY ADOPTER, and the chain is walked rather than recursed
  * into: the reach into `adoption.source` sat PAST the "no producer" return, so an adoption made by
- * `outer.set(inner)` (11.62) — which leaves `body` null — swallowed both triggers whole.
+ * `outer.set(inner)` (11.61) — which leaves `body` null — swallowed both triggers whole.
  *
  * 13.6 is what the "no producer" arm is for: an entry with nothing to reload is skipped, and what
  * it ADOPTS still has to be reached.
@@ -3384,7 +3208,7 @@ function eachAdopted(cell: Cell, visit: (cell: Cell) => void): void {
     let at: Cell = cell
     for (;;) {
         visit(at)
-        // 11.52: the data is behind whatever the body handed back, not in the body itself
+        // 11.51: the data is behind whatever the body handed back, not in the body itself
         // — AFTER the run, so the reach is to what is adopted now rather than what was.
         const adoption = at.adoption
         if (adoption === null) return
@@ -3509,27 +3333,43 @@ function pullAbove(cell: Cell): void {
 /**
  * The general `set`: adopts a `Reactive`, absorbs a load, or gates a value.
  *
- * 9.5: a refusal comes back to the caller, and only a refusal — an accepted write is `void`,
+ * 4.18: a refusal comes back to the caller, and only a refusal — an accepted write is `void`,
  * whatever ordinal `accept` minted for it. Behind its own frame so the settled, ungated
  * write above it stays small enough to be inlined into whatever loop calls `set`.
  */
 function setThroughGates(cell: Cell, value: unknown): unknown {
-    // 11.62: A `Reactive` WRITTEN IS ADOPTED, never stored — the same sentence 11.12 makes about
+    // 11.61: A `Reactive` WRITTEN IS ADOPTED, never stored — the same sentence 11.12 makes about
     // one a body hands back, and the brand is read before `then` for the same reason (1.6). It is
     // off the common write path rather than in front of it: a settled primitive never reaches this
     // frame at all, and what does is a thenable or a callable.
     if (isReactive(value)) {
-        // 11.67 — a write that would close a cycle throws, as misuse rather than a refusal of data.
+        // 11.66 — a write that would close a cycle throws, as misuse rather than a refusal of data.
         const cycle = adopt(cell, (value as unknown as Callable)[CELL])
         if (cycle !== undefined) throw cycle
         return undefined
     }
     if (!isThenable(value)) {
-        const answer = accept(cell, value, true)
+        const answer = accept(cell, value)
         return typeof answer === 'number' ? undefined : answer
     }
-    absorb(cell, value, true, false)
+    absorb(cell, value, false)
     return undefined
+}
+
+/**
+ * Lands what a value opens with: a `Reactive` adopted, anything else absorbed.
+ *
+ * 11.61 AT CONSTRUCTION — `reactive(other)` opens on `other` the way `s.set(other)` writes it, by
+ * adopting it rather than storing it, so the two spellings agree (31.8). Stored, the value held
+ * `other`'s getter, and a read handed back a function.
+ */
+function open(cell: Cell, initial: unknown): void {
+    if (!isReactive(initial)) {
+        absorb(cell, initial, false)
+        return
+    }
+    const cycle = adopt(cell, (initial as unknown as Callable)[CELL])
+    if (cycle !== undefined) throw cycle
 }
 
 /**
@@ -3637,7 +3477,7 @@ function settleRestore(
     // A MISS IS THE VALUE WITHOUT A STORE: the body runs, or the initial value lands (8.3).
     if (cell.body !== null) startProducer(cell)
     else if (initial === undefined) landOpening(cell)
-    else if (initial !== NO_INITIAL) absorb(cell, initial, true, false)
+    else if (initial !== NO_INITIAL) open(cell, initial)
     else if (cell.loading) {
         cell.loading = false
         probesMoved(cell)
@@ -3655,7 +3495,7 @@ function restore(cell: Cell, persisted: Persisted, value: unknown): void {
     persisted.restoring = true
     try {
         const stream = cell.stream
-        if (stream === null) produce(cell, value, true)
+        if (stream === null) produce(cell, value)
         else restoreStream(cell, stream, value as unknown[])
     } finally {
         persisted.restoring = false
@@ -3665,7 +3505,7 @@ function restore(cell: Cell, persisted: Persisted, value: unknown): void {
 /**
  * Restores a stream's stored accumulation as a finished run.
  *
- * 8.6 AND 8.7: the ring is seeded with the accumulation, and the stream reads as finished — ready,
+ * 8.6 AND 8.7: the chunk buffer is seeded with the accumulation, and the stream reads as finished — ready,
  * and not busy — with its body never started.
  */
 function restoreStream(cell: Cell, stream: Stream, chunks: unknown[]): void {
@@ -3680,12 +3520,12 @@ function restoreStream(cell: Cell, stream: Stream, chunks: unknown[]): void {
     landChunks(cell)
     cascade(cell)
     if (moved) probesMoved(cell)
-    // 8.7 SAYS THE BODY NEVER STARTS, AND `pump` IS WHAT REACHES `retainRun` — so the
+    // 8.7 SAYS THE BODY NEVER STARTS, AND `pump` IS WHAT REACHES `closeRun` — so the
     // restored accumulation is entered as a closed run here or nothing ever does it.
     // Without this `standingLive` answers false for the life of the value, which takes
     // the `ttl` out of `expire` and `sweepExpiry` silently — it never drops and never
-    // re-reads the store — and leaves `s.history()` empty over 8.6's seeded ring.
-    retainRun(cell, stream)
+    // re-reads the store.
+    closeRun(cell, stream)
 }
 
 /**
@@ -3745,7 +3585,7 @@ function settleReread(cell: Cell, persisted: Persisted, value: unknown): void {
 
 function settleMiss(cell: Cell): void {
     // 8.19: NOTHING LEFT TO SERVE. The miss reached a value that holds nothing — an expiry
-    // released the standing production (6.13) and the re-read 6.12 owes it came back empty, and
+    // released the standing production (6.7) and the re-read 6.6 owes it came back empty, and
     // there is no body to fall through to on a value whose only producer is its store. Left as a
     // miss it read as `NotLanded` with all three probes silent for the life of the value, and
     // `expire` returned at `dropped` on every later read, so nothing ever asked again.
@@ -4049,9 +3889,15 @@ export function readyOver(tags: string[] | null): boolean {
  * itself, so walking the chain as well would visit it twice.
  */
 export function invalidateOver(tags: string[] | null): void {
-    for (const cell of inReach(tags))
-        if (tags === null) invalidateOne(cell)
-        else eachAdopted(cell, invalidateOne)
+    for (const cell of inReach(tags)) invalidateIn(cell, tags)
+}
+
+function invalidateIn(cell: Cell, tags: string[] | null): void {
+    // 13.17 — A WRITE IN FLIGHT IS LEFT TO LAND: marked, its caller's await pulls the reload, and a
+    // mutation's reload is the write sent again.
+    if (cell.mutation && cell.loading) return
+    if (tags === null) invalidateOne(cell)
+    else eachAdopted(cell, invalidateOne)
 }
 
 /**
@@ -4064,7 +3910,9 @@ export function invalidateOver(tags: string[] | null): void {
  */
 export function refreshOver(tags: string[] | null): void {
     for (const cell of inReach(tags)) {
-        if (
+        // 13.16 — a mutation's reload is its write sent again, so a sweep marks it instead.
+        if (cell.mutation) invalidateIn(cell, tags)
+        else if (
             readByAny(cell.readers) ||
             readByAny(cell.probeReaders) ||
             cell.stream !== null
@@ -4082,7 +3930,7 @@ export function refreshOver(tags: string[] | null): void {
  * Whether any of `readers` is something reading the value rather than a keyed entry's lifetime.
  *
  * THE LIFETIME IS THE ONE MIRROR WITH NO ADOPTER (`Subscriber.isMirror`): it subscribes to an entry
- * of a keyed value declaring `ttl` to hear its productions (11.46), and counted here it had 13.7
+ * of a keyed value declaring `ttl` to hear its productions (11.45), and counted here it had 13.7
  * reload every such entry nothing reads.
  */
 function readByAny(readers: Subscriber[]): boolean {
@@ -4100,8 +3948,8 @@ const MEMBERS = {
         // reached unrun, so a `peek` that only read the field would answer with the
         // value the last read left behind — 2.2 moved the ABSENCE here, not staleness.
         bringCurrent(cell)
-        // A `peek` IS A READ by the rulebook's own term, so 6.5, 6.11 and 6.12 reach it
-        // the same way. What it does not join is the FLOW (2.11) — an expiry is not a
+        // A `peek` IS A READ by the rulebook's own term, so 6.5 and 6.6 reach it
+        // the same way. What it does not join is the FLOW (2.10) — an expiry is not a
         // subscription, and a `peek` that went on serving a production `s()` had already
         // dropped would be two answers to what is held.
         if (cell.expiry !== null) expire(cell)
@@ -4126,8 +3974,8 @@ const MEMBERS = {
     /**
      * The shared `isFailedNamed`, since this member reads no cell.
      *
-     * THE ONE MEMBER THAT READS NO CELL, so it is the shared function itself — `Rpc.isError` and a
-     * socket's are the same one. Its first parameter is the error, as the member's is.
+     * THE ONE MEMBER THAT READS NO CELL, so it is the shared function itself — `Rpc.isError` is the
+     * same one. Its first parameter is the error, as the member's is.
      */
     isError: isFailedNamed,
     set(this: Callable, value: unknown): unknown {
@@ -4144,17 +3992,10 @@ const MEMBERS = {
                 (typeof value !== 'object' && typeof value !== 'function') ||
                 typeof (value as PromiseLike<unknown>).then !== 'function')
         ) {
-            produce(cell, value, true)
+            produce(cell, value)
             return undefined
         }
         return setThroughGates(cell, value)
-    },
-    publish(this: Callable, value: unknown): unknown {
-        const cell = this[CELL]
-        cell.generation += 1
-        if (!isThenable(value)) return accept(cell, value, false)
-        absorb(cell, value, false, false)
-        return cell.ordinal
     },
     patch(this: Callable, mutate: (value: unknown) => void): void {
         patchCell(this[CELL], mutate)
@@ -4172,33 +4013,9 @@ const MEMBERS = {
     ): () => void {
         return watchCell(this[CELL], effect)
     },
-    history(this: Callable, replay?: number): History<unknown> {
-        // The core's own reader is handed the whole cell; the server sees only its `Retained`.
-        const cell = pastOf(this) as Cell
-        // 6.17: a streaming producer's past is its CLOSED runs, which is a different ring from
-        // the chunk buffer `cell` carries — see `historyView`. Everything below is the same
-        // arithmetic over whichever of the two the value has.
-        const source: Retained =
-            cell.stream !== null ? historyView(cell, cell.stream) : cell
-        // 2.6: replay DEPTH alone, bounded above by what is retained.
-        const held = retained(source)
-        const depth =
-            replay === undefined || replay > held
-                ? held
-                : replay < 0
-                  ? 0
-                  : replay
-        // The callable IS the read: `Callable` types only the cell it carries.
-        return historyFrom(
-            source,
-            source.ordinal - depth,
-            this as unknown as () => unknown,
-            replay,
-        )
-    },
     [Symbol.asyncIterator](this: Callable): AsyncIterator<unknown> {
         const cell = this[CELL]
-        // 2.7: "the production in flight, from its start". Starting one ordinal back is
+        // 2.5: "the production in flight, from its start". Starting one ordinal back is
         // what includes it rather than skipping to whatever comes next — and clamped at
         // zero, where a value nothing has produced into must WAIT rather than hand over
         // the `undefined` it is holding.
@@ -4210,7 +4027,7 @@ const MEMBERS = {
                 : cell.ordinal > 0
                   ? cell.ordinal - 1
                   : 0
-        return historyFrom(cell, from)[Symbol.asyncIterator]()
+        return new Cursor(cell, from)
     },
     // biome-ignore lint/suspicious/noThenProperty: RULEBOOK 1.4 — a `Reactive` MUST be thenable, which is what this rule warns about. Banning it buys a discrimination rather than a semantics, and 16.4's in-process `Rpc` arm is what that discrimination would have cost. 1.6 is the guard that makes thenability safe — the brand is read before `then`.
     then(
@@ -4232,33 +4049,21 @@ const MEMBERS = {
 }
 
 /**
- * The cell whose retained past a reader of `value` replays, swept of expired entries.
+ * The cell `value` serves from, through every adoption.
  *
- * THE CELL A READER OF `value`'S PAST IS HANDED, and the one way to it: `s.history` and a socket
- * subscription (18.13) both come through here, so neither replays what the other would not.
- *
- * 9.15: an adopting value's past is the adopted value's, and an adoption of an adoption goes on
- * down. Stopping at one level answered from the MIDDLE value's standing production, which retains
- * nothing of its own: a two-deep chain over a ring of ten reported one entry.
- *
- * 6.5, AND THIS IS WHERE IT BITES. A replay is the only way to reach a retained production (2.5), so
- * sweeping here is what stops one past its life being handed back — 6.9's timer is the common path
- * and this is the backstop for a fire that came late. Before any cursor exists, so 6.7 is untouched:
- * what must not observe an expiry is a LIVE cursor.
+ * 11.12: an adopting value serves the adopted value's production, and an adoption of an adoption
+ * goes on down — so a follow's version (18.7) and its feed name the cell that actually produced.
  */
-export function pastOf(value: unknown): Retained {
-    const cell = adoptedCellOf(value)
-    if (cell.expiry !== null && cell.ringDepth > 0)
-        dropExpired(cell.expiry, ringedOf(cell), standingKept(cell))
-    return cell
+export function servedCellOf(value: unknown): Retained {
+    return adoptedCellOf(value)
 }
 
 /**
  * When the production `value` serves stops being servable, as a wall-clock time.
  *
  * 21.8 — WHEN THE PRODUCTION A VALUE IS SERVING STOPS BEING SERVABLE, as a wall-clock time: its
- * own `ttl` from when it was minted (6.11), or its entry's from when the entry last produced
- * (11.46), through whatever it adopts. Infinity where neither bounds it.
+ * own `ttl` from when it was minted (6.5), or its entry's from when the entry last produced
+ * (11.45), through whatever it adopts. Infinity where neither bounds it.
  */
 export function deadlineOf(value: unknown): number {
     const cell = adoptedCellOf(value)
@@ -4270,7 +4075,7 @@ export function deadlineOf(value: unknown): number {
 /**
  * The generation of the load `value` has in flight, or `undefined`.
  *
- * 16.52 — WHICH LOAD A VALUE HAS IN FLIGHT, as the generation that started it, or `undefined` where
+ * 16.48 — WHICH LOAD A VALUE HAS IN FLIGHT, as the generation that started it, or `undefined` where
  * none is. Read off the cell rather than through `busy`, which is a probe and would subscribe the
  * caller that asked (3.3).
  */
@@ -4282,7 +4087,7 @@ export function loadOf(value: unknown): number | undefined {
 /**
  * The generation `value`'s past stands at, or `undefined` while a load is in flight.
  *
- * What 21.15's `Cached` compares across a call, read through adoption as `pastOf` is.
+ * What 21.15's `Cached` compares across a call, read through adoption as `servedCellOf` is.
  */
 export function heldGenerationOf(value: unknown): number | undefined {
     const cell = adoptedCellOf(value)
@@ -4306,7 +4111,7 @@ export function failedTransiently(value: unknown): boolean {
 /**
  * Ends `value`'s load in flight, refusing it with `failure`.
  *
- * 16.53 — THE LOAD IN FLIGHT, ENDED WHERE IT STANDS. The generation moves so a settle arriving after
+ * 16.49 — THE LOAD IN FLIGHT, ENDED WHERE IT STANDS. The generation moves so a settle arriving after
  * is the stale one `absorb` already drops, a stream stops reaching the value, and the value refuses
  * with `failure` — which leaves what it held being served (2.4), a stream's chunks so far included.
  */
@@ -4319,7 +4124,7 @@ export function abandonLoad(value: unknown, failure: unknown): void {
 }
 
 /**
- * `value` settled (1.4), or `STREAMING` once it turns out to stream (9.20) — whichever comes first.
+ * `value` settled (1.4), or `STREAMING` once it turns out to stream (9.6) — whichever comes first.
  *
  * A body whose promise resolves to a generator is not a stream until it does, so a reader deciding
  * between framing chunks and answering one value has to wait for the first of the two — and is
@@ -4333,7 +4138,7 @@ export function streamingOrSettled(value: unknown): Promise<unknown> {
  * Whether `value` is a streaming producer's `Reactive`.
  *
  * A streaming producer's own `Reactive` — a body declared as an async generator, or one whose run
- * handed one back (9.20).
+ * handed one back (9.6).
  */
 export function isStreaming(value: unknown): boolean {
     if (!isReactive(value)) return false
@@ -4344,10 +4149,10 @@ export function isStreaming(value: unknown): boolean {
 /**
  * The chunks a streaming value has told its readers of, from index `from` on.
  *
- * 16.33 — THE CHUNKS A STREAMING VALUE HAS TOLD ITS READERS OF PAST `from`, for a writer sending each
+ * 16.32 — THE CHUNKS A STREAMING VALUE HAS TOLD ITS READERS OF PAST `from`, for a writer sending each
  * once. Ungated they are read out of the accumulation in place, to `visible` rather than its length
- * (5.18): a read materialises a copy of the whole of it (9.2), which for a writer woken per chunk is
- * n²/2 elements copied to send n. A schema or a transform has to see the whole accumulation (9.22),
+ * (5.18): a read materialises a copy of the whole of it (9.1), which for a writer woken per chunk is
+ * n²/2 elements copied to send n. A schema or a transform has to see the whole accumulation (9.8),
  * so a gated value answers from what a read would.
  */
 export function* chunksFrom(value: unknown, from: number): Generator<unknown> {
@@ -4366,7 +4171,7 @@ export function* chunksFrom(value: unknown, from: number): Generator<unknown> {
 
 function adoptedCellOf(value: unknown): Cell {
     let cell = (value as Callable)[CELL]
-    // A stream's own `adoption` is a write it follows (9.25), and its past is its own.
+    // A stream's own `adoption` is a write it follows (9.11), and its past is its own.
     while (cell.adoption !== null && cell.stream?.source !== null)
         cell = cell.adoption.source
     return cell
@@ -4433,15 +4238,15 @@ const MEMBER_PROTOTYPE = brandedPrototype()
  *
  * THE SAME MEMBERS WITH A STREAM'S WRITES — see `acceptIntoStream` for why they are not a branch.
  * Chosen once, when a value is built over a stream body, and kept for its life — a stream following
- * a `Reactive` it was set to (11.62) stays on it. A value ADOPTING a stream moves to
+ * a `Reactive` it was set to (11.61) stays on it. A value ADOPTING a stream moves to
  * `ADOPTING_PROTOTYPE` instead, like any adoption.
  */
 const STREAM_PROTOTYPE = brandedPrototype({
     set(this: Callable, value: unknown): unknown {
         const cell = this[CELL]
-        // 11.62: a `Reactive` written is adopted, and on a stream that is a write following it.
+        // 11.61: a `Reactive` written is adopted, and on a stream that is a write following it.
         if (isReactive(value)) {
-            // 11.67 — a cycle throws, as `setThroughGates` does.
+            // 11.66 — a cycle throws, as `setThroughGates` does.
             const cycle = follow(
                 cell,
                 cell.stream as Stream,
@@ -4450,22 +4255,17 @@ const STREAM_PROTOTYPE = brandedPrototype({
             if (cycle !== undefined) throw cycle
             return undefined
         }
-        return writeStream(cell, value, true)
-    },
-    publish(this: Callable, value: unknown): unknown {
-        const cell = this[CELL]
-        const answer = writeStream(cell, value, false)
-        return answer === undefined ? cell.ordinal : answer
+        return writeStream(cell, value)
     },
 })
 
 /**
  * The member prototype of an adopting value, whose writes reach what it adopts.
  *
- * THE SAME MEMBERS WITH AN ADOPTING VALUE'S WRITES, which reach what it adopts (11.60) — through that
+ * THE SAME MEMBERS WITH AN ADOPTING VALUE'S WRITES, which reach what it adopts (11.59) — through that
  * value's own members, so a stream's writes stay a stream's and an adoption of an adoption goes on
  * down — an adopting source is on this prototype for exactly as long as `adoption` is set. A
- * `Reactive` given to `set` is adopted HERE instead (11.62), or a value re-pointed at a new source
+ * `Reactive` given to `set` is adopted HERE instead (11.61), or a value re-pointed at a new source
  * would hand that source to the one it is leaving.
  */
 const ADOPTING_PROTOTYPE = brandedPrototype({
@@ -4474,12 +4274,6 @@ const ADOPTING_PROTOTYPE = brandedPrototype({
         if (adoption === null || isReactive(value))
             return MEMBERS.set.call(this, value)
         return (adoption.source.callable as Reactive<unknown>).set(value)
-    },
-    publish(this: Callable, value: unknown): unknown {
-        const adoption = this[CELL].adoption
-        if (adoption === null || isReactive(value))
-            return MEMBERS.publish.call(this, value)
-        return (adoption.source.callable as Reactive<unknown>).publish(value)
     },
     patch(this: Callable, mutate: (value: unknown) => void): void {
         const adoption = this[CELL].adoption
@@ -4500,7 +4294,7 @@ const ADOPTING_PROTOTYPE = brandedPrototype({
  * baseline path exactly, because it IS the baseline path.
  *
  * ON A `simple` VALUE THAT IS ALREADY SERVING, `produce` -> `serve` -> `cascade` reduces to
- * what is below: the ring, the cap, the expiry and the store are absent by `simple`; `moved`
+ * what is below: the cap, the expiry and the store are absent by `simple`; `moved`
  * is false by the three state tests, so no probe moves and nothing settles; no reload is
  * owed, so 7.9 has nothing to settle; and every status field `serve` writes is already at the
  * value it writes. The state tests are the `moved` computation and `produce`'s 7.9 test, read
@@ -4533,7 +4327,7 @@ const SIMPLE_PROTOTYPE = brandedPrototype({
                 return undefined
             }
             cell.value = value
-            // 6.18: an `undefined` is served and moves no ordinal.
+            // 6.10: an `undefined` is served and moves no ordinal.
             if (value !== undefined) cell.ordinal += 1
             // `setDirect`, with `plain` known true by `simple`.
             cell.direct = cell.state === CLEAN
@@ -4598,8 +4392,12 @@ export function createReactive<
     options: ReactiveOptions<Accepted, Stored, Failures> | undefined,
     // 5.19: a keyed value's window decides when this entry's producer starts, not the reach.
     deferred = false,
+    // A KEYED ENTRY IS ITS CACHE'S, held for whoever reaches it next and not the setup or the
+    // request that reached it first (12.4, 12.5) — so it is never orphaned by one. Only the entry:
+    // what its body opens is owned as any body's is, or a rung's `watch` outlives its request.
+    cached = false,
 ): Reactive<Stored, Accepted, Failures, Produced> {
-    // 11.42 IS A COMPILE ERROR THE TYPES CANNOT RAISE: a body declaring no parameter is still
+    // 11.41 IS A COMPILE ERROR THE TYPES CANNOT RAISE: a body declaring no parameter is still
     // assignable to the keyed overload's `(args: Args) => Computed`, so the checker falls through
     // to it and accepts the call. Like 5.14 it lands at construction instead, the earliest moment
     // there is — and a keyed value strips `args` before building an entry, so any that arrives
@@ -4608,7 +4406,7 @@ export function createReactive<
         throw new Error(
             `${label} declares args with no parameter to gate. args belongs to a keyed reactive, whose body declares one.`,
         )
-    // 9.20 AT CONSTRUCTION for a declared stream; a body handing one back is promoted by its run.
+    // 9.6 AT CONSTRUCTION for a declared stream; a body handing one back is promoted by its run.
     const streaming = body !== null && isStreamBody(body)
     const cell = new Cell(
         label,
@@ -4662,24 +4460,20 @@ export function createReactive<
     // 12.14 — A DERIVED VALUE IS ITS OWNER'S, as a watch is: built in a setup or a request, it
     // lets go of what it reads once that ends and nothing else reads it. A plain value reads
     // nothing, so it has nothing to let go of.
-    if (body !== null && owning()) owned(() => orphan(cell))
+    if (body !== null && !cached && owning()) owned(() => orphan(cell))
 
     // 1.7: reaching an instance starts the work it is for. For the value form that is
     // the initial write; for a body it is the first run, which 11.4 has happening once
     // per key rather than once per read.
     //
-    // AN ABSENT OPENING VALUE MINTS NOTHING, and it is the same sentence whatever the
-    // retention. A value nobody has published to retains NOTHING rather than one
-    // `undefined`, and a value nobody has written reads as not landed (2.2, 9.14) rather
-    // than serving an `undefined` its own type says is a `Stored`.
-    // Withholding this from the untailed form was the exception CLAUDE.md's uniformity
-    // bias refuses: the same option, one producer, two readings.
+    // AN ABSENT OPENING VALUE MINTS NOTHING: a value nobody has written reads as not landed
+    // (2.2, 4.14) rather than serving an `undefined` its own type says is a `Stored`.
     // 8.3 AND 8.14: a store answers first, where the value is constructed, and whatever it misses
     // falls back to what the value would have done without one.
     if (cell.store !== null) restoreFirst(cell, cell.store, initial)
     else if (body === null) {
         if (initial === undefined) landOpening(cell)
-        else if (initial !== NO_INITIAL) absorb(cell, initial, true, false)
+        else if (initial !== NO_INITIAL) open(cell, initial)
     } else if (deferred) cell.loading = true
     else startProducer(cell)
     return self as unknown as Reactive<Stored, Accepted, Failures, Produced>

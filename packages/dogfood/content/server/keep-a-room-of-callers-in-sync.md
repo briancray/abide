@@ -1,218 +1,187 @@
 ---
 title: Keep every caller in sync
-nav: Sockets
-intent: Serve a channel to callers outside the process — chat, presence, live prices, pushed rather than polled.
+nav: Live updates
+intent: Serve live state to every caller — chat, presence, live prices — pushed rather than polled.
 covers:
   - `Produced`
-  - socket › `Args`
-  - socket › `crossOrigin`
-  - socket › `middleware`
-  - `SocketEvent`
-  - `socket`
-  - `Socket`
-  - `clientPublish`
-  - `server/sockets/chat.ts`
-  - `server/sockets/feed.ts`
-  - `src/server/sockets/**/*.ts`
+  - `PatchOp`
 examples:
   - packages/dogfood/examples/socket-room.json
 ---
 
-A channel is already live state anything in the process may publish and anything may read. A chat
-pane, a presence list and a live price all want that same state reaching browsers — pushed, not
-polled every two seconds.
+A chat pane, a presence list and a live price all want one array on the server reaching every
+browser, pushed rather than polled every two seconds. You serve it the way you serve any read: a
+`global` reactive value behind a `GET`, written to by a `POST`.
 
-`socket` gives a channel an address. Nothing about the channel changes, and nothing on the page
-polls: it is the same `Reactive` the server publishes into, reached from outside the process.
+Nothing on the page polls and nothing on it opens a connection. A page that reads the `GET` follows
+it, and a `patch` on the server reaches every page following it.
 
-## The forms of `socket`
+## Live state is three declarations
 
-| You write | What you get |
+| You write | What it is |
 | --- | --- |
-| `socket(values)` | a `Socket` — `(args?) => Reactive`, serving each channel's messages out |
-| `socket(values, options)` | the same, with `clientPublish`, `crossOrigin` or `middleware` |
+| `reactive(fn, { global: true })` | the value every caller shares, one per args key where `fn` declares a parameter |
+| `export const room = GET(rooms)` | its address — a browser reading it follows it |
+| `export const say = POST(…)` | the way in from outside, a handler that patches the value |
 
-`values` is a `Reactive` — a channel, where it declares `history` — or a `Keyed` holding one per
-args key, so one socket carries every channel in it (18.1). It is built with `global: true`: a
-channel is one value every caller shares (9.16), and a value built without `global` is
-request-local on a server (11.32), so `socket` refuses one where it is declared (18.18). `Produced` and `Args` come through unchanged, so neither is spelled again here.
-What the options gate is the **transport**: who may connect, who may publish inward, and from
-which origin. Every signature is in the [Transports](../reference/transports.md) reference, and
-what a channel is before it has an address is [Channels](../values/let-anything-publish-and-anything-read.md).
+`global: true` puts the value in one process-wide cache that outlives every request (11.34). Leave
+it out and the value is request-local on a server (11.32), so every caller gets one of their own and
+nobody hears anybody. Every signature is in the [Transports](../reference/transports.md) reference,
+and what a channel is before it has an address is
+[Channels](../values/let-anything-publish-and-anything-read.md).
 
 ## A turn one tab sends reaches every tab
 
 {% example socket-room %}
 
-*1 option, 0 frames* — against the arm, which opens the socket, frames each turn, keeps a latest
-turn per room, fans each turn out to that room's tabs and reopens the connection when it drops.
+*2 handlers, 0 frames* — against the arm, which opens the socket, frames each turn, holds a turn
+sent while it is down, keeps a latest turn per room, fans each turn out to that room's tabs and
+reopens the connection when it drops.
 
-Each reader gets a room of their own. `rooms` is keyed, so `support({ id })` is one channel per
-id, and the id is a cookie — every tab of one browser sends it, and nobody else's does. A page
-everyone can post to would put a stranger's turn in front of you; keyed by an id only your browser
-holds, the room is yours and its tabs. A room nobody has posted to for an hour is let go (11.46).
+Each reader gets a room of their own. The body declares a parameter, so `rooms` is keyed (11.2) and
+`room({ id })` is one room per id. The id is a cookie that every tab of one browser sends and nobody
+else's does, so the room is yours and your tabs'.
 
-The tab that sends does not paint its own turn. `publish` on a browser's copy sends the message to
-the room on the server, and it comes back to every subscriber as a production, this tab included
-(18.6). So the transcript is the server's, in the order the server took it, in every tab at once.
+A browser reading a `GET` is subscribed to that handler's productions for those args (18.3), over
+one web socket mux every followed `GET` on the page shares (18.1). So a page following four rooms
+holds one connection.
 
-## A channel over a socket is still a channel
+The tab that sends does not paint its own turn. `say` sends the text, the handler patches the room,
+and what the patch wrote goes to every follower (18.11), this tab included. The transcript is the
+server's, in the order the server took it, in every tab at once.
 
-There is nothing about the shape that says which transport carried it: a bare read is the latest
-message, the probes answer, `s.history(n)` is the cursor, and `publish` hands back the `seq` it
-minted or the `Failed` it was refused with (9.5). `Args` picks the channel, keyed by the same
-canonical wire form a keyed value's arguments use (11.24).
+Each turn carries an id the server gives it, and the room declares `by: 'id'`. A follower's copy
+carries `by` (18.4), so a `{#for turn of room}` keys its rows by it (32.32) and a new turn adds one
+row. `ttl` is the life of a keyed entry (11.45), which is how a room nobody uses is let go.
 
-A `publish` on the server's value is sent to every subscriber (9.1), and `invalidate` and `refresh`
-on it reach every subscriber's copy (7.10, 7.18). A `GET` is carried the same way: a client reading
-one is subscribed over the same mux to that handler's productions for those `Args` (18.17).
+## The server writes each message, so nobody forges its author
 
-What a channel does before it has an address is on
-[Channels](../values/let-anything-publish-and-anything-read.md), and none of it changes here.
+`say` takes `{ id, text }` and nothing else. The turn's id, its speaker and anything else it
+carries are written by the handler, so a caller can only ever add a turn that says what they typed.
+The example writes `'you'`; an app with sign-in writes who is signed in:
 
-## A socket's address is its file path and export name
-
-Anything under `#server/sockets/**/*.ts` is reachable, the same way `#server/rpc/**` is:
-
-| File | Export | Reached at |
-| --- | --- | --- |
-| `#server/sockets/chat.ts` | `default` | `/__abide/socket/chat` |
-| `#server/sockets/feed.ts` | `ticks` | `/__abide/socket/feed/ticks` |
-
-Every socket is carried over **one** web socket mux, so a page subscribed to four channels holds
-one connection.
-
-## Callers are read-only until `clientPublish` says otherwise
-
-Default false. A socket serves messages out and accepts none in.
-
-That flag gates **this transport and nothing else**, which is why it belongs to the socket
-rather than to the channel: a socket accepts frames at a channel nobody named. The other way into
-a channel from outside is a `POST`, and one of those exists only because you declared an rpc that
-publishes into it — the declaration is already the intent a second flag would restate.
-
-```ts #server/rpc/threads.ts — excerpt
-export const say = POST(({ id, text }: { id: string; text: string }) =>
-    thread({ id }).publish({ id: crypto.randomUUID(), text }),
-)
+```ts server
+export const say = POST(({ id, text }: { id: string; text: string }) => {
+    const { name } = principal.resolved()
+    rooms({ id }).patch((turns) => {
+        turns.push({ id: crypto.randomUUID(), speaker: name, text })
+    })
+})
 ```
 
-`transform` still runs on a publish `clientPublish` admits. Refusing a message is a question
-about the message, not about who asked.
+The handler may read `principal`, because a handler is bound to the request it answers (16.25). The
+room's own body may not: `global: true` is a build error on a body reading `principal` (11.37),
+since one value serves every caller.
 
-Read on: [Mutations](change-something-on-the-server.md)
+So the room is append-only with no rung saying so. A caller has no way to write to it except the
+handlers you declared, and each one writes exactly what its body writes. Who may post is the
+`POST`'s own `middleware`, which runs on every call (16.11). A moderator removing a turn is a second
+`POST`, behind a rung of its own, whose handler finds the turn by id and splices it out.
 
-## `SocketOptions` gates the upgrade and what may be published
+A `patch` mutates the value in place rather than minting a production (5.7), so a `schema` on the
+room never sees it. The check is on the way in: the `POST`'s `args` are derived from its annotation
+(19.9), and anything stricter goes in the handler beside the push.
 
-The upgrade goes through `middleware`, which is the same `Middleware` type the http lane takes,
-instantiated over a `SocketEvent`:
+abide puts no cap on the array. The example trims in the same patch that appends —
+`if (turns.length > 20) turns.shift()` — and the `shift` is one more op on the wire.
 
-```ts shared
-type SocketEvent = {
-    kind: 'subscribe' | 'publish'
-    args: Args
-    message?: Produced
-    request: Request
-}
-```
+Read on: [Mutations](change-something-on-the-server.md) ·
+[Auth & principal](../app/know-who-is-calling.md)
 
-```ts #server/sockets/chat.ts — excerpt
-export default socket(thread, {
-    clientPublish: true,
-    crossOrigin: ['https://partner.example'],
+## Rungs on the `GET` decide who may follow
+
+A room anyone can follow is a room anyone can read. Put a rung on the `GET`:
+
+```ts server
+export const room = GET(rooms, {
     middleware: [
-        async (next, event) => {
-            const publishing = event.kind === 'publish'
-            if (publishing && !(await canPost(event.request, event.args)))
-                throw new Error('not a member')
-            return next(event)
-        },
+        async (next, ctx) =>
+            (await isMember(ctx.request, ctx.args())) ? next(ctx) : refuse(403),
     ],
 })
 ```
 
-`message` is absent on a subscribe, nothing having been published yet. There is no `Response`
-to return, so a **throw is the only refusal** on this lane.
+A read over http passes the rung like any call (16.11). A subscription runs it once, as it opens, in
+the request the connection opened in, and is sent productions only where the rung admitted it
+(18.8, 18.16). The decision is made per connection: access revoked after it opened takes effect when
+it next reconnects.
 
-`crossOrigin` is closed unless declared — `true` for any origin, a `string[]` for the
-allow-list — exactly as it is on the http lane.
+`crossOrigin` gates the same subscription from another origin, closed unless the `GET` admits that
+origin (18.2).
 
 Read on: [Authorization](decide-who-may-call-what.md) · [CORS](let-another-origin-call-you.md)
 
-## A reconnect resumes without a gap and without a duplicate
+## A follower is sent what a patch wrote, as JSON Patch
 
-Every message carries a `seq`, monotonic per channel and minted with the production (18.10). A
-channel also carries an **epoch** — its history version — minted when the value, or the keyed
-entry, is constructed (9.19). A restart constructs it again, so the epoch moves.
+A `patch` on the room is sent to every follower standing at the version it was made over as what it
+wrote, in JSON Patch (RFC 6902), and not as the array (18.11). Each write is a `PatchOp`: an `add`,
+`remove` or `replace` at a JSON Pointer, so a `push` is an `add` at `/-` and a `shift` a `remove` at
+`/0`. A twenty-turn room sends one turn per message, not twenty.
 
-You never write either (18.12). `s.history(n)` already replays the snapshot and goes live from where it
-ended, so a reconnect sends the last `seq` it rendered and the epochs are compared underneath:
-
-| | The client gets |
+| The patch | The follower is sent |
 | --- | --- |
-| same epoch, known cursor | everything after that `seq` |
-| same epoch, cursor older than `history` | the whole ring, never a gap |
-| moved epoch | the ring **marked as a reset** |
+| over the version it holds | the ops |
+| over a version it does not hold | the ops, and it reads the value again (18.12) |
+| over a copy the page wrote to itself | the ops, and it reads the value again (18.21) |
+| one whose writes cannot be sent as data | the value, whole (18.13) |
 
-A reset is announced because it has to be: a server that changed incarnation cannot know what
-the client painted, so replaying silently would duplicate rows a `{#for}` over the cursor had already
-appended. On a reset the block clears its accumulated rows and repaints from the ring — the one
-place it is not append-only, and rare enough that correctness beats the reflow.
+A write to a followed copy stays in that tab — a `say` is how a turn reaches the room — and lasts
+until the server next changes the room.
 
-That makes three handoffs one mechanism rather than three — seeding a first render, a
-socket that dropped and reopened, a tab too slow to adopt — with `s.history(n)` the only
-spelling any of them has.
+The same follow is open to anything that speaks http. Ask the `GET`'s address for
+`text/event-stream` and it is server-sent events, each frame's op its `event`, its version the `id`,
+and the value or the JSON Patch its `data` (18.20):
 
-A cursor you persisted across sessions is the one thing this does not serve, and could not: the
-ring lives in memory, bounded by `history` and `ttl`, so a cursor older than that is always past
-it. Catching up over that horizon is app data behind an ordinary rpc.
-
-Read on: [History](../values/keep-the-last-few-values.md)
-
-## Removing a message is an ordinary publish
-
-A `publish` appends, and there is no `revoke` and no `clear` over what a channel retains (9.17).
-
-A moderator removing a message publishes a **tombstone** the block renders as removed:
-
-```ts #shared/channels.ts — excerpt
-type Post = { id: string; text: string; removed?: true }
-
-export const thread = reactive(
-    (_args: { id: string }): Post | undefined => undefined,
-    { history: 20, global: true },
-)
+```
+curl -N -H 'Accept: text/event-stream' \
+  'https://app.example/__abide/rpc/socketRoomSupport/room?id=lobby'
 ```
 
-```abide #ui/pages/threads/[id]/page.abide — excerpt
-{#for post of thread({ id }).history(20) by post.id}
-    {#if post.removed}
-        <li class="removed">removed</li>
-    {:else}
-        <li>{post.text}</li>
-    {/if}
-{/for}
-```
+An `EventSource` reconnecting sends the last `id` back as `Last-Event-ID`, and is sent only what
+moved after it.
 
-`by post.id` lands the tombstone — `{ id, text: '', removed: true }` — on the row the original
-keyed to, so a live subscriber updates one row and a late one replays both messages and resolves
-them the same way. No epoch move, no reset frame, no repaint.
+Read on: [Watch a channel](../ship/watch-a-room-from-the-terminal.md)
 
-**A ring edit could not have delivered what it promised.** Dropping the message from the retention
-would stop it being *served* again — but the ring is already bounded by `history` and `ttl`, and a
-process restart drops it wholesale. Anything that must genuinely never be served again is durable,
-so it lives in the app's own store behind an rpc, where a delete is a delete.
+## A reconnect is sent the value, then its patches
 
-## The `seq` counter and the epoch are process-local
+A version names one production or one patch, and no other in this process or in any earlier one
+(18.7). A client subscribing names the version it holds (18.9), and the server's answer follows
+from it (18.6):
 
-Both live in the process, as a `global` value's cache does. More than one instance degrades rather
-than breaks: a reconnect landing on another instance is the announced epoch reset, and the client
-takes the ring. abide supplies no cross-process mechanism for it.
+| The client holds | It is sent |
+| --- | --- |
+| the value's current version | nothing, until the next patch |
+| any other version | the value, whole |
+
+Seeding a first render, a connection that dropped and reopened, and a tab too slow to keep up are
+one mechanism, and none of it is spelled by the app.
+
+The value is not durable. It lives in memory, so a restart starts the room from its body again.
+History anyone must be able to scroll back past that is app data behind an ordinary rpc.
+
+## A followed value is still a reactive value
+
+The call hands back the same `Reactive` the handler had, `Produced` included (16.3). A bare read is
+the array, `room.at(-1)` is the latest turn, and the probes answer. A follower's copy is `busy()`
+until its first production arrives (9.14).
+
+Writing to that copy is not how to send. A `set` on it stands only until the next production
+replaces it (9.4), so a turn goes through `say`.
+
+`room.invalidate({ id })` and `room.refresh({ id })` inside a handler reach every browser's copy of
+that room (7.10, 7.18). A `for await` over the room hands back the standing array once per turn, a
+burst collapsing to the latest (2.6), so code that has to act on every message acts in `say`.
+
+## Each instance holds its own room
+
+A `global` value lives in the process, as its cache does. More than one instance degrades rather
+than breaks: a reconnect landing on another instance names a version that instance never minted,
+and is sent that instance's value whole. abide supplies no cross-process mechanism for it.
 
 Read on: [Sharing](../values/share-one-value-across-components.md)
 
 ## Next
 
-* [Channels](../values/let-anything-publish-and-anything-read.md) — what a channel is, before a transport
-* [Schemas](check-what-callers-send-you.md) — declaring what a message must look like
-* [Watch a channel](../ship/watch-a-room-from-the-terminal.md) — subscribing from a shell
+* [Channels](../values/let-anything-publish-and-anything-read.md) — what a channel is, before it has an address
+* [Reading data](read-data-without-writing-an-api.md) — `GET`, and how any read follows the server
+* [Watch a channel](../ship/watch-a-room-from-the-terminal.md) — following a `GET` from a shell

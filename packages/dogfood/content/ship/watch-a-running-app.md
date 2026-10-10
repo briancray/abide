@@ -13,10 +13,11 @@ abide logs
 ```
 
 Tails the app's log records. It reads the `GET` over `log.records`, and a client reading a `GET` is
-subscribed to what it produces (18.17), so this is a live subscription — the one the shell
+subscribed to what it produces (18.3), so this is a live subscription — the one the shell
 makes to any channel (38.10). That is worth stating first because it explains everything else
-about it: the channel is a channel, the ring is that channel's `history`, and there is no separate
-log API for this to be a client of.
+about it. `log.records` is an ordinary `reactive` holding the lines kept, and `/__abide/logs` is a `GET` over
+it (28.2): the lines held arrive first, then each line written as an `add`, over the same server-sent
+events any followed `GET` speaks (18.20). There is no separate log API for this to be a client of.
 
 ## `DEBUG` is read where the app runs
 
@@ -40,17 +41,17 @@ variable is the decision.
 Read on: [Config](../app/configure-the-app.md) ·
 [Configuration](../reference/configuration.md)
 
-## The tail is a memory ring
+## The tail is held in memory
 
-`ABIDE_MAX_LOG_BUFFER_COUNT` is how many records the channel retains, and it is bounded and
-process-local like any other ring. What this command shows is what that process still holds —
+`ABIDE_MAX_LOG_BUFFER_COUNT` is how many of the latest lines `log.records` keeps (28.1), and they
+are bounded and process-local. What this command shows is what that process still holds —
 so it is the tool for **what is happening now**, and a collector is the tool for what happened
 last Tuesday.
 
 `ABIDE_LOG_FORMAT` picks the machine form for that collector. Unset, the output is the readable
 one, and `NO_COLOR` and `FORCE_COLOR` decide the ansi.
 
-Read on: [History](../values/keep-the-last-few-values.md)
+Read on: [Logging](../app/record-what-happened.md)
 
 ## Next
 

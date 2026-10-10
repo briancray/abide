@@ -28,10 +28,10 @@ abide has one answer.
 with its own loading convention, which is what the hand-written arm has to keep.
 
 Four ways of getting a value, one type back — every one of them is `reactive`: a value the
-scope owns, a value with a body, a body that loads, and a value that waits for a publish. Declare
-`history` on that last kind and it is a channel, state the system keeps sending to everyone
-connected — still a `Reactive` like the other three, carried over a socket or not. See
-[Sockets](../server/keep-a-room-of-callers-in-sync.md).
+scope owns, a value with a body, a body that loads, and a value that waits for its first write.
+Hold an array in one and serve it from a `GET` and it is a channel, state the system keeps sending
+to everyone connected — still a `Reactive` like the other three. See
+[Live updates](../server/keep-a-room-of-callers-in-sync.md).
 
 That is not a naming convenience:
 

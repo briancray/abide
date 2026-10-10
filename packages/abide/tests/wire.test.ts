@@ -1,4 +1,4 @@
-// 16.2, 16.29, 16.30 AND 19.16 — A HANDLER OVER HTTP, END TO END. An app is built and served by the
+// 16.2, 16.28, 16.29 AND 19.15 — A HANDLER OVER HTTP, END TO END. An app is built and served by the
 // commands a host runs, and what is asserted is what crosses the wire: the address a handler answers
 // at, what each outcome is answered with, what the browser's bundle was handed in place of the
 // server module — and, through `wire` itself, that the browser's `Rpc` is the same value the server's
@@ -98,7 +98,7 @@ let app = ''
 let stop = (): void => {}
 let base = ''
 
-// 18.17 — EVERY `GET` THE WIRE LOADS IS FOLLOWED over the mux, and `followWire.test.ts` is where that
+// 18.3 — EVERY `GET` THE WIRE LOADS IS FOLLOWED over the mux, and `followWire.test.ts` is where that
 // is asserted. Here the socket never opens: happy-dom's `WebSocket` wraps `ws`, which throws an
 // unhandled `error` for a host nobody listens on — which three of these tests' addresses are.
 const unstubbedSocket = globalThis.WebSocket
@@ -128,8 +128,8 @@ afterAll(() => {
 
 const RPC = '/__abide/rpc/invoices'
 
-// 16.2, 19.1 — the file's path below `server/rpc`, then the export; 16.31 and 21.3 on the answer.
-test('a handler answers at its file path and export name, as JSON — 16.2, 16.31', async () => {
+// 16.2, 19.1 — the file's path below `server/rpc`, then the export; 16.30 and 21.3 on the answer.
+test('a handler answers at its file path and export name, as JSON — 16.2, 16.30', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/getInvoice?id=4021`)
     expect(answer.status).toBe(200)
     expect(answer.headers.get('content-type')).toBe('application/json')
@@ -140,30 +140,36 @@ test('a handler answers at its file path and export name, as JSON — 16.2, 16.3
     expect(await health.json()).toEqual({ up: true })
 })
 
-// 16.41, 15.1 — the refusal the handler RETURNED, at its own status, as the four fields it is.
-test('a refusal is answered at its own status with its name and data — 16.41', async () => {
+// 16.40, 15.1 — the refusal the handler RETURNED, at its own status, as Problem Details (RFC 9457):
+// its name the `type`, its message the `detail`, its data an extension member.
+test('a refusal is answered at its own status with its name and data — 16.40', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/getInvoice?id=4311`)
     expect(answer.status).toBe(403)
+    expect(answer.headers.get('content-type')).toBe('application/problem+json')
     expect(await answer.json()).toEqual({
-        name: 'NotYours',
+        type: 'NotYours',
+        title: 'NotYours',
         status: 403,
-        message: 'That invoice belongs to someone else.',
+        detail: 'That invoice belongs to someone else.',
         data: { owner: 'Grace Hopper' },
     })
 })
 
-// 16.32, 16.42 — nothing is 204; a throw is 500 and says nothing about itself.
-test('nothing is 204, and a throw is 500 with nothing of the error in it — 16.32, 16.42', async () => {
+// 16.31, 16.41 — nothing is 204; a throw is 500 and says nothing about itself.
+test('nothing is 204, and a throw is 500 with nothing of the error in it — 16.31, 16.41', async () => {
     expect((await Bun.fetch(`${base}${RPC}/ping`)).status).toBe(204)
     const broken = await Bun.fetch(`${base}${RPC}/broken`)
     expect(broken.status).toBe(500)
     const text = await broken.text()
     expect(text).not.toContain('on fire')
-    expect(JSON.parse(text).name).toBe('HttpError')
+    expect(JSON.parse(text)).toMatchObject({
+        type: 'about:blank',
+        title: 'Internal Server Error',
+    })
 })
 
-// 16.19, 16.21 — a mutation's args are its JSON body, and a body that is not one is a 400.
-test('a mutation takes its args from the body, and refuses one that is not JSON — 16.19, 16.21', async () => {
+// 16.18, 16.20 — a mutation's args are its JSON body, and a body that is not one is a 400.
+test('a mutation takes its args from the body, and refuses one that is not JSON — 16.18, 16.20', async () => {
     const paid = await Bun.fetch(`${base}${RPC}/payInvoice`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -181,7 +187,7 @@ test('a mutation takes its args from the body, and refuses one that is not JSON 
 test('an address or a method nothing answers is NotFound — 15.7', async () => {
     const nowhere = await Bun.fetch(`${base}${RPC}/nothingHere`)
     expect(nowhere.status).toBe(404)
-    expect((await nowhere.json()).name).toBe('NotFound')
+    expect((await nowhere.json()).type).toBe('NotFound')
     const wrongMethod = await Bun.fetch(`${base}${RPC}/getInvoice`, {
         method: 'POST',
     })
@@ -200,11 +206,11 @@ test('a handler reads its request and writes its response — 22.1, 22.9', async
     expect(made.headers.get('location')).toBe('/invoices/9')
 })
 
-// 16.29 — THE BROWSER GETS THE WRAPPER AND NOT THE MODULE. The handler module imports the secret,
+// 16.28 — THE BROWSER GETS THE WRAPPER AND NOT THE MODULE. The handler module imports the secret,
 // the page imports the handler, and the bundle carries the address and not the secret. THE REVERT:
 // drop `fence` from `bundleClient`'s plugins; the server module is bundled as written and the
 // secret is in the client — along with `abide/server` and everything it reaches.
-test('the browser bundle carries the address and none of the server module — 16.29', async () => {
+test('the browser bundle carries the address and none of the server module — 16.28', async () => {
     const chunks = [
         ...new Bun.Glob('**/*.js').scanSync({ cwd: `${app}/.abide/client` }),
     ]
@@ -215,22 +221,22 @@ test('the browser bundle carries the address and none of the server module — 1
     expect(bundle).toContain('../rpc/invoices/getInvoice')
 })
 
-// 16.30 — ANYTHING ELSE UNDER `server/` IS A BUILD ERROR from the client graph, never a module the
+// 16.29 — ANYTHING ELSE UNDER `server/` IS A BUILD ERROR from the client graph, never a module the
 // browser silently receives. THE REVERT: return `undefined` from the fence's `onLoad` for a path
 // with no wrapper; the build succeeds and the database module is in the bundle.
-test('a page importing server code that is not a handler does not build — 16.30', async () => {
+test('a page importing server code that is not a handler does not build — 16.29', async () => {
     const leaking = appFixture({
         'ui/pages/page.abide': `<script>\nimport { SECRET } from '#server/database.ts'\n</script>\n\n<p>{SECRET}</p>`,
         'server/database.ts': `export const SECRET = '${SECRET}'\n`,
     })
     const built = await buildApp(leaking)
     expect(built.exitCode).not.toBe(0)
-    expect(built.stderr).toContain('RULEBOOK 16.30')
+    expect(built.stderr).toContain('RULEBOOK 16.29')
 })
 
-// 19.16 — an export under `server/rpc` that is not declared as a handler is refused by name, rather
+// 19.15 — an export under `server/rpc` that is not declared as a handler is refused by name, rather
 // than being an address that never answers.
-test('an rpc module exporting something that is not a handler does not build — 19.16', async () => {
+test('an rpc module exporting something that is not a handler does not build — 19.15', async () => {
     const stray = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
         'server/rpc/invoices.ts': `import { GET } from 'abide/server'\n\nexport const getInvoice = GET(() => 1)\nexport const TAX_RATE = 0.2\n`,
@@ -238,11 +244,11 @@ test('an rpc module exporting something that is not a handler does not build —
     const built = await buildApp(stray)
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain('`TAX_RATE`')
-    expect(built.stderr).toContain('RULEBOOK 19.16')
+    expect(built.stderr).toContain('RULEBOOK 19.15')
 })
 
-// 19.2 — two modules declaring one address is a build error naming both.
-test('two handlers at one address do not build, and both files are named — 19.2', async () => {
+// 19.1 — two modules declaring one address is a build error naming both.
+test('two handlers at one address do not build, and both files are named — 19.1', async () => {
     const twice = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
         'server/rpc/admin.ts': `import { GET } from 'abide/server'\n\nexport const audit = GET(() => 1)\n`,
@@ -254,13 +260,13 @@ test('two handlers at one address do not build, and both files are named — 19.
     expect(built.stderr).toContain('server/rpc/admin/audit.ts')
 })
 
-// 19.16 — WHAT DECLARES A HANDLER IS THE CALL, NOT THE SPELLING OF THE LINE IT STANDS ON. Every
+// 19.15 — WHAT DECLARES A HANDLER IS THE CALL, NOT THE SPELLING OF THE LINE IT STANDS ON. Every
 // module below is a handler the language says is one — declared then exported, exported under
 // another name, its method imported under another name or through a namespace, re-exported from a
 // helper module, a default naming a binding — and none is written `export const x = GET(…)`.
 // THE REVERT: read the method off the source with a pattern over that one spelling; the build is
 // refused on the first of them.
-test('a handler declared any way the language allows is mounted with its method — 19.16', async () => {
+test('a handler declared any way the language allows is mounted with its method — 19.15', async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
         'server/shared.ts': `import { PATCH } from 'abide/server'\n\nexport const touch = PATCH(() => 1)\n`,
@@ -291,9 +297,9 @@ test('a handler declared any way the language allows is mounted with its method 
 // 20.3, 38.63 — `clients: { cli: false }` IS READ OFF THE DECLARATION INTO THE TABLE THE BUILD WRITES,
 // the only thing the shell holds of an app it may never have booted (38.7). THE REVERT: read
 // `withheldFrom(call, 'ui')` for `cli` in `declaringMethod`; `internal` reads `cli: true`, and the shell
-// lists it. 16.38 — AND ONE TYPED AS RETURNING A `Response` IS WRITTEN WITHHELD unless its `clients`
+// lists it. 16.37 — AND ONE TYPED AS RETURNING A `Response` IS WRITTEN WITHHELD unless its `clients`
 // puts it back. THE REVERT: default `cli` to true in `declaringMethod`; `raw` reads `cli: true`.
-test('a handler with clients.cli false, or returning a Response, is written to the table withheld from the shell — 16.38, 20.3, 38.63', async () => {
+test('a handler with clients.cli false, or returning a Response, is written to the table withheld from the shell — 16.37, 20.3, 38.63', async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
         'server/rpc/staff.ts': `import { GET } from 'abide/server'\n\nexport const internal = GET(() => 'staff only', { clients: { cli: false } })\n\nexport const open = GET(() => 'anyone')\n\nexport const raw = GET(async () => new Response('bytes'))\n\nexport const shown = GET(() => new Response('{}'), { clients: { cli: true } })\n`,
@@ -314,9 +320,9 @@ test('a handler with clients.cli false, or returning a Response, is written to t
     })
 })
 
-// 19.16 — AND A CALL NAMED `GET` THAT IS NOT abide's IS NOT A HANDLER. THE REVERT: accept the
+// 19.15 — AND A CALL NAMED `GET` THAT IS NOT abide's IS NOT A HANDLER. THE REVERT: accept the
 // export by the callee's spelling; this builds, and mounts a plain number as a handler.
-test('an export calling a GET that is not abide’s does not build — 19.16', async () => {
+test('an export calling a GET that is not abide’s does not build — 19.15', async () => {
     const app = appFixture({
         'ui/pages/page.abide': '<p>home</p>',
         'server/rpc/fake.ts': `const GET = (value: () => number) => value()\n\nexport const count = GET(() => 1)\n`,
@@ -324,14 +330,14 @@ test('an export calling a GET that is not abide’s does not build — 19.16', a
     const built = await buildApp(app)
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain('`count`')
-    expect(built.stderr).toContain('RULEBOOK 19.16')
+    expect(built.stderr).toContain('RULEBOOK 19.15')
 })
 
 // THE BROWSER'S `Rpc`, against the served handler. `wire` is what a generated wrapper calls, so this
 // is the value a page holds: it answers with the handler's value, it joins a standing call with the
-// same args (1.8), a refusal narrows by name (16.9), and a mutation calls again (16.7). The wire is
+// same args (1.8), a refusal narrows by name (16.8), and a mutation calls again (16.7). The wire is
 // counted, because a call that re-fetched would still answer right.
-test('the wire is the same Rpc: coalesced, narrowable, and a mutation calls again — 16.4, 16.29', async () => {
+test('the wire is the same Rpc: coalesced, narrowable, and a mutation calls again — 16.4, 16.28', async () => {
     const calls: string[] = []
     const window = globalThis as { fetch: typeof fetch }
     const previous = window.fetch
@@ -466,9 +472,9 @@ test('the wire takes a call the page already started, and fetches after that —
     }
 })
 
-// 16.33 — A FRAMED STREAM IS THE CHUNKS IT CARRIED, in each framing the server can answer in. THE
+// 16.32 — A FRAMED STREAM IS THE CHUNKS IT CARRIED, in each framing the server can answer in. THE
 // REVERT: drop the jsonl arm from `answered`; the body is not one JSON value, and the call refuses.
-test('the wire collects a jsonl or sse answer into its chunks — 16.33', async () => {
+test('the wire collects a jsonl or sse answer into its chunks — 16.32', async () => {
     const window = globalThis as unknown as Record<string, unknown>
     const previous = window.fetch
     const bodies: Record<string, [string, string]> = {
@@ -494,13 +500,13 @@ test('the wire collects a jsonl or sse answer into its chunks — 16.33', async 
     }
 })
 
-// 16.33 — A STREAMING HANDLER'S COPY TAKES EACH CHUNK AS ITS LINE ARRIVES. The answer's second line
+// 16.32 — A STREAMING HANDLER'S COPY TAKES EACH CHUNK AS ITS LINE ARRIVES. The answer's second line
 // is not sent until the copy has shown the first, so a copy that collected would show nothing at
 // all and the race reports it. No clock is read: the order is the claim.
 //
 // THE REVERT: declare `body` rather than `streamed` for a marked copy in `wire`; the first read loses
 // the race, and the value lands once, whole, when the answer closes.
-test('a copy the build marked as streaming holds each chunk as it lands — 16.33', async () => {
+test('a copy the build marked as streaming holds each chunk as it lands — 16.32', async () => {
     const window = globalThis as unknown as Record<string, unknown>
     const previous = window.fetch
     let send = (_line: string): void => {}
@@ -595,13 +601,13 @@ test('a streaming mutation coalesces until its stream closes, then calls again �
     }
 })
 
-// 16.33 — AND THE BUILD IS WHAT MARKS IT: a handler returning an async generator is written into the
+// 16.32 — AND THE BUILD IS WHAT MARKS IT: a handler returning an async generator is written into the
 // browser's wrapper as a stream, and one that does not is left a value — a mutation's as much as a
 // read's, and an arrow handing one back or a promise of one, or a member naming one
 // (`claudeCode.bridge`), as much as one declared `async function*`. THE REVERT: return false from
 // `returnsGenerator`; no wrapper carries `stream` and every copy collects. Put back
 // `method.name === 'GET'` and `postLines` loses it; drop its `Promise` unwrap and `awaitedLines` does.
-test('the build marks a handler returning an async generator as a stream in its wrapper — 16.33', async () => {
+test('the build marks a handler returning an async generator as a stream in its wrapper — 16.32', async () => {
     const wrapper = await Bun.file(
         `${app}/.abide/wire/server/rpc/invoices.ts`,
     ).text()
@@ -616,7 +622,7 @@ test('the build marks a handler returning an async generator as a stream in its 
     expect(lineOf('getInvoice')).not.toContain('stream')
 })
 
-// 20.4 — A HANDLER WITHHELD FROM THE UI GETS NO WRAPPER, so a page importing it is 16.30's compile
+// 20.4 — A HANDLER WITHHELD FROM THE UI GETS NO WRAPPER, so a page importing it is 16.29's compile
 // error rather than a call the browser was quietly handed; the handler still answers over http. THE
 // REVERT: write a wrapper for every mount in `wrappersOf`; the build succeeds and the page ships a call
 // to a handler its author withheld.
@@ -698,11 +704,11 @@ test('hydration waits on the calls painted settled, and a failed one ends the wa
     }
 })
 
-// 16.35 — A BINARY DECODES BACK TO THE BYTES IT WAS, at `application/octet-stream` and at a `Blob`'s
+// 16.34 — A BINARY DECODES BACK TO THE BYTES IT WAS, at `application/octet-stream` and at a `Blob`'s
 // own type alike. `0xff` is no UTF-8, so a body read as text cannot hand these bytes back. THE
 // REVERT: read every answer as text in `answerOf`'s `fetched` (drop the `bytes` arm); the call
 // settles `undefined`, the body being no JSON.
-test('a binary answer decodes back to a Uint8Array in the browser — 16.35', async () => {
+test('a binary answer decodes back to a Uint8Array in the browser — 16.34', async () => {
     const window = globalThis as { fetch: typeof fetch }
     const previous = window.fetch
     window.fetch = ((input: string, init?: RequestInit) =>
@@ -734,12 +740,12 @@ test('a binary answer decodes back to a Uint8Array in the browser — 16.35', as
     }
 })
 
-// 16.3, 16.47 — A STREAM OF BINARY CHUNKS IS A STREAM OF BYTES TO ITS READER, each read landing as it
+// 16.3, 16.46 — A STREAM OF BINARY CHUNKS IS A STREAM OF BYTES TO ITS READER, each read landing as it
 // arrives: the handler holds its second chunk until the first has landed in the copy, so a copy that
 // collected shows nothing before the race ends. THE REVERT: leave `binary` out of `fetched`'s
 // `unread` in `answerOf`; the body is read to its end, which waits on a chunk the handler holds
 // back until the first has landed, and the race reports nothing landed.
-test('a streaming copy over binary chunks holds each as a Uint8Array as it lands — 16.3, 16.47', async () => {
+test('a streaming copy over binary chunks holds each as a Uint8Array as it lands — 16.3, 16.46', async () => {
     const window = globalThis as { fetch: typeof fetch }
     const previous = window.fetch
     window.fetch = ((input: string, init?: RequestInit) =>

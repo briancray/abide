@@ -1,6 +1,6 @@
-// 19.8 — A `GET` OR `DELETE`'s TEXT ARGS, COERCED FROM THE TYPE THE `JsonSchema` DECLARES, before
+// 19.7 — A `GET` OR `DELETE`'s TEXT ARGS, COERCED FROM THE TYPE THE `JsonSchema` DECLARES, before
 // anything validates them. A URL carries text, so `?id=42` is `'42'` until the schema says the member
-// is a number. Coercion is the pipeline's and not the schema's (19.7): the schema is handed what this
+// is a number. Coercion is the pipeline's and not the schema's (19.6): the schema is handed what this
 // made of the text, and refuses what would not coerce.
 //
 // Read off a `Schema` built by `jsonSchema`, where the document is exposed; a schema with no document
@@ -30,7 +30,7 @@ export function argsDocumentOf(handler: Gated<unknown>): Document | undefined {
 /**
  * Name and value pairs as args: a name given more than once is a list, one given once its text.
  *
- * 16.19 — a query's and a form's members, and 38.62 — `abide call`'s `name=value` words, alike.
+ * 16.18 — a query's and a form's members, and 38.62 — `abide call`'s `name=value` words, alike.
  */
 export function collapsed(
     entries: URLSearchParams | FormData,

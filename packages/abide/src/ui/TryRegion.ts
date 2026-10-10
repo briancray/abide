@@ -85,7 +85,7 @@ export class TryRegion extends ArmRegion {
      * subscribes the retry to what the body read. A body that fails there sets the failure the catch
      * binds, and the catch is adopted; one that mounts is left standing for the swap. A value still
      * in flight decides neither, and the attempt is run again under this watch, whose run it aborts
-     * as it would anywhere (2.13) — so this watch is what the value landing wakes.
+     * as it would anywhere (2.12) — so this watch is what the value landing wakes.
      */
     follow(): void {
         if (this.at === undefined && namedArm(this.region.open.data) === 1) {
@@ -108,7 +108,7 @@ export class TryRegion extends ArmRegion {
      * Every scope it builds carries it, and a throw straight out of the mount — a handler or a node
      * reference that failed as it was bound — is the boundary's too. A hydration mismatch is not a
      * failure of the body, and is left to the caller that rebuilds; and a value still in flight is
-     * not a failure either: it aborts the run as it would anywhere (2.13).
+     * not a failure either: it aborts the run as it would anywhere (2.12).
      *
      * `again` IS WHAT A RETRY RE-RUNS: the binding that threw, or the body mounted again.
      */

@@ -546,9 +546,9 @@ let late = reactive(false)
 })
 
 // 31.3 — AN `await` OPERAND HOLDS THE `Reactive`, WHEREVER AN `await` IS LEGAL. Every `Reactive`
-// is a promise for its own settling (1.4, 2.8), so this is the same line a `.ts` file writes and
+// is a promise for its own settling (1.4, 2.7), so this is the same line a `.ts` file writes and
 // it means the same thing. Lowered as a read (31.1) it would be `await total()` — what has landed,
-// and a throw where nothing has (2.10), which is never what an `await` asked for.
+// and a throw where nothing has (2.9), which is never what an `await` asked for.
 //
 // IN A HANDLER, BECAUSE 34.3 IS WHY. Setup is a function body on both sides and may not await at
 // its top level, so the positions left are the ones inside a function — a handler, a `reactive`

@@ -1,10 +1,8 @@
-// WHAT A HANDLER'S VALUE IS ANSWERED AS, over http. JSON by default (16.31), and otherwise by what the
-// value is: a `Response` as it stands (16.37), a binary as bytes (16.35), a `Blob` range-aware
-// (16.36), a document where `page` named one (17.2), a stream — a streaming handler's chunks, or
-// `Values` a handler returned — framed one chunk per pull (16.33, 16.45–16.48), and a value declaring
-// `history` framed one production per pull where the reader asks for frames (16.49–16.51).
+// WHAT A HANDLER'S VALUE IS ANSWERED AS, over http. JSON by default (16.30), and otherwise by what the
+// value is: a `Response` as it stands (16.36), a binary as bytes (16.34), a `Blob` range-aware
+// (16.35), a document where `page` named one (17.2), a stream — a streaming handler's chunks, or
+// `Values` a handler returned — framed one chunk per pull (16.32, 16.44–16.47).
 
-import { isReactive } from '#shared/reactive/index.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { prefers } from './prefers.ts'
 import {
@@ -13,7 +11,6 @@ import {
     heldByApp,
     holdScope,
 } from './requestScope.ts'
-import { resumeProductions } from './resumeProductions.ts'
 
 const ENCODER = new TextEncoder()
 // AN EVENT STREAM OPENS ON A COMMENT — `bodyOf` says why.
@@ -41,21 +38,15 @@ export async function answerValue(
     const framing = currentRequestScope()?.framing
     // 17.9, 17.10 — what `json` fixed: the standing value, whatever it is, and `null` for nothing.
     if (framing === 'json') {
-        const settled = isReactive(value)
-            ? (value as { peek(): unknown }).peek()
-            : value
         headers.set('content-type', 'application/json')
         return compressAnswer(
-            JSON.stringify(settled ?? null),
+            JSON.stringify(value ?? null),
             request,
             headers,
             status,
         )
     }
-    // A `Reactive` is what `outcomeOf` hands on for a value declaring `history`, and for nothing else.
-    if (isReactive(value))
-        return answerProductions(value, request, headers, status)
-    // 16.32 — nothing to say is 204, where the handler wrote no status of its own, and 16.56 — a
+    // 16.31 — nothing to say is 204, where the handler wrote no status of its own, and 16.52 — a
     // type for no content is noise, at any status: a `redirect` has no body for it to describe.
     if (value === undefined) {
         headers.delete('content-type')
@@ -89,7 +80,7 @@ export async function answerValue(
     // A sync iterable is a stream only where a helper fixed the framing: an array is a value.
     if (isValues(value) || (framing !== undefined && isIterable(value)))
         return answerStream(chunksOf(value), framing, request, headers, status)
-    // 16.31.
+    // 16.30.
     return compressAnswer(JSON.stringify(value), request, headers, status)
 }
 
@@ -102,90 +93,10 @@ function isIterable(value: unknown): value is Iterable<unknown> {
 }
 
 /**
- * A value declaring `history`, answered as its productions, or as the one standing.
- *
- * 16.49 — ONE FRAME PER PRODUCTION, each carrying the sequence number and the epoch the socket lane
- * carries (`resumeProductions`): the ring, and then every production live. Only where the reader
- * asks for frames over JSON; a reader asking for the value is answered the standing production as
- * any value is (16.31), which is what a browser's `Rpc` asks for.
- *
- * jsonl frames are the mux's own (`ServerFrame`, less its `id`). 16.50 — AN EVENT STREAM carries
- * each production's value as `data:`, and its place as `id: <seq>:<epoch>`, so an `EventSource`
- * reconnecting hands both back as `Last-Event-ID` (16.51) and 18.13's epoch comparison has an epoch
- * to compare; a moved one is one `event: reset` whose data is the ring. A `Last-Event-ID` naming no
- * epoch is compared as a moved one — the whole ring, never a gap.
- */
-function answerProductions(
-    value: unknown,
-    request: Request,
-    headers: Headers,
-    status: number,
-): Promise<Response> | Response {
-    const sse = prefers(request, 'text/event-stream', 'application/json')
-    if (!sse && !prefers(request, 'application/jsonl', 'application/json'))
-        return answerValue(
-            (value as { peek(): unknown }).peek(),
-            request,
-            headers,
-            status,
-        )
-    const last = request.headers.get('last-event-id') ?? ''
-    const colon = last.indexOf(':')
-    const seq = Number.parseInt(colon === -1 ? last : last.slice(0, colon), 10)
-    const { epoch, moved, ring, cursor } = resumeProductions(
-        value,
-        Number.isNaN(seq) ? undefined : seq,
-        colon === -1 ? undefined : last.slice(colon + 1),
-    )
-    const production = (at: number, item: unknown): Uint8Array =>
-        ENCODER.encode(
-            sse
-                ? `id: ${at}:${epoch}\ndata: ${JSON.stringify(item)}\n\n`
-                : `${JSON.stringify({ op: 'prod', seq: at, epoch, value: item })}\n`,
-        )
-    const head: Uint8Array[] = []
-    if (sse) head.push(ENCODER.encode(SSE_OPENER))
-    if (!moved) for (const [at, item] of ring) head.push(production(at, item))
-    else {
-        const at = ring.at(-1)?.[0] ?? cursor.at
-        head.push(
-            ENCODER.encode(
-                sse
-                    ? `event: reset\nid: ${at}:${epoch}\ndata: ${JSON.stringify(ring)}\n\n`
-                    : `${JSON.stringify({ op: 'reset', epoch, ring })}\n`,
-            ),
-        )
-    }
-    // The head, and then each production live, already framed — so `bodyOf` writes them as bytes.
-    let headAt = 0
-    const frames: AsyncIterator<Uint8Array> = {
-        async next() {
-            if (headAt < head.length)
-                return { done: false, value: head[headAt++] as Uint8Array }
-            const next = await cursor.next()
-            return next.done === true
-                ? { done: true, value: undefined }
-                : { done: false, value: production(cursor.at, next.value) }
-        },
-        return(value) {
-            void cursor.return?.(value)
-            return Promise.resolve({ done: true, value: undefined })
-        },
-    }
-    if (sse) sseHeaders(headers)
-    else {
-        headers.set('content-type', 'application/jsonl')
-        // 16.46 — a feed is never stored, whatever the production's own life said (21.8).
-        headers.set('cache-control', 'no-cache')
-    }
-    return new Response(bodyOf(frames, 'bytes'), { status, headers })
-}
-
-/**
- * The head of an event stream. 16.46 — never stored, whatever the value's own life said (21.8), and
+ * The head of an event stream. 16.45 — never stored, whatever the value's own life said (21.8), and
  * never buffered by a proxy in front.
  */
-function sseHeaders(headers: Headers): void {
+export function sseHeaders(headers: Headers): void {
     headers.set('content-type', 'text/event-stream')
     headers.set('cache-control', 'no-cache')
     headers.set('x-accel-buffering', 'no')
@@ -211,7 +122,7 @@ async function* lifted(value: Iterable<unknown>): AsyncGenerator<unknown> {
 /**
  * A stream answered at the framing a helper fixed, or the first the first chunk's type admits.
  *
- * 16.33, 16.47, 16.48 — binary chunks admit bytes alone, and values admit jsonl and then sse, sse
+ * 16.32, 16.46, 16.47 — binary chunks admit bytes alone, and values admit jsonl and then sse, sse
  * where `Accept` asks for it.
  */
 async function answerStream(
@@ -233,7 +144,18 @@ async function answerStream(
         headers,
         status,
         first,
+        linesType(request),
     )
+}
+
+/**
+ * The type one JSON value per line is answered as: NDJSON's where the reader asks for it by that
+ * name, and `application/jsonl` otherwise — the same bytes either way (16.45).
+ */
+export function linesType(request: Request): string {
+    return prefers(request, 'application/x-ndjson', 'application/jsonl')
+        ? 'application/x-ndjson'
+        : 'application/jsonl'
 }
 
 /** A stream answered at a framing already decided — a handler's, and `log.records` (36.7). */
@@ -243,11 +165,11 @@ export function framed(
     headers: Headers,
     status: number,
     first?: IteratorResult<unknown>,
+    lines = 'application/jsonl',
 ): Response {
     if (framing === 'bytes')
         headers.set('content-type', 'application/octet-stream')
-    else if (framing === 'jsonl')
-        headers.set('content-type', 'application/jsonl')
+    else if (framing === 'jsonl') headers.set('content-type', lines)
     else sseHeaders(headers)
     return new Response(bodyOf(chunks, framing, first), {
         status,
@@ -258,7 +180,7 @@ export function framed(
 /**
  * A response body writing each chunk as one frame of `framing`.
  *
- * 16.45, 16.46 — ONE FRAME PER PULL, so a reader sees each chunk as it is produced rather than
+ * 16.44, 16.45 — ONE FRAME PER PULL, so a reader sees each chunk as it is produced rather than
  * once the stream has finished. A reader who hangs up returns the generator, which stops what it
  * was reading in its scope.
  *
@@ -343,7 +265,7 @@ export function bodyOf(
 /**
  * A blob answered at its own type under the given etag, range-aware.
  *
- * 16.35, 16.36 — `If-None-Match` answered 304, one `Range` answered 206 — or 416 where it lies
+ * 16.34, 16.35 — `If-None-Match` answered 304, one `Range` answered 206 — or 416 where it lies
  * past the end — and `If-Range` naming another version answered in full. The body is the blob
  * itself, or a slice of it, so a file is sent from disk rather than through a copy in memory. The
  * etag is handed in, because a public file's was read at boot (21.13).
@@ -407,7 +329,7 @@ export function answerBlobTagged(
  * the way out weakens the etag, and the browser sends back the `W/` form. `If-Range` compares
  * strongly, and stays an equality.
  */
-function namesEtag(header: string | null, etag: string): boolean {
+export function namesEtag(header: string | null, etag: string): boolean {
     if (header === null) return false
     for (const listed of header.split(',')) {
         const tag = listed.trim()
@@ -419,12 +341,12 @@ function namesEtag(header: string | null, etag: string): boolean {
 /**
  * The blob's etag: a file's by its path, size and write time, anything else's by its bytes.
  *
- * THE ETAG 16.36 HONORS `If-Range` AGAINST. A whole file on disk is named by its path, size and
+ * THE ETAG 16.35 HONORS `If-Range` AGAINST. A whole file on disk is named by its path, size and
  * write time — a stat, so neither a 304 nor a Range reads the file to decide whether to. Anything
  * else is named by its bytes: a blob in memory has no other identity, and a slice of a file shares
  * the file's path and write time with every other slice of its size. A file that stats empty is
  * read too, which costs nothing where it is empty and throws where it is missing — inside the
- * handler's answer, as 16.42 answers it, rather than out of the server's send.
+ * handler's answer, as 16.41 answers it, rather than out of the server's send.
  */
 async function etagOf(blob: Blob): Promise<string> {
     // A file `Bun.file` made carries its path as `name` and its write time as `lastModified`.

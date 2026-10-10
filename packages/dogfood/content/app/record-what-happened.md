@@ -33,7 +33,7 @@ examples:
 
 `log('invoice paid', { id })` writes a line. What makes it worth having rather than a
 `console.log` is everything around it: the line carries a trace, it goes under a namespace somebody
-can switch off, and it is published to a channel a page can read.
+can switch off, and it lands in an array a page can read.
 
 ## The four levels and the default namespace
 
@@ -75,7 +75,7 @@ yours, and `DEBUG=abide:request` turns on one lane.
 | Namespace | Levels | What it says |
 | --- | --- | --- |
 | `abide:request` | `debug` | one line per request |
-| `abide:socket` | `debug` | one line per socket event |
+| `abide:socket` | `debug` | one line per frame on the socket mux |
 | `abide:lifecycle` | `debug` `error` | a lifecycle that ran |
 | `abide:principal` | `debug` `warning` | a principal set or cleared |
 | `abide:health` | `warning` | an `onHealth` that threw or answered a non-object |
@@ -94,7 +94,7 @@ anywhere else.
 Read on: [Watching values](../values/do-something-when-a-value-changes.md) ·
 [Error pages](../pages/show-a-page-when-something-fails.md)
 
-## `log.records` is a channel
+## `log.records` is the lines kept
 
 ```ts shared
 type LogRecord = {
@@ -106,20 +106,26 @@ type LogRecord = {
 }
 ```
 
-`log.records` is a channel — an ordinary `reactive` of `LogRecord` declaring `history` (28.1) —
-which is why an admin page showing the last hundred lines **subscribes** rather than polls. There
-is no second mechanism for reading logs back.
+`log.records` is an ordinary `reactive` holding the lines kept as an array, each line appended as
+it is written (28.1) — which is why an admin page showing the last hundred lines **subscribes**
+rather than polls. There is no second mechanism for reading logs back.
 
-The channel's `history` is `ABIDE_MAX_LOG_BUFFER_COUNT`, and it is a memory ring like any other —
-bounded, and gone when the process is. Anything that has to outlive the process goes to a
+In a template it is a member access rather than a name, so the read is spelled out:
+
+{% snippet log-channels src/ui/components/LogChannelsConsole.abide {#for record of %}
+
+`ABIDE_MAX_LOG_BUFFER_COUNT` is how many of the latest lines it keeps, the oldest cut away in one
+move rather than shifted off per line, and they live in memory — bounded, and gone when the process
+is. Anything that has to outlive the process goes to a
 collector, which is what the machine format is for.
 
-`ABIDE_LOGS` opts in to declaring the `GET` over `log.records`. It is off by default because an
-app's log is not something to expose by accident. A client reading that `GET` is subscribed to
-every line it publishes (18.17), and `abide logs` is exactly that subscription (38.10).
+`ABIDE_LOGS` opts in to declaring the `GET` over `log.records`, at `/__abide/logs`. It is off by
+default because an app's log is not something to expose by accident. It is a `GET` like any other
+(28.2), so a reader is followed as any value is: the lines held, then each line written as an `add`
+at `/-`, over the page's connection or as server-sent events (18.20). `abide logs` is exactly that
+follow (38.10). A reader that reconnects is sent the lines held again.
 
-Read on: [Channels](../values/let-anything-publish-and-anything-read.md) ·
-[History](../values/keep-the-last-few-values.md)
+Read on: [Channels](../values/let-anything-publish-and-anything-read.md)
 
 ## Two formats, chosen for the reader
 

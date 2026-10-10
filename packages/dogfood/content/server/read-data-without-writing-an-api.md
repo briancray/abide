@@ -11,7 +11,6 @@ covers:
   - `server/rpc/name.ts`
   - `server/rpc/users.ts`
   - `src/server/rpc/**/*.ts`
-  - `abide-version`
 examples:
   - packages/dogfood/examples/rpc-call.json
   - packages/dogfood/examples/rpc-reactive.json
@@ -106,30 +105,41 @@ the handler serves a `global` value, a change the server makes — a `set`, a `p
 reaches every browser holding it, and the list above moves with nothing on the page asking.
 
 The first read and the socket are two paths, and a change landing between them would be lost. So
-the answer names the version it carried in `abide-version`, the browser names that version when it
-subscribes, and the server sends the value only if it has moved since.
+the answer names its version as an ordinary `ETag`, the browser names that version when it
+subscribes, and the server sends the value only if it has moved since (18.6). The same `ETag` serves
+any reader: a `GET` carrying `If-None-Match` with the version it holds is answered `304 Not
+Modified` and no body (18.19), so `curl` and a browser's cache revalidate the way the page does.
+
+The follow itself is standard too. Ask the same address for `text/event-stream` and it is a stream
+of server-sent events: `event: value` with the value and its version as the event `id`, then `event:
+patch` with each change as JSON Patch (18.20). An `EventSource` reconnecting sends the last `id` back
+as `Last-Event-ID` and is sent only what moved after it — so `curl -N -H 'Accept: text/event-stream'`
+follows a value with nothing abide-shaped on its side, and `abide watch` does the same from a shell.
 
 A trigger reaches browsers too, for any `GET`: `getContact.invalidate({ id })` inside a handler
-marks every browser's copy of that contact stale, whether or not the value is `global`. A `GET`
-declaring `middleware` is followed for its triggers alone, and each browser re-reads through the
-rungs, which a value pushed down the socket would have skipped.
+marks every browser's copy of that contact stale, whether or not the value is `global`.
+
+A `GET` declaring `middleware` is followed too. Its rungs run once, as the subscription opens — over
+the socket mux, or as the request opening an event stream — and a subscription they admit is fed the
+value like any other, while one they refuse is sent its triggers alone (18.8). So a signed-in chat
+room streams, and the decision is made per connection: access revoked after it opened takes effect
+when it next reconnects, or when the server ends it.
 
 ## Two callers asking for one invoice are one request
 
-The `reactive` wrapper is not ceremony. A keyed value is identity per arguments: two components
+The `reactive` a handler becomes is not ceremony. A keyed value is identity per arguments: two components
 asking for invoice `42` are one request, and the second gets the value the first is waiting on.
 
-Hand `GET` the keyed value directly to name the caching yourself:
+Name the caching yourself in the same object as the description:
 
 ```ts #server/rpc/invoices.ts — excerpt
-const invoiceTotals = reactive(
+export const getInvoiceTotals = GET(
     ({ id }: { id: string }) => database.invoice.totals(id),
-    { ttl: 30_000 },
+    {
+        ttl: 30_000,
+        description: "One invoice's totals, by id. Cached for 30 seconds.",
+    },
 )
-
-export const getInvoiceTotals = GET(invoiceTotals, {
-    description: "One invoice's totals, by id. Cached for 30 seconds.",
-})
 ```
 
 `GET` accepts three things:
@@ -137,8 +147,8 @@ export const getInvoiceTotals = GET(invoiceTotals, {
 | Target | Meaning |
 | --- | --- |
 | a keyed value | identity per args — coalescing, `ttl`, `invalidate` |
-| one `Reactive` | that value, a channel among them — a client reading it follows every production (18.17) |
-| a plain function | sugar: `GET(fn)` **is** `GET(reactive(fn))` |
+| one `Reactive` | that value, a channel among them — a client reading it follows every production (18.3) |
+| a plain function | sugar: `GET(fn, options)` **is** `GET(reactive(fn, options))` |
 
 So there is no uncached endpoint to reason about.
 

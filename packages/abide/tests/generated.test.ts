@@ -128,7 +128,7 @@ test('the OpenAPI document is derived from the route table — 20.1, 20.6, 20.11
 
 // 20.9 — A HANDLER TAKING NO ARGS IS A RESOURCE and one taking args, or a mutation, is a TOOL, read off
 // the arm `GET` took. THE REVERT: list every `GET` as a resource; `getInvoice` is not a tool.
-// 16.38 — AND ONE TYPED AS RETURNING A `Response` IS NEITHER unless its `clients` puts it back:
+// 16.37 — AND ONE TYPED AS RETURNING A `Response` IS NEITHER unless its `clients` puts it back:
 // `playlist` is withheld, `tagged` listed. THE REVERT: default `mcp` to true in `declaringMethod`;
 // `invoices_playlist` is listed, six tools rather than five.
 test('MCP lists tools and resources by the arm GET took — 20.9', async () => {
@@ -157,7 +157,7 @@ test('MCP lists tools and resources by the arm GET took — 20.9', async () => {
     ])
 })
 
-// 20.10, 19.8 — A CALL IS A REQUEST THROUGH THE APP, so a rung refuses it as it would anyone, and the
+// 20.10, 19.7 — A CALL IS A REQUEST THROUGH THE APP, so a rung refuses it as it would anyone, and the
 // args arrive coerced as a browser's would.
 test('an MCP call is answered through the app, refusals included — 20.10', async () => {
     const called = (
@@ -185,12 +185,12 @@ test('an MCP call is answered through the app, refusals included — 20.10', asy
     expect(JSON.parse(read.contents[0]?.text as string)).toEqual([{ id: 1 }])
 })
 
-// 16.14 — THE MCP ENDPOINT IS GATED ON `Origin` AS A MUTATION IS. A tool call runs its handler with
+// 16.13 — THE MCP ENDPOINT IS GATED ON `Origin` AS A MUTATION IS. A tool call runs its handler with
 // the caller's cookies, and a `text/plain` POST crosses origins with no preflight, so another origin's
 // page could otherwise run any published mutation as its reader. From the app's own origin the call
 // is answered. THE REVERT: drop the gate in `answerMcp`; the cross-origin call is answered 200 and
 // the mutation runs.
-test('a cross-origin POST to the MCP endpoint is refused, and a same-origin one answered — 16.14', async () => {
+test('a cross-origin POST to the MCP endpoint is refused, and a same-origin one answered — 16.13', async () => {
     const payFrom = (origin: string): Promise<Response> =>
         Bun.fetch(`${base}/__abide/mcp`, {
             method: 'POST',
@@ -217,10 +217,17 @@ test('a cross-origin POST to the MCP endpoint is refused, and a same-origin one 
 // 36.7, 28.1 — THE `GET` OVER `log.records`: a line written after the reader subscribed arrives as an
 // event.
 //
-// RUN ALONE the ring is empty when the subscription opens. THE REVERT: drop the comment frame an
+// RUN ALONE nothing is held when the subscription opens. THE REVERT: drop the comment frame an
 // sse `bodyOf` opens with; the head is held until the first record, and alone this times out.
+// 28.2 — a `GET` like any other: the held lines as JSON where nothing asks for a stream, and a follow
+// where the reader asks for one, as an `EventSource` does.
 test('the logs GET streams log.records as events — 36.7, 28.1', async () => {
-    const answer = await Bun.fetch(`${base}/__abide/logs`)
+    const held = await Bun.fetch(`${base}/__abide/logs`)
+    expect(held.headers.get('content-type')).toBe('application/json')
+    expect(Array.isArray(await held.json())).toBe(true)
+    const answer = await Bun.fetch(`${base}/__abide/logs`, {
+        headers: { accept: 'text/event-stream' },
+    })
     expect(answer.headers.get('content-type')).toBe('text/event-stream')
     const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
     await Bun.fetch(`${base}/__abide/rpc/invoices/shout`, {

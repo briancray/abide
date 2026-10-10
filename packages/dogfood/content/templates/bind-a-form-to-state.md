@@ -109,7 +109,7 @@ Where the value you want is computed, hand over the pair explicitly:
 The accessor pair is the general form. Naming a value is the sugar over it.
 
 A derived value is writable too, and where its body hands back another `Reactive` the write goes
-through to that one (11.60). So `bind:value` over `reactive(() => users({ id: selected }))` edits
+through to that one (11.59). So `bind:value` over `reactive(() => users({ id: selected }))` edits
 the shared `users({ id })` entry, and every other reader of that entry sees the edit.
 
 ## A `schema` refuses a value as it is written

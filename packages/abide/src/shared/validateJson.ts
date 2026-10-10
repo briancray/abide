@@ -1,5 +1,5 @@
 // THE NATIVE VALIDATOR. A `JsonSchema` is the form abide can generate, publish and read
-// back (19.8, 20.6), so it is the one form that cannot be delegated to a library an app
+// back (19.7, 20.6), so it is the one form that cannot be delegated to a library an app
 // happens to have — the OpenAPI document and the MCP tool description are the same
 // document this validates against.
 //
@@ -322,7 +322,7 @@ function check(
     }
 
     // NaN AND THE INFINITIES ARE NOT JSON VALUES — the invariant `canonicalKey` holds at the reach
-    // (11.65) — so they are refused ONCE, here, whatever the node declares. Refused per keyword
+    // (11.64) — so they are refused ONCE, here, whatever the node declares. Refused per keyword
     // they leaked past every one-sided test: `NaN < 0` and `NaN > 100` are both false, and
     // `-Infinity` passes `maximum` as readily as `Infinity` passes `minimum`, so `{maximum: 100}`
     // accepted `-Infinity` with no issue while the NaN beside it was caught by a tail check.

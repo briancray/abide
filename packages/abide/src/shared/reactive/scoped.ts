@@ -1,4 +1,4 @@
-// 11.32, 11.38 AND 11.68 — A VALUE BUILT OUTSIDE EVERY SCOPE, ON A SERVER. A module's `reactive` is built
+// 11.32, 11.38 AND 11.67 — A VALUE BUILT OUTSIDE EVERY SCOPE, ON A SERVER. A module's `reactive` is built
 // once, when the module is first imported, and every request after that reaches the same object —
 // so the value it hands back is a FORWARDER: outside a request it is the value built at import
 // (the HOME), and inside one it is an instance of its own, built the first time that request
@@ -17,24 +17,29 @@ import { CELL } from './CELL.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { brandedPrototype, MEMBER_KEYS } from './Reactive.ts'
 import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
-import { currentScope, SCOPING } from './scoping.ts'
+import { currentScope, runInScope, SCOPING } from './scoping.ts'
 
 const UNBUILT: unique symbol = Symbol('abide.unbuilt')
 
 /**
  * What a forwarder resolves through: the home, and how to build the same value again in a scope.
  *
- * 16.68 — A HANDLER'S HOME IS BUILT WHERE IT IS FIRST REACHED, and every other value's where it is
+ * 16.64 — A HANDLER'S HOME IS BUILT WHERE IT IS FIRST REACHED, and every other value's where it is
  * declared. Building a value with a body starts the body (1.7), and at import that ran the handler
  * — a mutation fired at boot, for a request nobody had made.
+ *
+ * A `global` handler (11.34) is filed only to be built late: every request reaches the home, built
+ * outside each of them, so it is the one value its option says it is.
  */
 class Filed {
     home: unknown
     make: () => unknown
+    global: boolean
 
-    constructor(make: () => unknown, lazy: boolean) {
+    constructor(make: () => unknown, lazy: boolean, global: boolean) {
         this.make = make
         this.home = lazy ? UNBUILT : make()
+        this.global = global
     }
 }
 
@@ -48,9 +53,10 @@ type Forwarder = { [FILED]: Filed }
  * Built INSIDE the scope, so every cell it makes records that scope as its own (`Cell.scope`).
  */
 function instanceOf(filed: Filed): Record<PropertyKey, unknown> {
-    const scope = currentScope()
+    const scope = filed.global ? undefined : currentScope()
     if (scope === undefined) {
-        if (filed.home === UNBUILT) filed.home = filed.make()
+        if (filed.home === UNBUILT)
+            filed.home = runInScope(undefined, () => filed.make(), undefined)
         return filed.home as Record<PropertyKey, unknown>
     }
     let instance = scope.instances.get(filed)
@@ -100,10 +106,14 @@ export function outsideScope(global: boolean): boolean {
  *
  * `lazy` leaves the home unbuilt until something outside every request reaches it. Only an unkeyed
  * value can be: a keyed face carries its home's gate and defaults, and building one runs no body
- * (11.4).
+ * (11.4). `global` resolves every scope to the home, and only a lazy value is filed with it.
  */
-export function scoped(make: () => unknown, lazy = false): unknown {
-    const filed = new Filed(make, lazy)
+export function scoped(
+    make: () => unknown,
+    lazy = false,
+    global = false,
+): unknown {
+    const filed = new Filed(make, lazy, global)
     // A keyed value, carrying both, or any other value, carrying neither.
     const home = filed.home as { [KEYED_BRAND]?: true } & Partial<
         Gated<unknown>
@@ -142,5 +152,6 @@ export function scoped(make: () => unknown, lazy = false): unknown {
  * Whether `value` is request-local on this server — built without `global`, outside every request.
  */
 export function isForwarder(value: unknown): boolean {
-    return (value as Partial<Forwarder> | null)?.[FILED] !== undefined
+    const filed = (value as Partial<Forwarder> | null)?.[FILED]
+    return filed !== undefined && !filed.global
 }

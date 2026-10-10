@@ -20,7 +20,7 @@ import { aliasedSymbol } from './aliasedSymbol.ts'
 
 // WHAT THE CHECKER SAYS A NAME HOLDS, asked by both of the session's jobs over one snapshot: the
 // read classifier (`readsIn`), which asks whether a name is a `Reactive`, and the handler reader
-// (`declaredExports`), which asks whether a handler's value nests one (16.40).
+// (`declaredExports`), which asks whether a handler's value nests one (16.39).
 
 /** What calling the `Reactive` a name holds hands back. */
 export async function valueTypeOf(

@@ -146,7 +146,7 @@ export function routeOf(slug: string): string {
  * `address`, written as the page at `route` links to it: relative, so the browser resolves it
  * below whatever the app is mounted at.
  *
- * 16.11 — THE BUILD BAKES NO MOUNT, and this HTML is a string the page carries into `raw` rather
+ * 16.10 — THE BUILD BAKES NO MOUNT, and this HTML is a string the page carries into `raw` rather
  * than template, so `url` cannot reach it. A relative address is the one spelling that is right at
  * every mount without being told which: `/values/b` from `/values/a` is `../values/b`, whether the
  * browser is at `/values/a` or `/docs/values/a`. The root page's is its own directory — the server

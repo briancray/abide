@@ -1,4 +1,4 @@
-// 16.10 TO 16.25, 16.43 AND 19.8 — WHAT A HANDLER'S OPTIONS DO, over a served app (spawned, for
+// 16.9 TO 16.24, 16.42 AND 19.7 — WHAT A HANDLER'S OPTIONS DO, over a served app (spawned, for
 // `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -89,7 +89,7 @@ async function* lines(n: number) {
 
 const unlucky = {
     middleware: [
-        // No args schema, so the annotation types the URL's text (19.10).
+        // No args schema, so the annotation types the URL's text (19.9).
         async (next: () => unknown, ctx: { args(): unknown }) =>
             (ctx.args() as { n: number }).n === 13 ? refuse(451, 'unlucky') : next(),
     ],
@@ -143,7 +143,7 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'ui/pages/page.abide': '<main>home</main>',
         'server/rpc/options.ts': HANDLERS,
-        // 16.59 — the environment's ceiling, for a handler that names none of its own.
+        // 16.55 — the environment's ceiling, for a handler that names none of its own.
         'server/app.ts': `import { onConfig } from 'abide/server'
 
 onConfig(() => ({ ABIDE_MAX_REQUEST_BODY_SIZE: 1024 }))
@@ -156,10 +156,10 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-// 19.8, 19.9 — A URL's TEXT IS COERCED BY THE DECLARED JSON SCHEMA before anything sees it, the
+// 19.7, 19.8 — A URL's TEXT IS COERCED BY THE DECLARED JSON SCHEMA before anything sees it, the
 // first rung included. THE REVERT: pass `raw` to the handler rather than `coerceArgs(raw, …)`; the
 // rung sees a string and the gate refuses the call 422.
-test('a GET arg is coerced from the type its JSON Schema declares — 19.8, 19.9', async () => {
+test('a GET arg is coerced from the type its JSON Schema declares — 19.7, 19.8', async () => {
     const answer = await Bun.fetch(
         `${base}${RPC}/guarded?id=42&flags=true&flags=false`,
     )
@@ -175,14 +175,14 @@ test('a GET arg is coerced from the type its JSON Schema declares — 19.8, 19.9
     ])
 })
 
-// 19.10 — THE ANNOTATION IS THE SCHEMA where none is declared: the URL's text arrives as the types
-// it names, and what the types refuse is refused before the handler runs. 19.11 — a member the
+// 19.9 — THE ANNOTATION IS THE SCHEMA where none is declared: the URL's text arrives as the types
+// it names, and what the types refuse is refused before the handler runs. 19.10 — a member the
 // handler defaults is not required, whatever the annotation says. THE REVERT: drop `args` from the
 // mount row in `handlersUnder`; `id` arrives the string `'42'`, and `id=abc` and `kind=film` both
 // reach the handler and answer 200. Drop `defaulted` from `argsSchemaOf` and the first call is 422.
-// 19.21 — and a member the annotation does not declare is refused: drop `additionalProperties`
+// 19.20 — and a member the annotation does not declare is refused: drop `additionalProperties`
 // from `objectOf` and `extra=1` reaches the handler and answers 200.
-test('a GET typed only by its annotation is coerced and held to it — 19.10, 19.11, 19.21', async () => {
+test('a GET typed only by its annotation is coerced and held to it — 19.9, 19.10, 19.20', async () => {
     const answer = await Bun.fetch(
         `${base}${RPC}/annotated?id=42&kind=movie&tags=a`,
     )
@@ -207,17 +207,17 @@ test('a GET typed only by its annotation is coerced and held to it — 19.10, 19
     ]) {
         const refused = await Bun.fetch(`${base}${RPC}/annotated?${query}`)
         expect(`${query} ${refused.status}`).toBe(`${query} 422`)
-        expect(((await refused.json()) as { name: string }).name).toBe(
+        expect(((await refused.json()) as { type: string }).type).toBe(
             'ValidationError',
         )
     }
 })
 
-// 19.10 OVER AN OPTIONAL RECORD — a handler whose parameter is optional is keyed (11.2), so its
+// 19.9 OVER AN OPTIONAL RECORD — a handler whose parameter is optional is keyed (11.2), so its
 // annotation is the schema too, and no args at all is still an answer. THE REVERT: drop the
 // optional-parameter arm from `Declare`; the `Rpc` is typed as taking no args, no schema is derived,
 // and `kind=film` reaches the handler and answers 200.
-test('an optional args record is held to its annotation — 19.10, 11.2', async () => {
+test('an optional args record is held to its annotation — 19.9, 11.2', async () => {
     const plain = await Bun.fetch(`${base}${RPC}/optionallyAnnotated`)
     expect(await plain.json()).toBe('none')
     const coerced = await Bun.fetch(
@@ -230,9 +230,9 @@ test('an optional args record is held to its annotation — 19.10, 11.2', async 
     expect(refused.status).toBe(422)
 })
 
-// 19.10 ON A BODY: JSON carries its own types, and the annotation still holds them. THE REVERT, as
+// 19.9 ON A BODY: JSON carries its own types, and the annotation still holds them. THE REVERT, as
 // above: the string reaches `pay` and is echoed back 200.
-test('a mutation body is held to its annotation — 19.10', async () => {
+test('a mutation body is held to its annotation — 19.9', async () => {
     const refused = await Bun.fetch(`${base}${RPC}/pay`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -241,12 +241,12 @@ test('a mutation body is held to its annotation — 19.10', async () => {
     expect(refused.status).toBe(422)
 })
 
-// 16.19 — AN EMPTY LIST CROSSES THE URL AS ONE, spelled by the browser's own `rpcRequest` and read
+// 16.18 — AN EMPTY LIST CROSSES THE URL AS ONE, spelled by the browser's own `rpcRequest` and read
 // back by the server: alone, where the query would otherwise be empty and the args `undefined`, and
 // beside other members, where it would otherwise be missing. `['']` stays the one-member list it is.
 // THE REVERT: skip an empty list in `rpcRequest` as before; the lone one is refused 422 and the
 // other arrives without its member.
-test('an empty list arg reaches the handler as an empty list — 16.19, 19.8', async () => {
+test('an empty list arg reaches the handler as an empty list — 16.18, 19.7', async () => {
     const called = async (
         name: string,
         args: Record<string, unknown>,
@@ -264,38 +264,38 @@ test('an empty list arg reaches the handler as an empty list — 16.19, 19.8', a
     ])
 })
 
-// 16.19, 19.8 — A BARE NAME IS AN EMPTY LIST ONLY WHERE THE SCHEMA DECLARES AN ARRAY: a text member
+// 16.18, 19.7 — A BARE NAME IS AN EMPTY LIST ONLY WHERE THE SCHEMA DECLARES AN ARRAY: a text member
 // given `?q` keeps the `''` `URLSearchParams` reads it as. THE REVERT: turn every bare name into `[]`
 // ahead of the schema, as `answerRpc` once did; `?q` is refused 422, a list where a string is due.
-test('a bare name for a text arg stays text — 16.19, 19.8', async () => {
+test('a bare name for a text arg stays text — 16.18, 19.7', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/searched?q`)
     expect([answer.status, await answer.json()]).toEqual([200, ''])
 })
 
-// 16.19, 16.22 — `ctx.args()` VALIDATES, and its refusal leaves the whole onion at its own status.
-test('an arg that fails the schema is refused by ctx.args() — 16.19', async () => {
+// 16.18, 16.21 — `ctx.args()` VALIDATES, and its refusal leaves the whole onion at its own status.
+test('an arg that fails the schema is refused by ctx.args() — 16.18', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/guarded?id=forty`)
     expect(answer.status).toBe(422)
-    expect(((await answer.json()) as { name: string }).name).toBe(
+    expect(((await answer.json()) as { type: string }).type).toBe(
         'ValidationError',
     )
 })
 
-// 16.17 — A RUNG ANSWERS IN THE HANDLER'S PLACE by returning, a refusal included.
-test('a rung short-circuits with a refusal — 16.17', async () => {
+// 16.16 — A RUNG ANSWERS IN THE HANDLER'S PLACE by returning, a refusal included.
+test('a rung short-circuits with a refusal — 16.16', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/guarded?id=13`)
     expect(answer.status).toBe(451)
 })
 
-// 16.12 — THE RUNGS RUN IN PROCESS as they do over the wire. THE REVERT: have `call` reach the handler
+// 16.11 — THE RUNGS RUN IN PROCESS as they do over the wire. THE REVERT: have `call` reach the handler
 // directly, as before; the in-process call answers with the rung never having run, 0 where 1 is due.
-test('a handler called in process runs its rungs — 16.12', async () => {
+test('a handler called in process runs its rungs — 16.11', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/callsInner`)
     expect(await answer.json()).toEqual(['inner value', 1])
 })
 
-// 16.14 — the body ceiling, from the declared length.
-test('a mutation over maxBodySize is refused 413 — 16.14', async () => {
+// 16.13 — the body ceiling, from the declared length.
+test('a mutation over maxBodySize is refused 413 — 16.13', async () => {
     const small = await Bun.fetch(`${base}${RPC}/pay`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -310,10 +310,10 @@ test('a mutation over maxBodySize is refused 413 — 16.14', async () => {
     expect(large.status).toBe(413)
 })
 
-// 16.59 — A BODY THAT NEVER SAID HOW LONG IT WAS IS BOUNDED AS IT STREAMS, at the handler's ceiling
+// 16.55 — A BODY THAT NEVER SAID HOW LONG IT WAS IS BOUNDED AS IT STREAMS, at the handler's ceiling
 // and at the environment's. THE REVERT: read the body with `request.text()` in `argsOf` rather than
 // through `bodyUnder`; both are paid 200.
-test('a streamed body over the ceiling is refused 413 — 16.59', async () => {
+test('a streamed body over the ceiling is refused 413 — 16.55', async () => {
     const streamed = (text: string) =>
         new ReadableStream<Uint8Array>({
             start(controller) {
@@ -342,21 +342,22 @@ test('a streamed body over the ceiling is refused 413 — 16.59', async () => {
     expect(await under.json()).toEqual({ paid: 5 })
 })
 
-// 16.63 OVER THE WIRE — a call that timed out is answered at the refusal's own status. THE REVERT:
+// 16.59 OVER THE WIRE — a call that timed out is answered at the refusal's own status. THE REVERT:
 // drop the `timeLoad` call in `#shared/reactive/callLoad.ts`; the request hangs until the test's own
 // timeout.
-test('a call that goes its timeout without settling is answered 504 — 16.63', async () => {
+test('a call that goes its timeout without settling is answered 504 — 16.59', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/stalls`)
     expect(answer.status).toBe(504)
     expect(await answer.json()).toMatchObject({
-        name: 'HttpError',
+        type: 'about:blank',
+        title: 'Gateway Timeout',
         status: 504,
     })
 })
 
-// 16.14, 16.25 — A MUTATION FROM ANOTHER ORIGIN IS REFUSED, unless the handler named that origin, and
+// 16.13, 16.24 — A MUTATION FROM ANOTHER ORIGIN IS REFUSED, unless the handler named that origin, and
 // then abide answers its preflight. THE REVERT: skip the origin gate; the stranger's POST is paid 200.
-test('a cross-origin mutation is refused unless declared, and its preflight answered — 16.14, 16.25', async () => {
+test('a cross-origin mutation is refused unless declared, and its preflight answered — 16.13, 16.24', async () => {
     const stranger = await Bun.fetch(`${base}${RPC}/pay`, {
         method: 'POST',
         headers: {
@@ -413,8 +414,8 @@ test('a GET from an origin the handler did not admit carries no allow-origin —
     expect(own.headers.get('vary')).toContain('origin')
 })
 
-// 16.10, 16.43 — `url` is the address a call makes, and `raw` the same call as its response.
-test('rpc.url builds the address and rpc.raw answers the call as a response — 16.10, 16.43', async () => {
+// 16.9, 16.42 — `url` is the address a call makes, and `raw` the same call as its response.
+test('rpc.url builds the address and rpc.raw answers the call as a response — 16.9, 16.42', async () => {
     expect(
         await (await Bun.fetch(`${base}${RPC}/addressOfLookup`)).json(),
     ).toBe(`${RPC}/guarded?id=5`)
@@ -424,18 +425,18 @@ test('rpc.url builds the address and rpc.raw answers the call as a response — 
     ])
 })
 
-// 16.33 BEHIND A RUNG — A STREAMING HANDLER'S CHUNKS LEAVE AS THEY LAND. The onion's centre is async
+// 16.32 BEHIND A RUNG — A STREAMING HANDLER'S CHUNKS LEAVE AS THEY LAND. The onion's centre is async
 // and a `Reactive` is thenable, so a rung between the call and a generator used to settle the stream
 // and answer its accumulation when it closed. The generator here does not close until the test asks
 // it to, AFTER the first chunk has arrived — so a collecting onion never sends that chunk, and the
 // race below reports it. No clock is read: the order is the claim.
 //
-// AND A HANDLER HANDING ONE BACK (9.20) as much as one declared `async function*`.
+// AND A HANDLER HANDING ONE BACK (9.6) as much as one declared `async function*`.
 //
 // THE REVERT: await `reach` in `rpc.ts`'s centre in place of `streamingOrSettled`; the first read
 // loses the race, and the answer is `application/json` rather than jsonl.
 test.each(['streamed', 'arrowStreamed'])(
-    'a streaming handler behind a rung sends each chunk as it lands — %s, 16.33, 16.12',
+    'a streaming handler behind a rung sends each chunk as it lands — %s, 16.32, 16.11',
     async (name) => {
         const answer = await Bun.fetch(`${base}${RPC}/${name}?n=1`)
         expect(answer.headers.get('content-type')).toStartWith(
@@ -457,16 +458,16 @@ test.each(['streamed', 'arrowStreamed'])(
         }
         expect(rest).toContain('"second"')
 
-        // And the rung still answers in the handler's place (16.17), at its own status.
+        // And the rung still answers in the handler's place (16.16), at its own status.
         expect((await Bun.fetch(`${base}${RPC}/${name}?n=13`)).status).toBe(451)
     },
 )
 
 // 1.8 BEHIND A RUNG — A SECOND CALL WITH THE SAME ARGS JOINS THE STREAM, and both read every chunk:
-// the value the call reaches is a stream of its own (9.20), not the one-shot generator the centre
+// the value the call reaches is a stream of its own (9.6), not the one-shot generator the centre
 // hands it. THE REVERT: drop the `isAsyncGenerator` arm of `absorb`'s settle; the value holds the
 // generator, and neither await is the chunks.
-test('two calls with the same args behind a rung join one stream and read all of it — 1.8, 9.20', async () => {
+test('two calls with the same args behind a rung join one stream and read all of it — 1.8, 9.6', async () => {
     expect(
         await (await Bun.fetch(`${base}${RPC}/joinedStream`)).json(),
     ).toEqual([true, ['first 2', 'second'], ['first 2', 'second']])

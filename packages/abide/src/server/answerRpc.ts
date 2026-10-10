@@ -2,8 +2,8 @@
 // request's own scope (11.32), and what this module adds is the transport either side of it: the
 // args off the request, and the answer onto a response.
 //
-// WIRE-ONLY, per 16.14: the `Origin` gate on a mutation, `maxBodySize`, the `crossOrigin` preflight,
-// raising the request's idle timeout (16.23), and 19.8's coercion of the text a URL carried.
+// WIRE-ONLY, per 16.13: the `Origin` gate on a mutation, `maxBodySize`, the `crossOrigin` preflight,
+// raising the request's idle timeout (16.22), and 19.7's coercion of the text a URL carried.
 
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
@@ -18,15 +18,16 @@ import type { Defaults } from '#shared/reactive/parameterDefaults.ts'
 import { notFound, refuse } from '#shared/refuse.ts'
 import type { Method, Rpc } from '#shared/rpc.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'
-import type { Socket } from '#shared/socket.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
+import { versionInEtag } from '#shared/versionInEtag.ts'
 import {
     answered,
     answerFailure,
     type ErrorPages,
     handlerHeaders,
 } from './answerFailure.ts'
-import { answerValue } from './answerValue.ts'
+import { followAsEvents } from './answerSocket.ts'
+import { answerValue, namesEtag, sseHeaders } from './answerValue.ts'
 import { argsFor } from './argsFor.ts'
 import { callerOf } from './callerOf.ts'
 import { argsDocumentOf, collapsed, type Document } from './coerceArgs.ts'
@@ -52,12 +53,11 @@ import { versionOf } from './versionOf.ts'
 /**
  * One row of the table the build writes to `<out>/rpc.ts`: where a handler answers, and its module.
  *
- * The module is relative to the app's root, which both commands that serve already know. 18.2 — a
- * socket is a row too, whose method is `SOCKET`.
+ * The module is relative to the app's root, which both commands that serve already know.
  */
 export type Mount = {
     address: string
-    method: Method | 'SOCKET'
+    method: Method
     source: string
     name: string
     /** Whether a browser is handed a wrapper for it. 20.4. */
@@ -67,7 +67,7 @@ export type Mount = {
     /**
      * Whether MCP lists it where its runtime `clients` does not say.
      *
-     * 16.38 — false for a handler typed as returning a `Response`, which only the build can tell.
+     * 16.37 — false for a handler typed as returning a `Response`, which only the build can tell.
      */
     mcp: boolean
     /** Its `description`, where the declaration writes one as a literal the build can read. */
@@ -75,7 +75,7 @@ export type Mount = {
     /**
      * What a `GET`'s value declares that the browser's copy behaves by, or `undefined`.
      *
-     * 18.19 — set where its declaration names any of it.
+     * 18.4 — set where its declaration names any of it.
      */
     copy: CopyOptions | undefined
     /**
@@ -84,7 +84,7 @@ export type Mount = {
      * 11.29 — the server reads its own off the handler.
      */
     defaults: Defaults | undefined
-    /** The JSON Schema the handler's args annotation derives, where it takes a record. 19.10. */
+    /** The JSON Schema the handler's args annotation derives, where it takes a record. 19.9. */
     args: JsonValue | undefined
 }
 
@@ -95,13 +95,13 @@ export type Mounted = Mount & {
     /**
      * The args' JSON Schema, probed once at mount.
      *
-     * 19.8, 20.11 — a third-party schema converts itself on every probe.
+     * 19.7, 20.11 — a third-party schema converts itself on every probe.
      */
     argsDocument: Document | undefined
     /**
      * What the wire holds args to where the handler declares no `args` gate of its own.
      *
-     * 19.10 — the annotation's schema. An in-process call already holds the type, so the handler
+     * 19.9 — the annotation's schema. An in-process call already holds the type, so the handler
      * never runs it.
      */
     wireArgs: JsonValue | undefined
@@ -117,7 +117,7 @@ export function mountedOwn(
     name: string,
     handler: object,
 ): [string, Mounted] {
-    // 16.11 — READ WHEN IT IS REPORTED, where a mounted handler's is stamped at boot: the mount is
+    // 16.10 — READ WHEN IT IS REPORTED, where a mounted handler's is stamped at boot: the mount is
     // the configuration's, and nothing boots this handler.
     Object.defineProperty(handler, 'address', {
         get: () => underMount(address),
@@ -143,44 +143,33 @@ export function mountedOwn(
     ]
 }
 
-// 16.62 — the environment's `timeout`, for every call a handler that names none makes.
+// 16.58 — the environment's `timeout`, for every call a handler that names none makes.
 export function environmentTimeout(): number | undefined {
     return positiveSetting('ABIDE_RPC_TIMEOUT', undefined)
 }
 
 /**
- * The table's handlers and sockets, imported and keyed by address.
+ * The table's handlers, imported and keyed by address.
  *
  * Imported from the SOURCE tree, so a page rendering on the server and a call over the wire reach
  * one module and so one handler. AT BOOT rather than on the first call, because a page's render
  * reaches a handler through the page's own import and has to know its address before anything has
- * called it over the wire. One pass over both kinds of row, split by method into what `answerRpc`
- * and the socket mux each answer from.
+ * called it over the wire.
  */
 export async function mountHandlers(
     table: Mount[],
     moduleOf: (source: string) => Promise<Record<string, unknown>>,
-): Promise<{
-    handlers: Map<string, Mounted>
-    sockets: Map<string, Socket<unknown, unknown>>
-}> {
+): Promise<{ handlers: Map<string, Mounted> }> {
     const modules = await Promise.all(
         table.map((mount) => moduleOf(mount.source)),
     )
     const handlers = new Map<string, Mounted>()
-    const sockets = new Map<string, Socket<unknown, unknown>>()
     for (let at = 0; at < table.length; at += 1) {
         const mount = table[at] as Mount
         const exported = (modules[at] as Record<string, unknown>)[mount.name]
-        if (mount.method === 'SOCKET') {
-            const carried = exported as Socket<unknown, unknown>
-            carried.address = mount.address
-            sockets.set(mount.address, carried)
-            continue
-        }
         const handler = exported as Rpc<unknown, unknown> & Gated<unknown>
         const declared = argsDocumentOf(handler)
-        // 16.10, 16.11 — the address `rpc.url` and `rpc.raw` build on, under the mount — and what a
+        // 16.9, 16.10 — the address `rpc.url` and `rpc.raw` build on, under the mount — and what a
         // page's render turns a call it made into the browser's request by (41.20).
         handler.address = underMount(mount.address)
         handlers.set(mount.address, {
@@ -191,7 +180,7 @@ export async function mountHandlers(
             wireArgs: declared === undefined ? mount.args : undefined,
         })
     }
-    return { handlers, sockets }
+    return { handlers }
 }
 
 /** The `Response` to a handler call made over http. */
@@ -199,13 +188,13 @@ export async function answerRpc(
     handlers: Map<string, Mounted>,
     url: URL,
     request: Request,
-    // 16.39 — what paints a refusal for a request that came as a navigation.
+    // 16.38 — what paints a refusal for a request that came as a navigation.
     pages: ErrorPages,
 ): Promise<Response> {
     const pathname = url.pathname
     const found = handlers.get(pathname)
     const origin = request.headers.get('origin')
-    // 16.25 — THE PREFLIGHT, answered by abide where the handler declared `crossOrigin`.
+    // 16.24 — THE PREFLIGHT, answered by abide where the handler declared `crossOrigin`.
     if (
         found !== undefined &&
         request.method === 'OPTIONS' &&
@@ -213,7 +202,7 @@ export async function answerRpc(
         allows(found.handler.crossOrigin, origin)
     )
         return preflight(found, origin, request)
-    // 16.54 — a `HEAD` is the `GET`'s answer, which the server sends without its body.
+    // 16.50 — a `HEAD` is the `GET`'s answer, which the server sends without its body.
     const head = request.method === 'HEAD'
     // 15.7 — no handler at this address AND this method is one refusal, not two.
     if (found === undefined || found.method !== (head ? 'GET' : request.method))
@@ -225,10 +214,10 @@ export async function answerRpc(
     const closed = closedTo(handler.crossOrigin, crossing)
     // 21.19 — the origin the answer admits, where the handler declared it may read.
     const admitted = closed ? null : crossing
-    // 16.14 — A MUTATION FROM ANOTHER ORIGIN IS REFUSED unless the handler declared it may come.
+    // 16.13 — A MUTATION FROM ANOTHER ORIGIN IS REFUSED unless the handler declared it may come.
     if (closed && !inUrl)
         return answered(crossingRefusal(crossing, found.method))
-    // 16.58 — THE BODY CEILING, none where neither the handler nor the environment names one; 16.59 —
+    // 16.54 — THE BODY CEILING, none where neither the handler nor the environment names one; 16.55 —
     // read off the declared length before a byte of the body is.
     const ceiling =
         handler.maxBodySize ??
@@ -239,18 +228,18 @@ export async function answerRpc(
     if (isFailed(raw)) return answered(raw)
     let args: unknown
     try {
-        // A URL's and a form's args are text, and the query tells a bare name from `name=` (19.8).
+        // A URL's and a form's args are text, and the query tells a bare name from `name=` (19.7).
         args = argsFor(found, raw, inUrl ? url.search : form ? '' : undefined)
     } catch (refused) {
         if (isFailed(refused)) return answered(refused)
         throw refused
     }
-    // 16.60 — where neither names one, nothing is raised and the server's own idle timeout stands.
+    // 16.56 — where neither names one, nothing is raised and the server's own idle timeout stands.
     const timeout = handler.timeout ?? RPC_SERVER.timeout()
     if (timeout !== undefined) raiseTimeout(timeout)
     // 41.7 — the call a hydrating page makes for what its render already reached is answered from
     // that, and the handler is not run again (41.13).
-    // 16.55 — a `HEAD` leaves the seed for the `GET` it stands in front of.
+    // 16.51 — a `HEAD` leaves the seed for the `GET` it stands in front of.
     const caller = head ? undefined : callerOf()
     const seeded =
         caller === undefined ? undefined : takeSeed(caller, handler, args)
@@ -268,10 +257,10 @@ export async function answerRpc(
         heldAt !== undefined &&
         GLOBAL_GETS.get(handler)?.(args) === held &&
         heldGenerationOf(held) === heldAt
-    // 16.39 — A MUTATION A DOCUMENT MADE — a form posted with no script — is answered as a navigation.
+    // 16.38 — A MUTATION A DOCUMENT MADE — a form posted with no script — is answered as a navigation.
     if (!inUrl && prefers(request, 'text/html', 'application/json'))
         return navigated(outcome, request, pathname, pages)
-    const answer = await answerOutcome(outcome, request, handler, args)
+    const answer = await answerOutcome(outcome, request, found, args)
     // A `Response` the handler built is its own — but the origin answer below is laid over it, so it
     // varies on `Origin` too (21.7), which `handlerHeaders` never reached.
     if (outcome.settled && outcome.value instanceof Response) {
@@ -297,6 +286,16 @@ export async function answerRpc(
     return admitting(answer, admitted)
 }
 
+/** Whether a handler's value is a stream of chunks, which answers as its own framing. */
+function streams(value: unknown): boolean {
+    return (
+        value instanceof ReadableStream ||
+        (value !== null &&
+            typeof value === 'object' &&
+            Symbol.asyncIterator in (value as object))
+    )
+}
+
 /** The answer with the crossing origin allowed, where the handler admits it. 21.19. */
 function admitting(answer: Response, admitted: string | null): Response {
     if (admitted !== null)
@@ -307,20 +306,37 @@ function admitting(answer: Response, admitted: string | null): Response {
 async function answerOutcome(
     outcome: Outcome,
     request: Request,
-    handler: { guarded: boolean },
+    found: Mounted,
     args: unknown,
 ): Promise<Response> {
+    const handler = found.handler
     if (!outcome.settled) return answered(failureOf(outcome.error))
-    // The `global` value the answer came from, or `undefined` for one built per request.
-    const serving = GLOBAL_GETS.get(handler)?.(args)
+    // The `global` value the answer came from, or `undefined` for one built per request. 18.22 — or
+    // for one whose production has moved past what is answered: a seeded answer is what the render
+    // reached (41.13). 18.23 — or for a binary.
+    const global = GLOBAL_GETS.get(handler)?.(args)
+    const value = outcome.value
+    const serving =
+        global !== undefined &&
+        !(
+            value instanceof Blob ||
+            value instanceof ArrayBuffer ||
+            ArrayBuffer.isView(value)
+        ) &&
+        (streams(value) || (global as { peek(): unknown }).peek() === value)
+            ? global
+            : undefined
     // 21.3 — what the handler wrote through `response` is laid over it at the exit (21.10).
     const headers = handlerHeaders()
     // When the production answered stops being servable, or Infinity where nothing bounds it.
     const deadline =
         serving === undefined ? Number.POSITIVE_INFINITY : deadlineOf(serving)
-    // 18.20 — the version a follower resumes from (18.21), where the mux would feed one (18.23).
-    if (serving !== undefined && !handler.guarded) {
-        headers.set(VERSION_HEADER, String(versionOf(serving)))
+    // 18.5 — the version a follower resumes from (18.6), as the answer's `ETag`: guarded or not,
+    // since a guarded `GET` is fed once its rungs admit the follower (18.8), and this answer passed
+    // them already.
+    const etag = serving !== undefined ? `"${versionOf(serving)}"` : undefined
+    if (etag !== undefined) {
+        headers.set(VERSION_HEADER, etag)
         RPC_SERVER.served?.(handler, serving)
     }
     // 21.8, 21.9, 21.11 — WHAT IS LEFT OF THE LIFE OF THE PRODUCTION ANSWERED, in place of `no-store`
@@ -331,9 +347,34 @@ async function answerOutcome(
             'cache-control',
             `private, max-age=${Math.max(0, Math.floor((deadline - Date.now()) / 1000))}`,
         )
-    // 16.41 FOR A STREAM TOO. A stream's head waits on its first chunk, so one refusing before it
+    // 18.19 — A READER HOLDING THIS VERSION IS TOLD SO, and sent no body.
+    if (
+        etag !== undefined &&
+        namesEtag(request.headers.get('if-none-match'), etag)
+    )
+        return new Response(null, { status: 304, headers })
+    // 18.20 — A READER ASKING FOR AN EVENT STREAM IS FOLLOWED, rather than answered once: the value,
+    // then each change, from the version its `Last-Event-ID` names. A handler that streams answers
+    // its own chunks as it always has (16.45).
+    if (
+        etag !== undefined &&
+        !streams(outcome.value) &&
+        prefers(request, 'text/event-stream', 'application/json')
+    ) {
+        const events = handlerHeaders()
+        sseHeaders(events)
+        return new Response(
+            followAsEvents(
+                found,
+                args,
+                versionInEtag(request.headers.get('last-event-id')),
+            ),
+            { status: 200, headers: events },
+        )
+    }
+    // 16.40 FOR A STREAM TOO. A stream's head waits on its first chunk, so one refusing before it
     // said anything throws out of the answer rather than settling into the outcome — and was answered
-    // 500, as a throw that is not a `Failed` is (16.42), where the refusal named its own status. Any
+    // 500, as a throw that is not a `Failed` is (16.41), where the refusal named its own status. Any
     // other throw goes on to where it went before.
     try {
         return await answerValue(
@@ -364,13 +405,13 @@ async function argsOf(
         ? await bodyUnder(request, ceiling)
         : request
     if (isFailed(body)) return body
-    // 16.39 — a form's fields, a field given more than once a list, as a query's are.
+    // 16.38 — a form's fields, a field given more than once a list, as a query's are.
     if (form) {
         return collapsed(await body.formData())
     }
     const text = await body.text()
     if (text === '') return undefined
-    // 16.21 — a body that is not an `Args` is the caller's fault.
+    // 16.20 — a body that is not an `Args` is the caller's fault.
     let parsed: unknown
     try {
         parsed = JSON.parse(text)
@@ -385,7 +426,7 @@ async function argsOf(
 /**
  * The request's body read up to `ceiling`, as a `Response`, or a 413 refusal past it.
  *
- * 16.59 — A BODY WITH NO DECLARED LENGTH, BOUNDED AS IT STREAMS: counted chunk by chunk and cut
+ * 16.55 — A BODY WITH NO DECLARED LENGTH, BOUNDED AS IT STREAMS: counted chunk by chunk and cut
  * off at the chunk that passes the ceiling, so a caller that never said how much it would send is
  * never held past it. What it read is handed back as a `Response` for the parse to read as it
  * would the request.
@@ -427,10 +468,10 @@ function preflight(found: Mounted, origin: string, request: Request): Response {
 /**
  * Raises the request's idle timeout to cover `milliseconds`, never lowering it.
  *
- * 16.23, 16.24 — the floor is the longest any handler in the request asked for. Where no socket is
+ * 16.22, 16.23 — the floor is the longest any handler in the request asked for. Where no socket is
  * bound there is no idle timeout to raise.
  *
- * 16.61 — `Infinity` is never reaped, which bun spells 0; any finite bound is capped at the 255
+ * 16.57 — `Infinity` is never reaped, which bun spells 0; any finite bound is capped at the 255
  * seconds bun's idle timeout can hold.
  *
  * ON THE REQUEST THE LISTENER RECEIVED, never the one being answered: under a mount, or past a
@@ -460,7 +501,7 @@ function isForm(request: Request): boolean {
 /**
  * The answer a form posted with no script gets.
  *
- * 16.39 — a `redirect` the handler wrote passes through; a value is a 303 back where the form was;
+ * 16.38 — a `redirect` the handler wrote passes through; a value is a 303 back where the form was;
  * a refusal renders the nearest error page at its own status, and a fault renders it at 500.
  */
 async function navigated(
@@ -482,7 +523,7 @@ async function navigated(
         written?.headers.has('location') === true
     )
         return new Response(null, { status, headers })
-    // 16.57 — back where the form was only where that is this app: a `Referer` naming another
+    // 16.53 — back where the form was only where that is this app: a `Referer` naming another
     // origin makes the 303 an open redirect.
     const referer = request.headers.get('referer')
     const from = referer === null ? null : URL.parse(referer)

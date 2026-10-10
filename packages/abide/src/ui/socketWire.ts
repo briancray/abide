@@ -1,127 +1,29 @@
-// 18.2 — A SOCKET, AS A BROWSER HOLDS IT. What a page imported as `chat` is, in the bundle,
-// `socketWire('/__abide/socket/chat')`: a call per args handing back a subscriber's copy, fed over the
-// one web socket every socket on the page shares.
-//
-// THE COPY IS BUSY UNTIL ITS FIRST PRODUCTION ARRIVES (9.29), and each production after it lands
-// through the copy's own `publish`, numbered by the owner rather than by the copy (9.14): the owner's
-// sequence number and epoch are held beside it for a reconnect to resume from (18.13). A publish the
-// page makes is sent to the owner rather than applied here — it arrives back as a production like any
-// other, once the owner has taken it (18.6).
-//
-// NOT HERE YET: 18.15's reset of a `{#for}` over the copy, which is the compiler's; a reset here
-// publishes the owner's ring into the copy.
+// 18.1 — THE MUX, AS A BROWSER HOLDS IT: one web socket per page, over which every `GET` the page
+// reads is followed (18.3). Each copy is kept in step with the value it was answered from: the value
+// where the version it holds is not the server's, and the writes of each patch over it (18.6, 18.11).
 
 import { ABIDE_ADDRESS, SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
-import { failed, isFailedNamed } from '#shared/Failed.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
-import { type Reactive, reactive } from '#shared/reactive/index.ts'
-import type { BrowserFrame, ServerFrame } from '#shared/socket.ts'
-import { applyPatch } from './applyPatch.ts'
+import {
+    heldGenerationOf,
+    loadOf,
+    type Reactive,
+} from '#shared/reactive/index.ts'
+import { PATCHES } from '#shared/reactive/PATCHES.ts'
+import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
+import { applyPatch } from '#shared/applyPatch.ts'
+import { onPrincipalRotated } from '#shared/principalRotated.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
 
-/** How many productions a subscriber's copy retains for a cursor to replay. */
-const COPY_HISTORY = 100
 const RETRY_FLOOR_MS = 250
 const RETRY_CEILING_MS = 10_000
-
-/** A socket subscribed: an owner-numbered log (9.14), resumed from where it stood (18.13). */
-class Subscription {
-    id: number
-    address: string
-    args: unknown
-    copy: Reactive<unknown>
-    publish: (value: unknown) => unknown
-    first: ((value: unknown) => void) | null
-    refuse: ((error: unknown) => void) | null
-    seq: number | undefined
-    epoch: string | undefined
-
-    /**
-     * 9.29 — BUSY UNTIL THE FIRST PRODUCTION ARRIVES, which settles the value it was built over.
-     */
-    constructor(id: number, address: string, args: unknown) {
-        this.id = id
-        this.address = address
-        this.args = args
-        const settled = Promise.withResolvers<unknown>()
-        this.first = settled.resolve
-        this.refuse = settled.reject
-        this.copy = reactive<unknown>(settled.promise, {
-            history: COPY_HISTORY,
-        }) as Reactive<unknown>
-        this.publish = this.copy.publish
-        this.seq = undefined
-        this.epoch = undefined
-    }
-
-    frame(): BrowserFrame {
-        return {
-            op: 'sub',
-            id: this.id,
-            address: this.address,
-            args: this.args,
-            seq: this.seq,
-            epoch: this.epoch,
-        }
-    }
-
-    receive(frame: ServerFrame): void {
-        if (frame.op === 'error') {
-            const error = frame.error
-            const refusal =
-                error === undefined
-                    ? undefined
-                    : failed(
-                          error.name,
-                          error.status,
-                          error.message,
-                          error.data,
-                      )
-            if (this.refuse !== null) {
-                this.refuse(refusal)
-                this.first = null
-                this.refuse = null
-            } else HYDRATE_LOG.warning('a socket refused', refusal)
-            return
-        }
-        this.epoch = frame.epoch
-        // A REPLAY IS ONE FRAME, a reset or not, so the whole ring lands in one turn.
-        const ring = frame.ring
-        if (ring !== undefined) {
-            for (const [seq, value] of ring) {
-                this.seq = seq
-                this.deliver(value)
-            }
-            return
-        }
-        this.seq = frame.seq
-        this.deliver(frame.value)
-    }
-
-    /**
-     * Lands one production in the copy.
-     *
-     * PUBLISHED EVEN WHERE IT IS THE FIRST, and the load resolved after it. A publish made while
-     * the load is in flight ends `busy` and supersedes the load, so the resolve that follows is
-     * dropped. Resolving first instead left the load in flight for the turn, and a ring landed in
-     * that same turn had its first entry superseded by the publish after it.
-     */
-    deliver(value: unknown): void {
-        this.publish.call(this.copy, value)
-        if (this.first !== null) {
-            this.first(value)
-            this.first = null
-            this.refuse = null
-        }
-    }
-}
 
 /**
  * A handler followed over the socket mux, its copy the `Rpc`'s entry for these args.
  *
- * 18.17 — beside the sockets on the same mux. The copy is reached through `entry` — a lookup by
+ * 18.3 — beside the sockets on the same mux. The copy is reached through `entry` — a lookup by
  * then, the follow starting once it has loaded. STATE, NOT A LOG: it names the version it holds
- * (18.24) and takes whatever value it is sent (18.25).
+ * (18.9) and takes whatever value it is sent (18.10).
  */
 class Following {
     id: number
@@ -130,6 +32,10 @@ class Following {
     version: number | undefined
     entry: () => unknown
     expiry: ReturnType<typeof setTimeout> | undefined
+    // 18.21 — WHERE THE COPY WAS LAST IN STEP: the generation it stood at, which a `set` or a new
+    // load moves, and the patch epoch then, which a local `s.patch` writes past on what it holds.
+    generation: number | undefined
+    epoch: number
 
     constructor(
         id: number,
@@ -144,12 +50,32 @@ class Following {
         this.version = version
         this.entry = entry
         this.expiry = undefined
+        this.generation = undefined
+        this.epoch = 0
+    }
+
+    /** Marks the copy in step as it stands, its load in flight included. */
+    inStep(): void {
+        const copy = this.entry()
+        this.generation = loadOf(copy) ?? heldGenerationOf(copy)
+        this.epoch = PATCHES.epoch
+    }
+
+    /** Whether the copy was written to since it was last in step. 18.21. */
+    diverged(copy: unknown): boolean {
+        if (heldGenerationOf(copy) !== this.generation) return true
+        const held = (copy as Reactive<unknown>).peek()
+        return (
+            held !== null &&
+            typeof held === 'object' &&
+            (PATCHES.written.get(held) ?? 0) > this.epoch
+        )
     }
 
     /**
      * Marks the copy stale once `lifeMs` runs out.
      *
-     * 18.29 — the life is what is left of the production's own on the server (21.8). Stale rather
+     * 18.14 — the life is what is left of the production's own on the server (21.8). Stale rather
      * than dropped: it goes on being served until a read or a probe runs the producer (7.17). The
      * later answer's timer replaces the earlier, and an answer naming no life is bounded by
      * `invalidate` alone (21.17).
@@ -179,14 +105,18 @@ class Following {
         const copy = this.entry() as Reactive<unknown>
         if (frame.op === 'value') {
             this.version = frame.version
-            copy.publish(frame.value)
+            copy.set(frame.value)
+            this.inStep()
         } else if (frame.op === 'patch') {
-            // 18.27 — WRITES MADE OVER ANOTHER VERSION WOULD LAND SOMEWHERE ELSE, so the copy reads
-            // the value again instead, and the answer's version puts it back in step (18.24).
-            if (this.version !== frame.base) copy.refresh()
+            // 18.12 — WRITES MADE OVER ANOTHER VERSION WOULD LAND SOMEWHERE ELSE, and 18.21 over a
+            // copy written to here, so the copy reads the value again instead, and the answer's
+            // version puts it back in step (18.9).
+            if (this.version !== frame.base || this.diverged(copy))
+                copy.refresh()
             else {
                 this.version = frame.version
                 copy.patch((value) => applyPatch(value, frame.ops ?? []))
+                this.inStep()
             }
         } else if (frame.op === 'invalidate') copy.invalidate()
         else if (frame.op === 'refresh') copy.refresh()
@@ -195,12 +125,11 @@ class Following {
     }
 }
 
-/** One web socket carrying every socket and followed handler under one address. */
+/** One web socket carrying every followed `GET` under one address. */
 class Mux {
     url: string
     socket: WebSocket | null
-    subscriptions: Map<number, Subscription | Following>
-    pending: string[]
+    subscriptions: Map<number, Following>
     nextId: number
     retry: number
 
@@ -208,18 +137,24 @@ class Mux {
         this.url = url
         this.socket = null
         this.subscriptions = new Map()
-        this.pending = []
         this.nextId = 1
         this.retry = RETRY_FLOOR_MS
+        onPrincipalRotated(() => this.reopen(), true)
     }
 
-    send(frame: BrowserFrame): void {
-        const text = JSON.stringify(frame)
-        if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(text)
-        else {
-            this.pending.push(text)
-            this.connect()
-        }
+    /**
+     * Opens the socket again, so its upgrade carries the cookie as it now stands: a connection is
+     * answered as the caller it opened as (18.16), and a sign-in or sign-out has changed who that is.
+     */
+    reopen(): void {
+        const socket = this.socket
+        if (socket === null) return
+        socket.onopen = null
+        socket.onmessage = null
+        socket.onclose = null
+        socket.close()
+        this.socket = null
+        if (this.subscriptions.size !== 0) this.connect()
     }
 
     /**
@@ -228,7 +163,7 @@ class Mux {
      * A subscription is never queued: `onopen` sends every one standing, so one registered before
      * the socket opens goes out with them.
      */
-    subscribe(subscription: Subscription | Following): void {
+    subscribe(subscription: Following): void {
         this.subscriptions.set(subscription.id, subscription)
         if (this.socket?.readyState === WebSocket.OPEN)
             this.socket.send(JSON.stringify(subscription.frame()))
@@ -241,12 +176,9 @@ class Mux {
         this.socket = socket
         socket.onopen = () => {
             this.retry = RETRY_FLOOR_MS
-            // 18.13 — every subscription again, carrying where it stood.
+            // Every subscription again, carrying the version it holds (18.9).
             for (const each of this.subscriptions.values())
                 socket.send(JSON.stringify(each.frame()))
-            const queued = this.pending
-            this.pending = []
-            for (const text of queued) socket.send(text)
         }
         // THE CLOSE THAT FOLLOWS IS WHAT RETRIES; an error left unhandled is only noise on top of it.
         socket.onerror = () => {}
@@ -287,34 +219,11 @@ function muxFor(address: string): Mux {
     return mux
 }
 
-/** The browser's socket for `address`: a call per args answering a subscriber's copy. */
-export function socketWire(address: string): unknown {
-    const copies = new Map<string, Reactive<unknown>>()
-    const call = (args?: unknown): Reactive<unknown> => {
-        const key = canonicalKey(args)
-        const standing = copies.get(key)
-        if (standing !== undefined) return standing
-        const mux = muxFor(address)
-        const subscription = new Subscription(mux.nextId++, address, args)
-        const copy = subscription.copy
-        // 18.6 — A PUBLISH FROM HERE GOES TO THE OWNER, which admits it or refuses it; what it admits
-        // comes back as a production.
-        copy.publish = (message) => {
-            mux.send({ op: 'pub', id: subscription.id, address, args, message })
-            return subscription.seq ?? 0
-        }
-        copies.set(key, copy)
-        mux.subscribe(subscription)
-        return copy
-    }
-    return Object.assign(call, { address, isError: isFailedNamed })
-}
-
 /**
  * The follow standing per handler and args, one for the life of the page.
  *
  * One however often the entry loads. A later answer names a later version, which is what a
- * reconnect then names (18.24).
+ * reconnect then names (18.9).
  */
 const FOLLOWING = new Map<string, Following>()
 
@@ -338,7 +247,12 @@ export function followRpc(
         FOLLOWING.set(key, following)
         mux.subscribe(following)
     } else if (version !== undefined && (following.version ?? 0) < version)
-        // 18.22 — versions only rise, so the larger is the later.
+        // 18.7 — versions only rise, so the larger is the later.
         following.version = version
+    // IN STEP AS THE ANSWER THIS FOLLOWS LANDS, at its load's generation. A turn later rather than
+    // now: an answer that had already arrived lands while its entry is still being built, and a reach
+    // of the entry from here would build a second one, which fetches.
+    const stepping = following
+    queueMicrotask(() => stepping.inStep())
     following.expireAfter(lifeMs)
 }

@@ -1,22 +1,22 @@
 // `GET` and the four mutations: a handler given an address (16.2). The IN-PROCESS arm is what a
 // server-side caller, a page rendering on the server and a test all reach; the WIRE arm is what a
-// browser gets in its place (16.29, `#ui/wire.ts`) — and it is `declare` over a body that fetches,
+// browser gets in its place (16.28, `#ui/wire.ts`) — and it is `declare` over a body that fetches,
 // which is why this module is in the seam both reach rather than in the server's.
 //
-// A HANDLER IS A `reactive` (16.1), so an `Rpc` is not a second kind of value: the call hands back
-// the handler's own `Reactive` (16.3), and every probe, trigger and failure on it is the reactive
-// core's — the `Rpc`'s own `busy`, `ready`, `refresh` and `invalidate` are the handler's, passed
-// through. What this file adds is the normalising — a plain function becomes the `reactive` it
-// would have been (16.6) — and the method.
+// A HANDLER IS A `reactive` OR BECOMES ONE (16.1), so an `Rpc` is not a second kind of value: the
+// call hands back the handler's own `Reactive` (16.3), and every probe, trigger and failure on it is
+// the reactive core's — the `Rpc`'s own `busy`, `ready`, `refresh` and `invalidate` are the
+// handler's, passed through. What this file adds is the normalising — a plain function or a value becomes the
+// `reactive` it would have been (16.6) — and the method.
 //
-// A HANDLER DECLARING `middleware` IS REACHED THROUGH ITS RUNGS (16.12), in process as over the wire:
+// A HANDLER DECLARING `middleware` IS REACHED THROUGH ITS RUNGS (16.11), in process as over the wire:
 // the call hands back a value whose body runs the onion once per args, per request, over the
-// handler's own. NOT HERE YET: 16.8's publish into a value with no producer, and 16.7's `ttl` default
-// on a `reactive` built before it reached a mutation.
+// handler's own.
 
 import { type Failed, isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { compose, type Middleware } from './Middleware.ts'
+import { principalRotated } from './principalRotated.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
 import {
     contractOf,
@@ -33,17 +33,18 @@ import {
     chunksOfStream,
     handlerValue,
     isKeyed,
-    isReactive,
     type Kept,
     type Keyed,
     type OptionalParameter,
     type Reactive,
-    type Refused,
+    type Refusals,
     reactive,
+    type Shaping,
     STREAMING,
     type Streams,
     streamingOrSettled,
 } from './reactive/index.ts'
+import { MUTATION } from './reactive/MUTATION.ts'
 import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { isForwarder } from './reactive/scoped.ts'
 import { checkArgs } from './refuse.ts'
@@ -52,7 +53,7 @@ import type { Schema } from './Schema.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
-/** What a call is handed beside its args (16.52). */
+/** What a call is handed beside its args (16.48). */
 export type CallOptions = { signal?: AbortSignal }
 
 /**
@@ -61,7 +62,7 @@ export type CallOptions = { signal?: AbortSignal }
  * 16.3 — the call hands back the handler's own `Reactive`; the members below are the handler's,
  * passed through.
  *
- * 16.9 — AND ITS FAILURES CARRY THE TRANSPORT'S `HttpError`, which no handler declares and every
+ * 16.8 — AND ITS FAILURES CARRY THE TRANSPORT'S `HttpError`, which no handler declares and every
  * call can be answered with: a body over `maxBodySize` (413), a closed `crossOrigin` (403), a
  * `timeout` (504), and any failure status whose body was not a `Failed`, rebuilt by `answered`.
  */
@@ -96,10 +97,10 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     /**
      * The call's address, resolved against the mount.
      *
-     * 16.10, 16.11 — a mutation's takes no args.
+     * 16.9, 16.10 — a mutation's takes no args.
      */
     url(...args: undefined extends Args ? [args?: Args] : [args: Args]): string
-    /** The same call, handed back as the `Response` (16.43). */
+    /** The same call, handed back as the `Response` (16.42). */
     raw(args?: Args, init?: RequestInit): Promise<Response>
     /** Where the handler is mounted, stamped by whoever mounted it — `undefined` until then. */
     address: string | undefined
@@ -111,7 +112,7 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     /**
      * Whether the handler declared rungs.
      *
-     * 18.23 — rungs a value pushed over the mux would not pass.
+     * 18.8 — rungs a value pushed over the mux would not pass.
      */
     guarded: boolean
 }
@@ -144,12 +145,33 @@ export type RpcOptions<Args = unknown> = {
 }
 
 /**
+ * A handler `declare` builds the value of: a plain function or a value, which no `Reactive` or
+ * `Keyed` is.
+ *
+ * Told by a member both carry and neither of those does. Without it a value handed in with a
+ * value's option — `GET(reactive(f), { ttl })` — fell through its own arm to a plain one, and the
+ * option was dropped by a value that had already been built.
+ */
+export type Plain = { invalidate?: never }
+
+// The value arm's handler: anything but a function, which is a body, or a `Reactive` or `Keyed`,
+// which has decided its own options. Unguarded, the arm won overload resolution's subtype pass over
+// every function arm, whose `& Plain` only passes assignability. The guard is the whole parameter
+// because `& Plain` kept `GET(0)` the literal `0`, and a bound of `Plain` refuses every primitive.
+type Held<Accepted> = Accepted extends
+    | ((...given: never[]) => unknown)
+    | { invalidate: unknown }
+    ? never
+    : Accepted | PromiseLike<Accepted>
+
+/**
  * The signature `GET` and the four mutations share: a handler in, its `Rpc` out.
  *
  * ONE CALL SIGNATURE PER HANDLER ARM, shared by all five names. The two `reactive` arms come first:
  * a `Reactive` is itself a `() => Stored`, so the plain-function arm would otherwise swallow it
- * and type the `Rpc` as holding the value's own getter. The four plain arms are `reactive`'s own
- * overloads, in its order and for its reason (16.6).
+ * and type the `Rpc` as holding the value's own getter. The plain arms are `reactive`'s own
+ * overloads, in its order and for its reason, and take its options beside the address's (16.6) —
+ * which is why a value handed in takes the address's alone: it has decided its own.
  */
 type Declare = {
     <Stored, Args, Accepted, Failures, Produced>(
@@ -161,72 +183,143 @@ type Declare = {
         options?: RpcOptions<undefined>,
     ): Rpc<Stored, undefined, Failures, Produced>
     // 11.2 — a stream whose parameter is optional is keyed, for `reactive`'s reason.
-    <Body extends (args?: never) => unknown>(
-        handler: Body & OptionalParameter<Body> & Streams<Body>,
-        options?: RpcOptions<Parameters<Body>[0]>,
-    ): Rpc<ChunkOf<Body>[], Parameters<Body>[0], never, ChunkOf<Body>>
-    <Chunk>(
-        handler: () => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>,
-        options?: RpcOptions<undefined>,
-    ): Rpc<Chunk[], undefined, never, Chunk>
-    <Chunk, Args>(
-        handler: (
-            args: Args,
-        ) => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>,
-        options?: RpcOptions<Args>,
-    ): Rpc<Chunk[], Args, never, Chunk>
-    // 11.2 — an optional parameter is keyed, and ahead of the arm below for `reactive`'s reason.
-    <Body extends (args?: never) => unknown>(
-        handler: Body & OptionalParameter<Body>,
-        options?: RpcOptions<Parameters<Body>[0]>,
+    <
+        Body extends (args?: never) => unknown,
+        Shaped = ChunkOf<Body>[],
+        Gate = Schema<ChunkOf<Body>[]>,
+        ArgsGate = Schema<Parameters<Body>[0]>,
+    >(
+        handler: Body & OptionalParameter<Body> & Streams<Body> & Plain,
+        options?: Shaping<
+            ChunkOf<Body>[],
+            Shaped,
+            Parameters<Body>[0],
+            Gate,
+            ArgsGate
+        > &
+            RpcOptions<Parameters<Body>[0]>,
     ): Rpc<
-        Kept<Awaited<ReturnType<Body>>>,
+        Kept<Shaped>,
         Parameters<Body>[0],
-        AdoptedFailures<ReturnType<Body>> | Refused<Awaited<ReturnType<Body>>>,
-        AdoptedProduced<ReturnType<Body>, Kept<Awaited<ReturnType<Body>>>>
+        Refusals<Shaped, Gate, ChunkOf<Body>[], ArgsGate, Parameters<Body>[0]>,
+        ChunkOf<Body>
     >
-    <Computed>(
-        handler: () => Computed,
-        options?: RpcOptions<undefined>,
-    ): Rpc<
-        Kept<Awaited<Computed>>,
-        undefined,
-        AdoptedFailures<Computed> | Refused<Awaited<Computed>>,
-        AdoptedProduced<Computed, Kept<Awaited<Computed>>>
-    >
-    <Computed, Args>(
-        handler: (args: Args) => Computed,
-        options?: RpcOptions<Args>,
-    ): Rpc<
-        Kept<Awaited<Computed>>,
+    <Chunk, Shaped = Chunk[], Gate = Schema<Chunk[]>>(
+        handler: (() =>
+            | AsyncGenerator<Chunk>
+            | Promise<AsyncGenerator<Chunk>>) &
+            Plain,
+        options?: Shaping<Chunk[], Shaped, never, Gate> & RpcOptions<undefined>,
+    ): Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Chunk[]>, Chunk>
+    <
+        Chunk,
         Args,
-        AdoptedFailures<Computed> | Refused<Awaited<Computed>>,
-        AdoptedProduced<Computed, Kept<Awaited<Computed>>>
+        Shaped = Chunk[],
+        Gate = Schema<Chunk[]>,
+        ArgsGate = Schema<Args>,
+    >(
+        handler: ((
+            args: Args,
+        ) => AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>) &
+            Plain,
+        options?: Shaping<Chunk[], Shaped, Args, Gate, ArgsGate> &
+            RpcOptions<Args>,
+    ): Rpc<
+        Kept<Shaped>,
+        Args,
+        Refusals<Shaped, Gate, Chunk[], ArgsGate, Args>,
+        Chunk
     >
+    // 11.2 — an optional parameter is keyed, and ahead of the arm below for `reactive`'s reason.
+    <
+        Body extends (args?: never) => unknown,
+        Shaped = Awaited<ReturnType<Body>>,
+        Gate = Schema<Awaited<ReturnType<Body>>>,
+        ArgsGate = Schema<Parameters<Body>[0]>,
+    >(
+        handler: Body & OptionalParameter<Body> & Plain,
+        options?: Shaping<
+            Awaited<ReturnType<Body>>,
+            Shaped,
+            Parameters<Body>[0],
+            Gate,
+            ArgsGate
+        > &
+            RpcOptions<Parameters<Body>[0]>,
+    ): Rpc<
+        Kept<Shaped>,
+        Parameters<Body>[0],
+        | AdoptedFailures<ReturnType<Body>>
+        | Refusals<
+              Shaped,
+              Gate,
+              Awaited<ReturnType<Body>>,
+              ArgsGate,
+              Parameters<Body>[0]
+          >,
+        AdoptedProduced<ReturnType<Body>, Kept<Shaped>>
+    >
+    <Computed, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>>(
+        handler: (() => Computed) & Plain,
+        options?: Shaping<Awaited<Computed>, Shaped, never, Gate> &
+            RpcOptions<undefined>,
+    ): Rpc<
+        Kept<Shaped>,
+        undefined,
+        AdoptedFailures<Computed> | Refusals<Shaped, Gate, Awaited<Computed>>,
+        AdoptedProduced<Computed, Kept<Shaped>>
+    >
+    <
+        Computed,
+        Args,
+        Shaped = Awaited<Computed>,
+        Gate = Schema<Awaited<Computed>>,
+        ArgsGate = Schema<Args>,
+    >(
+        handler: ((args: Args) => Computed) & Plain,
+        options?: Shaping<Awaited<Computed>, Shaped, Args, Gate, ArgsGate> &
+            RpcOptions<Args>,
+    ): Rpc<
+        Kept<Shaped>,
+        Args,
+        | AdoptedFailures<Computed>
+        | Refusals<Shaped, Gate, Awaited<Computed>, ArgsGate, Args>,
+        AdoptedProduced<Computed, Kept<Shaped>>
+    >
+    // 16.1 — a value, `reactive`'s value overload given an address. Last, so a function is a body.
+    <Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(
+        handler: Held<Accepted>,
+        options?: Shaping<Accepted, Shaped, never, Gate> &
+            RpcOptions<undefined>,
+    ): Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Accepted>>
 }
 
 /** Builds the handler declarer for one method — what `GET`, `POST` and the rest are. */
 export function declare(method: Method): Declare {
     return ((handler: unknown, options?: RpcOptions): unknown => {
         // 16.6, and 16.7's `ttl` of 0 on a mutation: each call is a write, so nothing a previous
-        // call produced is served to the next one.
-        const cacheOptions = method === 'GET' ? undefined : { ttl: 0 }
-        // 16.5 — THE ARM IS READ OFF A BRAND. A `Keyed` and a one-parameter plain function have
-        // the same shape, and only the first has already decided its own keying.
-        const value =
-            isReactive(handler) || isKeyed(handler)
-                ? handler
-                : handlerValue(handler, cacheOptions)
+        // call produced is served to the next one. 13.16 — and marked, so a sweep never sends it again.
+        const cacheOptions =
+            method === 'GET' ? undefined : { ttl: 0, [MUTATION]: true as const }
+        // 16.6 — A PLAIN FUNCTION'S VALUE IS BUILT WITH THE WHOLE OPTIONS OBJECT: `reactive` reads
+        // the keys that are its own and passes over the address's, so nothing splits them. 16.7's
+        // `ttl` is a default the handler's own overrides.
+        const value = handlerValue(
+            handler,
+            cacheOptions === undefined
+                ? options
+                : { ...cacheOptions, ...options },
+        )
         const keyed = isKeyed(value)
-        // 19.8 — the handler's `args` gate and its parameter defaults, on the `Rpc` too, for the
+        // 19.7 — the handler's `args` gate and its parameter defaults, on the `Rpc` too, for the
         // wire to coerce and key by. 11.27, 11.29 — THE DEFAULTS ARE APPLIED AT THE CALL rather than
         // left to the value's own reach: a value behind rungs is keyed ahead of the handler's, and
         // the seed buffer files the call by the args it was handed.
         const contract = contractOf(keyed ? value : undefined)
         const reach = (args?: unknown): unknown =>
             keyed ? (value as (args: unknown) => unknown)(args) : value
-        // 16.12, 16.13 — THE RUNGS, IN REGISTRATION ORDER, around the reach. Built once, at the
-        // declaration (16.15); a value keyed by args, so a second call with the same args in one
+        // 16.11, 16.12 — THE RUNGS, IN REGISTRATION ORDER, around the reach. Built once, at the
+        // declaration (16.14); a value keyed by args, so a second call with the same args in one
         // request joins the first (1.8) and a server files one per request (11.32).
         const rungs = options?.middleware ?? []
         // A rung that handed `next` a context of its own making chose those args.
@@ -238,12 +331,12 @@ export function declare(method: Method): Declare {
                 args: argsOnce(gateOf(contract), args),
                 [SENT]: args,
             }) as RpcContext
-        // 16.33 BEHIND RUNGS — A STREAM'S CHUNKS ARE FORWARDED, not collected. The centre of the
+        // 16.32 BEHIND RUNGS — A STREAM'S CHUNKS ARE FORWARDED, not collected. The centre of the
         // onion is an async function, and a `Reactive` is thenable (1.4), so handing a streaming value
         // out through it would wait out the whole run and answer the accumulation once it closed. So
-        // the centre waits only until the value settles or turns out to stream (9.20), and hands a
+        // the centre waits only until the value settles or turns out to stream (9.6), and hands a
         // stream on as its chunks — a generator, which is not thenable. The value the call reaches
-        // resolves to it and is a stream of its own from then (9.20), so a second call joining it
+        // resolves to it and is a stream of its own from then (9.6), so a second call joining it
         // (1.8) reads the same accumulation. A refusal a rung answers with is the value's refusal.
         const onion =
             rungs.length === 0
@@ -326,12 +419,16 @@ export function declare(method: Method): Declare {
                             given,
                         ),
                     )
-                return fetch(asked.url, given)
+                // 26.24 — a sign-in made raw is still a sign-in.
+                return fetch(asked.url, given).then((answer) => {
+                    principalRotated(answer)
+                    return answer
+                })
             },
         }) satisfies Gated<unknown>
         const members = rpc as unknown as Record<string, unknown>
         // 7.10, 7.18 — A TRIGGER ON A SERVER REACHES EVERY BROWSER HOLDING WHAT IT NAMES, through the
-        // mux (18.17). `null` in a browser, where the trigger is the copy's own.
+        // mux (18.3). `null` in a browser, where the trigger is the copy's own.
         for (const name of SELECTION_MEMBERS)
             members[name] =
                 name === 'invalidate' || name === 'refresh'
@@ -341,13 +438,13 @@ export function declare(method: Method): Declare {
                           return done
                       }
                     : (pattern?: unknown): unknown => face[name](pattern)
-        // 21.8, 18.20 — a `GET` over a `global` value, the value it is serving for some args: a cache
+        // 21.8, 18.5 — a `GET` over a `global` value, the value it is serving for some args: a cache
         // may hold it for as long as it lives, and the mux may feed it. A request-local one is a
         // forwarder to a value built per request (11.32).
         //
         // READ OFF THE VALUE rather than off the call: behind a rung the call settles to what the
         // value produced, and holds no way back to it. A keyed value is looked up without a reach,
-        // so asking starts nothing (11.56).
+        // so asking starts nothing (11.55).
         if (method === 'GET' && !isForwarder(value))
             GLOBAL_GETS.set(rpc, (args: unknown): unknown =>
                 keyed
@@ -378,8 +475,8 @@ function addressOf(rpc: { address: string | undefined }): string {
 /**
  * A rung's `ctx.args()`: the args validated on the first ask, and that answer kept after it.
  *
- * 16.18, 16.19, 16.20 — validated against the `args` the value declared on the first ask, and the
- * answer kept for every rung after it. A refusal is thrown, so it leaves the whole onion (16.22)
+ * 16.17, 16.18, 16.19 — validated against the `args` the value declared on the first ask, and the
+ * answer kept for every rung after it. A refusal is thrown, so it leaves the whole onion (16.21)
  * and is answered at its own status.
  */
 function argsOnce(

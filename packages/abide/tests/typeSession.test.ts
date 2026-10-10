@@ -37,7 +37,7 @@ const aliased = 'reactive(0)'
     expect(names).toEqual(['count', 'fromHelper', 'rows'])
 })
 
-// 19.12 — where inference fails the compiler reads rather than refuses. An unresolved import is
+// 19.11 — where inference fails the compiler reads rather than refuses. An unresolved import is
 // the commonest way for that to happen, and it must not take the file down with it.
 test('an unresolved name is not reactive and does not refuse the file', async () => {
     const file = parseAbide(`<script>

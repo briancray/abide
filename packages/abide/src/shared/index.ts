@@ -4,7 +4,7 @@
 // #server.
 //
 // ONE FACTORY. `state`, `memo` and `channel` are gone — `reactive` carries all three through its
-// overloads, a channel being a value that declares `history`.
+// overloads, a channel being a value whose array every caller appends to.
 //
 // ONE REFUSAL TYPE beside it. `Failed` is the only thing a producer answers in place of a
 // value (15.1), so it is in this seam rather than the server's: the same object crosses a
@@ -64,7 +64,6 @@ export {
     type Effect,
     enterShare,
     flushSync,
-    type History,
     type Identity,
     invalidate,
     isReactive,

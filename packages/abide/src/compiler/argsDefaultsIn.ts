@@ -51,7 +51,7 @@ export function parameterPattern(
 /**
  * The args members a function's parameter pattern gives a default.
  *
- * 19.11 — THE ARGS MEMBERS A HANDLER DEFAULTS, which its annotation still calls required: the type
+ * 19.10 — THE ARGS MEMBERS A HANDLER DEFAULTS, which its annotation still calls required: the type
  * the `Rpc` carries is the one written, and a default lives on the pattern that destructures it.
  */
 export function defaultedMembers(node: Node | undefined): string[] {

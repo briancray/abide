@@ -56,6 +56,7 @@ abide --help
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. |
 | `abide mcp [--url <origin>]` | The app's MCP server over stdio. |
 | `abide logs` | A live subscription to `log.records`. |
+| `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. |
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. |
 | `abide bundle` | A desktop launcher for the host platform. |
 | `abide lsp` | The `.abide` language server, over stdio. |

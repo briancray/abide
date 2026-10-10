@@ -8,10 +8,14 @@
 // reached is marked written the moment it is read, path and all. That over-reports, and an
 // over-report costs a row remade where an under-report shows a stale one.
 //
-// 18.26 — AND WHERE A SINK IS HANDED IN, each write is kept as data too: a set, a delete, or an array
-// method called with its arguments, at the path it was reached by. Anything that cannot be replayed
-// from that — a comparator, a `Map`'s own method, a row reached before its array was reordered —
-// marks the sink `lost` rather than send something that would land somewhere else (18.28).
+// 18.11 — AND WHERE A SINK IS HANDED IN, each write is kept as data too, as JSON Patch (RFC 6902) at
+// the JSON Pointer it was reached by: a member set is `add`, an index `replace` (or `add` one past
+// the end), a delete `remove`, and an array method the `add`s and `remove`s it makes — a `push` one
+// `add` at `/-` per item. A reorder (`sort`, `reverse`, `fill`, `copyWithin`) is one `replace` of
+// the array, which is then sent as it stands when the callback returns, like a placed object.
+// Anything JSON Patch cannot carry — a comparator, a hole in an array, a `Map`'s own method, a row
+// reached before its array was reordered — marks the sink `lost` rather than send something that
+// would land somewhere else (18.13).
 //
 // A RAW OBJECT THE CALLBACK PLACES IN THE VALUE IS WRITTEN THROUGH NO PROXY, since the callback
 // holds it directly: `list.push(row); row.name = x`. So a placed object is SENT AS IT STANDS WHEN THE
@@ -19,15 +23,10 @@
 // under one is not kept, since that copy already carries it.
 import type { PatchOp } from './PATCH_SINKS.ts'
 import { PATCHES } from './PATCHES.ts'
+import { RESHAPING } from './RESHAPING.ts'
 
-// The array methods that change the array they are called on. Kept as ONE call rather than the index
-// writes it makes, which for a `splice` near the front is a write per element after it.
-const RESHAPING = new Set([
-    'push',
-    'pop',
-    'shift',
-    'unshift',
-    'splice',
+// The reshaping methods JSON Patch has no op for: the array they leave is sent whole instead.
+const REORDERING: ReadonlySet<string> = new Set([
     'sort',
     'reverse',
     'fill',
@@ -60,7 +59,7 @@ export function recordWrites<Value>(
     // `list[0] === list[0]` inside the callback, and its parent. ONE ENTRY rather than a map for each,
     // because a row read is the loop this runs per row and each map is a lookup and an insert there.
     const reached = new Map<object, Reached>()
-    // 18.26 — where each object was reached from the root: a path read before its array was
+    // 18.11 — where each object was reached from the root: a path read before its array was
     // reshaped may no longer name the same object.
     const paths = sink === undefined ? undefined : new Map<object, Step>()
     // Every raw object `stored` has walked: what a placed object is — one reached under it is sent in
@@ -106,7 +105,7 @@ export function recordWrites<Value>(
         return known
     }
 
-    // 18.26 — the path a write through `held` is kept at: `undefined` where it cannot be trusted, and
+    // 18.11 — the path a write through `held` is kept at: `undefined` where it cannot be trusted, and
     // `null` where it need not be kept because an object on it was PLACED, and is sent as it stands.
     // A PATH IS TRUSTED WHERE EACH STEP STILL NAMES WHAT IT WAS REACHED BY, asked of the value as it
     // stands at the write — which is when the replay applies it. A reshape, an assignment, a
@@ -128,6 +127,8 @@ export function recordWrites<Value>(
             path.push(step.key)
             child = step.parent
         }
+        // The root, reordered, is sent whole too.
+        if (step.placed) return null
         return path.reverse()
     }
 
@@ -146,13 +147,16 @@ export function recordWrites<Value>(
     const keep = (
         held: object,
         last: string | number | undefined,
-        op: (path: (string | number)[]) => PatchOp,
+        ops: (pointer: string) => PatchOp[],
     ): void => {
         if (sink === undefined || sink.lost) return
         const path = pathTo(held, last)
         if (path === null) return
-        if (path === undefined) sink.lost = true
-        else sink.ops.push(op(path))
+        if (path === undefined) {
+            sink.lost = true
+            return
+        }
+        for (const op of ops(pointerOf(path))) sink.ops.push(op)
     }
 
     const handler: ProxyHandler<object> = {
@@ -172,15 +176,24 @@ export function recordWrites<Value>(
                         if (args.some((arg) => typeof arg === 'function'))
                             sink.lost = true
                         else
-                            keep(held, undefined, (path) => ({
-                                path,
-                                call: property,
-                                args: raws,
-                            }))
+                            keep(held, undefined, (pointer) =>
+                                opsOfCall(
+                                    held as unknown[],
+                                    property,
+                                    raws,
+                                    pointer,
+                                ),
+                            )
                     }
                     const result = (
                         value as (...args: unknown[]) => unknown
                     ).apply(held, raws)
+                    // A REORDERED ARRAY IS SENT WHOLE, as it stands when the callback returns —
+                    // so a write under it after the reorder is in that copy, not an op of its own.
+                    if (REORDERING.has(property)) {
+                        const step = paths?.get(held)
+                        if (step !== undefined) step.placed = true
+                    }
                     // `sort`, `reverse`, `fill` and `copyWithin` answer the array itself, and
                     // handing back the raw one would take every write after it off the record.
                     return result === held
@@ -211,23 +224,67 @@ export function recordWrites<Value>(
         set(held, property, value) {
             mark(held)
             const raw = stored(value)
-            if (sink !== undefined) {
-                keep(held, stepOf(held, property), (path) => ({
-                    path,
-                    set: raw,
-                }))
-            }
+            if (sink !== undefined) keepSet(held, property, raw)
             return Reflect.set(held, property, raw, held)
         },
         deleteProperty(held, property) {
             mark(held)
-            if (sink !== undefined)
-                keep(held, stepOf(held, property), (path) => ({
-                    path,
-                    delete: true,
-                }))
+            if (sink !== undefined) {
+                // A deleted INDEX leaves a hole JSON has no spelling for; a member not there deletes
+                // nothing, and a `remove` of it would refuse on the far side.
+                if (Array.isArray(held) || typeof property === 'symbol')
+                    sink.lost = true
+                else if (Object.hasOwn(held, property))
+                    keep(held, property, (pointer) => [
+                        { op: 'remove', path: pointer },
+                    ])
+            }
             return Reflect.deleteProperty(held, property)
         },
+    }
+
+    // An assignment as JSON Patch, read off the value BEFORE it lands: an index that exists is a
+    // `replace`, one at the end an `add`, and one past it a hole JSON cannot carry. A shortened
+    // `length` is the `remove`s it makes, from the end; a lengthened one is holes again.
+    const keepSet = (
+        held: object,
+        property: string | symbol,
+        raw: unknown,
+    ): void => {
+        if (typeof property === 'symbol') {
+            ;(sink as { lost: boolean }).lost = true
+            return
+        }
+        if (!Array.isArray(held)) {
+            keep(held, property, (pointer) => [
+                { op: 'add', path: pointer, value: raw },
+            ])
+            return
+        }
+        const step = stepOf(held, property)
+        if (typeof step === 'number') {
+            if (step < held.length)
+                keep(held, step, (pointer) => [
+                    { op: 'replace', path: pointer, value: raw },
+                ])
+            else if (step === held.length)
+                keep(held, step, (pointer) => [
+                    { op: 'add', path: pointer, value: raw },
+                ])
+            else (sink as { lost: boolean }).lost = true
+            return
+        }
+        const length = Number(raw)
+        if (property !== 'length' || !(length <= held.length)) {
+            ;(sink as { lost: boolean }).lost = true
+            return
+        }
+        keep(held, undefined, (pointer) => {
+            const ops: PatchOp[] = []
+            for (let at = held.length - 1; at >= length; at -= 1)
+                ops.push({ op: 'remove', path: `${pointer}/${at}` })
+            return ops
+        })
     }
 
     // WHAT A WRITE PUTS IN THE VALUE, WITH NO PROXY ANYWHERE IN IT. A proxy stored would outlive the
@@ -283,9 +340,7 @@ export function recordWrites<Value>(
             try {
                 for (let index = first; index < sink.ops.length; index += 1) {
                     const op = sink.ops[index] as PatchOp
-                    if ('set' in op) op.set = snapshot(op.set)
-                    else if ('call' in op)
-                        op.args = snapshot(op.args) as unknown[]
+                    if ('value' in op) op.value = snapshot(op.value)
                 }
             } catch {
                 // A value `structuredClone` refuses — a function in a row — is sent whole instead.
@@ -296,6 +351,63 @@ export function recordWrites<Value>(
 
 const snapshot = (raw: unknown): unknown =>
     raw !== null && typeof raw === 'object' ? structuredClone(raw) : raw
+
+/** A path as a JSON Pointer (RFC 6901): `''` for the root, `~` as `~0` and `/` as `~1`. */
+function pointerOf(path: (string | number)[]): string {
+    let pointer = ''
+    for (const step of path)
+        pointer += `/${String(step).replaceAll('~', '~0').replaceAll('/', '~1')}`
+    return pointer
+}
+
+/**
+ * The JSON Patch an array method makes, read off the array BEFORE it runs.
+ *
+ * A `splice`'s start and count are normalised the way the method does, so the `remove`s and `add`s
+ * name the indices it touches.
+ */
+function opsOfCall(
+    held: unknown[],
+    method: string,
+    args: unknown[],
+    pointer: string,
+): PatchOp[] {
+    const length = held.length
+    const ops: PatchOp[] = []
+    if (method === 'push')
+        for (const value of args)
+            ops.push({ op: 'add', path: `${pointer}/-`, value })
+    else if (method === 'pop') {
+        if (length > 0)
+            ops.push({ op: 'remove', path: `${pointer}/${length - 1}` })
+    } else if (method === 'shift') {
+        if (length > 0) ops.push({ op: 'remove', path: `${pointer}/0` })
+    } else if (method === 'unshift')
+        for (let at = 0; at < args.length; at += 1)
+            ops.push({ op: 'add', path: `${pointer}/${at}`, value: args[at] })
+    else if (method === 'splice') {
+        if (args.length === 0) return ops
+        const asked = Math.trunc(Number(args[0])) || 0
+        const start =
+            asked < 0 ? Math.max(length + asked, 0) : Math.min(asked, length)
+        const count =
+            args.length < 2
+                ? length - start
+                : Math.min(
+                      Math.max(Math.trunc(Number(args[1])) || 0, 0),
+                      length - start,
+                  )
+        for (let at = 0; at < count; at += 1)
+            ops.push({ op: 'remove', path: `${pointer}/${start}` })
+        for (let at = 2; at < args.length; at += 1)
+            ops.push({
+                op: 'add',
+                path: `${pointer}/${start + at - 2}`,
+                value: args[at],
+            })
+    } else ops.push({ op: 'replace', path: pointer, value: held })
+    return ops
+}
 
 /**
  * An object the patch reached: the proxy it is handed out as, and what it was reached from.
@@ -319,7 +431,7 @@ class Reached {
 /**
  * One step of an object's path from the root: its key, what it was read off, and that one's step.
  *
- * 18.26 — `parent` is `null` for the root, and `placed` says whether the callback placed it.
+ * 18.11 — `parent` is `null` for the root, and `placed` says whether the callback placed it.
  */
 class Step {
     key: string | number

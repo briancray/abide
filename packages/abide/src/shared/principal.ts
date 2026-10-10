@@ -8,7 +8,7 @@
 
 import { PRINCIPAL_ADDRESS } from './ADDRESSES.ts'
 import { type Failed, isFailed } from './Failed.ts'
-import { PRINCIPAL_ROTATED } from './PRINCIPAL_ROTATED.ts'
+import { onPrincipalRotated } from './principalRotated.ts'
 import { ambient } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import { seededDocument } from './seededDocument.ts'
@@ -31,7 +31,7 @@ export interface Principal {
 export const BROWSER_PRINCIPAL: {
     document: () => Principal | Promise<Principal>
     caller: () => string
-    set: (claims: unknown) => Promise<void>
+    set: (claims: Record<string, unknown>) => Promise<void>
     clear: () => void
 } = {
     // 26.17 — seeded as any handler's answer is. 26.23 — a refused one is the unauthenticated
@@ -110,8 +110,12 @@ export function principalMembers(): Members {
     }
     // A SIGN-IN OR SIGN-OUT A HANDLER ANSWERED reloads the document, and every member reads
     // through it. A REFRESH, not an invalidate: 7.4 keeps the document a click handler reads
-    // served until the new one lands.
-    PRINCIPAL_ROTATED.current = () => document.refresh()
+    // served until the new one lands. 26.24 — another tab's is heard too (`principalRotated.ts`);
+    // a browser's alone: a server, which replaced these slots, answers no `abide-principal` to itself.
+    onPrincipalRotated(
+        () => document.refresh(),
+        PRINCIPAL.document === BROWSER_PRINCIPAL.document,
+    )
     return members
 }
 
@@ -132,7 +136,7 @@ export const principal = {
     get caller(): Reactive<string> {
         return principalMembers().caller
     },
-    set(claims: unknown): Promise<void> {
+    set(claims: Record<string, unknown>): Promise<void> {
         return PRINCIPAL.set(claims)
     },
     clear(): void {

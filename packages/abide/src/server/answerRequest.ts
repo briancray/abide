@@ -34,7 +34,6 @@ import {
 } from '#shared/routePattern.ts'
 import type { Rpc } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
-import type { Socket } from '#shared/socket.ts'
 import { answerFailure } from './answerFailure.ts'
 import {
     answerRpc,
@@ -49,7 +48,7 @@ import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import { callerOrMint } from './callerOf.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
-import { answerLogs, answerMcp, openApi } from './generatedSurfaces.ts'
+import { answerMcp, LOGS_HANDLER, openApi } from './generatedSurfaces.ts'
 import { failureOf } from './hooks.ts'
 import { chunksOf, type Manifest } from './manifestOf.ts'
 import { muxAdmission } from './muxUpgrade.ts'
@@ -119,19 +118,13 @@ export type AppSources = {
     /** Every handler's address, to what answers it (`mountHandlers`). 16.2. */
     handlers: Map<string, Mounted>
     /**
-     * Every socket the app mounts, by address, carried over the one mux `App.listen` binds.
-     *
-     * 18.2.
-     */
-    sockets: Map<string, Socket<unknown, unknown>>
-    /**
      * The app's own route, asked where nothing of abide's answers.
      *
      * 37.2 — `bootApp` fills it from `src/server/app.ts`'s `default`.
      */
     own: ((request: Request) => Promise<Response | undefined>) | undefined
     /**
-     * What a page that threw, unrefused, is answered with in place of 16.42's bare 500.
+     * What a page that threw, unrefused, is answered with in place of 16.41's bare 500.
      *
      * 38.4 — `abide dev`'s document naming what broke, for the author looking at the browser.
      * `abide start` has none, and says nothing about itself to the caller.
@@ -246,7 +239,7 @@ export async function answerRequest(
     // one `principal.caller` reads for the rest of the request.
     const caller = callerOrMint()
     // 23.1 — WHERE THIS PAGE IS, for its setup to read, in the request's own instances (11.32).
-    // 16.11 — AT THE ADDRESS IT IS SERVED AT, which is the one the browser's router arrives at: the
+    // 16.10 — AT THE ADDRESS IT IS SERVED AT, which is the one the browser's router arrives at: the
     // request reached here with the mount taken off, and a page reading `route.url()` on both sides
     // would otherwise render one address and hydrate against another.
     const at = new URL(request.url)
@@ -284,6 +277,7 @@ export async function answerRequest(
 const OWN_HANDLERS = new Map([
     PRINCIPAL_MOUNT,
     mountedOwn(HEALTH_ADDRESS, 'health', health),
+    mountedOwn(LOGS_ADDRESS, 'logs', LOGS_HANDLER),
 ])
 
 // THE ADDRESSES ABIDE ANSWERS ITSELF, looked up once rather than asked in turn: each to its value,
@@ -299,7 +293,6 @@ const SURFACES = new Map<
         (_app, request) =>
             answerMcp((within('mcp').app as AnsweringApp).mcp, request),
     ],
-    [LOGS_ADDRESS, (_app, request) => answerLogs(request)],
     [BRIDGE_ADDRESS, (_app, request) => answerBridge(request)],
 ])
 
@@ -313,7 +306,7 @@ export function reachedInRender(
 ): void {
     const page = currentRequestScope()?.page
     if (page === undefined || !page.seed(rpc, args, reached)) return
-    // 16.11 — the address the browser's own call is made at, stamped under the mount by
+    // 16.10 — the address the browser's own call is made at, stamped under the mount by
     // `mountHandlers` — and `undefined` on a handler nothing mounted.
     const { address, method } = rpc as Rpc<unknown, unknown>
     if (address === undefined) return
@@ -435,13 +428,13 @@ export async function appSources(parts: SourceParts): Promise<LoadedSources> {
  */
 export function clientTags(manifest: Manifest, modules: string[]): string {
     if (manifest.entry === undefined) return ''
-    // 28.10 — `DEBUG`, through the document rather than the bundle, where the server has one.
+    // 28.11 — `DEBUG`, through the document rather than the bundle, where the server has one.
     const debug = process.env.DEBUG
     let tags =
         debug === undefined || debug === ''
             ? ''
             : `<meta name="${DEBUG_META}" content="${escapeAttribute(debug)}">`
-    // 16.11 — the mount the browser resolves every address against, the root's `''` included: a
+    // 16.10 — the mount the browser resolves every address against, the root's `''` included: a
     // lookup that finds no tag has walked the whole document to say so.
     tags += `<meta name="${MOUNT_META}" content="${escapeAttribute(MOUNT.current())}">`
     const client = mounted(CLIENT_ADDRESS)
@@ -458,7 +451,7 @@ export function clientTags(manifest: Manifest, modules: string[]): string {
 /**
  * The shell with every root-absolute `href` and `src` it writes put below the mount.
  *
- * 16.11, 36.11 — THE SHELL IS NOT A TEMPLATE, so it has no `url` to spell an address with, and the
+ * 16.10, 36.11 — THE SHELL IS NOT A TEMPLATE, so it has no `url` to spell an address with, and the
  * `/fonts/…` it preloads is a public file answered below the mount. The same shell is every page's
  * at every depth, so a relative address is no spelling either. `//` is another host's.
  */
@@ -550,7 +543,7 @@ async function methodRefused(
 /**
  * A public file's answer, conditional and range-aware off the etag read at boot.
  *
- * 21.14 and 16.36's range, answered before a byte is read. 36.12 and 36.14 — the bytes as
+ * 21.14 and 16.35's range, answered before a byte is read. 36.12 and 36.14 — the bytes as
  * authored, and the content-type off the extension, which is what `Bun.file` already derives
  * rather than a table kept here.
  */

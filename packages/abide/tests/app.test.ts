@@ -71,7 +71,7 @@ middleware(async (next, { request: asked }) => {
     return answer
 })
 middleware(async (next, { request: asked }) => {
-    // 16.17 — a rung that answers in the route's place.
+    // 16.16 — a rung that answers in the route's place.
     if (new URL(asked.url).pathname === '/short') return new Response('short-circuited')
     const answer = await next()
     answer.headers.set('x-onion', 'inner')
@@ -135,10 +135,10 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-// 37.3, 16.15 — THE RUNGS RUN PRE-ROUTING, IN REGISTRATION ORDER, the first outermost. THE REVERT:
+// 37.3, 16.14 — THE RUNGS RUN PRE-ROUTING, IN REGISTRATION ORDER, the first outermost. THE REVERT:
 // fold the rungs in `compose` from the front rather than the back; the header reads `inner`
 // rewritten by nothing, or `outer()` wrapping nothing, rather than `outer(inner)`.
-test('middleware wraps every lane, first registered outermost — 37.3, 16.15', async () => {
+test('middleware wraps every lane, first registered outermost — 37.3, 16.14', async () => {
     const page = await Bun.fetch(`${base}/`)
     expect(page.status).toBe(200)
     expect(page.headers.get('x-onion')).toBe('outer(inner)')
@@ -177,8 +177,8 @@ test('a rung that rewrites the request stays in the scope App.fetch opened — 4
     expect(remembered.headers.getSetCookie().length).toBe(2)
 })
 
-// 16.17 — a rung that never calls `next` is the answer.
-test('a rung short-circuits by returning — 16.17', async () => {
+// 16.16 — a rung that never calls `next` is the answer.
+test('a rung short-circuits by returning — 16.16', async () => {
     const answer = await Bun.fetch(`${base}/short`)
     expect(await answer.text()).toBe('short-circuited')
 })

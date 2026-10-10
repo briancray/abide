@@ -4,9 +4,9 @@ const onHand = document.querySelector('#onhand')
 const loadsOut = document.querySelector('#loads')
 
 // EXPIRY ON THE READ, NOT ON A TIMER. A `setTimeout` per entry
-// would drop the value with nobody asking — and paying for
-// retention on a schedule is exactly what makes a deep ring
-// expensive. So the stamp is checked when somebody looks.
+// would drop the value with nobody asking, which is a timer per
+// value kept for no reader. So the stamp is checked when somebody
+// looks.
 let held = null
 let storedAt = 0
 let inFlight = false

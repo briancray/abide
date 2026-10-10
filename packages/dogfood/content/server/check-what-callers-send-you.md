@@ -75,10 +75,11 @@ that second one has no validation in it at all. So the **option name** is the di
 function in `schema` or `args` refuses by throwing, a function in `transform` refuses by returning
 a `Failed`, and neither has to be told from the other.
 
-**Each gate checks one position.** `schema` checks the value: what a write sets, what a publish
-takes, and what a body produced (4.3, 9.8, 11.47). `args` checks the arguments a keyed value is
-called with (11.41), and it only refuses (11.28). A value whose body takes no parameter has no
-arguments, so it cannot spell `args` at all (11.42), rather than carrying an option that quietly
+**Each gate checks one position.** `schema` checks the value: what a `set` writes, what a body
+produced, and what a stream has accumulated (4.3, 11.46, 9.8). A `patch` mutates the value in place
+and runs no `schema` (5.7), so a write that has to be checked is a `set`. `args` checks the arguments a keyed value is
+called with (11.40), and it only refuses (11.28). A value whose body takes no parameter has no
+arguments, so it cannot spell `args` at all (11.41), rather than carrying an option that quietly
 does nothing.
 
 With no `transform`, `Stored` is `Accepted` and `schema` decides both ends. Nothing declares
@@ -110,9 +111,10 @@ it deliberately.
 
 ## There is no `schemas` on `GET` or `POST`
 
-A shape is a fact about the **value**, the way `ttl` is, so it rides in on the
-`reactive` that was passed and `RpcOptions` is left describing an address — `description`, `middleware`,
-`timeout`, `crossOrigin`, `maxBodySize`.
+A shape is a fact about the **value**, the way `ttl` is, so it builds the value rather than
+the address. Hand `GET` a plain function and `args` sits beside `description` in one object, because
+`GET(fn, options)` **is** `GET(reactive(fn, options))` — the `args` gate builds the value, and
+`description`, `middleware`, `timeout`, `crossOrigin` and `maxBodySize` describe the address.
 
 So one `reactive` handed to both `GET` and `POST` states the shape once between them, and an in-process
 caller gets the check a wire caller gets. A schema declared at the transport
@@ -120,8 +122,8 @@ is one that **skips itself** every other way the handler is reached — read ins
 value, imported by a second server module — so the shape would hold for your untrusted callers
 and not for your own code.
 
-`GET(fn)` is still sugar for `GET(reactive(fn))`. Write the `reactive` out when you have a gate
-to declare, and not otherwise.
+Write the `reactive` out when something besides the handler holds the value — a second handler,
+a page reading it in process — and pass `GET` the options otherwise.
 
 ## `Schema<T>` takes two forms
 
@@ -153,8 +155,8 @@ OpenAPI operation — the wrapper exposes the document where a Standard Schema e
 Schema, so it is published as written.
 
 A document is data, so something has to read it, and `jsonSchema` is what brings the validator.
-A page that never calls it carries none of it (19.14). Hand a gate a bare document and it refuses
-with the sentence naming the wrapper (19.15), rather than accepting a shape it never checked.
+A page that never calls it carries none of it (19.13). Hand a gate a bare document and it refuses
+with the sentence naming the wrapper (19.14), rather than accepting a shape it never checked.
 
 ## `Issues<T>` is keyed by path, not a list
 
@@ -260,7 +262,7 @@ Read on: [Failures](refuse-a-request-and-say-why.md)
 {% example schema-key %}
 
 A keyed value's entry is filed under the arguments **as sent**, and `args` runs after (11.26). A
-normalisation in it reaches the body (11.69) but never changes which entry it is (11.28).
+normalisation in it reaches the body (11.68) but never changes which entry it is (11.28).
 
 The order is forced rather than chosen. A browser has to compute the same key the server does in
 order to find its seeded value, and it cannot run a gate it was never sent. So the key is
@@ -268,47 +270,46 @@ taken before validation. Otherwise every handler with a normalising gate re-issu
 hydration.
 
 In channels keyed by their args the same cost is sharper: two spellings of a channel key are
-**two channels**, and a publisher in one is invisible to a subscriber in the other with nothing
-warning either. Where arguments must collapse, normalise them at the caller or type them so the
+**two channels**, and a message patched into one is invisible to a subscriber of the other with
+nothing warning either. Where arguments must collapse, normalise them at the caller or type them so the
 variation cannot be spelled. The gate is the wrong instrument.
 
-## A channel gates the message with `schema` and the key with `args`
+## A channel gates the array with `schema` and the key with `args`
 
-A channel's message is its input, so that is `schema` — the same option a value you write uses,
-`Accepted` being the message here:
+A channel is an array, so its `schema` checks the whole array on every `set` — the app's own
+included, because validity is not a question about who is asking:
 
 ```ts #shared/channels.ts — excerpt
-export const announcements = reactive<Post>(undefined, {
-    history: 50,
-    schema: messageSchema,
+export const announcements = reactive<Post[]>([], {
+    schema: z.array(messageSchema),
     global: true,
 })
 ```
 
-It runs on **every** publish, the app's own included, because validity is not a question about who
-is asking. The opening `undefined` lands past it (4.16), so the schema only ever sees a `Post`. So the `socket` declares who may connect and whether a frame may
-publish at all, and nothing about what a frame contains.
+What it does not see is a `patch`. An append through `patch` mutates the array in place rather than
+minting a production (5.7), so neither `schema` nor `transform` runs on it. A message that has to be
+checked arrives one of two ways: as a `set` of the whole array, where `schema` or a `transform`
+reads its last element, or checked by the code that patches it in. A caller outside the process is
+always the second kind. Its only way in is a `POST` whose handler patches the channel, so that
+handler's `args` and its body are the check.
 
 A channel keyed by its args also has a **channel key**, and that is the parameter its body
-declares, so it is `args`. The key picks which channel while the message flows:
+declares, so it is `args`. The key picks which channel while the messages flow:
 
 ```ts #shared/channels.ts — excerpt
-export const thread = reactive(
-    (_args: { id: string }): Post | undefined => undefined,
-    {
-        history: 50,
-        args: z.object({ id: z.string().min(1) }),
-        schema: messageSchema,
-        global: true,
-    },
-)
+export const thread = reactive((_args: { id: string }): Post[] => [], {
+    args: z.object({ id: z.string().min(1) }),
+    schema: z.array(messageSchema),
+    global: true,
+})
 ```
 
 Two positions, so two options. Both are derived from the type when not provided, the same way a
 handler's are, and a channel key is checked but never normalised (11.28): two spellings of one key
 are two channels.
 
-Read on: [Sockets](keep-a-room-of-callers-in-sync.md)
+Read on: [Live updates](keep-a-room-of-callers-in-sync.md) ·
+[Channels](../values/let-anything-publish-and-anything-read.md)
 
 ## Next
 

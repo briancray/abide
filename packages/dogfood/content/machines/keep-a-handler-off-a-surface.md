@@ -5,7 +5,6 @@ intent: One record decides which of the four surfaces carry a handler — and no
 covers:
   - `Clients`
   - rpc › `clients`
-  - socket › `clients`
   - Generated surfaces › `clients`
 ---
 
@@ -58,14 +57,6 @@ others withhold a listing, and this one withholds a name.
 It is what an admin-only mutation wants. The compile error is not a security boundary, and the
 rung is still the answer. But a handler no page should call is a handler no page should be able
 to *name*, and finding that out at build beats finding it out in review.
-
-## The same option, on a socket
-
-`clients` on a `socket` decides which surfaces carry that channel, and reads the same way. A channel
-served to browsers and withheld from the tool list is `{ mcp: false }` on the socket, and the
-channel itself is untouched — a transport option never reaches the producer.
-
-Read on: [Sockets](../server/keep-a-room-of-callers-in-sync.md)
 
 ## A `Response` turns two of them off by default
 

@@ -2,7 +2,7 @@
 // code that EMITS the measure to the spec that reads it, and a string typed twice is a
 // `shares()` call that throws "found no measure named" against a layer that ran.
 //
-// `.` RATHER THAN `:`. `abide:hydrate` and `abide:navigate` are WARNING channels (28.8) and these
+// `.` RATHER THAN `:`. `abide:hydrate` and `abide:navigate` are WARNING channels (28.9) and these
 // are performance entries — two namespaces that would otherwise be one grep.
 //
 // ONE NAME PER OP SOMEBODY WAITS ON, never per row. `shares()` sums every measure of a layer

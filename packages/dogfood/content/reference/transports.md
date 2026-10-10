@@ -1,19 +1,18 @@
 ---
 title: Transports
 nav: Transports
-intent: rpc, socket, response helpers and the headers abide sends.
+intent: rpc, the follow, response helpers and the headers abide sends.
 enumerates:
   - rpc
-  - socket
   - Schemas
   - Headers abide generates
   - OpenAPI
   - MCP
 ---
 
-A **transport** gives a producer an address. `rpc` is a `reactive` value reachable over http and
-`socket` is a channel reachable over a web socket — in both cases the thing handed back is the same
-`Reactive` shape the producer had, so nothing about a value says which transport carried it.
+A **transport** gives a producer an address. `rpc` reaches a `reactive` value over http, and a
+`GET` a page reads is followed over one web socket mux. Either way the thing handed back is the
+same `Reactive` shape the producer had, so nothing about a value says how it was carried.
 
 ## `rpc` — `reactive` + transport
 
@@ -25,7 +24,8 @@ A **transport** gives a producer an address. `rpc` is a `reactive` value reachab
 | `Value` | `unknown` | What the addressed `Reactive` holds. |
 | `Produced` | `unknown` | What it yields, per the unit rule. |
 | `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of `middleware`. |
-| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced> \| ((args?: Args) => Value), options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. |
+| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced>, options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. |
+| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: (args?: Args) => Value, options?: RpcOptions<Args, RungFailures> & ReactiveOptions<Value, Value, Failures, Args>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | The plain-function overload, whose options build the value it becomes beside its address. |
 | `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. |
 | `rpc.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to the handler's matching entries. |
 | `rpc.ready` | `(pattern?: Partial<Args>) => boolean` | `ready` narrowed to the handler's matching entries. |
@@ -36,6 +36,7 @@ A **transport** gives a producer an address. `rpc` is a `reactive` value reachab
 | `rpc.method` | `string` | The HTTP method. |
 | `rpc.url` | `(args?: Args) => string` | The address, resolved against the mount. |
 | `rpc.description` | `string \| undefined` | The human description. |
+| `PatchOp` | `{ op: 'add' \| 'replace' \| 'test'; path: string; value: unknown } \| { op: 'remove'; path: string } \| { op: 'move' \| 'copy'; from: string; path: string }` | One JSON Patch operation (RFC 6902), its paths JSON Pointers — what a follower is sent for an `s.patch`. |
 
 ### `RpcOptions`
 
@@ -47,7 +48,7 @@ A **transport** gives a producer an address. `rpc` is a `reactive` value reachab
 
 ### Stream framings
 
-* `jsonl` — `application/jsonl`, one JSON value per line.
+* `jsonl` — `application/jsonl`, one JSON value per line; `application/x-ndjson` where the reader asks for NDJSON (16.44).
 * `sse` — `text/event-stream`, the same transcript with `data: ` per line.
 * `octet-stream` — `application/octet-stream`, chunks of `Uint8Array` or a `Blob`.
 
@@ -65,49 +66,36 @@ A **transport** gives a producer an address. `rpc` is a `reactive` value reachab
 | `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `redirect` may carry. |
 | `refuse` | `(status: number, message?: string) => Failed<'HttpError', undefined>` | An undeclared refusal at a status. |
 
-### The options it shares with the other lane
-
-Spelled per lane, so the same name means what that lane has:
+### The options every handler takes
 
 * `Args` — `Record<string, JsonValue> \| undefined`. The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`.
 * `middleware` — `Middleware<{ request: Request; args: () => Args }, Value \| Failures>[]`. The rungs run per call.
 * `clients` — `Clients`. Which surfaces carry this handler.
 * `crossOrigin` — `boolean \| string[]`. Whether other origins may call it.
-A handler is a `reactive` value, a `Keyed`, or a plain function that becomes one — `GET(fn)` is
-sugar for `GET(reactive(fn))`. `RpcOptions` describes the **address**, so a shape belongs to the
-value and rides in on it instead. Calling an `Rpc` hands back the same `Reactive` shape the handler
+
+A handler is a `reactive` value, a `Keyed`, or a plain function that becomes one —
+`GET(fn, options)` is `GET(reactive(fn, options))`, the value's options and the address's in one
+object. `RpcOptions` describes the **address**; a value handed in has decided its own shape, so it
+takes `RpcOptions` alone. Calling an `Rpc` hands back the same `Reactive` shape the handler
 had, `Produced` included, and a client reading a `GET` is subscribed over the socket mux to what
-that handler produces for those args.
+that handler produces for those args (18.3).
 
-## `socket` — a channel + transport
+### The follow
 
-| Name | Signature | Meaning |
-| --- | --- | --- |
-| `Socket` | `<Produced, Args, Failures = never>(args?: Args) => Reactive<Produced, Produced, Failures, Produced>` | A value carried over a web socket. |
-| `Produced` | `unknown` | What one production carries. |
-| `socket` | `<Produced, Args, Failures = never>(values?: Reactive<Produced, Produced, Failures, Produced> \| Keyed<Produced, Args, Produced, Failures, Produced>, options?: SocketOptions<Produced, Args>) => Socket<Produced, Args, Failures>` | The socket factory, over a `reactive` or a `Keyed`. |
+Every `GET` a page follows is carried over **one** web socket mux at `/__abide/socket`, so a page
+following four values holds one connection (18.1). A subscription from another origin is refused
+unless the handler's `crossOrigin` admits it (18.2), and a `GET` declaring `middleware` runs it once
+as the subscription opens and feeds only a subscription it admitted (18.8).
 
-### `SocketOptions`
+A `GET` answered from a `global` value carries the version of what it answered as its `etag`
+(18.5). A subscriber names that version, and is sent the value only where it has moved (18.6,
+18.9). After that each `s.patch` is sent as what it wrote, as a list of `PatchOp`, rather than as
+the value (18.11). A patch whose writes cannot be sent as data is sent as the value (18.13).
 
-| Name | Signature | Meaning |
-| --- | --- | --- |
-| `SocketEvent` | `{ kind: 'subscribe' \| 'publish'; args: Args; message?: Produced; request: Request }` | What a socket's `middleware` rung is handed. |
-| `clientPublish` | `boolean` | Whether a frame from outside the process may publish. |
-
-### The options it shares with the other lane
-
-Spelled per lane, so the same name means what that lane has:
-
-* `Args` — `Record<string, JsonValue> \| undefined`. The channel's key.
-* `middleware` — `Middleware<SocketEvent, void>[]`. The rungs an upgrade and every frame pass.
-* `crossOrigin` — `boolean \| string[]`. Which origins may upgrade.
-* `clients` — `Clients`. Which surfaces carry this channel.
-`socket(values)` takes a `Reactive` or a `Keyed` and hands back a `Socket`, which is
-`(args?) => Reactive` — the **same value** the `Keyed` hands back for those args, so one socket
-carries every channel in it. `Produced` and `Args` come through unchanged, and every channel is
-carried over one web socket mux, so a page subscribed to four channels holds one
-connection. A value a socket carries is built with `global: true` and is process-wide, so a
-`publish` on it reaches every subscriber — one built without it is refused (18.18).
+The same `GET` answers any http reader the same way. `If-None-Match` naming the standing version is
+answered `304 Not Modified` with no body (18.19). A reader preferring `text/event-stream` is sent
+the follow as server-sent events: each frame's op its `event`, its version the `id`, and the value
+or the JSON Patch its `data`, from the version `Last-Event-ID` names (18.20).
 
 ## Schemas
 
@@ -125,7 +113,7 @@ A `Schema<T>` **returns what it accepts**, so it normalises as well as refuses �
 the function form is `=> T` rather than a predicate. `JsonSchema` is the native form and the
 only one publishable to a tool definition or an OpenAPI operation. A document is data, so it
 becomes a `Schema` through `jsonSchema`, which brings the validator with it — and a page that never
-calls `jsonSchema` never carries one (19.14).
+calls `jsonSchema` never carries one (19.13).
 
 ## Headers abide generates
 
@@ -144,7 +132,7 @@ calls `jsonSchema` never carries one (19.14).
 | `access-control-allow-origin` | an rpc answer to another origin | The origin a handler admitted through `crossOrigin`, and never one it did not. |
 | `allow: GET, HEAD` | a page, a public file or the bundle, asked by another method | The methods the address answers, on the 405. |
 | `vary` | wherever an answer depends on a request header | Names the header the answer varied on. |
-| `abide-version` | a `GET` answered from a `global` value with no `middleware` | The version of the production answered, which the browser names when it follows the handler over the socket, so it is sent a later value only. |
+| `etag` | a `GET` answered from a `global` value | The version of the production answered, which the browser names when it follows the handler over the mux, so it is sent a later value only. |
 | `server-timing` | an rpc answer; `Middleware` and a `timing` span on any answer | The handler's duration, named `Direct`, `Seeded` from the render's run, `Cached` from a held `global` production, or `Started` to a stream's first chunk; the rungs' time; and each `timing` span. |
 
 Every response declares its own content type and carries `x-content-type-options: nosniff`
@@ -181,8 +169,10 @@ is the handler's own, not a transport's approximation of it.
 ### The transport is not where a shape goes
 
 There is no `schemas` option on `GET` or `POST`. A shape is a fact about the value, so it rides
-in on the value, and an in-process caller gets the check a wire caller gets. A schema declared at
-the transport would skip itself every other way the handler is reached.
+in on the value, and an in-process caller gets the check a wire caller gets. Where `GET` is handed
+a plain function, `args` and `schema` sit beside `description` because they build that value — not
+the address. A schema declared at the transport would skip itself every other way the handler is
+reached.
 
 ## Examples
 
@@ -195,23 +185,20 @@ export const getInvoice = GET(
 )
 ```
 
-### A channel with an address
+### A value every caller follows
 
-```ts #server/sockets/chat.ts — excerpt
-import { socket } from 'abide/server'
-import { thread } from '#shared/channels'
+```ts server
+const rooms = reactive((_room: { id: string }): Turn[] => [], {
+    global: true,
+    by: 'id',
+})
 
-export default socket(thread, {
-    clientPublish: true,
-    crossOrigin: ['https://partner.example'],
-    middleware: [
-        async (next, event) => {
-            const publishing = event.kind === 'publish'
-            if (publishing && !(await canPost(event.request, event.args)))
-                throw new Error('not a member')
-            return next(event)
-        },
-    ],
+export const room = GET(rooms)
+
+export const say = POST(({ id, text }: { id: string; text: string }) => {
+    rooms({ id }).patch((turns) => {
+        turns.push({ id: crypto.randomUUID(), text })
+    })
 })
 ```
 
@@ -219,4 +206,4 @@ export default socket(thread, {
 
 * [Reading data](../server/read-data-without-writing-an-api.md) — `GET` in use
 * [Mutations](../server/change-something-on-the-server.md) — the four write methods
-* [Sockets](../server/keep-a-room-of-callers-in-sync.md) — the guide to `socket`
+* [Live updates](../server/keep-a-room-of-callers-in-sync.md) — a `GET` every caller follows, and a `POST` that patches it

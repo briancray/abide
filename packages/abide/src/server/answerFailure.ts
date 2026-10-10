@@ -1,9 +1,9 @@
 // A FAILURE, ANSWERED IN THE REPRESENTATION OF THE LANE IT HAPPENED IN: a page's is the nearest error
-// page (35.2), a handler's is the refusal's four fields as JSON (15.1), and abide's own addresses and
+// page (35.2), a handler's is the refusal as Problem Details (15.21), and abide's own addresses and
 // the listener answer as text (21.3). Which lane a request is in is the caller's to know; what each
 // lane's failure looks like is decided here, once.
 
-import { type Failed, wireFailure } from '#shared/Failed.ts'
+import { type Failed, problemOf } from '#shared/Failed.ts'
 import { RENDER_LOG } from '#shared/log.ts'
 import { coversPrefix, partsOf } from '#shared/matchRoute.ts'
 import type { AppSources } from './answerRequest.ts'
@@ -33,12 +33,14 @@ export function handlerHeaders(): Headers {
 /**
  * The `Response` a refusal is answered with.
  *
- * 15.1 — a refusal crosses the wire as the four fields it is, at its own status.
+ * 15.1 — a refusal crosses the wire as Problem Details (RFC 9457), at its own status.
  */
 export function answered(failure: Failed<string, unknown>): Response {
-    return new Response(JSON.stringify(wireFailure(failure)), {
+    const headers = handlerHeaders()
+    headers.set('content-type', 'application/problem+json')
+    return new Response(JSON.stringify(problemOf(failure)), {
         status: failure.status,
-        headers: handlerHeaders(),
+        headers,
     })
 }
 

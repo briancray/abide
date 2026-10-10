@@ -87,6 +87,43 @@ test('a two-row swap moves one node', async () => {
     expect(document.querySelectorAll('#list li')[2]).toBe(before)
 })
 
+// 32.32 OVER A CHANNEL — AN ARRAY APPENDED TO AND TRIMMED FROM THE FRONT, keyed by the `by` the value
+// declares, makes one row for the message that arrived and keeps every other. Keyed by position, the
+// same patch shifts every row's item and the whole list is made again.
+//
+// THE REVERT: hand back `positional` from `rowKeyOf` whatever the value declares; 100 nodes are
+// made where 2 are due.
+test('a message at the cap makes one row where the value declares by — 32.32', async () => {
+    await mountPage(`<script>
+import { reactive } from 'abide'
+
+const turns: { id: number; text: string }[] = []
+for (let id = 1; id <= 50; id += 1) turns.push({ id, text: \`message \${id}\` })
+let room = reactive(turns, { by: 'id' })
+
+function arrive() {
+    room.patch((list) => {
+        list.push({ id: 51, text: 'message 51' })
+        if (list.length > 50) list.shift()
+    })
+}
+</script>
+
+<ul id="room">{#for turn of room}<li>{turn.text}</li>{/for}</ul>
+<button id="arrive" onclick={arrive}>arrive</button>`)
+    const work = measure(() => {
+        ;(document.querySelector('#arrive') as HTMLElement).click()
+        flushSync()
+    })
+    const rows = [...document.querySelectorAll('#room li')]
+    expect([
+        rows.length,
+        rows[0]?.textContent,
+        rows.at(-1)?.textContent,
+    ]).toEqual([50, 'message 2', 'message 51'])
+    expect(`nodes made: ${work.nodesCreated}`).toBe('nodes made: 2')
+})
+
 // THE CORRECTNESS CASE. A full reverse prices nothing — every row moves either way — and it is
 // the one that catches a reconcile that transposes correctly at the ends and corrupts the middle,
 // which the swap above is blind to.
@@ -1217,90 +1254,30 @@ test('a row that throws while made leaves no row unrecorded — 41.14', () => {
     host.remove()
 })
 
-// A `{#for}` OVER `s.history(n)` IS A READER OF THE VALUE'S PAST, and a publish is what moves it.
-// The window's sync face read nothing, so the block painted the ring it found at mount and never
-// woke again — Send on the `channel-tail` card changed nothing on screen. Each block holds the
-// position it first replayed from (2.5): `history(2)` keeps the two it replayed and gathers every
-// arrival after them, `history(0)` gathers arrivals alone, and both lose what the VALUE's retention
-// drops (2.6, 6.16) — `history: 3` keeps four.
+// A COPY THAT HAS NOT LANDED HAS NOTHING AT HYDRATION. The server painted the owner's list; the copy
+// in the browser is busy until its load settles, so it holds nothing on the client's first run —
+// and an empty list against three painted rows was a mismatch, the block rebuilt and a warning on
+// `abide:hydrate`. The block's read aborts instead (2.12), the painted rows stand (32.23), and the
+// value is reconciled against them when it lands (41.8). The copy here is a value over a load
+// still in flight.
 //
-// THE REVERTS, each run: drop the read in `HistoryWindow`'s sync face and the first publish
-// reports `[2, 3]` and `[]`; drop `heldFrom` and it reports `[3, 4]` and `[]`, the window sliding;
-// drop the retention clamp and the last step reports `[2, 3, 4, 5, 6, 7]`, the ring's untrimmed
-// array rather than the four `history: 3` keeps.
-const HISTORY_ROWS = `<script>
-import { reactive } from 'abide'
-
-const token = reactive<number>(undefined, { history: 3 })
-for (const at of [1, 2, 3]) token.publish(at)
-let sent = 3
-
-function emit() {
-    sent += 1
-    token.publish(sent)
-}
-</script>
-
-<ul id="replayed">{#for at of token.history(2)}<li>{at}</li>{/for}</ul>
-<ul id="live">{#for at of token.history(0)}<li>{at}</li>{/for}</ul>
-<button id="emit" onclick={emit}>emit</button>`
-
-test('a {#for} over s.history(n) follows the value it reads — 2.5, 2.6', async () => {
-    await mountPage(HISTORY_ROWS)
-    const shown = (id: string): string[] =>
-        [...document.querySelectorAll(`#${id} li`)].map(
-            (node) => node.textContent ?? '',
-        )
-    expect([shown('replayed'), shown('live')]).toEqual([['2', '3'], []])
-    const standing = document.querySelector('#replayed li')
-
-    const work = measure(() => {
-        ;(document.querySelector('#emit') as HTMLElement).click()
-        flushSync()
-    })
-    expect([shown('replayed'), shown('live')]).toEqual([['2', '3', '4'], ['4']])
-    // One row inserted per block, and the rows already standing are the same nodes.
-    expect([work.nodesCreated, work.elementsMoved]).toEqual([4, 2])
-    expect(document.querySelector('#replayed li')).toBe(standing)
-
-    for (let press = 0; press < 3; press += 1) {
-        ;(document.querySelector('#emit') as HTMLElement).click()
-        flushSync()
-    }
-    expect([shown('replayed'), shown('live')]).toEqual([
-        ['4', '5', '6', '7'],
-        ['4', '5', '6', '7'],
-    ])
-})
-
-// A SUBSCRIBER'S COPY HAS NOTHING AT HYDRATION. The server painted the owner's ring; the copy in the
-// browser is busy until the mux's first frame (9.29), so its window is empty on the client's first
-// run — and an empty list against three painted rows was a mismatch, the block rebuilt and a
-// warning on `abide:hydrate`. The block's read aborts instead (2.13), the painted rows stand
-// (32.23), and the replay is reconciled against them when it lands (41.8). The copy here is what
-// `socketWire` builds — a value over a load the first frame settles — and the replay lands in one
-// turn, which is what a block needs to read what the server painted.
-//
-// THE REVERT, run: drop the read in `HistoryWindow`'s sync face. This reports one `abide:hydrate`
-// warning ("holds 3 rows where this {#for} computes 0") and an empty list that never fills.
+// THE REVERT, run: answer `undefined` for a value that has not landed in `readIndirect` rather than
+// throwing `NotLanded`. This reports one `abide:hydrate` warning ("holds 3 rows where this {#for}
+// computes 0") and the painted rows replaced rather than adopted.
 test('a {#for} over a copy that has not landed adopts the rows the server painted — 41.8', async () => {
     const turns = ['ask', 'answer', 'follow-up']
-    const side = globalThis as { historySubject?: unknown }
-    const owner = reactive<string>(undefined, { history: 100 })
-    for (const turn of turns) owner.publish(turn)
-    side.historySubject = owner
+    const side = globalThis as { transcriptSubject?: unknown }
+    side.transcriptSubject = reactive<string[]>([...turns])
     const { mount } = await renderPage(`<script>
-const transcript = (globalThis as { historySubject?: any }).historySubject
+const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
 </script>
 
-<ul id="transcript">{#for turn of transcript.history(50)}<li>{turn}</li>{/for}</ul>`)
+<ul id="transcript">{#for turn of transcript()}<li>{turn}</li>{/for}</ul>`)
     const painted = document.querySelector('#transcript li')
 
-    const landed = Promise.withResolvers<unknown>()
-    const copy = reactive<string>(landed.promise as Promise<string>, {
-        history: 100,
-    })
-    side.historySubject = copy
+    const landed = Promise.withResolvers<string[]>()
+    const copy = reactive<string[]>(landed.promise)
+    side.transcriptSubject = copy
     const warned: string[] = []
     const warn = console.warn
     console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
@@ -1310,15 +1287,14 @@ const transcript = (globalThis as { historySubject?: any }).historySubject
         // Still busy, so the painted rows are what stands — and what is adopted once it lands.
         await Bun.sleep(0)
         flushSync()
-        // The replay in one turn, every production published: a publish lands where a
-        // load is in flight, and the load settled after it is superseded.
-        for (const turn of turns) copy.publish(turn)
-        landed.resolve(turns[0])
+        // Set where the load is in flight, and the load settled after it superseded.
+        copy.set([...turns])
+        landed.resolve([...turns])
         await Bun.sleep(0)
         flushSync()
     } finally {
         console.warn = warn
-        side.historySubject = undefined
+        side.transcriptSubject = undefined
     }
     expect({
         rows: [...document.querySelectorAll('#transcript li')].map(
@@ -1329,31 +1305,33 @@ const transcript = (globalThis as { historySubject?: any }).historySubject
     }).toEqual({ rows: turns, adopted: true, warnings: [] })
 })
 
-// THE SAME ADOPTION OVER THE WIRE, end to end: the owner behind the mux in this process, the copy
-// `socketWire` builds in the browser, and each frame arriving in a task of its own as a web socket's
-// do. Both halves are what put the ring in the copy in ONE turn — the mux sends the replay as one
-// frame, and the copy publishes each entry rather than settling its load with the first.
+// THE SAME ADOPTION OVER THE WIRE, end to end: a `GET` over a `global` value behind the mux in this
+// process, its copy the one `wire` builds in the browser, loaded over a fetch held past the mount
+// and then followed (18.3), each mux frame arriving in a task of its own as a web socket's do. The
+// rows the server painted are adopted when the answer lands (41.8), and a patch the mux then carries
+// is reconciled into them rather than rebuilding the block (41.10).
 //
-// THE REVERTS, each run: send the ring a `prod` frame per entry in `subscribe` and the copy lands
-// the first turn alone — rows `['ask']` and one `abide:hydrate` warning ("holds 3 rows where this
-// {#for} computes 1"); resolve the load before publishing in `deliver` and the first entry is
-// superseded by the publish after it — rows `['answer', 'follow-up']` and the same warning.
-test('a {#for} over a socket copy adopts the rows the server painted, over the mux — 41.8, 41.10', async () => {
+// THE REVERT, run: the one above's — `undefined` for a value not landed rather than `NotLanded` —
+// and the same warning, the painted rows replaced (adopted: false, 1 warning).
+test('a {#for} over a followed GET adopts the rows the server painted, over the mux — 41.8, 41.10', async () => {
     const { Mux } = await import('#server/answerSocket.ts')
-    const { socket } = await import('#shared/socket.ts')
-    const { MUXES, socketWire } = await import('#ui/socketWire.ts')
-    const address = '/__abide/socket/transcript'
+    const { GET } = await import('#shared/rpc.ts')
+    const { MUXES } = await import('#ui/socketWire.ts')
+    const { wire } = await import('#ui/wire.ts')
+    // AN ORIGIN OF THIS CASE'S OWN, for `followWire.test.ts`'s reason: the browser's follows are
+    // process-wide, keyed by address.
+    const address = 'http://list-follow.test/__abide/rpc/transcript'
     const turns = ['ask', 'answer', 'follow-up']
-    const owner = reactive<string>(undefined, { history: 100, global: true })
-    for (const turn of turns) owner.publish(turn)
+    const owner = reactive<string[]>([...turns], { global: true })
+    const handler = GET(owner as never) as unknown as { address: string }
+    handler.address = '/__abide/rpc/transcript'
     const mux = new Mux(
-        new Map([[address, socket(owner as never)]]) as never,
-        new Map(),
+        new Map([[handler.address, { handler, ui: true } as never]]),
         undefined,
     )
     // A web socket whose far end is the mux above: every frame either way is its own task. A frame
     // down is delivered OUTSIDE the connection's request scope, as a browser's is — a timer set
-    // inside it carries that scope, and the copy's publishes land in the scope's own copy instead.
+    // inside it carries that scope, and the copy's writes land in the scope's own copy instead.
     const outside = AsyncLocalStorage.snapshot()
     class LoopbackSocket {
         static OPEN = 1
@@ -1364,7 +1342,7 @@ test('a {#for} over a socket copy adopts the rows the server painted, over the m
         onerror: (() => void) | null = null
         down: string[] = []
         connection = mux.connect(
-            new Request('http://app.test/__abide/socket'),
+            new Request('http://list-follow.test/__abide/socket'),
             {
                 send: (text: string) => {
                     this.down.push(text)
@@ -1394,41 +1372,61 @@ test('a {#for} over a socket copy adopts the rows the server painted, over the m
             setTimeout(() => void this.connection.message(text), 0)
         }
     }
-    const side = globalThis as { historySubject?: unknown; WebSocket: unknown }
-    side.historySubject = owner
+    const side = globalThis as {
+        transcriptSubject?: unknown
+        WebSocket: unknown
+        fetch: unknown
+    }
+    side.transcriptSubject = owner
     const { mount } = await renderPage(`<script>
-const transcript = (globalThis as { historySubject?: any }).historySubject
+const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
 </script>
 
-<ul id="transcript">{#for turn of transcript.history(50)}<li>{turn}</li>{/for}</ul>`)
+<ul id="transcript">{#for turn of transcript()}<li>{turn}</li>{/for}</ul>`)
     const painted = document.querySelector('#transcript li')
 
     const realSocket = side.WebSocket
+    const realFetch = side.fetch
     side.WebSocket = LoopbackSocket
-    // THE MUX IS THIS CASE'S, whatever ran first: a page's muxes stand for its life, so one an
-    // earlier file in this process opened — over a stub socket that never opens — would carry the
-    // copy instead. THE REVERT: drop the clear; after `wire.test.ts` in one process this reports
-    // `landed: false`.
+    // THE ANSWER IS HELD PAST THE MOUNT, so the copy has not landed when the block first runs. It
+    // names no version, so the follow is sent the value standing.
+    const answered = Promise.withResolvers<void>()
+    side.fetch = async () => {
+        await answered.promise
+        return new Response(JSON.stringify(turns), {
+            headers: { 'content-type': 'application/json' },
+        })
+    }
+    // THE MUX IS THIS CASE'S, whatever ran first: a page's muxes stand for its life.
     MUXES.clear()
     const warned: string[] = []
     const warn = console.warn
     console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
-    const copy = (socketWire(address) as () => { busy(): boolean })()
-    try {
-        side.historySubject = copy
-        mount()
-        flushSync()
-        for (let task = 0; task < 20 && copy.busy(); task += 1) {
+    const copy = (wire('GET', address) as () => { busy(): boolean })()
+    const settle = async (): Promise<void> => {
+        for (let task = 0; task < 20; task += 1) {
             await Bun.sleep(1)
             flushSync()
         }
-        await Bun.sleep(1)
+    }
+    try {
+        side.transcriptSubject = copy
+        mount()
         flushSync()
+        answered.resolve()
+        await settle()
+        owner.patch((list) => {
+            list.push('more')
+        })
+        flushSync()
+        await settle()
     } finally {
         console.warn = warn
         side.WebSocket = realSocket
-        side.historySubject = undefined
+        side.fetch = realFetch
+        side.transcriptSubject = undefined
         MUXES.clear()
+        mux.closeAll(1000, 'the case is over')
     }
     expect({
         rows: [...document.querySelectorAll('#transcript li')].map(
@@ -1437,70 +1435,10 @@ const transcript = (globalThis as { historySubject?: any }).historySubject
         adopted: document.querySelector('#transcript li') === painted,
         warnings: warned.filter((line) => line.includes('abide:hydrate')),
         landed: !copy.busy(),
-    }).toEqual({ rows: turns, adopted: true, warnings: [], landed: true })
-})
-
-// A `{#for}` OVER A STREAM'S `s.history(n)` reads the runs that CLOSED (6.17), and a close is not a
-// chunk: the block woke on each chunk through its read of the value and then never for the close
-// that entered the run into the past, so the run it was waiting for never painted.
-//
-// THE REVERT, run: drop the subscription to the past in `HistoryWindow`'s sync face. This reports
-// `[]` after the first close rather than `['ab']`, and `['ab']` after the second rather than
-// `['ab', 'c']`.
-test('a {#for} over a stream’s s.history(n) paints each run as it closes — 6.17, 2.5', async () => {
-    const side = globalThis as { historySubject?: unknown }
-    side.historySubject = reactive<string[]>(undefined, { history: 3 })
-    const { mount } = await renderPage(`<script>
-const runs = (globalThis as { historySubject?: any }).historySubject
-</script>
-
-<ul id="runs">{#for run of runs.history(3)}<li>{run.join('')}</li>{/for}</ul>`)
-    // Each run is a queue the test fills, and closes by pushing `null`.
-    let queue: (string | null)[] = []
-    let wake = (): void => {}
-    const feed = reactive(
-        async function* () {
-            queue = []
-            for (;;) {
-                while (queue.length === 0)
-                    await new Promise<void>((resolve) => {
-                        wake = resolve
-                    })
-                const chunk = queue.shift() as string | null
-                if (chunk === null) return
-                yield chunk
-            }
-        },
-        { history: 3 },
-    )
-    const send = async (...chunks: (string | null)[]): Promise<void> => {
-        for (const chunk of chunks) {
-            queue.push(chunk)
-            wake()
-            for (let turn = 0; turn < 5; turn += 1) await Bun.sleep(0)
-        }
-        flushSync()
-    }
-    const shown = (): string[] =>
-        [...document.querySelectorAll('#runs li')].map(
-            (node) => node.textContent ?? '',
-        )
-    side.historySubject = feed
-    try {
-        mount()
-        flushSync()
-        await send('a', 'b')
-        const midRun = shown()
-        await send(null)
-        const firstClosed = shown()
-        feed.refresh()
-        await send('c', null)
-        expect({ midRun, firstClosed, secondClosed: shown() }).toEqual({
-            midRun: [],
-            firstClosed: ['ab'],
-            secondClosed: ['ab', 'c'],
-        })
-    } finally {
-        side.historySubject = undefined
-    }
+    }).toEqual({
+        rows: [...turns, 'more'],
+        adopted: true,
+        warnings: [],
+        landed: true,
+    })
 })

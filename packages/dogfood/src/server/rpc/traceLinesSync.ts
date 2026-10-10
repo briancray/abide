@@ -6,7 +6,7 @@ export const syncContact = POST(
         log(`contact ${id} loaded`)
         await traceLinesBilling.notify(id)
         const lines: string[] = []
-        for (const record of log.records.history(50))
+        for (const record of log.records().slice(-50))
             if (record.trace === trace()) lines.push(record.message)
         return { trace: trace(), lines }
     },

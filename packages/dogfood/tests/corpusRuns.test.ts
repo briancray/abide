@@ -118,7 +118,7 @@ test('every example renders on the server and mounts on the client', async () =>
     const serverCookies = COOKIES.current
     const fetched = globalThis.fetch
     // NO APP ANSWERS A `raw` CALL IN PROCESS, whatever ran first: an app booted earlier in this
-    // process is the one a call outside every request falls to (16.43), stopped or not, and the
+    // process is the one a call outside every request falls to (16.42), stopped or not, and the
     // `null` the stub below would have answered is that app's refusal instead. THE REVERT: drop the
     // pin; after `socketScope.test.ts` in one process `json-null` reports a `SyntaxError`.
     const serverRaw = RPC_SERVER.raw
@@ -126,7 +126,7 @@ test('every example renders on the server and mounts on the client', async () =>
     try {
         const dir = temporaryModule(await appTree(session))
         Bun.plugin(componentImports(dir, dir))
-        // 16.10 — A HANDLER HAS ITS ADDRESS FROM BOOT, so a card reading `rpc.url` or `rpc.raw` has
+        // 16.9 — A HANDLER HAS ITS ADDRESS FROM BOOT, so a card reading `rpc.url` or `rpc.raw` has
         // one before anything is called; the copy is given the address `mountHandlers` would give.
         for (const path of new Bun.Glob('src/server/rpc/**/*.ts').scanSync({
             cwd: APP,

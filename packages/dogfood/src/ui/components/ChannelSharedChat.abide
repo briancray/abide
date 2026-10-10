@@ -12,7 +12,9 @@ const draft = reactive('How do I rotate an API key?')
     <label>message
         <input bind:value={draft}>
     </label>
-    <button onclick={() => onboarding.publish({ speaker: 'you', text: draft })}>
+    <button onclick={() => onboarding.patch((turns) => {
+        turns.push({ id: turns.length + 1, speaker: 'you', text: draft })
+    })}>
         Send
     </button>
 </div>

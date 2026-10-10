@@ -72,7 +72,7 @@ reached it, and there is no moment at which one request's is visible to another'
 | `principal.error` | `Reactive<Failed<string, unknown> \| undefined>` | The app's resolver having failed. |
 | `principal.resolved` | `Reactive<Principal>` | What `onPrincipal` returned, merged over the baseline. |
 | `principal.caller` | `Reactive<string>` | Which browser, as against who they are. |
-| `principal.set` | `(claims: unknown) => Promise<void>` | Authenticates this caller. |
+| `principal.set` | `(claims: Record<string, unknown>) => Promise<void>` | Authenticates this caller. |
 | `principal.clear` | `() => void` | Signs this caller out. |
 | `Principal` | `interface Principal { [claim: string]: unknown; authenticated: boolean; expiresAt?: string; error?: Failed<string, unknown> }` | The wire document. |
 | `authenticated` | `boolean` | Whether this caller presented a seal the server accepted. |

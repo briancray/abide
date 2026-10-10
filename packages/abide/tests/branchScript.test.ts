@@ -236,7 +236,7 @@ const inner = reactive('s')
 })
 
 // AN ARM'S SCRIPT IS STATEMENTS, NOT A VALUE. A template position is parenthesized where a comma or
-// a trailing comment would change what the emit splices it into (19.12); a script spliced the same
+// a trailing comment would change what the emit splices it into (19.11); a script spliced the same
 // way is `(const a = 1, b = 2)`, which is not a program.
 //
 // THE REVERT: lower a setup through `Lowering.expression` rather than `Lowering.setup`. Both

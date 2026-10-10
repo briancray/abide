@@ -3,7 +3,7 @@ title: Let another origin call you
 nav: CORS
 intent: Open one handler to a named origin without opening the app.
 covers:
-  - rpc › `crossOrigin`
+  - `crossOrigin`
   - `access-control-allow-origin`
   - `vary`
   - `referrer-policy: strict-origin-when-cross-origin`
@@ -91,14 +91,14 @@ page.
 
 Read on: [CSP](../app/lock-down-what-the-page-may-load.md)
 
-## A socket's `crossOrigin` gates the upgrade
+## A `GET`'s `crossOrigin` gates its followers too
 
-`crossOrigin` on a `socket` is the same option deciding who may **upgrade**, closed unless
-declared. Undeclared, the check compares against `APP_URL`'s origin — and where `APP_URL` is
+A page following a `GET` subscribes over the socket mux, and the same option decides whether a
+subscription from another origin is taken, closed unless declared (18.2). Undeclared, the check compares against `APP_URL`'s origin — and where `APP_URL` is
 unset it falls back to the request's own, which is the weaker answer: a caller controls its own
 `Host`, and behind TLS termination that origin is the proxy's.
 
-Read on: [Sockets](keep-a-room-of-callers-in-sync.md) · [Config](../app/configure-the-app.md)
+Read on: [Live updates](keep-a-room-of-callers-in-sync.md) · [Config](../app/configure-the-app.md)
 
 ## Next
 

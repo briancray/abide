@@ -172,7 +172,7 @@ export class Router {
     /**
      * The route and params an address matches, or `undefined` for one this app has no route for.
      *
-     * 16.11 — AN ADDRESS OUTSIDE THE MOUNT IS NO ROUTE OF THIS APP'S, and one inside it is matched
+     * 16.10 — AN ADDRESS OUTSIDE THE MOUNT IS NO ROUTE OF THIS APP'S, and one inside it is matched
      * as the address below the app's root. Every way in — a click, an intent, back and forward, a
      * hydration — is matched here.
      */

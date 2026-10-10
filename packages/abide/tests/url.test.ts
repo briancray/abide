@@ -33,7 +33,7 @@ test('the query argument is last — 30.6', () => {
     expect(url('/', undefined, new URLSearchParams({ page: '2' }))).toBe(
         '/?page=2',
     )
-    // `null` is text here as it is in an rpc's args, where 19.8 reads it back.
+    // `null` is text here as it is in an rpc's args, where 19.7 reads it back.
     expect(url('/search', {}, { q: null })).toBe('/search?q=null')
     expect(url()).toBe('/')
 })
@@ -59,11 +59,11 @@ test('a required segment makes the params argument required — 30.2', () => {
     ])
 })
 
-// 16.11 — THE MOUNT IS READ ONCE, not per address. A document abide did not render names no mount,
+// 16.10 — THE MOUNT IS READ ONCE, not per address. A document abide did not render names no mount,
 // and a lookup that misses walks the whole document, so `url()` per `{#for}` row was quadratic in
 // the page. THE REVERT: drop the memo in `documentMount`; the selector runs 100 times rather than
 // at most 1.
-test('url reads the document mount at most once — 16.11', () => {
+test('url reads the document mount at most once — 16.10', () => {
     const querySelector = document.querySelector.bind(document)
     let lookups = 0
     document.querySelector = ((selector: string) => {
@@ -78,9 +78,9 @@ test('url reads the document mount at most once — 16.11', () => {
     expect(lookups).toBeLessThanOrEqual(1)
 })
 
-// 16.11 — THE DOCUMENT NAMES THE MOUNT AT THE ROOT TOO, so the browser's one lookup is a hit rather
+// 16.10 — THE DOCUMENT NAMES THE MOUNT AT THE ROOT TOO, so the browser's one lookup is a hit rather
 // than a walk of the whole page. THE REVERT: write the tag only where the mount is not `''`.
-test('the document names the root mount — 16.11', () => {
+test('the document names the root mount — 16.10', () => {
     const tags = clientTags(
         { entry: 'entry.js', stylesheet: undefined, chunks: {} } as never,
         [],

@@ -40,24 +40,26 @@ afterEach(() => {
         else process.env[name] = value
 })
 
-// 28.1 — EVERY LINE IS PUBLISHED TO `log.records`, the gated ones included once they pass. THE
-// REVERT: drop the `publish` from `write`; the records hold 0 of the 2 lines the console got.
-test('every written line is a production of log.records — 28.1', () => {
-    const before = [...log.records.history()].length
+// 28.1 — EVERY LINE IS APPENDED TO `log.records`, an array, the gated ones included once they pass.
+// THE REVERT: drop the `patch` from `write`; the records end on neither of the 2 lines the console got.
+test('every written line is appended to the log.records array — 28.1', () => {
     log('booted')
     log.warning('disk', 91)
-    const after = [...log.records.history()]
-    expect(after.length - before).toBe(2)
-    const last = after.at(-1)
+    const held = log.records.peek() ?? []
+    expect(Array.isArray(held)).toBe(true)
+    expect(held.slice(-2).map((record) => record.message)).toEqual([
+        'booted',
+        'disk 91',
+    ])
+    const last = held.at(-1)
     expect(last?.level).toBe('warning')
     expect(last?.namespace).toBe('ledger')
-    expect(last?.message).toBe('disk 91')
     expect(written.length).toBe(2)
 })
 
-// 28.2, 28.3 — THE BARE CALL, WARNINGS AND ERRORS ALWAYS WRITE; `info` and `debug` wait on `DEBUG`.
+// 28.3, 28.4 — THE BARE CALL, WARNINGS AND ERRORS ALWAYS WRITE; `info` and `debug` wait on `DEBUG`.
 // THE REVERT: gate the bare call on `isEnabled`; with `DEBUG` unset, 1 line is written of the 3.
-test('log, log.warning and log.error always write; info and debug are gated — 28.2, 28.3', () => {
+test('log, log.warning and log.error always write; info and debug are gated — 28.3, 28.4', () => {
     log('a')
     log.warning('b')
     log.error('c')
@@ -70,9 +72,9 @@ test('log, log.warning and log.error always write; info and debug are gated — 
     expect(written.length).toBe(5)
 })
 
-// 28.4, 28.5 — `named` PREFIXES THE APP NAME and a second `named` appends a segment, carrying the
+// 28.5, 28.6 — `named` PREFIXES THE APP NAME and a second `named` appends a segment, carrying the
 // same levels and `enabled`.
-test('log.named prefixes the app name, and again appends — 28.4, 28.5', () => {
+test('log.named prefixes the app name, and again appends — 28.5, 28.6', () => {
     const db = log.named('db')
     const pool = db.named('pool')
     pool.warning('exhausted')
@@ -82,21 +84,21 @@ test('log.named prefixes the app name, and again appends — 28.4, 28.5', () => 
     expect(typeof pool.debug).toBe('function')
 })
 
-// 28.12 — THE PREFIX IS READ PER LINE. A module names its logger at load, which is before the server's
+// 28.13 — THE PREFIX IS READ PER LINE. A module names its logger at load, which is before the server's
 // `config` has derived the app's name, so a prefix taken then is the `app` fallback forever after.
 // THE REVERT: take `namespaceOf()` once in `logger.named`; the line reads `ledger:db` where
 // `books:db` is due.
-test('a logger named before the app name changes writes under the new name — 28.12', () => {
+test('a logger named before the app name changes writes under the new name — 28.13', () => {
     const early = log.named('db')
     process.env.APP_NAME = 'books'
     early.warning('late')
     expect(JSON.parse(written.at(-1) as string).namespace).toBe('books:db')
 })
 
-// 28.6, 28.9 — `DEBUG` IN debug-npm GRAMMAR: a wildcard, a list, and an exclusion that beats an
+// 28.7, 28.10 — `DEBUG` IN debug-npm GRAMMAR: a wildcard, a list, and an exclusion that beats an
 // inclusion. THE REVERT: test the inclusions before the exclusions in `isEnabled`; `ledger:db` then
 // answers open under `ledger:*,-ledger:db`.
-test('log.enabled answers DEBUG in debug-npm grammar — 28.6, 28.9', () => {
+test('log.enabled answers DEBUG in debug-npm grammar — 28.7, 28.10', () => {
     process.env.DEBUG = 'ledger:*,-ledger:db'
     expect(log.named('http').enabled()).toBe(true)
     expect(log.named('db').enabled()).toBe(false)
@@ -117,10 +119,10 @@ test('tsv writes one line per record — 36.8', () => {
     expect(line.split('\t').slice(1, 3)).toEqual(['info', 'ledger'])
 })
 
-// 28.10, 28.11 — `DEBUG` REACHES A BROWSER THROUGH THE DOCUMENT, and the browser's own stored setting
+// 28.11, 28.12 — `DEBUG` REACHES A BROWSER THROUGH THE DOCUMENT, and the browser's own stored setting
 // answers only where the document carries none. THE REVERT: read `localStorage` first in
 // `documentDebug`; the stored `other` overrides what the server said.
-test("a browser's DEBUG is the document's, then its own stored one — 28.10, 28.11", () => {
+test("a browser's DEBUG is the document's, then its own stored one — 28.11, 28.12", () => {
     process.env.DEBUG = 'ledger:*'
     const tags = clientTags(
         { entry: 'entry.js', stylesheet: undefined, chunks: {} } as never,
@@ -137,11 +139,11 @@ test("a browser's DEBUG is the document's, then its own stored one — 28.10, 28
     localStorage.removeItem('debug')
 })
 
-// 28.10 — A BROWSER READS THE DOCUMENT'S `DEBUG` ONCE, not per gated line. A document with no
+// 28.11 — A BROWSER READS THE DOCUMENT'S `DEBUG` ONCE, not per gated line. A document with no
 // `DEBUG` has no `<meta>`, so every ask walked the whole document to miss: 10 µs a `log.debug` in
 // chromium beside a 1000-row list. THE REVERT: drop the memo in `environment`; the selector runs
 // 100 times rather than at most 1.
-test('a browser reads the document DEBUG at most once — 28.10', () => {
+test('a browser reads the document DEBUG at most once — 28.11', () => {
     const querySelector = document.querySelector.bind(document)
     let lookups = 0
     document.querySelector = ((selector: string) => {

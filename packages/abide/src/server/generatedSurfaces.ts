@@ -9,16 +9,17 @@
 // and the MCP protocol is `McpSurface`'s alone, whoever frames it: this endpoint over http, or a
 // provider that speaks MCP itself (`assistant`'s `forwardOf`).
 //
-// WHAT ONLY THE TYPE SAYS IS THE BUILD'S, arriving here on the mount: 16.38's default of `mcp` and
+// WHAT ONLY THE TYPE SAYS IS THE BUILD'S, arriving here on the mount: 16.37's default of `mcp` and
 // `cli` to false for a handler returning a `Response`, 20.4's `ui: false`, and 20.11's type-derived
-// schema (19.10) as `argsDocument`.
+// schema (19.9) as `argsDocument`.
 
 import { log, namedLogger } from '#shared/log.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
+import { refuse } from '#shared/refuse.ts'
+import { GET } from '#shared/rpc.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import { answered } from './answerFailure.ts'
 import type { Mounted } from './answerRpc.ts'
-import { framed } from './answerValue.ts'
 import type { ToolDefinition } from './assistant.ts'
 import { appIdentity, config } from './config.ts'
 import { crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
@@ -58,6 +59,23 @@ function listed(
     return found
 }
 
+/**
+ * A refusal's shape in the OpenAPI document: RFC 9457's members, and `data` as abide's extension.
+ *
+ * 15.1 — `type` is the refusal's name, or `about:blank` for an undeclared one.
+ */
+const PROBLEM_SCHEMA = {
+    type: 'object',
+    required: ['type', 'title', 'status', 'detail'],
+    properties: {
+        type: { type: 'string' },
+        title: { type: 'string' },
+        status: { type: 'integer' },
+        detail: { type: 'string' },
+        data: {},
+    },
+}
+
 /** The OpenAPI 3.1 document, each handler's `JsonSchema` published as it stands. 20.6. */
 function openApiOf(handlers: Map<string, Mounted>): unknown {
     const paths: Record<string, Record<string, unknown>> = {}
@@ -71,7 +89,10 @@ function openApiOf(handlers: Map<string, Mounted>): unknown {
                 },
                 '204': { description: 'Nothing to say.' },
                 default: {
-                    description: 'A refusal: name, status, message and data.',
+                    description: 'A refusal, as Problem Details (RFC 9457).',
+                    content: {
+                        'application/problem+json': { schema: PROBLEM_SCHEMA },
+                    },
                 },
             },
         }
@@ -347,7 +368,7 @@ export async function answerMcp(
     if (!surface.opened) return undefined
     if (request.method !== 'POST')
         return new Response(null, { status: 405, headers: { allow: 'POST' } })
-    // 20.12, 16.14 — A POST FROM ANOTHER ORIGIN IS REFUSED, as a mutation's is: a tool call runs a handler
+    // 20.12, 16.13 — A POST FROM ANOTHER ORIGIN IS REFUSED, as a mutation's is: a tool call runs a handler
     // with the caller's own cookies, and a `text/plain` body is sent cross-origin with no preflight.
     const crossing = crossingOrigin(request.headers.get('origin'), request.url)
     if (crossing !== null) return answered(crossingRefusal(crossing, 'POST'))
@@ -396,19 +417,14 @@ function callOf(
 }
 
 /**
- * The `log.records` event stream, or `undefined` where `ABIDE_LOGS` is closed.
+ * The `GET` over `log.records`, mounted at `/__abide/logs`: closed until `ABIDE_LOGS` opens it.
  *
- * 36.7, 28.1 — THE `GET` OVER `log.records`: the ring, and then every line as it is written,
- * framed as server-sent events — which is what `abide logs` subscribes to.
+ * 36.7, 28.2 — A `GET` LIKE ANY OTHER, so it is followed as any `global` value is (18.20): the lines
+ * held, then each line written as an `add` at `/-`. The rung is the gate, and makes it a guarded
+ * `GET` — run once as a follow opens (18.8), and answering 404 while `ABIDE_LOGS` is closed.
  */
-export function answerLogs(request: Request): Response | undefined {
-    if (!opened('ABIDE_LOGS')) return undefined
-    const cursor = log.records
-        .history(Number.MAX_SAFE_INTEGER)
-        [Symbol.asyncIterator]()
-    request.signal.addEventListener(
-        'abort',
-        () => void cursor.return?.(undefined),
-    )
-    return framed(cursor, 'sse', new Headers(), 200)
-}
+export const LOGS_HANDLER = GET(log.records, {
+    middleware: [
+        (next, ctx) => (opened('ABIDE_LOGS') ? next(ctx) : refuse(404)),
+    ],
+})

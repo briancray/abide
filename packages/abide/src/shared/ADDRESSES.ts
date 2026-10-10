@@ -55,10 +55,9 @@ export const DEV_ADDRESS = `${ABIDE_ADDRESS}/dev`
 export const RPC_ADDRESS = `${ABIDE_ADDRESS}/rpc`
 
 /**
- * Where the one web socket every `socket` is carried over is served, below the app's root.
+ * Where the one web socket a page follows its `GET`s over is served, below the app's root.
  *
- * 18.2 — the server answers the upgrade there, the compiler files each socket under it, and a
- * browser's `socketWire` dials it.
+ * 18.1 — the server answers the upgrade there, and a browser's mux dials it.
  */
 export const SOCKET_ADDRESS = `${ABIDE_ADDRESS}/socket`
 

@@ -17,6 +17,7 @@ import {
     followLogs,
     remoteHeaders,
     remoteUrl,
+    watch as watchAddress,
 } from './remote.ts'
 import { inScope, LISTENING } from './requestScope.ts'
 import { shell } from './shell.ts'
@@ -25,10 +26,10 @@ import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 /** What a command is handed: the words after the flags, the command's own first, and the flags. */
 export type Given = ReturnType<typeof parsed>
 
-export type Command = (given: Given) => Promise<number | undefined>
+type Command = (given: Given) => Promise<number | undefined>
 
 /** The commands that need the app's source and the compiler, which only `abide` holds. */
-export type SourceCommands = Record<
+type SourceCommands = Record<
     'scaffold' | 'dev' | 'build' | 'check' | 'compile' | 'lsp',
     Command
 >
@@ -136,6 +137,12 @@ function commandsOf(host: Host): Row[] {
             'logs',
             'a live subscription to log.records',
             ({ values }) => followLogs(appUrl(values.url)),
+            false,
+        ],
+        [
+            'watch <address> [args]',
+            "a live subscription to one of the app's followed GETs",
+            (given) => watch(host, given),
             false,
         ],
         fromSource(
@@ -324,6 +331,24 @@ async function run(
 }
 
 /** `call`: one call to one handler on a running app. 38.8. */
+/** `watch <address> [args]`: a `GET`'s value and each patch, as its event stream sends them (38.70). */
+async function watch(host: Host, given: Given): Promise<number> {
+    const {
+        positionals: [, address, ...args],
+        values: { url },
+    } = given
+    if (address === undefined) {
+        console.error(
+            `${host.name} watch: name the GET — ${host.name} watch chat/room room=lobby`,
+        )
+        return 1
+    }
+    return watchAddress(appUrl(url), address, args).catch((thrown: Error) => {
+        console.error(`${host.name} watch: ${thrown.message}`)
+        return 1
+    })
+}
+
 async function call(host: Host, given: Given): Promise<number> {
     const {
         positionals: [, address, ...args],

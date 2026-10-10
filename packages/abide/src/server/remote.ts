@@ -4,7 +4,9 @@
 // sent (36.6), and neither variable is read anywhere else.
 
 import { LOGS_ADDRESS, RPC_ADDRESS } from '#shared/ADDRESSES.ts'
-import { framedStream, framingPrefix } from '#shared/framing.ts'
+import { applyPatch } from '#shared/applyPatch.ts'
+import type { LogRecord } from '#shared/log.ts'
+import type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
 import type { Method } from '#shared/rpc.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import type { Mount } from './answerRpc.ts'
@@ -53,7 +55,6 @@ export async function callHandler(
     signal?: AbortSignal,
 ): Promise<{ code: number; text: string }> {
     const address = `${RPC_ADDRESS}/${path.replace(/^\//, '')}`
-    // A socket's row is under `SOCKET_ADDRESS`, so an rpc address never finds one.
     const handler = handlers.find((mount) => mount.address === address)
     const args = callArgs(given)
     const chosen = (method?.toUpperCase() ??
@@ -78,7 +79,7 @@ export async function callHandler(
  * A call's args out of the words after its address, or `undefined` where there are none.
  *
  * 38.62 — `name=value` words, kept as the text they are for the app to coerce as it coerces a query's
- * (19.8), against the schema it holds the call to; or, where the first word opens one, a JSON object.
+ * (19.7), against the schema it holds the call to; or, where the first word opens one, a JSON object.
  */
 function callArgs(
     given: string[],
@@ -126,7 +127,7 @@ function textRequest(
  */
 export async function followLogs(url: string): Promise<number> {
     const answer = await fetch(`${url}${LOGS_ADDRESS}`, {
-        headers: remoteHeaders(),
+        headers: { ...remoteHeaders(), accept: 'text/event-stream' },
     })
     if (!answer.ok || answer.body === null) {
         console.error(
@@ -134,15 +135,108 @@ export async function followLogs(url: string): Promise<number> {
         )
         return 1
     }
-    for await (const record of framedStream(
-        answer.body,
-        framingPrefix('text/event-stream') as string,
-    )) {
-        const { time, level, namespace, message } = record as Record<
-            string,
-            string
-        >
-        console.log(`${time} ${level} ${namespace} ${message}`)
+    // 18.20 — the lines held arrive as the value, and each line after as an `add` at `/-`; a trim's
+    // `remove`s are the buffer letting old lines go, which a tail has already printed.
+    for await (const event of eventsOf(answer.body)) {
+        if (event.name === 'error') console.error(`logs: ${event.data}`)
+        const lines =
+            event.name === 'value'
+                ? ((JSON.parse(event.data) as LogRecord[] | null) ?? [])
+                : event.name === 'patch'
+                  ? addedBy(JSON.parse(event.data) as PatchOp[])
+                  : []
+        for (const { time, level, namespace, message } of lines)
+            console.log(`${time} ${level} ${namespace} ${message}`)
     }
     return 0
+}
+
+/** The records a patch appended: the value of each `add`. */
+function addedBy(ops: PatchOp[]): LogRecord[] {
+    const added: LogRecord[] = []
+    for (const op of ops) if (op.op === 'add') added.push(op.value as LogRecord)
+    return added
+}
+
+/**
+ * Follows a `GET` of the app at `url` as an event stream, printing its value and its value after each
+ * patch; returns the exit code.
+ *
+ * 38.70, 18.20 — THE EVENT STREAM ANY CLIENT MAY ASK A FOLLOWED `GET` FOR, read by one: `event: value`
+ * replaces what is held and `event: patch` is JSON Patch applied over it. A handler the server does
+ * not follow — one built per request — answers once, and is printed once.
+ */
+export async function watch(
+    url: string,
+    address: string,
+    given: string[],
+    signal?: AbortSignal,
+): Promise<number> {
+    const path = `${RPC_ADDRESS}/${address.replace(/^\//, '')}`
+    const args = callArgs(given)
+    const request =
+        args instanceof URLSearchParams
+            ? textRequest('GET', path, args)
+            : rpcRequest('GET', path, args)
+    const answer = await fetch(`${url}${request.url}`, {
+        ...request.init,
+        headers: {
+            ...remoteHeaders(),
+            ...(request.init.headers as Record<string, string> | undefined),
+            accept: 'text/event-stream',
+        },
+        signal: signal ?? null,
+    })
+    if (!answer.ok) {
+        console.error(`watch: ${await answer.text()}`)
+        return 1
+    }
+    const type = answer.headers.get('content-type') ?? ''
+    if (!type.startsWith('text/event-stream') || answer.body === null) {
+        console.log(await answer.text())
+        return 0
+    }
+    let held: unknown
+    for await (const event of eventsOf(answer.body)) {
+        if (event.name === 'value') held = JSON.parse(event.data)
+        else if (event.name === 'patch')
+            applyPatch(held, JSON.parse(event.data) as PatchOp[])
+        else {
+            // A refresh the handler refused: what is held stays, and the refusal is said.
+            if (event.name === 'error') console.error(`watch: ${event.data}`)
+            continue
+        }
+        console.log(JSON.stringify(held))
+    }
+    return 0
+}
+
+/** Each event of an event stream: its `event` name, `message` where it named none, and its `data`. */
+async function* eventsOf(
+    body: ReadableStream<Uint8Array>,
+): AsyncIterable<{ name: string; data: string }> {
+    const decoder = new TextDecoder()
+    let buffered = ''
+    for await (const chunk of body) {
+        buffered += decoder.decode(chunk, { stream: true })
+        for (
+            let end = buffered.indexOf('\n\n');
+            end !== -1;
+            end = buffered.indexOf('\n\n')
+        ) {
+            const block = buffered.slice(0, end)
+            buffered = buffered.slice(end + 2)
+            let name = 'message'
+            let data: string | undefined
+            for (const line of block.split('\n')) {
+                if (line.startsWith('event:')) name = line.slice(6).trim()
+                else if (line.startsWith('data:')) {
+                    const field = line.slice(5).replace(/^ /, '')
+                    data = data === undefined ? field : `${data}\n${field}`
+                }
+            }
+            // A comment alone — the stream's opener — is no event.
+            if (data !== undefined) yield { name, data }
+        }
+    }
 }

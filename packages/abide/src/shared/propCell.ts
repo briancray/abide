@@ -1,6 +1,6 @@
 // 33.6, 33.7 — A PROP THE CHILD WRITES, as one cell whichever way the caller passed it: a
 // `reactive` over the caller's accessor. Where the caller bound it (32.6) the accessor hands back
-// the caller's `Reactive`, which the cell adopts (11.12) and every write reaches (11.60); passed
+// the caller's `Reactive`, which the cell adopts (11.12) and every write reaches (11.59); passed
 // as a value, a write stands until the caller's expression changes (11.8). The child never learns
 // which, and that is 33.8.
 //

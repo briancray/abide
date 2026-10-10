@@ -6,7 +6,7 @@
 // `reactive` built at this module's evaluation would be a cycle evaluated in the wrong order;
 // built on the first line or the first read of `log.records`, the core has long since loaded.
 //
-// 28.10, 28.11 — IN A BROWSER, `DEBUG` IS THE DOCUMENT'S: the server names it in a `<meta>` it writes
+// 28.11, 28.12 — IN A BROWSER, `DEBUG` IS THE DOCUMENT'S: the server names it in a `<meta>` it writes
 // into the head, and the browser's own stored `debug` answers only where the document carries none.
 
 import { DEBUG_META } from './DEBUG_META.ts'
@@ -30,7 +30,7 @@ export type Logger = ((...args: unknown[]) => void) & {
     debug(...args: unknown[]): void
     named(name: string): Logger
     enabled(): boolean
-    readonly records: Reactive<LogRecord>
+    readonly records: Reactive<LogRecord[]>
 }
 
 /**
@@ -41,21 +41,34 @@ export type Logger = ((...args: unknown[]) => void) & {
  */
 export const TRACE: { current: () => string } = { current: () => '' }
 
-const DEFAULT_HISTORY = 1000
+const DEFAULT_BUFFER = 1000
 
-let records: Reactive<LogRecord> | undefined
+let records: Reactive<LogRecord[]> | undefined
+let kept = DEFAULT_BUFFER
 
-function recordsValue(): Reactive<LogRecord> {
+function recordsValue(): Reactive<LogRecord[]> {
     if (records === undefined) {
         const configured = Number(environment('ABIDE_MAX_LOG_BUFFER_COUNT'))
-        records = reactive<LogRecord>(undefined, {
-            history:
-                Number.isInteger(configured) && configured >= 0
-                    ? configured
-                    : DEFAULT_HISTORY,
-        })
+        kept =
+            Number.isInteger(configured) && configured >= 0
+                ? configured
+                : DEFAULT_BUFFER
+        // 28.1 — one array for the process, which `/__abide/logs` follows (28.2).
+        records = reactive<LogRecord[]>([], { global: true })
     }
     return records
+}
+
+/**
+ * Appends `record` to `log.records`, trimming to the buffer it keeps.
+ *
+ * THE TRIM IS AMORTISED: grown to twice the buffer and cut back in one move, rather than a `shift`
+ * per line that moves every record still held.
+ */
+function keep(list: LogRecord[], record: LogRecord): void {
+    list.push(record)
+    if (list.length >= kept * 2 || (kept === 0 && list.length > 0))
+        list.splice(0, list.length - kept)
 }
 
 /**
@@ -75,7 +88,7 @@ function environment(name: string): string | undefined {
     return documentDebugRead
 }
 
-/** The document's `DEBUG`, or the browser's own stored one where it carries none (28.10, 28.11). */
+/** The document's `DEBUG`, or the browser's own stored one where it carries none (28.11, 28.12). */
 export function documentDebug(): string | undefined {
     if (typeof document === 'undefined') return undefined
     const named = document
@@ -93,7 +106,7 @@ export function documentDebug(): string | undefined {
 /**
  * The compiled `DEBUG` patterns: namespaces included, and namespaces excluded.
  *
- * 28.9 — THE debug-npm GRAMMAR: a list split on commas or whitespace, `*` any run of characters,
+ * 28.10 — THE debug-npm GRAMMAR: a list split on commas or whitespace, `*` any run of characters,
  * and a leading `-` an exclusion that beats every inclusion. Compiled once per distinct `DEBUG`.
  */
 type Gate = { include: RegExp[]; exclude: RegExp[] }
@@ -118,7 +131,7 @@ function currentGate(): Gate {
     return gate
 }
 
-/** Whether `DEBUG` enables a namespace's gated lines (28.6). */
+/** Whether `DEBUG` enables a namespace's gated lines (28.7). */
 function isEnabled(namespace: string): boolean {
     const { include, exclude } = currentGate()
     for (const pattern of exclude) if (pattern.test(namespace)) return false
@@ -199,15 +212,15 @@ function write(
     if (level === 'error') console.error(line)
     else if (level === 'warning') console.warn(line)
     else console.log(line)
-    recordsValue().publish(record)
+    recordsValue().patch((list) => keep(list, record))
 }
 
-/** A logger under `namespace`, which 28.4 builds from the app's name and 28.8 from `abide:`. */
+/** A logger under `namespace`, which 28.5 builds from the app's name and 28.9 from `abide:`. */
 export function namedLogger(namespace: string): Logger {
     return loggerOver(() => namespace)
 }
 
-/** Both lanes' render logger (28.8): the server's escalations and 32.20's dropped URLs. */
+/** Both lanes' render logger (28.9): the server's escalations and 32.20's dropped URLs. */
 export const RENDER_LOG = namedLogger('abide:render')
 
 /**
@@ -216,7 +229,7 @@ export const RENDER_LOG = namedLogger('abide:render')
  * The namespace is ASKED per line rather than held, which is all `log` needs over a named logger.
  */
 function loggerOver(namespaceOf: () => string): Logger {
-    // 28.2 — the bare call always writes. 28.3 — so do warnings and errors.
+    // 28.3 — the bare call always writes. 28.4 — so do warnings and errors.
     const logger = ((...args: unknown[]): void => {
         write(namespaceOf(), 'info', args)
     }) as Logger
@@ -230,7 +243,7 @@ function loggerOver(namespaceOf: () => string): Logger {
     }
     logger.warning = (...args) => write(namespaceOf(), 'warning', args)
     logger.error = (...args) => write(namespaceOf(), 'error', args)
-    // 28.4 — another segment, below this one. 28.12 — asked per line too, so a logger named at module
+    // 28.5 — another segment, below this one. 28.13 — asked per line too, so a logger named at module
     // load, before the app's name resolved, writes under the name once it has.
     logger.named = (name) => loggerOver(() => `${namespaceOf()}:${name}`)
     logger.enabled = () => isEnabled(namespaceOf())
@@ -241,7 +254,7 @@ function loggerOver(namespaceOf: () => string): Logger {
 /**
  * The slot the derived app name is read through, filled by the server's `config`.
  *
- * 28.4 — the app's name is the root every `log.named` hangs off: the environment's, or what 27.3
+ * 28.5 — the app's name is the root every `log.named` hangs off: the environment's, or what 27.3
  * derived, which the server's `config` fills in here.
  */
 export const APP_NAME: { derived: () => string | undefined } = {

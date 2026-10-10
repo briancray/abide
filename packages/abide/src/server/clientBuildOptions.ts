@@ -15,7 +15,7 @@ export function clientBuildOptions(
 ) {
     return {
         entrypoints: [`${entryDirectory}/${CLIENT_ENTRY}.ts`] as string[],
-        // 16.29, 16.30 — a handler module is its wrapper here, and the rest of `server/` refuses.
+        // 16.28, 16.29 — a handler module is its wrapper here, and the rest of `server/` refuses.
         plugins,
         target: 'browser',
         format: 'esm',
@@ -35,7 +35,7 @@ const UP_TO_ROOT = '../'.repeat(CLIENT_ADDRESS.split('/').length - 1)
 /**
  * A built stylesheet with every root-absolute `url()` written relative to the bundle's directory.
  *
- * 16.11, 36.15 — THE SAME MECHANISM AS THE HANDLER WRAPPERS: the address is written relative to
+ * 16.10, 36.15 — THE SAME MECHANISM AS THE HANDLER WRAPPERS: the address is written relative to
  * where the bundle is served and the browser resolves it against the sheet, so one build serves
  * at the root and below a mount. What survives the build as `url(/…)` is a public file's address
  * (the `external` list above), and the browser would resolve it against the origin. `//` is

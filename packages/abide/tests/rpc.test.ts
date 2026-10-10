@@ -79,10 +79,79 @@ test('a mutation runs again on a later call, where a read serves what it holds �
     expect(payments).toBe(2)
 })
 
-// 16.9 — A REFUSAL IS THE HANDLER'S OWN, carried on the value and narrowed by name on the `Rpc`.
+// 16.6 — A PLAIN HANDLER TAKES THE VALUE'S OPTIONS BESIDE THE ADDRESS'S, in one object: the gate
+// refuses before the body runs, and a mutation that declares a `ttl` is held for it rather than
+// 16.7's 0. The type half is `isError` narrowing to the `ValidationError` the `args` gate added,
+// and the `@ts-expect-error`s keep a value's option unspellable over a `Reactive` or a `Keyed`
+// that has decided its own. THE REVERT: build the plain
+// handler's value with `cacheOptions` alone in `rpc.ts`; the body runs for the negative id —
+// `body runs: 1` — and the payment runs 2 times where 1 is due.
+test("a plain handler's options build its value too — 16.6", async () => {
+    let runs = 0
+    const getInvoice = GET(
+        ({ id }: { id: number }) => {
+            runs += 1
+            return id * 2
+        },
+        {
+            args: (value: unknown) => {
+                if ((value as { id: number }).id < 0)
+                    throw new Error('id must not be negative')
+                return value as { id: number }
+            },
+            description: 'An invoice, by id.',
+        },
+    )
+    const refused = getInvoice({ id: -1 })
+    await refused.catch(() => {})
+    expect(`body runs: ${runs}`).toBe('body runs: 0')
+    expect(getInvoice.isError(refused.error(), 'ValidationError')).toBe(true)
+    expect(getInvoice.description).toBe('An invoice, by id.')
+    expect(await getInvoice({ id: 4 })).toBe(8)
+
+    let payments = 0
+    const payInvoice = POST(
+        ({ id }: { id: string }) => {
+            payments += 1
+            return id
+        },
+        { ttl: 60_000 },
+    )
+    await payInvoice({ id: '42' })
+    await tick()
+    await payInvoice({ id: '42' })
+    expect(`payments: ${payments}`).toBe('payments: 1')
+
+    const viewer = reactive(() => 1)
+    const byId = reactive(({ id }: { id: string }) => id)
+    // @ts-expect-error a value handed in has decided its own options
+    GET(viewer, { ttl: 0 })
+    // @ts-expect-error and so has a keyed one
+    GET(byId, { ttl: 0 })
+})
+
+// 16.1, 16.6 — A VALUE IS A HANDLER, `reactive`'s value overload given an address: it answers what
+// it holds, a promise adopted, and takes a value's options beside the address's. The type half is
+// the annotations: `string` and `number` only compile where the value arm typed the `Rpc`, and the
+// `@ts-expect-error` keeps a plain function whose options are wrong from falling through to it.
+// THE REVERT: drop the value arm from `Declare` — the three declarations fail typecheck, and the
+// `@ts-expect-error` still holds.
+test('a value is a handler, answering what it holds — 16.1, 16.6', async () => {
+    const greeting = GET('hello')
+    const answer = GET(Promise.resolve(42), { description: 'The answer.' })
+    const limit = POST(10, { schema: (value: unknown) => value as number })
+    const text: string = await greeting()
+    const number: number = await answer()
+    expect([text, number, await limit()]).toEqual(['hello', 42, 10])
+    expect(answer.description).toBe('The answer.')
+    // @ts-expect-error a body's options are checked against the body, not read as a value's
+    GET(() => 1, { ttl: 'soon' })
+})
+
+// 16.8 — A REFUSAL IS THE HANDLER'S OWN, carried on the value and narrowed by name on the `Rpc`.
 // The type half is the assignment inside the guard: `e.data.path` only compiles where the guard
 // narrowed `e` to `NotFound`.
-test('a refusal lands on the value and narrows by name — 16.9', async () => {
+test('a refusal lands on the value and narrows by name — 16.8', async () => {
     const getInvoice = GET(async ({ id }: { id: string }) =>
         id === '42'
             ? { number: 'INV-0042' }
@@ -99,7 +168,7 @@ test('a refusal lands on the value and narrows by name — 16.9', async () => {
     expect(getInvoice.isError(error, 'ValidationError')).toBe(false)
 })
 
-// 9.20 THROUGH 16.6: a generator handler is a streaming `reactive`, so the value is every chunk.
+// 9.6 THROUGH 16.6: a generator handler is a streaming `reactive`, so the value is every chunk.
 test('a generator handler streams, and the value is its chunks', async () => {
     const salesByRegion = GET(async function* ({ year }: { year: number }) {
         yield { region: 'north', year }
@@ -111,14 +180,14 @@ test('a generator handler streams, and the value is its chunks', async () => {
     ])
 })
 
-// 16.9 — EVERY `Rpc` CARRIES THE TRANSPORT'S `HttpError`, declared or not: a stream handler that
+// 16.8 — EVERY `Rpc` CARRIES THE TRANSPORT'S `HttpError`, declared or not: a stream handler that
 // declares nothing still times out 504, and the wire rebuilds a 500 whose body was no `Failed` as one.
 // The runtime half pins the shape the type names — name, status, data `undefined`. The type half is
 // the reads: `events.error()?.message` and `error.data` only compile where the `Rpc`'s failures carry
 // it, and the `@ts-expect-error` keeps a name no failure carries refusing. THE REVERT: drop
 // `| Failed<'HttpError', undefined>` from the call's `Reactive` in `rpc.ts` — four reads fail
 // typecheck, `.message`, `.status` and `.data` on `never`.
-test('every rpc carries the transport refusal in its failures — 16.9', async () => {
+test('every rpc carries the transport refusal in its failures — 16.8', async () => {
     const ask = POST(
         async function* (_args: { question: string }) {
             await new Promise(() => {})
@@ -159,10 +228,10 @@ test('every rpc carries the transport refusal in its failures — 16.9', async (
     expect((rebuilt as { data: unknown }).data).toBeUndefined()
 })
 
-// 11.62 — A VALUE ADOPTS A CALL CARRYING THE FAILURES IT CARRIES: a contact read through a `GET` and
+// 11.61 — A VALUE ADOPTS A CALL CARRYING THE FAILURES IT CARRIES: a contact read through a `GET` and
 // written through a `POST` both hold the transport's refusal. THE REVERT: type `set`'s `Reactive` arm
 // back to `Reactive<Accepted>` in `Reactive.ts` — the `set` below fails typecheck, failures `never`.
-test('a value adopts an rpc call whose failures it carries — 11.62, 16.9', async () => {
+test('a value adopts an rpc call whose failures it carries — 11.61, 16.8', async () => {
     const getContact = GET(async (_args: { id: string }) => ({ phone: '1' }))
     const updatePhone = POST(async ({ phone }: { phone: string }) => ({
         phone,

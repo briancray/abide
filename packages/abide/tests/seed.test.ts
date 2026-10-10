@@ -65,6 +65,35 @@ const lines = reactive(() => getLines({ id: 'l' }))
 
 <main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p></main>`
 
+// 18.5, 41.13 — A `global` VALUE A RENDER READ, and a write that moves it before the browser's call.
+const SHELF = `import { GET, POST, reactive } from 'abide/server'
+
+const shelf = reactive<string[]>(['dune'], { global: true })
+
+export const books = GET(shelf)
+
+export const shelve = POST(({ title }: { title: string }) => {
+    shelf.set([...shelf(), title])
+})
+`
+
+// 18.23 — A `global` VALUE HOLDING A BINARY.
+const COVERS = `import { GET, reactive } from 'abide/server'
+
+const cover = reactive(new Blob(['png'], { type: 'image/png' }), { global: true })
+
+export const art = GET(cover)
+`
+
+const SHELF_PAGE = `<script>
+import { reactive } from 'abide'
+import { books } from '#server/rpc/shelf.ts'
+
+const shelved = reactive(() => books())
+</script>
+
+<main><p>{shelved()}</p></main>`
+
 let stop = (): void => {}
 let base = ''
 
@@ -72,6 +101,9 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'ui/pages/page.abide': PAGE,
         'ui/pages/painted/page.abide': PAINTED,
+        'ui/pages/shelf/page.abide': SHELF_PAGE,
+        'server/rpc/shelf.ts': SHELF,
+        'server/rpc/covers.ts': COVERS,
         'server/rpc/totals.ts': TOTALS,
         'server/rpc/invoices.ts': INVOICES,
         'server/app.ts': SIGN_OUT,
@@ -283,7 +315,7 @@ test('a call the render made with other args runs the handler and warns on abide
     seed(handler, { id: 1 }, Promise.resolve('one'))
     seed(handler, { id: 2 }, Promise.resolve('two'))
     const warned = await hydrateWarnings(async () => {
-        // 19.8's case: the render passed a number, and the query arrives as text.
+        // 19.7's case: the render passed a number, and the query arrives as text.
         expect(takeSeed('caller-miss', handler, { id: '1' })).toBeUndefined()
         expect(await takeSeed('caller-miss', handler, { id: 1 })).toMatchObject(
             {
@@ -298,11 +330,11 @@ test('a call the render made with other args runs the handler and warns on abide
     expect(warned[0]).toContain('41.12')
 })
 
-// 16.34 — A STREAM'S TRANSCRIPT PAST `ABIDE_MAX_STREAM_BUFFER_SIZE` STOPS BEING HELD, and its call is
+// 16.33 — A STREAM'S TRANSCRIPT PAST `ABIDE_MAX_STREAM_BUFFER_SIZE` STOPS BEING HELD, and its call is
 // one the buffer cannot answer (41.12). Counted in jsonl bytes: `"aaaa"\n` is 7, so two chunks pass
 // 10 and one does not. THE REVERT: skip `boundTranscript` in `seedFor`; the entry over the bound
 // answers, and 0 warnings arrive where 1 is due.
-test('a seeded stream whose transcript passes ABIDE_MAX_STREAM_BUFFER_SIZE is not answered from the buffer — 16.34, 41.12', async () => {
+test('a seeded stream whose transcript passes ABIDE_MAX_STREAM_BUFFER_SIZE is not answered from the buffer — 16.33, 41.12', async () => {
     const unfile = onConfig(() => ({ ABIDE_MAX_STREAM_BUFFER_SIZE: 10 }))
     try {
         const handler = { address: '/__abide/rpc/reports/rows' }
@@ -328,4 +360,43 @@ test('a seeded stream whose transcript passes ABIDE_MAX_STREAM_BUFFER_SIZE is no
     } finally {
         unfile()
     }
+})
+
+// 18.22 — A SEEDED ANSWER NAMES THE VERSION OF WHAT IT CARRIES. The render reached the shelf before the
+// write, so its seed is the old production, and the version standing now would have the browser
+// follow from a body it never got — sent nothing until the shelf next moved. THE REVERT: stamp
+// `answerOutcome`'s etag from the value's standing production whatever was answered; the seeded
+// answer reads 'current' with the old shelf.
+test('a seeded answer the production moved past does not name the version standing now — 18.22, 41.13', async () => {
+    const page = await Bun.fetch(`${base}/shelf`)
+    await page.text()
+    const cookie = (page.headers.get('set-cookie') ?? '').split(
+        ';',
+    )[0] as string
+    const shelved = await Bun.fetch(`${base}/__abide/rpc/shelf/shelve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'emma' }),
+    })
+    await shelved.text()
+    const seeded = await Bun.fetch(`${base}/__abide/rpc/shelf/books`, {
+        headers: { cookie },
+    })
+    const fresh = await Bun.fetch(`${base}/__abide/rpc/shelf/books`)
+    const standing = fresh.headers.get('etag')
+    expect(
+        `${await seeded.text()} ${seeded.headers.get('etag') === standing ? 'current' : 'not current'}`,
+    ).toBe('["dune"] not current')
+    expect(await fresh.text()).toBe('["dune","emma"]')
+})
+
+// 18.23 — A BINARY CARRIES NO VERSION, so nothing follows it: a reader asking for an event stream is
+// answered the bytes. THE REVERT: drop the binary arm from `answerOutcome`'s `serving`; the answer is
+// a follow, 'text/event-stream' where 'image/png' is due.
+test('a global GET answering a binary is answered, not followed — 18.23', async () => {
+    const answer = await Bun.fetch(`${base}/__abide/rpc/covers/art`, {
+        headers: { accept: 'text/event-stream' },
+    })
+    await answer.body?.cancel()
+    expect(String(answer.headers.get('content-type'))).toBe('image/png')
 })

@@ -174,7 +174,7 @@ test('every page offers its own markdown and the bundle', async () => {
         const rail = railOf(page, await bodyOf(page, pages))
         const { body, examples } = await renderBody(page, pages)
         const source = pageSource(page, directoryOf(page.slug), body, examples)
-        // 16.11 — relative, so they are the page's wherever the app is mounted (`hrefFrom`).
+        // 16.10 — relative, so they are the page's wherever the app is mounted (`hrefFrom`).
         const from = routeOf(page.slug)
         const twin = hrefFrom(from, `/${page.slug}.md`)
         if (!rail.includes(`<a href="${twin}" download>`))
@@ -203,7 +203,7 @@ test('a rendered body links to an address the app answers', async () => {
     const broken: string[] = []
     for (const page of pages) {
         const body = await bodyOf(page, pages)
-        // Relative to the page (16.11), so each is resolved where the browser would resolve it.
+        // Relative to the page (16.10), so each is resolved where the browser would resolve it.
         const at = `http://app${routeOf(page.slug)}`
         for (const match of body.matchAll(/href="(?!https?:|#)([^"]+)"/g)) {
             const target = match[1] ?? ''

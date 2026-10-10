@@ -1,4 +1,4 @@
-// 16.52, 16.53, 16.63, 16.65, 16.66 — A CALL REACHING A LOAD, through `reactive` directly: the
+// 16.48, 16.49, 16.59, 16.61, 16.62 — A CALL REACHING A LOAD, through `reactive` directly: the
 // policy `callLoad` keeps over the core's loads, with no handler, no transport and no stubbed
 // `fetch` between the test and it. `abort.test.ts` and `timeout.test.ts` hold the same clauses
 // through `GET`; these hold the module those reach.
@@ -35,7 +35,7 @@ const nameOf = (value: Loading): string | undefined =>
 
 // THE REVERT: return from `Attended.handleEvent` on the first aborted signal rather than looping over
 // all of them; this reads `busy: false` after the first abort.
-test('a load two signalled calls share ends when both abort — 16.52', () => {
+test('a load two signalled calls share ends when both abort — 16.48', () => {
     const { call } = held()
     const first = new AbortController()
     const second = new AbortController()
@@ -52,7 +52,7 @@ test('a load two signalled calls share ends when both abort — 16.52', () => {
 
 // THE REVERT: drop the `pinned` check in `Attended.handleEvent`; the load is ended under a caller
 // that never handed a signal, and this reads `busy: false`.
-test('a call with no signal pins the load — 16.52', () => {
+test('a call with no signal pins the load — 16.48', () => {
     const { call } = held()
     const signalled = new AbortController()
     const value = call({ id: '2' }, signalled.signal)
@@ -63,7 +63,7 @@ test('a call with no signal pins the load — 16.52', () => {
 })
 
 // THE REVERT: drop the `abandoned` read in `callLoad`; the call joins the ended load and `loads: 1`.
-test('a call after an aborted load starts another — 16.66', async () => {
+test('a call after an aborted load starts another — 16.62', async () => {
     const { call, releases } = held()
     const leaving = new AbortController()
     const value = call({ id: '3' }, leaving.signal)
@@ -76,10 +76,10 @@ test('a call after an aborted load starts another — 16.66', async () => {
     expect(await value).toBe('invoice 3')
 })
 
-// 16.53 — THE LOAD'S OWN SIGNAL reaches the body as it starts, and aborts once every caller has —
+// 16.49 — THE LOAD'S OWN SIGNAL reaches the body as it starts, and aborts once every caller has —
 // the caller's own signal is one vote and is never the one handed on. THE REVERT: drop the
 // `ending?.abort()` in `Attended.handleEvent`; the body's signal reads `aborted: false`.
-test('the body a call starts is handed the load own signal — 16.53', () => {
+test('the body a call starts is handed the load own signal — 16.49', () => {
     let handed: AbortSignal | undefined
     const value = reactive(({ id }: { id: string }) => {
         handed = LOAD_SIGNAL.current
@@ -94,9 +94,9 @@ test('the body a call starts is handed the load own signal — 16.53', () => {
     expect(`aborted: ${handed?.aborted}`).toBe('aborted: true')
 })
 
-// 16.63 — the 504, on a plain `reactive` with no handler around it. THE REVERT: drop the `timeLoad`
+// 16.59 — the 504, on a plain `reactive` with no handler around it. THE REVERT: drop the `timeLoad`
 // call from `callLoad`; the load never settles and the test runs out its own timeout.
-test('a load that goes its timeout refuses 504 — 16.63', async () => {
+test('a load that goes its timeout refuses 504 — 16.59', async () => {
     const value = reactive(
         () => new Promise<string>(() => {}),
     ) as unknown as Loading
@@ -109,13 +109,13 @@ test('a load that goes its timeout refuses 504 — 16.63', async () => {
     expect((value.error() as { status?: number }).status).toBe(504)
 })
 
-// 16.65 — ONE CLOCK PER LOAD, counted rather than timed: three calls joining one load arm one timer.
+// 16.61 — ONE CLOCK PER LOAD, counted rather than timed: three calls joining one load arm one timer.
 // THE REVERT: drop the `timed` test in `callLoad`; each join arms a clock of its own, `clocks: 3`.
 const realSetTimeout = globalThis.setTimeout
 afterEach(() => {
     globalThis.setTimeout = realSetTimeout
 })
-test('calls joining a load start no clock of their own — 16.65', async () => {
+test('calls joining a load start no clock of their own — 16.61', async () => {
     let release = (): void => {}
     const value = reactive(
         () =>

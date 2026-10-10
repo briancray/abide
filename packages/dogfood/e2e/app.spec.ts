@@ -10,7 +10,7 @@
 import { expect, test } from '@playwright/test'
 import { NAV_ITEMS } from '../src/ui/NAV_ITEMS.ts'
 
-// TWO PROJECTS, ONE BUILD: served at the root and again below `/docs` (16.11). Every address a
+// TWO PROJECTS, ONE BUILD: served at the root and again below `/docs` (16.10). Every address a
 // spec asks for goes through `underMount`, so the same spec runs at either mount.
 function underMount(address: string): string {
     const base = test.info().project.use.baseURL ?? ''
@@ -130,7 +130,7 @@ test('the rail follows the page a reader navigated to', async ({ page }) => {
     const first = page.locator('.toc a[href^="#"]').first()
     await expect(first).toHaveAttribute(
         'href',
-        '#patch-mutates-the-held-value-and-mints-its-production',
+        '#patch-mutates-the-held-value-and-wakes-its-readers',
     )
     // The scroll spy marks where you are, and it only can where it re-measured after the
     // navigation — offsets taken against the page a reader left are every heading at once.

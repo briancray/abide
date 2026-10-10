@@ -9,7 +9,7 @@ import { useColor } from '#shared/log.ts'
 import { paint as painted } from '#shared/paint.ts'
 import type { Mount } from './answerRpc.ts'
 import { LogPanel } from './LogPanel.ts'
-import { callHandler, followLogs } from './remote.ts'
+import { callHandler, followLogs, watch } from './remote.ts'
 import { type Listed, surfaceOf } from './surfaceOf.ts'
 
 /**
@@ -78,15 +78,20 @@ export async function shell(options: {
             ),
     })
     // CTRL-C AS A SHELL TAKES IT — raw mode takes the key from the terminal, so no signal is sent for
-    // it: a call running is cancelled, a line typed is dropped, and on an empty line it asks once
-    // and leaves on the second, as `node`'s REPL does.
+    // it: a call running is cancelled, then every watch standing, a line typed is dropped, and on
+    // an empty line it asks once and leaves on the second, as `node`'s REPL does.
     let exited = false
     let closed = false
     let running: AbortController | undefined
+    const watching = new Set<AbortController>()
     let leaving = false
     lines.on('SIGINT', () => {
         if (running !== undefined) running.abort()
-        else if (lines.line !== '') {
+        else if (watching.size !== 0) {
+            for (const each of watching) each.abort()
+            watching.clear()
+            console.log('(watches stopped)')
+        } else if (lines.line !== '') {
             lines.write(null, { ctrl: true, name: 'e' })
             lines.write(null, { ctrl: true, name: 'u' })
         } else if (leaving) {
@@ -211,7 +216,26 @@ export async function shell(options: {
                 void followLogs(url).then(() => {
                     tailing = false
                 })
-            } else if (word === 'logs')
+            } else if (word === 'watch' && address !== undefined) {
+                // Followed alongside the prompt, as `logs` is.
+                const following = new AbortController()
+                watching.add(following)
+                void watch(
+                    url,
+                    address,
+                    restOfLine.startsWith('{')
+                        ? [restOfLine]
+                        : wordsOf(restOfLine),
+                    following.signal,
+                )
+                    .catch((thrown: Error) => {
+                        if (!following.signal.aborted)
+                            console.log(`watch: ${thrown.message}`)
+                    })
+                    .finally(() => watching.delete(following))
+            } else if (word === 'watch')
+                console.log('watch: name a GET — watch <address> [args]')
+            else if (word === 'logs')
                 console.log(
                     local
                         ? "logs: the app's log already tails here."
@@ -430,6 +454,7 @@ export function shellWords(local: boolean): [usage: string, meaning: string][] {
             'call a handler — call invoices/getInvoice id=4310',
         ],
         ['handlers', 'every handler call can reach, with its args'],
+        ['watch <address> [args]', 'follow a GET — watch chat/room room=lobby'],
     ]
     if (!local) words.push(['logs', "tail the app's log.records here"])
     words.push(

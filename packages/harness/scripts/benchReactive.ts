@@ -77,62 +77,6 @@ for (const kase of CASES) {
 }
 
 /**
- * Times a write at history 16 against history 4096 and says whether 6.2 holds.
- *
- * RULEBOOK 6.2 — "Raising `history` MUST NOT make a write dearer" — checked as a RATIO BETWEEN
- * TWO SIZES OF THE SAME STRUCTURE, which CLAUDE.md calls the one timing claim that stays honest
- * across substrates. There is no vanilla arm and there should not be: the earlier log case could
- * not see this at all, because its hand-written arm called `shift()` too and both arms were
- * linear in the depth together.
- *
- * No read in either arm, so nothing is allocated per operation and the GC noise that gave that
- * case a 17% floor is gone.
- */
-function writeIsConstantInHistory(): void {
-    const shallow = reactive<number>(undefined, { history: 16 })
-    const deep = reactive<number>(undefined, { history: 4096 })
-    let at = 0
-    // Filled past their caps before timing, so every timed write is steady state.
-    for (let index = 0; index < 20_000; index += 1) {
-        shallow.publish(at)
-        deep.publish(at)
-        at += 1
-    }
-    const measured = batch({
-        case: 'raising history does not make a write dearer',
-        arms: {
-            'history 16': (): void => {
-                shallow.publish(at++)
-            },
-            'history 4096': (): void => {
-                deep.publish(at++)
-            },
-        },
-        emulated: emulatedDom(),
-    })
-    const small = measured.samples['history 16'] as Sample
-    const large = measured.samples['history 4096'] as Sample
-    const result = ratio(large, small, { floor: measured.floor })
-    console.log('\n6.2 — RAISING `history` MUST NOT MAKE A WRITE DEARER')
-    console.log(
-        `  history 16 ${small.nanoseconds.toFixed(1)} ns   history 4096 ${large.nanoseconds.toFixed(1)} ns`,
-    )
-    // THE COMPARISON IS AGAINST WHAT LINEAR WOULD PREDICT, not against 1.00x. The depth
-    // rises 256x between the arms, so a write that scaled with retention would read
-    // ~256x; anything near 1x is a constant-time write however the A/A floor classifies
-    // the last few per cent. Reading `ratio()`'s verdict as the answer here would call a
-    // 5% difference a violation and a 256x one a pass on a noisy day.
-    const predicted = 4096 / 16
-    const observed = result.kind === 'ratio' ? result.value : 1 + measured.floor
-    console.log(
-        `  ${observed.toFixed(2)}x measured against ${predicted}x if the write scaled with the depth`,
-    )
-    console.log(
-        `  ${observed < predicted / 10 ? '6.2 HOLDS — the write is constant in the depth' : '6.2 IS VIOLATED — the write scales with retention'}`,
-    )
-}
-
-/**
  * Ceiling on the mount-112 / mount-16 ratio; above it the subscribe path is not linear.
  *
  * MOUNTING READERS IS LINEAR IN THE READER COUNT — the SLOPE half of the `track` dedup, which
@@ -140,13 +84,10 @@ function writeIsConstantInHistory(): void {
  * at one width, so it catches a CONSTANT the subscribe path grows and divides no slope out.
  * This is abide against ITSELF at two widths, which cancels the constant and leaves the slope.
  *
- * THE BAR IS CALIBRATED, NOT PREDICTED, which is the whole of 6.2's shape above and the thing
- * a first attempt here got wrong. Asking "is this 4x (linear) or 16x (quadratic)" answers
+ * THE BAR IS CALIBRATED, NOT PREDICTED, which is the thing a first attempt here got wrong. Asking "is this 4x (linear) or 16x (quadratic)" answers
  * "linear" for BOTH arms, because at any width this can price, `watch` construction dominates
  * and the n² term is a minority of the op — so a bar between the two complexity classes never
- * sees the difference. 6.2 does not do that either: it measures depth 16 against depth 4096
- * and asserts the result is ~1x against "256x if it scaled", a bar set by what the FIXED
- * mechanism measures.
+ * sees the difference. A bar is set by what the FIXED mechanism measures instead.
  *
  * THE BAR, AND WHAT IT IS A FACT ABOUT. Three runs each way on this machine under JSC at these
  * two widths: 5.87x / 6.49x / 7.00x with the reader-side dedup, against 8.72x / 8.73x / 9.40x
@@ -166,8 +107,8 @@ function writeIsConstantInHistory(): void {
  * 112 is inside it. Believing a width where n² DOMINATES was needed is what closed this search
  * the first time, and it was never the requirement.
  *
- * IT IS BRITTLE IN A WAY 6.2 IS NOT, and that is the price of calibrating a bar instead of
- * deriving one: 1x against 256x is a chasm no machine changes, where 7.0 against 8.7 is a gap.
+ * IT IS BRITTLE, and that is the price of calibrating a bar instead of deriving one: 7.0
+ * against 8.7 is a gap, not a chasm no machine changes.
  * When it drifts, re-SLACKEN it against a fresh pair of three-run spreads — do not re-derive it
  * from a complexity class, which is the mistake that made the first version of this useless.
  *
@@ -237,7 +178,6 @@ function mountingIsLinear(): void {
     )
 }
 
-writeIsConstantInHistory()
 mountingIsLinear()
 
 await machinery()

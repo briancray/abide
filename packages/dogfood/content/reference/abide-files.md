@@ -100,7 +100,7 @@ URL-typed attribute, where the encoding is what stops an entity forming a scheme
 | Spelling | Branches | Meaning |
 | --- | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. |
-| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. |
+| `{#for item, index of list by key}` | — | Repeats markup over a list, or over an async iterable as it produces. |
 | `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. |
 
 ### Components
