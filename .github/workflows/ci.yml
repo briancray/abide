@@ -17,10 +17,9 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun run typecheck
-      # Serial: two cases price a ratio, and a loaded runner can tie two arrivals a
-      # quiet one separates. A timing failure under --parallel is not believed until
-      # it reproduces here (CLAUDE.md, "checks").
-      - run: bun run test:serial
+      # The gate CLAUDE.md names. A timing failure here is re-run with
+      # `bun run test:serial` before it is believed (CLAUDE.md, "checks").
+      - run: bun run test
 
   # The front door, against the packed tarball — the artifact npm would publish.
   # Catches what the in-repo suite cannot: a file the scaffold needs missing from

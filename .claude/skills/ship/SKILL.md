@@ -41,7 +41,7 @@ re-prompting, but report the per-package version bumps before merging as a sanit
      `packages/bridge/{bin,src}`) become changelog entries — docs, tests, harness and dogfood do not.
 
 3. **Gate locally** — from the repo root: `bun run lint`, `bun run typecheck`, `bun run test`.
-   All must be clean. CI's verify job runs the same three (tests via `test:serial`) before
+   All must be clean. CI's verify job runs the same three before
    anything publishes, so a red gate here only wastes a release run. A TIMING failure under
    `--parallel` is re-run with `bun run test:serial` before it is believed (CLAUDE.md, "checks").
    - **If `@abide/bridge` is getting a bump**, `packages/abide/src/server/BRIDGE_VERSION.ts` must
