@@ -26,3 +26,6 @@ packages/dogfood/src/ui/NAV_ITEMS.ts
 
 # `bun run compile` in the docs app: the executable, named after the app (RULEBOOK 38.47).
 packages/dogfood/dogfood
+
+# `abide bundle` in the docs app: the desktop app, written where it was run (RULEBOOK 38.79).
+packages/dogfood/dogfood.app/
