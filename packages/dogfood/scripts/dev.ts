@@ -34,6 +34,11 @@ const app = Bun.spawn(
     { stdout: 'inherit', stderr: 'inherit' },
 )
 
+// THE APP GOES WITH THIS SCRIPT. A Ctrl-C reaches the whole process group, but a tool or an app that
+// stops this script signals it alone, and `abide dev` was left serving under launchd.
+for (const signal of ['SIGINT', 'SIGTERM'] as const)
+    process.once(signal, () => app.kill(signal))
+
 let settling: ReturnType<typeof setTimeout> | undefined
 // `examples/`, `scripts/` and `src/` as well as `content/`: a card's manifest, the renderer that
 // turns it into markup and the source its Files panel quotes are all things a page is made of.
@@ -56,4 +61,5 @@ for (const directory of ['content', 'examples', 'scripts', 'assets', 'src'])
         }, SETTLE_MILLISECONDS)
     })
 
-await app.exited
+// The watchers above hold the loop open, and the signal handlers took away the default exit.
+process.exit(await app.exited)

@@ -7,7 +7,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { addressOf, BIN, lastLinePrinted } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, POST, reactive } from '@abide/abide/server'
+const HANDLERS = `import { GET, POST, reactive, request } from '@abide/abide/server'
 
 const shelf = reactive<string[]>(['dune'], { global: true })
 
@@ -54,6 +54,13 @@ export const count = GET(
 export const howFar = GET(() => counted)
 
 export const patient = GET(() => 1, { timeout: 40_000 })
+
+// A child under the request's signal, named by its pid, and an answer that never ends on its own.
+export const spawns = GET(async function* () {
+    const child = Bun.spawn(['sleep', '60'], { signal: request().signal })
+    yield String(child.pid)
+    await new Promise(() => {})
+})
 
 // Answers anything, an upgrade included, with the status the lane admits the mux with.
 export const nothing = GET(() => new Response(null, { status: 204 }))
@@ -222,6 +229,7 @@ let said: unknown
 const say = (value: unknown) => { said = value }
 ${steps}
 console.log(JSON.stringify(said))
+process.exit(0)
 `,
     })
     return lastLinePrinted(['bun', `${dir}/client.ts`, base])
@@ -258,6 +266,44 @@ say(await (await fetch(rpc + 'howFar')).json())
 reader.cancel()
 `)
     expect(Number(said)).toBeLessThan(256)
+}, 20_000)
+
+// 38.97 — A HANDLER'S CHILD GOES WITH ITS REQUEST: the listener holds the connection, so a hang-up
+// reaches the worker as a message, and the request the app reads has to abort on it as bun's would.
+// The answer never ends, so only the signal can stop the child; `gone` looks for it for 3 s, and
+// kills it itself where it is still there.
+const SPAWNED = `const answer = await fetch(rpc + 'spawns')
+const reader = answer.body!.getReader()
+const pid = Number(/\\d+/.exec(new TextDecoder().decode((await reader.read()).value))?.[0])
+const alive = () => { try { process.kill(pid, 0); return true } catch { return false } }
+const gone = async () => {
+    for (const deadline = Date.now() + 3000; Date.now() < deadline; await Bun.sleep(50))
+        if (!alive()) return true
+    process.kill(pid)
+    return false
+}
+`
+
+// THE REVERT: drop `signal` from the `Request` `answerAsk` builds in `devWorker`. Run:
+// `child gone: false`.
+test('a caller hanging up aborts the request under abide dev — 38.97', async () => {
+    const said = await run(`${SPAWNED}
+await reader.cancel()
+say(\`child gone: \${await gone()}\`)
+`)
+    expect(said).toBe('child gone: true')
+}, 20_000)
+
+// THE REVERT: drop `process.on('SIGTERM', hangUpAndExit)` in `devWorker`. Run: `child gone: false` —
+// the worker replaced on a reload, and the child it spawned left running.
+test('a reload aborts the requests the replaced worker was answering — 38.97', async () => {
+    const said = await run(`${SPAWNED}
+const library = ${JSON.stringify(`${app}/server/rpc/library.ts`)}
+await Bun.write(library, await Bun.file(library).text())
+say(\`child gone: \${await gone()}\`)
+reader.cancel().catch(() => {})
+`)
+    expect(said).toBe('child gone: true')
 }, 20_000)
 
 // 16.22 UNDER `abide dev` — THE CONNECTION IS THE LISTENER'S, and the worker answering the call has no

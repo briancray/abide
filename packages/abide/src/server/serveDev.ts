@@ -200,8 +200,11 @@ export async function serveDev(
                 if (!child.killed && child.exitCode === null)
                     child.send(message)
             },
+            // 38.97 — SIGTERM, which the worker answers by hanging up what it is answering; a worker
+            // wedged in a loop never reads it, so a second later it is killed outright.
             terminate() {
                 child.kill()
+                setTimeout(() => child.kill('SIGKILL'), 1000).unref()
             },
         }
         worker = started
@@ -391,11 +394,14 @@ export async function serveDev(
         })
     }
 
-    // THE CHECKER GOES WITH THE COMMAND. It is a process of its own, and an app with no tsconfig
-    // holds a temporary project on disk for as long as it is open. The signal is raised again once
-    // it is closed, so the command still ends the way that signal ends a process.
+    // THE CHECKER AND THE WORKER GO WITH THE COMMAND. Each is a process of its own, and an app with
+    // no tsconfig holds a temporary project on disk for as long as the checker is open. The worker
+    // is told directly rather than left to its `disconnect`, which a worker busy inside a build
+    // reads only when the build lets go — orphaned until then. The signal is raised again once the
+    // checker is closed, so the command still ends the way that signal ends a process.
     for (const signal of ['SIGINT', 'SIGTERM'] as const)
         process.once(signal, () => {
+            worker?.terminate()
             void closeChecker().finally(() => process.kill(process.pid, signal))
         })
 

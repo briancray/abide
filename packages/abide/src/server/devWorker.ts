@@ -125,8 +125,27 @@ export type Ask = {
 function toListener(message: FromWorker): void {
     process.send?.(message)
 }
-// The listener gone — its process killed rather than ended — takes this one with it.
-process.on('disconnect', () => process.exit(0))
+// 38.97 — EACH REQUEST'S SIGNAL, by request id, until its answer ends: the listener holds the
+// connection, so a hang-up reaches this worker as a `cancel` rather than through bun.
+const HANG_UPS = new Map<number, AbortController>()
+
+/** Files away the hang-up of the request `id`, whose answer has ended, and hands it back. */
+function answered(id: number): AbortController | undefined {
+    const hangUp = HANG_UPS.get(id)
+    HANG_UPS.delete(id)
+    return hangUp
+}
+
+// EVERY REQUEST IN FLIGHT HANGS UP WITH THIS WORKER, as each would with `abide start`'s process: a
+// handler that spawned under `request().signal` takes its child down, where an exit alone left it
+// running under launchd. The listener ends this worker on every reload, and its own end — killed
+// rather than ended — is a disconnect.
+function hangUpAndExit(): void {
+    for (const hangUp of HANG_UPS.values()) hangUp.abort()
+    process.exit(0)
+}
+process.on('disconnect', hangUpAndExit)
+process.on('SIGTERM', hangUpAndExit)
 
 // THE COMPILE, AS SOMETHING TO WAIT ON. A request that arrives while the worker is still
 // compiling has to wait for the app rather than be told there is none: the listener forwards
@@ -159,6 +178,7 @@ async function receive(message: ToWorker): Promise<void> {
     if (message.kind === 'cancel') {
         const reading = bodies.get(message.id)
         bodies.delete(message.id)
+        answered(message.id)?.abort()
         return reading?.reader.cancel()
     }
     await opening
@@ -217,10 +237,13 @@ const BODILESS = new Set([101, 204, 205, 304])
  * they gave up.
  */
 async function answerAsk(ask: Ask): Promise<void> {
+    const hangUp = new AbortController()
+    HANG_UPS.set(ask.id, hangUp)
     const request = new Request(ask.url, {
         method: ask.method,
         headers: ask.headers,
         body: ask.body,
+        signal: hangUp.signal,
     })
     ASKS.set(request, ask.id)
     let response: Response
@@ -251,7 +274,10 @@ async function answerAsk(ask: Ask): Promise<void> {
             carried !== undefined && admitsMux(request, response, carried),
         whole,
     })
-    if (body === null || whole !== undefined) return
+    if (body === null || whole !== undefined) {
+        answered(ask.id)
+        return
+    }
     bodies.set(ask.id, {
         reader: body.getReader(),
         html: (response.headers.get('content-type') ?? '').startsWith(
@@ -274,6 +300,7 @@ async function pull(id: number): Promise<void> {
         const { done, value } = await reading.reader.read()
         if (done) {
             bodies.delete(id)
+            answered(id)
             toListener({ kind: 'end', id })
             return
         }
@@ -284,6 +311,7 @@ async function pull(id: number): Promise<void> {
         toListener({ kind: 'chunk', id, bytes })
     } catch (thrown) {
         bodies.delete(id)
+        answered(id)
         const why = describe(thrown)
         if (reading.html) {
             const shown = new TextEncoder().encode(failureMarkup(why))
