@@ -19,10 +19,10 @@ import { type Found, runSchema, type Schema } from '../Schema.ts'
 import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
+import { Cursor, hasCursorBehind, keepPlaces, type Retained } from './Cursor.ts'
 import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
 import { armTimer, type Expiry, expiryFor } from './Expiry.ts'
 import { FOLLOWED } from './FOLLOWED.ts'
-import { Cursor, hasCursorBehind, keepPlaces, type Retained } from './Cursor.ts'
 import { isReactive } from './isReactive.ts'
 import { isThenable } from './isThenable.ts'
 import { MUTATION } from './MUTATION.ts'
@@ -38,16 +38,19 @@ import {
     CLEAN,
     DIRTY,
     detach,
-    detachProbes,
     dropProbeReader,
     newSubscriber,
+    newTracked,
     RELEASING,
+    revive,
     type Subscriber,
     TRACKING,
     type Tracked,
+    tombstone,
     track,
     trackProbe,
     truncate,
+    truncateProbes,
     untracked,
 } from './tracking.ts'
 import { owned, owning, watchOver } from './watch.ts'
@@ -556,8 +559,12 @@ export function isStreamBody(body: (args: never) => unknown): boolean {
  * under JSC; adding a DEAD boolean back put all three within 0.6%, which is the proof it
  * was layout and not work — that same dead boolean then cost the probe walk 6-7%.
  *
- * So the boundary is worth KNOWING and not worth engineering around. Adding a field
- * costs nothing; getting under costs a structural change that the next field added here
+ * Above the budget is not free under JSC, though: three fields more (the dead-reader
+ * counts and `probeCursor`) moved `construct a value` and the derived case +6-8% there,
+ * and three UNUSED fields on the old record moved them the same — layout, not work.
+ *
+ * So the boundary is worth KNOWING and not worth engineering around. A field costs a few
+ * ns of construction; getting under costs a structural change that the next field added here
  * silently undoes, and it re-rolls in a different direction for every row. If
  * construction ever needs that 11%, shed fields — do not build machinery to shed them.
  * And when a V8-only move of this size shows up on a graph row, the first thing to check
@@ -568,20 +575,24 @@ class Cell {
      * Who reads this value, on the value edge.
      *
      * ARRAYS, not sets. The mark walk walks this per write and a set's iterator
-     * allocates; removal is O(n) against a reader count that is small by construction.
+     * allocates. A disposed reader is left in place and counted rather than found — see
+     * `dropFrom` in `tracking.ts` — so a walk over this skips `!alive`.
      */
     declare readers: Subscriber[]
+    declare deadReaders: number
     /**
      * Who asked about this value's PROBES — a different edge from `readers`, and see
      * `markProbes` for what that buys.
      */
     declare probeReaders: Subscriber[]
+    declare deadProbeReaders: number
     declare sources: Cell[]
     /**
      * The values whose PROBES this body asked about — a `Cell` is a `Subscriber`, so it
      * carries the reader half of the probe edge as well as the source half.
      */
     declare probeSources: Cell[]
+    declare probeCursor: number
     declare cursor: number
     /** See `Subscriber.seen`. */
     declare seen: Set<Cell> | null
@@ -801,9 +812,12 @@ class Cell {
     ) {
         // Every field, in one order, `undefined` included.
         this.readers = []
+        this.deadReaders = 0
         this.probeReaders = []
+        this.deadProbeReaders = 0
         this.sources = []
         this.probeSources = []
+        this.probeCursor = 0
         this.cursor = 0
         this.seen = null
         this.seenThrough = 0
@@ -1294,6 +1308,7 @@ function markProbes(cell: Cell, pass: number): void {
     const readers = cell.readers
     for (let index = 0; index < readers.length; index += 1) {
         const reader = readers[index] as Subscriber
+        if (!reader.alive) continue
         if (!reader.isEffect) markProbes(reader as unknown as Cell, pass)
         else if (reader.adopter !== null)
             markProbes(reader.adopter as unknown as Cell, pass)
@@ -2188,6 +2203,8 @@ function run(cell: Cell): void {
     // where the cascade would try: `a` reads `b` and `b` reads `a`. Without this the
     // recursion is unbounded and the failure is a stack overflow rather than a value.
     if (cell.running) return
+    // A released orphan read again (12.14) — see `tombstone`.
+    if (!cell.alive) revive(cell as unknown as Subscriber)
     cell.generation += 1
     cell.state = CLEAN
     cell.running = true
@@ -2199,9 +2216,7 @@ function run(cell: Cell): void {
     // THE RUN'S CURSOR, spelled out rather than behind a call frame on a path walked once
     // per node per write. Zero is also "has diverged nowhere yet": see `tracking.ts`.
     reader.cursor = 0
-    // The probe edge is rebuilt rather than cursored: a guard that stops being taken has
-    // to stop waking, and a body reads few probes where it reads many values.
-    if (reader.probeSources.length !== 0) detachProbes(reader)
+    reader.probeCursor = 0
     let produced: unknown
     try {
         // 11.32 — UNDER THE VALUE'S OWN SCOPE, not the ambient one. A drain runs every body a
@@ -2211,6 +2226,8 @@ function run(cell: Cell): void {
     } catch (thrown) {
         TRACKING.reader = previous
         if (reader.cursor < reader.sources.length) truncate(reader)
+        if (reader.probeCursor < reader.probeSources.length)
+            truncateProbes(reader)
         cell.running = false
         if (thrown instanceof NotLanded) {
             cell.loading = true
@@ -2235,6 +2252,8 @@ function run(cell: Cell): void {
     // that is the only thing the truncation has to do — so the test is here and the call
     // is the rare arm.
     if (reader.cursor < reader.sources.length) truncate(reader)
+    // And a guard this run did not take stops waking it.
+    if (reader.probeCursor < reader.probeSources.length) truncateProbes(reader)
     cell.running = false
     // A VALUE THAT WAS ADOPTING AND IS NOT ANY MORE. Behind the `adoption` load so every
     // other recompute pays one field test rather than the brand read below it.
@@ -3290,6 +3309,7 @@ function owedBelow(cell: Cell): void {
     const readers = cell.readers
     for (let index = 0; index < readers.length; index += 1) {
         const reader = readers[index] as Subscriber
+        if (!reader.alive) continue
         const below = (reader.isEffect
             ? reader.adopter
             : reader) as unknown as Cell | null
@@ -3713,14 +3733,13 @@ let compactProducersAt = 1024
  * subscribes to this, never to each entry — the probe edge `trackProbe` makes, from a node that
  * is nothing but that edge.
  */
-type Signal = { readers: Subscriber[]; probeReaders: Subscriber[] }
-const SIGNALS = new Map<string, Signal>()
-const SIGNALS_BY_TAG = new Map<string, Signal[]>()
+const SIGNALS = new Map<string, Tracked>()
+const SIGNALS_BY_TAG = new Map<string, Tracked[]>()
 /**
  * The bare selection's one signal. Not a key in `SIGNALS`: `{ tags: [] }` canonicalises to the
  * empty set and matches nothing, where the bare selection matches every filed load in reach.
  */
-const EVERY_PRODUCER: Signal = { readers: [], probeReaders: [] }
+const EVERY_PRODUCER = newTracked()
 
 function refOf(cell: Cell): WeakRef<Cell> {
     let ref = cell.ref
@@ -3839,13 +3858,13 @@ function trackSignal(tags: string[] | null): void {
     const reader = TRACKING.reader
     if (reader === null) return
     if (tags === null) {
-        trackProbe(EVERY_PRODUCER as unknown as Tracked, reader)
+        trackProbe(EVERY_PRODUCER, reader)
         return
     }
     const key = JSON.stringify([...new Set(tags)].sort())
     let signal = SIGNALS.get(key)
     if (signal === undefined) {
-        signal = { readers: [], probeReaders: [] }
+        signal = newTracked()
         SIGNALS.set(key, signal)
         for (const tag of tags) {
             const signals = SIGNALS_BY_TAG.get(tag)
@@ -3853,7 +3872,7 @@ function trackSignal(tags: string[] | null): void {
             else signals.push(signal)
         }
     }
-    trackProbe(signal as unknown as Tracked, reader)
+    trackProbe(signal, reader)
 }
 
 function markSignals(tags: string[]): void {
@@ -3936,6 +3955,7 @@ export function refreshOver(tags: string[] | null): void {
 function readByAny(readers: Subscriber[]): boolean {
     for (let index = 0; index < readers.length; index += 1) {
         const reader = readers[index] as Subscriber
+        if (!reader.alive) continue
         if (!reader.isMirror || reader.adopter !== null) return true
     }
     return false
@@ -4368,12 +4388,13 @@ function releaseOrphan(cell: Cell): void {
     const stream = cell.stream
     if (stream !== null && stream.source === null) stopStream(stream)
     dropAdoption(cell)
-    detach(cell as unknown as Subscriber)
     cell.aborted = false
     if (cell.body !== null && stream === null) {
+        // OWED A RUN, so a read that reaches it again runs it — and `run` revives it first.
+        tombstone(cell as unknown as Subscriber)
         cell.state = DIRTY
         cell.direct = false
-    }
+    } else detach(cell as unknown as Subscriber)
 }
 
 RELEASING.unread = (source: Tracked): void => releaseOrphan(source as Cell)

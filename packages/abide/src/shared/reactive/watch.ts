@@ -20,12 +20,12 @@ import type { Reactive } from './Reactive.ts'
 import { currentScope, runInScope } from './scoping.ts'
 import {
     detach,
-    detachProbes,
     newSubscriber,
     type Subscriber,
     TRACKING,
     type Tracked,
     truncate,
+    truncateProbes,
     untracked,
 } from './tracking.ts'
 
@@ -248,7 +248,7 @@ export function watchOver(
  * binding's `Scope` and a `{#try}`'s retry hold their own, and call this direct.
  *
  * A SECOND BODY BESIDE `watchOver` ON PURPOSE, and it reads as the duplication it is: the two
- * differ by the cursor reset, the probe rebuild and the tail trim, and the rest is the same lines.
+ * differ by the cursor resets and the tail trims, and the rest is the same lines.
  * ONE BODY WITH A `tracked` FLAG WAS BUILT AND MEASURED, under V8 against this pair, interleaved
  * four runs a side: `write a value that changed` — one bound watch — went 15.6 ns to 21.4 in every
  * run, and `mount 50 readers` +12% (+7% under JSC). Three flag tests cannot cost 6 ns. The likely
@@ -276,7 +276,7 @@ export function watchTracked(effect: Effect): Disposer {
         const previous = TRACKING.reader
         TRACKING.reader = reader
         reader.cursor = 0
-        if (reader.probeSources.length !== 0) detachProbes(reader)
+        reader.probeCursor = 0
         reader.running = true
         try {
             WORK.wakes += 1
@@ -285,6 +285,8 @@ export function watchTracked(effect: Effect): Disposer {
             reader.running = false
             TRACKING.reader = previous
             if (reader.cursor < reader.sources.length) truncate(reader)
+            if (reader.probeCursor < reader.probeSources.length)
+                truncateProbes(reader)
             // The abort reaches here too: an effect that read a value which has
             // not landed is not an effect that failed, it is one whose turn has
             // not come. The read subscribed before it threw, so the value landing
@@ -299,6 +301,8 @@ export function watchTracked(effect: Effect): Disposer {
         reader.running = false
         TRACKING.reader = previous
         if (reader.cursor < reader.sources.length) truncate(reader)
+        if (reader.probeCursor < reader.probeSources.length)
+            truncateProbes(reader)
     }
     reader.notify()
     return (): void => {

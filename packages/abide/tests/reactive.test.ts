@@ -690,6 +690,199 @@ test('a body that reads one value three times holds one subscription of it', () 
     expect(`held: ${held}`).toBe('held: 1')
 })
 
+// Counts every slot of `value`'s reader list a walk or a scan loads from here on — the list stays
+// the same array, so a swap, a pop and a sweep all go through to it.
+function countSlotsRead(
+    value: unknown,
+    edge: 'readers' | 'probeReaders',
+): () => number {
+    const cell = cellOf<Record<typeof edge, unknown[]>>(value)
+    let read = 0
+    const list = cell[edge]
+    cell[edge] = new Proxy(list, {
+        get(target, key, receiver) {
+            if (typeof key === 'string' && /^\d+$/.test(key)) read += 1
+            return Reflect.get(target, key, receiver)
+        },
+    })
+    return (): number => {
+        cell[edge] = list
+        return read
+    }
+}
+
+// TEARING ROWS DOWN IS LINEAR IN THE ROWS. A disposed reader is counted dead where it stands
+// rather than found (`dropFrom` in `tracking.ts`), so a teardown loads no slot of the shared
+// value's list until half of it is dead and one sweep takes them all. The order is a keyed
+// replace — the new rows mount behind the old ones, then the old ones go in order — which is the
+// worst a scan from the front can meet. Nothing about the OUTPUT moves: the scan finds every
+// reader it looks for, so the count is the only thing a test can hold.
+//
+// THE REVERT IS STRUCTURAL — it is the `!reader.alive` arm of `dropFrom`; take it out and every
+// drop scans. Run: `slots read: 5250` at 100 rows a side, against the 200 below — the one sweep.
+//
+// AND THE SWEEP LANDS ON THE LAST OLD ROW. A keyed replace ends on exactly half the list dead, and
+// a sweep that waited for MORE than half kept every old row reachable until some later reader left.
+// THE REVERT: `dead * 2 <= readers.length` in `dropFrom`. Run: `held after the old rows: 200`.
+test('disposing the readers of one value reads none of the readers left', () => {
+    const selected = reactive(0)
+    const rows = 100
+    const old: (() => void)[] = []
+    for (let index = 0; index < rows; index += 1)
+        old.push(
+            watch(() => {
+                selected()
+            }),
+        )
+    const replacing: (() => void)[] = []
+    for (let index = 0; index < rows; index += 1)
+        replacing.push(
+            watch(() => {
+                selected()
+            }),
+        )
+    const slotsRead = countSlotsRead(selected, 'readers')
+    for (const stop of old) stop()
+    const read = slotsRead()
+    const held = cellOf<{ readers: unknown[] }>(selected).readers.length
+    for (const stop of replacing) stop()
+    expect(`held after the old rows: ${held}`).toBe(
+        `held after the old rows: ${rows}`,
+    )
+    expect(`slots read: ${read}`).toBe(`slots read: ${2 * rows}`)
+    expect(cellOf<{ readers: unknown[] }>(selected).readers.length).toBe(0)
+})
+
+// AND A ROW THAT DERIVES OFF THE VALUE IS TORN DOWN THE SAME WAY. A row's `reactive(() => selected()
+// === row.id)` is released as an orphan once its binding stops (12.14), and that release dropped the
+// derived value from the page value's readers by scanning them — n rows paid n²/2 again, one level
+// down from the binding the test above holds. Keyed-replace order, as above.
+//
+// THE REVERT: release an orphan with `detach` rather than `tombstone` (`releaseOrphan` in
+// `Reactive.ts`). Run: `slots read: 5250` at 100 rows a side, against the one sweep's 200 below.
+test('tearing down rows that derive off one value reads none of its readers', () => {
+    const selected = reactive(-1)
+    const rows = 100
+    function mount(from: number): (() => void)[] {
+        const stops: (() => void)[] = []
+        for (let index = 0; index < rows; index += 1) {
+            const previous = collectWatches(stops)
+            const id = from + index
+            const isSelected = reactive(() => selected() === id)
+            watch(() => {
+                isSelected()
+            })
+            collectWatches(previous)
+        }
+        return stops
+    }
+    const old = mount(0)
+    const replacing = mount(rows)
+    flushSync()
+    const slotsRead = countSlotsRead(selected, 'readers')
+    for (const stop of old) stop()
+    const read = slotsRead()
+    for (const stop of replacing) stop()
+    expect(`slots read: ${read}`).toBe(`slots read: ${2 * rows}`)
+    expect(cellOf<{ readers: unknown[] }>(selected).readers.length).toBe(0)
+})
+
+// A RELEASED ORPHAN READ AGAIN IS ONE READER, once. Its release left it counted dead on a list with
+// live readers beside it, so the read that brings it back has to take that dead entry out rather
+// than subscribe a second time beside it — or a later write wakes it through an entry the count
+// says is dead, and its last drop leaves one behind.
+//
+// THE REVERT: drop the `purge` in `revive` — `held: 3` where 2 are due.
+test('a released orphan read again holds one subscription — 12.14', () => {
+    const source = reactive(1)
+    const stopOther = watch(() => {
+        source()
+    })
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    const derived = reactive(() => source() + 1)
+    collectWatches(previous)
+    expect(derived()).toBe(2)
+    for (const stop of stops) stop()
+    let seen = 0
+    const stopFollower = watch(() => {
+        seen = derived() as number
+    })
+    flushSync()
+    const held = cellOf<{ readers: unknown[] }>(source).readers.length
+    source.set(5)
+    flushSync()
+    stopFollower()
+    stopOther()
+    expect(`held: ${held}`).toBe('held: 2')
+    expect(seen).toBe(6)
+    // Read again it is nobody's to release, so it is the one live reader left.
+    const live = cellOf<{ readers: { alive: boolean }[] }>(
+        source,
+    ).readers.filter((reader) => reader.alive)
+    expect(live).toEqual([cellOf(derived)])
+})
+
+// A LIST WITH ENTRIES HAS A LIVE ONE, which every `readers.length` test in the core leans on — an
+// orphan is released on it (12.14), and a walk is skipped on it. A dead reader left in place must
+// not outlive the last live one, and the drop that leaves it alone is a LIVE reader's — scanned
+// out by a run that stopped reading the value — not a disposal.
+//
+// THE REVERT is sweeping only on a disposal: `held: 1`, a dead reader alone on the list.
+test('the last live reader leaving takes the dead ones with it', () => {
+    const value = reactive(0)
+    const reading = reactive(true)
+    const stopFirst = watch(() => {
+        value()
+    })
+    const stopSecond = watch(() => {
+        if (reading()) value()
+    })
+    stopFirst()
+    reading.set(false)
+    flushSync()
+    const held = cellOf<{ readers: unknown[] }>(value).readers.length
+    stopSecond()
+    expect(`held: ${held}`).toBe('held: 0')
+})
+
+// A GUARD RE-ASKED IS NOT RE-SUBSCRIBED. A run moves a probe it asks again to its probe cursor
+// (`trackProbe`), so a flip that wakes every guard over one shared `ready()` loads the shared
+// value's probe readers once — the walk that wakes them — and the reruns touch the list not at
+// all. Rebuilt per run, each rerun dropped itself from that list by scanning it, and n guards
+// woken by one flip paid n²/2.
+//
+// THE REVERT IS STRUCTURAL — it is `probeCursor = 0` at the start of a run standing in for
+// `detachProbes`, which drops and re-pushes the edge. Run: `probe slots read: 5251` at 100 guards,
+// against the 100 of the one walk below.
+test('a flip that reruns every guard over one value reads its probe readers once', () => {
+    const flag = reactive(0)
+    const shared = reactive(() => {
+        const at = flag()
+        return at % 2 === 0 ? at : new Promise<number>(() => {})
+    })
+    const guards = 100
+    let runs = 0
+    const stops: (() => void)[] = []
+    for (let index = 0; index < guards; index += 1)
+        stops.push(
+            watch(() => {
+                runs += 1
+                shared.ready()
+            }),
+        )
+    flushSync()
+    runs = 0
+    const slotsRead = countSlotsRead(shared, 'probeReaders')
+    flag.set(1)
+    flushSync()
+    const read = slotsRead()
+    const woke = runs
+    for (const stop of stops) stop()
+    expect(`guards woken: ${woke}`).toBe(`guards woken: ${guards}`)
+    expect(`probe slots read: ${read}`).toBe(`probe slots read: ${guards}`)
+})
+
 test('a body that reorders its sources keeps every one of them subscribed', () => {
     const first = reactive('a')
     const second = reactive('b')
@@ -2022,29 +2215,44 @@ test('a derived body may read a probe and wakes when it moves', async () => {
     expect(label()).toBe('idle')
 })
 
-// The probe edge is rebuilt per run, so a guard that stops being taken stops waking. A
-// cursored edge would keep the old one and the body would run for a probe it no longer
-// asks about — which is a wake, and a wake is a DOM write.
+// A guard that stops being taken stops waking: the run's probe cursor ends short of it and
+// `truncateProbes` drops the tail. A cursored edge with no truncation would keep the old one and
+// the body would run for a probe it no longer asks about — which is a wake, and a wake is a DOM
+// write. Asked of a derived body AND of a watch, which end their runs in two places.
+//
+// THE REVERT is dropping the truncation at a run's end: from `run`, `body runs: 4` against 2; from
+// `watchTracked`, `guard runs: 4` against 2. The derived body is READ by a watch, or the mark the
+// stale edge makes reaches a value nothing pulls and the revert reports nothing.
 test('a probe a body stops reading stops waking it', async () => {
     const answer = 1
     const watched = reactive(() => Promise.resolve(answer))
     await watched
     const use = reactive(true)
-    let runs = 0
+    let bodyRuns = 0
     const body = reactive(() => {
-        runs += 1
+        bodyRuns += 1
         return use() ? watched.busy() : false
     })
-    body()
-    expect(runs).toBe(1)
-
+    const stopReader = watch(() => {
+        body()
+    })
+    let guardRuns = 0
+    const stopGuard = watch(() => {
+        guardRuns += 1
+        if (use()) watched.busy()
+    })
+    flushSync()
     use.set(false)
-    body()
-    const settled = runs
+    flushSync()
     // The body no longer asks about `watched`, so a load starting there reaches nobody.
     watched.refresh()
-    expect(runs).toBe(settled)
+    flushSync()
     await watched
+    flushSync()
+    stopReader()
+    stopGuard()
+    expect(`body runs: ${bodyRuns}`).toBe('body runs: 2')
+    expect(`guard runs: ${guardRuns}`).toBe('guard runs: 2')
 })
 
 // THE CAP (RULEBOOK 5.8-5.15). Every claim below is about WORK — the values these tests

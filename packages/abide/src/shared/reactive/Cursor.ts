@@ -8,13 +8,13 @@
 // cursor reads is a handful of fields, and naming them keeps the cell's internals out of a
 // second file.
 
+import { PATCHES } from './PATCHES.ts'
 import {
     dropReader,
     newSubscriber,
     type Subscriber,
     type Tracked,
 } from './tracking.ts'
-import { PATCHES } from './PATCHES.ts'
 
 /**
  * What a cursor reads, and all of a cell the server is handed (`servedCellOf`).
@@ -22,15 +22,10 @@ import { PATCHES } from './PATCHES.ts'
  * `ring[index]` carries ordinal `ringBase + index + 1`, so a cursor holding an ordinal finds its
  * place in a stream's chunk buffer without the buffer having to hold one.
  */
-export type Retained = {
+export type Retained = Tracked & {
     /** The window a `throttle` or a `debounce` holds open, `holding` while a production waits on it. */
     cap: { holding: boolean } | null
     ordinal: number
-    /**
-     * Unused by a cursor and declared so a `Cell` still satisfies `Tracked`, which a cursor's
-     * subscriber is registered through.
-     */
-    probeReaders: Subscriber[]
     ring: unknown[]
     ringBase: number
     servable: boolean
@@ -41,7 +36,6 @@ export type Retained = {
      */
     stream: object | null
     value: unknown
-    readers: Subscriber[]
 }
 
 // The cursors standing over each source, for a patch to keep the place of the ones behind (5.7).
@@ -118,7 +112,7 @@ export class Cursor implements AsyncIterator<unknown> {
         // reader in the graph carries for the sake of the few that are cursors.
         // Registered outside the tracking protocol, so the source it waits on is declared
         // rather than discovered — see the same shape in `Reactive`'s `settled`.
-        this.reader = newSubscriber([source as unknown as Tracked], null)
+        this.reader = newSubscriber([source], null)
         // One production per waiting turn, in the order they were asked for: a burst that
         // lands three productions on a consumer holding two turns answers both.
         this.reader.notify = (): void => {

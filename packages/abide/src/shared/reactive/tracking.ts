@@ -88,6 +88,11 @@ export type Subscriber = {
      */
     probeSources: Tracked[]
     /**
+     * How far into `probeSources` this run has re-asked — `cursor` for the probe edge, and see
+     * `trackProbe` for why it is not the same protocol.
+     */
+    probeCursor: number
+    /**
      * How far into `sources` this run has matched.
      *
      * Once it reaches `sources.length` the run has DIVERGED and every read left goes through
@@ -111,8 +116,22 @@ export type Subscriber = {
 
 export type Tracked = {
     readers: Subscriber[]
+    /** How many of `readers` are disposed and not yet swept out — see `dropFrom`. */
+    deadReaders: number
     /** Who asked about this value's probes. Apart from `readers` — see `probeSources`. */
     probeReaders: Subscriber[]
+    /** `deadReaders` for `probeReaders`. */
+    deadProbeReaders: number
+}
+
+/** A node that is nothing but its edges — a probe signal with no value behind it. */
+export function newTracked(): Tracked {
+    return {
+        readers: [],
+        deadReaders: 0,
+        probeReaders: [],
+        deadProbeReaders: 0,
+    }
 }
 
 /** The reader whose run is on the stack, or `null` where reads subscribe to nothing. */
@@ -144,6 +163,7 @@ export function newSubscriber(
     return {
         sources,
         probeSources: [],
+        probeCursor: 0,
         cursor: 0,
         seen: null,
         seenThrough: 0,
@@ -167,8 +187,9 @@ export function newSubscriber(
  * of the loop beside this one is what CLAUDE.md's sibling-seam rule refuses.
  */
 export function dropReader(source: Tracked, reader: Subscriber): void {
-    removeFrom(source.readers, reader)
-    if (source.readers.length === 0) unread(source)
+    const readers = source.readers
+    source.deadReaders = dropFrom(readers, reader, source.deadReaders)
+    if (readers.length === 0) unread(source)
 }
 
 /**
@@ -218,40 +239,102 @@ export function untracked<First, Second, Result>(
  * rather than on a value.
  */
 export function dropProbeReader(source: Tracked, reader: Subscriber): void {
-    removeFrom(source.probeReaders, reader)
-    if (source.probeReaders.length === 0) unread(source)
+    const readers = source.probeReaders
+    source.deadProbeReaders = dropFrom(readers, reader, source.deadProbeReaders)
+    if (readers.length === 0) unread(source)
 }
 
-function removeFrom(readers: Subscriber[], reader: Subscriber): void {
+/**
+ * Takes `reader` off `readers`, of which `dead` are disposed, and returns how many are now.
+ *
+ * A DISPOSED READER IS LEFT WHERE IT IS AND COUNTED, rather than found. Finding it is a scan of
+ * every reader of the value, and a teardown drops them all — n rows reading one page value, torn
+ * down, paid n²/2 compares, and a keyed replace is the worst order there is: the new rows are
+ * pushed behind the old ones the scan walks past. 10,000 rows went 16-39 ms to 0.2-0.4. Every
+ * walk over a reader list skips `!alive`, so a dead slot costs a walk one test until the
+ * sweep below takes it out.
+ *
+ * SWEPT ONCE HALF THE LIST IS DEAD, which keeps a walk to at most twice the live readers and the
+ * sweep amortised O(1) a drop — and keeps the invariant every `length` test leans on: a list with
+ * entries has a LIVE one, since a list that is all dead is at least half dead. HALF, NOT MORE THAN
+ * HALF: a keyed replace ends on exactly half, n old rows dead behind n new ones, and a sweep that
+ * waited for one more drop kept the old rows — and through each one's `notify`, its scope and its
+ * nodes — reachable until some unrelated reader left. An over-count — a
+ * reader dropped twice — only sweeps early, and the sweep recounts from zero.
+ *
+ * A LIVE reader still scans: that is a run's own truncation or an orphan's release, a reader
+ * that may subscribe again, so it cannot be left to read as dead.
+ */
+function dropFrom(
+    readers: Subscriber[],
+    reader: Subscriber,
+    dead: number,
+): number {
+    if (!reader.alive) dead += 1
+    else purge(readers, reader)
+    if (dead * 2 < readers.length) return dead
+    let kept = 0
     for (let index = 0; index < readers.length; index += 1) {
-        if (readers[index] !== reader) continue
-        readers[index] = readers[readers.length - 1] as Subscriber
-        readers.pop()
-        return
+        const survivor = readers[index] as Subscriber
+        if (survivor.alive) {
+            readers[kept] = survivor
+            kept += 1
+        }
     }
+    readers.length = kept
+    return 0
 }
 
 /**
  * Subscribes `reader` to `source`'s probes, once per run.
  *
- * A PROBE EDGE IS REBUILT PER RUN rather than cursored. A body reads few probes where it reads
- * many values, and a guard that stops being taken must stop waking — so the list is dropped at
- * the start of a run and re-made by the reads that happen.
+ * A PROBE EDGE IS CURSORED, and kept in the order this run asked. `probeSources[0..probeCursor)`
+ * is what this run has asked so far; a source asked again is moved to the cursor rather than
+ * dropped and re-pushed, so a run that asks what its last one did touches no source's list at
+ * all. It used to be dropped at the start of every run and re-made — which put a scan of the
+ * SOURCE'S probe readers behind every rerun, and n guards over one shared `ready()` woken by one
+ * flip paid n²: 10,000 went 39 ms to 0.4. A guard that stops being taken still stops waking:
+ * what the run did not re-ask is past the cursor at its end, and `truncateProbes` drops it.
+ *
+ * NOT `track`'s protocol, because the list is a SET in no particular order where `sources` is
+ * positional: a re-ask out of order is a swap, never a divergence, and a body asks one to three.
  */
 export function trackProbe(source: Tracked, reader: Subscriber): void {
     const asked = reader.probeSources
-    for (let index = 0; index < asked.length; index += 1)
+    const at = reader.probeCursor
+    if (asked[at] === source) {
+        reader.probeCursor = at + 1
+        return
+    }
+    for (let index = 0; index < at; index += 1)
         if (asked[index] === source) return
-    asked.push(source)
-    source.probeReaders.push(reader)
+    let found = asked.length
+    for (let index = at + 1; index < asked.length; index += 1)
+        if (asked[index] === source) {
+            found = index
+            break
+        }
+    if (found === asked.length) {
+        asked.push(source)
+        source.probeReaders.push(reader)
+    }
+    asked[found] = asked[at] as Tracked
+    asked[at] = source
+    reader.probeCursor = at + 1
+}
+
+/** Drops the probe subscriptions `reader`'s run did not re-ask — the tail past its cursor. */
+export function truncateProbes(reader: Subscriber): void {
+    const asked = reader.probeSources
+    for (let index = reader.probeCursor; index < asked.length; index += 1)
+        dropProbeReader(asked[index] as Tracked, reader)
+    asked.length = reader.probeCursor
 }
 
 /** Drops every probe subscription `reader` holds. */
 export function detachProbes(reader: Subscriber): void {
-    const asked = reader.probeSources
-    for (let index = 0; index < asked.length; index += 1)
-        dropProbeReader(asked[index] as Tracked, reader)
-    asked.length = 0
+    reader.probeCursor = 0
+    truncateProbes(reader)
 }
 
 // How far `kept * dropped` must outgrow `kept + dropped` before `truncate` builds a `Set` over the
@@ -278,8 +361,9 @@ const SET_OVER_SCAN = 20
  * `SET_OVER_SCAN`): at 1000/999 the scan is one probe per dropped slot and building the Set
  * doubled the flip, so the two are priced against each other instead.
  *
- * A duplicate inside the DROPPED tail needs no test — `removeFrom` takes one occurrence and the
- * second call finds none.
+ * A duplicate inside the DROPPED tail needs no test — `dropFrom` takes one occurrence and the
+ * second call finds none, or for a disposed reader counts one dead too many, which only sweeps
+ * early.
  *
  * Exported because a tracked run's end is exactly this and nothing more: the TEST that there is a
  * tail is the caller's — two field loads, on the rare arm.
@@ -415,4 +499,54 @@ export function detach(reader: Subscriber): void {
     reader.cursor = 0
     truncate(reader)
     if (reader.probeSources.length !== 0) detachProbes(reader)
+}
+
+/**
+ * Lets go of every subscription `reader` holds as a DISPOSAL — counted dead where it stands
+ * (`dropFrom`) rather than scanned for — while keeping its lists, so `revive` can find what it left.
+ *
+ * FOR A RELEASED ORPHAN (12.14): n rows each deriving off one page value, torn down, scanned the
+ * page value's readers once a row. The orphan may be read again, which is what `revive` is for —
+ * paid by the read that comes back, which is rare, rather than by the release, which is per row.
+ */
+export function tombstone(reader: Subscriber): void {
+    reader.alive = false
+    const sources = reader.sources
+    for (let index = 0; index < sources.length; index += 1)
+        dropReader(sources[index] as Tracked, reader)
+    reader.cursor = 0
+    const asked = reader.probeSources
+    for (let index = 0; index < asked.length; index += 1)
+        dropProbeReader(asked[index] as Tracked, reader)
+    reader.probeCursor = 0
+}
+
+/**
+ * Takes a `tombstone`d reader's dead entries out of whatever list has not swept them yet, and
+ * makes it live with nothing subscribed — the state a fresh reader starts its run in.
+ */
+export function revive(reader: Subscriber): void {
+    reader.alive = true
+    const sources = reader.sources
+    for (let index = 0; index < sources.length; index += 1) {
+        const source = sources[index] as Tracked
+        if (purge(source.readers, reader)) source.deadReaders -= 1
+    }
+    sources.length = 0
+    const asked = reader.probeSources
+    for (let index = 0; index < asked.length; index += 1) {
+        const source = asked[index] as Tracked
+        if (purge(source.probeReaders, reader)) source.deadProbeReaders -= 1
+    }
+    asked.length = 0
+}
+
+function purge(readers: Subscriber[], reader: Subscriber): boolean {
+    for (let index = 0; index < readers.length; index += 1) {
+        if (readers[index] !== reader) continue
+        readers[index] = readers[readers.length - 1] as Subscriber
+        readers.pop()
+        return true
+    }
+    return false
 }

@@ -40,6 +40,7 @@ import {
     detachProbes,
     dropReader,
     newSubscriber,
+    newTracked,
     type Subscriber,
     TRACKING,
     type Tracked,
@@ -332,7 +333,7 @@ export function createKeyed<
     // entry's probe carries it: a guard asked before a key was reached subscribed to the entries
     // there were, so the key that starts loading next — search-as-you-type — never woke it. One
     // signal per `Keyed`, moved where an entry is reached and where one is released.
-    const membership: Tracked = { readers: [], probeReaders: [] }
+    const membership = newTracked()
 
     function askMembership(): void {
         const reader = TRACKING.reader
