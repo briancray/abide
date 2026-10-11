@@ -4,7 +4,12 @@
 // `Bun.fetch` was given.
 
 import { expect, test } from 'bun:test'
-import { brotliDecompressSync } from 'node:zlib' // bun decompresses gzip and zstd of its own, and no brotli
+import {
+    brotliCompressSync,
+    brotliDecompressSync,
+    constants,
+    gzipSync,
+} from 'node:zlib' // bun has no brotli, and the lane under test compresses gzip with zlib's
 import { compressAnswer } from '#server/compressAnswer.ts'
 import { ENCODINGS, negotiateEncoding } from '#server/negotiateEncoding.ts'
 import { prefers } from '#server/prefers.ts'
@@ -72,7 +77,7 @@ test('a document compresses in either encoding, says its length and reads back w
         ['br', brotliDecompressSync],
         ['gzip', Bun.gunzipSync],
     ] as const) {
-        const answer = compressAnswer(
+        const answer = await compressAnswer(
             document,
             asking(encoding),
             new Headers(),
@@ -85,7 +90,12 @@ test('a document compresses in either encoding, says its length and reads back w
         )
         expect(decoded.decode(decode(bytes))).toBe(decoded.decode(document))
     }
-    const plain = compressAnswer(document, asking(null), new Headers(), 200)
+    const plain = await compressAnswer(
+        document,
+        asking(null),
+        new Headers(),
+        200,
+    )
     expect(plain.headers.get('content-encoding')).toBeNull()
     expect(plain.headers.get('content-length')).toBe(
         String(document.byteLength),
@@ -97,7 +107,7 @@ test('a document compresses in either encoding, says its length and reads back w
 // Either way it says its length, as a document does. THE REVERT: drop the floor; the small answer is
 // sent as brotli. Drop the JSON lane's `content-length`; both answers declare none.
 test('a JSON answer varies on accept-encoding, says its length and is compressed only from the floor up — 38.30, 38.69', async () => {
-    const small = compressAnswer(
+    const small = await compressAnswer(
         '{"id":1}',
         asking('br'),
         new Headers({ vary: 'origin' }),
@@ -110,20 +120,70 @@ test('a JSON answer varies on accept-encoding, says its length and is compressed
     const text = JSON.stringify(
         Array.from({ length: 200 }, (_, id) => ({ id })),
     )
-    const large = compressAnswer(text, asking('gzip'), new Headers(), 201)
+    const large = await compressAnswer(text, asking('gzip'), new Headers(), 201)
     expect(large.status).toBe(201)
     expect(large.headers.get('content-encoding')).toBe('gzip')
     expect(large.headers.get('vary')).toBe('accept-encoding')
     const sent = new Uint8Array(await large.arrayBuffer())
     expect(large.headers.get('content-length')).toBe(String(sent.byteLength))
     expect(new TextDecoder().decode(Bun.gunzipSync(sent))).toBe(text)
-    const page = compressAnswer(
+    const page = await compressAnswer(
         new TextEncoder().encode(text),
         asking('gzip'),
         new Headers(),
         200,
     )
     expect(page.headers.get('vary')).toBeNull()
+})
+
+// 38.96 — FROM 64 KB AN ANSWER IS COMPRESSED OFF THE EVENT LOOP, to the bytes the loop would have
+// made, and under it with no await at all. A turn of the loop queued before the answer runs before
+// the answer lands only when the compression left the loop. THE REVERT: compress every answer on
+// the loop; the 620 KB answer lands with the turn not yet run, in either encoding.
+test('a large answer is compressed off the loop to the same bytes, and a small one with no await — 38.96', async () => {
+    const text = JSON.stringify(
+        Array.from({ length: 7000 }, (_, id) => ({ id, name: `row ${id}` })),
+    ).repeat(3)
+    expect(text.length).toBeGreaterThan(64 * 1024)
+    for (const [encoding, decode] of [
+        ['br', brotliDecompressSync],
+        ['gzip', Bun.gunzipSync],
+    ] as const) {
+        let turned = false
+        setImmediate(() => {
+            turned = true
+        })
+        const answer = await compressAnswer(
+            text,
+            asking(encoding),
+            new Headers(),
+            200,
+        )
+        expect(turned).toBe(true)
+        const sent = new Uint8Array(await answer.arrayBuffer())
+        expect(answer.headers.get('content-encoding')).toBe(encoding)
+        expect(answer.headers.get('content-length')).toBe(
+            String(sent.byteLength),
+        )
+        expect(new TextDecoder().decode(decode(sent))).toBe(text)
+        const bytes = new TextEncoder().encode(text)
+        expect(sent).toEqual(
+            new Uint8Array(
+                encoding === 'br'
+                    ? brotliCompressSync(bytes, {
+                          params: { [constants.BROTLI_PARAM_QUALITY]: 5 },
+                      })
+                    : gzipSync(bytes),
+            ),
+        )
+    }
+    const under = compressAnswer(
+        text.slice(0, 64 * 1024 - 1),
+        asking('br'),
+        new Headers(),
+        200,
+    )
+    expect(under instanceof Response).toBe(true)
 })
 
 /**
