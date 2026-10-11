@@ -259,6 +259,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | File | Export | Served at | Rules |
 | --- | --- | --- | --- |
 | `server/rpc/name.ts` | `default` | `/__abide/rpc/name` | 16.2, 19.1 |
+| `server/rpc/name.ts` | `name` | `/__abide/rpc/name` | 16.2, 19.1 |
 | `server/rpc/users.ts` | `getUser` | `/__abide/rpc/users/getUser` | 16.2, 19.1 |
 | `server/rpc/admin/audit.ts` | `recent` | `/__abide/rpc/admin/audit/recent` | 16.2, 19.1 |
 

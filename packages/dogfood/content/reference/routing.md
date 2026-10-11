@@ -36,16 +36,19 @@ match against.
 | File | Export | Served at |
 | --- | --- | --- |
 | `server/rpc/name.ts` | `default` | `/__abide/rpc/name` |
+| `server/rpc/name.ts` | `name` | `/__abide/rpc/name` |
 | `server/rpc/users.ts` | `getUser` | `/__abide/rpc/users/getUser` |
 | `server/rpc/admin/audit.ts` | `recent` | `/__abide/rpc/admin/audit/recent` |
 
-A `default` export takes the file's own name and a named export appends its name, so a file with
-one handler reads as an address and a file with five reads as five. A directory nests the
+A `default` export, or an export named as its file, takes the file's own name, and any other named
+export appends its name, so a file with one handler reads as an address and a file with five reads
+as five. A directory nests the
 address and changes nothing else.
 
 A path is owned by **exactly one** handler. `server/rpc/users.ts` exporting `getUser` and
 `server/rpc/users/getUser.ts` exporting `default` mount at the same address, and that is a build
-error naming both files rather than whichever won at the first request.
+error naming both files rather than whichever won at the first request. So is one file exporting
+both `default` and its own name.
 
 ## `render`
 

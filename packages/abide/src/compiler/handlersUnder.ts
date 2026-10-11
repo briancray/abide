@@ -1,6 +1,6 @@
 // 16.2 AND 19.1 — EVERY HANDLER AN APP DECLARES, AND WHERE IT IS ANSWERED. A handler is an export of
 // a module under `server/rpc`, and its address is the module's path below that directory and then
-// the export's name — `default` answering at the path alone.
+// the export's name — `default`, or an export named as its file, answering at the path alone.
 //
 // READ, NOT RUN. The build finds handlers by what their modules SAY rather than by importing them,
 // so a build never runs server code: an app's module may open a database at import, and nothing
@@ -82,7 +82,10 @@ export async function handlersUnder(
                 throw new Error(
                     `abide: ${source} exports \`${exported}\`, which is not declared as a handler. A module under ${HANDLER_DIRECTORY} exports handlers alone, each declared by abide's \`GET(…)\` (or POST, PUT, PATCH, DELETE); anything else belongs beside it. RULEBOOK 19.15.`,
                 )
-            const address = `${RPC_ADDRESS}/${path}${exported === 'default' ? '' : `/${exported}`}`
+            const atPath =
+                exported === 'default' ||
+                exported === path.slice(path.lastIndexOf('/') + 1)
+            const address = `${RPC_ADDRESS}/${path}${atPath ? '' : `/${exported}`}`
             const owner = owners.get(address)
             if (owner !== undefined)
                 throw new Error(

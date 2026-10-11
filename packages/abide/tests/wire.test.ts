@@ -118,6 +118,7 @@ beforeAll(async () => {
         'server/rpc/invoices.ts': INVOICES,
         // `default` answers at the module's own path.
         'server/rpc/health.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ up: true }))\n`,
+        'server/rpc/admin/uptime.ts': `import { GET } from '@abide/abide/server'\n\nexport const uptime = GET(() => ({ days: 41 }))\n`,
     }))
 }, 30_000)
 
@@ -128,7 +129,8 @@ afterAll(() => {
 
 const RPC = '/__abide/rpc/invoices'
 
-// 16.2, 19.1 — the file's path below `server/rpc`, then the export; 16.30 and 21.3 on the answer.
+// 16.2, 19.1 — the file's path below `server/rpc`, then the export, where `default` and an export
+// named as its file answer at the path alone; 16.30 and 21.3 on the answer.
 test('a handler answers at its file path and export name, as JSON — 16.2, 16.30', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/getInvoice?id=4021`)
     expect(answer.status).toBe(200)
@@ -138,6 +140,9 @@ test('a handler answers at its file path and export name, as JSON — 16.2, 16.3
 
     const health = await Bun.fetch(`${base}/__abide/rpc/health`)
     expect(await health.json()).toEqual({ up: true })
+
+    const uptime = await Bun.fetch(`${base}/__abide/rpc/admin/uptime`)
+    expect(await uptime.json()).toEqual({ days: 41 })
 })
 
 // 16.40, 15.1 — the refusal the handler RETURNED, at its own status, as Problem Details (RFC 9457):

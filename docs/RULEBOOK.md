@@ -769,7 +769,8 @@ message as `detail`, and its data as a `data` member.
 16.1 A handler MUST be a `reactive`, a plain function, or a value.
 
 16.2 `GET`, `POST`, `PUT`, `PATCH` and `DELETE` MUST give a handler an address over http, mounted by
-file path and export name.
+file path and export name, where a `default` export and an export named as its file MUST be mounted
+at the file path alone.
 
 16.3 An `Rpc` MUST hand back the same `Reactive` shape the handler had, `Produced` included.
 

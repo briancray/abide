@@ -138,7 +138,7 @@ function ask(
     content: string,
     maxTurns?: number,
 ): Promise<Response> {
-    return Bun.fetch(`${base}/__abide/rpc/ask/ask`, {
+    return Bun.fetch(`${base}/__abide/rpc/ask`, {
         method: 'POST',
         headers: {
             ...asPage(caller),
@@ -308,7 +308,7 @@ test('a caller hanging up kills the Claude Code run — 45.18', async () => {
 
 // 45.3 — a transcript ending on the model's own turn is refused before any provider is reached.
 test('a transcript that does not end on a user turn is refused — 45.3', async () => {
-    const answer = await Bun.fetch(`${base}/__abide/rpc/ask/ask`, {
+    const answer = await Bun.fetch(`${base}/__abide/rpc/ask`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -335,7 +335,7 @@ const boot = () => bootApp(originUnder('${app}'), () => loadBuild({ root: '${app
 const first = await boot()
 const second = await boot()
 await second.stop()
-const answer = await first.fetch(new Request('http://app.test/__abide/rpc/ask/ask', {
+const answer = await first.fetch(new Request('http://app.test/__abide/rpc/ask', {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/jsonl', cookie: 'who=ada' },
     body: JSON.stringify({ via: 'api', messages: [{ role: 'user', content: 'who am I?' }] }),

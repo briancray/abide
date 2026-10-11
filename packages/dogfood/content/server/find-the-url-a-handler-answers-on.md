@@ -74,6 +74,7 @@ Read on: [Mutations](change-something-on-the-server.md)
 | File | Export | Answers at |
 | --- | --- | --- |
 | `#server/rpc/name.ts` | `default` | `/__abide/rpc/name` |
+| `#server/rpc/name.ts` | `name` | `/__abide/rpc/name` |
 | `#server/rpc/users.ts` | `getUser` | `/__abide/rpc/users/getUser` |
 | `#server/rpc/admin/audit.ts` | `recent` | `/__abide/rpc/admin/audit/recent` |
 

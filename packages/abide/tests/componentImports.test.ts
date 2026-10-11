@@ -26,7 +26,7 @@ export const preview = GET(async ({ name }: { name: string }) =>
 )
 `,
 }
-const ADDRESS = '/__abide/rpc/preview/preview?name=ada'
+const ADDRESS = '/__abide/rpc/preview?name=ada'
 
 afterAll(removeTemporaryModules)
 
