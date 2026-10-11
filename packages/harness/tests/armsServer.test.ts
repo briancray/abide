@@ -484,9 +484,16 @@ test('app-fetch: the wire answers with a status and a trace header', async () =>
 test('app-fetch: the test the card shows passes from the docs app', async () => {
     const { spawned } = await import('../src/gate/index.ts')
     const run = await spawned(
-        [process.execPath, 'test', './src/server/app.test.ts'],
+        // A child under a loaded gate boots the app past bun's 5 s default for a test.
+        [
+            process.execPath,
+            'test',
+            '--timeout=60000',
+            './src/server/app.test.ts',
+        ],
         { cwd: DOGFOOD.pathname, deadline: 120_000 },
     )
+    if (run.exitCode !== 0) console.error(run.stderr)
     expect(`${run.exitCode} ${run.stderr.includes('2 pass')}`).toBe('0 true')
 }, 130_000)
 
