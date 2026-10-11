@@ -716,16 +716,16 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `abide scaffold <name>` | Writes a starter project. | 38.1, 38.43 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.58 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.32, 38.33, 38.34, 38.41 |
-| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 37.8, 37.9, 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27, 38.29, 38.31, 38.36, 38.37, 38.38, 38.39, 38.42, 38.44, 38.59, 38.64, 38.65, 38.66 |
-| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.44, 38.5, 38.19, 38.26, 38.27, 38.28, 38.31, 38.67 |
-| `abide start [--port <n>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28, 38.29, 38.30, 38.59, 38.68, 38.69 |
+| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 37.8, 37.9, 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27, 38.29, 38.31, 38.36, 38.37, 38.38, 38.39, 38.42, 38.44, 38.59, 38.64, 38.65, 38.66, 38.95, 38.97 |
+| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.44, 38.5, 38.19, 38.26, 38.27, 38.28, 38.31, 38.67, 38.95 |
+| `abide start [--port <n>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28, 38.29, 38.30, 38.59, 38.68, 38.69, 38.96 |
 | `abide [--url <origin>] [--port <n>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.54, 38.55, 38.56, 38.59, 38.60, 38.61, 38.63 |
 | `abide call <address> [args]` | One call to one handler. | 38.8, 38.62 |
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. | 38.9 |
 | `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.14 |
 | `abide logs` | A live subscription to `log.records`. | 38.10 |
 | `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. | 38.70 |
-| `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.11, 38.26, 38.27, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.53, 38.57 |
+| `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.11, 38.26, 38.27, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.53, 38.57, 38.94 |
 | `abide bundle [--out]` | A desktop app for the host platform, with a window on the app. | 38.11, 38.26, 38.27, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.93 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.12, 38.35, 38.40 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.13 |

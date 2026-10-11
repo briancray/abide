@@ -2185,6 +2185,18 @@ rest.
 38.93 The menu bar MUST be told again after every navigation the page makes, and MUST be the
 default alone from each load the launcher starts until the page loaded tells it its route's `menu`.
 
+38.94 The executable `abide compile` writes MUST carry the app's code as bytecode, and MUST still
+report an error at its source line.
+
+38.95 The chunks `abide build` and `abide dev` emit MUST NOT load, for a route, a module of the
+framework that no name the route imports reaches.
+
+38.96 `abide start` MUST compress an answer of 64 KB or more off the event loop, into the bytes the
+same encoding and quality make on it, and MUST compress a smaller one without yielding.
+
+38.97 `abide dev` MUST abort a request's signal when its caller hangs up, and when the process
+answering it is replaced or ended.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
