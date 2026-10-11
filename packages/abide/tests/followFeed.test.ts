@@ -5,8 +5,14 @@
 // value per write against 1.
 
 import { expect, test } from 'bun:test'
-import { Mux, type MuxConnection } from '#server/answerSocket.ts'
+import {
+    feedFromServed,
+    followAsEvents,
+    Mux,
+    type MuxConnection,
+} from '#server/answerSocket.ts'
 import { flushSync, invalidate, reactive, refresh } from '#shared'
+import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { GET } from '#shared/rpc.ts'
 
 const FOLLOWERS = 20
@@ -122,4 +128,120 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
         'value',
     ])
     connection.close()
+})
+
+// 18.8 — AN ENTRY ANSWERED REACHES THE FOLLOWERS OF ITS OWN ARGS, and walks no other: an answer of a
+// keyed `global` GET nobody was fed from looks up the entry of each follower filed under its key,
+// and of none of the thousand following other keys. THE REVERT: walk every follower of the handler
+// in `feedFromServed`, as before the followers were filed by key — 1000 entry lookups an answer,
+// against 1, and a request that pays ~60 µs at 1000 followers and ~600 µs at 10000.
+test('an entry answered looks up the followers of its own key alone — 18.8', async () => {
+    const KEYS = 1000
+    const value = reactive(({ id }: { id: number }) => ({ id }), {
+        global: true,
+    })
+    const rpc = GET(value as never) as unknown as { address: string }
+    rpc.address = '/__abide/rpc/keyed'
+    const mux = new Mux(
+        new Map([[rpc.address, { handler: rpc, ui: true } as never]]),
+        undefined,
+    )
+    const frames: {
+        op: string
+        id: number
+        version?: number
+        value?: unknown
+    }[] = []
+    const connection = mux.connect(
+        new Request('http://app.test/__abide/socket'),
+        {
+            send(text: string) {
+                frames.push(JSON.parse(text))
+            },
+            close() {},
+        },
+    )
+    for (let id = 0; id < KEYS; id++)
+        await connection.message(
+            JSON.stringify({
+                op: 'sub',
+                id: id + 1,
+                address: rpc.address,
+                args: { id },
+            }),
+        )
+    flushSync()
+    // Nothing was answered yet, so nothing is fed.
+    expect(frames).toEqual([])
+    ;(value as unknown as (args: { id: number }) => unknown)({ id: 0 })
+    const global = GLOBAL_GETS.get(rpc) as NonNullable<
+        ReturnType<typeof GLOBAL_GETS.get>
+    >
+    const key = global.key({ id: 0 })
+    const serving = global.at(key)
+    const at = global.at
+    let looked = 0
+    global.at = (asked) => {
+        looked += 1
+        return at(asked)
+    }
+    try {
+        feedFromServed(rpc, serving, key)
+    } finally {
+        global.at = at
+    }
+    flushSync()
+    expect(`looked: ${looked}`).toBe('looked: 1')
+    expect(frames).toEqual([
+        { op: 'value', id: 1, version: expect.any(Number), value: { id: 0 } },
+    ])
+    connection.close()
+})
+
+// 18.6, 18.20 — AN EVENT STREAM IS SENT THE BODY SERIALIZED FOR EVERY FOLLOWER, not one of its own:
+// a write to a value twenty event streams follow serializes it once and parses nothing. THE REVERT:
+// read each frame back with `JSON.parse` in `eventOf` and stringify its body again — 20 parses and
+// 21 stringifies a write, against 0 and 1.
+test('a write reaches every event stream following a value with one serialization and no parse — 18.6, 18.20', async () => {
+    const STREAMS = 20
+    const value = reactive({ titles: ['dune'] }, { global: true })
+    const rpc = GET(value as never) as unknown as { address: string }
+    rpc.address = '/__abide/rpc/events'
+    const mounted = { handler: rpc, ui: true } as never
+    const readers: ReadableStreamDefaultReader<Uint8Array>[] = []
+    for (let at = 0; at < STREAMS; at++)
+        readers.push(followAsEvents(mounted, undefined, undefined).getReader())
+    const { parse, stringify } = JSON
+    let parsed = 0
+    let stringified = 0
+    JSON.parse = ((...given: Parameters<typeof parse>) => {
+        parsed += 1
+        return parse(...given)
+    }) as typeof parse
+    JSON.stringify = ((...given: Parameters<typeof stringify>) => {
+        stringified += 1
+        return stringify(...given)
+    }) as typeof stringify
+    try {
+        value.set({ titles: ['dune', 'emma'] })
+        flushSync()
+    } finally {
+        JSON.parse = parse
+        JSON.stringify = stringify
+    }
+    expect(`parsed: ${parsed}, stringified: ${stringified}`).toBe(
+        'parsed: 0, stringified: 1',
+    )
+    const decoder = new TextDecoder()
+    for (const reader of readers) {
+        let text = ''
+        while (!text.includes('emma')) {
+            const { value: chunk } = await reader.read()
+            text += decoder.decode(chunk)
+        }
+        expect(text).toMatch(
+            /event: value\nid: \d+\ndata: \{"titles":\["dune","emma"\]\}\n\n$/,
+        )
+        await reader.cancel()
+    }
 })

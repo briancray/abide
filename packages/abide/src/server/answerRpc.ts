@@ -243,24 +243,36 @@ export async function answerRpc(
     const caller = head ? undefined : callerOf()
     const seeded =
         caller === undefined ? undefined : takeSeed(caller, handler, args)
+    // The entry key of a `global` value, taken once for every read of it below.
+    const global = GLOBAL_GETS.get(handler)
+    const key = global?.key(args)
     // 21.15 — A `global` PRODUCTION ALREADY HELD, and not loading, answers without a run: a run
     // this call started moves the generation, and one it joined was loading when it came.
     const held =
-        seeded === undefined ? GLOBAL_GETS.get(handler)?.(args) : undefined
+        seeded === undefined && key !== undefined ? global?.at(key) : undefined
     const heldAt = held === undefined ? undefined : heldGenerationOf(held)
     const timing = currentRequestScope()?.timing
     if (timing !== undefined) timing.answering = handler
     const started = performance.now()
     const outcome =
         seeded === undefined ? await outcomeOf(handler(args)) : await seeded
+    // The entry as the run left it, which the answer reads too.
+    const entry = key === undefined ? undefined : global?.at(key)
     const cached =
         heldAt !== undefined &&
-        GLOBAL_GETS.get(handler)?.(args) === held &&
+        entry === held &&
         heldGenerationOf(held) === heldAt
     // 16.38 — A MUTATION A DOCUMENT MADE — a form posted with no script — is answered as a navigation.
     if (!inUrl && prefers(request, 'text/html', 'application/json'))
         return navigated(outcome, request, pathname, pages)
-    const answer = await answerOutcome(outcome, request, found, args)
+    const answer = await answerOutcome(
+        outcome,
+        request,
+        found,
+        args,
+        key,
+        entry,
+    )
     // A `Response` the handler built is its own — but the origin answer below is laid over it, so it
     // varies on `Origin` too (21.7), which `handlerHeaders` never reached.
     if (outcome.settled && outcome.value instanceof Response) {
@@ -308,23 +320,24 @@ async function answerOutcome(
     request: Request,
     found: Mounted,
     args: unknown,
+    key: string | undefined,
+    entry: unknown,
 ): Promise<Response> {
     const handler = found.handler
     if (!outcome.settled) return answered(failureOf(outcome.error))
+    const value = outcome.value
     // The `global` value the answer came from, or `undefined` for one built per request. 18.22 — or
     // for one whose production has moved past what is answered: a seeded answer is what the render
     // reached (41.13). 18.23 — or for a binary.
-    const global = GLOBAL_GETS.get(handler)?.(args)
-    const value = outcome.value
     const serving =
-        global !== undefined &&
+        entry !== undefined &&
         !(
             value instanceof Blob ||
             value instanceof ArrayBuffer ||
             ArrayBuffer.isView(value)
         ) &&
-        (streams(value) || (global as { peek(): unknown }).peek() === value)
-            ? global
+        (streams(value) || (entry as { peek(): unknown }).peek() === value)
+            ? entry
             : undefined
     // 21.3 — what the handler wrote through `response` is laid over it at the exit (21.10).
     const headers = handlerHeaders()
@@ -337,7 +350,7 @@ async function answerOutcome(
     const etag = serving !== undefined ? `"${versionOf(serving)}"` : undefined
     if (etag !== undefined) {
         headers.set(VERSION_HEADER, etag)
-        RPC_SERVER.served?.(handler, serving)
+        RPC_SERVER.served?.(handler, serving, key as string)
     }
     // 21.8, 21.9, 21.11 — WHAT IS LEFT OF THE LIFE OF THE PRODUCTION ANSWERED, in place of `no-store`
     // and nothing else. A `ttl` of Infinity is bounded by `invalidate` alone (11.35), which no cache

@@ -54,19 +54,30 @@ type Follower = {
     peer: Peer
     id: number
     args: unknown
+    // The entry key its args are filed under (`GLOBAL_GETS`), taken once as it subscribes.
+    key: string
     // The `global` entry its productions are pushed from, which is what a refresh would otherwise
     // re-fetch — or `undefined`, and it is sent triggers instead.
     serving: unknown
     stopFeed: (() => void) | undefined
     // 18.6 — the version it was last sent, or named on subscribing.
     sent: number | undefined
-    // 13.15 — the literal `tags` the build copied onto the browser's copy, for a sweep to match.
-    tags: string[] | undefined
     // 18.8 — whether the handler's rungs let it through when it opened: a guarded `GET` feeds only
     // a follower they admitted, and sends the rest its triggers alone.
     admitted: boolean
 }
-const FOLLOWERS = new Map<object, Set<Follower>>()
+type Followed = {
+    // 13.15 — the literal `tags` the build copied onto the browser's copy, for a sweep to match:
+    // the handler's, so one for all of its followers.
+    tags: string[] | undefined
+    // What a trigger walks, matching each follower's args against its pattern.
+    all: Set<Follower>
+    // BY ENTRY KEY, so an entry answered walks the followers of its own args alone (18.8). Filed
+    // apart from `all` rather than instead of it: a walk of every follower through a set per key
+    // measured twice a flat set's.
+    byKey: Map<string, Set<Follower>>
+}
+const FOLLOWERS = new Map<object, Followed>()
 
 // 13.12 — narrowed by the pattern the trigger was handed, as the handler's own entries are.
 export function broadcast(
@@ -74,9 +85,9 @@ export function broadcast(
     member: 'invalidate' | 'refresh',
     pattern: unknown,
 ): void {
-    const followers = FOLLOWERS.get(rpc)
-    if (followers === undefined) return
-    for (const follower of followers) {
+    const followed = FOLLOWERS.get(rpc)
+    if (followed === undefined) return
+    for (const follower of followed.all) {
         if (!matchesPattern(follower.args, pattern)) continue
         // A fed copy is refreshed by the production the reload mints (7.18), and invalidated through
         // the cell it is fed from (`FOLLOWED`), whichever trigger reached it — where the entry it is
@@ -93,13 +104,14 @@ export function swept(
     member: 'invalidate' | 'refresh',
     tags: string[] | null,
 ): void {
-    for (const [rpc, followers] of FOLLOWERS)
-        for (const follower of followers) {
-            if (tags !== null && !sharesTag(follower.tags, tags)) continue
+    for (const [rpc, followed] of FOLLOWERS) {
+        if (tags !== null && !sharesTag(followed.tags, tags)) continue
+        for (const follower of followed.all) {
             if (attach(rpc as Mounted['handler'], follower) !== undefined)
                 continue
             send(follower.peer, { op: member, id: follower.id })
         }
+    }
 }
 
 function sharesTag(held: string[] | undefined, swept: string[]): boolean {
@@ -110,10 +122,14 @@ function sharesTag(held: string[] | undefined, swept: string[]): boolean {
 
 // 18.8 — AN ENTRY ANSWERED THAT NOBODY IS FED FROM: one made after a follower subscribed for its
 // args, or rebuilt after the one it was fed from was evicted. An entry already fed is the common
-// answer, and asks nothing more.
-export function feedFromServed(rpc: object, serving: unknown): void {
+// answer, and asks nothing more; one that is not reaches the followers filed under its key.
+export function feedFromServed(
+    rpc: object,
+    serving: unknown,
+    key: string,
+): void {
     if (FEEDS.has(serving as object)) return
-    const followers = FOLLOWERS.get(rpc)
+    const followers = FOLLOWERS.get(rpc)?.byKey.get(key)
     if (followers === undefined) return
     for (const follower of followers)
         attach(rpc as Mounted['handler'], follower)
@@ -128,7 +144,7 @@ function attach(rpc: Mounted['handler'], follower: Follower): unknown {
     const serving =
         rpc.guarded && !follower.admitted
             ? undefined
-            : GLOBAL_GETS.get(rpc)?.(follower.args)
+            : GLOBAL_GETS.get(rpc)?.at(follower.key)
     if (serving === follower.serving) return serving
     follower.stopFeed?.()
     // A version is one entry's count, so what it was sent of another says nothing about this one.
@@ -331,26 +347,42 @@ function followWith(
     admitted: boolean,
 ): () => void {
     const rpc = mounted.handler
+    const key = GLOBAL_GETS.get(rpc)?.key(args) ?? ''
     const follower: Follower = {
         peer,
         id,
         args,
+        key,
         serving: undefined,
         stopFeed: undefined,
         sent: held,
-        tags: mounted.copy?.tags,
         admitted,
     }
     attach(rpc, follower)
-    let followers = FOLLOWERS.get(rpc)
+    let followed = FOLLOWERS.get(rpc)
+    if (followed === undefined) {
+        followed = {
+            tags: mounted.copy?.tags,
+            all: new Set(),
+            byKey: new Map(),
+        }
+        FOLLOWERS.set(rpc, followed)
+    }
+    const byKey = followed.byKey
+    let followers = byKey.get(key)
     if (followers === undefined) {
         followers = new Set()
-        FOLLOWERS.set(rpc, followers)
+        byKey.set(key, followers)
     }
     followers.add(follower)
+    const all = followed.all
+    all.add(follower)
     return () => {
         follower.stopFeed?.()
-        followers.delete(follower)
+        all.delete(follower)
+        // A key nobody follows leaves, or the index grows with every key ever followed.
+        if (followers.delete(follower) && followers.size === 0)
+            byKey.delete(key)
     }
 }
 
@@ -410,19 +442,35 @@ export function followAsEvents(
     })
 }
 
-/** One mux frame as the SSE event it is: `event`, `id` where it names a version, and `data`. */
+/**
+ * One mux frame as the SSE event it is: `event`, `id` where it names a version, and `data`.
+ *
+ * 18.6 — READ OFF THE FRAME'S HEAD, never parsed: the body was serialized once for every follower
+ * (`sendAll`), and a parse and a stringify per event stream would pay it again per follower. Every
+ * frame this module writes is `{"op":…,"id":…`, numbers named `base` or `version`, and at most one
+ * body last — so the body is the rest of the text, as it was written.
+ */
 function eventOf(text: string): string {
-    const frame = JSON.parse(text) as ServerFrame
-    const data =
-        frame.op === 'value'
-            ? JSON.stringify(frame.value ?? null)
-            : frame.op === 'patch'
-              ? JSON.stringify(frame.ops ?? [])
-              : frame.op === 'error'
-                ? JSON.stringify(frame.error ?? null)
-                : ''
-    const id = frame.version === undefined ? '' : `id: ${frame.version}\n`
-    return `event: ${frame.op}\n${id}data: ${data}\n\n`
+    const opEnd = text.indexOf('"', 7)
+    const op = text.slice(7, opEnd)
+    let id = ''
+    let data =
+        op === 'value' || op === 'error' ? 'null' : op === 'patch' ? '[]' : ''
+    // Past `,"id":` — a number, so the next comma is the next member's.
+    let at = text.indexOf(',', opEnd + 6)
+    while (at !== -1) {
+        const nameEnd = text.indexOf('"', at + 2)
+        const name = text.slice(at + 2, nameEnd)
+        const from = nameEnd + 2
+        if (name !== 'base' && name !== 'version') {
+            data = text.slice(from, -1)
+            break
+        }
+        at = text.indexOf(',', from)
+        if (name === 'version')
+            id = `id: ${text.slice(from, at === -1 ? -1 : at)}\n`
+    }
+    return `event: ${op}\n${id}data: ${data}\n\n`
 }
 
 // 18.6 — ONE WATCH PER VALUE SERVED, however many follow it, and each frame's body serialized once

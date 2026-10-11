@@ -446,12 +446,17 @@ export function declare(method: Method): Declare {
         // value produced, and holds no way back to it. A keyed value is looked up without a reach,
         // so asking starts nothing (11.55).
         if (method === 'GET' && !isForwarder(value))
-            GLOBAL_GETS.set(rpc, (args: unknown): unknown =>
+            GLOBAL_GETS.set(
+                rpc,
                 keyed
-                    ? (value as { entries: Map<string, unknown> }).entries.get(
-                          keyOf(contract, args),
-                      )
-                    : value,
+                    ? {
+                          key: (args) => keyOf(contract, args),
+                          at: (key) =>
+                              (
+                                  value as { entries: Map<string, unknown> }
+                              ).entries.get(key),
+                      }
+                    : { key: () => '', at: () => value },
             )
         return rpc
     }) as Declare

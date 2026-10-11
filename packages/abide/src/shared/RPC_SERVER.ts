@@ -39,12 +39,12 @@ export const RPC_SERVER: {
         | ((member: 'invalidate' | 'refresh', tags: string[] | null) => void)
         | null
     /**
-     * The `global` entry an answer came from.
+     * The `global` entry an answer came from, and the key it is filed under (`GLOBAL_GETS`).
      *
      * 18.8 — so a follower subscribed before it existed, or fed from one since evicted, is fed
      * from this one.
      */
-    served: ((rpc: object, serving: unknown) => void) | null
+    served: ((rpc: object, serving: unknown, key: string) => void) | null
     /**
      * How long a handler's own body took inside its rungs.
      *
