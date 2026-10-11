@@ -53,6 +53,11 @@
         "#compiler": "./src/compiler/index.ts",
         "#compiler/*": "./src/compiler/*"
     },
+    "sideEffects": [
+        "./src/server/**",
+        "./src/shared/WORK.ts",
+        "./src/shared/reactive/Reactive.ts"
+    ],
     "dependencies": {
         "typescript": "^7.0.2"
     },

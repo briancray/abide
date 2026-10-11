@@ -322,3 +322,61 @@ test('every clause a framework comment cites exists', async () => {
     }
     expect(dangling).toEqual([])
 })
+
+// 38.95 — `sideEffects` in the package's `package.json` lets a bundler drop a module none of whose
+// exports a build uses, and a module that WRITES OUTSIDE ITSELF as it loads is then dropped with its
+// write: the compiled executable lost `installServer()` that way, and a page its `__ABIDE_WORK__`.
+// So every such module is listed, and every file listed by name is one. A write to a module's OWN
+// export (`refuse.named = named`) is not listed: it matters only where that export is used, and a
+// used export keeps its module. THE SPELLINGS READ are a column-0 statement opening with `(`/`;(`,
+// a member assignment, or a call, outside a template literal; a `for` or `if` at column 0 is not.
+// THE REVERT: drop `./src/shared/WORK.ts` from the list and it is named here; list
+// `./src/shared/log.ts` and that is named as listed with no write.
+const LOAD_WRITE =
+    /^(?:;?\(|([A-Za-z_$][\w$]*)(?:\.[\w$]+)+\s*=[^=]|(?!(?:if|for|while|switch|return|await|export|import|const|let|var|function|class|type|interface|declare)\b)([A-Za-z_$][\w$]*)(?:\.[\w$]+)*\(\s*([A-Za-z_$][\w$]*)?)/
+
+function writesOutsideItself(text: string): boolean {
+    let insideTemplate = false
+    for (const line of text.split('\n')) {
+        const opened = insideTemplate
+        for (const tick of line.matchAll(/\\?`/g))
+            if (tick[0] === '`') insideTemplate = !insideTemplate
+        if (opened) continue
+        const write = LOAD_WRITE.exec(line)
+        if (write === null) continue
+        // `Object.defineProperty(x, …)` and its kin write to their first argument.
+        const target =
+            write[1] ?? (write[2] === 'Object' ? write[3] : undefined)
+        if (
+            target === undefined ||
+            !new RegExp(
+                `^(?:export )?(?:const|let|var|function|class) ${target}\\b`,
+                'm',
+            ).test(text)
+        )
+            return true
+    }
+    return false
+}
+
+test('a module that writes outside itself at load is listed in sideEffects, and only one — 38.95', async () => {
+    const listed = (
+        (await Bun.file(new URL('package.json', ABIDE)).json()) as {
+            sideEffects: string[]
+        }
+    ).sideEffects
+    const globs = listed.map((pattern) => new Bun.Glob(pattern))
+    const unlisted: string[] = []
+    const found = new Set<string>()
+    for (const { path, text } of await sources(ABIDE, '{src,bin}/**/*.ts')) {
+        const relative = `./${path}`
+        if (!writesOutsideItself(text)) continue
+        found.add(relative)
+        if (!globs.some((glob) => glob.match(relative))) unlisted.push(relative)
+    }
+    expect(unlisted).toEqual([])
+    const stale: string[] = []
+    for (const pattern of listed)
+        if (!pattern.includes('*') && !found.has(pattern)) stale.push(pattern)
+    expect(stale).toEqual([])
+})
