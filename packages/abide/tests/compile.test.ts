@@ -18,6 +18,10 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 const HANDLERS = `import { config, GET } from '@abide/abide/server'
 
 export const name = GET(() => config().APP_NAME)
+
+export const fail = GET(() => {
+    throw new Error('failed in the handler')
+})
 `
 
 // A handler module no script below imports: its top level speaks on stderr if it ever runs.
@@ -218,4 +222,25 @@ console.log(JSON.stringify({ configured: config().APP_NAME, handler: await name(
         handler: '@acme/ledger',
         args: ['one'],
     })
+})
+
+// 38.94 — BYTECODE KEEPS THE SOURCE LINE: the executable carries its code compiled, and an error
+// thrown in a handler still names the handler's file and line. THE REVERT: `sourcemap: 'none'` in
+// `compileExecutable`; the frame reads `/$bunfs/root/ledger:10603` instead.
+test('an error thrown in the executable reports its source line — 38.94', async () => {
+    await Bun.write(
+        `${where}/failing.ts`,
+        `import { fail } from '#server/rpc/identity'
+try {
+    await fail()
+} catch (error) {
+    console.log((error as Error).stack)
+}
+`,
+    )
+    const ran = await spawned([`${where}/ledger`, 'run', 'failing.ts'], {
+        cwd: where,
+    })
+    expect(ran.stdout).toContain('failed in the handler')
+    expect(ran.stdout).toContain('identity.ts:6:')
 })

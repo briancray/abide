@@ -322,6 +322,11 @@ async function compileExecutable(
         // whoever operates it — a minified line prints as the whole page module it sits in. The
         // map is embedded in the executable, which reads it from there.
         sourcemap: 'inline',
+        // 38.94 — parsed at build time rather than on every boot. ESM because the entry awaits at
+        // its top level, and bun's bytecode default is CommonJS, which refuses that. Nothing in the
+        // executable or the build's outputs says bytecode is inside, so no test can see this.
+        bytecode: true,
+        format: 'esm',
         compile: {
             ...(platform === undefined
                 ? {}
