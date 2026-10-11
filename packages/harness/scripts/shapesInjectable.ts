@@ -2,7 +2,7 @@
 // ranking need not survive the crossing: a function carrying ~34 own properties is a
 // dictionary-mode candidate in V8 and is merely large in JSC, so the shape that wins on
 // retained bytes may lose on every property access.
-import { batch, emulatedDom, type Sample } from 'harness/report'
+import { type BatchSpec, batch, emulatedDom, type Sample } from 'harness/report'
 
 type Any = Record<string, unknown> & (() => unknown)
 
@@ -103,7 +103,9 @@ function record(): Any {
     return self
 }
 
-function rows(): { shape: string; read: number; write: number }[] {
+function rows(
+    sizing?: Pick<BatchSpec, 'reps' | 'warmup'>,
+): { shape: string; read: number; write: number }[] {
     const out: { shape: string; read: number; write: number }[] = []
     const shapes: [string, () => Any][] = [
         ['own props', ownProperties],
@@ -127,12 +129,14 @@ function rows(): { shape: string; read: number; write: number }[] {
         arms: readArms,
         emulated: emulatedDom(),
         budgetNanoseconds: 20_000_000_000,
+        ...sizing,
     })
     const write = batch({
         case: 'write',
         arms: writeArms,
         emulated: emulatedDom(),
         budgetNanoseconds: 20_000_000_000,
+        ...sizing,
     })
     for (const [name] of made)
         out.push({
@@ -144,4 +148,4 @@ function rows(): { shape: string; read: number; write: number }[] {
     return out
 }
 
-;(globalThis as unknown as { __SHAPES__: () => unknown }).__SHAPES__ = rows
+;(globalThis as unknown as { __SHAPES__: typeof rows }).__SHAPES__ = rows

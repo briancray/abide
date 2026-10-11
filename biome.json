@@ -11,7 +11,8 @@
             "!**/dist",
             "!**/node_modules",
             "!**/.abide",
-            "!explorations/probes"
+            "!explorations/probes",
+            "!test-timings.json"
         ]
     },
     "formatter": {

@@ -23,16 +23,8 @@ export default defineConfig({
     reporter: process.env.CI ? 'blob' : 'list',
     use: { trace: 'on-first-retry' },
     projects: [
-        {
-            name: 'root',
-            testDir: './packages/dogfood/e2e',
-            use: { ...devices['Desktop Chrome'], baseURL: BASE },
-        },
-        {
-            name: 'sub-path',
-            testDir: './packages/dogfood/e2e',
-            use: { ...devices['Desktop Chrome'], baseURL: SUB_BASE },
-        },
+        // THE HARNESS PAIR IS LISTED FIRST because its specs are the run's longest, and playwright
+        // hands out work in project order: started last, they were the tail every worker waited on.
         // TWO ENGINES, because the measure lane runs in whatever browser a READER
         // brought. V8 and JSC are the two that reach a card in practice, and the whole
         // claim of this lane is that one case counts the same in each.
@@ -45,6 +37,16 @@ export default defineConfig({
             name: 'harness-webkit',
             testDir: './packages/harness/e2e',
             use: { ...devices['Desktop Safari'] },
+        },
+        {
+            name: 'root',
+            testDir: './packages/dogfood/e2e',
+            use: { ...devices['Desktop Chrome'], baseURL: BASE },
+        },
+        {
+            name: 'sub-path',
+            testDir: './packages/dogfood/e2e',
+            use: { ...devices['Desktop Chrome'], baseURL: SUB_BASE },
         },
     ],
     webServer: [

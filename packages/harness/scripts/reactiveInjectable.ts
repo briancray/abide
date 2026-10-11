@@ -8,10 +8,17 @@
 // carries the refusals that matter here: it measures the clock's resolution rather
 // than assuming it, and a browser's is ~100 µs against bun's 41 ns.
 
-import { batch, claimOf, emulatedDom, ratio, type Sample } from 'harness/report'
+import {
+    type BatchSpec,
+    batch,
+    claimOf,
+    emulatedDom,
+    ratio,
+    type Sample,
+} from 'harness/report'
 import { type ReactiveBenchRow, reactiveCases } from './reactiveCases.ts'
 
-function run(): ReactiveBenchRow[] {
+function run(sizing?: Pick<BatchSpec, 'reps' | 'warmup'>): ReactiveBenchRow[] {
     const rows: ReactiveBenchRow[] = []
     for (const kase of reactiveCases()) {
         const measured = batch({
@@ -21,6 +28,7 @@ function run(): ReactiveBenchRow[] {
             // A browser clock is ~2,400x coarser than bun's, so n grows far higher and
             // the default two-second ceiling is not enough to reach it.
             budgetNanoseconds: 20_000_000_000,
+            ...sizing,
         })
         const counted = kase.work()
         const vanillaSample: Sample = {
@@ -49,5 +57,5 @@ function run(): ReactiveBenchRow[] {
 }
 
 ;(
-    globalThis as unknown as { __REACTIVE_BENCH__: () => ReactiveBenchRow[] }
+    globalThis as unknown as { __REACTIVE_BENCH__: typeof run }
 ).__REACTIVE_BENCH__ = run

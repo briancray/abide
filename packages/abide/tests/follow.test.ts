@@ -158,6 +158,7 @@ await settled()
 ws.close()
 await new Promise((done) => (ws.onclose = done))
 console.log(JSON.stringify(frames))
+process.exit(0)
 `,
     })
     return lastLinePrinted(['bun', `${dir}/client.ts`, base])

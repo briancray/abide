@@ -294,7 +294,9 @@ test('a reader asking for NDJSON is answered it, the same lines as jsonl — 16.
         headers: { accept: 'application/x-ndjson' },
     })
     expect(answer.headers.get('content-type')).toBe('application/x-ndjson')
-    expect((await answer.text()).split('\n').filter(Boolean).length).toBeGreaterThan(0)
+    expect(
+        (await answer.text()).split('\n').filter(Boolean).length,
+    ).toBeGreaterThan(0)
 })
 
 test('binary chunks are answered as octet-stream — 16.46, 16.47', async () => {
@@ -488,12 +490,18 @@ test('a GET over a global value answers the life its production has left — 21.
                 ) ?? '',
             )?.[1],
         )
-    for (const name of ['aging', 'agingKeyed?n=1', 'agingGuarded?n=1']) {
+    // One sleep between the two passes rather than one per name: each name's second read is
+    // still at least the sleep after its first.
+    const names = ['aging', 'agingKeyed?n=1', 'agingGuarded?n=1']
+    const firsts: number[] = []
+    for (const name of names) {
         const first = await maxAge(name)
         expect(first).toBeLessThanOrEqual(60)
-        await Bun.sleep(1_100)
-        expect(await maxAge(name)).toBeLessThan(first)
+        firsts.push(first)
     }
+    await Bun.sleep(1_100)
+    for (const [index, name] of names.entries())
+        expect(await maxAge(name)).toBeLessThan(firsts[index] as number)
 }, 10_000)
 
 // 16.63 — A CLIENT THAT LEFT IS NOT A FAULT. A handler waiting on work the request's signal cancels

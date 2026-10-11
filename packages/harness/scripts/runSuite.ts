@@ -17,11 +17,29 @@ import type { TestCase } from './rows.ts'
 // without passing it on a Stop orphans every `bun test` and browser still running, and the next
 // run shares the machine with them — which is what turns a timing gate red.
 // A killed suite never reaches the end where its JUnit file is written, so there is none to delete.
+//
+// SIGINT, NOT SIGTERM, passed on: playwright tears down its `webServer` on the first and not the
+// second, which left `abide start` holding port 3131 under launchd after every Stop.
+//
+// TO THE SUITE'S WHOLE GROUP. A test file that serves an app spawns `abide dev` itself and stops it
+// in `afterAll`, which a stopped file never reaches — so each suite leads a group of its own and
+// the group is what is signalled. Its own group is also why a Ctrl-C at this runner's terminal is
+// passed on rather than reaching the suites directly.
 const LIVE = new Set<Bun.Subprocess>()
-process.on('SIGTERM', () => {
-    for (const child of LIVE) child.kill()
-    process.exit(143)
-})
+for (const [signal, code] of [
+    ['SIGTERM', 143],
+    ['SIGINT', 130],
+] as const)
+    process.on(signal, () => {
+        for (const child of LIVE) {
+            try {
+                process.kill(-child.pid, 'SIGINT')
+            } catch {
+                // The group emptied between its suite ending and this signal.
+            }
+        }
+        process.exit(code)
+    })
 
 export type Suite = {
     file: string
@@ -116,6 +134,7 @@ export async function runSuite(spec: {
         env: { ...process.env, ...spec.environment, ...pointed.environment },
         stdout: 'ignore',
         stderr: 'pipe',
+        detached: true,
     })
     LIVE.add(child)
     const [stderr] = await Promise.all([

@@ -1,7 +1,9 @@
-// `sharedCases` in the reader's engine. Reports rather than asserts, like `reactive.spec.ts`.
+// `sharedCases` in the reader's engine. Reports rather than asserts, like `reactive.spec.ts`, and
+// at full size only under `bun run bench` — `BENCH_SIZING`.
 import { execFileSync } from 'node:child_process'
 import { test } from '@playwright/test'
 import type { SharedRow } from '../scripts/sharedRun.ts'
+import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 
@@ -18,13 +20,19 @@ test('shared allocations, current against candidate, in this engine', async ({
     await page.addInitScript({ path: built })
     await page.goto('about:blank')
     await page.setContent('<!doctype html><html><body></body></html>')
-    const rows = (await page.evaluate(() =>
-        (
-            globalThis as unknown as {
-                __SHARED_BENCH__: (budget: number) => SharedRow[]
-            }
-        ).__SHARED_BENCH__(60_000_000_000),
+    const rows = (await page.evaluate(
+        (sizing) =>
+            (
+                globalThis as unknown as {
+                    __SHARED_BENCH__: (
+                        budget: number,
+                        sizing?: typeof BENCH_SIZING,
+                    ) => SharedRow[]
+                }
+            ).__SHARED_BENCH__(60_000_000_000, sizing),
+        BENCH_SIZING,
     )) as SharedRow[]
+    if (BENCH_SIZING) return
     const { formatShared } = await import('../scripts/sharedRun.ts')
     console.log(`\n=== ${testInfo.project.name} ===\n${formatShared(rows)}`)
 })

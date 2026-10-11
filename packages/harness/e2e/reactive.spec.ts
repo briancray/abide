@@ -4,11 +4,13 @@
 //
 // It reports rather than asserts. A threshold here would be a threshold on somebody
 // else's machine under somebody else's load — what this is for is the SIGN of a ratio,
-// which is the thing CLAUDE.md records as inverting between engines.
+// which is the thing CLAUDE.md records as inverting between engines. At full size only under
+// `bun run bench` — `BENCH_SIZING`.
 
 import { execFileSync } from 'node:child_process'
 import { test } from '@playwright/test'
 import type { ReactiveBenchRow } from '../scripts/reactiveCases.ts'
+import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 
@@ -47,13 +49,18 @@ test('the reactive core against the hand-written arm, in this engine', async ({
     await page.goto('about:blank')
     await page.setContent('<!doctype html><html><body></body></html>')
 
-    const rows = (await page.evaluate(() =>
-        (
-            globalThis as unknown as {
-                __REACTIVE_BENCH__: () => ReactiveBenchRow[]
-            }
-        ).__REACTIVE_BENCH__(),
+    const rows = (await page.evaluate(
+        (sizing) =>
+            (
+                globalThis as unknown as {
+                    __REACTIVE_BENCH__: (
+                        sizing?: typeof BENCH_SIZING,
+                    ) => ReactiveBenchRow[]
+                }
+            ).__REACTIVE_BENCH__(sizing),
+        BENCH_SIZING,
     )) as ReactiveBenchRow[]
+    if (BENCH_SIZING) return
 
     const lines = [`\n=== ${testInfo.project.name} ===`]
     for (const row of rows) {

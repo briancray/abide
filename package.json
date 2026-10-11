@@ -7,7 +7,8 @@
     ],
     "scripts": {
         "typecheck": "bun run docs && tsc -p packages/abide/tsconfig.json && tsc -p packages/harness/tsconfig.json && tsc -p packages/dogfood/tsconfig.json && tsc -p packages/bridge/tsconfig.json",
-        "test": "bun run build && bun test packages/abide packages/harness/tests packages/dogfood/tests --parallel",
+        "test": "bun run build && bun test packages/abide packages/harness/tests packages/dogfood/tests --parallel --timings=test-timings.json",
+        "test:timings": "bun run build && bun test packages/abide packages/harness/tests packages/dogfood/tests --parallel --timings=test-timings.json --update-timings",
         "test:serial": "bun run build && bun test packages/abide packages/harness/tests packages/dogfood/tests",
         "test:changed": "bun test --changed",
         "build": "bun run --filter dogfood build",

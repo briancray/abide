@@ -1,5 +1,5 @@
 // Runs `sharedCases` through the one batcher, in whichever engine loaded it.
-import { batch, emulatedDom } from 'harness/report'
+import { type BatchSpec, batch, emulatedDom } from 'harness/report'
 import { sharedCases } from './sharedCases.ts'
 
 export type SharedRow = {
@@ -11,7 +11,10 @@ export type SharedRow = {
 }
 
 /** Batches every shared case and returns one row per case, each arm in nanoseconds per op. */
-export function runShared(budgetNanoseconds: number): SharedRow[] {
+export function runShared(
+    budgetNanoseconds: number,
+    sizing?: Pick<BatchSpec, 'reps' | 'warmup'>,
+): SharedRow[] {
     const rows: SharedRow[] = []
     for (const kase of sharedCases()) {
         const measured = batch({
@@ -19,6 +22,7 @@ export function runShared(budgetNanoseconds: number): SharedRow[] {
             arms: kase.arms,
             emulated: emulatedDom(),
             budgetNanoseconds,
+            ...sizing,
         })
         const arms: Record<string, number> = {}
         for (const name of Object.keys(kase.arms))

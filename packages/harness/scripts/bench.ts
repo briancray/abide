@@ -1,7 +1,9 @@
 // `bun run bench` — the machinery triple's two countable members for the harness package itself,
 // printed: code lines and exported names. The third, branches added to a shared path, stays
-// hand-counted. Every other bench is a script of its own under `bench:*`, and the ones with a
-// hand-written arm are rows on the docs app's `/bench` page too.
+// hand-counted. Then the browser specs that only REPORT — `reactive`, `shared` and `shapes` —
+// at full size in both engines, which the e2e gate runs only as a one-rep smoke (`BENCH_SIZING`).
+// Every other bench is a script of its own under `bench:*`, and the ones with a hand-written arm
+// are rows on the docs app's `/bench` page too.
 //
 // A WORKSPACE SCRIPT AND NOT AN `abide` COMMAND. `abide <cmd>` is governed surface —
 // RULEBOOK 38 and REGISTRY's Commands section — so a bench subcommand would owe a
@@ -61,4 +63,23 @@ async function machinery(): Promise<void> {
         console.log(`  ${entry}: ${exported.join(', ') || '—'}`)
 }
 
-if (import.meta.main) await machinery()
+const REPORT_SPECS = ['reactive', 'shared', 'shapes']
+
+/** The report-only browser specs at full size, through playwright, in both harness projects. */
+async function reportSpecs(): Promise<number> {
+    const command = ['bunx', 'playwright', 'test']
+    for (const name of REPORT_SPECS)
+        command.push(`packages/harness/e2e/${name}.spec.ts`)
+    command.push('--project', 'harness', '--project', 'harness-webkit')
+    const child = Bun.spawn(command, {
+        cwd: new URL('../../', PACKAGE).pathname,
+        env: { ...process.env, HARNESS_BENCH: '1' },
+        stdio: ['inherit', 'inherit', 'inherit'],
+    })
+    return child.exited
+}
+
+if (import.meta.main) {
+    await machinery()
+    process.exitCode = await reportSpecs()
+}
