@@ -68,7 +68,12 @@ export async function buildCompiledPage(
         const { invoked } = componentGraph(files, (specifier, from) =>
             resolve(from, specifier),
         )
-        const compilation: Compilation = { files: {}, tables: {} }
+        const compilation: Compilation = {
+            files: {},
+            handlers: {},
+            tables: {},
+            mounted: {},
+        }
         let at = 0
         for (const entry of files) {
             const names = answers[at]

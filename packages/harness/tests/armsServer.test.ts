@@ -478,10 +478,11 @@ test('app-fetch: the wire answers with a status and a trace header', async () =>
     expect(read('#traced')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-00$/)
 })
 
-// THE EXAMPLE'S OWN TEST, run as its reader runs it: `bun test` from the docs app's directory, where
-// `createApp` finds the app. Revert-verified: `onStop` with its close removed -> the second case
+// THE EXAMPLE'S OWN TESTS, run as its reader runs them: `bun test` from the docs app's directory,
+// where `createApp` finds the app and the preload serves its `.abide` — the app's, and the
+// component's beside it. Revert-verified: `onStop` with its close removed -> the second case
 // fails on `connected` still true.
-test('app-fetch: the test the card shows passes from the docs app', async () => {
+test('app-fetch: the tests the card shows pass from the docs app', async () => {
     const { spawned } = await import('../src/gate/index.ts')
     const run = await spawned(
         // A child under a loaded gate boots the app past bun's 5 s default for a test.
@@ -489,12 +490,12 @@ test('app-fetch: the test the card shows passes from the docs app', async () => 
             process.execPath,
             'test',
             '--timeout=60000',
-            './src/ship/call-your-app-from-a-test/app.test.ts',
+            './src/ship/call-your-app-from-a-test/tests/',
         ],
         { cwd: DOGFOOD.pathname, deadline: 120_000 },
     )
     if (run.exitCode !== 0) console.error(run.stderr)
-    expect(`${run.exitCode} ${run.stderr.includes('2 pass')}`).toBe('0 true')
+    expect(`${run.exitCode} ${run.stderr.includes('3 pass')}`).toBe('0 true')
 }, 130_000)
 
 // Reverted — `escapeHtml` dropped from `documentOf` — the second invoice's customer reads

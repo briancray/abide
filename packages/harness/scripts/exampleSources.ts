@@ -4,7 +4,22 @@
 /** The docs app's root. Its paths are what an example manifest names. */
 export const DOGFOOD = new URL('../../dogfood/', import.meta.url)
 
-const PAGES = new Bun.Glob('src/**/page.abide')
+// Every docs page and its text, read once: a run asks for a hundred examples, each across all of them.
+let pages: Promise<{ path: string; text: string }[]> | undefined
+
+function docsPages(): Promise<{ path: string; text: string }[]> {
+    pages ??= Promise.all(
+        [
+            ...new Bun.Glob('src/**/index.abide').scanSync({
+                cwd: DOGFOOD.pathname,
+            }),
+        ].map(async (path) => ({
+            path,
+            text: await Bun.file(new URL(path, DOGFOOD)).text(),
+        })),
+    )
+    return pages
+}
 
 /**
  * The component a docs example renders, as a path relative to the docs app's root, or `undefined`
@@ -16,8 +31,7 @@ const PAGES = new Bun.Glob('src/**/page.abide')
 export async function exampleComponentOf(
     name: string,
 ): Promise<string | undefined> {
-    for (const page of PAGES.scanSync({ cwd: DOGFOOD.pathname })) {
-        const text = await Bun.file(new URL(page, DOGFOOD)).text()
+    for (const { path: page, text } of await docsPages()) {
         const card = text.indexOf(`id="${name}"`)
         if (card === -1) continue
         const tag = /<([A-Z]\w*)/.exec(text.slice(text.indexOf('>', card)))?.[1]

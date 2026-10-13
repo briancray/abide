@@ -61,16 +61,21 @@ test.beforeAll(async ({}, testInfo) => {
     mkdirSync(`${APP}/plain`, { recursive: true })
     mkdirSync(`${APP}/about`, { recursive: true })
     writeFileSync(
-        `${APP}/plain/page.abide`,
+        `${APP}/plain/index.abide`,
         '<main id="plain"><h1>Plain</h1></main>',
     )
     writeFileSync(
-        `${APP}/page.abide`,
+        `${APP}/index.abide`,
         `<script>\nimport { reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n${HOME}`,
     )
     writeFileSync(
-        `${APP}/about/page.abide`,
+        `${APP}/about/index.abide`,
         '<head><title>About</title><meta name="description" content="the about page"></head>\n<main id="about"><h1>About</h1><a id="back" href="/">home</a></main>',
+    )
+    // A package's own directory, so the tsconfig beside its manifest is no file of an address (23.22).
+    writeFileSync(
+        `${APP}/package.json`,
+        JSON.stringify({ name: 'routing-fixture', type: 'module' }),
     )
     writeFileSync(
         `${APP}/tsconfig.json`,
@@ -137,7 +142,7 @@ if (!built.success) throw new AggregateError(built.logs, 'the routing app did no
 import { render } from '@abide/abide/server'
 serveCompilation(${JSON.stringify(APP)}, await Bun.file(${JSON.stringify(`${APP}/.abide/compilation.json`)}).json())
 const painted = {}
-for (const page of ['page', 'plain/page']) {
+for (const page of ['index', 'plain/index']) {
     const { default: C } = await import(${JSON.stringify(`${APP}/`)} + page + '.abide?component')
     const html = new TextDecoder().decode(await render(C))
     painted[page] = {
@@ -153,10 +158,10 @@ console.log(JSON.stringify(painted))`,
             .split('\n')
             .pop() as string,
     ) as Record<string, { body: string; head: string }>
-    PAINTED = painted.page?.body ?? ''
-    PAINTED_HEAD = painted.page?.head ?? ''
-    PLAIN = painted['plain/page']?.body ?? ''
-    PLAIN_HEAD = painted['plain/page']?.head ?? ''
+    PAINTED = painted.index?.body ?? ''
+    PAINTED_HEAD = painted.index?.head ?? ''
+    PLAIN = painted['plain/index']?.body ?? ''
+    PLAIN_HEAD = painted['plain/index']?.head ?? ''
     if (PAINTED_HEAD === '')
         throw new Error(
             'the server rendered no head, so this arm tests nothing',

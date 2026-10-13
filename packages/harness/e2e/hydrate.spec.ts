@@ -16,23 +16,28 @@ const REPO = new URL('../../../', import.meta.url).pathname
 // engines at once, and two tests of one project would each build into one tree.
 test.describe.configure({ mode: 'default' })
 
-const HANDLERS = `import { GET } from '@abide/abide/server'
+// One handler file apiece (16.73), so each page imports its own as the file's default (16.74).
+const HANDLERS = {
+    getValue: `import { GET } from '@abide/abide/server'
 
-export const getValue = GET(({ id }: { id: string }) => ({ id, word: 'settled' }))
+export default GET(({ id }: { id: string }) => ({ id, word: 'settled' }))
+`,
+    // Slower than the render's turn, so the server paints it in flight (41.4).
+    getSlow: `import { GET } from '@abide/abide/server'
 
-// Slower than the render's turn, so the server paints it in flight (41.4).
-export const getSlow = GET(async ({ id }: { id: string }) => {
+export default GET(async ({ id }: { id: string }) => {
     await new Promise((done) => setTimeout(done, 100))
     return { id, word: 'settled' }
 })
-`
+`,
+}
 
 // EACH ARM'S BUTTON HAS A HANDLER OF ITS OWN, and the two are one element apiece, so no walk can
 // refuse an arm bound to the other's nodes (41.10). What witnesses it is the handler a click runs,
 // and the static `class` — the one thing an arm bound to the other's button never writes.
 const pageOver = (handler: string) => `<script>
 import { reactive } from '@abide/abide'
-import { ${handler} } from '#src/data/data.abide'
+import ${handler} from '#src/data/${handler}.ts'
 
 const value = reactive(() => ${handler}({ id: 'one' }))
 const pressed = reactive('')
@@ -58,12 +63,10 @@ test.beforeAll(async ({}, testInfo) => {
             imports: { '#src/*': './*' },
         }),
     )
-    writeFileSync(
-        `${app}/data/data.abide`,
-        `<script server>\n${HANDLERS}</script>\n`,
-    )
-    writeFileSync(`${app}/armed/page.abide`, pageOver('getValue'))
-    writeFileSync(`${app}/slow/page.abide`, pageOver('getSlow'))
+    for (const [name, text] of Object.entries(HANDLERS))
+        writeFileSync(`${app}/data/${name}.ts`, text)
+    writeFileSync(`${app}/armed/index.abide`, pageOver('getValue'))
+    writeFileSync(`${app}/slow/index.abide`, pageOver('getSlow'))
     const cli = join(REPO, 'packages/abide/bin/abide.ts')
     execFileSync(
         'bun',

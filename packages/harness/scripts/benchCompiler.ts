@@ -157,7 +157,7 @@ async function compileCeiling(
     // the root set changed, so the project is resolved again — and a FRESH BUILD is all new
     // files while a watch rebuild is all known ones. Timed on the compiler's own fixture,
     // because a file outside the session's project throws rather than measuring.
-    const fixture = new URL('src/docs/', DOGFOOD).pathname
+    const fixture = new URL('src/lib/', DOGFOOD).pathname
     const sample = parseAbide(sources[0]?.text ?? '')
     await session.reads(`${fixture}warm.abide`, sample)
 
