@@ -143,35 +143,30 @@ test('every path parameter is declared, an optional one as required — 20.6', a
     ])
 })
 
-// 20.9 — A HANDLER TAKING NO ARGS IS A RESOURCE and one taking args, or a mutation, is a TOOL, read off
-// the arm `GET` took. THE REVERT: list every `GET` as a resource; `getInvoice` is not a tool.
+// 20.9 — EVERY LISTED HANDLER IS A TOOL, a `GET` taking no args included: a client that only calls
+// tools (a bridge's Claude Code among them) reaches every read. THE REVERT: list a `GET` taking no
+// args as a resource; `get_invoices_listInvoices` is not a tool.
 // 16.37 — AND ONE TYPED AS RETURNING A `Response` IS NEITHER unless its `clients` puts it back:
 // `playlist` is withheld, `tagged` listed. THE REVERT: default `mcp` to true in `declaringMethod`;
-// `invoices_playlist` is listed, six tools rather than five.
-test('MCP lists tools and resources by the arm GET took — 20.9', async () => {
+// `invoices_playlist` is listed, seven tools rather than six.
+test('MCP lists every handler as a tool — 20.9', async () => {
     const init = (await mcp('initialize')).result as {
         capabilities: Record<string, unknown>
     }
-    expect(Object.keys(init.capabilities).sort()).toEqual([
-        'resources',
-        'tools',
-    ])
+    expect(Object.keys(init.capabilities)).toEqual(['tools'])
     const tools = (
         (await mcp('tools/list')).result as { tools: { name: string }[] }
     ).tools
     expect(tools.map((tool) => tool.name).sort()).toEqual([
         'get_invoices_getInvoice',
+        'get_invoices_listInvoices',
         'post_invoices_guarded',
         'post_invoices_pay',
         'post_invoices_shout',
         'post_invoices_tagged',
     ])
-    const resources = (
-        (await mcp('resources/list')).result as { resources: { uri: string }[] }
-    ).resources
-    expect(resources.map((resource) => resource.uri)).toEqual([
-        'abide:/invoices/listInvoices',
-    ])
+    const resources = (await mcp('resources/list')).error as { code: number }
+    expect(resources.code).toBe(-32601)
 })
 
 // 20.10, 19.7 — A CALL IS A REQUEST THROUGH THE APP, so a rung refuses it as it would anyone, and the
@@ -198,11 +193,9 @@ test('an MCP call is answered through the app, refusals included — 20.10', asy
     expect(refused.isError).toBe(true)
 
     const read = (
-        await mcp('resources/read', {
-            uri: 'abide:/invoices/listInvoices',
-        })
-    ).result as { contents: { text: string }[] }
-    expect(JSON.parse(read.contents[0]?.text as string)).toEqual([{ id: 1 }])
+        await mcp('tools/call', { name: 'get_invoices_listInvoices' })
+    ).result as { content: { text: string }[] }
+    expect(JSON.parse(read.content[0]?.text as string)).toEqual([{ id: 1 }])
 })
 
 // 16.13 — THE MCP ENDPOINT IS GATED ON `Origin` AS A MUTATION IS. A tool call runs its handler with

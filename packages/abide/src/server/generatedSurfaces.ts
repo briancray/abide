@@ -29,7 +29,7 @@ import { type Listed, surfaceOf } from './surfaceOf.ts'
 const OPENAPI_LOG = namedLogger('abide:openapi')
 const MCP_LOG = namedLogger('abide:mcp')
 
-// What MCP and OpenAPI add to a listing: whether the handler is keyed.
+// What OpenAPI adds to a listing: whether the handler is keyed.
 type Published = Listed & { keyed: boolean }
 
 /** Every handler `surface` lists (`surfaceOf`). */
@@ -212,18 +212,8 @@ export function openApi(
     return Object.keys(document().paths).length > 0 ? document : undefined
 }
 
-/** What the MCP surface publishes: a tool per call that takes args or writes, a resource per read. */
-type Tools = { tools: Published[]; resources: Published[] }
+const published = new WeakMap<Map<string, Mounted>, Reactive<Published[]>>()
 
-const published = new WeakMap<Map<string, Mounted>, Reactive<Tools>>()
-
-function toolsOf(handlers: Map<string, Mounted>): Tools {
-    const found: Tools = { tools: [], resources: [] }
-    for (const one of listed(handlers, 'mcp'))
-        if (one.keyed || one.method !== 'GET') found.tools.push(one)
-        else found.resources.push(one)
-    return found
-}
 
 type JsonRpc = {
     jsonrpc: '2.0'
@@ -264,18 +254,20 @@ export class McpSurface {
 
     /** Whether the route table publishes any handler to it. 20.7. */
     get opened(): boolean {
-        const { tools, resources } = this.#published()
-        return tools.length > 0 || resources.length > 0
+        return this.#published().length > 0
     }
 
-    #published(): Tools {
-        return overTable(published, this.#handlers, toolsOf)()
+    #published(): Published[] {
+        // Every handler the MCP surface lists, each a tool — a read as much as a mutation. 20.9.
+        return overTable(published, this.#handlers, (handlers) =>
+            listed(handlers, 'mcp'),
+        )()
     }
 
     /** Every tool it lists. 20.9. */
     list(): ToolDefinition[] {
         const listing: ToolDefinition[] = []
-        for (const tool of this.#published().tools) {
+        for (const tool of this.#published()) {
             if (tool.description === undefined)
                 MCP_LOG.warning(
                     `${tool.name} is published with no description.`,
@@ -305,7 +297,7 @@ export class McpSurface {
     }
 
     #tool(name: unknown): Published | undefined {
-        return this.#published().tools.find((one) => one.name === name)
+        return this.#published().find((one) => one.name === name)
     }
 
     async #called(
@@ -335,7 +327,7 @@ export class McpSurface {
                 return {
                     result: {
                         protocolVersion: MCP_PROTOCOL_VERSION,
-                        capabilities: { tools: {}, resources: {} },
+                        capabilities: { tools: {} },
                         serverInfo: appIdentity(),
                     },
                 }
@@ -343,19 +335,6 @@ export class McpSurface {
                 return { result: {} }
             case 'tools/list':
                 return { result: { tools: this.list() } }
-            case 'resources/list':
-                return {
-                    result: {
-                        resources: this.#published().resources.map(
-                            (resource) => ({
-                                uri: `abide:${resource.address}`,
-                                name: resource.name,
-                                description: resource.description ?? '',
-                                mimeType: 'application/json',
-                            }),
-                        ),
-                    },
-                }
             case 'tools/call': {
                 const tool = this.#tool(params?.name)
                 if (tool === undefined)
@@ -375,25 +354,6 @@ export class McpSurface {
                     },
                 }
             }
-            case 'resources/read': {
-                const uri = String(params?.uri ?? '')
-                const resource = this.#published().resources.find(
-                    (one) => `abide:${one.address}` === uri,
-                )
-                if (resource === undefined)
-                    return mcpFailure(-32602, `No resource at ${uri}.`)
-                const { text, failed } = await this.#called(
-                    resource,
-                    undefined,
-                    asker,
-                )
-                if (failed) return mcpFailure(-32603, text)
-                return {
-                    result: {
-                        contents: [{ uri, mimeType: 'application/json', text }],
-                    },
-                }
-            }
             default:
                 return mcpFailure(-32601, `No method ${method}.`)
         }
@@ -404,8 +364,7 @@ export class McpSurface {
  * Answers one MCP JSON-RPC request over `surface`, or `undefined` where it publishes nothing.
  *
  * 20.9 — THE STREAMABLE-HTTP MCP ENDPOINT, answering JSON-RPC over `POST`, as the request's own
- * caller: a handler that takes no args is a resource, read at its address; one that takes args, and
- * every mutation, is a tool.
+ * caller: every handler it lists is a tool, a read as much as a mutation.
  */
 export async function answerMcp(
     surface: McpSurface,

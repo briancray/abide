@@ -421,9 +421,9 @@ test('a JSON answer from the floor up is compressed in the encoding asked, and u
 })
 
 // 38.68, 20.9 — AN MCP READ IS MADE IN PROCESS WITH THE CALLER'S HEADERS, and the handler's answer is
-// read there rather than sent on: a client asking for brotli still has the resource's JSON read
-// whole, and only the reply is encoded. THE REVERT: keep `accept-encoding` in `callOf`; the list is
-// read as brotli bytes, and the resource's text is not the rows.
+// read there rather than sent on: a client asking for brotli still has the tool's JSON read whole,
+// and only the reply is encoded. THE REVERT: keep `accept-encoding` in `callOf`; the list is read
+// as brotli bytes, and the tool's text is not the rows.
 test('an MCP read takes its handler answer uncompressed, whatever the client accepts — 38.68, 20.9', async () => {
     const answer = await Bun.fetch(`${base}/__abide/mcp`, {
         method: 'POST',
@@ -434,8 +434,8 @@ test('an MCP read takes its handler answer uncompressed, whatever the client acc
         body: JSON.stringify({
             jsonrpc: '2.0',
             id: 1,
-            method: 'resources/read',
-            params: { uri: 'abide:/ledger/listRows' },
+            method: 'tools/call',
+            params: { name: 'get_ledger_listRows' },
         }),
         decompress: false,
     })
@@ -444,8 +444,8 @@ test('an MCP read takes its handler answer uncompressed, whatever the client acc
         new TextDecoder().decode(
             brotliDecompressSync(new Uint8Array(await answer.arrayBuffer())),
         ),
-    ) as { result?: { contents: { text: string }[] } }
-    expect(JSON.parse(reply.result?.contents[0]?.text ?? 'null')).toHaveLength(
+    ) as { result?: { content: { text: string }[] } }
+    expect(JSON.parse(reply.result?.content[0]?.text ?? 'null')).toHaveLength(
         120,
     )
 })
