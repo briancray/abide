@@ -198,18 +198,16 @@ import trimmedChatSource from './lib/TrimmedChat.abide' with { type: 'text' }
     </Section>
 
     <Section title="Following a channel sees turns, not every message">
-        <p><code>for await (const turns of onboarding)</code> walks the channel's cursor. On a value
-        with no streaming producer the cursor hands back the standing value once per turn, however
-        many writes landed since the last, and a patch in place is one of them (2.6). A burst of
-        three messages in one turn is one step, holding all three.</p>
+        <p><code>{'onboarding.watch((turns) => …)'}</code> follows the channel. The effect runs once
+        at the end of a turn, however many writes landed in it, and a patch in place is one of them
+        (12.10). A burst of three messages in one turn is one run, holding all three.</p>
 
         <p>So there is no exactly-once tail of a channel. Code that has to act on every message acts
-        where it writes it — in <code>say</code>, beside the push. The cursor never hands back an
-        <code>undefined</code> value (6.10).</p>
+        where it writes it — in <code>say</code>, beside the push.</p>
 
-        <p>A stream is the other case: its cursor yields from the start of the run in flight and
-        then live, one step per chunk (2.5), and a capped window still delivers every chunk
-        (5.10).</p>
+        <p><code>for await</code> is not a follow. Over a value it yields the settled value once and
+        ends, as <code>await</code> does (2.5). Over a stream it yields each chunk of the run and ends
+        at the close (2.6), and a capped window still delivers every chunk (5.10).</p>
 
         <p>Read on: <a href={url('/values/do-something-when-a-value-changes')}>Watching values</a> ·
         <a href={url('/data/send-data-as-it-arrives')}>Streaming data</a></p>

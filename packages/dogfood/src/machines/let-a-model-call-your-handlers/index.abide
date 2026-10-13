@@ -6,15 +6,14 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
-    <Section title="The method decides tool or resource">
-        <p>A handler is published as a <strong>tool</strong> or as a <strong>resource</strong>
-        according to which arm <code>GET</code> took, and no flag tells them apart. A read is a
-        resource, a mutation is a tool — which is the distinction MCP already draws, arrived at from
-        the declaration rather than from an annotation somebody has to keep true.</p>
+    <Section title="Every handler is a tool">
+        <p>Every handler the route table publishes is a <strong>tool</strong> — a read that takes
+        no arguments as much as a mutation. None is published as an MCP resource, because a client
+        that only calls tools, Claude Code under <code>abide-bridge</code> among them, would never
+        reach a handler listed as one.</p>
 
-        <p>That is the whole of the mapping, and it is worth being able to state in one line: the
-        model sees your app's verbs because your app already declared which of its handlers change
-        something.</p>
+        <p>That is the whole of the mapping: the model sees every handler your app publishes, and
+        whether one changes something is the handler's own method, not a second listing.</p>
     </Section>
 
     <Section title="The description is the handler's">

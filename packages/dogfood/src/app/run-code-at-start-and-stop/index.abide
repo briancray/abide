@@ -7,7 +7,7 @@ import Section from '#src/lib/Section.abide'
 import Snippet from '#src/lib/Snippet.abide'
 import Pool from './lib/Pool.abide'
 import poolSource from './lib/Pool.abide' with { type: 'text' }
-import downloadsSource from '../../lib/downloads.ts' with { type: 'text' }
+import downloadsSource from '../../lib/serveDownloads.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -78,9 +78,11 @@ off()`} />
     <Section title="A root rung answers what no route does">
         <p><code>middleware</code> filed at the root route runs before routing, so a rung there can
         answer an address no page or handler claims, and hand everything else on with
-        <code>next()</code>. These docs serve every page as markdown that way:</p>
+        <code>next()</code>. These docs serve every page as markdown that way — the rung is a
+        module's export, and the root layout files it with <code>middleware(serveDownloads)</code>,
+        since a hook is only called in a page, a layout or a handler file (37.13):</p>
 
-        <Snippet source={downloadsSource} path="src/lib/downloads.ts" from={['middleware(async (next']} />
+        <Snippet source={downloadsSource} path="src/lib/serveDownloads.ts" from={['export const serveDownloads']} />
 
         <p>It uses the same response helpers everything else does, there being no second set.</p>
 

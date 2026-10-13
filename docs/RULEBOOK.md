@@ -106,11 +106,11 @@ second.
 
 2.4 A failed revalidation MUST NOT cause a read to throw.
 
-2.5 `s[Symbol.asyncIterator]` MUST yield the production in flight from its start, and MUST then
-continue live.
+2.5 On a value that is not a streaming producer, `s[Symbol.asyncIterator]` MUST settle as `s.then`
+does, yielding once what it resolves with.
 
-2.6 On a value that is not a streaming producer, `s[Symbol.asyncIterator]` MUST hand back the
-standing value once per turn, however many productions or patches landed since the last.
+2.6 On a streaming producer, `s[Symbol.asyncIterator]` MUST yield the chunks of the run being served
+from its first, and MUST end when that run closes.
 
 2.7 `s.then` MUST resolve with the value where `s.busy` becomes false and 2.2 would not throw.
 
@@ -270,9 +270,7 @@ the production it serves.
 
 6.9 An expiry MUST NOT report `s.busy` true.
 
-6.10 A cursor MUST NOT be handed an `undefined` production.
-
-6.11 A streaming producer's `ttl` MUST run from its run's close, and MUST NOT reach the run in
+6.10 A streaming producer's `ttl` MUST run from its run's close, and MUST NOT reach the run in
 flight.
 
 # 7. Triggers
@@ -395,6 +393,11 @@ made by one (11.61) MUST end with it.
 
 9.14 A subscriber's copy of a wired `Reactive` MUST report `s.busy` true until the first production
 arrives.
+
+9.15 A cursor over a streaming producer MUST throw, once it has yielded every chunk, the failure its
+run ended on.
+
+9.16 A cursor over a streaming producer MUST end where a new run replaces the one it was reading.
 
 # 10. Sharing
 
@@ -1164,8 +1167,8 @@ lists a handler for it. What a closed one answers is 36.7.
 
 20.8 Every `/__abide/**` address MUST run inside the app's own middleware.
 
-20.9 `/__abide/mcp` MUST publish a handler that reads as a tool and a resource according to which
-arm `GET` took, and MUST NOT require a flag to tell them apart.
+20.9 `/__abide/mcp` MUST publish every handler it lists as a tool, a `GET` taking no args included,
+and MUST NOT publish one as a resource.
 
 20.10 A handler whose own `Middleware` rung would refuse a caller MUST still be listed, and MUST
 still be refused on the call.
@@ -1294,7 +1297,8 @@ segment a page below it adds.
 
 23.15 A file under a fence MUST NOT have a route.
 
-23.16 A fence under a fence MUST be a build error naming both.
+23.16 A fence under a fence MUST be a build error naming both, save a `server` directory under a
+`lib` or a `tests` directory.
 
 23.17 A route whose first segment is `__abide` MUST be a build error.
 
@@ -1432,8 +1436,7 @@ module ran is not the one served after it.
 27.12 `Config` MUST admit a field an app declares on it, of any type.
 
 27.13 `abide check` and `abide lsp` MUST type `Config` with what the defaults of every `onConfig`
-called as a statement at the top of a `<script server>`, a handler file or a module under a `server`
-directory return, and a union return with the keys
+called as a statement at the top of a `<script server>` or a handler file return, and a union return with the keys
 every member of it has.
 
 # 28. Logging
@@ -2078,6 +2081,9 @@ nothing caught MUST stop the app through `App.stop`, and the process MUST then e
 through `App.stop`, and the process MUST then exit with 0.
 
 37.12 A second `SIGTERM` or `SIGINT` while the app is stopping MUST end the process at once.
+
+37.13 A lifecycle hook called in a module of the app's own that is neither a `.abide` nor a handler
+file MUST be a build error naming the module and the hook.
 
 # 38. Commands
 

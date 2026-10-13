@@ -104,8 +104,9 @@ import poolSource from '../../app/run-code-at-start-and-stop/lib/Pool.abide' wit
 
         <p>Each is a hook you <strong>call</strong> rather than an export the framework looks for,
         a <code>.abide</code> exporting nothing. It is filed at the route of the
-        <code>.abide</code> or the handler file that called it, and at the root where a module
-        called it (37.1). A <code>.abide</code> under a <code>lib</code> or a <code>tests</code>
+        <code>.abide</code> or the handler file that called it (37.1), and any other module
+        calling one is a build error (37.13) — export the function and call the hook where it
+        serves. A <code>.abide</code> under a <code>lib</code> or a <code>tests</code>
         directory files its hooks at the route of the directory holding that one. <code>onLauncher</code> is called in
         <code>src/launcher.abide</code> alone.</p>
 
@@ -140,8 +141,8 @@ import poolSource from '../../app/run-code-at-start-and-stop/lib/Pool.abide' wit
         <Section title="`Config` is typed from the `onConfig` calls" level={3}>
             <p><code>abide check</code> and <code>abide lsp</code> type <code>Config</code> from
             the defaults every <code>onConfig</code> returns, read where it is called as a
-            statement at the top of a <code>&lt;script server&gt;</code>, of a handler file or of
-            a module under a <code>server</code> directory (27.13). A default that returns a union
+            statement at the top of a <code>&lt;script server&gt;</code> or of a handler file
+            (27.13). A default that returns a union
             types the keys every member of it has. So a config read is typed without a declaration
             of its own, wherever in the app the default is written.</p>
         </Section>

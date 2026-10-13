@@ -168,8 +168,8 @@ import regionReportSource from './lib/RegionReport.abide' with { type: 'text' }
 
     <Section title="A reader arriving mid-run replays the run">
         <p>There is no retention option on the transport and none is owed. What a late reader needs
-        is the answer being built, and a cursor over the stream hands it the run in flight from its
-        start before it goes live (2.5). So a reader arriving halfway through still paints every
+        is the answer being built, and a <code>for await</code> over the stream hands it the run in
+        flight from its first chunk to its close (2.6). So a reader arriving halfway through still paints every
         row.</p>
     </Section>
 

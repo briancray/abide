@@ -127,7 +127,9 @@ import invoicePreviewSource from '../../pages/render-a-document-yourself/lib/Inv
 
             <p><code>lib</code>, <code>tests</code>, <code>server</code> and <code>public</code>
             are the fences, and nothing under one has a route (23.15). One inside another is a
-            build error, and so is an <code>index.abide</code>, a <code>layout.abide</code> or an
+            build error, save a <code>server</code> inside a <code>lib</code> or a
+            <code>tests</code>, which keeps code only the server loads beside the components that
+            call it — and so is an <code>index.abide</code>, a <code>layout.abide</code> or an
             <code>error.abide</code> under one (23.16, 23.18). A directory's top level holds pages,
             layouts, error pages, handler files, directories and fences alone — any other file
             there is a build error naming the <code>lib</code> to move it into (23.22). So listing a

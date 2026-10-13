@@ -1,10 +1,8 @@
 // THE DOCS AS MARKDOWN, for a reader with no browser: every page at its own address with `.md` on
 // the end, `abide.md` holding them all in reading order, and `llms.txt` pointing an agent at that.
-// Root middleware — a module calls it rather than a route, so it is filed at the root (37.1) and
-// answers addresses no route has (37.3). The root layout imports it. Each page's markdown is read
-// off the page the app renders, so the words have the one home.
-import { type RouteLiteral, url } from '@abide/abide'
-import { middleware } from '@abide/abide/server'
+// A rung the root layout files as middleware, so it answers addresses no route has (37.3). Each
+// page's markdown is read off the page the app renders, so the words have the one home.
+import { type Middleware, type RouteLiteral, url } from '@abide/abide'
 import { markdownOf } from '../server/markdownOf.ts'
 import { SITE } from './SITE.ts'
 import { markdownAddressOf } from './sitePages.ts'
@@ -41,7 +39,10 @@ ${contents}${body}`
 
 // The request a root middleware is handed is addressed below the mount, as a route is, so it is
 // matched against addresses below the mount rather than against `url()`, which adds it.
-middleware(async (next, { request }) => {
+export const serveDownloads: Middleware<
+    { request: Request },
+    Response
+> = async (next, { request }) => {
     const { pathname, origin } = new URL(request.url)
     if (!pathname.endsWith('.md') && !pathname.endsWith('/llms.txt'))
         return next()
@@ -58,4 +59,4 @@ middleware(async (next, { request }) => {
                     headers: MARKDOWN,
                 })
     return next()
-})
+}

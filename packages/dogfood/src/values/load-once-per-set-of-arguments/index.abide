@@ -184,8 +184,8 @@ import totalSource from './lib/Total.abide' with { type: 'text' }
         abide does not.</p>
 
         <p>A global value over a stream fans one producer out to many readers, and it needs no
-        retention to do it. A reader arriving mid-stream gets the run in flight from its start and
-        then goes live (2.5), and a reader leaving does not cancel the producer for the ones that
+        retention to do it. A reader arriving mid-stream gets the run in flight from its first chunk
+        to its close (2.6), and a reader leaving does not cancel the producer for the ones that
         remain (11.39).</p>
 
         <p>Read on: <a href={url('/values/keep-the-last-few-values')}>Recent values</a> ·

@@ -53,9 +53,9 @@ import undoStackSource from './lib/undoStack.ts' with { type: 'text' }
         want the ones before it, hold them: make the value the array, and append where you
         write.</p>
 
-        <p>A reader cannot build the window for you. <code>for await</code> over a value hands back
-        the standing value once per turn, and a burst of writes in one turn is one step (2.6), so a
-        window a reader assembles misses whatever landed in the same turn. The writer sees every
+        <p>A reader cannot build the window for you. A <code>watch</code> runs once per turn, and a
+        burst of writes in one turn is one run (12.10), so a window a reader assembles misses
+        whatever landed in the same turn. The writer sees every
         value, which is why the window is built where the write is.</p>
 
         <p>A channel is this same shape with many writers — a <code>reactive</code> over an array

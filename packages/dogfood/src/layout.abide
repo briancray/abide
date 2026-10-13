@@ -1,12 +1,14 @@
 <script server>
 // The docs app's own hooks; each example files its own in its own file.
 import { csp, middleware, onConfig } from '@abide/abide/server'
-import '#src/lib/downloads.ts'
+import { serveDownloads } from '#src/lib/serveDownloads.ts'
 
 // The sign-in examples need a secret: one per process, or the deployment's.
 const PRINCIPAL_SECRET = crypto.randomUUID()
 
 onConfig(() => ({ ABIDE_PRINCIPAL_SECRET: PRINCIPAL_SECRET }))
+
+middleware(serveDownloads)
 
 // Every docs page's policy; 'self' so the docs can frame invoice previews.
 middleware(csp({ 'frame-ancestors': ["'self'"] }))

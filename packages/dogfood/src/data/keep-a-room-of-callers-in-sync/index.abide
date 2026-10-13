@@ -195,9 +195,9 @@ import supportRoomSource from './lib/SupportRoom.abide' with { type: 'text' }
         next production replaces it (9.4), so a turn goes through <code>say</code>.</p>
 
         <p><code>{'room.invalidate({ id })'}</code> and <code>{'room.refresh({ id })'}</code> inside
-        a handler reach every browser's copy of that room (7.10, 7.18). A <code>for await</code>
-        over the room hands back the standing array once per turn, a burst collapsing to the latest
-        (2.6), so code that has to act on every message acts in <code>say</code>.</p>
+        a handler reach every browser's copy of that room (7.10, 7.18). A <code>watch</code> on the
+        room runs once per turn, a burst collapsing to the latest (12.10), so code that has to act on
+        every message acts in <code>say</code>.</p>
     </Section>
 
     <Section title="Each instance holds its own room">
