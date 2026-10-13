@@ -43,7 +43,7 @@ re-prompting, but report the per-package version bumps before merging as a sanit
 3. **Gate locally** — from the repo root: `bun run lint`, `bun run typecheck`, `bun run test`.
    All must be clean. CI's verify job runs the same three before
    anything publishes, so a red gate here only wastes a release run. A TIMING failure under
-   `--parallel` is re-run with `bun run test:serial` before it is believed (CLAUDE.md, "checks").
+   `--parallel` is rerun with `bun run test:serial` before it is believed (CLAUDE.md, "checks").
    - **If `@abide/bridge` is getting a bump**, `packages/abide/src/server/BRIDGE_VERSION.ts` must
      name the version the Version Packages PR will give it — `assistant.test.ts` gates the two
      equal, and the pairing command a site prints installs exactly that version.

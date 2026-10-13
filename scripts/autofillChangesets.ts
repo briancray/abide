@@ -2,7 +2,7 @@
 /*
 Pre-`changeset version` gap-filler. Changesets only documents changes that ship
 with a changeset file, so a commit pushed without one is invisible to the release
-notes. This synthesises a changeset for every commit since the last release that
+notes. This synthesizes a changeset for every commit since the last release that
 touches a published package yet added no changeset of its own, deriving the bump
 and summary from the conventional-commit subject. Hand-written changesets always
 win — a commit that added one is left untouched.
@@ -12,7 +12,7 @@ own package.json `files` ship. A commit is attributed to whichever package(s)
 its changed files belong to, so a `@abide/bridge` change bumps the bridge,
 not abide; a commit spanning two packages lists both in one changeset.
 
-Idempotent: each synthesised file is named `auto-<shortHash>.md`, so re-running
+Idempotent: each synthesized file is named `auto-<shortHash>.md`, so rerunning
 (e.g. the release action refreshing the Version Packages PR) never duplicates an
 entry. Runs inside `version-packages`, so both local and CI versioning fill the gap.
 */

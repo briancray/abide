@@ -6,17 +6,16 @@
         "packages/*"
     ],
     "scripts": {
-        "typecheck": "bun run docs && tsc -p packages/abide/tsconfig.json && tsc -p packages/harness/tsconfig.json && tsc -p packages/dogfood/tsconfig.json && tsc -p packages/bridge/tsconfig.json",
+        "typecheck": "bun check -p packages/abide && bun check -p packages/harness && bun check -p packages/dogfood && bun check -p packages/bridge",
         "test": "bun run build && bun test packages/abide packages/harness/tests packages/dogfood/tests --parallel --timings=test-timings.json",
         "test:timings": "bun run build && bun test packages/abide packages/harness/tests packages/dogfood/tests --parallel --timings=test-timings.json --update-timings",
         "test:serial": "bun run build && bun test packages/abide packages/harness/tests packages/dogfood/tests",
         "test:changed": "bun test --changed",
         "build": "bun run --filter dogfood build",
-        "docs": "bun run --filter dogfood pages",
         "dev": "bun run --filter dogfood dev",
         "lint": "biome lint",
         "format": "biome check --write --linter-enabled=false",
-        "check": "biome check --write",
+        "fix": "biome check --write",
         "knip": "bunx knip --workspace packages/abide",
         "e2e": "playwright test",
         "e2e:changed": "playwright test --only-changed",
@@ -41,7 +40,7 @@
     "devDependencies": {
         "@biomejs/biome": "^2.5.15",
         "@changesets/cli": "^3.0.3",
-        "@playwright/test": "^1.63.0",
+        "@playwright/test": "^1.64.0",
         "@types/bun": "^1.4.2",
         "typescript": "^7.0.2"
     }

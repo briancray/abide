@@ -11,9 +11,9 @@ A **registry**. One row per name, and the row answers exactly one question: *wha
 | A statement | Goes | Because |
 | --- | --- | --- |
 | Answerable from the type alone | here | a signature and its one-line meaning are the same fact |
-| Constrains behaviour, at build time or run time | RULEBOOK.md | a requirement has a clause number, and is stated once |
-| Explains why the design is this way | a guide in `packages/dogfood/content` | a reason is read once and never looked up |
-| A measurement | the harness | a number in prose is a number nothing re-runs |
+| Constrains behavior, at build time or run time | RULEBOOK.md | a requirement has a clause number, and is stated once |
+| Explains why the design is this way | a guide in `packages/dogfood/src` | a reason is read once and never looked up |
+| A measurement | the harness | a number in prose is a number nothing reruns |
 
 ## Format rules
 
@@ -26,9 +26,9 @@ These are immutable. A change to them is a change to what this document is.
 3. **No requirement keyword appears in this document.** MUST, MUST NOT, SHALL, SHOULD, SHOULD NOT
    and MAY belong to RULEBOOK.md, and a check refuses them here.
 4. **No rationale, no measurement, no example.** A row that wants any of the three is a row whose
-   behaviour is being restated; cite the clause instead.
-5. **Behaviour is cited, never described.** The `Rules` cell lists the clauses that govern the name.
-   `—` is permitted and is an admission: it says this name has no behaviour of its own.
+   behavior is being restated; cite the clause instead.
+5. **Behavior is cited, never described.** The `Rules` cell lists the clauses that govern the name.
+   `—` is permitted and is an admission: it says this name has no behavior of its own.
 
 The one-sentence rule is what keeps the two documents apart. A second sentence is a rule every time.
 
@@ -181,8 +181,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `refuse.named` | `<Name extends string, Data extends JsonValue>(name: Name, status: number \| undefined, message: string \| ((data: Data) => string) \| undefined, options: { schema: Schema<Data> }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | The same, carrying data its schema declares. | 15.3, 15.11, 15.12, 15.13, 15.14, 15.15, 15.18 |
 | `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }` | The one refusal type, in-process and over a wire alike. | 15.1, 15.2, 15.6, 16.40, 16.41, 15.21 |
 | `return myError(data)` | `Failed<Name, Data>` | The one spelling for every refusal. | 15.4, 15.5 |
-| `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | Abide's own refusal for an address nothing answers. | 15.7, 15.9 |
-| `validationError` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | Abide's own refusal for a schema or an `args` gate that refused. | 15.8, 15.9 |
+| `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | Abide's own refusal for an address nothing answers. | 15.7, 15.9, 15.22 |
+| `validationError` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | Abide's own refusal for a schema or an `args` gate that refused, or a call's route parameter no segment can spell. | 15.8, 15.9 |
 | `aborted` | `(data?: undefined) => Failed<'Aborted', undefined>` | Abide's own refusal for a load every caller aborted, and for a client that left. | 15.9, 16.49, 16.63 |
 | `myError(data)` DISCARDED | compile error | A `Failed` built and thrown away. | 15.10 |
 
@@ -214,10 +214,10 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.16 |
 | `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of `middleware`. | 16.14, 16.15, 16.16, 16.21 |
-| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced>, options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.34, 16.35, 16.36, 16.37, 16.39, 16.44, 16.45, 16.46, 16.47, 16.50, 16.51, 16.52, 16.64, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24 |
+| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced>, options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.34, 16.35, 16.36, 16.37, 16.39, 16.44, 16.45, 16.46, 16.47, 16.50, 16.51, 16.52, 16.64, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24 |
 | `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: (args?: Args) => Value, options?: RpcOptions<Args, RungFailures> & ReactiveOptions<Value, Value, Failures, Args>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | The plain-function overload, whose options build the value it becomes beside its address. | 16.1, 16.6, 16.7 |
 | `GET` | `<Value, Failures, RungFailures>(handler: Value \| PromiseLike<Value>, options?: RpcOptions<undefined, RungFailures> & ReactiveOptions<Value, Value, Failures>) => Rpc<Value, undefined, Failures \| RungFailures>` | The value overload, for what the handler owns outright. | 16.1, 16.6, 16.7 |
-| `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. | 16.2, 16.7, 16.32, 16.38, 16.53 |
+| `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. | 16.2, 16.7, 16.32, 16.68, 16.38, 16.53 |
 | `rpc.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to the handler's matching entries. | 13.2, 13.3, 13.12 |
 | `rpc.ready` | `(pattern?: Partial<Args>) => boolean` | `ready` narrowed to the handler's matching entries. | 13.11, 13.12 |
 | `rpc.invalidate` | `(pattern?: Partial<Args>) => void` | `invalidate` narrowed to the handler's matching entries. | 7.2, 7.3, 13.4, 13.12 |
@@ -258,18 +258,19 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | File | Export | Served at | Rules |
 | --- | --- | --- | --- |
-| `server/rpc/name.ts` | `default` | `/__abide/rpc/name` | 16.2, 19.1 |
-| `server/rpc/name.ts` | `name` | `/__abide/rpc/name` | 16.2, 19.1 |
-| `server/rpc/users.ts` | `getUser` | `/__abide/rpc/users/getUser` | 16.2, 19.1 |
-| `server/rpc/admin/audit.ts` | `recent` | `/__abide/rpc/admin/audit/recent` | 16.2, 19.1 |
+| `users/page.abide` | `getUser` | `/users/getUser` | 16.2, 19.1, 19.21, 23.14 |
+| `layout.abide` | `health` | `/health` | 16.2, 23.14 |
+| `admin/page.abide` | `recent` | `/admin/recent` | 16.2, 23.14 |
+| `media/[id]/page.abide` | `save` | `/media/[id]/save`, `id` reaching its `Args` | 16.2, 16.65, 16.66, 16.67, 16.69 |
+| `media/[id]/comments.abide` | `addComment` | `/media/[id]/addComment` | 16.2, 19.1, 23.14 |
 
 ## Schemas
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. | 19.2, 19.3, 19.4, 19.6, 19.8, 19.9, 19.10, 19.20, 19.11, 19.12 |
+| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. | 19.2, 19.3, 19.4, 19.6, 19.8, 19.9, 19.10, 19.19, 19.11, 19.12 |
 | `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. | — |
-| `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | 19.4, 19.21 |
+| `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | 19.4, 19.20 |
 | `Paths<T>` | `string` | The dot-joined leaf paths of a type. | 19.5 |
 | `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.7, 19.14 |
 | `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.13, 19.14, 20.11 |
@@ -285,8 +286,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `cache-control: private, max-age=<ttl>` | a `GET` over a `global` `reactive` | The value's own duration, answered rather than restated. | 21.8, 21.9, 21.11, 21.16, 21.17, 18.14 |
 | `cache-control: no-store` | `/__abide/openapi.json`, `/__abide/mcp` | Refuses caching for an answer about the app's surfaces. | 21.4 |
 | `cache-control: public, max-age=31536000, immutable` | the built bundle | A chunk addressed by its own content hash. | 21.5 |
-| `cache-control: public, max-age=0, must-revalidate` | a file under `src/ui/public` | A file at an address the build never chose. | 21.12 |
-| `etag` | a file under `src/ui/public` | The answered bytes, addressed by their content. | 21.13, 21.14 |
+| `cache-control: public, max-age=0, must-revalidate` | a file under a `public` directory | A file at an address the build never chose. | 21.12 |
+| `etag` | a file under a `public` directory | The answered bytes, addressed by their content. | 21.13, 21.14 |
 | `referrer-policy: strict-origin-when-cross-origin` | a page | The browsers' own default, written down. | 21.6 |
 | `vary` | wherever an answer depends on a request header | Names the header the answer varied on. | 21.7 |
 | `content-security-policy: frame-ancestors 'none'` | a page | The default a write through `response` or `csp` overrides. | 21.18, 21.10 |
@@ -306,14 +307,14 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `/__abide/openapi.json` | `GET` | The generated OpenAPI document. | 20.5, 20.6, 20.7, 20.8, 20.11 |
+| `/__abide/openapi.json` | `GET` | The generated OpenAPI document. | 20.5, 20.6, 20.7, 20.8, 20.11, 20.13, 36.7 |
 | `OpenApiDocument` | `JsonValue` | OpenAPI 3.1, whose schema dialect is `JsonSchema`. | 20.6 |
 
 ## MCP
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 20.5, 20.7, 20.8, 20.9, 20.10, 20.12 |
+| `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 20.5, 20.7, 20.8, 20.9, 20.10, 20.12, 20.13, 36.7 |
 
 # Assistant
 
@@ -343,7 +344,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `claudeCode.bridgeCommand` | `() => { command: string; expires: number }` | The command that pairs a bridge with this browser. | 45.14 |
 | `claudeCode.bridge` | `() => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 45.20, 45.22 |
 | `BridgeStatus` | `{ paired: boolean; command: string \| undefined }` | Whether a bridge is paired, and the command that pairs one where none is. | 45.20 |
-| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 45.14, 45.15, 45.19 |
+| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 45.14, 45.15, 45.19 |
 
 # Ambient values
 
@@ -434,10 +435,10 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `config` | `Reactive<Config>` | The resolved configuration document. | 27.1, 27.9 |
-| `Config` | `interface Config { [field: string]: unknown; APP_NAME: string; APP_VERSION: string; APP_DATA_DIR: string; ABIDE_LOGS: boolean; ABIDE_OPENAPI: boolean; ABIDE_MCP: boolean; ABIDE_BRIDGE: boolean }` | The resolved document, which an app widens with fields of its own by declaration merging. | 27.12 |
+| `Config` | `interface Config { [field: string]: unknown; APP_NAME: string; APP_VERSION: string; APP_DATA_DIR: string }` | The resolved document, widened by what each `onConfig`'s defaults return, and by declaration merging. | 27.12, 27.13 |
 | `Env` | `Record<string, string \| undefined>` | The process environment as read, before coercion. | 27.2, 27.8 |
 | `config.invalidate` | `() => void` | The trigger over the resolved configuration. | 7.2, 27.5 |
-| `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's defaults and its schema. | 27.3, 27.4, 27.6, 27.10 |
+| `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's defaults and its schema. | 27.3, 27.4, 27.6, 27.10, 27.13 |
 | `ConfigDefaults` | `(env: Env) => unknown` | The defaults function, synchronous by contract. | 27.4, 27.11 |
 
 ### `ConfigOptions`
@@ -452,26 +453,26 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `log` | `(...args: unknown[]) => void` | A message under the default namespace. | 28.1, 28.3 |
-| `log.info` / `log.warning` / `log.error` / `log.debug` | `(...args: unknown[]) => void` | The four levels. | 28.4 |
-| `log.named` | `(name: string) => Logger` | A logger under a named namespace. | 28.5, 28.6, 28.13 |
-| `Logger` | `typeof log` | What `log.named` hands back. | 28.6 |
-| `log.enabled` | `() => boolean` | Whether a gated line under this namespace would be written. | 28.7, 28.8 |
+| `log` | `(...args: unknown[]) => void` | A message under the default namespace. | 28.1, 28.2 |
+| `log.info` / `log.warning` / `log.error` / `log.debug` | `(...args: unknown[]) => void` | The four levels. | 28.3 |
+| `log.named` | `(name: string) => Logger` | A logger under a named namespace. | 28.4, 28.5, 28.12 |
+| `Logger` | `typeof log` | What `log.named` hands back. | 28.5 |
+| `log.enabled` | `() => boolean` | Whether a gated line under this namespace would be written. | 28.6, 28.7 |
 | `LogRecord` | `{ time: string; level: 'debug' \| 'info' \| 'warning' \| 'error'; namespace: string; message: string; trace: string }` | One line, as a value. | 24.3 |
-| `log.records` | `Reactive<LogRecord[]>` | The lines kept, appended to as each is written. | 28.1, 28.2 |
-| `abide:request` | `debug` | One line per request. | 28.9 |
-| `abide:socket` | `debug` | One line per frame on the socket mux. | 28.9 |
-| `abide:lifecycle` | `debug` `error` | A lifecycle that ran. | 28.9 |
-| `abide:principal` | `debug` `warning` | A principal set or cleared. | 28.9 |
-| `abide:health` | `warning` | An `onHealth` that threw or answered a non-object. | 25.2, 28.9 |
-| `abide:mcp` | `debug` `warning` | A handler withheld from MCP, or a tool published with no description. | 20.3, 20.9, 28.9 |
-| `abide:openapi` | `warning` | A handler whose schema had no JSON Schema export. | 20.11, 28.9 |
-| `abide:config` | `warning` | A second `onConfig` replacing the first. | 27.6, 28.9 |
-| `abide:render` | `warning` | An `error.abide` that itself failed. | 28.9 |
-| `abide:refuse` | `warning` | A message formatter that threw. | 15.13, 28.9 |
-| `abide:reactive` | `warning` | A failed revalidation over a value still being served. | 4.12, 28.9 |
-| `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. | 12.6, 28.9 |
-| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. | 28.9, 41.10, 41.15, 41.24 |
+| `log.records` | `Reactive<LogRecord[]>` | The lines kept, appended to as each is written. | 28.1 |
+| `abide:request` | `debug` | One line per request. | 28.8 |
+| `abide:socket` | `debug` | One line per frame on the socket mux. | 28.8 |
+| `abide:lifecycle` | `debug` `error` | A lifecycle that ran. | 28.8 |
+| `abide:principal` | `debug` `warning` | A principal set or cleared. | 28.8 |
+| `abide:health` | `warning` | An `onHealth` that threw or answered a non-object. | 25.2, 28.8 |
+| `abide:mcp` | `debug` `warning` | A handler withheld from MCP, or a tool published with no description. | 20.3, 20.9, 28.8 |
+| `abide:openapi` | `warning` | A handler whose schema had no JSON Schema export. | 20.11, 28.8 |
+| `abide:config` | `warning` | A second `onConfig` replacing the first. | 27.6, 28.8 |
+| `abide:render` | `warning` | An `error.abide` that itself failed. | 28.8 |
+| `abide:refuse` | `warning` | A message formatter that threw. | 15.13, 28.8 |
+| `abide:reactive` | `warning` | A failed revalidation over a value still being served. | 4.12, 28.8 |
+| `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. | 12.6, 28.8 |
+| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. | 28.8, 41.10, 41.15, 41.24 |
 
 ## `csp`
 
@@ -484,7 +485,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `url` | `<P extends RouteLiteral>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal. | 30.1, 30.2, 30.8, 30.19, 30.26 |
+| `url` | `<P extends RouteLiteral>(url?: P, ...rest: HasParams<P> extends true ? [params: ParamsOf<P>, queryParams?: Query] : [params?: ParamsOf<P>, queryParams?: Query]) => string` | Builds an address from a route literal or a public file's address. | 30.1, 30.2, 30.8, 30.19, 30.26 |
 | `HasParams<P>` | `boolean` | Whether the literal carries a required segment. | 30.2 |
 | `HasSegments<P>` | `boolean` | Whether the literal carries a segment of any kind. | 30.2 |
 | `RequiredNames<P>` | `string` | The required segment names. | 30.3 |
@@ -493,7 +494,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `Query` | `Record<string, unknown> \| URLSearchParams` | The query half. | 30.6 |
 | `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| (string \| number)[] }` | What a route literal's segments accept. | 30.3, 30.4, 30.5 |
 | `RouteParams<P>` | `{ [K in RequiredNames<P>]: string } & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }` | What a page filed under `P` reads its params as. | 23.9 |
-| `Routes` | `interface Routes {}` | The app's route literals, which `abide check` declares. | 30.26 |
+| `Routes` | `interface Routes {}` | The app's route literals and public file addresses, which `abide check` declares. | 30.26 |
 | `RouteLiteral` | `[keyof Routes] extends [never] ? string : Extract<keyof Routes, string>` | What `url` takes. | 30.26 |
 
 ## `navigate`
@@ -581,8 +582,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15, 34.18 |
-| `<script module>` | Module scope. | 34.2, 34.3, 34.12, 34.14, 34.15, 34.17, 34.19 |
+| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15, 34.18, 34.34, 34.35 |
+| `<script module>` | Module scope. | 34.2, 34.3, 34.12, 34.14, 34.15, 34.17, 34.19, 34.24, 34.25, 34.35 |
+| `<script server>` | Module scope on a server alone, exporting the file's handlers. | 16.28, 19.15, 19.22, 34.3, 34.12, 34.20, 34.21, 34.22, 34.23, 34.24, 34.26, 34.33, 34.34, 34.35, 37.1 |
 | `<style>` | Component-scoped styles. | 34.4, 34.5, 34.10, 34.11 |
 | `import './app.css'` | A stylesheet the component depends on. | 34.6 |
 | `:global(…)` | The per-selector escape from scoping. | 34.5 |
@@ -595,7 +597,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- |
 | `<head>` | A page's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14 |
 | `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10 |
-| `[name]` | A required dynamic segment. | 23.5, 30.3 |
+| `[name]` | A required dynamic segment. | 16.65, 23.5, 30.3 |
 | `[[name]]` | An optional segment. | 23.5, 30.4 |
 | `[...name]` | A rest segment, terminal. | 23.5, 30.5 |
 | `/__abide/**` | Every endpoint abide controls. | 20.8 |
@@ -605,8 +607,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4 |
-| `render` | `(component: Component, shell?: Shell) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 35.11 |
-| `Shell` | `string \| URL \| undefined` | The document a render renders into. | 35.6, 19.18 |
+| `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 35.11 |
 
 ## Sinks
 
@@ -623,10 +624,10 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Type | Meaning | Rules |
 | --- | --- | --- | --- |
-| `PORT` | `number` | The listen port. | 36.1, 38.64, 38.65 |
-| `APP_URL` | `string \| null` | The app's public URL. | 36.2, 19.19 |
+| `PORT` | `number` | The listen port. | 36.1, 38.63, 38.64 |
+| `APP_URL` | `string \| null` | The app's public URL. | 36.2, 19.18 |
 | `NODE_ENV` | `string` | The environment name, verbatim. | 36.3, 36.16 |
-| `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.5 |
+| `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.4 |
 | `APP_VERSION` | `string` | The version beside that name. | 27.3 |
 | `APP_DATA_DIR` | `string` | The platform's per-user data directory. | 27.3, 36.4 |
 | `ABIDE_PRINCIPAL_SECRET` | `string \| null` | What seals the principal cookie. | 26.11, 36.5 |
@@ -636,13 +637,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `ABIDE_RPC_TIMEOUT` | `number` | The default ms a call may go without progress. | 16.22, 16.56, 16.58 |
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55 |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
-| `ABIDE_LOGS` | `boolean` | Opts in to declaring the `GET` over `log.records`. | 36.7 |
-| `ABIDE_OPENAPI` | `boolean` | Opts in to declaring the OpenAPI address. | 20.7, 36.7 |
-| `ABIDE_MCP` | `boolean` | Opts in to declaring the MCP address. | 20.7, 36.7 |
-| `ABIDE_BRIDGE` | `boolean` | Opts in to relaying a visitor's Claude Code. | 36.7, 45.19 |
 | `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |
 | `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. | 36.8 |
-| `DEBUG` | `string \| null` | Log-namespace gating. | 28.7, 28.10, 28.11, 28.12 |
+| `DEBUG` | `string \| null` | Log-namespace gating. | 28.6, 28.9, 28.10, 28.11 |
 | `NO_COLOR` | `string \| null` | Refuses ansi anywhere. | 36.9 |
 | `FORCE_COLOR` | `string \| null` | Asks for the readable form off a pipe. | 36.9 |
 
@@ -650,56 +647,54 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Path | Meaning | Rules |
 | --- | --- | --- |
-| `src/**` | The app's source. | 36.10 |
-| `src/server/**` | Server-related source. | 36.10 |
-| `src/ui/**` | Browser-related source. | 36.10 |
-| `src/shared/**` | Source shared by both. | 36.10 |
-| `src/server/app.ts` | The lifecycle hooks. | 37.1 |
-| `src/bundle/icon.png` · `src/bundle/icon.icns` | The desktop app's icon. | 38.80 |
-| `src/bundle/launch.abide` | The desktop launcher's page, in place of its own. | 38.83, 38.85, 38.86 |
-| `src/bundle/launch.html` | The document the launcher's page renders into. | 38.85 |
-| `src/ui/app.html` | The document its pages are served in. | 35.6, 39.4 |
-| `src/ui/public/**` | The files answered as authored, at their path below that directory. | 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.19, 38.20 |
-| `src/ui/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
-| `src/ui/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
-| `src/ui/pages/**/page.abide` | A route. | 23.3, 23.4 |
-| `src/ui/pages/**/layout.abide` | A layout, rendering its child page through a slot. | 35.1, 41.11, 41.19, 41.23 |
-| `src/ui/pages/**/error.abide` | The page a refusal renders in. | 35.2, 35.3 |
-| `src/server/rpc/**/*.ts` | The rpc handlers. | 19.1, 19.15 |
-| `bunfig.toml` | The file whose `[serve.static] plugins` the client is built with. | 38.44 |
+| `src/**` | The app's source. | 36.10, 38.25 |
+| `**/server/**` | Source the browser never loads. | 16.29, 23.15, 23.16, 23.18, 36.10 |
+| `**/public/**` | The files answered as authored, at their path below that directory. | 23.15, 23.16, 23.18, 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.18, 38.19 |
+| `src/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
+| `src/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
+| `src/public/icon.png` · `src/public/icon.icns` | The files answered at `/icon.png` and `/icon.icns`, and the desktop app's icon. | 36.11, 38.79 |
+| `src/**/` | A directory of the app's, a segment of the route its `page.abide`, `layout.abide` and `error.abide` answer at. | 23.14, 23.17 |
+| `**/page.abide` | A route: its page, and the handlers its `<script server>` exports. | 16.2, 19.1, 23.3, 23.4 |
+| `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
+| `src/launcher.abide` | The desktop launcher, beside the root layout: the `launcher` options its `<script module>` exports, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85 |
+| `src/layout.abide` | The root layout, whose `<script server>` is the app's own, and whose `<html>` is the document its pages are served in. | 35.15, 35.16, 35.17, 37.1, 37.3, 39.4 |
+| `**/error.abide` | The page a refusal renders in. | 35.2, 35.3, 35.14 |
+| `**/node_modules/**/*.abide` | A component a dependency ships as source, compiled with the app that imports it. | 34.27, 34.28, 34.29, 34.30, 34.31, 38.99 |
+| `import '…' with { type: 'routes' }` | A package's directory mounted at the importing file's directory, its pages, layouts, error pages and handlers answering below it. | 23.19, 23.20 |
+| `bunfig.toml` | The file whose `[serve.static] plugins` the client is built with. | 38.43 |
 
 ## Lifecycle hooks
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `default` | `(request, server) => Response \| undefined \| Promise<…>`, or `{ fetch }` | The app's own route. | 37.2 |
-| `middleware` | `(...rungs: Middleware<{ request: Request }, Response>[]) => () => void` | The per-request app lane. | 37.3 |
+| `middleware` | `(...rungs: Middleware<{ request: Request }, Response>[]) => () => void` | The per-request lane at the calling file's route. | 18.26, 37.2, 37.3 |
 | `onStart` | `(fn: (start: () => Promise<void>) => void \| Promise<void>) => () => void` | Wraps the boot. | 37.4, 37.6 |
 | `onStop` | `(fn: (stop: () => Promise<void>) => void \| Promise<void>) => () => void` | Mirrors it for teardown. | 37.4, 37.6 |
-| `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error in this scope. | 37.5, 37.8 |
+| `onError` | `(fn: (error: unknown) => unknown) => () => void` | Runs on an unexpected error at the calling file's route. | 37.5, 37.8 |
 | `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's config defaults. | 27.6, 37.7 |
-| `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.2 |
+| `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.2, 37.7 |
 | `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns claims into the app's half of a principal. | 26.4, 37.7 |
 
 ## The desktop app
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `src/bundle/launcher.json` | `{ name?: string; width?: number; height?: number; minWidth?: number; minHeight?: number; start?: boolean; connect?: boolean }` | The window the desktop app opens and the forms its launcher offers. | 38.81, 38.82, 38.84, 38.87, 38.88 |
-| `menu` | `MenuItem[]` | The menus a layout or a page adds to the desktop app's menu bar, exported from its `<script module>`. | 38.89, 38.93 |
-| `MenuItem` | `'separator' \| MenuEntry \| { label: string; key?: string; role?: MenuRole; href?: string; items?: MenuItem[] }` | One entry in the menu bar or in a menu under it. | 38.90, 38.91 |
-| `MenuRole` | `'about' \| 'hide' \| 'hideOthers' \| 'showAll' \| 'quit' \| 'connect' \| 'disconnect' \| 'close' \| 'undo' \| 'redo' \| 'cut' \| 'copy' \| 'paste' \| 'selectAll' \| 'reload' \| 'fullscreen' \| 'minimize' \| 'zoom' \| 'front'` | What a menu item does natively. | 38.75, 38.90 |
-| `menuItem` | `(item: { label: string; key?: string; href?: string }) => MenuEntry` | A menu item the page that exports it answers. | 38.92 |
-| `MenuEntry` | `class MenuEntry { label: string; key: string \| undefined; href: string \| undefined }` | What `menuItem` makes. | 38.92 |
-| `MenuEntry.on` | `(answer: () => unknown) => () => void` | Files a function run each time the item is picked. | 38.92 |
-| `Launch` | `{ name: string; start: string \| undefined; connect: string \| undefined; fields: ConfigField[]; url: string; failure: { form: 'start' \| 'connect'; message: string; issues: Record<string, string[]> } \| undefined; focus: 'start' \| 'connect' }` | The props a launch page is rendered with. | 38.83, 38.84 |
-| `ConfigField` | `{ name: string; label: string; description: string \| undefined; input: 'text' \| 'number' \| 'checkbox' \| 'password' \| 'url' \| 'select'; options: string[] \| undefined; required: boolean; value: string }` | One input the start form asks for. | 38.73 |
+| `launcher` | `LauncherOptions` | The window the desktop app opens and the forms its launcher offers, exported from `src/launcher.abide`'s `<script module>`. | 34.32, 38.80, 38.83, 38.86 |
+| `LauncherOptions` | `{ width?: number; height?: number; minWidth?: number; minHeight?: number } & ({ start?: true; connect?: boolean } \| { start: false; connect?: true })` | What the `launcher` export may set. | 38.80, 38.81 |
+| `menu` | `MenuItem[]` | The menus a layout or a page adds to the desktop app's menu bar, exported from its `<script module>`. | 34.32, 38.88, 38.92 |
+| `MenuItem` | `'separator' \| MenuEntry \| { label: string; key?: string; role?: MenuRole; href?: string; items?: MenuItem[] }` | One entry in the menu bar or in a menu under it. | 38.89, 38.90 |
+| `MenuRole` | `'about' \| 'hide' \| 'hideOthers' \| 'showAll' \| 'quit' \| 'connect' \| 'disconnect' \| 'close' \| 'undo' \| 'redo' \| 'cut' \| 'copy' \| 'paste' \| 'selectAll' \| 'reload' \| 'fullscreen' \| 'minimize' \| 'zoom' \| 'front'` | What a menu item does natively. | 38.74, 38.89 |
+| `menuItem` | `(item: { label: string; key?: string; href?: string }) => MenuEntry` | A menu item the page that exports it answers. | 38.91 |
+| `MenuEntry` | `class MenuEntry { label: string; key: string \| undefined; href: string \| undefined }` | What `menuItem` makes. | 38.91 |
+| `MenuEntry.on` | `(answer: () => unknown) => () => void` | Files a function run each time the item is picked. | 38.91 |
+| `Launch` | `{ name: string; start: string \| undefined; connect: string \| undefined; fields: ConfigField[]; url: string; failure: { form: 'start' \| 'connect'; message: string; issues: Record<string, string[]> } \| undefined; focus: 'start' \| 'connect' \| undefined; icon: string \| undefined; accent: string \| undefined }` | The props a launch page is rendered with. | 38.82, 38.83, 38.87, 38.101 |
+| `ConfigField` | `{ name: string; label: string; description: string \| undefined; input: 'text' \| 'number' \| 'checkbox' \| 'password' \| 'url' \| 'select'; options: string[] \| undefined; required: boolean; value: string }` | One input the start form asks for. | 38.72 |
 
 # The app object
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `createApp` | `() => Promise<App>` | The app built and booted, with no socket bound. | 42.1, 42.2, 42.3, 42.4, 42.16, 37.4, 37.6 |
+| `createApp` | `() => Promise<App>` | The app built and booted, with no socket bound. | 42.1, 42.2, 42.3, 42.4, 42.16, 37.4, 37.6, 38.100 |
 | `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
 | `App.fetch` | `(request: Request) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6 |
 | `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 11.38 |
@@ -713,19 +708,19 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Command | Meaning | Rules |
 | --- | --- | --- |
-| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.43 |
-| `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.58 |
-| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.32, 38.33, 38.34, 38.41 |
-| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 37.8, 37.9, 38.4, 38.15, 38.16, 38.17, 38.18, 38.20, 38.25, 38.26, 38.27, 38.29, 38.31, 38.36, 38.37, 38.38, 38.39, 38.42, 38.44, 38.59, 38.64, 38.65, 38.66, 38.95, 38.97 |
-| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.44, 38.5, 38.19, 38.26, 38.27, 38.28, 38.31, 38.67, 38.95 |
-| `abide start [--port <n>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.21, 38.22, 38.23, 38.24, 38.26, 38.27, 38.28, 38.29, 38.30, 38.59, 38.68, 38.69, 38.96 |
-| `abide [--url <origin>] [--port <n>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.54, 38.55, 38.56, 38.59, 38.60, 38.61, 38.63 |
-| `abide call <address> [args]` | One call to one handler. | 38.8, 38.62 |
+| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106 |
+| `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57 |
+| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 34.24, 38.105 |
+| `abide sync` | Writes the types a `.ts` reads a `.abide` by. | 34.24 |
+| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97 |
+| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94 |
+| `abide start [--port <n>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97 |
+| `abide [--url <origin>] [--port <n>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.53, 38.54, 38.55, 38.58, 38.59, 38.60, 38.62 |
+| `abide call <address> [args]` | One call to one handler. | 38.8, 38.61 |
 | `abide openapi [--out <file>] [--url <origin>]` | The OpenAPI document written rather than served. | 38.9 |
-| `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.14 |
-| `abide logs` | A live subscription to `log.records`. | 38.10 |
-| `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. | 38.70 |
-| `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.11, 38.26, 38.27, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.53, 38.57, 38.94 |
-| `abide bundle [--out]` | A desktop app for the host platform, with a window on the app. | 38.11, 38.26, 38.27, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.93 |
-| `abide lsp` | The `.abide` language server, over stdio. | 38.12, 38.35, 38.40 |
-| `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.13 |
+| `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.13 |
+| `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. | 38.69 |
+| `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97 |
+| `abide bundle [--out]` | A desktop app for the host platform, with a window on the app. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102 |
+| `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98 |
+| `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12 |

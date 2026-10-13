@@ -10,14 +10,14 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.3
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun run typecheck
-      # The gate CLAUDE.md names. A timing failure here is re-run with
+      # The gate CLAUDE.md names. A timing failure here is rerun with
       # `bun run test:serial` before it is believed (CLAUDE.md, "checks").
       - run: bun run test
 
@@ -27,10 +27,13 @@ jobs:
   scaffold-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.3
+
+      # `prepack` builds the docs app (scripts/packDocs.ts), which needs the workspace installed.
+      - run: bun install --frozen-lockfile
 
       - name: Pack @abide/abide
         run: cd packages/abide && bun pm pack --destination "$RUNNER_TEMP"

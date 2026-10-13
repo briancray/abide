@@ -1,6 +1,6 @@
 # Rulebook
 
-Every rule that governs behaviour, stated once, numbered.
+Every rule that governs behavior, stated once, numbered.
 
 ## What this document is
 
@@ -11,10 +11,10 @@ hold?*
 
 | A statement | Goes | Because |
 | --- | --- | --- |
-| Constrains behaviour, at build time or run time | here | a requirement is what two implementations have to agree on |
+| Constrains behavior, at build time or run time | here | a requirement is what two implementations have to agree on |
 | Answerable from the type alone | REGISTRY.md | a signature is not a rule |
-| Explains why the rule is this way | a guide in `packages/dogfood/content` | a reason is read once and never looked up |
-| A measurement | the harness | a number in prose is a number nothing re-runs |
+| Explains why the rule is this way | a guide in `packages/dogfood/src` | a reason is read once and never looked up |
+| A measurement | the harness | a number in prose is a number nothing reruns |
 
 ## Format rules
 
@@ -50,8 +50,8 @@ REGISTRY.md because none of them is a name an app author writes.
 | probe | Any of `s.busy`, `s.ready`, `s.error`. |
 | trigger | `s.refresh` or `s.invalidate`. |
 | producer | A source a value can ask for a value: a body, a `store`, or the connection a subscriber's copy is carried over. |
-| materialisation | The making of a `Stored` from what a producer has yielded. |
-| production | One materialisation of a `Stored` that a reader may observe. |
+| materialization | The making of a `Stored` from what a producer has yielded. |
+| production | One materialization of a `Stored` that a reader may observe. |
 | provisional | A body run that read a value which had not landed. |
 | reader | An expression or effect that performed a read. |
 | revalidation | A load started by `s.refresh` over a value still being served. |
@@ -67,6 +67,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | propagation | The derivation of a probe from the values a body read. |
 | sink | What 35.7 defines. |
 | implementation | Anything claiming conformance to this document. |
+| dependency's `.abide` | A `.abide` file under a `node_modules` directory or outside the app's root. |
 
 RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**, **SHALL**,
 **SHOULD**, **SHOULD NOT**, **MAY**.
@@ -120,7 +121,7 @@ standing value once per turn, however many productions or patches landed since t
 
 2.12 A `NotLanded` thrown into a tracked body MUST abort that body.
 
-2.13 A body a `NotLanded` aborted MUST re-run when the value it names lands.
+2.13 A body a `NotLanded` aborted MUST rerun when the value it names lands.
 
 2.14 A `NotLanded` and a `Failed` MUST be distinguishable by brand.
 
@@ -161,7 +162,7 @@ escape the write.
 
 4.6 A `transform` MUST refuse by returning a `Failed` rather than by throwing, per 15.5.
 
-4.7 A `transform` MUST run untracked, on the settled value, once per materialisation of a `Stored`.
+4.7 A `transform` MUST run untracked, on the settled value, once per materialization of a `Stored`.
 
 4.8 A `transform` MUST NOT run on a promise, and MUST NOT run per chunk.
 
@@ -357,7 +358,7 @@ the value of that write standing in its place.
 
 # 9. Streams and wired values
 
-9.1 A streaming producer's `Stored` MUST be the chunks accumulated so far, materialised on the
+9.1 A streaming producer's `Stored` MUST be the chunks accumulated so far, materialized on the
 read that asks for it.
 
 9.2 An implementation MUST NOT accumulate chunks by copying the accumulation per chunk.
@@ -376,7 +377,7 @@ MUST be one from that run on.
 first chunk, and that stream's accumulation from then on.
 
 9.8 A `schema` and a `transform` on a streaming producer MUST run on the accumulation a read
-materialises, at most once per chunk the accumulation holds.
+materializes, at most once per chunk the accumulation holds.
 
 9.9 A streaming producer MUST wake its readers at most once per task.
 
@@ -554,7 +555,7 @@ store it as a value — on a streaming producer, as a write that 11.59 does not 
 
 11.62 A body answering `undefined` MUST land `undefined`.
 
-11.63 A body a `NotLanded` aborted that something probes MUST re-run in the turn that lands the
+11.63 A body a `NotLanded` aborted that something probes MUST rerun in the turn that lands the
 value it named.
 
 11.64 Reaching a `Keyed` with an `Args` member 11.24 cannot write — anything outside `JsonValue`
@@ -649,7 +650,7 @@ match the pattern.
 13.13 A `Selection` made in any scope MUST reach every `global` `reactive` it matches, and every
 entry of a `global` `Keyed` it matches.
 
-13.14 A bare `refresh` MUST NOT re-run a synchronous derivation, which MUST recompute from the
+13.14 A bare `refresh` MUST NOT rerun a synchronous derivation, which MUST recompute from the
 load it reads.
 
 13.15 On a server, a bare `invalidate` or `refresh`, or one over a set of `tags`, MUST also send the
@@ -722,10 +723,11 @@ excludes `null` and `undefined`, naming `s.ready`.
 
 15.6 `Failed` MUST be structural.
 
-15.7 `notFound` MUST be returned where no route matched, and where no handler is mounted at that
-address and method.
+15.7 `notFound` MUST be returned where no route matched.
 
-15.8 `validationError` MUST be returned where a `schema` or an `args` gate refuses, at status 422.
+15.8 `validationError` MUST be returned where a `schema` or an `args` gate refuses, or where a call's
+args leave a parameter of its route no spelling as a segment (30.3, 30.19) — in process as over the
+wire, and before the handler runs — at status 422.
 
 15.9 An implementation MUST declare no refusal names beyond those `notFound`, `validationError` and
 `aborted` carry and the one 17.4 names.
@@ -747,8 +749,9 @@ being built.
 
 15.16 An address that will not percent-decode MUST be answered `refuse(400)`.
 
-15.17 A page, a file under `src/ui/public` and the built bundle MUST answer a method other than
-`GET` or `HEAD` with a refusal at status 405 carrying `allow: GET, HEAD`.
+15.17 A route, a file under a `public` directory and the built bundle MUST answer a method nothing at
+that address answers with a refusal at status 405 carrying an `allow` naming the methods answered
+there.
 
 15.18 A refusal declared through `refuse.named` MUST carry data only where it is given a `schema`,
 and its data's type MUST be inferred from that `schema`; a `message` function MUST be accepted only
@@ -764,13 +767,16 @@ MUST run its body again for the next reach rather than serve that answer.
 name as `type`, or `about:blank` titled by its status's reason phrase where it was not declared, its
 message as `detail`, and its data as a `data` member.
 
+15.22 The `notFound` 15.7 returns, and the 405 15.17 answers at a route, MUST be painted as a page's
+failure where the request prefers `text/html` over `application/json`, and MUST cross as 15.21
+states otherwise.
+
 # 16. Handlers and transports
 
 16.1 A handler MUST be a `reactive`, a plain function, or a value.
 
-16.2 `GET`, `POST`, `PUT`, `PATCH` and `DELETE` MUST give a handler an address over http, mounted by
-file path and export name, where a `default` export and an export named as its file MUST be mounted
-at the file path alone.
+16.2 `GET`, `POST`, `PUT`, `PATCH` and `DELETE` MUST give a handler an address over http: the route of
+the file whose `<script server>` exports it, per 23.14, and then one segment named as the export.
 
 16.3 An `Rpc` MUST hand back the same `Reactive` shape the handler had, `Produced` included.
 
@@ -790,7 +796,8 @@ options declare one.
 declared, and the undeclared `Failed` named `HttpError` per 17.4, with no data, which the transport
 may answer any call with.
 
-16.9 `rpc.url` MUST take the `Args` on a `GET` or a `DELETE`, and MUST take none on a mutation.
+16.9 `rpc.url` MUST take the `Args`, MUST write each parameter of its route into the path, and MUST
+carry the rest in the query on a `GET` or a `DELETE` alone.
 
 16.10 `rpc.url` MUST resolve a mount-relative address at run time, and the build MUST NOT bake an
 absolute one.
@@ -826,7 +833,8 @@ declared.
 16.23 A request's `timeout` floor MUST be the maximum over every handler that ran in it.
 
 16.24 `crossOrigin` MUST default to false, and where it is declared abide MUST answer the `OPTIONS`
-preflight itself.
+preflight itself. An `OPTIONS` naming no `access-control-request-method` is no preflight, and MUST be
+answered per 15.17.
 
 16.25 A handler MUST be request-bound where its rungs or its body read the request scope, and
 calling one from a scope that has none MUST be a build error, per 11.37.
@@ -837,10 +845,10 @@ read it.
 16.27 A `schema` MUST run where its `Reactive` lives.
 
 16.28 A browser MUST receive a generated `Rpc` wrapper carrying the method, the mount-relative address and
-the description, and MUST NOT receive the server module.
+the description, and MUST NOT receive the `<script server>` that declared it.
 
-16.29 Importing a name from `#server` that is not a handler MUST be a compile error from the client
-graph, and MUST NOT be a silent stub.
+16.29 Importing a module under a `server` directory from the client graph MUST be a compile error,
+and MUST NOT be a silent stub.
 
 16.30 An `Rpc` returning a raw `Value` MUST transport as `application/json`.
 
@@ -856,7 +864,7 @@ whichever framing the caller asked for.
 16.34 An `Rpc` returning a binary MUST transport as `application/octet-stream`, or as a `Blob`'s own
 type where it has one.
 
-16.35 A returned `Blob` MUST be range-aware: abide MUST read `Range`, honour `If-Range` against the
+16.35 A returned `Blob` MUST be range-aware: abide MUST read `Range`, honor `If-Range` against the
 ETag it derives, and answer 206, 416 and 304 as the protocol requires.
 
 16.36 A handler MAY return a `Response`, and an in-process caller MUST receive it unconverted.
@@ -936,6 +944,22 @@ that call passed.
 answer `aborted` at 499, and MUST NOT report the throw as unexpected.
 
 16.64 An `Rpc` over a plain function MUST NOT run that function before the first call reaches it.
+
+16.65 Each parameter of the route a handler's file answers at MUST reach the handler's `Args` from the
+path.
+
+16.66 A request naming a parameter of its route in its query or its body as well as its path MUST be
+answered `refuse(400)`.
+
+16.67 A handler whose `Args` does not declare each parameter of its route MUST be a build error
+naming the handler and the parameter.
+
+16.68 A refusal reaching a jsonl or an sse answer after its status was sent MUST be sent as its last
+frame — a line `{"$refusal": <Problem Details>}`, or an `event: refusal` whose data is the Problem
+Details — and a reader MUST refuse with it after the chunks before it.
+
+16.69 A `[...rest]` segment MUST take the most parts of an address the segments after it leave, so
+a handler declared under one MUST answer at its own name.
 
 # 17. Response helpers
 
@@ -1036,17 +1060,21 @@ value again rather than apply what a patch wrote, as 18.12 has it for a version 
 18.25 A browser's connection to the socket mux MUST be opened again, in every tab, on the
 `abide-principal` header 26.24 has an answer carry.
 
+18.26 A subscription to a `GET` MUST pass the `middleware` 37.2 runs at the route of the file that
+declared it, as it opens, and MUST NOT be fed where a rung answered in the handler's place.
+
 # 19. Mount paths and schemas
 
-19.1 A mount path MUST be owned by exactly one handler, and a collision MUST be a build error
-naming both files that declared a `GET`, `POST`, `PUT`, `PATCH` or `DELETE` there.
+19.1 A route MUST be answered for each method by one file at most, a page answering `GET` and `HEAD`
+at its own, and a second MUST be a build error naming both files, two routes differing only in
+their parameters' names being one route.
 
 19.2 A `Schema` MUST return what it accepts.
 
 19.3 An implementation MUST NOT accept a predicate as a `Schema`.
 
 19.4 The plain-function `Schema` form MUST throw what it refuses, and that throw MUST be caught where
-the schema runs and become the `''` entry of `Issues<T>`, or the whole of it per 19.21.
+the schema runs and become the `''` entry of `Issues<T>`, or the whole of it per 19.20.
 
 19.5 `Paths<T>` MUST be dot-joined, MUST be depth-limited, and MUST widen to `string` past the limit.
 
@@ -1074,7 +1102,7 @@ optional.
 19.14 A `JsonSchema` given as a `Schema` without `jsonSchema` MUST be refused, naming
 `jsonSchema`.
 
-19.15 Every value a module under `src/server/rpc` exports MUST be declared by a call of abide's
+19.15 Every value a `<script server>` exports MUST be declared by a call of abide's
 `GET`, `POST`, `PUT`, `PATCH` or `DELETE` — however the language spells the export, the call or its
 import — and an export that is not MUST be a build error naming it.
 
@@ -1084,17 +1112,19 @@ be refused at construction, naming its `Args` member, and the build MUST refuse 
 19.17 `route.url` MUST hold the address a page is served at, the path `APP_URL` names included, on
 the server as in the browser.
 
-19.18 A root-absolute `href` or `src` in the `Shell` MUST be answered below the path `APP_URL`
-names.
-
-19.19 A request for the path `APP_URL` names, without its trailing `/`, MUST be redirected 308 to
+19.18 A request for the path `APP_URL` names, without its trailing `/`, MUST be redirected 308 to
 that path with one, by path alone.
 
-19.20 A `Schema` derived per 19.9 MUST refuse a member its type does not declare, wherever the type
+19.19 A `Schema` derived per 19.9 MUST refuse a member its type does not declare, wherever the type
 carries no index signature.
 
-19.21 An `Issues<T>` over a value that is not an object MUST be the bare list of messages, not a
+19.20 An `Issues<T>` over a value that is not an object MUST be the bare list of messages, not a
 record keyed by `''`.
+
+19.21 A request MUST be answered by the most specific route answering its method, ranked as 30.9
+ranks routes for `navigate`.
+
+19.22 A `<script server>` that re-exports with `export * from` MUST be a build error naming its file.
 
 # 20. Generated surfaces
 
@@ -1105,17 +1135,18 @@ beside it.
 
 20.3 `Clients` MUST decide what is generated and listed, and MUST NOT decide who may call.
 
-20.4 `ui: false` MUST generate no client wrapper, and importing that handler from `#ui` or a `.abide`
-file MUST then be the compile error 16.29 states.
+20.4 `ui: false` MUST generate no client wrapper, and importing that handler from the client graph
+MUST then be a compile error naming it.
 
 20.5 `/__abide/openapi.json` and `/__abide/mcp` MUST be served from a `reactive` over the route table,
 and MUST take no `ttl`.
 
 20.6 `/__abide/openapi.json` MUST publish OpenAPI 3.1, and MUST publish a handler's `JsonSchema`
-with no translation.
+with no translation. It MUST declare every path parameter, with or without a schema, an optional or
+rest one as present and required as OpenAPI requires.
 
-20.7 `/__abide/openapi.json` MUST be gated by `ABIDE_OPENAPI` and `/__abide/mcp` by `ABIDE_MCP`.
-What a closed one answers is 36.7.
+20.7 `/__abide/openapi.json` and `/__abide/mcp` MUST each be open exactly where the route table
+lists a handler for it. What a closed one answers is 36.7.
 
 20.8 Every `/__abide/**` address MUST run inside the app's own middleware.
 
@@ -1130,6 +1161,11 @@ one spelling for it, and MUST publish the type-derived `JsonSchema` where it has
 
 20.12 `/__abide/mcp` MUST refuse 403 a request whose `Origin` is another origin's, before it reads
 the body.
+
+20.13 A handler's name on `/__abide/mcp` and `/__abide/openapi.json` MUST be its method in lower case
+and then its route, each joined by `_`, with every character but a letter, a digit and `-` written
+`_` and a segment's brackets and dots dropped, and two handlers sharing one MUST be a build error
+naming both.
 
 # 21. Generated headers
 
@@ -1158,9 +1194,9 @@ app MUST NOT be required to state the duration a second time.
 21.11 The `max-age` 21.8 derives MUST replace 21.3's `no-store`, and 21.3 MUST decide the rest
 of that header.
 
-21.12 A file under `src/ui/public` MUST answer `cache-control: public, max-age=0, must-revalidate`.
+21.12 A file under a `public` directory MUST answer `cache-control: public, max-age=0, must-revalidate`.
 
-21.13 A file under `src/ui/public` MUST answer an `etag` derived from its bytes.
+21.13 A file under a `public` directory MUST answer an `etag` derived from its bytes.
 
 21.14 A request whose `if-none-match` is `*`, or lists the `etag` 21.13 derives under weak
 comparison, MUST be answered 304.
@@ -1215,7 +1251,7 @@ composite.
 
 23.2 `route.url` MUST be one `URL` instance per navigation, built when the route resolves.
 
-23.3 A page route MUST be created where a `page.abide` file lies under `src/ui/pages`.
+23.3 A page route MUST be created where a `page.abide` with a template or a head has a route.
 
 23.4 A page route's file path MUST determine its `route.url`.
 
@@ -1238,6 +1274,25 @@ segment a page below it adds.
 23.12 `reachable` MUST hold each host's answer for 60 seconds, as a `global` value's `ttl` holds one.
 
 23.13 `reachable` MUST ask a host that names no scheme over https, and an origin as written.
+
+23.14 A route MUST be the path of its file's directory below the app's `--root`.
+
+23.15 A file under a `server` or `public` directory MUST NOT have a route.
+
+23.16 A `server` or `public` directory under either of those two MUST be a build error naming
+both.
+
+23.17 A route whose first segment is `__abide` MUST be a build error.
+
+23.18 A `page.abide`, a `layout.abide` or an `error.abide` under a `server` or `public` directory
+MUST be a build error.
+
+23.19 An `import '…' with { type: 'routes' }` in an app's `.abide` MUST place every `.abide` under the
+directory it names at the importing file's directory, routed by its path below the named directory
+as 23.14 routes the app's own, and a specifier naming no directory MUST be a build error.
+
+23.20 A directory two `type: 'routes'` imports name, or one that is the app's own, MUST be a build
+error naming the mount.
 
 # 24. Tracing
 
@@ -1336,12 +1391,13 @@ them.
 
 27.4 `ConfigDefaults` MUST be synchronous by contract.
 
-27.5 `config.invalidate` MUST re-read the environment and re-run `onConfig`.
+27.5 `config.invalidate` MUST re-read the environment and rerun `onConfig`.
 
-27.6 A second `onConfig` MUST replace the first, its schema included, and MUST warn on
-`abide:config`.
+27.6 Every `onConfig` filed MUST compose, in the order 37.7 states: the defaults each returns merged
+over the ones before it, and its schema run per 27.7.
 
-27.7 The `config` `schema` MUST be checked last, over the whole document.
+27.7 Each `onConfig` `schema` MUST be checked last, over the whole document, and what each accepts
+MUST be merged over the document in the order 37.7 states.
 
 27.8 A value out of `Env` MUST be coerced to the type of the default it overrides, and a value that
 will not coerce MUST keep that default.
@@ -1355,37 +1411,39 @@ module ran is not the one served after it.
 
 27.12 `Config` MUST admit a field an app declares on it, of any type.
 
+27.13 `abide check` and `abide lsp` MUST type `Config` with what the defaults of every `onConfig`
+called as a statement at the top of a `<script server>` return, and a union return with the keys
+every member of it has.
+
 # 28. Logging
 
 28.1 Every line MUST be appended to `log.records`, an ordinary `reactive` holding the lines kept as an
 array.
 
-28.2 `/__abide/logs` MUST be a `GET` over `log.records`, and a line written MUST reach its followers
-as an `add` at `/-`.
+28.2 `log` MUST always write.
 
-28.3 `log` MUST always write.
+28.3 `log.warning` and `log.error` MUST always write.
 
-28.4 `log.warning` and `log.error` MUST always write.
+28.4 `log.named` MUST prefix the app name, on a server and in a browser alike, and calling it again
+MUST append another segment.
 
-28.5 `log.named` MUST prefix the app name, and calling it again MUST append another segment.
+28.5 A `Logger` MUST carry the same levels and the same `log.enabled` as `log`.
 
-28.6 A `Logger` MUST carry the same levels and the same `log.enabled` as `log`.
+28.6 `log.enabled` MUST answer whether a gated line on that namespace would be written.
 
-28.7 `log.enabled` MUST answer whether a gated line on that namespace would be written.
+28.7 A namespace `log.enabled` reports closed MUST NOT run the measurement a gated line would report.
 
-28.8 A namespace `log.enabled` reports closed MUST NOT run the measurement a gated line would report.
+28.8 A correctness or a configuration failure MUST report on a namespace `abide:` names.
 
-28.9 A correctness or a configuration failure MUST report on a namespace `abide:` names.
-
-28.10 `DEBUG` MUST gate namespaces in debug-npm grammar, and MUST be read from the environment
+28.9 `DEBUG` MUST gate namespaces in debug-npm grammar, and MUST be read from the environment
 on a server.
 
-28.11 `DEBUG` MUST reach a browser through the document rather than through the bundle.
+28.10 `DEBUG` MUST reach a browser through the document rather than through the bundle.
 
-28.12 A browser's own stored `DEBUG` setting MUST answer only where the document carries none, and
+28.11 A browser's own stored `DEBUG` setting MUST answer only where the document carries none, and
 MUST NOT override it.
 
-28.13 The app name `log.named` prefixes MUST be read per line, so a logger named before the app's
+28.12 The app name `log.named` prefixes MUST be read per line, so a logger named before the app's
 identity resolved writes under it once it has.
 
 # 29. Content security policy
@@ -1433,11 +1491,12 @@ segment.
 
 30.7 `navigate` MUST navigate, and MUST NOT reload the document.
 
-30.8 A route MUST be the directory path of a `page.abide` under `pages`, in the segment spelling
-`url` takes.
+30.8 A route `url` and `navigate` take MUST be a page route, per 23.14, and MUST NOT be a handler
+module's.
 
 30.9 `navigate` MUST match the most specific route, ranking a static segment above a required
-one, a required above an optional, and an optional above a rest.
+one, a required above an optional, and an optional above a rest, and where one route ends, its end
+below a required segment and above an optional one.
 
 30.10 An address `navigate` matches no route for MUST be left to the document, and MUST NOT be
 refused.
@@ -1483,7 +1542,8 @@ the page shown, and MUST NOT where only its query or fragment does.
 30.25 A `navigate` that does not remount the page MUST NOT move the scroll, except to the element a
 fragment it carries names.
 
-30.26 `abide check` MUST refuse a `url` literal that no page of the app is filed under.
+30.26 `abide check` MUST refuse a `url` literal that no page of the app is filed under and no public
+file of the app is served at.
 
 30.27 A `navigate` whose request fails, or whose route's chunks fail to load, MUST leave the address
 to the document.
@@ -1510,7 +1570,7 @@ operand — or where 31.14 holds it.
 31.7 `s` and `s.set` MUST keep compiling inside a `.abide` file.
 
 31.8 A write through a member path into plain data MUST copy down that path and then write, and the
-copy MUST NOT be optimised away.
+copy MUST NOT be optimized away.
 
 31.9 A mutator lifted per 31.8 MUST be resolved from the type of the `Reactive` rather than from
 the member name.
@@ -1545,7 +1605,8 @@ as a name bound to a `Reactive` is, per 31.1 to 31.7.
 32.4 `on<event>` MUST bind a native listener on an element, and MUST be an ordinary prop on a
 component.
 
-32.5 `bind:value` MUST read the property and write it back on input or change.
+32.5 `bind:value` MUST read the property and write it back on input or change, through the member
+path where its operand is a path into a value (31.8).
 
 32.6 `bind:prop` on a component MUST hand the child the caller's `Reactive`, or its `{ get, set }` pair,
 as that prop's write path.
@@ -1575,7 +1636,7 @@ arrives, and MUST append rather than reconcile.
 32.16 `{#try}` MUST be a render-time boundary over a region, and a failure MUST replace the whole
 body.
 
-32.17 A capitalised tag `<Name/>` MUST be a component invocation.
+32.17 A capitalized tag `<Name/>` MUST be a component invocation.
 
 32.18 `<slot/>` MUST render children, and a fallback MUST render where none were passed.
 
@@ -1778,8 +1839,8 @@ element.
 
 34.2 A `<script module>` block MUST be module scope, on a server as in a browser.
 
-34.3 A `<script>` or a `<script module>` MUST NOT await at its top level, and one that does MUST be
-a compile error.
+34.3 A `<script>`, a `<script module>` or a `<script server>` MUST NOT await at its top level, and
+one that does MUST be a compile error.
 
 34.4 A `<style>` block written outside a block body MUST be component-scoped: every root element MUST
 carry a scope token, and every selector MUST require it on its rightmost compound.
@@ -1802,17 +1863,17 @@ no other.
 34.11 A `<style>` written in a `{#for}` row or an `{#if}` arm MUST apply to the elements that body holds,
 and to no other element the component writes.
 
-34.12 A `<script>` carrying `lang="ts"` MUST be read as it would be without it.
+34.12 A `<script>` carrying a `lang` attribute MUST be a compile error.
 
 34.13 `generics` on a component's `<script>` MUST declare that component's type parameters: its
 blocks and template MUST be checked for every type they admit, and a `<Name/>` MUST infer them from
 the props it passes.
 
-34.14 A relative specifier a `<script>` or a `<script module>` imports from MUST resolve against the
-`.abide` file it is written in.
+34.14 A relative specifier any script block imports from MUST resolve against the `.abide` file it
+is written in.
 
-34.15 A `.abide` file a `<script>` or a `<script module>` names in an `import()` MUST resolve to the
-module that file compiles to, as a static import of it does.
+34.15 A `.abide` file any script block names in an `import()` MUST resolve to the module that file
+compiles to, as a static import of it does.
 
 34.16 A `.abide` file a server module imports MUST resolve to a function that binds its props and
 answers a `Component`, under `abide dev`, `abide start` and `abide compile` alike.
@@ -1825,11 +1886,63 @@ server as in a browser.
 34.19 A write a `<script>` makes outside any function to a `let` or `var` its file's
 `<script module>` declares, holding no `Reactive`, MUST be warned on.
 
+34.20 A `<script server>` block MUST be module scope run on a server alone, and the module a browser
+loads MUST NOT carry it.
+
+34.21 A `<script server>` in a `.abide` file of the app's own under a `server` or `public` directory
+MUST be a compile error.
+
+34.22 A `<script server>` exporting `default` MUST be a compile error.
+
+34.23 A handler a `<script server>` exports MUST be exported from the module a browser loads as the
+wrapper 16.28 states, under the same name.
+
+34.24 `abide sync`, `abide check`, `abide dev` and `abide build` MUST write, for every `.abide`
+under the root, a module typing what its `<script module>` and `<script server>` export, below
+`.abide/types` at the path the file has below the directory above the root, and MUST remove one whose
+`.abide` is gone; `abide lsp` MUST write an open file's as the editor holds it, and the scaffold MUST
+run `abide sync` on install without failing the install where it fails. A file `abide sync` or
+`abide check` refuses MUST be named, and MUST NOT stop the others being typed.
+
+34.25 A file a script block imports `with { type: 'text' }`, a `.abide` among them, MUST be imported
+as its text and typed a `string`, on a server, in a browser and to the checker alike.
+
+34.26 A binding a `<script server>` imports that its file's `<script module>` or `<script>` imports
+from the same specifier under the same name MUST compile as that one binding, a value wherever any
+of them imports it as one. Where that binding is a `.abide`'s default or namespace imported as a
+value by both, it MUST be a compile error, since the server block's is the bound function (34.16)
+and the other's the module (32.17).
+
+34.27 A `.abide` file any script block imports MUST be compiled with the app that imports it,
+wherever it lies.
+
+34.28 A dependency's `.abide` MUST be a component, and MUST NOT be an address, save where a mount
+places it (23.19).
+
+34.29 A dependency's `.abide` MUST be typed by the project of the app that imports it.
+
+34.30 A dependency's `.abide` MUST run on the abide that the app's root resolves.
+
+34.31 A `<script server>` in a dependency's `.abide` MUST NOT give a handler an address of its own,
+save the one a mount places it at (23.19).
+
+34.32 A name the framework reads off what a `<script module>` exports MUST be read off the loaded
+module when the thing that needs it runs, MUST be held to its type by the checker alone, and MUST
+NOT be read by evaluating the module during a build.
+
+34.33 A `<script>` carrying a `server` attribute with a value, or beside any other attribute, MUST be
+a compile error.
+
+34.34 A `</script>` that closes no `<script>` MUST be a compile error.
+
+34.35 A `</script>` inside a string, a template, a comment or a regular expression in a `<script>`,
+`<script module>` or `<script server>` block MUST be a compile error.
+
 # 35. Pages, rendering and sinks
 
-35.1 A `src/ui/pages/**/layout.abide` MUST render its child page through a slot.
+35.1 A `layout.abide` MUST render every page whose route lies below its own through a slot.
 
-35.2 A `src/ui/pages/**/error.abide` MUST be resolved nearest-ancestor, as a layout is.
+35.2 An `error.abide` MUST be resolved nearest-ancestor by route, as a layout is.
 
 35.3 An `error.abide` that itself fails MUST escalate past the boundary, and MUST warn on
 `abide:render`.
@@ -1838,7 +1951,8 @@ server as in a browser.
 
 35.5 `render` MUST produce a document as its bytes.
 
-35.6 A `Shell` MUST default to `src/ui/app.html`.
+35.6 `render` MUST render into abide's own document, which carries an encoding and a viewport, each
+keyed, and nothing else.
 
 35.7 A sink MUST be a hole a `render` leaves where a value is still in flight, for the browser to
 fill once that value lands.
@@ -1851,6 +1965,26 @@ fill once that value lands.
 
 35.11 A `render` MUST close when its walk is done, and MUST NOT write a sink's fill into the
 document it streams.
+
+35.12 Two `layout.abide` files, or two `error.abide` files, at one route MUST be a build error naming
+both.
+
+35.13 A `layout.abide` with no template MUST NOT wrap a page.
+
+35.14 An `error.abide` with neither a template nor a head MUST NOT answer for a page.
+
+35.15 The outermost component of a render — the root `layout.abide` of a page, or the component given
+to `render` — written inside `<html>` MUST write the document: its `<head>`'s children
+MUST contribute to the head as a `<head>` block's do, its `<body>`'s children MUST be its template,
+and the attributes of its `<html>` and `<body>` MUST be written onto the document's own two.
+
+35.16 An `<html>` or `<body>` in a page, an error page or any layout but the root `layout.abide`,
+one nested in markup, one with markup beside it, or an `<html>` holding anything but a `<head>` and a
+`<body>`, MUST be a build error, and a component writing `<html>` placed inside another MUST be
+refused where it renders.
+
+35.17 An attribute on the document's `<html>` or `<body>` MUST be typed, rendered and bound as one
+on any element is.
 
 # 36. Environment and files
 
@@ -1866,33 +2000,35 @@ document it streams.
 
 36.6 `ABIDE_APP_TOKEN` and `ABIDE_APP_URL` MUST be read by the remote CLI only.
 
-36.7 `ABIDE_LOGS`, `ABIDE_OPENAPI`, `ABIDE_MCP` and `ABIDE_BRIDGE` MUST each be closed by default, and
-a closed one MUST answer 404.
+36.7 A closed surface — `/__abide/openapi.json` or `/__abide/mcp` (20.7), or `/__abide/bridge`
+(45.19) — MUST answer 404.
 
 36.8 `ABIDE_LOG_FORMAT` unset MUST follow the TTY.
 
 36.9 `NO_COLOR` MUST beat `FORCE_COLOR`.
 
-36.10 `#server`, `#ui` and `#shared` MUST be the seams the source is split by.
+36.10 A module MUST be importable from either graph unless it lies under a `server` directory, per
+16.29.
 
-36.11 A file under `src/ui/public` MUST be answered at its path below that directory, rooted at the
-mount rather than at the origin.
+36.11 A file under a `public` directory MUST be answered at that directory's path below the app's
+`--root` followed by its own path below that directory, rooted at the mount rather than at the
+origin.
 
-36.12 A file under `src/ui/public` MUST be answered with the bytes as authored.
+36.12 A file under a `public` directory MUST be answered with the bytes as authored.
 
-36.13 A `src/ui/public` path resolving to the address of a page route MUST be refused by
-`abide build` and by `abide dev`, naming both.
+36.13 A file under a `public` directory answered at a route's address, or at another such file's,
+MUST be refused by `abide build` and by `abide dev`, naming both.
 
-36.14 A file under `src/ui/public` MUST carry a `content-type` derived from its extension.
+36.14 A file under a `public` directory MUST carry a `content-type` derived from its extension.
 
-36.15 A URL in the client bundle naming the address of a file under `src/ui/public` MUST resolve
+36.15 A URL in the client bundle naming the address of a file under a `public` directory MUST resolve
 to that address below the path `APP_URL` names, and MUST NOT be resolved as a path on disk by
 `abide build` or by `abide dev`.
 
 36.16 `NODE_ENV` MUST default to `development` under `abide dev`, and to `production` under
 `abide build` and `abide start`.
 
-36.17 A file under `src/ui/public` whose `content-type` is `text/*` MUST name `charset=utf-8` where
+36.17 A file under a `public` directory whose `content-type` is `text/*` MUST name `charset=utf-8` where
 its extension's type names none.
 
 36.18 A seed buffer entry whose stream transcript passes `ABIDE_MAX_STREAM_BUFFER_SIZE`, counted in
@@ -1901,23 +2037,29 @@ answered per 41.12.
 
 # 37. Lifecycle hooks
 
-37.1 A lifecycle hook MUST be called rather than exported, and `src/server/app.ts` MUST be optional.
+37.1 A lifecycle hook MUST be called rather than exported, and MUST be filed at the route of the
+`<script server>` that called it, or at the root route where none did.
 
-37.2 The `default` export MUST be the app's own route, answering where it returns a `Response`.
+37.2 `middleware` filed below the root route MUST run after routing, over a request its route or a
+route below it answers, outermost route first.
 
-37.3 `middleware` MUST run pre-routing, over the request and the response, and over the upgrade to the
+37.3 `middleware` filed at the root route MUST run pre-routing, over the request and the response, and over the upgrade to the
 socket mux, which MUST open only at its own address below the mount, only in an app with a handler
 to carry, and MUST NOT open where a rung answered in the lane's place — under `abide dev` as under
 `abide start`.
 
-37.4 `onStart` MUST wrap `createApp` and `onStop` MUST wrap `App.stop`.
+37.4 `onStart` MUST wrap `createApp` and `onStop` MUST wrap `App.stop`, each composed in the order 37.7
+states, the first filed outermost.
 
-37.5 `onError` MUST run on an unexpected error in that scope.
+37.5 `onError` MUST run on an unexpected error in a request its route or a route below it answers,
+nearest route first, and on one outside every request where filed at the root route.
 
 37.6 A hook `onStart` or `onStop` wraps that throws MUST fail hard, and the server MUST NOT
 start.
 
-37.7 `onConfig` and `onPrincipal` MUST replace rather than compose, and a second MUST warn.
+37.7 `onConfig`, `onPrincipal`, `onStart`, `onStop` and `onHealth` MUST each compose every hook filed,
+by route depth, then by route, then in the order called — the answers of `onConfig` and
+`onPrincipal` merged, a later one's member over an earlier one's.
 
 37.8 Under `abide start` and `abide dev`, a rejection nothing handled and a throw nothing caught MUST
 reach `onError` as 37.5's error does.
@@ -1954,248 +2096,280 @@ through `App.stop`, and the process MUST then exit with 0.
 38.9 `abide openapi` and `abide mcp` MUST derive from the same route table the served surfaces do,
 per 20.1.
 
-38.10 `abide logs` MUST be a live subscription to `log.records`, as 38.7's shell makes one.
+38.10 `abide compile` and `abide bundle` MUST produce a standalone artifact.
 
-38.11 `abide compile` and `abide bundle` MUST produce a standalone artifact.
+38.11 `abide lsp` MUST speak over stdio.
 
-38.12 `abide lsp` MUST speak over stdio.
+38.12 Asking `abide` for help MUST be a success, and an unknown command MUST NOT be.
 
-38.13 Asking `abide` for help MUST be a success, and an unknown command MUST NOT be.
-
-38.14 `abide mcp` MUST be a bridge a model client spawns and kills, and `abide start` MUST NOT be
+38.13 `abide mcp` MUST be a bridge a model client spawns and kills, and `abide start` MUST NOT be
 put in that position.
 
-38.15 `abide dev` MUST hold the app in a child process and keep the listener in its own.
+38.14 `abide dev` MUST hold the app in a child process and keep the listener in its own.
 
-38.16 `abide dev` MUST replace that process to reload, and MUST force-close every live socket on
+38.15 `abide dev` MUST replace that process to reload, and MUST force-close every live socket on
 replacement.
 
-38.17 `abide dev` MUST build the client into memory, unminified and entry-named by its source, and
+38.16 `abide dev` MUST build the client into memory, unminified and entry-named by its source, and
 MUST write nothing to disk.
 
-38.18 A client build that fails under `abide dev` MUST NOT stop the server, and the reload client
+38.17 A client build that fails under `abide dev` MUST NOT stop the server, and the reload client
 MUST be served by the dev worker rather than out of the bundle.
 
-38.19 `abide build` MUST copy `src/ui/public` into the built output, and each file MUST be listed in
-the manifest 38.5 emits.
+38.18 `abide build` MUST copy every `public` directory into the built output, and each file MUST be
+listed in the manifest 38.5 emits.
 
-38.20 `abide dev` MUST answer a file under `src/ui/public` out of the source tree, per 38.17.
+38.19 `abide dev` MUST answer a file under a `public` directory out of the source tree, per 38.16.
 
-38.21 `abide start` MUST answer what `abide build` bundled under `/__abide/client`, and MUST answer
+38.20 `abide start` MUST answer what `abide build` bundled under `/__abide/client`, and MUST answer
 nothing else there.
 
-38.22 `abide start` MUST answer 404 at an address no route matches, per 30.8.
+38.21 `abide start` MUST answer 404 at an address no route matches, per 30.8.
 
-38.23 The document `abide start` serves MUST load the client entry, and MUST load it from the head.
+38.22 The document `abide start` serves MUST load the client entry, and MUST load it from the head.
 
-38.24 The document `abide start` serves MUST link the stylesheet `abide build` bundled, and MUST
+38.23 The document `abide start` serves MUST link the stylesheet `abide build` bundled, and MUST
 link none where the build bundled none.
 
-38.25 A request `abide dev` has not begun to answer when it replaces the worker MUST be answered
+38.24 A request `abide dev` has not begun to answer when it replaces the worker MUST be answered
 by the replacement.
 
-38.26 `--root` MUST default to `src` where that holds a `src/ui`, and to the working directory
-where that holds a `ui`.
+38.25 `--root` MUST default to `src` where the working directory holds one, and to the working
+directory otherwise.
 
-38.27 A command that finds no app at its `--root` MUST fail, naming where it looked.
+38.26 A command that finds no app at its `--root` MUST fail, naming where it looked.
 
-38.28 `--out` MUST default beside the app rather than beside the working directory.
+38.27 `--out` MUST default beside the app rather than beside the working directory.
 
-38.29 The document `abide start` or `abide dev` serves MUST preload, from the head, every chunk its
+38.28 The document `abide start` or `abide dev` serves MUST preload, from the head, every chunk its
 route imports statically, and MUST NOT preload a chunk reached only through a dynamic import.
 
-38.30 `abide start` MUST answer the document, the bundle and an `Rpc`'s JSON answer in an
+38.29 `abide start` MUST answer the document, the bundle and an `Rpc`'s JSON answer in an
 encoding the request accepts where it has one, and MUST name `accept-encoding` in `vary`.
 
-38.31 `abide build` and `abide dev` MUST type an app with no `tsconfig.json` against a default
+38.30 `abide build` and `abide dev` MUST type an app with no `tsconfig.json` against a default
 project, and MUST NOT compile it untyped.
 
-38.32 `abide check` MUST check each `.abide` file as the program it lowers to.
+38.31 `abide check` MUST check each `.abide` file as the program it lowers to.
 
-38.33 `abide check` MUST exit non-zero where it reports an error, and MUST exit zero where it reports
+38.32 `abide check` MUST exit non-zero where it reports an error, and MUST exit zero where it reports
 warnings alone.
 
-38.34 `abide check` MUST report a refusal the build would make as a finding, and MUST go on checking
+38.33 `abide check` MUST report a refusal the build would make as a finding, and MUST go on checking
 every file that refusal does not stop.
 
-38.35 `abide lsp` MUST report what 38.3 reports, over the text the editor holds rather than the
+38.34 `abide lsp` MUST report what 38.3 reports, over the text the editor holds rather than the
 text on disk.
 
-38.36 `abide dev` MUST send a response body as the app produces it.
+38.35 `abide dev` MUST send a response body as the app produces it.
 
-38.37 `abide dev` MUST read no more of a response body whose length is not declared than the
+38.36 `abide dev` MUST read no more of a response body whose length is not declared than the
 connection has taken.
 
-38.38 A response `abide dev` has begun to answer when it replaces the worker MUST end in an error.
+38.37 A response `abide dev` has begun to answer when it replaces the worker MUST end in an error.
 
-38.39 `abide dev` MUST answer in the identity encoding.
+38.38 `abide dev` MUST answer in the identity encoding.
 
-38.40 `abide lsp` MUST answer a hover and a jump to a definition about the text it last checked, with
+38.39 `abide lsp` MUST answer a hover and a jump to a definition about the text it last checked, with
 a name read by name as the `Reactive` it was declared as, a member of it as a member of the value, and
 a component tag as the component it invokes.
 
-38.41 `abide check` MUST hold every attribute a component tag passes to the type its component's
+38.40 `abide check` MUST hold every attribute a component tag passes to the type its component's
 `props` call declares, and MUST report a mismatch on the attribute.
 
-38.42 A worker `abide dev` did not replace that exits MUST be replaced, and every request it held
+38.41 A worker `abide dev` did not replace that exits MUST be replaced, and every request it held
 MUST be answered or ended rather than left open.
 
-38.43 The project `abide scaffold` writes MUST depend on the abide that wrote it in a spelling that
+38.42 The project `abide scaffold` writes MUST depend on the abide that wrote it in a spelling that
 installs, and MUST type the runtime its server modules run on.
 
-38.44 `abide build` and `abide dev` MUST build the client with the plugins the app's `bunfig.toml`
+38.43 `abide build` and `abide dev` MUST build the client with the plugins the app's `bunfig.toml`
 names under `[serve.static] plugins`, after abide's own.
 
-38.45 The executable `abide compile` writes MUST read nothing from the app's source tree or its build
+38.44 The executable `abide compile` writes MUST read nothing from the app's source tree or its build
 when it runs.
 
-38.46 The executable `abide compile` writes MUST NOT read a `bunfig.toml` where it is started.
+38.45 The executable `abide compile` writes MUST NOT read a `bunfig.toml` where it is started.
 
-38.47 `abide compile` given no `--out` MUST write the executable into the directory it was run from,
+38.46 `abide compile` given no `--out` MUST write the executable into the directory it was run from,
 named after the app's `package.json` name without its scope.
 
-38.48 `abide compile --platforms` MUST write one executable per platform, each named with its
+38.47 `abide compile --platforms` MUST write one executable per platform, each named with its
 platform as a suffix.
 
-38.49 `abide compile` MUST refuse `--target` and `--platforms` given together.
+38.48 `abide compile` MUST refuse `--target` and `--platforms` given together.
 
-38.50 The executable `abide compile` writes MUST take `--port` on `start` as `abide start` does.
+38.49 The executable `abide compile` writes MUST take `--port` on `start` as `abide start` does.
 
-38.51 The executable `abide compile` writes MUST answer every command `abide` answers.
+38.50 The executable `abide compile` writes MUST answer every command `abide` answers.
 
-38.52 The executable `abide compile` writes MUST refuse a command that needs the app's source, naming
+38.51 The executable `abide compile` writes MUST refuse a command that needs the app's source, naming
 the `abide` command that runs it.
 
-38.53 The usage the executable `abide compile` writes prints MUST NOT list a command it refuses, nor a
+38.52 The usage the executable `abide compile` writes prints MUST NOT list a command it refuses, nor a
 flag only such a command reads.
 
-38.54 `abide` and the executable given no command and no running app to talk to MUST serve the app
+38.53 `abide` and the executable given no command and no running app to talk to MUST serve the app
 and open 38.7's shell on it.
 
-38.55 Leaving the shell 38.54 opens with `exit` MUST stop the app.
+38.54 Leaving the shell 38.53 opens with `exit` MUST stop the app.
 
-38.56 Input that ends MUST NOT stop the app `abide` serves under 38.54.
+38.55 Input that ends MUST NOT stop the app `abide` serves under 38.53.
 
-38.57 A script the executable's `run` imports MUST resolve `abide`'s entries and the app's handler
+38.56 A script the executable's `run` imports MUST resolve `abide`'s entries and the app's handler
 modules to the ones the executable holds.
 
-38.58 `abide run` and the executable's `run` MUST resolve the configuration under the app's identity.
+38.57 `abide run` and the executable's `run` MUST resolve the configuration under the app's identity.
 
-38.59 `abide dev`, `abide start` and the app 38.54 serves MUST print every address the app answers at,
+38.58 `abide dev`, `abide start` and the app 38.53 serves MUST print every address the app answers at,
 the local one first.
 
-38.60 38.7's shell MUST answer `help` with every word it takes.
+38.59 38.7's shell MUST answer `help` with every word it takes.
 
-38.61 A line the app logs while 38.7's shell is open on a terminal MUST NOT move the shell's prompt,
+38.60 A line the app logs while 38.7's shell is open on a terminal MUST NOT move the shell's prompt,
 nor the line being typed — `log` or the console alike.
 
-38.62 `abide call`'s args MUST be `name=value` words, each value coerced by the app it reaches as
+38.61 `abide call`'s args MUST be `name=value` words, each value coerced by the app it reaches as
 19.7 coerces a query's and a name given twice a list, or one JSON object where the first word opens
 one.
 
-38.63 38.7's shell MUST list and complete each handler `call` reaches that `clients.cli` does not
+38.62 38.7's shell MUST list and complete each handler `call` reaches that `clients.cli` does not
 withhold, with its args, and with its `description` where the declaration writes one as a literal.
 
-38.64 `abide dev` given neither `--port` nor `PORT` MUST listen on the first free port from 3000
+38.63 `abide dev` given neither `--port` nor `PORT` MUST listen on the first free port from 3000
 through 3099.
 
-38.65 `abide dev` given a port by `--port` or `PORT` MUST NOT listen on any other.
+38.64 `abide dev` given a port by `--port` or `PORT` MUST NOT listen on any other.
 
-38.66 Each compile `abide dev` makes MUST compile the tree as it stands: what an earlier compile in
+38.65 Each compile `abide dev` makes MUST compile the tree as it stands: what an earlier compile in
 the same process found MUST NOT change what a later one emits.
 
-38.67 Each file `abide build` writes MUST replace its predecessor whole, and a build MUST remove from
+38.66 Each file `abide build` writes MUST replace its predecessor whole, and a build MUST remove from
 its output only a file it did not produce that was written before it began.
 
-38.68 `abide start` and the executable's `start` MUST NOT read their input.
+38.67 `abide start` and the executable's `start` MUST NOT read their input.
 
-38.69 An `Rpc`'s JSON answer under 1024 bytes MUST be answered in the identity encoding.
+38.68 An `Rpc`'s JSON answer under 1024 bytes MUST be answered in the identity encoding.
 
-38.70 `abide watch` MUST follow a `GET` per 18.20, and print its value and its value after each
+38.69 `abide watch` MUST follow a `GET` per 18.20, and print its value and its value after each
 `s.patch`.
 
-38.71 The executable `abide bundle` writes, started on macOS with no command, MUST open a window on
-the app rather than 38.54's shell, and given a command MUST answer it as 38.51 does.
+38.70 The executable `abide bundle` writes, started on macOS with no command, MUST open a window on
+the app rather than 38.53's shell, and given a command MUST answer it as 38.50 does.
 
-38.72 The window `abide bundle`'s executable opens MUST show the launcher page where nothing is
+38.71 The window `abide bundle`'s executable opens MUST show the launcher page where nothing is
 remembered, offering to start the app in the process and to connect to one running at a URL.
 
-38.73 The launcher's start form MUST ask for each field the `onConfig` schema's JSON Schema
+38.72 The launcher's start form MUST ask for each field the `onConfig` schema's JSON Schema
 declares, or each field `onConfig`'s defaults return where the schema has none, and MUST boot the
 app with its values as the environment, showing a refusal by field.
 
-38.74 The launcher MUST remember a start's values or a connect's URL under `APP_DATA_DIR`, and MUST
+38.73 The launcher MUST remember a start's values or a connect's URL under `APP_DATA_DIR`, and MUST
 start or connect the same way at the next launch.
 
-38.75 The `disconnect` role MUST stop the app the launcher serves, forget what 38.74 remembered, and
+38.74 The `disconnect` role MUST stop the app the launcher serves, forget what 38.73 remembered, and
 show the launcher page.
 
-38.76 The app `abide bundle`'s launcher serves MUST listen on loopback alone, on the port the last
+38.75 The app `abide bundle`'s launcher serves MUST listen on loopback alone, on the port the last
 launch served it on where that port is free.
 
-38.77 Quitting the launcher MUST stop the app it serves through `App.stop` before the process exits.
+38.76 Quitting the launcher MUST stop the app it serves through `App.stop` before the process exits.
 
-38.78 `abide bundle` MUST refuse on a platform other than macOS, naming `abide compile`.
+38.77 `abide bundle` MUST refuse on a platform other than macOS, naming `abide compile`.
 
-38.79 `abide bundle` given no `--out` MUST write the `.app` into the directory it was run from, named
-as 38.47 names the executable.
+38.78 `abide bundle` given no `--out` MUST write the `.app` into the directory it was run from, named
+as 38.46 names the executable.
 
-38.80 `abide bundle` MUST give the `.app` the icon `src/bundle/icon.icns` holds, or one drawn at
-every size from `src/bundle/icon.png` where there is no `.icns`.
+38.79 `abide bundle` MUST give the `.app` the icon the public file answered at `/icon.icns` holds,
+or one drawn at every size from the one at `/icon.png` where there is no `.icns`.
 
-38.81 `abide bundle` MUST read `src/bundle/launcher.json` as it runs, and MUST refuse a key it does
-not take, or a value of a type the key does not take, before it builds anything.
+38.80 The desktop app MUST read the `launcher` that `src/launcher.abide`'s `<script module>`
+exports as it launches, and MUST refuse to launch on a key it does not take, or a value of a type
+the key does not take.
 
-38.82 `abide bundle` MUST refuse a `src/bundle/launcher.json` turning off both `start` and
-`connect`.
+38.81 `LauncherOptions` MUST NOT admit turning off both `start` and `connect`, and the desktop app
+MUST refuse to launch on a `launcher` that does.
 
-38.83 Where the app has `src/bundle/launch.abide`, the launcher MUST render it through `render`,
-bound to the `Launch` it would show, in place of its own page.
+38.82 Where the app's `src/launcher.abide` has markup of its own, the launcher MUST render it
+through `render`, bound to the `Launch` it would show, in place of its own page; one holding script
+blocks alone MUST leave the launcher's own page standing.
 
-38.84 A form `src/bundle/launcher.json` turns off MUST have no address in `Launch`, MUST NOT be
+38.83 A form the `launcher` export turns off MUST have no address in `Launch`, MUST NOT be
 answered, and MUST NOT be done again at launch, and turning `connect` off MUST take the `connect`
 item out of the default menu bar.
 
-38.85 The page `src/bundle/launch.abide` renders MUST carry its own `<style>` in the head of
-`src/bundle/launch.html`, or of a bare document where there is none.
+38.84 The page `src/launcher.abide` renders MUST carry its own `<style>` in the head of the
+document it renders into.
 
-38.86 A `src/bundle/launch.abide` that fails to render MUST reach `onError`, and the launcher MUST
+38.85 A `src/launcher.abide` that fails to render MUST reach `onError`, and the launcher MUST
 show its own page in its place.
 
-38.87 The window MUST open at `src/bundle/launcher.json`'s `width` and `height` where no launch
+38.86 The window MUST open at the `launcher` export's `width` and `height` where no launch
 before it left a size, and MUST NOT be resized below its `minWidth` and `minHeight`.
 
-38.88 `src/bundle/launcher.json`'s `name` MUST name the app in its bundle, its menu bar and its
-`Launch`.
+38.87 The app's package name, as 38.46 names the executable, MUST name the app in its bundle, its
+menu bar and its `Launch`.
 
-38.89 The desktop app's menu bar MUST be the application, File, Edit, View and Window menus, with
+38.88 The desktop app's menu bar MUST be the application, File, Edit, View and Window menus, with
 the `menu` each layout and the page of the route the window shows exports from its
 `<script module>`, outermost first: a menu whose `label` names one already standing appends its
 items to that one, and any other stands before Window.
 
-38.90 A `MenuItem` whose `MenuRole` AppKit answers MUST be sent down the responder chain, and MUST
+38.89 A `MenuItem` whose `MenuRole` AppKit answers MUST be sent down the responder chain, and MUST
 be disabled where nothing in the chain answers it.
 
-38.91 Picking a `MenuItem` with an `href` MUST `navigate` to it in the page that exported it.
+38.90 Picking a `MenuItem` with an `href` MUST `navigate` to it in the page that exported it.
 
-38.92 Picking a `menuItem` MUST run every function its `on` filed, in the page that exported it,
+38.91 Picking a `menuItem` MUST run every function its `on` filed, in the page that exported it,
 whether the launcher serves that app or connected to it, and a throw from one MUST NOT stop the
 rest.
 
-38.93 The menu bar MUST be told again after every navigation the page makes, and MUST be the
+38.92 The menu bar MUST be told again after every navigation the page makes, and MUST be the
 default alone from each load the launcher starts until the page loaded tells it its route's `menu`.
 
-38.94 The executable `abide compile` writes MUST carry the app's code as bytecode, and MUST still
+38.93 The executable `abide compile` writes MUST carry the app's code as bytecode, and MUST still
 report an error at its source line.
 
-38.95 The chunks `abide build` and `abide dev` emit MUST NOT load, for a route, a module of the
+38.94 The chunks `abide build` and `abide dev` emit MUST NOT load, for a route, a module of the
 framework that no name the route imports reaches.
 
-38.96 `abide start` MUST compress an answer of 64 KB or more off the event loop, into the bytes the
+38.95 `abide start` MUST compress an answer of 64 KB or more off the event loop, into the bytes the
 same encoding and quality make on it, and MUST compress a smaller one without yielding.
 
-38.97 `abide dev` MUST abort a request's signal when its caller hangs up, and when the process
+38.96 `abide dev` MUST abort a request's signal when its caller hangs up, and when the process
 answering it is replaced or ended.
+
+38.97 A stack frame in a module compiled from a `.abide` MUST name the `.abide` and the line written
+there, under `abide dev`, `abide start` and `abide compile` alike, and the client bundle `abide dev`
+serves MUST carry a source map placing its positions in the `.abide`; the bundle `abide build` writes
+MUST NOT carry one.
+
+38.98 `abide lsp` MUST answer a completion at a member access with the members of what the text it
+last checked holds there, as 38.39 answers a hover.
+
+38.99 `abide dev` MUST rebuild when a dependency's `.abide` it compiled changes.
+
+38.100 `abide start` and `createApp` MUST build the app first where its output holds no build.
+
+38.101 The launcher's accent MUST be the most saturated hue of the app's icon (38.79), taken when
+`abide bundle` runs, and the platform's own accent where the icon gives none; `Launch` MUST carry
+the accent and the icon to `src/launcher.abide`.
+
+38.102 The launcher's own page MUST show the app's icon, its name and a button for each form the
+`launcher` export leaves on. A button whose form asks for anything MUST open it in a modal dialog,
+a start that asks for nothing MUST start at once, a refused start or connect MUST show its dialog
+open on the refusal, and the `connect` menu role MUST show the connect dialog open.
+
+38.103 The project `abide scaffold` writes MUST carry a `check` script that runs `abide check`.
+
+38.104 The project `abide scaffold` writes MUST carry instructions for a coding agent that name where
+the installed package holds the documentation, the registry and the rulebook.
+
+38.105 Every clause an `abide check` diagnostic or a refusal cites MUST resolve in a rulebook the
+published package holds.
+
+38.106 The documentation the instructions `abide scaffold` writes name (38.104) MUST be every page
+as one markdown file, in reading order.
 
 # 39. Head and view transitions
 
@@ -2234,84 +2408,84 @@ app MUST NOT be required to feature-detect.
 or layout is mounted.
 
 39.14 On a client navigation, a keyed `<head>` contribution that a leaving page or layout made and
-no arriving one makes MUST return to the next-outer contributor's value for its key — the nearest
-kept layout's, else the shell's — and MUST be removed where no outer contributor has that key.
+no arriving one makes MUST return to the nearest kept layout's value for its key, and MUST be removed
+where no kept layout has that key.
 
 # 40. Documentation
 
 *Free-standing: these clauses govern the documentation system, which REGISTRY does not name — a
-`{% snippet %}` is not something an app writes.*
+`<Snippet>` is not something an app writes.*
 
 40.1 The documentation site MUST be the package at `packages/dogfood`.
 
 40.2 Every name REGISTRY carries MUST be documented against real `.abide` and `.ts` files.
 
-40.3 Every `{% example %}` SHOULD carry an end-to-end spec.
+40.3 Every `<Example>` SHOULD carry an end-to-end spec.
 
-40.4 A file an `{% example %}` names that is not part of the problem its summary names MUST NOT be
+40.4 A file an `<Example>` names that is not part of the problem its summary names MUST NOT be
 one of its files.
 
-40.5 `{% example %}` MUST render the example's component inline, above a tab per file it is made
+40.5 `<Example>` MUST render the example's component inline, above a tab per file it is made
 of, and the render MUST NOT be one of those tabs.
 
-40.6 `{% snippet %}` MUST be how a page shows code from an example, in place of pasting it into a
+40.6 `<Snippet>` MUST be how a page shows code from an example, in place of pasting it into a
 fence.
 
-40.7 A `{% snippet %}` anchor MUST be a line prefix matching exactly once, and the slice MUST run to the end
+40.7 A `<Snippet>` anchor MUST be a line prefix matching exactly once, and the slice MUST run to the end
 of the construct it opens.
 
-40.8 Several `{% snippet %}` anchors separated by an elision MUST render as one fence in file
+40.8 Several `<Snippet>` anchors separated by an elision MUST render as one fence in file
 order, with the gap marked rather than closed.
 
-40.9 A `{% snippet %}`'s caption, language and spine MUST be derived from its address.
+40.9 A `<Snippet>`'s caption, language and spine MUST be derived from its address.
 
-40.10 A `{% snippet %}` anchor matching none or matching two MUST be a build failure.
+40.10 A `<Snippet>` anchor matching none or matching two MUST fail the page it is on as it renders.
 
-40.11 A page MUST declare in `covers` which REGISTRY names it covers, and an overview or a reference
-page MUST declare none.
+40.11 A page MUST declare in its `SITE` entry's `covers` which REGISTRY names it covers, and an
+overview or a reference page MUST declare none.
 
 40.12 Every name `covers` may claim MUST be claimed by exactly one page.
 
 40.13 The voice, the vocabulary and the register of a title against a nav label MUST be
 `docs/BRAND.md`'s, and MUST NOT be stated here.
 
-40.14 An `{% example %}` MUST run the component it names in the docs app, and MUST NOT run a
+40.14 An `<Example>` MUST run the component it names in the docs app, and MUST NOT run a
 stand-in for it.
 
-40.15 A request an `{% example %}` makes MUST be answered by the docs app's own handlers, and MUST
+40.15 A request an `<Example>` makes MUST be answered by the docs app's own handlers, and MUST
 NOT be answered by a fixture.
 
-40.16 Instrumentation the documentation adds to an `{% example %}` MUST sit outside the render.
+40.16 Instrumentation the documentation adds to an `<Example>` MUST sit outside the render.
 
-40.17 A page MUST embed one `{% example %}` per behaviour it teaches.
+40.17 A page MUST embed one `<Example>` per behavior it teaches.
 
-40.18 An `{% example %}` MUST demonstrate exactly one behaviour.
+40.18 An `<Example>` MUST demonstrate exactly one behavior.
 
-40.19 A readout the hand-written arm paired with an `{% example %}` renders MUST be one that example's
+40.19 A readout the hand-written arm paired with an `<Example>` renders MUST be one that example's
 own source names.
 
-40.20 An `{% example %}` MUST be embedded by exactly one page declaring `covers`.
+40.20 An `<Example>` MUST be embedded by exactly one page declaring `covers`.
 
-40.21 An `{% example %}` MUST model a pattern from an app `docs/BRAND.md` names.
+40.21 An `<Example>` MUST model a pattern from an app `docs/BRAND.md` names.
 
-40.22 Every `{% example %}` a page embeds MUST be drawn from the same app.
+40.22 Every `<Example>` a page embeds MUST be drawn from the same app.
 
-40.23 A control an `{% example %}` renders MUST sit with the value it changes.
+40.23 A control an `<Example>` renders MUST sit with the value it changes.
 
-40.24 An `{% example %}` MUST prove the heading it sits under.
+40.24 An `<Example>` MUST prove the heading it sits under.
 
-40.25 An `{% example %}` MUST NOT carry code its proof does not need.
+40.25 An `<Example>` MUST NOT carry code its proof does not need.
 
-40.26 The capability an `{% example %}` proves MUST be one the app it is drawn from would reach
+40.26 The capability an `<Example>` proves MUST be one the app it is drawn from would reach
 for.
 
-40.27 A heading that carries an `{% example %}` MUST be followed by it, with nothing between
+40.27 A heading that carries an `<Example>` MUST be followed by it, with nothing between
 them.
 
-40.28 An `{% example %}`'s summary MUST state the situation it is in, and MUST NOT restate the
+40.28 An `<Example>`'s summary MUST state the situation it is in, and MUST NOT restate the
 heading.
 
-40.29 A comment in an `{% example %}`'s own source MUST fit on one line, and a reason longer than
+40.29 A comment in an `<Example>`'s own source MUST fit on one line, and a reason longer than
 that MUST go in the copy after the card.
 
 40.30 A page's lead MUST read standalone, being what a section overview shows for that page, and
@@ -2320,7 +2494,15 @@ MUST NOT carry a relative link.
 40.31 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
 forms, the options they share, and a link to its reference page.
 
-40.32 A page reporting the build's own results MUST NOT be listed in `NAV`.
+40.32 A page reporting the build's own results MUST NOT be listed in `SITE`.
+
+40.33 A documentation page MUST be a `page.abide` written by hand at its route, and its title, nav
+label, intent, lead, app and `covers` MUST be its `SITE` entry's alone.
+
+40.34 An `<Example>` MUST render a component in the directory of the page that embeds it, and that
+component's handlers, hooks and data MUST be in its own file, save a file the example is about.
+
+40.35 A page's `.md` twin MUST be derived from what its `page.abide` renders.
 
 # 41. Rendering and hydration
 
@@ -2383,7 +2565,7 @@ markup, starting each `Rpc` call the setup made as the request the browser's `Rp
 41.22 An `Rpc` call for args a seed buffer entry already answered MUST NOT warn on
 `abide:hydrate`.
 
-41.23 On the client, a `src/ui/pages/**/layout.abide` MUST NOT hydrate or build its markup before
+41.23 On the client, a `layout.abide` MUST NOT hydrate or build its markup before
 the page under it is set up.
 
 41.24 Where hydration's setup chooses an arm of an `{#if cond}` other than the one the server painted,
@@ -2495,7 +2677,7 @@ compared against.
 
 44.18 `batch` MUST throw in a parallel worker.
 
-44.19 A hand-written arm under `harness/arms` MUST be paired with an `{% example %}`.
+44.19 A hand-written arm under `harness/arms` MUST be paired with an `<Example>` of the same id.
 
 44.20 `measure` MUST report `wakes`, `bindingRuns` and `descents` as absent where no record has been
 published, and MUST NOT report zero for one.
@@ -2530,7 +2712,7 @@ lists, and MUST call each as a request through the app answering the request.
 45.7 A `Toolbox` call MUST carry the asking request's `cookie` and `authorization` headers, and MUST
 NOT carry any other header of it.
 
-45.8 `mcp` over an MCP surface `ABIDE_MCP` has not opened MUST throw, naming `ABIDE_MCP`.
+45.8 `mcp` over an app whose route table lists no handler for `/__abide/mcp` MUST throw.
 
 45.9 `claudeApi` MUST call the Messages API again with the tool results only while a turn stops for
 `tool_use`, and MUST send each assistant turn's blocks back as they arrived.
@@ -2559,8 +2741,7 @@ was made in.
 
 45.18 `claudeCode` MUST end a turn's run on the bridge when the caller hangs up.
 
-45.19 `/__abide/bridge` MUST be gated by `ABIDE_BRIDGE`, and `claudeCode` MUST throw, naming
-`ABIDE_BRIDGE`, where it is closed.
+45.19 `/__abide/bridge` MUST be closed until `claudeCode` has minted a pairing code in that process.
 
 45.20 `claudeCode.bridge` MUST yield a `BridgeStatus` whenever the asking browser's pairing changes,
 and MUST yield a fresh command where the standing one's code expires unpaired.

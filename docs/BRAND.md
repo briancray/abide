@@ -13,10 +13,10 @@ question: *how do we talk about this?*
 | --- | --- | --- |
 | How we describe the product, and to whom | here | positioning is a decision about an audience |
 | Which word we use, and which we refuse | here | a vocabulary is a choice nothing else records |
-| What a reader sees — colour, type, the code spine | here | an identity is a fact about the surface |
+| What a reader sees — color, type, the code spine | here | an identity is a fact about the surface |
 | What must hold | RULEBOOK.md | a requirement has a clause number |
 | What a name is | REGISTRY.md | a signature is not a claim |
-| A measurement | the harness | a number in prose is a number nothing re-runs |
+| A measurement | the harness | a number in prose is a number nothing reruns |
 
 ## Format rules
 
@@ -72,7 +72,7 @@ with where the audience knows what an MCP server costs to maintain.
 | | Why |
 | --- | --- |
 | A static marketing site | It renders one, but nothing here earns its keep if nothing on the page changes |
-| Gradual adoption into an existing app | The `#ui` / `#server` / `#shared` seams are the mechanism, not a convention. There is no partial mode |
+| Gradual adoption into an existing app | The `page` / `layout` / `error` files and the `server` directories are the mechanism, not a convention. There is no partial mode |
 | A team that wants to swap the runtime | abide is Bun and web standards deliberately, and uses Bun's APIs rather than abstracting over them |
 
 Saying these out loud is part of the positioning, not a disclaimer to bury. A framework that
@@ -88,11 +88,11 @@ it by number, so where the two disagree the rulebook is right and the claim is s
 
 | Claim | Rests on |
 | --- | --- |
-| **Call a server function from a page.** No route, no fetch, no client. | 16.28, 16.29 — the client module is GENERATED rather than shaken out of the server's, and a non-handler import is a compile error. 16.11, 16.4 — a page's render-time read goes through the same handler a browser calls, so there is one call rather than two paths |
+| **Call a server function from a page.** No fetch, no client. | 16.28, 16.29 — the client module is GENERATED rather than shaken out of the server's, and importing anything under a `server` directory is a compile error. 16.11, 16.4 — a page's render-time read goes through the same handler a browser calls, so there is one call rather than two paths |
 | **One handler, four surfaces.** A page, an OpenAPI operation, an MCP tool, a CLI command. | 20.1 — all four DERIVED from the route table, so none can describe a handler that does not exist. 38.9 — the CLI derives from the same table. 20.2, 20.3, 20.4 — `clients` withholds a surface and is not access control |
 | **One type back.** | 1.1 — every producer hands back `Reactive`. 11.2, 16.4 — the keyed forms hand back a factory you call with its arguments first |
 | **Same name, both sides.** | 16.27, 22.1, 23.7, 23.8 — a name resolves on either side, each answering from what its side has, and where one genuinely cannot it throws rather than no-opping |
-| **Reaching loads it.** | 1.7, 1.8 — reaching a value starts the work it is for, and a second reach joins the standing work. 11.4, 11.5 — a keyed entry is computed when its key is reached, and an unkeyed derived value re-runs when what it read moves. 11.6 — `ttl`, `invalidate` and `refresh` are a keyed value's ways back. 41.7, 41.13 — the browser's read is answered by what the render already fetched |
+| **Reaching loads it.** | 1.7, 1.8 — reaching a value starts the work it is for, and a second reach joins the standing work. 11.4, 11.5 — a keyed entry is computed when its key is reached, and an unkeyed derived value reruns when what it read moves. 11.6 — `ttl`, `invalidate` and `refresh` are a keyed value's ways back. 41.7, 41.13 — the browser's read is answered by what the render already fetched |
 | **It does not block.** | 2.1 — a read returns what it has, and never awaits. 2.10 — `s.peek` answers where nothing has landed yet. 3.4 — a busy value with nothing to serve opens a sink and the hole fills. 11.21 — that reaches a derived value |
 | **A refusal is a value.** | 15.1, 15.2, 15.6 — declared, structural, and landing in the `Failures` of the value that produced it. 4.9, 4.10, 4.11 — a refused write keeps the last accepted value on screen beside the message |
 | **The schema is the type.** | 19.9, 19.10 — derived from the annotation and the argument defaults. 19.11 — where inference cannot reach, the schema WIDENS rather than the file being refused. 16.26 — a shape rides on the `Reactive`. 38.3 — `abide check` reports on the `.abide` line |
@@ -180,9 +180,9 @@ Three levels, and a reader may stop at any of them.
 | Topic page | one problem, solved |
 
 The three levels are 40.11's, the constraint on a lead is 40.30's and the map section is 40.31's;
-the `{% lead %}` directive is the build's. SOME OF WHAT IS BELOW IS GATED as well, in
+`<Lead of="…"/>` is how an overview shows one, reading it from `SITE`. SOME OF WHAT IS BELOW IS GATED as well, in
 `packages/dogfood/tests/coverage.test.ts` and `voice.test.ts` — the tests are the list, an
-enumeration here being a second copy of them that nothing re-runs. A rule here that turns out to be
+enumeration here being a second copy of them that nothing reruns. A rule here that turns out to be
 checkable belongs in a test rather than in prose; what stays is what only a reader can decide.
 
 * **A page's LEAD is what the section overview says about it.** 40.30 is the constraint and also
@@ -232,7 +232,7 @@ three pages later.
 | seed buffer | sink, hydration data, embedded state | The seed buffer is how DATA reaches the client, by answering the client's own request; a sink is a hole in the MARKUP a late value fills. Two mechanisms, two lifetimes, and a document carries no copy of any answer |
 | claims, principal, session | any one of the three for another | THREE THINGS. CLAIMS are the proof and the only thing in the cookie; the PRINCIPAL is what `onPrincipal` resolved that proof into, and is PUBLIC by definition; SESSION is app data addressed by what the claims identify, behind an ordinary rpc. Collapsing them to "session" puts something that grows into a cookie. `caller` is a fourth and none of them — a handle for WHICH BROWSER, carried whether or not anyone authenticated |
 | surface | client, target, integration | `ui`, `openapi`, `mcp`, `cli` — one handler spoken in another vocabulary, and what `clients` withholds |
-| seam | layer, boundary | `#ui`, `#server`, `#shared` — an import edge the build enforces |
+| seam | layer, boundary | a `server` directory — an import edge the build enforces, everything else being both sides |
 | both sides | isomorphic (in body copy) | *isomorphic* is the headline word and stays in the statement; every page after it says "both sides". A third spelling is the drift this table exists to stop |
 | by name | auto-tracking, magic reactivity | Reading `count` in a template IS `count()`; the sugar is over the explicit form, never instead of it |
 | tracked / subscriber | either for the other | TWO REGISTERS OF ONE MECHANISM, the way sink and hole are. TRACKED is a property of the POSITION — whether a read there is captured at all, which is what REGISTRY's Tracking table answers. A SUBSCRIBER is the edge a tracked read registers. They come apart at exactly one place and it is load-bearing: on a server a render read IS tracked and registers NO subscriber, there being no rerender to feed — which is why a watch runs once there, and why an eager trigger is bounded by subscribers rather than by what is tracked |
@@ -257,7 +257,7 @@ three pages later.
   everything none of those can carry: the reason, the refusal, the thing the running page cannot
   show. 40.27 is what keeps a fourth voice out from between a heading and its card — the layer that kept being
   written and is always a fourth voice restating one of the other three — a card had a heading
-  saying a derived value re-runs when what it read changes, then a paragraph saying reading is what
+  saying a derived value reruns when what it read changes, then a paragraph saying reading is what
   subscribes, then a title saying auto-tracked derivation, then a summary saying the total
   follows the seats. Four ways to say it before anything had been shown.
 * **The opening card is the one to price.** The line after it says what it cost, against the
@@ -271,7 +271,7 @@ three pages later.
   wherever the value came from" — same fact, and the first is checkable in the time it takes to
   read. THE TEST IS NOT THE GERUND: "Reading loads a value" is a CLAIM about the system, its
   subject is a gerund, and it is one of the shortest sentences here. TWO SHAPES COST, and both
-  defer the verb. A NOMINALISED INSTRUCTION makes the reader convert it before they can act —
+  defer the verb. A NOMINALIZED INSTRUCTION makes the reader convert it before they can act —
   "Building the value outside the call and passing it in is what makes this go wrong" is "Do not
   build the value outside the call and pass it in". A CLEFT — "X is what does Y" — buys
   contrastive emphasis the plain verb already carries: "Reading is what loads it" is "Reading
@@ -301,11 +301,11 @@ three pages later.
   heading a claim and let the table be the list.
 * **The code under a heading answers that heading.** A section about `.abide` sugar showing a
   `.ts` file, or a section about the shape of a keyed value showing its `tags` option too, reads
-  as two subjects and teaches neither. `{% snippet %}` takes several anchors for this reason —
+  as two subjects and teaches neither. `<Snippet>` takes several anchors for this reason —
   pull the lines the heading is about, and if they are not one construct, say so with the
   elision rather than widening until they fit.
 * **A heading names what an author WRITES, not a type they have not met.** "A `Transformer`
-  normalises a value" is the type of an option spelled `transform`, so the reader scans for a
+  normalizes a value" is the type of an option spelled `transform`, so the reader scans for a
   word that is not in their file. Name the property, then introduce the type under it. `Reactive`
   and `Accepted` are fair — nothing else is spelled those.
 * **A heading may not state an absolute the page then qualifies.** "A read never awaits" was
@@ -373,7 +373,7 @@ The thing an example is for is the thing that runs, and a reader who has to find
 seeing one has been handed source to read instead of something to try.
 
 A stub marker takes `--color-muted`. It marks an ABSENCE, so it takes the ground's own recessive
-tone rather than a reserved colour, and it goes when the framework is written — which is why it has
+tone rather than a reserved color, and it goes when the framework is written — which is why it has
 no row here to inherit.
 
 **The signature is the code-block spine.** Every snippet of SOURCE carries a colored edge and a
@@ -381,18 +381,18 @@ caption. THE EDGE IS THE SIDE AND THE CAPTION IS THE SYNTAX, and they are two fa
 one: `.ts · browser` says which of the two spellings is on screen and where it runs, where
 `browser` alone said only the second and left a reader guessing between a name read by name and
 `s()` — which are the two forms this whole design is about. A file path says both by itself.
-Three colours over four seam words: `shared` and `abide` are BOTH SIDES, the seam deciding it
-rather than the extension, so a `#shared/*.ts` takes the same edge a `.abide` file does. A block
+Three colors over four seam words: `shared` and `abide` are BOTH SIDES, the seam deciding it
+rather than the extension, so a module under no `server` directory takes the same edge a `.abide` file does. A block
 that is not source — a shell transcript, a directory tree — carries no language and no caption,
 having no side to name. A caption showing part of a file says so: `— excerpt`, because an address
 a reader cannot open is a claim, and one that contradicts the same address on another page is a
 claim that has already broken. It is the framework's central idea made visible, and it is the one
 device to keep wherever the brand appears.
 
-NONE OF THAT IS TYPED ANY MORE, on a page that has been converted. `{% snippet %}` names an
-example and a line in it, and the caption, the language, the `— excerpt` and the colour are all
-DERIVED from the address — so a snippet cannot claim a seam its path contradicts, and a sample
-that drifts from the file fails the build rather than the reader. The four bare words are what a
+NONE OF THAT IS TYPED ANY MORE, on a page that has been converted. `<Snippet>` names an
+example's file and a line in it, and the caption, the language, the `— excerpt` and the color are
+all DERIVED from the address — so a snippet cannot claim a seam its path contradicts, and a sample
+that drifts from the file fails the page as it renders rather than the reader. The four bare words are what a
 page still carries until its example exists; they are a stage, not a second spelling.
 
 # Status

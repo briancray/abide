@@ -7,15 +7,27 @@ Same callable, same name, same *intent* on both sides. A reactive value is read 
 inside a `.abide` file, and the explicit `x()` / `x.set(v)` spelling keeps compiling: the sugar
 is over it, never instead of it.
 
-Status: **shell**. The workspace, seams, checks and measurement lanes are in place; the
-framework itself is not written yet. `docs/REGISTRY.md` is the surface being built toward, and
-`docs/RULEBOOK.md` is what it has to do.
+Status: **pre-1.0**. `@abide/abide` is published and its surface still changes between minor
+versions. `docs/REGISTRY.md` is every name an app writes, and `docs/RULEBOOK.md` is every rule
+those names are held to.
+
+## Start an app
+
+    bunx @abide/abide scaffold my-app
+    cd my-app && bun install && bun run dev
+
+The installed package carries its own documentation in `node_modules/@abide/abide/docs/`:
+`abide.md` (every docs page, in reading order), `REGISTRY.md` and `RULEBOOK.md`. A message ending
+in `RULEBOOK 23.16.` names a clause in that file. The scaffold's `AGENTS.md` points a coding agent
+at all three, and `bun run check` runs `abide check`, the type checker over `.abide` files — `tsc`
+does not read them.
 
 ## Layout
 
     packages/abide      the framework
     packages/harness    the three measurement lanes everything is tested and measured with
     packages/dogfood    the documentation app, and the app abide is dogfooded on
+    packages/bridge     abide-bridge, the CLI that connects Claude Code to an abide site
 
 `abide` is split by seam — `#shared`, `#ui`, `#server` — and those seams are what
 framework-internal code imports through. An app resolves `@abide/abide`, `@abide/abide/runtime` and
@@ -40,112 +52,42 @@ goes.
 
 ## Documentation
 
-The docs are being written BEFORE the framework, on purpose: a capability that cannot be
-explained as a problem an app author has is not ready to be a capability. `packages/dogfood`
-holds the prose, and THE DOCS ARE AN ABIDE APP: `content/**.md` is compiled into
-`src/ui/pages/**/page.abide`, and from there it is the three commands an app author runs.
+THE DOCS ARE AN ABIDE APP, written the way an app author writes one: `packages/dogfood` is served by
+`abide dev`, built by `abide build`, and has nothing generated in its source tree.
 
-    bun run docs          compile packages/dogfood/content -> packages/dogfood/src/ui/pages
-    bun run dev           the same, watched, with `abide dev` serving it on :3131
-    bun run build         the pages, then `abide build`
+    bun run dev           abide dev on :3131
+    bun run build         abide build
 
-`content/**.md` is what you edit; the pages under `src/ui/` are generated and not checked in.
-The information architecture is `scripts/NAV.ts`; a page's `title`, short `nav` label,
-`intent`, `covers` claim and `examples` paths live in its own front matter.
+- A page is a hand-written `page.abide` at its route — `src/values/show-a-value-that-changes/page.abide`
+  is `/values/show-a-value-that-changes` — wrapped in `<Doc>`, with its headings as `<Section>`s,
+  its code as `<Code>` and `<Snippet>`, and its live examples as `<Example>` cards. Those components
+  are the docs app's own, in `src/docs/`.
+- `src/docs/SITE.ts` is the site map: every page in reading order, with its title, nav label,
+  intent, opening paragraph, the app its examples are drawn from and the REGISTRY names it
+  `covers`. The nav, a page's header and a section overview's `<Lead>`s all read it.
+- An EXAMPLE is ONE `.abide` beside the page that embeds it — its `<script server>` handlers,
+  hooks and data, its `<script>` and its markup in one file (RULEBOOK 40.34) — and the card's Files
+  tab shows that file, imported as text (`with { type: 'text' }`, 34.25). A card's `id` is what its
+  hand-written arm under `packages/harness/arms/` is paired by (44.19).
+- Every page is also served as markdown at its address with `.md` on the end, and `/abide.md` is
+  every page in reading order — derived from the rendered page by `src/downloads.abide`,
+  so the words have one home (40.35).
 
-MARKDOWN IS THE PAGE and the app is derived from it. A content link names the `.md`, and the
-generator rewrites it to the ADDRESS that page answers — so a content file is correct read
-where it LIES, on GitHub or as a download, and not only after a build. `examples:` names each embedded
-example's directory repo-relative for the same reason: an agent reading the markdown alone
-knows where the files are without being told how `{% example <name> %}` resolves. `bun test`
-gates both — front matter against the directives in the body, every link against the nav.
-
-Every page is downloadable as markdown, served at its own address with `.md` on the end —
-`/values/show-a-value-that-changes.md` — with its directives expanded, so what a reader
-downloads is the page rather than the markers that build it. `/abide.md` is every page in nav
-order in one file, for an agent that has the file and not the repo. Both are generated rather
-than checked in — an agent with the repo reads `packages/dogfood/content/` directly.
-
-The site's stylesheet is `packages/dogfood/src/ui/app.css`, which the page imports the way any
-abide component imports one (34.5): the build collects it and the document links what the
-build bundled (38.24). RULEBOOK 34.6 carries that import: global rather than scoped, folded into
-the route's content-hashed sheet ahead of the scoped blocks.
-
-An EXAMPLE is a DIRECTORY under `packages/dogfood/examples/`, not a fence, per RULEBOOK 40: real
-files, embedded with `{% example <name> %}`, rendered as one object
-with Files / Requests / Bench / Tests panels and a Download button that
-serves one zip per example, built by `scripts/zip.ts` — STORED entries, no dependency and
-no system `zip`, since `Bun.hash.crc32` is the only piece a zip writer otherwise needs.
-An example solves ONE stated problem and every file in it contributes to that problem —
-a file that demonstrates something else belongs in the example whose problem it is.
-Bench and Tests are RESULTS, not source: a reader wants to know whether the example holds,
-and the spec itself ships in the zip. A panel with no artifact is not rendered, so a Requests
-tab never appears on an example that makes no request. An example carries no styling it does not
-need: read-invoice has no `<style>` block at all, and the render shows abide's own defaults.
-
-THE RENDER RUNS THE HAND-WRITTEN ARM (RULEBOOK 40.19). `vanilla/` is real code — a real cache, a
-real in-flight table — bundled into the frame with a `fetch` shim that answers from the example's
-own `wire` fixture (40.20), so the request meter under the render is a count the arm made rather
-than a number somebody typed. It replaced a machine of authored HTML snapshots, and the arm is the
-substrate only until the compiler can run the `.abide` the Files panel shows.
-
-File ORDER is derived, not listed: a reader opens the file the problem is solved in,
-which is the `.abide` file for almost every problem — the page is where an author
-starts and the handler is what they reach back for. So files sort by SEAM
-(`.abide`, then browser, then server), and `"about": "server"` flips it for an example
-whose problem IS a server one — validating a body, authorising a call. The manifest's
-array order only breaks ties within a seam. `example.json` names the files each panel shows.
-`files/`, `vanilla/` and the downloads are real, and `vanilla/` now also RUNS; `compiled/`, `wire`
-and `bench` are checked-in static content the compiler and the harness are meant to REPLACE, which
-is why they are artifacts in the example directory rather than markup in the renderer.
-
-`bun test` gates that every embedded example exists, that every example directory is
-embedded, that every path a manifest names is on disk, and that a page's `examples:` front
-matter names exactly the directories its body embeds. The suite roots are enumerated in
-the `test` script because an example's own test is an artifact the docs display and cannot run
-until the framework exists.
-
-The Overview mirrors the SIDEBAR: one short section per major nav section, each a small
-table, a few lines of example, and the links into that section. Adding a nav section without
-a matching one there is what makes the home page stop being a map.
-
-There are no horizontal rules anywhere — not the `<hr>` element, and not a border doing
-its job on a heading, a footer or a nav group. Spacing and the heading colour carry the
-structure instead, and the renderer has no `---` branch, so one cannot come back by accident.
-The rules between pages in `/abide.md` are the exception that proves it: that file is
-plain text an agent reads, not a page, and nothing renders it.
-
-The rail renders on EVERY page, because it carries the markdown downloads. The "on this
-page" list inside it, with scroll-spy, appears only where there are two or more `##`
-headings — one heading is a repeat of the title. A file is shown by the SPECIFIER an author types — `#server/rpc/invoices.ts`, never the
-disk form — so the renderer maps `src/<seam>/` onto `#<seam>/` in every fence label and
-file tab. Build output has no seam and is left alone.
-
-A fenced block may carry a LABEL after the language — ```` ```ts src/server/rpc/invoices.ts ```` —
-and the label decides the block's spine colour: a path naming `server` is one side, a `.abide`
-file is both, anything else is the browser. THE CAPTION IS THE SYNTAX AND THE SPINE IS THE SIDE,
-which are two facts rather than one: a bare label renders as `.ts · browser`, derived from the
-fence's own language, because "browser" alone said where the code runs and left a reader guessing
-between a name read by name and `s()`. A path says both by itself.
-
-`bun test` gates the coverage claim: every capability named in a `docs/REGISTRY.md` table must be
-covered by some guide's `covers:` list, nothing may claim a capability the registry does not have,
-and no content file may be unreachable from the nav.
+`bun test` gates the docs against the REGISTRY and against RULEBOOK 40 and BRAND —
+`packages/dogfood/tests/coverage.test.ts`, `markdown.test.ts`, `voice.test.ts`, `fences.test.ts` —
+reading `SITE.ts`, each `page.abide`, and the pages and markdown the built app serves.
 
 ## Checks
 
-    bun run typecheck     tsc (TypeScript 7, the native port) over all three packages
+    bun run typecheck     TypeScript 7 over all four packages
     bun run test          abide build, then bun test --parallel
-    bun run test:serial   the same, unparallelised — re-run a TIMING failure here before believing it
+    bun run test:serial   the same, unparallelized — rerun a TIMING failure here before believing it
     bun run test:changed  only what a change reaches
     bun run lint          unused locals, imports and parameters
-    bun run e2e           playwright, two projects over the one app
+    bun run e2e           playwright: the docs app at the root and under a sub-path, and the
+                          harness's browser specs in chromium and webkit
     bun run knip          exports and files nothing resolves through
-    bun run docs          render the documentation site
     bun run verify        lint, typecheck, test
-
-`verify` is green now. `e2e` is configured but not yet live: it comes online with the
-first page the dogfood app serves, since `abide start` has nothing to serve until then.
 
 Run everything from the REPO ROOT: `bunfig.toml`'s DOM preload is resolved relative to it,
 and the suites measure a different code path while still passing if it is not found.

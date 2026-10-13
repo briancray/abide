@@ -19,14 +19,11 @@ blob-report
 # Emitted modules a test imports. See packages/abide/tests/temporaryModule.ts
 .test-modules/
 
-# The documentation, compiled into the app. `bun run docs` writes these from `content/`.
-# See packages/dogfood/scripts/buildPages.ts
-packages/dogfood/src/ui/pages/
-packages/dogfood/src/ui/public/
-packages/dogfood/src/ui/NAV_ITEMS.ts
-
 # `bun run compile` in the docs app: the executable, named after the app (RULEBOOK 38.47).
 packages/dogfood/dogfood
 
 # `abide bundle` in the docs app: the desktop app, written where it was run (RULEBOOK 38.79).
 packages/dogfood/dogfood.app/
+
+# What `@abide/abide` ships for a reader with only node_modules, copied at pack time (scripts/packDocs.ts).
+packages/abide/docs/
