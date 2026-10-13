@@ -199,7 +199,7 @@ test('listeners bound and binding runs are separate rows', () => {
 })
 
 // Wakes, binding runs and descents are read off the record abide publishes, zeroed
-// per case, and NOT off a DOM patch — a prototype patch cannot see an effect re-run,
+// per case, and NOT off a DOM patch — a prototype patch cannot see an effect rerun,
 // and this lane may not import abide to count one.
 //
 // The one gate in this file whose broken arm is INSTALLABLE, so it carries a runnable
@@ -261,7 +261,7 @@ gate(
 // assert exactly these three rows.
 //
 // The revert is STRUCTURAL — the shape is fixed in `blankWork()` and there is no arm to
-// install — so it is a comment with its number, verified by hand: initialise the three
+// install — so it is a comment with its number, verified by hand: initialize the three
 // to 0 and this file reports `0` where it asks for null, which is the reading every one
 // of those eleven gates would have accepted.
 test('the rows this lane does not count read as absent, not as zero', () => {

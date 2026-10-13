@@ -61,7 +61,7 @@ export type Sample = {
      *
      * Never under bun: nothing there waits on a paint, and the clock resolves a whole op.
      *
-     * Click -> paint is frame quantised: nine ops reading 16.6-17.0 across six frameworks is the
+     * Click -> paint is frame quantized: nine ops reading 16.6-17.0 across six frameworks is the
      * answer, not an instrument to sharpen. `ratio()` will not divide two of these.
      */
     underOneFrame: boolean

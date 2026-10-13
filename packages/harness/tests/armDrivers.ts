@@ -73,7 +73,7 @@ export function streamingFetch(
             return new Response(
                 new ReadableStream({
                     // THE ABORT HAS TO REACH THE READER, and registering it per branch is
-                    // how this stopped testing anything: the parked branch honoured the
+                    // how this stopped testing anything: the parked branch honored the
                     // signal and the producing one did not, so a wall-clock timer passed.
                     start(controller) {
                         init?.signal?.addEventListener('abort', () => {

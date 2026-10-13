@@ -23,7 +23,7 @@ function roomFor(conversation) {
     return held
 }
 
-// The gate sits on the way in, so nothing downstream has to re-run
+// The gate sits on the way in, so nothing downstream has to rerun
 // it — including whatever else comes to publish here later.
 function publish(conversation, turn) {
     if (turn.text.length > LIMIT) return tooLong(turn.text.length)

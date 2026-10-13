@@ -123,7 +123,7 @@ for (const kase of CASES) {
  * that cannot happen. Seventeen clean runs put the upper tail at 7.02x.
  *
  * WHICH MAKES A `HOLDS` THE WEAKER VERDICT, and it is the reverse of the habit: CLAUDE.md says
- * re-run a timing FAILURE before believing it, and here it is a timing PASS that a loaded run
+ * rerun a timing FAILURE before believing it, and here it is a timing PASS that a loaded run
  * should not be believed on. A false HOLDS needs the broken arm to dip 12% under its observed
  * 8.72x minimum — unlikely, since broken's spread is only 1.11x (at 112 the n² term swamps the
  * noise) — but it is the reachable error of the two. Read a HOLDS on a busy machine as "not

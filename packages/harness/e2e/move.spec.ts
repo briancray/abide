@@ -15,7 +15,7 @@
 // measuring nothing, which CLAUDE.md records happening twice already.
 //
 // ENGINE-CONDITIONAL, which is the honest shape for a platform swap. `moveNode` PROBES rather
-// than versions, so where `moveBefore` has not shipped the fallback is today's behaviour and
+// than versions, so where `moveBefore` has not shipped the fallback is today's behavior and
 // there is nothing to assert; the spec says so rather than failing a lane for its engine. What
 // is asserted unconditionally is that the reorder HAPPENED — an arm that does nothing preserves
 // focus perfectly.

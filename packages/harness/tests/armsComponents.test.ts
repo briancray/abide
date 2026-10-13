@@ -134,7 +134,7 @@ test('memo-keyed: a prefix already typed is answered with no request and no spin
     expect([rows(), requests, read('#status')]).toEqual([3, 3, ''])
 })
 
-// WHAT THIS FILE CANNOT REACH, said out loud. `memo-tracked` claims a body did NOT re-run over
+// WHAT THIS FILE CANNOT REACH, said out loud. `memo-tracked` claims a body did NOT rerun over
 // a SYNCHRONOUS local derivation, and that is unobservable by construction: no request, no
 // probe, and a value identical either way. The arm holds the invariant and nothing checks it.
 // `memo-keyed` had the same gap and lost it by moving behind a handler, which is the repair
@@ -661,14 +661,14 @@ test('bind-group: a radio holds one value and a checkbox set holds an array', as
 
 test('style-scoped: two components style one class name and neither reaches the other', async () => {
     await mount('style-scoped', 'badges.js')
-    const colourOf = (id: string) =>
+    const colorOf = (id: string) =>
         getComputedStyle(document.querySelector(id) as Element).color
 
     // THE CLAIM. Both components wrote a rule for the same name, and the two rules
     // landed on their own element and nowhere else. In the arm that is a name per
     // component in the selector, which is a convention rather than a guarantee — a
     // third component reusing `badge` has to already know these two exist.
-    expect([colourOf('#overdue'), colourOf('#paid')]).toEqual([
+    expect([colorOf('#overdue'), colorOf('#paid')]).toEqual([
         'rgb(163, 58, 58)',
         'rgb(47, 107, 68)',
     ])
@@ -676,13 +676,13 @@ test('style-scoped: two components style one class name and neither reaches the 
 
 test('style-global: the escape reaches markup the component did not render', async () => {
     await mount('style-global', 'legend.js')
-    const colourOf = (id: string) =>
+    const colorOf = (id: string) =>
         getComputedStyle(document.querySelector(id) as Element).color
 
     // THE CLAIM. The scoped rule stays on the component's own element and the
     // `:global` one lands on a paragraph the page rendered, so the escape is per
     // selector rather than per stylesheet.
-    expect([colourOf('#badge'), colourOf('#legend')]).toEqual([
+    expect([colorOf('#badge'), colorOf('#legend')]).toEqual([
         'rgb(163, 58, 58)',
         'rgb(93, 108, 102)',
     ])

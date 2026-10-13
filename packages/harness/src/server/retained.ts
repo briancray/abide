@@ -7,7 +7,7 @@
 // and 2002 / 2000 / 2000 / 0 with them held in a block-scoped local — run 3 did not
 // lose them to GC nondeterminism, JSC saw the local was never read after the loop and
 // collected it before the `after` read. So whether a gate observes what it gates
-// would depend on the optimiser's liveness analysis of a case body, invisible at the
+// would depend on the optimizer's liveness analysis of a case body, invisible at the
 // call site and flipping when the body is edited for an unrelated reason. This
 // function answers the question that is stable; `allocated()` answers the other one
 // and is tagged so it cannot be gated on.
@@ -15,7 +15,7 @@
 import { countsMoved, liveCounts } from './liveCounts.ts'
 
 // The keep-alive. What the body handed back stays reachable across the `after` read,
-// so the diff is what the op RETAINS rather than what the optimiser let survive.
+// so the diff is what the op RETAINS rather than what the optimizer let survive.
 const ROOTS: unknown[] = []
 
 /**

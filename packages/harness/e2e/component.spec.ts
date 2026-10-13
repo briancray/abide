@@ -112,7 +112,7 @@ test('the mount of a list of components, against the same rows inline', async ({
 
         // EACH ARM HYDRATES THE DOCUMENT ITS OWN SERVER WROTE, anchors and all: the component
         // page's markup carries a pair per row that the inline page's does not, and that
-        // difference is part of what is being priced rather than something to equalise away.
+        // difference is part of what is being priced rather than something to equalize away.
         const measured = await page.evaluate(
             ({ size, list }) => {
                 const { batch, claimOf, emulatedDom, ratio } = (

@@ -9,7 +9,11 @@
 // THIS FILE holds what is checked across EVERY arm at once; the specs over one arm each are in
 // the `arms*.test.ts` files beside it, split by the docs they stand behind.
 import { expect, test } from 'bun:test'
-import { abideSourcesOf, DOGFOOD } from '../scripts/exampleSources.ts'
+import {
+    abideSourcesOf,
+    DOGFOOD,
+    exampleComponentOf,
+} from '../scripts/exampleSources.ts'
 import { ARMS_DIR } from './armDrivers.ts'
 
 // THE ARM AND THE `.abide` SOURCE ARE CLAIMED TO BE EQUIVALENT, which is what makes a ratio
@@ -43,7 +47,7 @@ test('every control the arm renders is one the page source names', async () => {
 })
 
 // THE SIBLING OF THE CONTROL CHECK, pointed at the thing a demo card is FOR. A card claims
-// something about work — derivations re-run, requests made, entries held — and the claim is
+// something about work — derivations rerun, requests made, entries held — and the claim is
 // only ever visible as a readout, so an arm reporting a count the `.abide` source never names
 // is the two arms having come apart on the one line the reader is there to read. It renders
 // perfectly either way, and it is worse than a stray button: a stray button does nothing, and
@@ -136,12 +140,7 @@ test('every arm is paired with a docs example', async () => {
         cwd: ARMS_DIR.pathname,
     })) {
         const name = path.slice(0, path.indexOf('/'))
-        if (
-            !(await Bun.file(
-                new URL(`examples/${name}.json`, DOGFOOD),
-            ).exists())
-        )
-            unpaired.push(name)
+        if ((await exampleComponentOf(name)) === undefined) unpaired.push(name)
     }
     expect(unpaired).toEqual([])
 })

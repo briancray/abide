@@ -119,7 +119,7 @@ test('a layer is priced against the op, and the observed ceiling is zero under a
     // Whether THIS run landed under a frame is the machine's business — an op
     // measured to paint carries at least one frame boundary, and a loaded machine
     // carries two. The contract is the correspondence: a CPU share is not a latency,
-    // so the observed ceiling is zero exactly when the op is frame quantised.
+    // so the observed ceiling is zero exactly when the op is frame quantized.
     expect(answer.underOneFrame).toBe(answer.opNanoseconds < THRESHOLDS.frame)
     expect(answer.ceilingObserved).toBe(
         answer.underOneFrame ? 0 : answer.ceilingCpu,

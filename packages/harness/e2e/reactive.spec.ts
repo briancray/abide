@@ -44,7 +44,7 @@ test('the reactive core against the hand-written arm, in this engine', async ({
     // larger n and the whole run is minutes rather than seconds.
     test.setTimeout(15 * 60 * 1000)
     await page.addInitScript({ path: built })
-    // `setContent` on a page still on its initial `about:blank` re-runs no init script
+    // `setContent` on a page still on its initial `about:blank` reruns no init script
     // — nothing navigated — so the injection would be silently absent.
     await page.goto('about:blank')
     await page.setContent('<!doctype html><html><body></body></html>')

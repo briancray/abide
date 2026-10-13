@@ -9,7 +9,6 @@
 // The CLI-driving helpers are the framework tests' own: harness scripts are not a lane, and a second
 // copy of "build, start on port 0, read the origin back" is one more place for the two to disagree.
 import { buildApp, startApp } from '../../abide/tests/builtApp.ts'
-import { buildPages } from '../../dogfood/scripts/buildPages.ts'
 
 const DOGFOOD = new URL('../../dogfood/', import.meta.url).pathname
 
@@ -26,7 +25,6 @@ export type DocsApp = {
  * bound, and a fixed port is the one way a script that works alone fails on a busy machine.
  */
 export async function serveDocsApp(): Promise<DocsApp> {
-    await buildPages()
     const built = await buildApp(`${DOGFOOD}src`, `${DOGFOOD}.abide`)
     if (built.exitCode !== 0)
         throw new Error(`abide build failed: ${built.stderr}`)

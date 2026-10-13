@@ -42,7 +42,7 @@ const built = injectable()
 test.beforeEach(async ({ page }) => {
     await page.addInitScript({ path: built })
     // A `setContent` on a page still sitting on its initial `about:blank` does not
-    // re-run init scripts — nothing navigated — so every counter reads undefined and
+    // rerun init scripts — nothing navigated — so every counter reads undefined and
     // the gate fails on the instrument rather than on the claim. The navigation is
     // what arms the injection.
     await page.goto('about:blank')

@@ -8,7 +8,7 @@ export const THRESHOLDS = {
     /**
      * One frame at 60 Hz.
      *
-     * Click -> paint is quantised to it, so every implementation under one frame reads the same
+     * Click -> paint is quantized to it, so every implementation under one frame reads the same
      * ~16.7 ms and the wall clock is a perception detector rather than a blunt one.
      */
     frame: 16_700_000,

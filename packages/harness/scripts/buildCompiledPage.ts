@@ -9,19 +9,21 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
 import { tmpdir } from 'node:os' // bun exposes no temp-directory helper of its own
 import { resolve } from 'node:path' // bun has no path helpers of its own
-import type { Browser, Page } from '@playwright/test'
 import {
+    abideModules,
+    type Compilation,
     componentGraph,
     emitClient,
     emitComponent,
     parseAbide,
+    serveCompilation,
     TypeSession,
 } from '@abide/abide/compiler'
 import { render } from '@abide/abide/server'
+import type { Browser, Page } from '@playwright/test'
 import { armLayers } from './armLayers.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
-const SHELL = '<!doctype html><html><head></head><body></body></html>'
 
 /** A compiled page as a browser takes it: the server's body markup and the client IIFE. */
 export type CompiledPage = { markup: string; script: string }
@@ -30,9 +32,10 @@ export type CompiledPage = { markup: string; script: string }
  * Compiles one `.abide` page source, with any components it invokes, into markup and a script.
  *
  * `components` are the `.abide` files the page INVOKES (32.17), keyed by the name it imports them
- * as. Each compiles to the pair a caller reaches — `Name.ts` for the server render and
- * `Name.client.ts` for the mount — and the page goes through that same loop, so a page with a
- * component in it is built the way the build builds one rather than by a second scheme.
+ * as. Each compiles to the pair a caller reaches — the server render and the mount, served at
+ * `Name.abide` as the build serves them (`abideModules`) — and the page goes through that same loop,
+ * so a page with a component in it is built the way the build builds one rather than by a second
+ * scheme.
  */
 export async function buildCompiledPage(
     source: string,
@@ -65,24 +68,27 @@ export async function buildCompiledPage(
         const { invoked } = componentGraph(files, (specifier, from) =>
             resolve(from, specifier),
         )
+        const compilation: Compilation = { files: {}, tables: {} }
         let at = 0
         for (const entry of files) {
             const names = answers[at]
             at += 1
-            writeFileSync(
-                `${scratch}/${entry.name}.ts`,
-                emitComponent(entry.file, names),
-            )
             const client = emitClient(
                 entry.file,
                 names,
                 invoked.has(entry.path) ? 'invoked' : 'none',
             )
-            writeFileSync(
-                `${scratch}/${entry.name}.client.ts`,
-                client === '' ? 'export default () => {}\n' : client,
-            )
+            compilation.files[`${entry.name}.abide`] = {
+                server: emitComponent(entry.file, names),
+                client: client === '' ? 'export default () => {}\n' : client,
+                sheet: undefined,
+                serverMappings: undefined,
+                clientMappings: undefined,
+            }
+            // Where an import of it resolves to; what answers it is the compilation.
+            writeFileSync(`${scratch}/${entry.name}.abide`, '')
         }
+        serveCompilation(scratch, compilation)
         writeFileSync(
             `${scratch}/entry.ts`,
             // `flushSync` is exposed beside `mount` because a drain is batched to the end of a
@@ -96,7 +102,7 @@ export async function buildCompiledPage(
             // because code that runs once never gets warm. This is the arm that says whether the
             // client pays the same thing — and it is what `{#for}` emits by construction.
             [
-                `import mount from './Page.client.ts'`,
+                `import mount from './Page.abide'`,
                 `import { flushSync, reactive, watch } from '@abide/abide'`,
                 `import { escapeless, setText } from '@abide/abide/runtime'`,
                 `const g = globalThis`,
@@ -126,12 +132,15 @@ export async function buildCompiledPage(
             ].join('\n'),
         )
 
-        const { default: Component } = await import(`${scratch}/Page.ts`)
+        const { default: Component } = await import(
+            `${scratch}/Page.abide?component`
+        )
         let markup = ''
-        markup += new TextDecoder().decode(await render(Component, SHELL))
+        markup += new TextDecoder().decode(await render(Component))
 
         const built = await Bun.build({
             entrypoints: [`${scratch}/entry.ts`],
+            plugins: [abideModules(scratch, compilation)],
             format: 'iife',
             target: 'browser',
             minify: false,

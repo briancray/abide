@@ -36,7 +36,7 @@ export type Shares = {
     /**
      * The ceiling a user would experience: zero whenever the op is under one frame.
      *
-     * Click -> paint is frame quantised, so removing 4.3% of an op that gets rounded up to the
+     * Click -> paint is frame quantized, so removing 4.3% of an op that gets rounded up to the
      * next frame boundary changes observed latency by exactly nothing. CPU is for seeing which
      * way the headroom runs and is never quoted as latency.
      */

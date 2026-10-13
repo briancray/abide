@@ -4,7 +4,7 @@
 // JSC tiers LLInt -> Baseline -> DFG -> FTL, so whichever arm ran second inherits
 // warmed code, which is a systematic bias and not noise — so the arms are supplied
 // together and the interleave is the only thing this can do. The first arm is run a
-// SECOND time, labelled as its own control — so even a single arm is interleaved
+// SECOND time, labeled as its own control — so even a single arm is interleaved
 // against that control — and
 // whatever ratio that produces IS the floor for this case on this machine today.
 // `underTheFloor` then means a number with a provenance rather than a word: "two runs,
@@ -213,7 +213,7 @@ export function batch(spec: BatchSpec): Batched {
     // cold reported 1208 ns warm, a third of the bar, and the batcher would have
     // thrown on a sample size it had chosen itself.
     // A CHEAP PROBE FINDS THE STARTING n, and the full run is what proves it. Growing
-    // by re-running warm-up and every rep at each step costs the whole rep set once
+    // by rerunning warm-up and every rep at each step costs the whole rep set once
     // per doubling — it is what made the browser case unfinishable — and growing off
     // a COLD probe alone undershoots, because the timed reps come back faster than
     // the probe that chose n. So: probe cheaply, run fully, and grow again if the run

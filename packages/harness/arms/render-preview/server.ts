@@ -13,7 +13,7 @@ const INVOICES: Record<
         customer: 'Analytical Engines Ltd',
         due: '2026-10-14',
         lines: [
-            { item: 'Annual licence', amount: '$1,000.00' },
+            { item: 'Annual license', amount: '$1,000.00' },
             { item: 'Onboarding', amount: '$240.00' },
         ],
         total: '$1,240.00',

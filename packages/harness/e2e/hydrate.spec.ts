@@ -32,7 +32,7 @@ export const getSlow = GET(async ({ id }: { id: string }) => {
 // and the static `class` — the one thing an arm bound to the other's button never writes.
 const pageOver = (handler: string) => `<script>
 import { reactive } from '@abide/abide'
-import { ${handler} } from '#server/rpc/data.ts'
+import { ${handler} } from '#src/data/data.abide'
 
 const value = reactive(() => ${handler}({ id: 'one' }))
 const pressed = reactive('')
@@ -47,24 +47,23 @@ let base = ''
 test.beforeAll(async ({}, testInfo) => {
     const app = join(REPO, `.test-modules/e2e-hydrate-${testInfo.project.name}`)
     rmSync(app, { recursive: true, force: true })
-    mkdirSync(`${app}/ui/pages/armed`, { recursive: true })
-    mkdirSync(`${app}/ui/pages/slow`, { recursive: true })
-    mkdirSync(`${app}/server/rpc`, { recursive: true })
+    mkdirSync(`${app}/data`, { recursive: true })
+    mkdirSync(`${app}/armed`, { recursive: true })
+    mkdirSync(`${app}/slow`, { recursive: true })
     writeFileSync(
         `${app}/package.json`,
         JSON.stringify({
             name: 'hydrate-fixture',
             type: 'module',
-            imports: { '#ui/*': './ui/*', '#server/*': './server/*' },
+            imports: { '#src/*': './*' },
         }),
     )
     writeFileSync(
-        `${app}/ui/app.html`,
-        '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>',
+        `${app}/data/data.abide`,
+        `<script server>\n${HANDLERS}</script>\n`,
     )
-    writeFileSync(`${app}/server/rpc/data.ts`, HANDLERS)
-    writeFileSync(`${app}/ui/pages/armed/page.abide`, pageOver('getValue'))
-    writeFileSync(`${app}/ui/pages/slow/page.abide`, pageOver('getSlow'))
+    writeFileSync(`${app}/armed/page.abide`, pageOver('getValue'))
+    writeFileSync(`${app}/slow/page.abide`, pageOver('getSlow'))
     const cli = join(REPO, 'packages/abide/bin/abide.ts')
     execFileSync(
         'bun',
@@ -120,7 +119,7 @@ test('a value painted settled is settled where the page adopts — 41.25', async
     page,
 }) => {
     const warned = hydrateWarnings(page)
-    await page.route('**/__abide/rpc/**', async (route) => {
+    await page.route('**/data/**', async (route) => {
         await new Promise((done) => setTimeout(done, 400))
         await route.continue()
     })

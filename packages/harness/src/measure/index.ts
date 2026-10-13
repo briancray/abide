@@ -33,7 +33,7 @@ export type { Work } from './Work.ts'
  * a duration, and taking it under happy-dom guarantees the wrong answer — measured, interleaved,
  * min-of-7, the PATCHED arm came out FASTER at 0.89x, because `appendChild` there is ~130 ns of
  * JavaScript and a JS wrapper is a rounding error on it, where in Chromium the same member is
- * native and a patch both adds a frame and deoptimises the call site. So there is no threshold to
+ * native and a patch both adds a frame and deoptimizes the call site. So there is no threshold to
  * hold the lane to: there is no duration field, and this throws while the counters are armed.
  */
 export function time(spec: Omit<BatchSpec, 'emulated'>): Batched {

@@ -57,7 +57,7 @@ test('shares() prices the layer against the whole op somebody waits on', () => {
 })
 
 // TWO CEILINGS, BECAUSE A CPU SHARE IS NOT A LATENCY. Click -> paint is frame
-// quantised, so removing 4.3% of an op that is going to be rounded up to the next
+// quantized, so removing 4.3% of an op that is going to be rounded up to the next
 // frame boundary changes observed latency by exactly zero. Reverted to one `ceiling`
 // "which is what gets written down", a 4.3% CPU share is quoted as 4.3% of the wait.
 test('an op under one frame has an observed ceiling of zero', () => {

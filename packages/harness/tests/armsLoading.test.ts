@@ -1,5 +1,5 @@
 // THE ARMS BEHIND THE LOADING CARDS — caches, probes, reloads, stores, tails, and a load that
-// is cancelled or has not landed. What an arm spec is for is said at the head of `arms.test.ts`.
+// is canceled or has not landed. What an arm spec is for is said at the head of `arms.test.ts`.
 import { expect, test } from 'bun:test'
 import {
     click,
@@ -585,7 +585,7 @@ test('reachable-host: one probe answers every send for the minute', async () => 
     }
 })
 
-test('aborted-signal: a cancelled load reads as cancelled, with nothing in flight', async () => {
+test('aborted-signal: a canceled load reads as canceled, with nothing in flight', async () => {
     const standing = globalThis.fetch
     globalThis.fetch = ((_input: string, init?: RequestInit) =>
         new Promise((resolve, reject) => {
@@ -609,7 +609,7 @@ test('aborted-signal: a cancelled load reads as cancelled, with nothing in fligh
         click('#cancel')
         await Bun.sleep(10)
         expect([read('#statement'), read('#status'), cancel.disabled]).toEqual([
-            'cancelled',
+            'canceled',
             '',
             true,
         ])

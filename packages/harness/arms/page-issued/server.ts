@@ -18,7 +18,7 @@ td + td, th + th { text-align: right; }
 <h1>Invoice INV-4021</h1>
 <p>Analytical Engines Ltd · issued 2026-09-14 · due 2026-10-14</p>
 <table>
-<tr><td>Annual licence</td><td>$1,000.00</td></tr>
+<tr><td>Annual license</td><td>$1,000.00</td></tr>
 <tr><td>Onboarding</td><td>$240.00</td></tr>
 <tr><th>Total</th><th>$1,240.00</th></tr>
 </table>

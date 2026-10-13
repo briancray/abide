@@ -1,5 +1,5 @@
 // THE ARMS BEHIND THE SERVER CARDS — sockets, cookies, log channels, the assistant relays, and
-// the `app.ts` hooks: start, config, health, principal, policy, middleware, traces, errors. What
+// the root layout's server hooks: start, config, health, principal, policy, middleware, traces, errors. What
 // an arm spec is for is said at the head of `arms.test.ts`.
 import { expect, test } from 'bun:test'
 import { DOGFOOD } from '../scripts/exampleSources.ts'
@@ -276,11 +276,11 @@ test('claude-code: a turn is refused until a bridge pairs, then runs on that bri
         string,
         (request: Request) => Promise<Response> | Response
     >
-    const dialled = await relay.GET?.(
+    const dialed = await relay.GET?.(
         new Request(`http://example.invalid/bridge?code=${code}`),
     )
     const frames = (
-        dialled as Response
+        dialed as Response
     ).body?.getReader() as ReadableStreamDefaultReader<Uint8Array>
     await Bun.sleep(20)
     expect([
@@ -316,7 +316,7 @@ test('claude-code: a turn is refused until a bridge pairs, then runs on that bri
     ])
 })
 
-// THE `app.ts` ARMS. Each one's server half is the arm, so the page's fetch is routed into the
+// THE SERVER-HOOK ARMS. Each one's server half is the arm, so the page's fetch is routed into the
 // routes its `Bun.serve` was handed.
 function routedFetch(routes: Routes): typeof fetch {
     return Object.assign(
@@ -489,7 +489,7 @@ test('app-fetch: the test the card shows passes from the docs app', async () => 
             process.execPath,
             'test',
             '--timeout=60000',
-            './src/server/app.test.ts',
+            './src/ship/call-your-app-from-a-test/app.test.ts',
         ],
         { cwd: DOGFOOD.pathname, deadline: 120_000 },
     )

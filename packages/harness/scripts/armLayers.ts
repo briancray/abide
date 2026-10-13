@@ -9,7 +9,7 @@ import { LAYERS_ARMED } from '../../abide/src/ui/LAYER_NAMES.ts'
  * script and a navigation, not `page.evaluate` after load.
  */
 export async function armLayers(context: BrowserContext): Promise<void> {
-    // The name is an ARGUMENT: an init script is serialised, so a closed-over constant is gone.
+    // The name is an ARGUMENT: an init script is serialized, so a closed-over constant is gone.
     await context.addInitScript((flag) => {
         ;(globalThis as unknown as Record<string, boolean>)[flag] = true
     }, LAYERS_ARMED)

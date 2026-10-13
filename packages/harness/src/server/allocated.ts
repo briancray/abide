@@ -1,10 +1,10 @@
 // WHAT AN OP ALLOCATED, which `heapStats()` cannot see and this therefore does not
 // pretend to report exactly. A batch mean, tagged, and the tag is the point: an exact
 // integer is `retained()`'s to hand out, and a fractional reading like `Object:3.09`
-// is a reachability artefact rather than a genuinely fractional quantity.
+// is a reachability artifact rather than a genuinely fractional quantity.
 //
 // What a fractional per-rep count IS good for is the other question: a non-integer
-// means the allocation is conditional or amortised — a rehash, an IC transition, a
+// means the allocation is conditional or amortized — a rehash, an IC transition, a
 // once-per-batch structure — and a mean over the whole batch hides which. So the
 // batch is halved and the two halves are reported apart. Zero growth across them is
 // the leak check.

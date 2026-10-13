@@ -35,16 +35,13 @@ let APP = ''
 
 const HOME = `<head><title>Home</title><meta name="description" content="the home page"></head>
 <main id="home"><h1>Home</h1><p id="n">{count}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button><a id="go" href="/about">about</a><a id="plain" href="/plain">plain</a></main>`
-// THE APP'S SHELL, which keys a `<title>` the home page overrides and `/plain` does not (39.14).
-const SHELL =
-    '<!doctype html><html><head><title>Shell</title></head><body></body></html>'
 // WHAT THE SERVER ACTUALLY RENDERS, taken from the page's own server module rather than written
 // out here. A hand-copied shell is a hydration mismatch waiting to happen, and 41.10 answers one
 // by warning and stopping — so the page comes up looking right and dead, which is the failure
 // this arm exists to catch and would instead have been written into it.
 let PAINTED = ''
 let PAINTED_HEAD = ''
-// `/plain` as the server paints it on a direct load: the shell's title, no page one over it.
+// `/plain` as the server paints it on a direct load: no title at all.
 let PLAIN = ''
 let PLAIN_HEAD = ''
 
@@ -61,19 +58,18 @@ test.beforeAll(async ({}, testInfo) => {
     // only the build and the server render below are — and a heredoc inside an argv string is
     // three layers of quoting to get right every time the page changes.
     rmSync(APP, { recursive: true, force: true })
-    mkdirSync(`${APP}/ui/pages/about`, { recursive: true })
-    mkdirSync(`${APP}/ui/pages/plain`, { recursive: true })
-    writeFileSync(`${APP}/ui/app.html`, SHELL)
+    mkdirSync(`${APP}/plain`, { recursive: true })
+    mkdirSync(`${APP}/about`, { recursive: true })
     writeFileSync(
-        `${APP}/ui/pages/plain/page.abide`,
+        `${APP}/plain/page.abide`,
         '<main id="plain"><h1>Plain</h1></main>',
     )
     writeFileSync(
-        `${APP}/ui/pages/page.abide`,
+        `${APP}/page.abide`,
         `<script>\nimport { reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n${HOME}`,
     )
     writeFileSync(
-        `${APP}/ui/pages/about/page.abide`,
+        `${APP}/about/page.abide`,
         '<head><title>About</title><meta name="description" content="the about page"></head>\n<main id="about"><h1>About</h1><a id="back" href="/">home</a></main>',
     )
     writeFileSync(
@@ -87,7 +83,7 @@ test.beforeAll(async ({}, testInfo) => {
                 allowImportingTsExtensions: true,
                 types: [],
             },
-            include: ['ui'],
+            include: ['**/*'],
         }),
     )
     execFileSync(
@@ -102,20 +98,28 @@ test.beforeAll(async ({}, testInfo) => {
         ],
         { cwd: REPO, encoding: 'utf8' },
     )
-    // `__ALIVE__` is what a reload erases, and the whole of "MUST NOT reload the document".
-    writeFileSync(
-        `${APP}/.abide/entry.ts`,
-        "import { start } from './routes.ts'\nstart(document.body)\nwindow.__ALIVE__ = true\n",
-    )
+    // `__ALIVE__` is what a reload erases, and the whole of "MUST NOT reload the document". The
+    // entry carrying it is one more of the build's own modules, bundled through the plugin that
+    // serves the rest (`abideModules`).
     execFileSync(
         'bun',
         [
-            'build',
-            `${APP}/.abide/entry.ts`,
-            '--target=browser',
-            '--format=esm',
-            '--splitting',
-            `--outdir=${APP}/.abide/bundle`,
+            '-e',
+            `import { abideModules } from '@abide/abide/compiler'
+const root = ${JSON.stringify(APP)}
+const compilation = await Bun.file(root + '/.abide/compilation.json').json()
+compilation.tables['alive.ts'] = "import { start } from '../__abide/routes.ts'\\nstart(document.body)\\nwindow.__ALIVE__ = true\\n"
+const built = await Bun.build({
+    entrypoints: [root + '/__abide/alive.ts'],
+    root,
+    target: 'browser',
+    format: 'esm',
+    splitting: true,
+    naming: { entry: 'entry.[ext]' },
+    outdir: root + '/.abide/bundle',
+    plugins: [abideModules(root, compilation)],
+})
+if (!built.success) throw new AggregateError(built.logs, 'the routing app did not bundle')`,
         ],
         { cwd: REPO, encoding: 'utf8' },
     )
@@ -129,11 +133,13 @@ test.beforeAll(async ({}, testInfo) => {
             'bun',
             [
                 '-e',
-                `import { render } from '@abide/abide/server'
+                `import { serveCompilation } from '@abide/abide/compiler'
+import { render } from '@abide/abide/server'
+serveCompilation(${JSON.stringify(APP)}, await Bun.file(${JSON.stringify(`${APP}/.abide/compilation.json`)}).json())
 const painted = {}
 for (const page of ['page', 'plain/page']) {
-    const { default: C } = await import(${JSON.stringify(`${APP}/.abide/ui/pages/`)} + page + '.ts')
-    const html = new TextDecoder().decode(await render(C, ${JSON.stringify(SHELL)}))
+    const { default: C } = await import(${JSON.stringify(`${APP}/`)} + page + '.abide?component')
+    const html = new TextDecoder().decode(await render(C))
     painted[page] = {
         body: html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>')),
         head: html.slice(html.indexOf('<head>') + 6, html.indexOf('</head>')),
@@ -299,10 +305,9 @@ test('a page the server painted nothing for builds itself on a direct hit — 30
     await expect(page.locator('#home h1')).toHaveText('Home')
 })
 
-// 39.14 — A TITLE THE READER LEFT DOES NOT OUTLIVE THE PAGE THAT SET IT. The home page overrides
-// the shell's `<title>` and `/plain` sets none, so the server paints `/plain` with the shell's —
-// and a navigation there has to end on the same title a direct load does, which the document no
-// longer holds once the server merged the shell's out under `Home`.
+// 39.14 — A TITLE THE READER LEFT DOES NOT OUTLIVE THE PAGE THAT SET IT. The home page sets a
+// `<title>` and `/plain` sets none, nor does any layout above it, so the server paints `/plain`
+// with none — and a navigation there has to end on no title too, as a direct load does.
 //
 // THE REVERT: return from `withdrawHead` at its top; the tab reads `Home` on `/plain`.
 test('a navigation to a page with no title ends on the title a direct load paints — 39.14', async ({
@@ -314,7 +319,7 @@ test('a navigation to a page with no title ends on the title a direct load paint
         () => (window as { __ALIVE__?: boolean }).__ALIVE__ === true,
     )
     const direct = await page.title()
-    expect(direct).toBe('Shell')
+    expect(direct).toBe('')
 
     await page.goto(`${base}/`)
     await page.waitForFunction(
@@ -334,5 +339,5 @@ test('a navigation to a page with no title ends on the title a direct load paint
         await page.evaluate(
             () => document.head.querySelectorAll('title').length,
         ),
-    ).toBe(1)
+    ).toBe(0)
 })

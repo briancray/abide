@@ -109,7 +109,7 @@ export function ratio(
         )
     if (numerator.n !== denominator.n)
         throw new Error(
-            `ratio("${numerator.case}") was given n=${numerator.n} against n=${denominator.n}. A per-op figure at n=10,000 has different GC and cache behaviour than at n=10.`,
+            `ratio("${numerator.case}") was given n=${numerator.n} against n=${denominator.n}. A per-op figure at n=10,000 has different GC and cache behavior than at n=10.`,
         )
 
     const workDisagreement = disagreeingWork(

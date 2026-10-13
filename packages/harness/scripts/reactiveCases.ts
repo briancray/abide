@@ -303,7 +303,7 @@ function writeEqualObject(): Case {
         flushSync()
     }
     return {
-        name: 'write a re-materialised equal value, default identity',
+        name: 'write a re-materialized equal value, default identity',
         distinguishes:
             'the write path with a fresh object and a reference compare on both arms — cost with the work held equal',
         vanilla,
@@ -323,7 +323,7 @@ function writeEqualObject(): Case {
  * WHAT DECLARING `structural` COSTS AND BUYS, which is now the app's decision rather
  * than the framework's. The walk is paid on EVERY write; the wake it saves is only
  * collected when the payload really is equal. An app names it on the values where
- * re-materialisation is the common case, and this is the number that decision is made
+ * re-materialization is the common case, and this is the number that decision is made
  * against.
  */
 function writeEqualObjectStructural(): Case {
@@ -346,7 +346,7 @@ function writeEqualObjectStructural(): Case {
         flushSync()
     }
     return {
-        name: 'write a re-materialised equal value, structural declared',
+        name: 'write a re-materialized equal value, structural declared',
         distinguishes:
             'the option an app passes where a reload rebuilds an equal payload — a deep walk per write against a wake per write',
         vanilla,
@@ -427,7 +427,7 @@ function derived(): Case {
  *
  * WHAT THE RECOMPUTE PATH BUYS, and the case the previous one cannot answer. A source
  * that changes without changing what derives from it: the vanilla arm's dirty flag
- * cannot tell, so everything downstream re-runs; the abide arm compares the recomputed
+ * cannot tell, so everything downstream reruns; the abide arm compares the recomputed
  * value and stops there. This is the ratio's other half — the previous case prices the
  * cost, this one prices what it is for, and neither is the claim alone.
  */
@@ -546,7 +546,7 @@ function appendToCappedArrayAndWalk(): Case {
  * Returns the dead-code-elimination sink every arm writes.
  *
  * `sink` exists to defeat dead-code elimination — every arm writes it, and an unread
- * write is exactly what an optimiser removes. Read once, so the linter does not read it
+ * write is exactly what an optimizer removes. Read once, so the linter does not read it
  * as dead, which it is not.
  */
 export function sinkValue(): unknown {
@@ -918,7 +918,7 @@ function alternatingSources(): Case {
     type Source = { bump(): void }
     // BODY RUNS AND THE EDGES THE OP MOVED, on the timed graph. Neither arm exposes its
     // subscription list, so an edge is counted by what it DOES: a source REACHES the body
-    // when writing it makes the next read re-run the body. The source the op stops reading is
+    // when writing it makes the next read rerun the body. The source the op stops reading is
     // asked after it (`edgesDropped` is 1 if it no longer reaches), and the one it starts
     // reading before and after (`edgesAdded` is 1 if it reaches only once the op has run).
     function counted(
@@ -1139,7 +1139,7 @@ function probeSettledDag(width: number, depth: number): Case {
  */
 function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
     const name = fresh
-        ? `a re-materialised equal value, ${width} readers, structural vs CARELESS`
+        ? `a re-materialized equal value, ${width} readers, structural vs CARELESS`
         : `a write of the value already held, ${width} readers, vanilla written CARELESSLY`
     const make = (): { id: number; total: number } => ({ id: 1, total: 100 })
     const standing = make()
@@ -1222,7 +1222,7 @@ function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
  *
  * THE PER-READER FIGURES in `track`'s own comment are the third record and the widest — 446 ns
  * rising to 3,872 ns against ~60 ns flat, measured directly at n=500 through n=8000, where
- * neither of the two rows reaches past 112. Those are a measurement to re-run rather than a
+ * neither of the two rows reaches past 112. Those are a measurement to rerun rather than a
  * gate; the gate that runs in `bun test` is the dedup's subscription count in `reactive.test.ts`.
  */
 

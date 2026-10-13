@@ -157,7 +157,7 @@ async function compileCeiling(
     // the root set changed, so the project is resolved again — and a FRESH BUILD is all new
     // files while a watch rebuild is all known ones. Timed on the compiler's own fixture,
     // because a file outside the session's project throws rather than measuring.
-    const fixture = new URL('src/ui/components/', DOGFOOD).pathname
+    const fixture = new URL('src/docs/', DOGFOOD).pathname
     const sample = parseAbide(sources[0]?.text ?? '')
     await session.reads(`${fixture}warm.abide`, sample)
 
@@ -172,7 +172,7 @@ async function compileCeiling(
     const freshNanoseconds = (Bun.nanoseconds() - freshStart) / ROUNDS
 
     // THE SAME FILES IN ONE SNAPSHOT, which is what a build does. The gap between this and the
-    // line above is not a micro-optimisation: it is adding a file to the project's ROOT SET
+    // line above is not a micro-optimization: it is adding a file to the project's ROOT SET
     // against asking about a file already in it.
     const batched = []
     for (let at = 0; at < ROUNDS; at += 1)

@@ -72,7 +72,7 @@ test('a keyed reorder against the DOM-call floor and against a rebuild', async (
     // Four cases, three arms each, batched against a ~100 µs clock over 200-row lists.
     test.setTimeout(15 * 60 * 1000)
     await page.addInitScript({ path: built })
-    // `setContent` on a page still on its initial `about:blank` re-runs no init script
+    // `setContent` on a page still on its initial `about:blank` reruns no init script
     // — nothing navigated — so the injection would be silently absent.
     await page.goto('about:blank')
     await page.setContent('<!doctype html><html><body></body></html>')

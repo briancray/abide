@@ -13,7 +13,7 @@ import type { Work } from './Work.ts'
  *
  * Throws when the record lacks a numeric field this lane reads (44.21).
  *
- * WHAT ABIDE PUBLISHES, read rather than imported. A prototype patch cannot see an effect re-run
+ * WHAT ABIDE PUBLISHES, read rather than imported. A prototype patch cannot see an effect rerun
  * and this lane may not import abide to count one, so the framework puts a fixed-shape record on
  * the global under a dev flag and the harness reads it and zeroes it. Reading a global is not an
  * import edge, so the lane-isolation gate stays green — reverted to an import of abide's

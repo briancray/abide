@@ -6,7 +6,7 @@ const SPELLINGS = [
     ['#lower', 'abc-123'],
 ]
 
-// THE ENTRY TABLE, KEYED BY THE ARGUMENTS AS SENT. Normalising
+// THE ENTRY TABLE, KEYED BY THE ARGUMENTS AS SENT. Normalizing
 // before the key would collapse these two onto one entry, and then
 // a page rendered on the server keys one way and the browser the
 // other — so every load runs a second time on hydration.

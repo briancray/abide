@@ -1,16 +1,16 @@
 const field = document.querySelector('#handle')
 const stored = document.querySelector('#stored')
 
-// THE NORMALISATION, BY HAND, AT EVERY WRITE SITE. Here there is
+// THE NORMALIZATION, BY HAND, AT EVERY WRITE SITE. Here there is
 // one; a second place that writes the handle needs the same call,
 // and the one that forgets it is what puts a capital in the
 // column.
-function normalise(typed) {
+function normalize(typed) {
     return typed.trim().toLowerCase().replaceAll(' ', '_')
 }
 
 field.addEventListener('input', () => {
-    const value = normalise(field.value)
+    const value = normalize(field.value)
     field.value = value
     stored.textContent = `@${value || '—'}`
 })

@@ -66,7 +66,7 @@ type Counts = Record<string, number | null>
 test('the compiled page against the hand-written one, in this engine', async ({
     page,
 }, testInfo) => {
-    // The init script is re-run on every navigation, and `run` navigates once per arm — which is
+    // The init script is rerun on every navigation, and `run` navigates once per arm — which is
     // also what stops the two arms from sharing a JavaScript context.
     await page.addInitScript({ path: measureLane })
 

@@ -66,7 +66,7 @@ test('the batcher throws on a sample under 100x the clock', async () => {
 })
 
 // The growth half of the same refusal, and the record of the n it used: a per-op
-// figure at n=10,000 has different GC and cache behaviour than at n=10, so the number
+// figure at n=10,000 has different GC and cache behavior than at n=10, so the number
 // is carried rather than discarded.
 test('the batcher grows n until the sample clears the bar, and records it', async () => {
     const run = await inAFreshProcess(
@@ -150,9 +150,9 @@ test('ratio() refuses two cases and two batch sizes', () => {
 })
 
 // The tag cannot be stringified into a numeric cell. Reverted — drop the tag at the
-// division — two frame-quantised samples come back as 1.01x, which is `read-invoice`'s
+// division — two frame-quantized samples come back as 1.01x, which is `read-invoice`'s
 // hand-typed First paint row reproduced by the producer that exists to refuse it.
-test('ratio() will not divide two frame-quantised samples', () => {
+test('ratio() will not divide two frame-quantized samples', () => {
     const abide = sampleOf({
         n: 1,
         nanoseconds: 16_800_000,

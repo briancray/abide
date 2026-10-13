@@ -36,7 +36,7 @@ import { type ArmSample, traceArm } from './traceArm.ts'
 const LAYER_VANILLA = 'vanilla.build'
 
 // `bun run bench:reorder 2000` — the n is a lever because the PERCEPTION rule needs it. A share is
-// not a reason to change anything on its own: an optimisation is worth designing against where the
+// not a reason to change anything on its own: an optimization is worth designing against where the
 // cost crosses a frame or an interaction budget, and that is a question about n rather than about
 // the layer. Sweeping it is how the crossing point gets stated instead of assumed.
 const ROWS = Number(process.argv[2] ?? '500')
@@ -233,7 +233,7 @@ const VANILLA_BODIES: Record<string, string> = {
     // ONE PARSE FOR THE WHOLE TREE, which is what `fillRegion` does and what a row build does NOT.
     // The row result — construction beats parsing 7x — is a result about a TINY string, where the
     // parser's fixed setup dominates. A region fill hands the parser a whole page at once, the
-    // fixed cost amortises over thousands of bytes, and the per-byte work is C++ against JS doing
+    // fixed cost amortizes over thousands of bytes, and the per-byte work is C++ against JS doing
     // one call per node. This arm is whether the same change helps there or hurts.
     oneParse: `
     let markup = ''
@@ -467,7 +467,7 @@ console.log(
 //
 // SO THE RATIO IS NOT "ABIDE'S DOM IS 15x SLOWER". What it is, and it is worth more than a
 // like-for-like number would be, is an EXISTENCE PROOF with the DOM half priced: 500 rows of this
-// exact shape are materialisable in 0.7 ms, so the remaining ~10 ms is reactive construction and
+// exact shape are materializable in 0.7 ms, so the remaining ~10 ms is reactive construction and
 // teardown rather than anything the document required. That is the fraction to decompose next,
 // and until it is decomposed nobody should name the allocator or the effect as the target.
 const staticBuild = layerMedian(byCase['replace (static rows)'])
@@ -563,7 +563,7 @@ console.log(
 const oneParse = layerMedian(byCase['ONE parse for the whole tree'])
 // THE QUESTION A ROW RESULT CANNOT ANSWER. Construction wins on a row because the parser's FIXED
 // cost dominates a forty-byte string. A region fill is one parse of the whole tree — so this is
-// whether the same trade holds when the fixed cost is amortised over everything at once.
+// whether the same trade holds when the fixed cost is amortized over everything at once.
 console.log(
     `\n  ONE PARSE OF ${ROWS} ROWS: ${milliseconds(oneParse)} ms, against ` +
         `${milliseconds(handBuild)} ms to CONSTRUCT the same tree ` +

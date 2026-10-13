@@ -9,7 +9,7 @@ const loadCounts = () =>
     new Promise((done) => setTimeout(() => done(MATCHING), 200))
 
 // NOTHING HERE IS TRACKED EITHER WAY, so the two arms differ in
-// the one thing this card is about: which of them is re-run. The
+// the one thing this card is about: which of them is rerun. The
 // subscription is the call below, written by hand — and writing
 // it by hand is exactly why the second one gets forgotten.
 async function runLabel() {
@@ -33,7 +33,7 @@ function render() {
 
 document.querySelector('#filter').addEventListener('change', (event) => {
     filter = event.target.value
-    // The first label's read is in the graph, so it re-runs. The
+    // The first label's read is in the graph, so it reruns. The
     // second one's is not, and this is the call that is missing.
     runLabel()
     render()

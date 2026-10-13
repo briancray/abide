@@ -23,7 +23,7 @@ import type { TestCase } from './rows.ts'
 //
 // TO THE SUITE'S WHOLE GROUP. A test file that serves an app spawns `abide dev` itself and stops it
 // in `afterAll`, which a stopped file never reaches — so each suite leads a group of its own and
-// the group is what is signalled. Its own group is also why a Ctrl-C at this runner's terminal is
+// the group is what is signaled. Its own group is also why a Ctrl-C at this runner's terminal is
 // passed on rather than reaching the suites directly.
 const LIVE = new Set<Bun.Subprocess>()
 for (const [signal, code] of [

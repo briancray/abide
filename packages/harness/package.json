@@ -14,14 +14,14 @@
         "./rows": "./scripts/rows.ts"
     },
     "scripts": {
-        "typecheck": "tsc -p tsconfig.json",
+        "typecheck": "bun check",
         "build:injectable": "bun scripts/buildInjectable.ts"
     },
     "devDependencies": {
-        "@happy-dom/global-registrator": "^20.12.0",
-        "happy-dom": "^20.12.0"
+        "@happy-dom/global-registrator": "^20.14.6",
+        "happy-dom": "^20.14.6"
     },
     "peerDependencies": {
-        "@playwright/test": "^1.62.1"
+        "@playwright/test": "^1.64.0"
     }
 }
