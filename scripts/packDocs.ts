@@ -5,7 +5,7 @@ fresh app above all, which knows no abide it was not handed. Run by the package'
 what is published was read off this checkout:
 
 - `docs/abide.md`, every docs page in reading order, fetched from the built docs app at the address
-  that serves it, so the words keep the one home `page.abide` gives them (RULEBOOK 38.106)
+  that serves it, so the words keep the one home a page's `index.abide` gives them (RULEBOOK 38.106)
 - `docs/RULEBOOK.md`, which every `RULEBOOK n.nn` a refusal ends with resolves in (38.105), and
   `docs/REGISTRY.md`, the names its clauses hang off
 

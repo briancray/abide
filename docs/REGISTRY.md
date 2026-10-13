@@ -57,7 +57,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `Failures` | union of `Failed` | What a read hands back in place of a value. | 1.3 |
 | `Shaped` | `unknown` | What a `transform` hands back: the value to store, or a refusal. | 4.6, 4.9 |
 | `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.2, 9.3 |
-| `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.4, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.64, 19.16 |
+| `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.4, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.64, 19.15 |
 | `reactive` | `<Computed, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>>(body: () => Computed, options?: Omit<ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never>, 'schema'> & { transform?: (value: Awaited<Computed>) => Shaped; schema?: Gate & Schema<Awaited<Computed>> }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>>, AdoptedProduced<Computed, Kept<Shaped>>>` | The unkeyed body overload. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14 |
 | `reactive` | `<Chunk, Shaped = Chunk[], Gate = Schema<Chunk[]>>(body: () => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Omit<ReactiveOptions<Chunk[], Kept<Shaped>, never>, 'schema'> & { transform?: (value: Chunk[]) => Shaped; schema?: Gate & Schema<Chunk[]> }) => Reactive<Kept<Shaped>, Chunk[], Refused<Shaped> \| Gated<Gate, Chunk[]>, Chunk>` | The streaming body overload. | 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9 |
 | `reactive` | `<Chunk, Args, Shaped = Chunk[], Gate = Schema<Chunk[]>, ArgsGate = Schema<Args>>(body: (args: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Omit<ReactiveOptions<Chunk[], Kept<Shaped>, never, Args>, 'schema' \| 'args'> & { transform?: (value: Chunk[]) => Shaped; schema?: Gate & Schema<Chunk[]>; args?: ArgsGate & Schema<Args> }) => Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped> \| Gated<Gate, Chunk[]> \| Gated<ArgsGate, Args>, Chunk>` | The keyed streaming body overload. | 9.6, 9.9 |
@@ -212,7 +212,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.30 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
-| `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.16 |
+| `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.15 |
 | `Middleware` | `<Ctx, Result>(next: (ctx?: Ctx) => Promise<Result>, ctx: Ctx) => Result \| Promise<Result>` | One rung of `middleware`. | 16.14, 16.15, 16.16, 16.21 |
 | `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced>, options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.34, 16.35, 16.36, 16.37, 16.39, 16.44, 16.45, 16.46, 16.47, 16.50, 16.51, 16.52, 16.64, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24 |
 | `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: (args?: Args) => Value, options?: RpcOptions<Args, RungFailures> & ReactiveOptions<Value, Value, Failures, Args>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | The plain-function overload, whose options build the value it becomes beside its address. | 16.1, 16.6, 16.7 |
@@ -256,21 +256,20 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 ## Mount paths
 
-| File | Export | Served at | Rules |
+| File | Declares | Served at | Rules |
 | --- | --- | --- | --- |
-| `users/page.abide` | `getUser` | `/users/getUser` | 16.2, 19.1, 19.21, 23.14 |
-| `layout.abide` | `health` | `/health` | 16.2, 23.14 |
-| `admin/page.abide` | `recent` | `/admin/recent` | 16.2, 23.14 |
-| `media/[id]/page.abide` | `save` | `/media/[id]/save`, `id` reaching its `Args` | 16.2, 16.65, 16.66, 16.67, 16.69 |
-| `media/[id]/comments.abide` | `addComment` | `/media/[id]/addComment` | 16.2, 19.1, 23.14 |
+| `users/getUser.ts` | `export default GET(…)` | `/users/getUser` | 16.2, 16.73, 19.1, 19.20, 23.14 |
+| `health.ts` | `export default GET(…)` | `/health` | 16.2, 23.14 |
+| `media/[id]/save.ts` | `export default POST(…)` | `/media/[id]/save`, `id` reaching its `Args` | 16.2, 16.65, 16.66, 16.67, 16.69 |
+| `media/[id]/lib/Comments.abide` | `const addComment = POST(…)` in its `<script server>` | `/__abide/handlers/media/id/lib/Comments/addComment` | 16.70, 16.71, 16.72 |
 
 ## Schemas
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. | 19.2, 19.3, 19.4, 19.6, 19.8, 19.9, 19.10, 19.19, 19.11, 19.12 |
+| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. | 19.2, 19.3, 19.4, 19.6, 19.8, 19.9, 19.10, 19.18, 19.11, 19.12 |
 | `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. | — |
-| `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | 19.4, 19.20 |
+| `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | 19.4, 19.19 |
 | `Paths<T>` | `string` | The dot-joined leaf paths of a type. | 19.5 |
 | `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.7, 19.14 |
 | `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.13, 19.14, 20.11 |
@@ -370,7 +369,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `route.url` | `Reactive<URL>` | Where we are. | 23.1, 23.2, 23.3, 23.4, 30.23, 19.17, 31.16 |
+| `route.url` | `Reactive<URL>` | Where we are. | 23.1, 23.2, 23.3, 23.4, 30.23, 19.16, 31.16 |
 | `route.params` | `Reactive<Params>` | The matched route's segments. | 23.1, 23.5, 23.9, 30.23, 31.16 |
 | `Params` | `Record<string, string \| string[]>` | What a matched route's segments are. | 23.5 |
 | `route.name` | `Reactive<string>` | The resolution path. | 23.1, 23.6, 31.16 |
@@ -582,9 +581,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15, 34.18, 34.34, 34.35 |
-| `<script module>` | Module scope. | 34.2, 34.3, 34.12, 34.14, 34.15, 34.17, 34.19, 34.24, 34.25, 34.35 |
-| `<script server>` | Module scope on a server alone, exporting the file's handlers. | 16.28, 19.15, 19.22, 34.3, 34.12, 34.20, 34.21, 34.22, 34.23, 34.24, 34.26, 34.33, 34.34, 34.35, 37.1 |
+| `<script>` | Per-instance component setup. | 14.7, 34.1, 34.3, 34.12, 34.13, 34.14, 34.15, 34.17, 34.29, 34.30 |
+| `<script module>` | Module scope. | 34.2, 34.3, 34.12, 34.14, 34.15, 34.17, 34.18, 34.21, 34.30 |
+| `<script server>` | Module scope on a server alone, declaring its file's private handlers and filing its hooks. | 16.28, 16.70, 34.3, 34.12, 34.17, 34.19, 34.20, 34.22, 34.28, 34.29, 34.30, 37.1 |
 | `<style>` | Component-scoped styles. | 34.4, 34.5, 34.10, 34.11 |
 | `import './app.css'` | A stylesheet the component depends on. | 34.6 |
 | `:global(…)` | The per-selector escape from scoping. | 34.5 |
@@ -625,7 +624,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Type | Meaning | Rules |
 | --- | --- | --- | --- |
 | `PORT` | `number` | The listen port. | 36.1, 38.63, 38.64 |
-| `APP_URL` | `string \| null` | The app's public URL. | 36.2, 19.18 |
+| `APP_URL` | `string \| null` | The app's public URL. | 36.2, 19.17 |
 | `NODE_ENV` | `string` | The environment name, verbatim. | 36.3, 36.16 |
 | `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.4 |
 | `APP_VERSION` | `string` | The version beside that name. | 27.3 |
@@ -649,19 +648,24 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- |
 | `src/**` | The app's source. | 36.10, 38.25 |
 | `**/server/**` | Source the browser never loads. | 16.29, 23.15, 23.16, 23.18, 36.10 |
+| `**/lib/**` | The app's code that is no address: components and modules, on both sides. | 23.15, 23.16, 23.18, 23.22, 37.1 |
+| `**/tests/**` | The app's tests. | 23.15, 23.16, 23.18, 23.22, 37.1, 38.109 |
 | `**/public/**` | The files answered as authored, at their path below that directory. | 23.15, 23.16, 23.18, 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.18, 38.19 |
 | `src/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
 | `src/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
 | `src/public/icon.png` · `src/public/icon.icns` | The files answered at `/icon.png` and `/icon.icns`, and the desktop app's icon. | 36.11, 38.79 |
-| `src/**/` | A directory of the app's, a segment of the route its `page.abide`, `layout.abide` and `error.abide` answer at. | 23.14, 23.17 |
-| `**/page.abide` | A route: its page, and the handlers its `<script server>` exports. | 16.2, 19.1, 23.3, 23.4 |
+| `src/**/` | A directory of the app's, a segment of the route of every file directly in it. | 23.14, 23.17, 23.22 |
+| `**/index.abide` | The page at its directory's route. | 19.1, 23.3, 23.4, 23.14, 23.18 |
+| `**/<name>.abide` | The page at its directory's route and then `<name>`. | 19.1, 23.3, 23.4, 23.14, 23.21 |
+| `**/<name>.ts` | A handler file: the handler its default export declares, at its directory's route and then `<name>`. | 16.2, 16.28, 16.73, 16.74, 19.1, 23.14, 23.22 |
 | `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
-| `src/launcher.abide` | The desktop launcher, beside the root layout: the `launcher` options its `<script module>` exports, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85 |
+| `src/launcher.abide` | The desktop launcher, beside the root layout: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
 | `src/layout.abide` | The root layout, whose `<script server>` is the app's own, and whose `<html>` is the document its pages are served in. | 35.15, 35.16, 35.17, 37.1, 37.3, 39.4 |
 | `**/error.abide` | The page a refusal renders in. | 35.2, 35.3, 35.14 |
-| `**/node_modules/**/*.abide` | A component a dependency ships as source, compiled with the app that imports it. | 34.27, 34.28, 34.29, 34.30, 34.31, 38.99 |
-| `import '…' with { type: 'routes' }` | A package's directory mounted at the importing file's directory, its pages, layouts, error pages and handlers answering below it. | 23.19, 23.20 |
+| `**/node_modules/**/*.abide` | A component a dependency ships as source, compiled with the app that imports it. | 34.23, 34.24, 34.25, 34.26, 34.27, 38.99 |
+| `import '…' with { type: 'routes' }` | A package's directory mounted at the importing file's directory, its pages, layouts, error pages and handler files answering below it. | 23.19, 23.20 |
 | `bunfig.toml` | The file whose `[serve.static] plugins` the client is built with. | 38.43 |
+| `preload = ["@abide/abide/test"]` | The `[test]` preload a test imports the app's `.abide` files through. | 38.109 |
 
 ## Lifecycle hooks
 
@@ -674,17 +678,17 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's config defaults. | 27.6, 37.7 |
 | `onHealth` | `(report: () => unknown \| Promise<unknown>) => () => void` | The app's health reporter. | 25.2, 37.7 |
 | `onPrincipal` | `(resolve: (claims: unknown) => unknown \| Promise<unknown>) => () => void` | Turns claims into the app's half of a principal. | 26.4, 37.7 |
+| `onLauncher` | `(options: () => LauncherOptions) => () => void` | The window the desktop app opens and the forms its launcher offers. | 38.80, 38.81, 38.83, 38.86, 38.102, 38.107 |
 
 ## The desktop app
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `launcher` | `LauncherOptions` | The window the desktop app opens and the forms its launcher offers, exported from `src/launcher.abide`'s `<script module>`. | 34.32, 38.80, 38.83, 38.86 |
-| `LauncherOptions` | `{ width?: number; height?: number; minWidth?: number; minHeight?: number } & ({ start?: true; connect?: boolean } \| { start: false; connect?: true })` | What the `launcher` export may set. | 38.80, 38.81 |
-| `menu` | `MenuItem[]` | The menus a layout or a page adds to the desktop app's menu bar, exported from its `<script module>`. | 34.32, 38.88, 38.92 |
+| `LauncherOptions` | `{ width?: number; height?: number; minWidth?: number; minHeight?: number } & ({ start?: true; connect?: boolean } \| { start: false; connect?: true })` | What an `onLauncher` may answer. | 38.80, 38.81 |
+| `onMenu` | `(read: () => readonly MenuItem[]) => () => void` | The menus a layout or a page adds to the desktop app's menu bar while it stands. | 38.88, 38.92 |
 | `MenuItem` | `'separator' \| MenuEntry \| { label: string; key?: string; role?: MenuRole; href?: string; items?: MenuItem[] }` | One entry in the menu bar or in a menu under it. | 38.89, 38.90 |
 | `MenuRole` | `'about' \| 'hide' \| 'hideOthers' \| 'showAll' \| 'quit' \| 'connect' \| 'disconnect' \| 'close' \| 'undo' \| 'redo' \| 'cut' \| 'copy' \| 'paste' \| 'selectAll' \| 'reload' \| 'fullscreen' \| 'minimize' \| 'zoom' \| 'front'` | What a menu item does natively. | 38.74, 38.89 |
-| `menuItem` | `(item: { label: string; key?: string; href?: string }) => MenuEntry` | A menu item the page that exports it answers. | 38.91 |
+| `menuItem` | `(item: { label: string; key?: string; href?: string }) => MenuEntry` | A menu item the page that files it answers. | 38.91 |
 | `MenuEntry` | `class MenuEntry { label: string; key: string \| undefined; href: string \| undefined }` | What `menuItem` makes. | 38.91 |
 | `MenuEntry.on` | `(answer: () => unknown) => () => void` | Files a function run each time the item is picked. | 38.91 |
 | `Launch` | `{ name: string; start: string \| undefined; connect: string \| undefined; fields: ConfigField[]; url: string; failure: { form: 'start' \| 'connect'; message: string; issues: Record<string, string[]> } \| undefined; focus: 'start' \| 'connect' \| undefined; icon: string \| undefined; accent: string \| undefined }` | The props a launch page is rendered with. | 38.82, 38.83, 38.87, 38.101 |
@@ -710,8 +714,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- |
 | `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57 |
-| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 34.24, 38.105 |
-| `abide sync` | Writes the types a `.ts` reads a `.abide` by. | 34.24 |
+| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105 |
+| `abide routes [--json]` | Every address the app answers, the file answering it, and where each hook is filed. | 38.108 |
 | `abide dev [--port <n>]` | Watches the project and keeps the app up. | 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97 |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94 |
 | `abide start [--port <n>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97 |

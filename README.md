@@ -58,24 +58,24 @@ THE DOCS ARE AN ABIDE APP, written the way an app author writes one: `packages/d
     bun run dev           abide dev on :3131
     bun run build         abide build
 
-- A page is a hand-written `page.abide` at its route — `src/values/show-a-value-that-changes/page.abide`
+- A page is a hand-written `index.abide` at its route — `src/values/show-a-value-that-changes/index.abide`
   is `/values/show-a-value-that-changes` — wrapped in `<Doc>`, with its headings as `<Section>`s,
   its code as `<Code>` and `<Snippet>`, and its live examples as `<Example>` cards. Those components
-  are the docs app's own, in `src/docs/`.
-- `src/docs/SITE.ts` is the site map: every page in reading order, with its title, nav label,
+  are the docs app's own, in `src/lib/`.
+- `src/lib/SITE.ts` is the site map: every page in reading order, with its title, nav label,
   intent, opening paragraph, the app its examples are drawn from and the REGISTRY names it
   `covers`. The nav, a page's header and a section overview's `<Lead>`s all read it.
-- An EXAMPLE is ONE `.abide` beside the page that embeds it — its `<script server>` handlers,
-  hooks and data, its `<script>` and its markup in one file (RULEBOOK 40.34) — and the card's Files
-  tab shows that file, imported as text (`with { type: 'text' }`, 34.25). A card's `id` is what its
+- An EXAMPLE is ONE `.abide` in the `lib/` beside the page that embeds it — its `<script server>`
+  handlers, hooks and data, its `<script>` and its markup in one file (RULEBOOK 40.34) — and the card's Files
+  tab shows that file, imported as text (`with { type: 'text' }`, 34.21). A card's `id` is what its
   hand-written arm under `packages/harness/arms/` is paired by (44.19).
 - Every page is also served as markdown at its address with `.md` on the end, and `/abide.md` is
-  every page in reading order — derived from the rendered page by `src/downloads.abide`,
+  every page in reading order — derived from the rendered page by `src/lib/downloads.ts`,
   so the words have one home (40.35).
 
 `bun test` gates the docs against the REGISTRY and against RULEBOOK 40 and BRAND —
 `packages/dogfood/tests/coverage.test.ts`, `markdown.test.ts`, `voice.test.ts`, `fences.test.ts` —
-reading `SITE.ts`, each `page.abide`, and the pages and markdown the built app serves.
+reading `SITE.ts`, each `index.abide`, and the pages and markdown the built app serves.
 
 ## Checks
 
