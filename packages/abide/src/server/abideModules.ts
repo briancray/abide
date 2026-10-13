@@ -123,11 +123,37 @@ let registered = false
  */
 export function serveCompilation(root: string, compilation: Compilation): void {
     const real = realOrAsGiven(root)
-    addCompilation(real, compilation, RUNTIME)
+    const handlerFiles = addCompilation(real, compilation, RUNTIME)
     installSourceMaps(serverMapsOf(compilation, real), real)
+    if (handlerFiles.length !== 0) Bun.plugin(handlerFilesPlugin(handlerFiles))
     if (registered) return
     registered = true
     Bun.plugin(modulesPlugin(RUNTIME))
+}
+
+// 16.2 — A HANDLER FILE LOADED AT ITS OWN PATH RE-EXPORTS ITS FACE, so every spelling of its import
+// is the module the server mounted. The runtime asks `onResolve` only for a specifier with an
+// extension, while `onLoad` is asked by the path the file resolved to, however it was spelled. One
+// plugin per compilation because the filter is fixed at registration, and the runtime's `onLoad`
+// cannot fall through, so the filter names the handler files and nothing else. The face it names
+// is resolved by `modulesPlugin`, registered once.
+function handlerFilesPlugin(paths: string[]): Bun.BunPlugin {
+    return {
+        name: 'abide-handler-files',
+        setup(build) {
+            build.onLoad(
+                {
+                    filter: new RegExp(
+                        `^(?:${paths.map(RegExp.escape).join('|')})$`,
+                    ),
+                },
+                (args) => ({
+                    contents: `export { default } from ${JSON.stringify(`${args.path}${HANDLER_SUFFIX}`)}\n`,
+                    loader: 'js',
+                }),
+            )
+        },
+    }
 }
 
 /** What the server's table exports: its routes and error pages, server blocks and handlers. */
@@ -162,18 +188,24 @@ export function serverMapsOf(
     return maps
 }
 
+/** Adds `compilation` to `held`, and answers its handler files' absolute paths. */
 function addCompilation(
     root: string,
     compilation: Compilation,
     held: Held,
-): void {
+): string[] {
     // RESOLVED, not joined: a dependency's file is keyed above the root (`../node_modules/…`).
     for (const [relative, compiled] of Object.entries(compilation.files))
         held.files.set(resolve(root, relative), compiled)
-    for (const [relative, face] of Object.entries(compilation.handlers))
-        held.handlers.set(resolve(root, relative), face)
+    const handlerFiles: string[] = []
+    for (const [relative, face] of Object.entries(compilation.handlers)) {
+        const path = resolve(root, relative)
+        held.handlers.set(path, face)
+        handlerFiles.push(path)
+    }
     for (const [name, text] of Object.entries(compilation.tables))
         held.tables.set(`${root}/${VIRTUAL_DIRECTORY}/${name}`, text)
+    return handlerFiles
 }
 
 // `Bun.resolveSync` asks EVERY abide plugin's `onResolve` again — this one's, and the runtime's, which
@@ -292,46 +324,45 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
 
             // A HANDLER FILE IS FOUND BY WHERE ITS IMPORT RESOLVES, however the import spells it, and
             // only from the app's own modules: a package's never names one, and asking bun again for
-            // each of a package's relative imports is a resolve per module of the bundle. IN A BUNDLE
-            // THE FILTER IS THE HANDLER FILES' NAMES: a hook matching every relative import costs the
-            // bundle abide's own `sideEffects`, and the barrel's rest — the validator, the csp — moved
-            // into the chunk every page loads (38.94). The runtime is told of each compilation after
-            // it registered, so it matches every relative or `#` import and asks.
+            // each of a package's relative imports is a resolve per module of the bundle. THE FILTER
+            // IS THE HANDLER FILES' NAMES: a hook matching every relative import costs the bundle
+            // abide's own `sideEffects`, and the barrel's rest — the validator, the csp — moved into
+            // the chunk every page loads (38.94). ONLY IN A BUNDLE: the runtime finds a handler file
+            // by the path it loads at (`handlerFilesPlugin`), which costs no resolve per import.
             // Each handler file's name without `.ts` — what an import of one ends in.
-            let stems: string[] | undefined
-            if (bundling) {
-                const names = new Set<string>()
+            const stems = new Set<string>()
+            if (bundling)
                 for (const path of served.handlers.keys())
-                    names.add(basename(path, '.ts'))
-                stems = [...names]
-            }
-            const handlerImport =
-                stems === undefined
-                    ? RELATIVE_OR_SUBPATH
-                    : new RegExp(
-                          `(?:^|/)(?:${stems.map(RegExp.escape).join('|')})(?:\\.ts)?$`,
-                      )
-            if (stems?.length !== 0)
-                build.onResolve({ filter: handlerImport }, (args) => {
-                    if (resolving || !RELATIVE_OR_SUBPATH.test(args.path))
-                        return undefined
-                    const importer = pathOf(args.importer)
-                    if (importer.includes('/node_modules/')) return undefined
-                    let path: string
-                    try {
-                        path = resolved(args.path, args.importer)
-                    } catch {
-                        return undefined
-                    }
-                    const face = served.handlers.get(path)
-                    if (face === undefined) return undefined
-                    // 20.4 — a handler the browser is handed no wrapper for is no import of its.
-                    if (inBrowser(args.importer) && face.client === '')
-                        throw new Error(
-                            `abide: ${pathOf(args.importer)} imports ${args.path}, whose handler withholds itself from the browser (\`clients: { ui: false }\`). Call it from a <script server>, or let the browser have it. RULEBOOK 20.4.`,
-                        )
-                    return { path: `${path}${HANDLER_SUFFIX}` }
-                })
+                    stems.add(basename(path, '.ts'))
+            if (stems.size !== 0)
+                build.onResolve(
+                    {
+                        filter: new RegExp(
+                            `(?:^|/)(?:${[...stems].map(RegExp.escape).join('|')})(?:\\.ts)?$`,
+                        ),
+                    },
+                    (args) => {
+                        if (resolving || !RELATIVE_OR_SUBPATH.test(args.path))
+                            return undefined
+                        const importer = pathOf(args.importer)
+                        if (importer.includes('/node_modules/'))
+                            return undefined
+                        let path: string
+                        try {
+                            path = resolved(args.path, args.importer)
+                        } catch {
+                            return undefined
+                        }
+                        const face = served.handlers.get(path)
+                        if (face === undefined) return undefined
+                        // 20.4 — a handler the browser is handed no wrapper for is no import of its.
+                        if (inBrowser(args.importer) && face.client === '')
+                            throw new Error(
+                                `abide: ${pathOf(args.importer)} imports ${args.path}, whose handler withholds itself from the browser (\`clients: { ui: false }\`). Call it from a <script server>, or let the browser have it. RULEBOOK 20.4.`,
+                            )
+                        return { path: `${path}${HANDLER_SUFFIX}` }
+                    },
+                )
 
             // A RELATIVE SPECIFIER A FACE IMPORTS AT RUN TIME is resolved from the file the face
             // stands for: bun's runtime reads one from an importer in a namespace as no path at
@@ -340,12 +371,18 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
             // and where a hook matching every relative import in a package costs the bundle that
             // package's `sideEffects`: a two-page app grew by 12 KB, the validator one page never
             // calls moved into the chunk both pages load.
-            if (!bundling)
+            if (!bundling) {
+                // A face `handlerFilesPlugin` re-exports, named by its absolute path, which no file
+                // is at.
+                build.onResolve({ filter: HANDLER_FACE }, (args) => ({
+                    path: args.path,
+                }))
                 build.onResolve({ filter: /^\.\.?\// }, (args) =>
                     resolving || pathOf(args.importer) === args.importer
                         ? undefined
                         : { path: resolved(args.path, args.importer) },
                 )
+            }
 
             build.onLoad(
                 { filter: /\.abide$/, namespace: componentNamespace },
