@@ -1,0 +1,54 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const EMAILS: Record<string, string> = {
+    ada: 'ada@example.com',
+    grace: 'grace@example.com',
+    katherine: 'katherine@example.com',
+}
+
+export const getContact = GET(
+    async ({ id }: { id: string }) => {
+        // A slow directory, so there is time to press Copy before it lands.
+        await Bun.sleep(1500)
+        return { id, email: EMAILS[id] ?? '' }
+    },
+    { description: 'The email of a contact, from a slow directory.' },
+)
+</script>
+
+<script>
+import { NotLanded, reactive } from '@abide/abide'
+
+const PEOPLE = ['ada', 'grace', 'katherine']
+
+let id = reactive('ada')
+let copied = reactive('')
+
+const contact = reactive(() => getContact({ id }))
+
+function copy() {
+    try {
+        copied = contact.email
+    } catch (error) {
+        if (!(error instanceof NotLanded)) throw error
+        copied = 'still loading'
+    }
+}
+</script>
+
+<div class="tabs">
+{#for one of PEOPLE}
+    <button aria-selected={id === one}
+        onclick={() => { id = one; copied = '' }}>{one}</button>
+{/for}
+</div>
+
+<div class="row">
+    <button onclick={copy}>Copy email</button>
+    <span class="status">{contact.busy() ? 'loading…' : ''}</span>
+</div>
+
+<ul class="fields">
+    <li><span>copied</span><strong>{copied || '—'}</strong></li>
+</ul>

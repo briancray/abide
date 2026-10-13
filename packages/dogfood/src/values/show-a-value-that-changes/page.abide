@@ -1,0 +1,149 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import OwnedHandle from './OwnedHandle.abide'
+import Record from './Record.abide'
+import TransformHandle from './TransformHandle.abide'
+import ownedHandleSource from './OwnedHandle.abide' with { type: 'text' }
+import recordSource from './Record.abide' with { type: 'text' }
+import transformHandleSource from './TransformHandle.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="The value forms of `reactive`">
+        <table>
+            <thead><tr><th>You write</th><th>What you get</th></tr></thead>
+            <tbody>
+                <tr><td><code>reactive(v)</code></td><td>a value the page owns, landed from the moment it exists</td></tr>
+                <tr><td><code>reactive(load)</code></td><td>the same, serving the <strong>settled</strong> value once it arrives</td></tr>
+                <tr><td><code>reactive(v, options)</code></td><td>either, with a gate or a shape on the way in</td></tr>
+                <tr><td><code>reactive&lt;T&gt;()</code></td><td>an empty value, with nothing landed until the first <code>set</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>The options are <code>schema</code>, <code>transform</code>, <code>store</code>,
+        <code>identity</code>, <code>by</code>, <code>ttl</code>, <code>throttle</code> and
+        <code>debounce</code>, and what comes back is a <code>Reactive</code> — the same one a body,
+        a channel and every rpc handler hand back, so a member learned here is a member everywhere.
+        Every signature is in the <a href={url('/reference/reactive')}><code>reactive</code>
+        reference</a>.</p>
+    </Section>
+
+    <Section title="A value you own is read and written by its own name">
+        <Example
+            id="state-owned"
+            title="`reactive(v)` — a value the page owns"
+            summary="A contact's handle. Type into the field and watch the heading."
+            files={{
+                'OwnedHandle.abide': ownedHandleSource,
+            }}
+        >
+            <OwnedHandle />
+        </Example>
+
+        <p><em>2 lines, 0 listeners</em> — against the handler the hand-written arm needs for each
+        place the value is shown.</p>
+
+        <p>Inside a <code>.abide</code> file the name <strong>is</strong> the value:
+        <code>handle</code> in an expression reads it, <code>handle = 'ada'</code> writes it, and
+        <code>{'bind:value={handle}'}</code> does both. Naming it alone — a binding, a return, an
+        argument typed as a <code>Reactive</code> — hands over the value itself rather than reading
+        it.</p>
+
+        <p>The sugar sits <strong>over</strong> two members, <code>s</code> and <code>s.set</code>,
+        and both keep compiling everywhere. A <code>.ts</code> file has no sugar, so it writes them
+        out, and that explicit form still means exactly this inside a <code>.abide</code> file. It
+        is never a different mechanism.</p>
+
+        <p>Read on: <a href={url('/templates/read-and-write-a-value-by-name')}>Values by
+        name</a></p>
+    </Section>
+
+    <Section title="A load given to `reactive` serves the settled value">
+        <Example
+            id="state-loaded"
+            title="`reactive(load)` — the settled value, never the promise"
+            summary="A contact fetched when the page is built. Reload the page to watch it land again."
+            files={{
+                'Record.abide': recordSource,
+            }}
+        >
+            <Record />
+        </Example>
+
+        <p>That is a <code>Reactive&lt;Contact&gt;</code>, never a
+        <code>Reactive&lt;Promise&lt;Contact&gt;&gt;</code>. The value serves the
+        <strong>settled</strong> value, so a write puts a <code>Contact</code> in rather than being
+        made to wrap one, and the read is <code>contact.name</code> at every site rather than an
+        await. One rule at construction and at every write after it: <code>s.set</code> takes what
+        <code>reactive</code> took, a settled value or a load.</p>
+
+        <p><code>reactive&lt;Contact&gt;()</code> with no argument is a value nothing has written
+        yet. It is neither busy nor ready, a read throws <code>NotLanded</code> (2.9) and
+        <code>s.peek</code> answers <code>undefined</code> (2.10), until the first <code>set</code>
+        lands one. Where <code>undefined</code> is itself a value the page holds, say so —
+        <code>reactive&lt;Contact | undefined&gt;(undefined)</code> has landed from the moment it
+        exists. A function to hold rather than run goes inside a record,
+        <code>{'reactive({ handler })'}</code>, since a function given to <code>reactive</code> is a
+        body.</p>
+
+        <p>A load is one answer, not a producer: nothing can be asked for it again. So on a value
+        you hand a load, as on one you put a value in yourself, the triggers are inert rather than
+        destructive (7.6), and they never drop what an app put there. Give <code>reactive</code> an
+        arrow where you want to reload, or a <code>store</code>, which is a producer too (8.2).</p>
+
+        <p>Read on: <a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a> ·
+        <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a> ·
+        <a href={url('/values/keep-a-value-outside-the-process')}>Persistence</a></p>
+    </Section>
+
+    <Section title="A `transform` shapes a value on the way in">
+        <Example
+            id="state-transform"
+            title={'`reactive(v, { transform })` — what is stored is not what you typed'}
+            summary="A contact's handle, normalized on the way in. Type a name with capitals and a space."
+            files={{
+                'TransformHandle.abide': transformHandleSource,
+            }}
+        >
+            <TransformHandle />
+        </Example>
+
+        <p><code>Accepted</code> is what you typed and <code>Stored</code> is what the transform
+        returned, and with no transform they are one type — which is why
+        <code>reactive&lt;number&gt;(0)</code> is one parameter as it reads. The field shows the
+        stored form back because a binding holds the value rather than a copy of it.</p>
+
+        <p>It runs untracked, on the settled value — never on the promise and never per chunk — so a
+        transform sees whole values whatever the producer was. Its type is
+        <code>Transformer</code>.</p>
+
+        <p>A transform may also <strong>refuse</strong>, and what you refuse with decides which gate
+        you reach for. A <code>schema</code> refuses as a <code>ValidationError</code> carrying the
+        messages; a <code>transform</code> refuses as a name you declared, which is the only way a
+        refusal arrives under its own name with its own data.</p>
+
+        <p><code>Shaped</code> is everything the transform can hand back, and the types split it the
+        way the value does at run time: a refusal is typed onto <code>s.error()</code> and the rest
+        is <code>Stored</code>. So nothing is spelled twice — return
+        <code>{'tooLong({ length })'}</code> and <code>s.error()</code> is already the
+        <code>TooLong</code> refusal, with its data typed.</p>
+
+        <p>Read on: <a href={url('/templates/bind-a-form-to-state')}>Form binding</a> ·
+        <a href={url('/data/check-what-callers-send-you')}>Schemas</a> ·
+        <a href={url('/data/refuse-a-request-and-say-why')}>Failures</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a> — what
+            a page shows before a value lands</li>
+            <li><a href={url('/values/derive-a-value-from-other-values')}>Derived values</a> —
+            computing from what you already hold</li>
+            <li><a href={url('/values/share-one-value-across-components')}>Sharing</a> — one value
+            read from two components</li>
+        </ul>
+    </Section>
+</Doc>

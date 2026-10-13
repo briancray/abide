@@ -1,0 +1,29 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+/** What this caller may do with the record, which only the server knows. */
+export const getViewer = GET(
+    async () => {
+        // A slow service, so the wait is on screen.
+        await Bun.sleep(1600)
+        return { readOnly: true }
+    },
+    { description: 'Whether this caller may only read the record.' },
+)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const viewer = reactive(() => getViewer())
+
+// Until the gate lands this run is abandoned, never branched.
+const mode = reactive(() => (viewer.readOnly ? 'locked' : 'editable'))
+</script>
+
+<ul class="fields stacked">
+    <li><span>branched on the gate</span>
+        <button disabled={mode === 'locked'}>Save</button></li>
+    <li><span>locked until the gate lands</span>
+        <button disabled={!mode.ready() || mode === 'locked'}>Save</button></li>
+</ul>

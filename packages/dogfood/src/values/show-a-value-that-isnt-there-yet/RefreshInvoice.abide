@@ -1,0 +1,36 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+// Counts the loads: the total never moves, so this is what shows a refresh.
+let sent = 0
+
+export const getInvoiceTotal = GET(
+    async (_args: { id: string }) => {
+        // A slow database, so the wait is on screen.
+        await Bun.sleep(900)
+        sent += 1
+        return { total: '$1,240.00', sent }
+    },
+    { description: 'An invoice total, and how often it was sent.' },
+)
+</script>
+
+<script>
+import { reactive, refresh } from '@abide/abide'
+
+const invoice = reactive(() => getInvoiceTotal({ id: '4021' }))
+// A reload over a value still being served: busy, and still ready.
+const reloading = reactive(() => invoice.busy() && invoice.ready())
+</script>
+
+<div class="row">
+    <button onclick={() => refresh(invoice)}>Refresh</button>
+    <span class="status">{reloading ? 'refreshing…' : ''}</span>
+</div>
+
+{#if !invoice.ready()}<p>Loading the invoice…</p>{/if}
+
+<ul class="fields stacked">
+    <li><span>total</span><strong>{invoice.total}</strong></li>
+    <li><span>times sent</span><strong>{invoice.sent}</strong></li>
+</ul>

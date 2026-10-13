@@ -1,0 +1,28 @@
+<script>
+import { props } from '@abide/abide'
+
+type Invoice = {
+    number: string
+    customer: string
+    due: string
+    lines: { item: string; amount: string }[]
+    total: string
+}
+
+const { invoice } = props<{ invoice: Invoice }>()
+// A document of its own, which no bundle reaches: its styles are inline.
+</script>
+
+<html lang="en">
+<body style="margin: 0; padding: 1.25rem; background: #fff; color: #1d2a28;
+    font: 14px/1.5 system-ui, sans-serif">
+<h1>Invoice {invoice.number}</h1>
+<p>{invoice.customer} · due {invoice.due}</p>
+<table>
+{#for line of invoice.lines by line.item}
+    <tr><td>{line.item}</td><td>{line.amount}</td></tr>
+{/for}
+    <tr><th>Total</th><th>{invoice.total}</th></tr>
+</table>
+</body>
+</html>

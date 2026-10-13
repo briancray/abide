@@ -1,0 +1,38 @@
+<script server>
+import { GET, onStart, onStop } from '@abide/abide/server'
+import { pool } from './pool'
+
+onStart(async (start) => {
+    await pool.connect()
+    await start()
+})
+
+onStop(async (stop) => {
+    await stop()
+    await pool.close()
+})
+
+export const poolState = GET(() => ({ connected: pool.connected }), {
+    description: 'Whether the pool is connected.',
+})
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+let status = reactive('—')
+let traced = reactive('—')
+</script>
+
+<div class="row">
+    <button onclick={async () => {
+        const answer = await poolState.raw()
+        status = String(answer.status)
+        traced = answer.headers.get('traceresponse') ?? 'none'
+    }}>Fetch it over the wire</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>status</span><strong>{status}</strong></li>
+    <li><span>traceresponse</span><strong>{traced}</strong></li>
+</ul>

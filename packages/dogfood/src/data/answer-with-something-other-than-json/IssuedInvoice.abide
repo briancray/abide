@@ -1,0 +1,47 @@
+<script server>
+import { GET, page } from '@abide/abide/server'
+
+// As sent, styled inline: the app's CSP refuses a `<style>` block.
+const ISSUED: Record<string, string> = {
+    '4021': `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>INV-4021</title>
+</head>
+<body style="margin: 0; padding: 1.25rem; font: 14px/1.5 system-ui, sans-serif;
+    color: #1d2a28; background: #fff">
+<h1 style="margin: 0; font-size: 1.25rem">Invoice INV-4021</h1>
+<p style="margin: .25rem 0 1rem; color: #5b6b68">
+Analytical Engines Ltd · issued 2026-09-14 · due 2026-10-14</p>
+<table style="width: 100%; border-collapse: collapse">
+<tr><td style="padding: .375rem 0;
+    border-top: 1px solid #d9e0de">Annual license</td>
+<td style="padding: .375rem 0;
+    border-top: 1px solid #d9e0de; text-align: right">$1,000.00</td></tr>
+<tr><td style="padding: .375rem 0;
+    border-top: 1px solid #d9e0de">Onboarding</td>
+<td style="padding: .375rem 0;
+    border-top: 1px solid #d9e0de; text-align: right">$240.00</td></tr>
+<tr><th style="padding: .375rem 0;
+    border-top: 1px solid #d9e0de; text-align: left">Total</th>
+<th style="padding: .375rem 0;
+    border-top: 1px solid #d9e0de; text-align: right">$1,240.00</th></tr>
+</table>
+</body>
+</html>`,
+}
+
+export const issuedInvoice = GET(
+    async ({ id }: { id: string }) => {
+        await Bun.sleep(300) // a slow database, so the wait is on screen
+        const html = ISSUED[id]
+        if (html === undefined) throw new Error(`no invoice ${id}`)
+        return page(html)
+    },
+    { description: 'The issued copy of an invoice, as a page.' },
+)
+</script>
+
+<iframe src={issuedInvoice.url({ id: '4021' })} title="INV-4021"
+    class="h-56 w-full rounded-md border border-rule"></iframe>

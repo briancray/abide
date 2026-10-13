@@ -1,0 +1,145 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Retries from './Retries.abide'
+import retriesSource from './Retries.abide' with { type: 'text' }
+import envSource from '../../../.env' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="`onConfig` declares the defaults, and `Config` their types">
+        <Example
+            id="config-coerced"
+            title="`onConfig(fn)` and `config()` — a default the deployment overrides"
+            summary="A CRM's retry count: 3 beside the handler, 5 in the deployment's .env. The page adds one for the first try and gets 6, not 51."
+            files={{
+                'Retries.abide': retriesSource,
+                '.env': envSource,
+            }}
+        >
+            <Retries />
+        </Example>
+
+        <p>The default is a value, and <strong>its type is the field's</strong>: what the defaults
+        return is merged into <code>Config</code>, so <code>config().RETRIES</code> is a
+        <code>number</code> to the checker with no declaration written. A field no default names is
+        <code>unknown</code>, because <code>Config</code> admits whatever an app declares and knows
+        nothing it was not told.</p>
+
+        <p><code>RETRIES=5</code> arrives from <code>.env</code> as text. abide <strong>coerces it
+        to the type of the default it overrides</strong>, so the handler hands the page a number and
+        <code>retries + 1</code> is 6. Nobody wrote <code>Number()</code> at the read site.</p>
+    </Section>
+
+    <Section title="The precedence is derived, then the app, then the environment">
+        <p>Each layer is laid over the one before it, so the last one to name a field wins:</p>
+
+        <table>
+            <thead><tr><th></th><th>Wins over</th><th>Because</th></tr></thead>
+            <tbody>
+                <tr><td><code>Env</code></td><td>everything</td><td>it is the deployment overriding a default that exists</td></tr>
+                <tr><td>the app's <code>onConfig</code></td><td>what abide derived</td><td>it is the app saying what its own defaults are</td></tr>
+                <tr><td>a <strong>derived</strong> value</td><td>nothing</td><td>it is the fallback for a field nobody else names</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>APP_NAME</code>, <code>APP_VERSION</code> and <code>APP_DATA_DIR</code> are derived
+        where nothing carries them — from the package, and from the platform's per-user data
+        directory. A deployment that sets <code>APP_NAME</code> is naming the app for that
+        deployment, and the card above is the same rule one layer up: <code>.env</code> beat the
+        app's own <code>onConfig</code>.</p>
+
+        <p><code>NODE_ENV</code> is the environment name <strong>verbatim</strong>. Not a boolean
+        and not a three-way enum: an app comparing it against <code>'production'</code> is comparing
+        against the string it was started with.</p>
+    </Section>
+
+    <Section title="`Env` is what was read, `Config` is what resolved">
+        <p><code>Env</code> is <code>Record&lt;string, string | undefined&gt;</code> — the process
+        environment, before anything was coerced. <code>Config</code> is every field of
+        <code>Env</code> plus what <code>onConfig</code> defaulted and the schema normalized, and it
+        is what <code>config()</code> hands back.</p>
+
+        <p>A value out of <code>Env</code> is <strong>coerced to the type of the default it
+        overrides</strong>: a number for a number, <code>true</code> or <code>false</code> for a
+        boolean. A value that will not coerce — <code>RETRIES=lots</code> — leaves the default
+        standing rather than handing arithmetic a <code>NaN</code>, and the schema is where a value
+        that has to be right is refused outright.</p>
+
+        <p><code>ConfigDefaults</code> is <strong>synchronous by contract</strong>. Configuration
+        that needs a network call is not configuration; it is a value, and a value can have a
+        body.</p>
+
+        <p>Read on: <a href={url('/values/derive-a-value-from-other-values')}>Derived values</a></p>
+    </Section>
+
+    <Section title="The schema is checked last, over the whole document">
+        <p><code>config</code>'s <code>schema</code> gates the resolved document rather than one
+        field, which is what lets it express a relationship: a webhook secret required only when
+        webhooks are on, two ports that must differ.</p>
+
+        <Code language="ts" caption="server" code={`onConfig(defaults, {
+    schema: z.looseObject({
+        RETRIES: z.number().int().min(0).max(10),
+        STRIPE_KEY: z.string().min(1),
+    }),
+})`} />
+
+        <p>The object is <strong>loose</strong> because the document is the whole configuration, the
+        environment included. A strict object hands back only the fields it names, and every other
+        field — <code>APP_NAME</code> among them — is gone from <code>config()</code> after it.</p>
+
+        <p>A second <code>onConfig</code> <strong>composes</strong> with the first: its defaults are
+        merged over the ones before it, and its schema is checked over the whole document too. So the
+        file a setting belongs to can default it — the card's <code>Retries.abide</code> files one,
+        and these docs' root layout files another.</p>
+
+        <p>Read on: <a href={url('/data/check-what-callers-send-you')}>Schemas</a> ·
+        <a href={url('/app/record-what-happened')}>Logging</a></p>
+    </Section>
+
+    <Section title="`config` is a value, and is read like any other">
+        <p><code>config</code> is an unkeyed <code>global</code> reactive value, which is why it is
+        <code>config()</code> rather than an object you import: it is one entry for the process, and
+        reading it in a template subscribes.</p>
+
+        <p><code>config.invalidate()</code> has the next read re-read the environment and rerun
+        <code>onConfig</code>, and runs nothing itself. That is for a process whose environment
+        genuinely changed under it — a rotated secret, a re-issued key — and it is a trigger rather
+        than a poll, so nothing pays for the possibility.</p>
+
+        <p><code>config()</code> <strong>throws what <code>onConfig</code> threw</strong>. A
+        configuration that cannot resolve is not a degraded app, and the throw is what stops one
+        starting.</p>
+
+        <p>Read on: <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a> ·
+        <a href={url('/reference/configuration')}>Configuration</a></p>
+    </Section>
+
+    <Section title="A page reads a setting through a handler">
+        <p><code>config</code> is imported from <code>@abide/abide/server</code>, so it is a server
+        name and never reaches a bundle. A page that needs a setting asks a handler for it —
+        <code>retryPolicy</code> in the card above — and the handler decides which fields leave the
+        process.</p>
+
+        <p>That is what keeps <code>STRIPE_KEY</code> out of a browser: no handler hands it back.
+        The boundary is the server block rather than a naming convention, so forgetting a prefix
+        cannot publish a secret.</p>
+
+        <p>Read on: <a href={url('/data/read-data-without-writing-an-api')}>Reading data</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a> — where
+            <code>onConfig</code> is registered</li>
+            <li><a href={url('/reference/configuration')}>Configuration</a> — every variable, file
+            and hook</li>
+            <li><a href={url('/data/check-what-callers-send-you')}>Schemas</a> — the
+            <code>Schema&lt;T&gt;</code> the gate takes</li>
+        </ul>
+    </Section>
+</Doc>

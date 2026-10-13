@@ -1,0 +1,56 @@
+<script>
+import { reactive, refuse } from '@abide/abide'
+import { z } from 'zod'
+
+const LIMIT = 120
+
+const tooLong = refuse.named(
+    'TooLong',
+    422,
+    'That message is longer than the conversation takes.',
+    {
+        schema: z.object({ length: z.number() }),
+    },
+)
+
+/** Runs on every write: the turn just added is the one it checks. */
+let onboarding = reactive([] as { speaker: string; text: string }[], {
+    transform: (turns) => {
+        const last = turns.at(-1)
+        if (last === undefined || last.text.length <= LIMIT) return turns
+        return tooLong({ length: last.text.length })
+    },
+})
+
+let refusal = reactive('')
+let draft = reactive(
+    'Walk me through rotating an API key, revoking the old one, and ' +
+        'updating each of the three services that still hold it today.',
+)
+
+function send() {
+    onboarding = [...onboarding, { speaker: 'you', text: draft }]
+    const answer = onboarding.error()
+    if (!tooLong.is(answer)) {
+        refusal = ''
+        return
+    }
+    refusal = `${answer.name} at ${answer.data.length} characters`
+}
+</script>
+
+<ul class="fields stacked">
+    <li><span>last sent</span>
+        <strong>
+            {onboarding.at(-1)?.text ?? 'nothing sent yet'}
+        </strong>
+    </li>
+</ul>
+
+<div class="row">
+    <label>message
+        <input bind:value={draft}>
+    </label>
+    <button onclick={send}>Send</button>
+</div>
+<p class="status">{refusal}</p>

@@ -4,10 +4,10 @@
 // reasons: one value holds the rows and a run patches into it as each lands.
 import { reactive } from '@abide/abide'
 import { matchesFilter, type RowItem, type TestCase, type TestRow } from 'harness/rows'
-import { runTests, testCatalog } from '#server/rpc/tests'
-import { messageOf } from '#ui/messageOf.ts'
-import { readRows } from '#ui/readRows.ts'
-import { ROW_STATES } from '#ui/ROW_STATES.ts'
+import { runTests, testCatalog } from '../tests.abide'
+import { messageOf } from './messageOf.ts'
+import { readRows } from '../readRows.ts'
+import { ROW_STATES } from './ROW_STATES.ts'
 
 type Section = { name: string; items: RowItem[] }
 

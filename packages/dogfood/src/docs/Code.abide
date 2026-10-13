@@ -1,0 +1,31 @@
+<script>
+// A block of code a page writes out, highlighted, under the caption that says where it lives.
+//
+// THE CAPTION IS THE SYNTAX AND THE SPINE IS THE SIDE. A path says both by itself; one of the four
+// side words — `server`, `browser`, `shared`, `abide` — is shown beside the language, because "browser"
+// alone says where the code runs and leaves a reader guessing between a name read by name and `s()`.
+import { props, raw } from '@abide/abide'
+import { highlight, sideOf } from './highlight.ts'
+
+const {
+    code,
+    language = '',
+    caption = '',
+} = props<{ code: string; language?: string; caption?: string }>()
+
+const shown =
+    caption.includes('/') || caption.startsWith('.') || language === ''
+        ? caption
+        : language === caption
+          ? `.${caption}`
+          : `.${language} · ${caption}`
+</script>
+
+{#if caption}
+    <figure class="snippet" data-side={sideOf(caption)} data-caption={caption}>
+        <figcaption>{shown}</figcaption>
+        <pre><code class="language-{language}">{raw(highlight(code))}</code></pre>
+    </figure>
+{:else}
+    <pre><code class="language-{language}">{raw(highlight(code))}</code></pre>
+{/if}

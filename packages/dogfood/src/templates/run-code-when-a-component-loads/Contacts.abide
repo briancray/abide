@@ -1,0 +1,8 @@
+<script>
+import Row from './Row.abide'
+</script>
+
+<ul class="fields stacked">
+    <Row name="Ada Lovelace"/>
+    <Row name="Grace Hopper"/>
+</ul>

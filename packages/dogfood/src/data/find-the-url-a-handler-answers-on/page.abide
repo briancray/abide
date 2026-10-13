@@ -1,0 +1,156 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Section from '#src/docs/Section.abide'
+</script>
+
+<Doc>
+    <p>The handler carries the address, so the string is derived rather than typed. Rename the
+    export and every place that reached for it follows, there being no path written down to
+    miss.</p>
+
+    <Section title="The four members an `Rpc` carries">
+        <table>
+            <thead><tr><th>You read</th><th>What you get</th></tr></thead>
+            <tbody>
+                <tr><td><code>rpc.url(args?)</code></td><td>the address, resolved against the mount at read time</td></tr>
+                <tr><td><code>rpc.method</code></td><td>the verb it was declared with</td></tr>
+                <tr><td><code>rpc.raw(args?, init?)</code></td><td>the <code>Response</code> itself, unparsed</td></tr>
+                <tr><td><code>rpc.description</code></td><td>the sentence the declaration gave it</td></tr>
+            </tbody>
+        </table>
+
+        <p>None of the four is a call to the handler. They describe the address rather than reaching
+        it, which is what makes them the surface for everything outside the app — a <code>&lt;form
+        action&gt;</code>, an <code>&lt;img src&gt;</code>, a webhook registration, a
+        <code>curl</code> line. Every signature is in the
+        <a href={url('/reference/transports')}>Transports</a> reference.</p>
+    </Section>
+
+    <Section title="`rpc.url` is derived, not baked">
+        <p>The generated wrapper carries a <strong>mount-relative</strong> address. <code>url</code>
+        resolves it at read time:</p>
+
+        <table>
+            <thead><tr><th>Where</th><th>Against</th></tr></thead>
+            <tbody>
+                <tr><td>a browser</td><td><code>&lt;meta name="abide-mount"&gt;</code> in the document</td></tr>
+                <tr><td>a server</td><td><code>config().APP_URL</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>A mount is chosen after the build — <code>APP_URL</code> of
+        <code>https://abide.com/v2</code> serves every page, endpoint and asset under
+        <code>/v2</code> — so a build artifact cannot hold the absolute form. That is why the same
+        bundle deploys at a sub-path without a rebuild.</p>
+    </Section>
+
+    <Section title="`rpc.url` takes the args">
+        <p>An address without its arguments is not something a browser can fetch, so the call takes
+        them. They are written in the same canonical wire form the request itself uses, rather than
+        a query string you assemble and the server parses back differently:</p>
+
+        <Code language="abide" caption="src/media/page.abide — excerpt" code={`<video src={playFile.url({ id: file.id })} controls></video>
+<img src={getPoster.url({ path, width: 250 })} alt="">`} />
+
+        <p>That is how a handler is reached from markup at all, and it is the only surface a handler
+        serving bytes has. A parameter the route carries is written into the path, whatever the
+        method; the rest go in the query on a <code>GET</code> or a <code>DELETE</code>, and in the
+        body on a mutation.</p>
+
+        <p>Read on: <a href={url('/pages/serve-the-app-under-a-sub-path')}>Sub-path mounting</a> ·
+        <a href={url('/app/configure-the-app')}>Config</a></p>
+    </Section>
+
+    <Section title="`rpc.method` says which verb the address wants">
+        <p>The method the handler was declared with, as a string. Reading it rather than writing
+        <code>"post"</code> keeps a form correct when a handler is redeclared — and only
+        <code>GET</code> and <code>POST</code> are form-reachable, so a <code>PUT</code> moved to a
+        form is a bug the value makes visible.</p>
+
+        <p>Read on: <a href={url('/data/change-something-on-the-server')}>Mutations</a></p>
+    </Section>
+
+    <Section title="The address comes from the directory and the export name">
+        <table>
+            <thead><tr><th>File</th><th>Export</th><th>Answers at</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/users/page.abide</code></td><td><code>getUser</code></td><td><code>/users/getUser</code></td></tr>
+                <tr><td><code>src/admin/page.abide</code></td><td><code>recent</code></td><td><code>/admin/recent</code></td></tr>
+                <tr><td><code>src/media/[id]/page.abide</code></td><td><code>save</code></td><td><code>/media/42/save</code>, with <code>id</code> in its args</td></tr>
+                <tr><td><code>src/media/[id]/comments.abide</code></td><td><code>addComment</code></td><td><code>/media/42/addComment</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>So the address is readable from the source tree, which is what a log line or a network
+        panel is for. A parameter in the route reaches the handler's args from the path, so its
+        <code>Args</code> declares it. The address is not a thing to write out: the route table is a
+        build artifact, and two files that answer one method at one address are a build error naming
+        both.</p>
+    </Section>
+
+    <Section title="`rpc.raw` hands back the `Response`">
+        <p>Where you want the <code>Response</code> rather than a decoded value — a header to read,
+        a <code>Blob</code> to hand to a download, a body you will frame yourself:</p>
+
+        <Code language="ts" caption="browser" code={`const response = await downloadLedger.raw(
+    { year: 2026 },
+    { headers: { accept: 'text/csv' } },
+)
+const disposition = response.headers.get('content-disposition')`} />
+
+        <p>It takes a <code>RequestInit</code>, so it is also how a caller sends an
+        <code>Accept</code> a streaming handler answers differently — jsonl or SSE at the same
+        address.</p>
+
+        <p>You give up everything the <code>Reactive</code> was doing: no coalescing, no
+        <code>ttl</code>, no probes, no seeding. Reach for it when the response <strong>is</strong>
+        the thing you want, and for the ordinary call otherwise.</p>
+
+        <p>Read on: <a href={url('/data/send-data-as-it-arrives')}>Streaming data</a> ·
+        <a href={url('/data/read-data-without-writing-an-api')}>Reading data</a></p>
+    </Section>
+
+    <Section title="`rpc.description` is the sentence every surface carries">
+        <p>The string you passed as <code>description</code>, readable back off the handler. The
+        same one rides onto the OpenAPI operation, the MCP tool and the CLI command — one place to
+        write it, and no surface can carry a different sentence than another.</p>
+
+        <Code language="ts" caption="server" code={`export const getInvoice = GET(
+    ({ id }: { id: string }) => database.invoice.find(id),
+    { description: 'One invoice, by id.' },
+)`} />
+
+        <p>Read on: <a href={url('/machines/describe-your-api-without-writing-a-spec')}>OpenAPI</a>
+        · <a href={url('/machines/let-a-model-call-your-handlers')}>MCP</a></p>
+    </Section>
+
+    <Section title="A webhook takes `rpc.url` read on the server">
+        <p>A provider that calls you wants an absolute URL, which is <code>rpc.url</code> read on
+        the server:</p>
+
+        <Code language="ts" caption="server" code={`onStart(async (start) => {
+    await payments.registerWebhook(paymentSettled.url())
+    await start()
+})`} />
+
+        <p>The handler on the other end of that is an ordinary <code>POST</code>, and a caller that
+        is not a browser sends no <code>Origin</code> — which the mutation gate allows on purpose,
+        there being no ambient cookie to abuse. Authenticating that caller is a rung.</p>
+
+        <p>Read on: <a href={url('/data/decide-who-may-call-what')}>Authorization</a> ·
+        <a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/ship/call-a-handler-from-the-terminal')}>Call a handler</a> — the
+            same handler from a shell</li>
+            <li><a href={url('/pages/serve-the-app-under-a-sub-path')}>Sub-path mounting</a> — why
+            the address is relative</li>
+            <li><a href={url('/machines/keep-a-handler-off-a-surface')}>Withholding a surface</a> —
+            an address that answers but is not listed</li>
+        </ul>
+    </Section>
+</Doc>

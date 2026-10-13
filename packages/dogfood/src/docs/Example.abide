@@ -1,0 +1,40 @@
+<script>
+// 40.5 — an example card: the component itself, running, above a tab per file it is made of. The
+// render is never a tab; it is what the example IS, and the files are what you consult about it.
+import { props, raw, reactive } from '@abide/abide'
+import { highlight, sideOf } from './highlight.ts'
+import { inline } from './inline.ts'
+
+const { id, title, summary, files } = props<{
+    /** The example's name: its anchor here, and what its hand-written arm is paired by (44.19). */
+    id: string
+    title: string
+    summary: string
+    /** Each file the example is made of, by the path a reader is shown, to its text. */
+    files: Record<string, string>
+}>()
+
+const paths = Object.keys(files)
+let open = reactive(0)
+</script>
+
+<figure class="example" id={id}>
+    <figcaption>
+        <span class="ex-title">{raw(inline(title))}</span>
+        <span class="ex-summary">{summary}</span>
+    </figcaption>
+    <div class="ex-render"><slot/></div>
+    <div class="ex-files" role="tablist">
+        {#for path, index of paths}
+            <button
+                role="tab"
+                aria-selected={String(open === index)}
+                data-side={sideOf(path)}
+                onclick={() => (open = index)}
+            >{path}</button>
+        {/for}
+    </div>
+    {#for path, index of paths}
+        <pre hidden={open !== index}><code>{raw(highlight((files[path] ?? '').trimEnd()))}</code></pre>
+    {/for}
+</figure>

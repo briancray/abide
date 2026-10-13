@@ -1,0 +1,32 @@
+<script server>
+import { POST } from '@abide/abide/server'
+
+// The writes that landed: a double press must not bill twice.
+let payments = 0
+
+export const payInvoice = POST(
+    async ({ id }: { id: string }) => {
+        await Bun.sleep(1500) // a slow database, so the wait is on screen
+        payments += 1
+        return payments
+    },
+    { description: 'Marks an invoice paid.' },
+)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+let paid = reactive()
+</script>
+
+<div class="row">
+    <button onclick={() => { paid = payInvoice({ id: '4310' }) }}>Pay</button>
+</div>
+
+<p class="status">{paid.busy() ? 'paying…' : ''}</p>
+
+<ul class="fields">
+    <li><span>payments</span>
+        <strong>{paid.ready() ? paid : '—'}</strong></li>
+</ul>

@@ -1,12 +1,21 @@
+// THE DOCS AGAINST THE REGISTRY, AND AGAINST THEIR OWN RULES (RULEBOOK 40): every capability claimed
+// by one written page, every example card on exactly one teaching page, and the words held to what
+// docs/BRAND.md asks of a heading, a label and a code sample. The pages are read three ways —
+// `SITE.ts` for what a page claims, its `page.abide` for what it embeds, and the markdown the built
+// app serves for what a reader reads (`docsPages.ts`).
+
 import { expect, test } from 'bun:test'
-import { NAV } from '../scripts/NAV.ts'
-import { readPages } from '../scripts/readContent.ts'
-import { type Manifest, readManifest } from '../scripts/renderExample.ts'
-import { EXAMPLE, LEAD, SNIPPET } from '../scripts/renderMarkdown.ts'
+import { SITE } from '../src/docs/SITE.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
+import {
+    allCards,
+    cardsOf,
+    DOGFOOD,
+    docsPages,
+    renderedMarkdown,
+} from './docsPages.ts'
 
 const REGISTRY = new URL('../../../docs/REGISTRY.md', import.meta.url)
-const CONTENT_DIR = new URL('../content/', import.meta.url)
 
 type RegistryRow = {
     name: string
@@ -83,7 +92,6 @@ const RESTATED = new Set([
     '`onHealth`',
     '`abide openapi [--out <file>] [--url <origin>]`',
     '`abide mcp [--url <origin>]`',
-    '`src/ui/pages/**/error.abide`',
     // The reactive primitives carry `Produced` as one of the four type parameters, and `Rpc`
     // carries it again as what a handler yields. One name, one meaning, written where each is read.
     '`Produced`',
@@ -124,43 +132,30 @@ test('a restated capability is restated identically', async () => {
     expect(drifted).toEqual([])
 })
 
-// THIS GATE USED TO PASS ON AN EMPTY FILE. `covers` is frontmatter, so a stub — title and intent
-// decided, prose not written — satisfied it exactly as a written page did, and 171 of 323 claims
-// were being made by the 43 pages that say "not written yet" at the top. 40.2 asks for a name
-// documented against real `.abide` and `.ts` files, and a list of names in a header is not that.
-// `voice.test.ts` skips stubs on purpose, so a stub was exempt from every prose check AND counted
-// as coverage, which is the worst of both.
-//
-// Making stubs stop counting turns 171 claims red at once, and a permanently red gate is one
-// nobody reads. So this is a RATCHET instead: the debt is written down, the test asserts the
-// uncovered set is EXACTLY that list, and both directions fail. A registry name nobody claims is
-// new debt and fails; a page that stops being a stub covers its names and fails until they leave
-// the list. The list can only shrink, and it is the one number that says how much of the design
-// has been pressure-tested by having to explain it.
-// 171 of 323, which is the number to watch.
+// THIS GATE USED TO PASS ON AN EMPTY FILE: a stub — title and intent decided, prose not written —
+// satisfied it exactly as a written page did. 40.2 asks for a name documented against real `.abide`
+// and `.ts` files, and a list of names in `SITE` is not that. So a stub's claims do not count, and
+// the uncovered set is a RATCHET: written down here, asserted exactly, shrinking only.
 const UNWRITTEN: string[] = []
 
 test('every registry capability is covered by a guide that is written', async () => {
     const covered = new Set<string>()
-    for (const page of await readPages()) {
+    for (const page of await docsPages()) {
         if (page.stub) continue
-        for (const name of page.covers) covered.add(name)
+        for (const name of page.covers ?? []) covered.add(name)
     }
-
     const uncovered = (await specCapabilities())
         .filter((name) => !covered.has(name))
         .sort()
     expect(uncovered).toEqual([...UNWRITTEN].sort())
 })
 
-// The stub half of the same join. A stub still has to CLAIM its names — that is what stops a
-// capability going missing entirely while its page is unwritten — so the two lists together are
-// still every capability, and nothing falls between them.
+// The stub half of the same join: a stub still CLAIMS its names, so nothing falls between the two.
 test('every unwritten capability is claimed by some stub', async () => {
     const claimed = new Set<string>()
-    for (const page of await readPages()) {
+    for (const page of await docsPages()) {
         if (!page.stub) continue
-        for (const name of page.covers) claimed.add(name)
+        for (const name of page.covers ?? []) claimed.add(name)
     }
     expect(UNWRITTEN.filter((name) => !claimed.has(name))).toEqual([])
 })
@@ -168,87 +163,135 @@ test('every unwritten capability is claimed by some stub', async () => {
 test('nothing claims to cover a capability the registry does not have', async () => {
     const capabilities = new Set(await specCapabilities())
     const unknown: string[] = []
-    for (const page of await readPages()) {
-        for (const name of page.covers)
-            if (!capabilities.has(name)) unknown.push(`${page.slug}: ${name}`)
-    }
+    for (const page of await docsPages())
+        for (const name of page.covers ?? [])
+            if (!capabilities.has(name)) unknown.push(`${page.route}: ${name}`)
     expect(unknown).toEqual([])
 })
 
-test('every content page is reachable from the nav', async () => {
+// A page nobody can reach is a page nobody reads, and a `SITE` entry with no page renders nothing.
+test('every docs page is in SITE, and every SITE entry has its page', async () => {
     const listed = new Set<string>()
-    for (const group of NAV) for (const slug of group.pages) listed.add(slug)
-
+    for (const page of await docsPages()) listed.add(page.file)
     const orphans: string[] = []
-    for (const path of new Bun.Glob('**/*.md').scanSync({
-        cwd: CONTENT_DIR.pathname,
-    })) {
-        const slug = path.slice(0, -'.md'.length)
-        if (!listed.has(slug)) orphans.push(slug)
-    }
-    expect(orphans).toEqual([])
-})
-
-const EXAMPLES_DIR = new URL('../examples/', import.meta.url)
-const APP = new URL('../', import.meta.url)
-
-// Every example, by name, with its manifest.
-async function examples(): Promise<Map<string, Manifest>> {
-    const found = new Map<string, Manifest>()
-    for (const path of new Bun.Glob('*.json').scanSync({
-        cwd: EXAMPLES_DIR.pathname,
-    })) {
-        const name = path.slice(0, -'.json'.length)
-        found.set(name, await readManifest(name))
-    }
-    return found
-}
-
-// An example is real files, so a page can reference one that does not exist and a
-// directory can rot with nothing embedding it. Both are silent without this.
-// A page EMBEDS an example either way it reaches one: `{% example %}` shows the whole
-// directory as panels, `{% snippet %}` shows one slice of one of its files. Both make the
-// page's code that directory's code, which is the property every check below is about.
-function embeddedExamples(body: string): string[] {
-    const names: string[] = []
-    for (const match of body.matchAll(new RegExp(EXAMPLE.source, 'gm')))
-        names.push(match[1] ?? '')
-    for (const match of body.matchAll(new RegExp(SNIPPET.source, 'gm')))
-        names.push(match[1] ?? '')
-    return names
-}
-
-test('every embedded example exists, and every example is embedded', async () => {
-    const embedded = new Set<string>()
-    for (const path of new Bun.Glob('**/*.md').scanSync({
-        cwd: CONTENT_DIR.pathname,
-    })) {
-        const source = await Bun.file(new URL(path, CONTENT_DIR)).text()
-        for (const name of embeddedExamples(source)) embedded.add(name)
-    }
-
-    const onDisk = new Set((await examples()).keys())
-
-    expect([...embedded].filter((name) => !onDisk.has(name))).toEqual([])
-    expect([...onDisk].filter((name) => !embedded.has(name))).toEqual([])
-})
-
-// Every path an example's manifest names has to resolve, or a panel renders empty.
-test('every file an example manifest names is on disk', async () => {
+    for (const path of new Bun.Glob('src/**/page.abide').scanSync({
+        cwd: DOGFOOD,
+    }))
+        if (!listed.has(path) && !/^src\/(bench|tests)\//.test(path))
+            orphans.push(path)
     const missing: string[] = []
-    for (const [name, manifest] of await examples())
-        for (const path of manifest.files)
-            if (!(await Bun.file(new URL(path, APP)).exists()))
-                missing.push(`${name}: ${path}`)
+    for (const page of await docsPages())
+        if (!(await Bun.file(`${DOGFOOD}${page.file}`).exists()))
+            missing.push(page.file)
+    expect({ orphans, missing }).toEqual({ orphans: [], missing: [] })
+})
+
+// An example is real files, so a card can name one that is gone and a panel renders empty.
+test('every file a card renders or shows is on disk', async () => {
+    const missing: string[] = []
+    for (const card of await allCards()) {
+        if (!(await Bun.file(`${DOGFOOD}${card.component}`).exists()))
+            missing.push(
+                `${card.id}: renders ${card.component || '(no import)'}`,
+            )
+        for (const [shown, path] of card.files)
+            if (path === '' || !(await Bun.file(`${DOGFOOD}${path}`).exists()))
+                missing.push(`${card.id}: shows ${shown}`)
+    }
     expect(missing).toEqual([])
 })
 
-// A heading of the form `Subject: `a`, `b`, `c`` is a GLOSSARY LABEL — BRAND names
-// "Probes: `pending`, `refreshing`, `done`" as the shape a reader scans for. What makes
-// it worth having is also what makes it dangerous: it reads as the whole set. The probes
-// heading named four and the table under it listed six, so `streaming()` and `error()`
-// were in the docs and absent from the one line a reader checks. Compared against the
-// table rather than against a list here, because the table is what the section teaches.
+// 40.4 — A CARD SHOWS THE FILE IT RENDERS: the component is what the example IS, and a card whose
+// tabs leave it out shows code that is not what runs above them.
+test('every card shows the component it renders', async () => {
+    const hidden: string[] = []
+    for (const card of await allCards())
+        if (![...card.files.values()].includes(card.component))
+            hidden.push(`${card.id}: ${card.component}`)
+    expect(hidden).toEqual([])
+})
+
+// An id names one example: it is the card's anchor and what its hand-written arm is paired by.
+test('every card has an id no other card has', async () => {
+    const seen = new Map<string, string>()
+    const repeated: string[] = []
+    for (const card of await allCards()) {
+        if (card.id === '') repeated.push(`${card.route}: a card with no id`)
+        const first = seen.get(card.id)
+        if (first !== undefined)
+            repeated.push(`${card.id}: ${first} and ${card.route}`)
+        seen.set(card.id, card.route)
+    }
+    expect(repeated).toEqual([])
+})
+
+// 40.20 — ONE TEACHING PAGE PER EXAMPLE. A component taught from two pages is code one of those
+// readers was never shown running. `covers` is the discriminant (40.11): an overview carries a
+// section's opening example and teaches no name in it.
+test('an example component is taught by exactly one page', async () => {
+    const pagesFor = new Map<string, string[]>()
+    for (const page of await docsPages()) {
+        if (!page.covers?.length) continue
+        for (const card of cardsOf(page))
+            pagesFor.set(card.component, [
+                ...(pagesFor.get(card.component) ?? []),
+                page.route,
+            ])
+    }
+    const shared: string[] = []
+    for (const [component, routes] of pagesFor)
+        if (new Set(routes).size > 1)
+            shared.push(`${component}: ${[...new Set(routes)].join(', ')}`)
+    expect(shared).toEqual([])
+})
+
+// 40.21, 40.22 — A PAGE'S EXAMPLES ARE DRAWN FROM ONE APP THE BRAND NAMES, declared once on its
+// `SITE` entry. A page with a card and no app is a page whose examples answer to nothing.
+test('every page with an example declares the app it is drawn from', async () => {
+    const undeclared: string[] = []
+    for (const page of await docsPages())
+        if (cardsOf(page).length > 0 && page.app === undefined)
+            undeclared.push(page.route)
+    expect(undeclared).toEqual([])
+})
+
+// 40.27 — a card follows its heading with nothing between them. A paragraph there is a fourth voice
+// restating the heading, the title or the summary, and belongs after the card.
+test('an example follows its heading directly', async () => {
+    const separated: string[] = []
+    for (const page of await docsPages()) {
+        const lines = page.source.split('\n')
+        for (let at = 0; at < lines.length; at += 1) {
+            if (!(lines[at] ?? '').trim().startsWith('<Example')) continue
+            let previous = at - 1
+            while (previous >= 0 && (lines[previous] ?? '').trim() === '')
+                previous -= 1
+            if (!(lines[previous] ?? '').trim().startsWith('<Section'))
+                separated.push(`${page.route}:${at + 1}`)
+        }
+    }
+    expect(separated).toEqual([])
+})
+
+// BRAND, "Documentation structure": the main overview shows one section per area, each through that
+// area's own lead (`<Lead of="…"/>`), so the words have one home. A section added to `SITE` and not
+// to the overview is what makes the home page stop being a map, and the drift is silent.
+test('every section shows its opening on the main overview', async () => {
+    const home = (await docsPages()).find((page) => page.route === '/')
+    const shown = new Set<string>()
+    for (const [, route] of home?.source.matchAll(/<Lead of="([^"]+)"/g) ?? [])
+        shown.add(route as string)
+    const missing: string[] = []
+    for (const group of SITE) {
+        const first = group.pages[0]?.route ?? ''
+        if (first !== '/' && !shown.has(first))
+            missing.push(`${group.section} (${first})`)
+    }
+    expect(missing).toEqual([])
+})
+
+// A heading of the form `Subject: `a`, `b`, `c`` is a GLOSSARY LABEL, and it reads as the whole set —
+// so it is compared against the table under it, which is what the section teaches.
 const ENUMERATING = /^#{2,4}\s+[^:`]+:\s+((?:`[^`]+`)(?:,\s*`[^`]+`)+)\s*$/
 const CELL = /^\|\s*`([^`]+)`/
 
@@ -259,21 +302,18 @@ function bare(name: string): string {
 
 test('a heading that enumerates names everything its table lists', async () => {
     const partial: string[] = []
-    for (const page of await readPages()) {
-        const lines = page.body.split('\n')
+    for (const [route, body] of await renderedMarkdown()) {
+        const lines = body.split('\n')
         for (let at = 0; at < lines.length; at += 1) {
             const named = ENUMERATING.exec(lines[at] ?? '')
             if (!named?.[1]) continue
             const heading = named[1]
                 .split(',')
                 .map((one) => bare(one.trim().slice(1, -1)))
-
             const listed: string[] = []
             for (let scan = at + 1; scan < lines.length; scan += 1) {
                 const line = lines[scan] ?? ''
                 if (line.startsWith('#')) break
-                // The FIRST table only: a section may follow one with another about
-                // something else, and reading both would compare against a union.
                 if (listed.length > 0 && !line.startsWith('|')) break
                 const cell = CELL.exec(line)
                 if (cell?.[1]) listed.push(bare(cell[1]))
@@ -281,100 +321,53 @@ test('a heading that enumerates names everything its table lists', async () => {
             if (listed.length === 0) continue
             if (heading.join() !== listed.join())
                 partial.push(
-                    `${page.slug}: "${heading.join(', ')}" vs table ${listed.join(', ')}`,
+                    `${route}: "${heading.join(', ')}" vs table ${listed.join(', ')}`,
                 )
         }
     }
     expect(partial).toEqual([])
 })
 
-// docs/BRAND.md, Voice: "A heading carries its own subject." A reader arriving from the
-// on-this-page list or a search result has no previous section, so a bare pronoun in a
-// heading refers to nothing. Written after "Declare it" and "Call it" shipped — a check
-// that only looked for a LEADING pronoun had passed over both.
+// docs/BRAND.md, Voice: "A heading carries its own subject." A reader arriving from the rail or a
+// search result has no previous section, so a bare pronoun in a heading refers to nothing.
 const BARE_PRONOUN =
     /(^(it|they|this|these|those|its|their)\b|\b(it|them|this|these|those|one)$)/i
 
 test('no heading leans on a pronoun for its subject', async () => {
     const offenders: string[] = []
-    for (const page of await readPages()) {
-        for (const line of page.body.split('\n')) {
+    for (const [route, body] of await renderedMarkdown())
+        for (const line of body.split('\n')) {
             const heading = /^#{2,4}\s+(.*?)\s*$/.exec(line)
             if (heading?.[1] && BARE_PRONOUN.test(heading[1]))
-                offenders.push(`${page.slug}: ${heading[1]}`)
+                offenders.push(`${route}: ${heading[1]}`)
         }
-    }
     expect(offenders).toEqual([])
 })
 
-// 40.27 — a card follows its heading with nothing between them. A paragraph there is a fourth voice
-// restating the heading, the title or the summary (docs/BRAND.md, "Four layers reach a card"), and
-// the copy it was trying to be belongs after the card.
-test('an example follows its heading directly', async () => {
-    const separated: string[] = []
-    for (const page of await readPages()) {
-        let fenced = false
-        let previous = ''
-        for (const line of page.body.split('\n')) {
-            if (line.startsWith('```')) fenced = !fenced
-            if (
-                !fenced &&
-                EXAMPLE.test(line.trim()) &&
-                !/^#{2,4}\s/.test(previous)
-            )
-                separated.push(`${page.slug}: ${line.trim()}`)
-            if (line.trim() !== '') previous = line
-        }
-    }
-    expect(separated).toEqual([])
-})
-
 // A `.abide` file is where a state is read and written BY NAME — `count += 1`, not
-// `count.set(count() + 1)`. Both spellings compile and that is deliberate, but a guide
-// showing the explicit one teaches back the ceremony the file exists to remove. Where the
-// explicit spelling is the SUBJECT rather than the example, it goes in a `ts` fence or an
-// inline span, which is honest twice over: a `.ts` file is exactly where an author writes
-// it, and nothing here has to grow an opt-out marker to say so.
-
-// `route` and `principal` are NAMESPACES, not states (RULEBOOK 31.1, 23.1),
-// so `principal.set(…)` is the namespace's own method and never an unsugared write.
+// `count.set(count() + 1)`. A guide showing the explicit one teaches back the ceremony the file
+// exists to remove; where the explicit spelling IS the subject, it goes in a `ts` fence.
+// `route` and `principal` are NAMESPACES, not states (RULEBOOK 31.1, 23.1).
 const NAMESPACES = new Set(['route', 'principal'])
 
-// Every `.abide` source the docs SHIP: each `abide` fence, plus the example files on disk.
+// Every `.abide` source the docs SHIP: each `abide` fence a page writes, and every `.abide` a card
+// shows — which the markdown carries as a fence too, so one read covers both.
 async function abideSources(): Promise<{ where: string; code: string }[]> {
     const sources: { where: string; code: string }[] = []
-    for (const path of new Bun.Glob('**/*.md').scanSync({
-        cwd: CONTENT_DIR.pathname,
-    })) {
-        const text = await Bun.file(new URL(path, CONTENT_DIR)).text()
+    for (const [route, body] of await renderedMarkdown()) {
         let ordinal = 0
-        for (const match of text.matchAll(/```abide[^\n]*\n([\s\S]*?)```/g)) {
+        for (const match of body.matchAll(/```abide[^\n]*\n([\s\S]*?)```/g)) {
             ordinal += 1
             sources.push({
-                where: `${path} block ${ordinal}`,
+                where: `${route} block ${ordinal}`,
                 code: match[1] ?? '',
             })
         }
     }
-    const seen = new Set<string>()
-    for (const manifest of (await examples()).values())
-        for (const path of manifest.files) {
-            if (!path.endsWith('.abide') || seen.has(path)) continue
-            seen.add(path)
-            sources.push({
-                where: path,
-                code: await Bun.file(new URL(path, APP)).text(),
-            })
-        }
     return sources
 }
 
-// Which names in a source are reactive values, from what the source itself says: a `reactive`
-// binding — `reactive.of` and `reactive.share` included — a `Reactive<…>` prop, a `bind:` target, or an explicit write. A zero-argument
-// call on anything else is an ordinary function — `cookies()` is one — and reading every
-// `foo()` as an unsugared state read is how this gate would start failing on code it has
-// no business judging. The cost is a read staying invisible where nothing else in the
-// snippet names the state; the WRITE is caught unconditionally, and it is the common one.
+// Which names in a source are reactive values, from what the source itself says.
 function stateNames(code: string): Set<string> {
     const names = new Set<string>()
     for (const match of code.matchAll(
@@ -395,7 +388,6 @@ test('an abide snippet reads and writes state by name, not through the explicit 
     const offenders: string[] = []
     for (const { where, code } of await abideSources()) {
         const states = stateNames(code)
-        // A MEMBER call is a `Reactive` probe — `invoice.pending()` — so only a bare name.
         for (const match of code.matchAll(
             /(?<![.\w$])([A-Za-z_$][\w$]*)\.set\(/g,
         )) {
@@ -413,146 +405,7 @@ test('an abide snippet reads and writes state by name, not through the explicit 
                 offenders.push(`${where}: ${name}() — read \`${name}\``)
         }
     }
-    expect(offenders).toEqual([])
-})
-
-// The front matter states where a page's examples live on disk; the body embeds them by
-// name. Two spellings of one fact, so they are gated equal — a page that grows an example
-// and not the header reads, to an agent, as a page with no files behind it.
-const EXAMPLES_PREFIX = 'packages/dogfood/examples/'
-const REPO = new URL('../../../', import.meta.url)
-
-test('front matter names exactly the example manifests the page embeds', async () => {
-    const wrong: string[] = []
-    for (const page of await readPages()) {
-        const embedded: string[] = []
-        for (const name of embeddedExamples(page.body))
-            embedded.push(`${EXAMPLES_PREFIX}${name}.json`)
-        if (page.examples.join() !== [...new Set(embedded)].join())
-            wrong.push(
-                `${page.slug}: front matter ${page.examples.join()}, body ${embedded.join()}`,
-            )
-    }
-    expect(wrong).toEqual([])
-})
-
-// ONE TEACHING PAGE PER EXAMPLE, which is what is left of "one example per page" once a page
-// carries a demo per behaviour instead (40.17). The property that rule was protecting
-// survives the inversion: a reader meets an example where it is taught, so a directory taught
-// from two pages is code one of those readers has never been shown running. RULEBOOK 40.20.
-//
-// `covers` IS THE DISCRIMINANT, and it is the one already in the front matter (40.11): an
-// overview carries a section's opening example and a style experiment re-renders one to
-// compare voices, and neither is teaching the names in it. A page that claims a name is.
-test('an example directory is taught by exactly one page', async () => {
-    const pagesFor = new Map<string, string[]>()
-    for (const page of await readPages()) {
-        if (!page.covers.length) continue
-        for (const name of new Set(embeddedExamples(page.body))) {
-            const seen = pagesFor.get(name) ?? []
-            seen.push(page.slug)
-            pagesFor.set(name, seen)
-        }
-    }
-    const shared: string[] = []
-    for (const [name, pages] of pagesFor) {
-        if (pages.length > 1) shared.push(`${name}: ${pages.join(', ')}`)
-    }
-    expect(shared).toEqual([])
-})
-
-// THE FOUR APPS docs/BRAND.md names, as an example declares them. `unconverted` is the
-// examples written before the catalogue existed, and it is deliberately not one of the four:
-// it reads as the debt it is, and it is what a page mixing worlds gets caught on below.
-const APPS = new Set(['crm', 'chat', 'dashboard', 'player', 'unconverted'])
-
-test('every example declares an app the brand names', async () => {
-    const wrong: string[] = []
-    for (const [name, manifest] of await examples())
-        if (!APPS.has(manifest.app)) wrong.push(`${name}: app ${manifest.app}`)
-    expect(wrong).toEqual([])
-})
-
-// ONE APP PER PAGE (RULEBOOK 40.22). Six cards from four worlds is four worlds to enter, and
-// the reader pays that per card while the thing being taught is one thing throughout.
-test('every example a page embeds is drawn from the same app', async () => {
-    const mixed: string[] = []
-    const all = await examples()
-    for (const page of await readPages()) {
-        const apps = new Set<string>()
-        for (const name of new Set(embeddedExamples(page.body))) {
-            const manifest = all.get(name)
-            if (manifest) apps.add(manifest.app)
-        }
-        if (apps.size > 1) mixed.push(`${page.slug}: ${[...apps].join(', ')}`)
-    }
-    expect(mixed).toEqual([])
-})
-
-// THE OLD SHAPE, LISTED SO IT IS A NUMBER RATHER THAN A READING. A page in the shape 40.17 and
-// 40.18 replaced — one example in the lead and every section hanging a snippet off it —
-// passes every check there is: 40.24 and 40.25 are judgement, and the example it embeds declares
-// `unconverted`, which the app check waves through. So an agent asked to convert a section can
-// polish its prose, leave the structure untouched, and go green.
-//
-// A RATCHET, not a report. Converting a page means deleting its line; a page that arrives in the
-// old shape has to add one, which is the moment somebody notices. The list only shrinks.
-//
-// IT IS EMPTY, and that is the state worth defending rather than the end of the mechanism.
-// Both assertions still bind: a page embedding an `unconverted` example fails until somebody
-// writes its slug in here, and a slug in here with no such page fails too. So the next page
-// to arrive in the old shape cannot land quietly.
-const OLD_SHAPE = new Set<string>([])
-
-test('no teaching page is in the old shape but the ones already counted', async () => {
-    const apps = new Map<string, string>()
-    for (const [name, manifest] of await examples())
-        apps.set(name, manifest.app)
-    // A style experiment re-renders one example in another voice and teaches no name, so it
-    // declares no `covers` and is not a page this is about.
-    const found: string[] = []
-    for (const page of await readPages()) {
-        if (!page.covers.length) continue
-        const old = [...new Set(embeddedExamples(page.body))].filter(
-            (name) => apps.get(name) === 'unconverted',
-        )
-        if (old.length) found.push(page.slug)
-    }
-    expect(found.filter((slug) => !OLD_SHAPE.has(slug))).toEqual([])
-    expect([...OLD_SHAPE].filter((slug) => !found.includes(slug))).toEqual([])
-})
-
-test('every example manifest the front matter names is on disk', async () => {
-    const missing: string[] = []
-    for (const page of await readPages()) {
-        for (const path of page.examples) {
-            const manifest = Bun.file(new URL(path, REPO))
-            if (!(await manifest.exists()))
-                missing.push(`${page.slug}: ${path}`)
-        }
-    }
-    expect(missing).toEqual([])
-})
-
-// BRAND, "Documentation structure": the main overview shows one section per area, each
-// through that area's own `{% lead %}`, so the words have one home. A section added to NAV
-// and not to the overview is what makes the home page stop being a map, and the drift is
-// SILENT — both files stay valid alone. Written after Reference had gone eight sections
-// without an opening. The exception is derived rather than listed: the section whose first
-// page IS the overview has no separate opening to pull.
-test('every nav section shows its opening on the main overview', async () => {
-    const overview = await Bun.file(new URL('index.md', CONTENT_DIR)).text()
-    const shown = new Set<string>()
-    for (const match of overview.matchAll(new RegExp(LEAD.source, 'gm')))
-        shown.add(match[1] ?? '')
-
-    const missing: string[] = []
-    for (const group of NAV) {
-        const first = group.pages[0] ?? ''
-        if (first !== 'index' && !shown.has(first))
-            missing.push(`${group.section} (${first})`)
-    }
-    expect(missing).toEqual([])
+    expect([...new Set(offenders)]).toEqual([])
 })
 
 // A type signature names other types, and every one has to be declared somewhere or the
@@ -637,154 +490,104 @@ test('every type a signature names is declared somewhere', async () => {
     expect([...new Set(dangling)]).toEqual([])
 })
 
-// A capability claimed by two pages is a capability neither page owns. `transform` was
-// claimed by the streaming guide for the stream join and by the form guide for the write
-// refusal — two jobs, one claim, and the coverage test satisfied by either.
+// A capability claimed by two pages is a capability neither page owns.
 test('each capability is claimed by exactly one page', async () => {
     const claims = new Map<string, string[]>()
-    for (const page of await readPages())
-        for (const name of page.covers)
-            claims.set(name, [...(claims.get(name) ?? []), page.slug])
-    const shared = [...claims]
-        .filter(([, pages]) => pages.length > 1)
-        .map(([name, pages]) => `${name}: ${pages.join(', ')}`)
+    for (const page of await docsPages())
+        for (const name of page.covers ?? [])
+            claims.set(name, [...(claims.get(name) ?? []), page.route])
+    const shared: string[] = []
+    for (const [name, routes] of claims)
+        if (routes.length > 1) shared.push(`${name}: ${routes.join(', ')}`)
     expect(shared).toEqual([])
 })
 
-// docs/BRAND.md, Documentation structure: "A label stands alone." A nav label is read
-// with no sentence around it, so a fragment refers to nothing — "By name" and "On change"
-// wait for a noun the reader does not have.
-//
-// The SHAPE is a preposition and a single word, never a leading preposition alone: "On
-// value change" is the repair BRAND names, so a check that banned the preposition would
-// have failed the label it recommends. Narrow on purpose — "stands alone" is not
-// checkable, and a fragment built another way is still a review question.
+// docs/BRAND.md, Documentation structure: "A label stands alone." A nav label is read with no
+// sentence around it, so a preposition and a single word waits for a noun the reader does not have.
 const BARE_PREPOSITIONAL =
     /^(on|by|in|with|for|from|at|to|of|about|after|before)\s+\S+$/i
 
 test('no nav label begins with a preposition', async () => {
     const offenders: string[] = []
-    for (const page of await readPages())
+    for (const page of await docsPages())
         if (BARE_PREPOSITIONAL.test(page.nav))
-            offenders.push(`${page.slug}: ${page.nav}`)
+            offenders.push(`${page.route}: ${page.nav}`)
     expect(offenders).toEqual([])
 })
 
-// RULEBOOK 40.11: a page declares in `covers` which REGISTRY names it covers, and an overview or
-// a reference page declares none. `machines/index` had grown four entries the section's topic pages
-// should have owned, and nothing said so — the coverage tests above are satisfied by a
-// claim from any page, which is exactly what makes the WRONG page's claim invisible.
+// 40.11 — an overview or a reference page declares no `covers`: a claim from the wrong page is
+// invisible to every coverage gate above, which any claim satisfies.
 test('no overview or reference page declares covers', async () => {
     const offenders: string[] = []
-    for (const page of await readPages()) {
-        const routes =
-            page.slug.endsWith('/index') || page.slug.startsWith('reference/')
-        if (routes && page.covers.length > 0) offenders.push(page.slug)
-    }
+    for (const group of SITE)
+        for (const [index, page] of group.pages.entries())
+            if (
+                (index === 0 || page.route.startsWith('/reference')) &&
+                (page.covers?.length ?? 0) > 0
+            )
+                offenders.push(page.route)
     expect(offenders).toEqual([])
 })
 
-// docs/BRAND.md, Documentation structure: a nav label is what a reader scans a sidebar
-// for, and a link standing in for a page is read as that label. So a RENAME has two
-// halves and only one of them is in the file being renamed — "Rooms & sockets" survived
-// in nine links after the page became "Sockets", and "On value change" in two.
-//
-// A link to a section OVERVIEW is labelled with the SECTION name, that being what a
-// reader is sent to; a CODE label names an API and the link is where to read about it.
-test('a link is labelled with the nav of the page it points at', async () => {
-    const pages = await readPages()
-    const navOf = new Map(pages.map((page) => [page.slug, page.nav]))
-    const sectionOf = new Map(pages.map((page) => [page.slug, page.section]))
-
+// docs/BRAND.md: a link standing in for a page is read as that page's label, so a RENAME has two
+// halves and only one is in the page renamed. A link to an overview is labeled with the SECTION; a
+// CODE label names an API and the link is where to read about it.
+test('a link is labeled with the nav of the page it points at', async () => {
+    const pages = await docsPages()
+    const navOf = new Map<string, string>()
+    const sectionOf = new Map<string, string>()
+    for (const group of SITE)
+        for (const [index, page] of group.pages.entries()) {
+            navOf.set(page.route, page.nav)
+            if (index === 0) sectionOf.set(page.route, group.section)
+        }
     const stale: string[] = []
-    for (const page of pages) {
-        const from = page.slug.slice(0, page.slug.lastIndexOf('/') + 1)
-        for (const [, label, target] of page.body.matchAll(
-            /\[([^\]]+)\]\(([^)]+)\.md\)/g,
+    for (const [route, body] of await renderedMarkdown())
+        for (const [, label, target] of body.matchAll(
+            /\[([^\]]+)\]\(([^)#]+)\.md(?:#[^)]*)?\)/g,
         )) {
-            const slug = new URL(`${target}`, `abide:/${from}`).pathname.slice(
-                1,
-            )
-            const nav = navOf.get(slug)
+            const linked = target === '/index' ? '/' : (target as string)
+            const nav = navOf.get(linked)
             if (
                 nav === undefined ||
                 label === undefined ||
                 label.startsWith('`')
             )
                 continue
-            const overview = slug.endsWith('/index')
-                ? sectionOf.get(slug)
-                : undefined
-            if (label !== nav && label !== overview)
+            if (label !== nav && label !== sectionOf.get(linked))
                 stale.push(
-                    `${page.slug}: "${label}" -> ${slug}, whose nav is "${nav}"`,
+                    `${route}: "${label}" -> ${linked}, whose nav is "${nav}"`,
                 )
         }
-    }
+    expect(pages.length).toBeGreaterThan(0)
     expect(stale).toEqual([])
 })
 
-// A fence renders in `main`'s 44rem column at `font: 400 .75rem/1.25rem
-// var(--mono)`, which measures 589px of content against a 7.2px advance — 81
-// characters before `pre`'s own `overflow-x:auto` takes over. Past that the
-// sample is a thing to scroll rather than a thing to read, and the ONE line
-// that overflows is usually the line the section is about: 50 of 545 did,
-// worst at 107.
-//
-// THE WIDTH IS READ FROM THE FORMATTER RATHER THAN RESTATED, because a second
-// copy of it drifts and only one of the two gets fixed: this said 76 against a
-// `lineWidth` of 100, so a format run reflowed two example sources to 90-odd
-// characters and turned this red — a formatter and a test fighting over one
-// file with no way for either to win. Read, they cannot disagree, and this
-// gate stops being a width opinion and becomes what it is for: covering the
-// files biome does not reach. Its `files.includes` is `**/*.{json,ts,js}`, so
-// a markdown fence, a `.abide` template and a comment are all formatted by
-// nobody — and the example FILES are here because they render in that same
-// column whatever their extension.
+// A sample renders in `main`'s column, and past the formatter's line width it is a thing to scroll
+// rather than a thing to read. THE WIDTH IS READ FROM THE FORMATTER rather than restated, so the two
+// cannot disagree; biome formats no `.abide`, so this is what holds an example's own file to it.
 const COLUMN: number = (
     await Bun.file(new URL('../../../biome.json', import.meta.url)).json()
 ).formatter.lineWidth
 
-function overlongLines(source: string, fencedOnly: boolean): number[] {
-    const over: number[] = []
-    let fenced = !fencedOnly
-    const lines = source.split('\n')
-    for (let at = 0; at < lines.length; at += 1) {
-        const line = lines[at] ?? ''
-        if (fencedOnly && line.startsWith('```')) {
-            fenced = !fenced
-            continue
-        }
-        if (fenced && line.length > COLUMN) over.push(at + 1)
-    }
-    return over
-}
-
 test('no code sample is wider than the column it renders in', async () => {
     const wide: string[] = []
-    for (const path of new Bun.Glob('**/*.md').scanSync({
-        cwd: CONTENT_DIR.pathname,
-    })) {
-        const source = await Bun.file(new URL(path, CONTENT_DIR)).text()
-        for (const line of overlongLines(source, true))
-            wide.push(`content/${path}:${line}`)
+    for (const [route, body] of await renderedMarkdown()) {
+        let fenced = false
+        for (const line of body.split('\n')) {
+            if (line.startsWith('```')) {
+                fenced = !fenced
+                continue
+            }
+            if (fenced && line.length > COLUMN)
+                wide.push(`${route}: ${line.slice(0, 60)}…`)
+        }
     }
-    // An example's own files, which the panel renders at the same width.
-    const shown = new Set<string>()
-    for (const manifest of (await examples()).values())
-        for (const path of manifest.files) shown.add(path)
-    for (const path of shown) {
-        const source = await Bun.file(new URL(path, APP)).text()
-        for (const line of overlongLines(source, false))
-            wide.push(`${path}:${line}`)
-    }
-    expect(wide).toEqual([])
+    expect([...new Set(wide)]).toEqual([])
 })
 
-// 40.29: a comment in an example's own source fits on one line, and a longer reason goes in the
-// copy after the card, where it is prose rather than a thing to scroll past in the Files tab. A
-// run of `//` lines, or a `/*` that does not close on its own line, is a comment of two lines or
-// more. With every source comment the 40.29 pass shortened put back: 15 files.
+// 40.29: a comment in an example's own source fits on one line, and a longer reason goes in the copy
+// after the card. A run of `//` lines, or a `/*` that does not close on its own line, is two or more.
 function multilineComments(source: string): number[] {
     const opened: number[] = []
     const lines = source.split('\n')
@@ -803,25 +606,25 @@ function multilineComments(source: string): number[] {
 test("no comment in an example's own source runs past one line", async () => {
     const long: string[] = []
     const shown = new Set<string>()
-    for (const manifest of (await examples()).values())
-        for (const path of manifest.files) shown.add(path)
+    for (const card of await allCards())
+        for (const path of card.files.values()) shown.add(path)
     for (const path of shown) {
-        const source = await Bun.file(new URL(path, APP)).text()
+        if (path === '') continue
+        const source = await Bun.file(`${DOGFOOD}${path}`).text()
         for (const line of multilineComments(source))
             long.push(`${path}:${line}`)
     }
     expect(long).toEqual([])
 })
 
-// docs/BRAND.md, Visual identity: the code-block spine is the one device to keep, and an
-// uncaptioned fence renders without it — 46 of 87 did. The caption is a file path or one
-// of the four side words; a fence with NO LANGUAGE is exempt, being a shell transcript or
-// a directory tree rather than source, with no side to name.
+// docs/BRAND.md, Visual identity: the code-block spine is the one device to keep, and an uncaptioned
+// fence renders without it. A fence with NO LANGUAGE is exempt — a shell transcript or a directory
+// tree, with no side to name.
 test('every source fence carries a caption', async () => {
     const bare: string[] = []
-    for (const page of await readPages()) {
+    for (const [route, body] of await renderedMarkdown()) {
         let fenced = false
-        for (const line of page.body.split('\n')) {
+        for (const line of body.split('\n')) {
             if (!line.startsWith('```')) continue
             if (fenced) {
                 fenced = false
@@ -829,25 +632,17 @@ test('every source fence carries a caption', async () => {
             }
             fenced = true
             if (line.trim() !== '```' && !/^```\S+\s+\S/.test(line))
-                bare.push(`${page.slug}: ${line.trim()}`)
+                bare.push(`${route}: ${line.trim()}`)
         }
     }
     expect(bare).toEqual([])
 })
 
-// A REFERENCE PAGE THAT ENUMERATES ITS SECTION EXCEPT FOR ONE NAME reads as complete, which is
-// the whole failure mode of a reference: a reader who does not find `s.peek` concludes there is
-// no such thing rather than that the page is short. `covers:` gates a guide against a capability
-// and this is its counterpart for the other document type, gating a page against a whole section
-// of REGISTRY.md.
-//
-// The UNION is what is checked, not each page: `Reactive` and `state` split one registry section
-// between the interface and the factory that hands it back, which is the split the format asks
-// for and is not a section either page covers alone.
-const REGISTRY_MD = new URL('../../../docs/REGISTRY.md', import.meta.url)
-
+// A REFERENCE PAGE THAT ENUMERATES ITS SECTION EXCEPT FOR ONE NAME reads as complete — a reader who
+// does not find `s.peek` concludes there is no such thing. The UNION of the pages claiming a section
+// is what is checked: `Reactive` and `reactive` split one registry section between two pages.
 test('every name a reference page enumerates is on one of the pages that claim it', async () => {
-    const registry = await Bun.file(REGISTRY_MD).text()
+    const registry = await Bun.file(REGISTRY).text()
     const bySection = new Map<string, string[]>()
     let section = ''
     for (const line of registry.split('\n')) {
@@ -862,40 +657,31 @@ test('every name a reference page enumerates is on one of the pages that claim i
         if (name)
             bySection.set(section, [...(bySection.get(section) ?? []), name])
     }
-
+    const bodies = await renderedMarkdown()
     const claimed = new Map<string, string[]>()
-    for (const page of await readPages()) {
-        for (const name of page.enumerates) {
-            claimed.set(name, [...(claimed.get(name) ?? []), page.body])
-        }
-    }
-
+    for (const page of await docsPages())
+        for (const name of page.enumerates ?? [])
+            claimed.set(name, [
+                ...(claimed.get(name) ?? []),
+                bodies.get(page.route) ?? '',
+            ])
     const absent: string[] = []
-    for (const [name, bodies] of claimed) {
+    for (const [name, texts] of claimed) {
         const names = bySection.get(name)
         if (!names) {
             absent.push(`no REGISTRY section named ${name}`)
             continue
         }
-        for (const row of names) {
-            if (bodies.some((body) => body.includes(`\`${row}\``))) continue
-            absent.push(`${name}: ${row}`)
-        }
+        for (const row of names)
+            if (!texts.some((text) => text.includes(`\`${row}\``)))
+                absent.push(`${name}: ${row}`)
     }
     expect(absent).toEqual([])
 })
 
-// A REFERENCE PAGE THAT RESTATES A SIGNATURE IS A SECOND COPY OF IT, and the check above only
-// asked that the NAME be present — so `Reactive<Stored, Failures>` sat in three reference pages
-// across the whole change that added the slot the two-parameter form was missing. A reader who
-// opens the reference gets the copy, and the copy is what they write code against.
-//
-// Only the SIGNATURE cell is compared. The description is where a reference page earns its keep,
-// and REGISTRY's one-sentence meaning is deliberately not what a page says.
+// A REFERENCE PAGE THAT RESTATES A SIGNATURE IS A SECOND COPY OF IT, and a reader writes code
+// against the copy. An OVERLOAD has two signatures in one section, so a restatement matches ONE.
 test('every signature a reference page restates matches REGISTRY', async () => {
-    // An OVERLOAD is a name with two signatures in one section — `memo` has a keyed form and an
-    // unkeyed one, `watch` a narrowed form and a bare one — so what a page restates has to match
-    // ONE of them rather than the first, which is a different rule from the drift being checked.
     const bySection = new Map<string, Map<string, string[]>>()
     for (const { name, signature, section } of await registryRows()) {
         if (signature === undefined || signature === '') continue
@@ -903,13 +689,13 @@ test('every signature a reference page restates matches REGISTRY', async () => {
         names.set(name, [...(names.get(name) ?? []), signature])
         bySection.set(section, names)
     }
-
+    const bodies = await renderedMarkdown()
     const drifted: string[] = []
-    for (const page of await readPages()) {
-        for (const section of page.enumerates) {
+    for (const page of await docsPages())
+        for (const section of page.enumerates ?? []) {
             const names = bySection.get(section)
             if (!names) continue
-            for (const line of page.body.split('\n')) {
+            for (const line of (bodies.get(page.route) ?? '').split('\n')) {
                 if (!line.startsWith('| `')) continue
                 const row = cells(line)
                 const name = row[0] ?? ''
@@ -918,10 +704,9 @@ test('every signature a reference page restates matches REGISTRY', async () => {
                 if (declared === undefined || signature === '') continue
                 if (declared.includes(signature)) continue
                 drifted.push(
-                    `${page.slug}: ${name}\n  page:     ${signature}\n  REGISTRY: ${declared.join('\n            ')}`,
+                    `${page.route}: ${name}\n  page:     ${signature}\n  REGISTRY: ${declared.join('\n            ')}`,
                 )
             }
         }
-    }
     expect(drifted).toEqual([])
 })

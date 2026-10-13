@@ -1,0 +1,103 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Snippet from '#src/docs/Snippet.abide'
+import Account from './Account.abide'
+import accountSource from './Account.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Code code={`{
+    "version": "2.4.1",
+    "abide": "0.9.0",
+    "startedAt": "2026-03-04T09:12:44.108Z"
+}`} />
+
+    <Section title="The three baseline fields">
+        <table>
+            <thead><tr><th></th><th></th></tr></thead>
+            <tbody>
+                <tr><td><code>version</code></td><td>the app's version — <strong><code>0.0.0</code> rather than absent</strong> where the package declares none</td></tr>
+                <tr><td><code>abide</code></td><td>the framework's version</td></tr>
+                <tr><td><code>startedAt</code></td><td>when this process came up, ISO-8601</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>version</code> always being there is the useful choice: a consumer reads one shape
+        always, and "no version declared" is a value rather than a key that sometimes is not
+        there.</p>
+
+        <p><code>startedAt</code> is a timestamp rather than an uptime because a timestamp is
+        stable. Two scrapes a minute apart of the same process report the same
+        <code>startedAt</code> and different uptimes, and only one of those tells you a restart
+        happened.</p>
+    </Section>
+
+    <Section title="`onHealth` adds to it, and the app wins">
+        <Example
+            id="health-merge"
+            title="`onHealth(fn)` — your fields beside the baseline"
+            summary="The account a load balancer scrapes, read on a CRM's status panel through health(). The database line is the app's own; the rest is abide's."
+            files={{
+                'Account.abide': accountSource,
+            }}
+        >
+            <Account />
+        </Example>
+
+        <p>The <code>database</code> line is the card's own <code>onHealth</code>, and the
+        <code>declare module</code> block beside it is what lets a page read
+        <code>account.database</code> as a string. What a reporter returns is merged over the
+        baseline, and <strong>the app's own fields win every collision</strong>. That is the
+        direction that keeps the endpoint useful: an app that has a better answer for
+        <code>version</code> than the one abide derived should be able to give it, and a framework
+        overriding an app's field would make the endpoint say something nobody wrote.</p>
+
+        <p>A reporter that throws, or that answers with something that is not an object, warns on
+        <code>abide:health</code> and the baseline still answers. A health check that fails to
+        report is not a health check that reports failure — the load balancer needs an answer either
+        way, and the warning is where the problem goes.</p>
+
+        <p>Read on: <a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a> ·
+        <a href={url('/app/record-what-happened')}>Logging</a></p>
+    </Section>
+
+    <Section title="`health` is an rpc that takes no args">
+        <p><code>health</code> is an <code>Rpc</code>, imported from <code>@abide/abide</code> and
+        called the same way on both sides: <code>health()</code> in a page, <code>await
+        health()</code> in a handler. The call is what asks, so a page that never makes it loads no
+        account.</p>
+
+        <Snippet source={accountSource} path="Account.abide" from={['const account']} />
+
+        <p>It is <strong>seeded like any rpc</strong>, which means the browser's own call on
+        hydration is answered from the seed buffer rather than by the reporter running again (25.3,
+        41.5).</p>
+    </Section>
+
+    <Section title="The endpoint passes the app's rungs">
+        <p><code>/__abide/health</code> goes through <code>middleware</code> like every other
+        address — a rung in the root layout runs over it as it runs over a page. So an app-wide
+        rung that refuses a caller with no credentials has to let this address through. A load
+        balancer presents none, and a health check a 401 rung can fail reports the auth layer rather
+        than the app.</p>
+
+        <p>It answers <code>no-store</code>, because it describes this process at this moment. A
+        cached health check is a load balancer being told a drained instance is fine.</p>
+
+        <p>Read on: <a href={url('/data/decide-who-may-call-what')}>Authorization</a> ·
+        <a href={url('/data/answer-with-something-other-than-json')}>Response types</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a> — where
+            <code>onHealth</code> is registered</li>
+            <li><a href={url('/reference/ambient-values')}>Ambient values</a> — <code>health</code>
+            beside the rest</li>
+        </ul>
+    </Section>
+</Doc>

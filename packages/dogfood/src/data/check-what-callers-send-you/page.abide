@@ -1,0 +1,394 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Email from './Email.abide'
+import Seats from './Seats.abide'
+import InvoiceSearch from './InvoiceSearch.abide'
+import PastedRow from './PastedRow.abide'
+import InvoiceKey from './InvoiceKey.abide'
+import emailSource from './Email.abide' with { type: 'text' }
+import seatsSource from './Seats.abide' with { type: 'text' }
+import invoiceSearchSource from './InvoiceSearch.abide' with { type: 'text' }
+import pastedRowSource from './PastedRow.abide' with { type: 'text' }
+import invoiceKeySource from './InvoiceKey.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>Here the annotation you already wrote <strong>is</strong> the schema.
+    <code>{'GET(({ id }: { id: number }) => …)'}</code> builds the runtime schema for
+    <code>{'{ id: number }'}</code>, and a caller sending <code>{'{ id: "abc" }'}</code> gets a 422
+    before the handler runs. Where that derivation is not enough, an option pins the shape, on the
+    value rather than at the address.</p>
+
+    <Section title="A derived schema reads `required` off the syntax">
+        <p>One rule, readable from the declaration alone: <code>required</code> is which
+        destructured members lack defaults, and <code>Args</code> itself is optional where the
+        parameter has one.</p>
+
+        <table>
+            <thead><tr><th>Declaration</th><th>Schema</th><th>Called as</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'({ page }: { page: number })'}</code></td><td><code>{'{ page: number }'}</code>, <code>page</code> required</td><td><code>{'listPayments({ page: 2 })'}</code></td></tr>
+                <tr><td><code>{'({ page = 1 })'}</code></td><td><code>{'{ page?: number }'}</code>, <code>default: 1</code></td><td><code>listPayments()</code> or <code>{'listPayments({ page: 7 })'}</code></td></tr>
+                <tr><td><code>{'({ page = 1 } = {})'}</code></td><td><code>Args</code> itself optional</td><td><code>listPayments()</code> with a bare URL</td></tr>
+                <tr><td>no parameter at all</td><td>none</td><td><code>listPayments()</code></td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`args` and `schema` gate what comes in, `transform` shapes what is stored">
+        <p>Deriving from an annotation means the build resolves types, so build time is typecheck
+        time — and a schema is only ever as good as the inference that reached it. Where inference
+        <strong>fails</strong> the compiler reads on rather than refusing the file, because valid
+        TypeScript has to compile. The cost is that an unresolved annotation degrades to a
+        <strong>wider</strong> schema, silently.</p>
+
+        <p>That is the trade "the shape is never declared twice" is bought with, and the repair is
+        an option at each <strong>position</strong>. <code>args</code> gates the arguments a keyed
+        value is called with:</p>
+
+        <Code language="abide" caption="src/invoices/api.abide — excerpt" code={`<script server>
+import { z } from 'zod'
+
+const invoices = reactive(
+    (args: { lines: Line[] }) => database.invoice.create(args.lines),
+    { args: z.object({ lines: z.array(lineSchema).min(1) }) },
+)
+
+export const createInvoice = POST(invoices)
+</script>`} />
+
+        <p><code>transform</code> shapes what gets stored:</p>
+
+        <Code language="ts" caption="src/ledger.ts — excerpt" code={`const paidIds = reactive(() => listInvoices({ year }), {
+    transform: (all) => new Set(all.filter((r) => r.paid).map((r) => r.id)),
+})`} />
+
+        <p>They are not two spellings of one job. <code>Accepted</code> and <code>Stored</code>
+        already name the two ends, and that second one has no validation in it at all. So the
+        <strong>option name</strong> is the discriminant: a function in <code>schema</code> or
+        <code>args</code> refuses by throwing, a function in <code>transform</code> refuses by
+        returning a <code>Failed</code>, and neither has to be told from the other.</p>
+
+        <p><strong>Each gate checks one position.</strong> <code>schema</code> checks the value:
+        what a <code>set</code> writes, what a body produced, and what a stream has accumulated
+        (4.3, 11.46, 9.8). A <code>patch</code> mutates the value in place and runs no
+        <code>schema</code> (5.7), so a write that has to be checked is a <code>set</code>.
+        <code>args</code> checks the arguments a keyed value is called with (11.40), and it only
+        refuses (11.28). A value whose body takes no parameter has no arguments, so it cannot spell
+        <code>args</code> at all (11.41), rather than carrying an option that quietly does
+        nothing.</p>
+
+        <p>With no <code>transform</code>, <code>Stored</code> is <code>Accepted</code> and
+        <code>schema</code> decides both ends. Nothing declares that; it falls out of the types.</p>
+
+        <p>Either option pins a shape you will not have widened, and either is where a constraint
+        the type system cannot express goes — a non-empty array, an ISO date, a bounded number.</p>
+    </Section>
+
+    <Section title="A schema runs where its value lives">
+        <Example
+            id="schema-browser"
+            title={'`reactive(v, { schema })` — a check with no server in it'}
+            summary="A contact's email. Take the dot out of the domain, and watch the record rather than the field."
+            files={{
+                'Email.abide': emailSource,
+            }}
+        >
+            <Email />
+        </Example>
+
+        <p><em>1 option, 0 validators</em> — the arm spells the shape a second time, in a form
+        nothing compares against the annotation it came from.</p>
+
+        <p>Not "on the server" — <strong>where the <code>Reactive</code> is declared</strong>. One
+        in a page checks in the browser, one in a <code>&lt;script server&gt;</code> checks on the
+        server, and one in a module both sides import checks wherever it was used. That is where the
+        code runs, rather than a rule of validation's own.</p>
+
+        <p>A refused write fills <code>error()</code> rather than throwing, and stores nothing — so
+        the field keeps what was typed while the record keeps what it had. On a primitive the issues
+        are a bare <code>string[]</code>, there being no path to key them under.</p>
+
+        <p>An rpc's handler is a <code>reactive</code> in a <code>&lt;script server&gt;</code>, so a
+        browser calling it through the generated wrapper cannot pre-check — the wrapper carries a
+        method, an address and a description, and nothing else. Not an exception; that is where the
+        value is. Want the same shape checked on both sides and you put it in a module both import
+        and declare it twice — the one duplication this design asks for, and it asks for it
+        deliberately.</p>
+    </Section>
+
+    <Section title="There is no `schemas` on `GET` or `POST`">
+        <p>A shape is a fact about the <strong>value</strong>, the way <code>ttl</code> is, so it
+        builds the value rather than the address. Hand <code>GET</code> a plain function and
+        <code>args</code> sits beside <code>description</code> in one object, because <code>GET(fn,
+        options)</code> <strong>is</strong> <code>GET(reactive(fn, options))</code> — the
+        <code>args</code> gate builds the value, and <code>description</code>,
+        <code>middleware</code>, <code>timeout</code>, <code>crossOrigin</code> and
+        <code>maxBodySize</code> describe the address.</p>
+
+        <p>So one <code>reactive</code> handed to both <code>GET</code> and <code>POST</code> states
+        the shape once between them, and an in-process caller gets the check a wire caller gets. A
+        schema declared at the transport is one that <strong>skips itself</strong> every other way
+        the handler is reached — read inside another value, imported by a second server module — so
+        the shape would hold for your untrusted callers and not for your own code.</p>
+
+        <p>Write the <code>reactive</code> out when something besides the handler holds the value —
+        a second handler, a page reading it in process — and pass <code>GET</code> the options
+        otherwise.</p>
+    </Section>
+
+    <Section title="`Schema<T>` takes two forms">
+        <Code language="ts" caption="shared" code={`type Schema<T> = ((value: unknown) => T) | StandardSchemaV1<T>`} />
+
+        <p>A schema <strong>returns what it accepts</strong>, so it normalizes as well as refuses.
+        That is why the function form is <code>=&gt; T</code> and not a predicate: a
+        <code>boolean</code> cannot normalize, and a <code>false</code> stored as the value is the
+        silent version of a refusal.</p>
+
+        <table>
+            <thead><tr><th>Form</th><th>What it is</th></tr></thead>
+            <tbody>
+                <tr><td><code>(value: unknown) =&gt; T</code></td><td>returns what it accepts, throws a sentence at what it refuses</td></tr>
+                <tr><td><code>StandardSchemaV1&lt;T&gt;</code></td><td>the interop spec zod, valibot and arktype all answer to</td></tr>
+            </tbody>
+        </table>
+
+        <p>A JSON Schema document is the <strong>native</strong> shape, and it enters as the
+        Standard form.</p>
+    </Section>
+
+    <Section title="A JSON Schema document gates a value through `jsonSchema`">
+        <Example
+            id="json-schema"
+            title="`jsonSchema(document)` — a JSON Schema document as a gate"
+            summary="The seats on a deal, capped at fifty by a JSON Schema document. Press + past the cap and the deal keeps what it had."
+            files={{
+                'Seats.abide': seatsSource,
+            }}
+        >
+            <Seats />
+        </Example>
+
+        <p><code>jsonSchema(document)</code> wraps a document as a Standard Schema that carries its
+        own validator, so it goes wherever a <code>Schema</code> goes. The refusal is worded by the
+        document, and keyed the way <code>Issues&lt;T&gt;</code> keys any other schema's.</p>
+
+        <p>A handler means <code>JsonSchema</code>, and it is the only shape publishable to a tool
+        definition or an OpenAPI operation — the wrapper exposes the document where a Standard
+        Schema exposes its JSON Schema, so it is published as written.</p>
+
+        <p>A document is data, so something has to read it, and <code>jsonSchema</code> is what
+        brings the validator. A page that never calls it carries none of it (19.13). Hand a gate a
+        bare document and it refuses with the sentence naming the wrapper (19.14), rather than
+        accepting a shape it never checked.</p>
+    </Section>
+
+    <Section title="`Issues<T>` is keyed by path, not a list">
+        <Example
+            id="schema-issues"
+            title="`Issues<T>` — a message under the field it belongs to"
+            summary="The invoice search. Empty the query, or ask for four — each message lands under its own field."
+            files={{
+                'InvoiceSearch.abide': invoiceSearchSource,
+            }}
+        >
+            <InvoiceSearch />
+        </Example>
+
+        <Code language="ts" caption="shared" code={`type Issues<T> = T extends object
+    ? Partial<Record<Paths<T> | '', string[]>>
+    : string[]`} />
+
+        <p>A record on a composite, a bare list on a primitive — because the reader always has the
+        path in hand. A flat list would cost a <code>find</code> <strong>per field per
+        render</strong> — twenty scans on a twenty-field form. It is <code>string[]</code> and not
+        <code>string</code> because one field fails two ways at once, too short <em>and</em>
+        malformed, and one message per path is a loss with nothing naming it.</p>
+
+        <p><code>Paths&lt;T&gt;</code> is the dot-joined leaf paths — <code>lines.0.qty</code>,
+        never <code>lines[0].qty</code>. One spelling, and it is the one every Standard Schema
+        already hands back: <code>['lines', 0, 'qty']</code> joined, so there is no bracket grammar
+        to specify and nothing to parse back.</p>
+
+        <table>
+            <thead><tr><th>Where</th><th>Key</th></tr></thead>
+            <tbody>
+                <tr><td>a field</td><td><code>'lines.0.qty'</code></td></tr>
+                <tr><td>the whole value — a <code>refine</code>, a thrown sentence</td><td><code>''</code></td></tr>
+                <tr><td>a primitive</td><td>no key; <code>data</code> is the <code>string[]</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>Two costs worth knowing. <code>Paths&lt;T&gt;</code> is <strong>depth-limited</strong>,
+        because a recursive template-literal type is typecheck time paid on every handler; past the
+        limit the key widens to <code>string</code> and the lookup stops being checked. And
+        integer-like keys iterate first in JavaScript whatever the insertion order — what an array
+        wants, and what a mixed shape merely has.</p>
+
+        <p>Read on:
+        <a href={url('/machines/describe-your-api-without-writing-a-spec')}>OpenAPI</a></p>
+    </Section>
+
+    <Section title="`validateJson` checks a value nothing gates">
+        <Example
+            id="validate-json"
+            title="`validateJson(schema, value)` — the issues, with no value to gate"
+            summary="A contact row pasted from a partner's export, checked before it is imported. Fix the plan and the seats, and watch each issue leave its own field."
+            files={{
+                'PastedRow.abide': pastedRowSource,
+            }}
+        >
+            <PastedRow />
+        </Example>
+
+        <p><code>validateJson(schema, value)</code> is the validator <code>jsonSchema</code>
+        carries, called on its own. It hands back <code>null</code> when the value matches and
+        <code>Issues&lt;T&gt;</code> when it does not, and stores and refuses nothing either way.
+        Reach for it where the value is not one you hold yet — a pasted row, an import, a file — and
+        the only question is whether it fits.</p>
+
+        <p>A keyword it does not implement throws rather than being skipped, because a document
+        declaring a constraint nothing applied reads as checked. <code>format</code> is one.
+        <code>title</code>, <code>description</code> and <code>default</code> are annotations, and
+        pass.</p>
+    </Section>
+
+    <Section title="`JsonValue` is the bound on an argument">
+        <Code language="ts" caption="shared" code={`type JsonValue =
+    | null
+    | boolean
+    | number
+    | string
+    | JsonValue[]
+    | { [k: string]: JsonValue }`} />
+
+        <p>The bound exists because the canonical wire form of an arguments object is also its
+        <strong>cache key</strong>. A value that cannot be serialized cannot be keyed, and a keyed
+        value that cannot key its arguments cannot coalesce two callers onto one load.</p>
+
+        <p><code>GET</code> and <code>DELETE</code> narrow it further, their wire form being URL
+        parameters: flat only, an array being the repeated key <code>URLSearchParams</code> already
+        has a form for. A nested object is keyable and is not sendable, so it is refused at compile
+        time naming the method — and the error says the fix is a <code>POST</code>, and that a
+        <code>POST</code> gives up the browser cache.</p>
+
+        <p>Read on: <a href={url('/data/change-something-on-the-server')}>Mutations</a></p>
+    </Section>
+
+    <Section title="Coercion happens before validation, not inside the schema">
+        <p>A <code>GET</code>'s arguments arrive as text. They are coerced from the JSON Schema's
+        declared <code>type</code> first — <code>"number"</code> through <code>Number()</code>,
+        <code>"boolean"</code> from <code>"true"</code> / <code>"false"</code>, <code>"array"</code>
+        from the repeated key — and validated after:</p>
+
+        <table>
+            <thead><tr><th>Declared</th><th><code>?limit=20</code> becomes</th></tr></thead>
+            <tbody>
+                <tr><td><code>number</code></td><td><code>20</code></td></tr>
+                <tr><td><code>boolean</code></td><td><code>true</code> / <code>false</code></td></tr>
+                <tr><td><code>array</code></td><td>every repeat of the key, in order</td></tr>
+            </tbody>
+        </table>
+
+        <p>That table is total over the flat argument types, and it is the same one <code>style:
+        form, explode: true</code> publishes. It runs at the first <code>ctx.args()</code> that
+        asks, so every rung after that and the handler see the coerced value.</p>
+
+        <p><code>validateJson</code> stays a checker. Putting coercion in the schema instead would
+        ask every form of <code>Schema</code> to coerce, which the native validator does not do and
+        a Standard Schema does its own way.</p>
+    </Section>
+
+    <Section title="A schema refusal is 422 and carries the issues">
+        <p>A schema refusal is <code>422</code> carrying <code>Failed&lt;'ValidationError',
+        Issues&lt;Args&gt;&gt;</code>. A malformed body — not valid JSON at all — is
+        <code>400</code>. Both are raised where the first middleware rung asks for the
+        arguments.</p>
+
+        <p><code>isError</code> narrows <code>.data</code> to <code>Issues&lt;Args&gt;</code>, so
+        the key is checked against your own argument shape rather than being an untyped string index
+        — a typo in <code>'lines.0.qty'</code> is a compile error.</p>
+
+        <p>Read on: <a href={url('/data/refuse-a-request-and-say-why')}>Failures</a></p>
+    </Section>
+
+    <Section title="`args` refuses; it does not decide the key">
+        <Example
+            id="schema-key"
+            title={'`reactive(fn, { args })` — the gate refuses, the arguments key'}
+            summary="One invoice, spelled two ways. Open the second spelling, then go back to the first."
+            files={{
+                'InvoiceKey.abide': invoiceKeySource,
+            }}
+        >
+            <InvoiceKey />
+        </Example>
+
+        <p>A keyed value's entry is filed under the arguments <strong>as sent</strong>, and
+        <code>args</code> runs after (11.26). A normalization in it reaches the body (11.68) but
+        never changes which entry it is (11.28).</p>
+
+        <p>The order is forced rather than chosen. A browser has to compute the same key the server
+        does in order to find its seeded value, and it cannot run a gate it was never sent. So the
+        key is taken before validation. Otherwise every handler with a normalizing gate re-issues
+        its call on hydration.</p>
+
+        <p>In channels keyed by their args the same cost is sharper: two spellings of a channel key
+        are <strong>two channels</strong>, and a message patched into one is invisible to a
+        subscriber of the other with nothing warning either. Where arguments must collapse,
+        normalize them at the caller or type them so the variation cannot be spelled. The gate is
+        the wrong instrument.</p>
+    </Section>
+
+    <Section title="A channel gates the array with `schema` and the key with `args`">
+        <p>A channel is an array, so its <code>schema</code> checks the whole array on every
+        <code>set</code> — the app's own included, because validity is not a question about who is
+        asking:</p>
+
+        <Code language="ts" caption="src/channels.ts — excerpt" code={`export const announcements = reactive<Post[]>([], {
+    schema: z.array(messageSchema),
+    global: true,
+})`} />
+
+        <p>What it does not see is a <code>patch</code>. An append through <code>patch</code>
+        mutates the array in place rather than minting a production (5.7), so neither
+        <code>schema</code> nor <code>transform</code> runs on it. A message that has to be checked
+        arrives one of two ways: as a <code>set</code> of the whole array, where <code>schema</code>
+        or a <code>transform</code> reads its last element, or checked by the code that patches it
+        in. A caller outside the process is always the second kind. Its only way in is a
+        <code>POST</code> whose handler patches the channel, so that handler's <code>args</code> and
+        its body are the check.</p>
+
+        <p>A channel keyed by its args also has a <strong>channel key</strong>, and that is the
+        parameter its body declares, so it is <code>args</code>. The key picks which channel while
+        the messages flow:</p>
+
+        <Code language="ts" caption="src/channels.ts — excerpt" code={`export const thread = reactive((_args: { id: string }): Post[] => [], {
+    args: z.object({ id: z.string().min(1) }),
+    schema: z.array(messageSchema),
+    global: true,
+})`} />
+
+        <p>Two positions, so two options. Both are derived from the type when not provided, the same
+        way a handler's are, and a channel key is checked but never normalized (11.28): two
+        spellings of one key are two channels.</p>
+
+        <p>Read on: <a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a> ·
+        <a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/data/decide-who-may-call-what')}>Authorization</a> — why a 401 rung
+            runs before any parse</li>
+            <li><a href={url('/data/put-a-ceiling-on-a-request')}>Limits</a> — the ceiling on a
+            body, checked before buffering</li>
+            <li><a href={url('/machines/describe-your-api-without-writing-a-spec')}>OpenAPI</a> —
+            where the schema is published</li>
+        </ul>
+    </Section>
+</Doc>

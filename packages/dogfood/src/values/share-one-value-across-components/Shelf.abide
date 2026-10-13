@@ -1,0 +1,16 @@
+<script>
+import { props, reactive } from '@abide/abide'
+import QueueControl from './QueueControl.abide'
+
+type Props = { name: string }
+
+const { name } = props<Props>()
+// Nothing above holds this key, so it is created right here.
+let queued = reactive.share('queued', () => reactive('nothing'))
+</script>
+
+<ul class="fields stacked">
+    <li><span>shelf</span><strong>{name}</strong></li>
+    <li><span>queued</span><strong>{queued}</strong></li>
+</ul>
+<QueueControl name={name}/>

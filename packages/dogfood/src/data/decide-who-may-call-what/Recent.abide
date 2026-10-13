@@ -1,0 +1,72 @@
+<script server>
+import { principal, refuse } from '@abide/abide'
+import { GET, POST } from '@abide/abide/server'
+import { z } from 'zod'
+
+// Three rows, and a schema capping the limit at 3.
+const INVOICES = [
+    { id: '4021', total: '$1,240.00' },
+    { id: '4022', total: '$310.00' },
+    { id: '4023', total: '$76.50' },
+]
+
+export const searchInvoices = GET(
+    async ({ limit }: { limit: number }) => {
+        await Bun.sleep(450) // a slow database, so the wait is on screen
+        return INVOICES.slice(0, limit)
+    },
+    {
+        args: z.object({ limit: z.number().int().min(1).max(3) }),
+        description: 'Recent invoices, for a caller who signed in.',
+        middleware: [
+            async (next, ctx) => {
+                if (!(await principal.authenticated))
+                    return refuse(401, 'Sign in first.')
+                return next(ctx)
+            },
+        ],
+    },
+)
+
+export const signIn = POST(() => principal.set({ id: 'ada' }), {
+    description: 'Signs in as Ada.',
+})
+
+export const signOut = POST(() => principal.clear(), {
+    description: 'Signs out.',
+})
+</script>
+
+<script>
+import { principal, reactive } from '@abide/abide'
+
+let limit = reactive('2')
+
+const found = reactive(() => searchInvoices({ limit: Number(limit) }))
+
+/** The refusal as the status line shows it: its status, then its message. */
+function refusal() {
+    const failed = found.error()
+    return failed ? `${failed.status} ${failed.message}` : ''
+}
+</script>
+
+<div class="row">
+    <button onclick={async () => {
+        await (principal.authenticated() ? signOut() : signIn())
+        searchInvoices.refresh()
+    }}>{principal.authenticated() ? 'Sign out' : 'Sign in'}</button>
+</div>
+
+<label>limit
+    <input bind:value={limit}>
+</label>
+
+<p class="status">{refusal()}</p>
+
+<ul class="fields">
+    <li><span>invoices</span>
+        <strong>
+            {found.ready() && !found.error() ? found.length : '—'}
+        </strong></li>
+</ul>

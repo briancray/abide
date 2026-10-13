@@ -1,7 +1,0 @@
-{
-    "title": "`jsonSchema(document)` — a JSON Schema document as a gate",
-    "summary": "The seats on a deal, capped at fifty by a JSON Schema document. Press + past the cap and the deal keeps what it had.",
-    "app": "crm",
-    "files": ["src/ui/components/JsonSchemaSeats.abide"],
-    "render": "src/ui/components/JsonSchemaSeats.abide"
-}

@@ -1,0 +1,25 @@
+<script>
+// One heading and what it heads. The heading is listed in the page's rail as it is written, so
+// the rail is the page's own sections rather than a scan of its markup.
+import { props, raw, reactive } from '@abide/abide'
+import { inline, slugify } from './inline.ts'
+
+const { title, level = 2 } = props<{ title: string; level?: 2 | 3 }>()
+const id = slugify(title)
+
+const headings = reactive.share('docHeadings', () =>
+    reactive<{ id: string; title: string; level: number }[]>([]),
+)
+headings = [...headings, { id, title, level }]
+</script>
+
+<section>
+    <div class="flow">
+        {#if level === 3}
+            <h3 id={id}>{raw(inline(title))}</h3>
+        {:else}
+            <h2 id={id}>{raw(inline(title))}</h2>
+        {/if}
+        <slot/>
+    </div>
+</section>

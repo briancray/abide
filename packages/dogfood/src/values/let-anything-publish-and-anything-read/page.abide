@@ -1,0 +1,295 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Chat from './Chat.abide'
+import Conversation from './Conversation.abide'
+import LimitedChat from './LimitedChat.abide'
+import TrimmedChat from './TrimmedChat.abide'
+import chatSource from './Chat.abide' with { type: 'text' }
+import conversationSource from './Conversation.abide' with { type: 'text' }
+import lastSpokenSource from './LastSpoken.abide' with { type: 'text' }
+import limitedChatSource from './LimitedChat.abide' with { type: 'text' }
+import onboardingSource from './onboarding.ts' with { type: 'text' }
+import trimmedChatSource from './TrimmedChat.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="The forms of a channel">
+        <p>A channel is not a factory of its own. It is a <code>reactive</code> over an array,
+        <code>patch</code> is how a message is appended, and <code>by</code> is what tells one
+        message from another.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>What you get</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'reactive<Turn[]>([], { by: \'id\' })'}</code></td><td>one channel — a <code>Reactive</code></td></tr>
+                <tr><td><code>{'reactive((_args: Args): Turn[] => [], { by: \'id\' })'}</code></td><td>a <code>Keyed</code>, one channel per args key</td></tr>
+                <tr><td><code>{'turns({ conversation })'}</code></td><td>the channel for that key — a <code>Reactive</code></td></tr>
+            </tbody>
+        </table>
+
+        <p><code>room.patch((list) =&gt; list.push(m))</code> appends in place (5.7). The latest
+        message is <code>room.at(-1)</code>, and <code>{'{#for m of room}'}</code> is the whole
+        conversation. How long the array grows is yours to decide: abide puts no cap on it, and the
+        trim goes in the same patch as the push.</p>
+
+        <p>Every other option is the one any reactive value takes. <code>args</code> refuses a key
+        (11.28), <code>transform</code> shapes what a <code>set</code> stores, and <code>ttl</code>
+        is the life of a keyed channel's entry (11.45). On a channel a <code>GET</code> serves,
+        <code>refresh</code> and <code>invalidate</code> reach every subscriber's copy (7.10, 7.18).
+        Every signature is in the <a href={url('/reference/reactive')}><code>reactive</code>
+        reference</a>.</p>
+    </Section>
+
+    <Section title="Anyone appends, anyone reads">
+        <Example
+            id="channel-shared"
+            title="`reactive<Turn[]>([])` — a channel anything can reach"
+            summary="A conversation's composer, and the line above it that reports who spoke last. Press Send and watch a component the composer never names."
+            files={{
+                'onboarding.ts': onboardingSource,
+                'Chat.abide': chatSource,
+                'LastSpoken.abide': lastSpokenSource,
+            }}
+        >
+            <Chat />
+        </Example>
+
+        <p><em>2 components, 0 props threaded</em> — against the subscriber list the hand-written
+        arm keeps, and the wiring it takes per reader.</p>
+
+        <p>That symmetry is the whole difference. A value you write belongs to whoever owns it; a
+        derived value is computed by its body; a channel is written by <strong>anything that can
+        reach it</strong>, and read the same way. The composer imports the channel and not the
+        readout, the readout imports the channel and not the composer, and the channel is the whole
+        of what is between them.</p>
+
+        <p>What comes back is a <code>Reactive</code>, so there is no second type to learn either.
+        <code>LastSpoken</code> derives <code>last</code> as <code>reactive(() =&gt;
+        onboarding.at(-1))</code>, which follows the channel the way any derived value follows what
+        it read. Opened with <code>[]</code>, a channel has landed: it is <code>ready()</code>
+        before anyone speaks, and <code>last</code> reads <code>undefined</code> until somebody
+        does.</p>
+
+        <p>Nothing is loading where a channel is written, so it is never <code>busy()</code> there
+        (3.9). A subscriber's copy is <code>busy()</code> until the first value arrives over the
+        connection (9.14), so an <code>await</code> there resolves at that value (2.7).</p>
+
+        <p>In-process nobody asks who is writing — the page appends because it is your code. A
+        caller <strong>outside</strong> the process reaches a channel only through a handler you
+        declare: a <code>GET</code> to follow it, and a <code>POST</code> whose handler patches it.
+        So there is no way in from outside that you did not write.</p>
+
+        <p>Read on: <a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a> ·
+        <a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a></p>
+    </Section>
+
+    <Section title="A channel per args key">
+        <Example
+            id="channel-rooms"
+            title="`reactive((args) => [])` — a channel per key"
+            summary="Two conversations behind one declaration. Send something in onboarding, switch to billing, send there, and come back."
+            files={{
+                'Conversation.abide': conversationSource,
+            }}
+        >
+            <Conversation />
+        </Example>
+
+        <p>Give the body a parameter and it is <strong>one channel per key</strong> (11.2), and the
+        args you call it with pick one. That one declaration is a different channel per
+        conversation, which is why changing conversations is changing one value and nothing else.
+        Each holds its own messages, and coming back to one finds it as you left it.</p>
+
+        <p>The body answers <code>[]</code>, so a conversation nobody has written to lands empty —
+        the empty conversation on the card. The parameter has to be declared, or the call is the
+        unkeyed form.</p>
+
+        <p>Args are keyed by the same canonical wire form every keyed value uses — sorted,
+        <code>undefined</code> dropped, <code>Date</code> written ISO — so a fresh object built each
+        run lands on the same channel (11.24). The <code>args</code> option is a schema that
+        <strong>refuses</strong> a key rather than normalizing one, two spellings that both pass
+        being two channels (11.28).</p>
+
+        <p>Read on: <a href={url('/values/load-once-per-set-of-arguments')}>Caching</a> ·
+        <a href={url('/data/check-what-callers-send-you')}>Schemas</a></p>
+    </Section>
+
+    <Section title="A channel's length is its writer's to decide">
+        <Example
+            id="channel-tail"
+            title="`patch` with a trim — a channel that keeps three turns"
+            summary="A transcript pane over a conversation already three turns old. Send a fourth and watch the top of it."
+            files={{
+                'TrimmedChat.abide': trimmedChatSource,
+            }}
+        >
+            <TrimmedChat />
+        </Example>
+
+        <p>The trim is one line in the patch that appends: <code>if (turns.length &gt; 3)
+        turns.shift()</code>. The card keeps three so the cap shows in a single press; a chat pane
+        keeps fifty. Put the push and the trim in one function every writer calls, as
+        <code>say</code> is here, and the cap belongs to the channel rather than to whichever caller
+        remembered it.</p>
+
+        <p><code>by: 'id'</code> is what makes the trim cheap on screen. Each message carries an id
+        the app gives it, and a keyed <code>{'{#for}'}</code> moves the rows it keeps (32.29), so a
+        send adds one row and drops one. Without <code>by</code> the rows are positional (32.13):
+        trimming the front shifts every message up one place, and every row is rewritten.</p>
+
+        <p>On the wire the trim is cheap too. A patch on a value a <code>GET</code> serves is sent
+        to its followers as what it wrote rather than as the value (18.11), and a <code>shift</code>
+        is one write.</p>
+
+        <p>Read on: <a href={url('/values/keep-the-last-few-values')}>Recent values</a> ·
+        <a href={url('/templates/repeat-markup-over-a-list')}>Lists</a></p>
+    </Section>
+
+    <Section title="`transform` refuses a message under a name you declared">
+        <Example
+            id="channel-transform"
+            title={'`{ transform }` on a channel — a message refused by name'}
+            summary="The composer holding a message longer than the conversation takes. Press Send, then cut it down and press again."
+            files={{
+                'LimitedChat.abide': limitedChatSource,
+            }}
+        >
+            <LimitedChat />
+        </Example>
+
+        <p><code>transform</code> is the same option every reactive value takes. It may rewrite the
+        value or <strong>refuse</strong> it by returning a <code>Failed</code>, and the card's
+        refuses a turn longer than the conversation takes. You declare the refusal once, and its
+        name and data are the type on both sides — so <code>tooLong.is</code> narrows
+        <code>error()</code> to it.</p>
+
+        <p>A <code>patch</code> mutates the held array in place (5.7), so neither
+        <code>schema</code> nor <code>transform</code> sees it. The card writes the whole array
+        instead, <code>onboarding = [...onboarding, turn]</code>, and the transform checks the turn
+        it ends on. A refused write stores nothing (4.9) and fills <code>error()</code> (4.10), so
+        the last accepted turn stays on screen beside the message. <code>set</code> hands that
+        refusal back too (4.18). The other spelling checks the turn before patching it in, and keeps
+        the patch.</p>
+
+        <p>It runs on <strong>every</strong> write, the app's own included — normalizing is not a
+        question about who is asking. A message's <strong>shape</strong> is the sibling option,
+        <code>schema</code>, and it is the channel's rather than the <code>GET</code>'s for the same
+        reason (16.26).</p>
+
+        <p>Read on: <a href={url('/data/refuse-a-request-and-say-why')}>Failures</a> ·
+        <a href={url('/data/check-what-callers-send-you')}>Schemas</a> ·
+        <a href={url('/values/patch-a-list-from-a-live-feed')}>Patching a list</a></p>
+    </Section>
+
+    <Section title="Every write is gated by `identity`">
+        <p>There is no ungated write to a channel. <code>identity</code> means what it means on
+        every value, and a <code>set</code> of the value already held mints nothing (5.2). A turn
+        said twice is two elements in the array, so a repeated message is still a change, and the
+        channel holds both.</p>
+
+        <p>A <code>set</code> on a subscriber's copy stands until the next value arrives and
+        replaces it (9.4).</p>
+
+        <p>Read on: <a href={url('/values/slow-down-a-value-that-changes-too-fast')}>Throttle &amp;
+        debounce</a></p>
+    </Section>
+
+    <Section title="Following a channel sees turns, not every message">
+        <p><code>for await (const turns of onboarding)</code> walks the channel's cursor. On a value
+        with no streaming producer the cursor hands back the standing value once per turn, however
+        many writes landed since the last, and a patch in place is one of them (2.6). A burst of
+        three messages in one turn is one step, holding all three.</p>
+
+        <p>So there is no exactly-once tail of a channel. Code that has to act on every message acts
+        where it writes it — in <code>say</code>, beside the push. The cursor never hands back an
+        <code>undefined</code> value (6.10).</p>
+
+        <p>A stream is the other case: its cursor yields from the start of the run in flight and
+        then live, one step per chunk (2.5), and a capped window still delivers every chunk
+        (5.10).</p>
+
+        <p>Read on: <a href={url('/values/do-something-when-a-value-changes')}>Watching values</a> ·
+        <a href={url('/data/send-data-as-it-arrives')}>Streaming data</a></p>
+    </Section>
+
+    <Section title="A channel is not a stream">
+        <p>Both hold an array that grows, and who grows it separates them. A channel has no
+        producer: anything appends to it, and every append is a whole message. A body that is or
+        returns an async generator is a stream, and its array is the chunks its run has yielded
+        (9.1).</p>
+
+        <table>
+            <thead><tr><th></th><th>the array grows by</th><th><code>busy()</code></th><th><code>await</code> resolves at</th></tr></thead>
+            <tbody>
+                <tr><td>channel</td><td>a <code>patch</code> from anything that reaches it</td><td>never where it is written (3.9)</td><td>at once where it is written</td></tr>
+                <tr><td>stream</td><td>a <strong>chunk</strong> from its own run</td><td>until the stream <strong>closes</strong> (3.7)</td><td>the close</td></tr>
+            </tbody>
+        </table>
+
+        <p>A channel does not finish, so being live is not being busy.</p>
+
+        <p>Read on: <a href={url('/data/send-data-as-it-arrives')}>Streaming data</a></p>
+    </Section>
+
+    <Section title="A channel lives as long as the value does">
+        <p>Nothing discards a channel for having no subscribers. A keyed channel's entry lives until
+        its <code>ttl</code> (11.45), and a write to it starts that life again, so a room nobody
+        wrote to for an hour is let go. On a channel with no body there is no producer, and
+        <code>ttl</code> is inert (6.2).</p>
+
+        <p>A message that should expire on its own is the app's to drop: a <code>setTimeout</code>
+        per message that patches it out. A restart drops every channel, and a conversation older
+        than the process was always app data behind an ordinary rpc.</p>
+
+        <p>Read on: <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a></p>
+    </Section>
+
+    <Section title="Channels are process-wide, not per caller">
+        <p>The one thing to get right. A reactive value's default scope is one caller —
+        request-local on a server (11.32) — and <strong>a channel every caller follows is the
+        opposite</strong>. So it is built with <code>global: true</code>, which puts it in one
+        process-wide cache that outlives every request (11.34). State every caller can reach is what
+        a channel <em>is</em>, and <code>args</code> is how one caller's channel is told from
+        another's.</p>
+
+        <p>So on a server a channel is shared across requests by design. Anything caller-specific
+        belongs in the <code>args</code>, exactly as it does for a <code>global</code> keyed
+        value.</p>
+    </Section>
+
+    <Section title="`reactive.share` is one caller; a channel is many">
+        <p>They look alike — both give distant components one thing with no prop between them — and
+        they are opposites underneath.</p>
+
+        <table>
+            <thead><tr><th></th><th><code>reactive.share</code></th><th>a channel</th></tr></thead>
+            <tbody>
+                <tr><td>scope</td><td>one component and its descendants</td><td>process-wide, every caller</td></tr>
+                <tr><td>before anyone writes</td><td>the value you created, <code>ready()</code></td><td>the array you opened it with, <code>ready()</code></td></tr>
+                <tr><td>lifetime</td><td>never evicted within its scope</td><td>the value's, or an entry's <code>ttl</code></td></tr>
+                <tr><td>typing</td><td>a key per name, each its own type</td><td>one element type across every channel</td></tr>
+            </tbody>
+        </table>
+
+        <p>The short version: <code>reactive.share</code> is <strong>one caller, many
+        components</strong>. A channel is <strong>many callers, one subject</strong>. Reach for the
+        first when the thing is yours and the path between readers is long; reach for a channel when
+        the thing belongs to nobody.</p>
+
+        <p>Read on: <a href={url('/values/share-one-value-across-components')}>Sharing</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a> — serving a
+            channel to callers outside the process</li>
+            <li><a href={url('/values/keep-the-last-few-values')}>Recent values</a> — keeping the
+            last few values, on a channel or anywhere</li>
+            <li><a href={url('/values/share-one-value-across-components')}>Sharing</a> — the
+            one-caller counterpart</li>
+        </ul>
+    </Section>
+</Doc>

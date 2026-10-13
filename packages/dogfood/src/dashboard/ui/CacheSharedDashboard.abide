@@ -1,7 +1,0 @@
-<script>
-import Average from '#ui/components/Average.abide'
-import Total from '#ui/components/CacheSharedTotal.abide'
-</script>
-
-<Total/>
-<Average/>

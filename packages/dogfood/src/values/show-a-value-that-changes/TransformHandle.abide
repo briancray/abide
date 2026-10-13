@@ -1,0 +1,14 @@
+<script>
+import { reactive } from '@abide/abide'
+
+// Typed is `Accepted`, shown back is `Stored`; the transform splits them.
+let handle = reactive('', {
+    transform: (typed) => typed.toLowerCase().replaceAll(' ', '_'),
+})
+</script>
+
+<label>handle
+    <input bind:value={handle} placeholder="Ada Lovelace">
+</label>
+
+<p>on the record: <strong>@{handle || '—'}</strong></p>

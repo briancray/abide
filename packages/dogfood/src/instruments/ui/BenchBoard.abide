@@ -7,10 +7,10 @@
 // leaves every other row in the catalog standing.
 import { reactive } from '@abide/abide'
 import { type BenchRow, matchesFilter, type RowItem } from 'harness/rows'
-import { benchCatalog, runBench } from '#server/rpc/bench'
-import { messageOf } from '#ui/messageOf.ts'
-import { readRows } from '#ui/readRows.ts'
-import { ROW_STATES } from '#ui/ROW_STATES.ts'
+import { benchCatalog, runBench } from '../bench.abide'
+import { messageOf } from './messageOf.ts'
+import { readRows } from '../readRows.ts'
+import { ROW_STATES } from './ROW_STATES.ts'
 
 type Section = { name: string; items: RowItem[] }
 

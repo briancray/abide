@@ -1,0 +1,80 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const REVENUE: Record<string, string> = {
+    north: '$12,480.00',
+    south: '$9,140.00',
+}
+const COUNT: Record<string, number> = { north: 128, south: 94 }
+
+// Two counters per region, so a reload of north is seen to leave south alone.
+const computed: Record<string, number> = { north: 0, south: 0 }
+const loaded: Record<string, number> = { north: 0, south: 0 }
+
+export const getTotals = GET(
+    async ({ region }: { region: string }) => {
+        // A slow database, so the wait is on screen.
+        await Bun.sleep(450)
+        computed[region] = (computed[region] ?? 0) + 1
+        return {
+            revenue: REVENUE[region] ?? '$0.00',
+            computed: computed[region],
+        }
+    },
+    { description: 'Order totals for a region.' },
+)
+
+export const getOrders = GET(
+    async ({ region }: { region: string }) => {
+        await Bun.sleep(450)
+        loaded[region] = (loaded[region] ?? 0) + 1
+        return { count: COUNT[region] ?? 0, loaded: loaded[region] }
+    },
+    { description: 'Recent orders for a region.' },
+)
+</script>
+
+<script module>
+import { reactive } from '@abide/abide'
+
+type Region = { region: string }
+
+/** A tag function gets the entry's args, so a tag can name the row. */
+const totalsFor = reactive((args: Region) => getTotals(args), {
+    tags: ({ region }) => ['metrics', `region:${region}`],
+})
+
+const ordersFor = reactive((args: Region) => getOrders(args), {
+    tags: ({ region }) => ['orders', `region:${region}`],
+})
+</script>
+
+<script>
+import { props, refresh } from '@abide/abide'
+
+const { region } = props<{ region: string }>()
+
+const totals = totalsFor({ region })
+const orders = ordersFor({ region })
+</script>
+
+<ul class="fields">
+    <li><span>region</span><strong>{region}</strong></li>
+    <li><span>revenue</span>
+        <strong>{totals.ready() ? totals.revenue : '—'}</strong>
+    </li>
+    <li><span>recent orders</span>
+        <strong>{orders.ready() ? orders.count : '—'}</strong>
+    </li>
+    <li><span>revenue computed</span>
+        <strong>{totals.ready() ? totals.computed : '—'}</strong>
+    </li>
+    <li><span>orders loaded</span>
+        <strong>{orders.ready() ? orders.loaded : '—'}</strong>
+    </li>
+    <li><span>late figures</span>
+        <button onclick={() => refresh({ tags: [`region:${region}`] })}>
+            Reload
+        </button>
+    </li>
+</ul>

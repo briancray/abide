@@ -1,7 +1,0 @@
-{
-    "title": "`reactive(() => call(args))` — a load the value adopts",
-    "summary": "A profile panel behind two tabs. Open the other person, then come back to the first.",
-    "app": "crm",
-    "files": ["src/ui/components/Profile.abide", "src/server/rpc/profiles.ts"],
-    "render": "src/ui/components/Profile.abide"
-}

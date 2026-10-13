@@ -1,7 +1,0 @@
-{
-    "title": "`cookies()` — one jar, read on both sides",
-    "summary": "The contact list's density, kept in a cookie. Pick one and reload the page — the server paints the one you picked.",
-    "app": "crm",
-    "files": ["src/ui/components/CookiesDensityContacts.abide"],
-    "render": "src/ui/components/CookiesDensityContacts.abide"
-}

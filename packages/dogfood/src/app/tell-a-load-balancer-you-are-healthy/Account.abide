@@ -1,0 +1,38 @@
+<script server>
+import { onHealth, onStart, onStop } from '@abide/abide/server'
+
+declare module '@abide/abide' {
+    interface Health {
+        database: string
+    }
+}
+
+// The pool this process holds: open while the app is up.
+const database = { connected: false }
+
+onStart(async (start) => {
+    database.connected = true
+    await start()
+})
+
+onStop(async (stop) => {
+    await stop()
+    database.connected = false
+})
+
+onHealth(() => ({
+    database: database.connected ? 'connected' : 'closed',
+}))
+</script>
+
+<script>
+import { health } from '@abide/abide'
+
+const account = health()
+</script>
+
+<ul class="fields stacked">
+    <li><span>version</span><strong>{account.version}</strong></li>
+    <li><span>up since</span><strong>{account.startedAt}</strong></li>
+    <li><span>database</span><strong>{account.database}</strong></li>
+</ul>

@@ -1,0 +1,141 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import LoadedRegions from './LoadedRegions.abide'
+import Regions from './Regions.abide'
+import UnpatchedRegions from './UnpatchedRegions.abide'
+import loadedRegionsSource from './LoadedRegions.abide' with { type: 'text' }
+import regionsSource from './Regions.abide' with { type: 'text' }
+import unpatchedRegionsSource from './UnpatchedRegions.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="`patch` mutates the held value and wakes its readers">
+        <Example
+            id="patch-wakes"
+            title="`s.patch(mutate)` — change in place, and wake the readers"
+            summary="A regional dashboard whose order counts arrive one region at a time."
+            files={{
+                'Regions.abide': regionsSource,
+            }}
+        >
+            <Regions />
+        </Example>
+
+        <p><em>1 entry written per frame, 1 row painted</em> — against a list of four, or of four
+        thousand.</p>
+
+        <p><code>set</code> replaces. <code>patch</code> hands you what is already held, lets you
+        change it in place, and wakes its readers — so a frame naming one region costs one entry
+        rather than a copy of every region that did not move. Press the button and watch the other
+        three rows: they are not rewritten, because nothing wrote them.</p>
+
+        <p>Both halves are the member. The mutation alone moves nothing on the page, and a wake
+        alone says nothing new — <code>patch</code> is the pair, which is why it is a member rather
+        than something you assemble at the call site.</p>
+
+        <p>Read on: <a href={url('/values/show-a-value-that-changes')}>Local state</a> ·
+        <a href={url('/values/do-something-when-a-value-changes')}>Watching values</a></p>
+    </Section>
+
+    <Section title="A write that misses `patch` moves nothing — until something else does">
+        <Example
+            id="patch-unseen"
+            title="`applyOrderCount(byId, …)` — the same fold, reached without `patch`"
+            summary="The same dashboard, and a helper handed the held table directly."
+            files={{
+                'UnpatchedRegions.abide': unpatchedRegionsSource,
+            }}
+        >
+            <UnpatchedRegions />
+        </Example>
+
+        <p>Press <strong>Apply without patch</strong> first. Nothing happens, and that is the whole
+        of it: the frame landed in the held <code>Map</code> and no reader was told. Reaching the
+        same <code>Map</code> any other way changes it and moves nothing on the page, because the
+        reference never changed and readers watch the reference.</p>
+
+        <p><strong>The wrong way is spelled like nothing at all.</strong> The two handlers on the
+        card are the same four lines and differ only on the last. <code>applyOrderCount(byId,
+        frame)</code> is a read by name in a value-typed argument (31.1), handing the helper the
+        held <code>Map</code>; <code>byId.patch(…)</code> hands that same helper that same map
+        through the member. No cast, no escape hatch, nothing that reads as reaching around
+        anything.</p>
+
+        <p><strong>Then press Apply next frame.</strong> Two figures move: the one you just asked
+        for, and the one from the press you had written off. A patch repaints from the whole map, so
+        the write that woke nobody arrives now — attached to an interaction that had nothing to do
+        with it. That is what makes this expensive to find later rather than merely wrong.</p>
+
+        <p>Read on: <a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a> ·
+        <a href={url('/values/do-something-when-a-value-changes')}>Watching values</a></p>
+    </Section>
+
+    <Section title="A `Map` is the shape per-row updates want">
+        <Example
+            id="patch-transform"
+            title={'`reactive(() => rows, { transform })` — an array in, an index held'}
+            summary="The regions table arriving from the server as a list, on a dashboard whose updates name ids."
+            files={{
+                'LoadedRegions.abide': loadedRegionsSource,
+            }}
+        >
+            <LoadedRegions />
+        </Example>
+
+        <p>A frame names an id, and finding that id in an array is a scan before it is a write. The
+        server sends an <strong>array</strong>, and the page holds an <strong>index</strong>.
+        <code>transform</code> is where the one becomes the other, once, on the way in, so nothing
+        downstream re-indexes per frame.</p>
+
+        <p>Doing it here is also what keeps it done once. A reshape written at the call site is a
+        reshape every caller has to remember, and the one that forgets is holding a different shape
+        from everybody else.</p>
+
+        <p>The index reads the rows rather than adopting the call, and that is deliberate. A write
+        to a value that adopts another reaches the value it adopted (11.59), so a <code>patch</code>
+        on <code>{'reactive(() => getRegions(), { transform })'}</code> would be handed the array
+        and not the index.</p>
+
+        <p>The index is still <strong>loaded</strong>: <code>regions.refresh()</code> reloads the
+        rows, and the fold runs again over what the server said (11.5). A patch is the app catching
+        a held value up between loads, never a second source of truth beside it, and where the two
+        disagree the load wins (11.8).</p>
+
+        <p>Read on: <a href={url('/values/derive-a-value-from-other-values')}>Derived values</a> ·
+        <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a> ·
+        <a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a></p>
+    </Section>
+
+    <Section title="`patch` keeps the value's identity, so `by` is how a row is told apart">
+        <p><code>set</code> replaces the value with a new one; <code>patch</code> changes the one
+        already held (5.7). The reference does not move, so a reader that compares references would
+        see nothing — which is why <code>patch</code> wakes its readers itself, and why a
+        <code>{'{#for}'}</code> over the value never keeps a row showing an element as it stood
+        before the patch (32.33).</p>
+
+        <p>What tells one element from another is <code>by</code> (5.22). A list keyed by its own
+        ids moves the rows it keeps (32.29), so a patch that appends, removes or reorders touches
+        the rows it changed and no others. Across a connection a patch is sent as what it wrote
+        rather than as the value (18.11), so a subscriber's copy is patched the same way.</p>
+
+        <p>A list many callers append to and everyone connected reads is the same value with more
+        writers, and that is a channel.</p>
+
+        <p>Read on: <a href={url('/templates/repeat-markup-over-a-list')}>Lists</a> ·
+        <a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/values/keep-the-last-few-values')}>Recent values</a> — a list trimmed
+            in the patch that appends to it</li>
+            <li><a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a> — where
+            the updates themselves come from</li>
+            <li><a href={url('/values/slow-down-a-value-that-changes-too-fast')}>Throttle &amp;
+            debounce</a> — when the frames arrive faster than a paint</li>
+        </ul>
+    </Section>
+</Doc>

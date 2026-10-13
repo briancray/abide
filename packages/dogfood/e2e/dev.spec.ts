@@ -1,4 +1,4 @@
-// 38.4 AND 38.16 IN A BROWSER — the loop `abide dev` exists for: a file is saved and the tab a
+// 38.4 AND 38.15 IN A BROWSER — the loop `abide dev` exists for: a file is saved and the tab a
 // reader has open shows the new app. The bun-side tests in `packages/abide/tests/dev.test.ts`
 // assert everything up to the socket; what they cannot see is the RELOAD, which is a client
 // holding a socket open, the listener force-closing it, and the page coming back by itself.
@@ -23,7 +23,7 @@ const COPY = `${REPO}.test-modules/dogfood-dev`
 const ROOT = `${COPY}/src`
 // A file an author WROTE rather than one the generator owns, and one every page carries: a
 // marker in the nav is visible from whatever address the browser is standing on.
-const BAR = `${ROOT}/ui/components/SiteBar.abide`
+const BAR = `${ROOT}/docs/SiteBar.abide`
 
 let dev: ChildProcess | undefined
 let base = ''
@@ -42,7 +42,16 @@ test.beforeAll(async ({}, testInfo) => {
     testInfo.skip(testInfo.project.name !== 'root', 'one dev server is enough')
     rmSync(COPY, { recursive: true, force: true })
     mkdirSync(COPY, { recursive: true })
-    for (const kept of ['package.json', 'tsconfig.json', 'bunfig.toml', 'src'])
+    for (const kept of [
+        'package.json',
+        'tsconfig.json',
+        'bunfig.toml',
+        '.env',
+        'src',
+        // 34.27 — the package a card imports a component from, as installed and as its source.
+        'crm-ui',
+        'node_modules/crm-ui',
+    ])
         cpSync(`${APP}/${kept}`, `${COPY}/${kept}`, { recursive: true })
     original = readFileSync(BAR, 'utf8')
     dev = spawn('bun', [BIN, 'dev', '--root', ROOT, '--port', '0'], {
@@ -70,7 +79,7 @@ test.afterAll(() => {
 
 // THE REVERT: drop the socket terminate from `serveDev`'s `replace`, and this waits out its
 // timeout on a page that is serving the old markup with nothing to tell it so.
-test('a save reloads the tab a reader has open — 38.4, 38.16', async ({
+test('a save reloads the tab a reader has open — 38.4, 38.15', async ({
     page,
 }) => {
     await page.goto(`${base}/values/show-a-value-that-changes`)

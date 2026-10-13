@@ -1,7 +1,0 @@
-{
-    "title": "`reactive(() => …)` — an auto-tracked derivation",
-    "summary": "A deal, and the total that follows its seats. Step the seats.",
-    "app": "crm",
-    "files": ["src/ui/components/Deal.abide"],
-    "render": "src/ui/components/Deal.abide"
-}

@@ -1,0 +1,25 @@
+<script server>
+import { GET, notFound } from '@abide/abide/server'
+
+const INVOICES = new Map([
+    ['42', { number: 'INV-0042', total: '$1,240.00', dueOn: '2026-09-14' }],
+])
+
+export const getInvoice = GET(
+    async ({ id }: { id: string }) => {
+        await Bun.sleep(450) // a slow database, so the wait is on screen
+        const invoice = INVOICES.get(id)
+        return invoice ?? notFound({ path: `/invoices/${id}`, method: 'GET' })
+    },
+    { description: 'An invoice, by id.' },
+)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const invoice = reactive(() => getInvoice({ id: '42' }))
+</script>
+
+<h3>Invoice {invoice.number}</h3>
+<p>{invoice.total} due {invoice.dueOn}</p>

@@ -1,0 +1,211 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import AccountManager from './AccountManager.abide'
+import IssuedInvoice from './IssuedInvoice.abide'
+import Avatar from './Avatar.abide'
+import accountManagerSource from './AccountManager.abide' with { type: 'text' }
+import issuedInvoiceSource from './IssuedInvoice.abide' with { type: 'text' }
+import avatarSource from './Avatar.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>Return what a helper hands back. Each one writes through <code>response</code>, the response
+    being built for this request, and hands its argument back. A status, a header or a
+    <code>set-cookie</code> is written there too, so a cookie and the navigation after it are one
+    return, with no response middleware between.</p>
+
+    <Section title="The response helpers">
+        <table>
+            <thead><tr><th>You return</th><th>The caller gets</th></tr></thead>
+            <tbody>
+                <tr><td><code>page(body)</code></td><td><code>text/html</code>, streamed as the render yields it</td></tr>
+                <tr><td><code>json(value)</code></td><td>the same serialization a bare return gets, fixed</td></tr>
+                <tr><td><code>redirect(to, status?)</code></td><td>a navigation, at one of five statuses</td></tr>
+                <tr><td><code>jsonl(values)</code> / <code>sse(values)</code></td><td>a stream, framed two ways</td></tr>
+            </tbody>
+        </table>
+
+        <p>None of them does the work of producing what it sends — <code>page</code> takes what a
+        render produced rather than rendering. Every signature is in the
+        <a href={url('/reference/transports')}>Transports</a> reference.</p>
+    </Section>
+
+    <Section title="The return type already decides a content type">
+        <p>Before reaching for a helper, know what a plain return does:</p>
+
+        <table>
+            <thead><tr><th>The handler returned</th><th>The caller gets</th></tr></thead>
+            <tbody>
+                <tr><td>any JSON value</td><td><code>application/json</code></td></tr>
+                <tr><td><code>undefined</code></td><td><code>204</code>, no body</td></tr>
+                <tr><td><code>Uint8Array</code>, <code>ArrayBuffer</code>, <code>Blob</code>, <code>DataView</code></td><td><code>application/octet-stream</code>, or a <code>Blob</code>'s own <code>type</code></td></tr>
+                <tr><td>an <code>AsyncGenerator</code></td><td>jsonl, one value per line</td></tr>
+            </tbody>
+        </table>
+
+        <p>A binary decodes back to a <code>Uint8Array</code> on the caller's side, so an rpc that
+        hands back a generated PDF needs no helper and no encoding step.</p>
+    </Section>
+
+    <Section title="A returned `Blob` is served by range">
+        <p>A <code>Blob</code> has <code>size</code> and <code>slice</code>, which is the whole of
+        what range serving needs — so abide reads <code>Range</code>, honors <code>If-Range</code>
+        against the ETag it derives, and answers <code>206</code> with <code>content-range</code>,
+        <code>416</code> where the range is unsatisfiable and <code>304</code> on a matching
+        <code>If-None-Match</code>. <code>Bun.file(path)</code> IS a <code>Blob</code>, so serving a
+        file that seeks is returning one:</p>
+
+        <Code language="abide" caption="src/media/api.abide" code={`<script server>
+export const playFile = GET(async ({ id }: { id: number }) => {
+    const path = await pathFor(id)
+    return Bun.file(path)
+})
+</script>`} />
+
+        <p><em>0 lines of range parsing</em> — against the sixty every media server writes once and
+        gets <code>content-length</code> on a <code>206</code> wrong the first time, a player that
+        will not seek being the only symptom. Reach it from markup with
+        <a href={url('/data/find-the-url-a-handler-answers-on')}><code>{'playFile.url({ id })'}</code></a>.</p>
+
+        <p>A handler returning a whole <code>Response</code> instead — a playlist at
+        <code>no-store</code> beside the segments it names at <code>immutable</code> — is answering
+        the same way, with one consequence worth knowing: <code>clients.mcp</code> and
+        <code>clients.cli</code> default to <strong>false</strong>, a <code>Response</code> having
+        no output schema to publish. Turn them back on where the body is JSON you wanted a header
+        on.</p>
+
+        <p>Read on: <a href={url('/data/read-data-without-writing-an-api')}>Reading data</a> ·
+        <a href={url('/data/send-data-as-it-arrives')}>Streaming data</a></p>
+    </Section>
+
+    <Section title="`json` answers `null` where a bare return says nothing">
+        <Example
+            id="json-null"
+            title="`json(value)` — `null` for nobody, not an empty answer"
+            summary="A sync script reads each contact's account manager as JSON. Grace has none — switch to her."
+            files={{
+                'AccountManager.abide': accountManagerSource,
+            }}
+        >
+            <AccountManager />
+        </Example>
+
+        <p><em>1 helper, 0 special cases</em> — the arm spells the <code>?? null</code> out, and a
+        route that forgets it answers an empty body the script's <code>json()</code> throws on.</p>
+
+        <p>A bare <code>undefined</code> is a 204 with no body (16.31), which is right for a write
+        with nothing to report and wrong for a read whose answer is "nobody". <code>json</code>
+        sends <code>null</code> at the status written through <code>response</code>, 200 unless
+        something wrote another (17.10). It is the same serialization a bare return gets otherwise,
+        fixed, so nothing a caller's <code>Accept</code> asks for moves it off JSON.</p>
+    </Section>
+
+    <Section title="`page` answers with a document">
+        <Example
+            id="page-issued"
+            title="`page(body)` — an invoice as a document of its own"
+            summary="The invoice exactly as it was issued, kept as the HTML the customer was sent."
+            files={{
+                'IssuedInvoice.abide': issuedInvoiceSource,
+            }}
+        >
+            <IssuedInvoice />
+        </Example>
+
+        <p><em>1 helper, 0 headers</em> — the arm sets <code>text/html</code> itself, and an answer
+        without it is text a browser is told by <code>nosniff</code> not to guess at.</p>
+
+        <p><code>page</code> takes what a render <strong>produced</strong> rather than doing the
+        render — a stored copy, as here, or the bytes <code>render</code> hands back from one of the
+        app's own components, which <a href={url('/pages/render-a-document-yourself')}>Manual
+        rendering</a> runs as a preview. Either way it is <code>text/html</code>, the bytes as they
+        were built.</p>
+    </Section>
+
+    <Section title="`redirect` sends the caller on to another address">
+        <Example
+            id="redirect-avatar"
+            title="`redirect(to)` — one address, sent on to another"
+            summary="Every contact's avatar has one address that never changes. It sends the browser on to the photo's current version."
+            files={{
+                'Avatar.abide': avatarSource,
+            }}
+        >
+            <Avatar />
+        </Example>
+
+        <p><em>0 addresses written twice</em> — the arm spells the photo route's path and query a
+        second time in the <code>location</code> it builds, and <code>photo.url()</code> is the
+        handler's own address.</p>
+
+        <Code language="ts" caption="shared" code={`type RedirectStatus = 301 | 302 | 303 | 307 | 308`} />
+
+        <p>The status is restricted to those five, defaulting to <code>302</code>, so a typo is a
+        compile error rather than a browser quietly ignoring the header. A sign-in's cookie is
+        written through <code>cookies</code> before the return, so the cookie and the navigation
+        after it are one answer.</p>
+
+        <p><code>303</code> is the one a mutation wants: it turns a <code>POST</code> into a
+        <code>GET</code> at the destination, which stops a refresh re-submitting. A
+        <code>POST</code> that returns a plain value to a form navigation already gets a
+        <code>303</code> back to the <code>Referer</code> without you writing one.</p>
+
+        <p>Read on: <a href={url('/data/change-something-on-the-server')}>Mutations</a> ·
+        <a href={url('/pages/link-to-another-page')}>Links &amp; navigation</a></p>
+    </Section>
+
+    <Section title="`nosniff` is on every response, unconditionally">
+        <p>Every abide response declares its own content type, so a browser guessing a different one
+        is only ever the vulnerability — a JSON refusal sniffed as HTML is script running on your
+        origin.</p>
+
+        <p>It is spelled a second time on the asset route, which is served in front of the pipeline
+        and never reaches the funnel.</p>
+    </Section>
+
+    <Section title="A `cache-control` default is the handler's to override">
+        <p><code>cache-control</code> on a page, an rpc answer or a refusal is a
+        <strong>default</strong>, not a rule — every helper takes a <code>ResponseInit</code>, so a
+        handler that knows its answer is shareable overrides it:</p>
+
+        <table>
+            <thead><tr><th>Default</th><th>On</th><th>Why</th></tr></thead>
+            <tbody>
+                <tr><td><code>private, no-store</code></td><td>a page, an rpc answer, any refusal</td><td>a page renders per request and a handler answers as whoever called it. Absent is not neutral: it licenses a shared cache to invent a lifetime for an answer that names who asked</td></tr>
+                <tr><td><code>private, max-age=&lt;the </code>ttl<code>&gt;</code></td><td>a <code>GET</code> over a <a href={url('/values/load-once-per-set-of-arguments')}><code>global</code></a> <code>reactive</code></td><td>one number, not two — <code>private</code> because access is not something a rung can be read for, and nothing at all for <code>ttl: Infinity</code>, which no cache can be told</td></tr>
+                <tr><td><code>no-store</code></td><td><code>/__abide/health</code>, <code>/__abide/principal</code></td><td>both describe this process or this caller at this moment. A cached health check is a load balancer being told a drained instance is fine</td></tr>
+                <tr><td><code>public, max-age=31536000, immutable</code></td><td>the built bundle</td><td>a chunk is addressed by its own content hash, so it cannot go stale</td></tr>
+            </tbody>
+        </table>
+
+        <p>The method decides the <strong>ceiling</strong> on that override: a <code>GET</code>
+        answer can be made shareable and a <code>POST</code> answer cannot be, whatever it sets.</p>
+
+        <p>Read on: <a href={url('/data/change-something-on-the-server')}>Mutations</a> ·
+        <a href={url('/app/tell-a-load-balancer-you-are-healthy')}>Health</a> ·
+        <a href={url('/ship/build-and-serve-the-app')}>Build &amp; start</a></p>
+    </Section>
+
+    <Section title="An app route answers with the same helpers">
+        <p><code>src/layout.abide</code> exports one route of the app's own, asked where no
+        page, handler or public file answered, and it uses this same set — there is no second one.
+        Returning <code>undefined</code> hands the request on to the 404.</p>
+
+        <p>Read on: <a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/data/send-data-as-it-arrives')}>Streaming data</a> —
+            <code>jsonl</code> and <code>sse</code>, the two streaming helpers</li>
+            <li><a href={url('/data/find-the-url-a-handler-answers-on')}>Handler URLs</a> —
+            reaching a handler's raw <code>Response</code></li>
+            <li><a href={url('/pages/render-a-document-yourself')}>Manual rendering</a> —
+            <code>render</code> and its shell, in full</li>
+        </ul>
+    </Section>
+</Doc>

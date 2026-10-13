@@ -1,8 +1,0 @@
-{
-    "title": "`csp()` — your own scripts run, a stranger's do not",
-    "summary": "A support widget somebody pasted into the CRM from another origin. Add it, and the policy this page was served with refuses it.",
-    "app": "crm",
-    "about": "server",
-    "files": ["src/server/app.ts", "src/ui/components/CspBlockedWidget.abide"],
-    "render": "src/ui/components/CspBlockedWidget.abide"
-}

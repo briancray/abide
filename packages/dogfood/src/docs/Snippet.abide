@@ -1,0 +1,26 @@
+<script>
+// 40.6 — code from an example's own file, never pasted: the anchors name lines that must exist, so
+// a sample cannot drift from the file it quotes, and an anchor matching none or two throws where
+// the page renders (40.10).
+import { props } from '@abide/abide'
+import Code from './Code.abide'
+import { EXCERPT } from './highlight.ts'
+import { slice } from './slice.ts'
+
+const {
+    source,
+    path,
+    from = [],
+} = props<{ source: string; path: string; from?: readonly string[] }>()
+
+const code =
+    from.length === 0
+        ? source.trimEnd()
+        : slice(source, from, `snippet ${path}`)
+</script>
+
+<Code
+    code={code}
+    language={path.slice(path.lastIndexOf('.') + 1)}
+    caption={from.length === 0 ? path : `${path}${EXCERPT}`}
+/>

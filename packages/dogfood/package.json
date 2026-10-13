@@ -3,34 +3,23 @@
     "version": "0.0.0",
     "private": true,
     "type": "module",
-    "description": "The abide documentation, as an abide app — and the app abide is dogfooded on",
+    "description": "The abide documentation, as an abide app \u2014 and the app abide is dogfooded on",
     "imports": {
-        "#shared": "./src/shared/index.ts",
-        "#shared/*": [
-            "./src/shared/*",
-            "./src/shared/*.ts"
-        ],
-        "#ui": "./src/ui/index.ts",
-        "#ui/*": [
-            "./src/ui/*",
-            "./src/ui/*.ts"
-        ],
-        "#server": "./src/server/index.ts",
-        "#server/*": [
-            "./src/server/*",
-            "./src/server/*.ts"
+        "#src/*": [
+            "./src/*",
+            "./src/*.ts"
         ]
     },
     "scripts": {
-        "pages": "bun run scripts/buildPages.ts",
-        "build": "bun run pages && abide build",
-        "compile": "bun run pages && abide compile",
+        "build": "abide build",
+        "compile": "abide compile",
         "start": "abide start --port 3131",
-        "dev": "bun run scripts/dev.ts",
-        "typecheck": "tsc -p tsconfig.json"
+        "dev": "abide dev",
+        "typecheck": "bun check"
     },
     "dependencies": {
         "@abide/abide": "workspace:*",
+        "crm-ui": "file:./crm-ui",
         "zod": "^4.6.5"
     },
     "devDependencies": {

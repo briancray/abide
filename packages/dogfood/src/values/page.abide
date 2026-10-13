@@ -1,0 +1,102 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Lead from '#src/docs/Lead.abide'
+import Section from '#src/docs/Section.abide'
+</script>
+
+<Doc>
+    <table>
+        <thead><tr><th>You write</th><th>The value comes from</th><th>What reloads it</th></tr></thead>
+        <tbody>
+            <tr><td><code>reactive(0)</code></td><td>you</td><td>nothing — you write it yourself</td></tr>
+            <tr><td><code>reactive(() =&gt; a + b)</code></td><td>other values</td><td>a value its body read, moving</td></tr>
+            <tr><td><code>{'reactive(() => getThing({ id }))'}</code></td><td>your server</td><td><code>refresh</code>, <code>invalidate</code>, a tag, a <code>ttl</code></td></tr>
+            <tr><td><code>{'reactive<Message[]>([], { by: \'id\' })'}</code></td><td>anything that reaches it, live</td><td>nothing — it is appended to</td></tr>
+        </tbody>
+    </table>
+
+    <p><strong>The arrow makes the third row reloadable.</strong>
+    <code>{'reactive(getThing({ id }))'}</code> compiles and loads once, and then every trigger on
+    it does nothing: a value handed in has no producer to rerun, so <code>refresh</code> and a tag
+    alike are inert on it. Where you want one known thing, loaded once and reloaded when you say,
+    hand <code>reactive</code> an arrow rather than the call.</p>
+
+    <Code language="ts" caption="shared" code={`const draft = reactive('')
+const words = reactive(() => draft().split(' ').length)`} />
+
+    <Section title="Local state">
+        <Lead of="/values/show-a-value-that-changes" />
+
+        <p>Read on: <a href={url('/values/show-a-value-that-changes')}>Local state</a></p>
+    </Section>
+
+    <Section title="Derived values">
+        <Lead of="/values/derive-a-value-from-other-values" />
+
+        <p>Read on: <a href={url('/values/derive-a-value-from-other-values')}>Derived values</a></p>
+    </Section>
+
+    <Section title="Channels">
+        <Lead of="/values/let-anything-publish-and-anything-read" />
+
+        <p>Read on: <a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a></p>
+    </Section>
+
+    <Section title="Patching a list">
+        <Lead of="/values/patch-a-list-from-a-live-feed" />
+
+        <p>Read on: <a href={url('/values/patch-a-list-from-a-live-feed')}>Patching a list</a></p>
+    </Section>
+
+    <Section title="Loading states">
+        <Lead of="/values/show-a-value-that-isnt-there-yet" />
+
+        <p>Read on: <a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a></p>
+    </Section>
+
+    <Section title="Caching">
+        <Lead of="/values/load-once-per-set-of-arguments" />
+
+        <p>Read on: <a href={url('/values/load-once-per-set-of-arguments')}>Caching</a></p>
+    </Section>
+
+    <Section title="Reloading">
+        <Lead of="/values/decide-when-a-value-reloads" />
+
+        <p>Read on: <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a></p>
+    </Section>
+
+    <Section title="Throttle & debounce">
+        <Lead of="/values/slow-down-a-value-that-changes-too-fast" />
+
+        <p>Read on: <a href={url('/values/slow-down-a-value-that-changes-too-fast')}>Throttle &amp;
+        debounce</a></p>
+    </Section>
+
+    <Section title="Sharing">
+        <Lead of="/values/share-one-value-across-components" />
+
+        <p>Read on: <a href={url('/values/share-one-value-across-components')}>Sharing</a></p>
+    </Section>
+
+    <Section title="Watching values">
+        <Lead of="/values/do-something-when-a-value-changes" />
+
+        <p>Read on: <a href={url('/values/do-something-when-a-value-changes')}>Watching
+        values</a></p>
+    </Section>
+
+    <Section title="History">
+        <Lead of="/values/keep-the-last-few-values" />
+
+        <p>Read on: <a href={url('/values/keep-the-last-few-values')}>Recent values</a></p>
+    </Section>
+
+    <Section title="Persistence">
+        <Lead of="/values/keep-a-value-outside-the-process" />
+
+        <p>Read on: <a href={url('/values/keep-a-value-outside-the-process')}>Persistence</a></p>
+    </Section>
+</Doc>

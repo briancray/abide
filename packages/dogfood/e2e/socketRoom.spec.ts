@@ -4,7 +4,7 @@
 // THE REVERT: skip the `patch` the mux makes for a `pub` frame; the other tab keeps the greeting.
 import { expect, test } from '@playwright/test'
 
-const ROOM = 'server/keep-a-room-of-callers-in-sync'
+const ROOM = 'data/keep-a-room-of-callers-in-sync'
 
 function underMount(address: string): string {
     const base = test.info().project.use.baseURL ?? ''

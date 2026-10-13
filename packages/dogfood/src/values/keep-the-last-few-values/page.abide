@@ -1,0 +1,151 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Draft from './Draft.abide'
+import TokenWindow from './TokenWindow.abide'
+import draftSource from './Draft.abide' with { type: 'text' }
+import tokenWindowSource from './TokenWindow.abide' with { type: 'text' }
+import undoStackSource from './undoStack.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>The window is an array the value holds. You append to it and trim it in one
+    <code>patch</code>, and how much it keeps is a line of your code rather than an option of
+    ours.</p>
+
+    <Section title="A window is an array trimmed in the patch that appends">
+        <Example
+            id="tail-window"
+            title="`patch` with a trim — a window onto the recent past"
+            summary="A pane over an answer arriving one token at a time. Press Next token a few times and watch the top of the list."
+            files={{
+                'TokenWindow.abide': tokenWindowSource,
+            }}
+        >
+            <TokenWindow />
+        </Example>
+
+        <p><em>1 patch, 2 lines in it</em> — the push and the trim, against the array the
+        hand-written arm trims and the list it rebuilds per token.</p>
+
+        <p><code>patch</code> hands you the held array and mutates it in place (5.7), so the push
+        and the trim are one write and readers wake once for both. abide puts no cap on the array,
+        so the trim is the condition you write: a count here, an age or a byte total wherever that
+        is what bounds it. The latest value is <code>token.at(-1)</code>, and
+        <code>{'{#for line of token}'}</code> is the window.</p>
+
+        <p><code>by: 'at'</code> is what keeps the trim cheap. A keyed <code>{'{#for}'}</code> moves
+        the rows it keeps (32.29), so a token adds one row and drops one, and the three in between
+        are not touched. Without <code>by</code> the rows are positional (32.13): a
+        <code>shift</code> moves every value up one place, and every row is rewritten. Give each
+        value an id when it is appended, and declare <code>by</code> on the value that holds
+        them.</p>
+
+        <p>Read on: <a href={url('/values/patch-a-list-from-a-live-feed')}>Patching a list</a> ·
+        <a href={url('/templates/repeat-markup-over-a-list')}>Lists</a></p>
+    </Section>
+
+    <Section title="A value keeps no past of its own">
+        <p>Every <code>Reactive</code> holds its standing value and nothing before it. Where you
+        want the ones before it, hold them: make the value the array, and append where you
+        write.</p>
+
+        <p>A reader cannot build the window for you. <code>for await</code> over a value hands back
+        the standing value once per turn, and a burst of writes in one turn is one step (2.6), so a
+        window a reader assembles misses whatever landed in the same turn. The writer sees every
+        value, which is why the window is built where the write is.</p>
+
+        <p>A channel is this same shape with many writers — a <code>reactive</code> over an array
+        that everyone connected reads, trimmed the same way.</p>
+
+        <p>Read on: <a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a></p>
+    </Section>
+
+    <Section title="An undo stack is history the app keeps">
+        <Example
+            id="tail-undo"
+            title="An undo stack is history the app keeps"
+            summary="A composer draft with an Undo beside it. Type a few edits, then press Undo more than once."
+            files={{
+                'undoStack.ts': undoStackSource,
+                'Draft.abide': draftSource,
+            }}
+        >
+            <Draft />
+        </Example>
+
+        <p>A window is the recent past of a list many readers follow. An undo stack is the private
+        past of one value, walked by the one reader typing into it, and the value itself stays a
+        string. The past is an array the app pushes into — here from a <code>watch</code> over the
+        draft. abide leaves the stack to you, because what a stack should coalesce, discard and
+        restore differs per app.</p>
+
+        <p>Two things decide how you build it.</p>
+
+        <p>Each entry has to be a distinct object, or every restore hands back the value already on
+        screen. A string already is one. A record is one when it is written through a member path,
+        because that write copies down the path (31.8).</p>
+
+        <p>And <strong>an undo is itself a write</strong>, so the <code>watch</code> pushes it onto
+        the same array — walk backwards through an array you are also appending to and the second
+        step reads the first one back. So the position lives over a snapshot: take one when a run
+        begins and move an index over it, which is the <code>run</code> and <code>at</code> pair in
+        <code>undoStack.ts</code>.</p>
+
+        <p>Read on: <a href={url('/values/do-something-when-a-value-changes')}>Watching values</a> ·
+        <a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a></p>
+    </Section>
+
+    <Section title="A copy per write is the wrong shape for a stream of items">
+        <p>A write through a member path copies down that path and then sets, so the reference moves
+        and readers wake (31.8). It costs a copy per write, so it is the wrong shape for items
+        arriving one at a time:</p>
+
+        <Code language="ts" caption="shared" code={`for (const row of incoming) rows.push(row)   // O(n²) — a copy per row`} />
+
+        <p><code>patch</code> is the escape. It mutates the array it already holds rather than
+        copying it (5.7), so a batch is one call — <code>rows.patch((list) =&gt;
+        list.push(...incoming))</code> — and one wake, however many rows it brought.</p>
+
+        <p>Read on: <a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a> ·
+        <a href={url('/values/patch-a-list-from-a-live-feed')}>Patching a list</a></p>
+    </Section>
+
+    <Section title="`ABIDE_MAX_STREAM_BUFFER_SIZE` caps a transcript in memory">
+        <p>A window is counted in values. The thing that can actually run away is bytes, and one
+        variable caps it wherever a stream's transcript is held:</p>
+
+        <table>
+            <thead><tr><th></th><th></th></tr></thead>
+            <tbody>
+                <tr><td><code>ABIDE_MAX_STREAM_BUFFER_SIZE</code></td><td>bytes, default <code>Infinity</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>It governs a seed buffer entry's transcript: an entry past it stops holding the stream,
+        and the browser's call runs the handler again and says so on <code>abide:hydrate</code>
+        (36.18).</p>
+
+        <p>A seed buffer entry needs no other bound: it is single-use and lives seconds, so the
+        exposure is request rate multiplied by transcript size, and size is the only dimension that
+        can grow. A count ceiling would evict an entry a document in flight is about to claim, which
+        is the one failure the buffer exists to avoid.</p>
+
+        <p>Read on: <a href={url('/reference/configuration')}>Configuration</a> ·
+        <a href={url('/pages/send-the-page-before-the-data-lands')}>Streaming HTML</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a> — the
+            same window, written by many</li>
+            <li><a href={url('/data/send-data-as-it-arrives')}>Streaming data</a> — where chunks
+            come from</li>
+            <li><a href={url('/ship/watch-a-room-from-the-terminal')}>Watch a channel</a> — a
+            channel followed from a shell</li>
+        </ul>
+    </Section>
+</Doc>

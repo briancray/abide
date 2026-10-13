@@ -1,0 +1,71 @@
+<script server>
+import {
+    type AssistantMessage,
+    assistant,
+    claudeCode,
+    GET,
+    POST,
+} from '@abide/abide/server'
+
+export const bridge = GET(() => claudeCode.bridge(), {
+    timeout: Infinity,
+    clients: { mcp: false },
+})
+
+export const askClaudeCode = POST(
+    async function* ({ messages }: { messages: AssistantMessage[] }) {
+        yield* assistant(
+            messages,
+            claudeCode({ systemPrompt: 'Answer in one sentence.' }),
+        )
+    },
+    { clients: { mcp: false } },
+)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const QUESTION = 'What does an invoice record, in one sentence?'
+
+let connecting = reactive(false)
+const pairing = reactive(() => (connecting ? bridge() : []))
+let asked = reactive(0)
+const events = reactive(() =>
+    asked
+        ? askClaudeCode({ messages: [{ role: 'user', content: QUESTION }] })
+        : [],
+)
+
+// The reply arrives in pieces, one `text` event each.
+const answer = reactive(() => {
+    let text = ''
+    for (const event of events) if (event.type === 'text') text += event.text
+    return text
+})
+</script>
+
+{#if pairing.at(-1)?.paired}
+    <ul class="fields">
+        <li><span>your claude code</span><strong>paired</strong></li>
+    </ul>
+{:else if pairing.at(-1)}
+    <pre class="rounded-md border border-rule bg-raised p-snug
+        text-chrome">{pairing.at(-1)?.command}</pre>
+{:else}
+    <div class="row">
+        <button onclick={() => { connecting = true }}>Connect</button>
+    </div>
+{/if}
+
+<ul class="chat">
+    <li data-speaker="you"><span>you</span><p>{QUESTION}</p></li>
+{#if answer}
+    <li><span>claude code</span><p>{answer}</p></li>
+{/if}
+</ul>
+
+<div class="row">
+    <button onclick={() => { asked += 1 }}>Ask</button>
+    <span class="status">{events.error()?.message ?? ''}</span>
+</div>

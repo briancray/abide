@@ -1,7 +1,0 @@
-{
-    "title": "`flushSync()` — measure the page the write left",
-    "summary": "A contact's notes in a box that scrolls. Add a note — the handler measures the list straight after the write, and lands on the note it just added.",
-    "app": "crm",
-    "files": ["src/ui/components/FlushSyncNotes.abide"],
-    "render": "src/ui/components/FlushSyncNotes.abide"
-}

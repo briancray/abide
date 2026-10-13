@@ -1,8 +1,0 @@
-<script>
-import Row from '#ui/components/Row.abide'
-</script>
-
-<ul class="fields stacked">
-    <Row name="Ada Lovelace"/>
-    <Row name="Grace Hopper"/>
-</ul>

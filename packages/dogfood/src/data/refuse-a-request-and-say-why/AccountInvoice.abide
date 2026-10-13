@@ -1,0 +1,75 @@
+<script server>
+import { refuse } from '@abide/abide'
+import { GET } from '@abide/abide/server'
+import { z } from 'zod'
+
+const notYours = refuse.named(
+    'NotYours',
+    403,
+    'That invoice belongs to someone else.',
+    { schema: z.object({ owner: z.string() }) },
+)
+
+const superseded = refuse.named(
+    'Superseded',
+    409,
+    'That invoice was replaced.',
+    { schema: z.object({ replacedBy: z.string() }) },
+)
+
+// One row per outcome: yours, somebody else's, and replaced.
+type Row = { total: string; mine: boolean; owner: string; replacedBy: string }
+
+const INVOICES: Record<string, Row> = {
+    '4310': { total: '$1,240.00', mine: true, owner: 'ada', replacedBy: '' },
+    '4311': { total: '$96.00', mine: false, owner: 'grace', replacedBy: '' },
+    '4312': { total: '$512.00', mine: true, owner: 'ada', replacedBy: '4313' },
+}
+
+export const getInvoice = GET(
+    async ({ id }: { id: string }) => {
+        await Bun.sleep(450) // a slow database, so the wait is on screen
+        const invoice = INVOICES[id]
+        if (invoice === undefined) throw new Error(`no row ${id}`)
+        if (!invoice.mine) return notYours({ owner: invoice.owner })
+        const { replacedBy } = invoice
+        if (replacedBy) return superseded({ replacedBy })
+        return invoice
+    },
+    { description: 'An invoice, by id, where it is yours and current.' },
+)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const ON_ACCOUNT = ['4310', '4311', '4312']
+
+let id = reactive('4310')
+
+const invoice = reactive(() => getInvoice({ id }))
+
+/** What the refusal says, matched by the name it was refused under. */
+function refusal() {
+    const failed = invoice.error()
+    if (invoice.isError(failed, 'NotYours'))
+        return `Owned by ${failed.data.owner}.`
+    if (invoice.isError(failed, 'Superseded'))
+        return `Replaced by #${failed.data.replacedBy}.`
+    return ''
+}
+</script>
+
+<div class="tabs">
+{#for one of ON_ACCOUNT}
+    <button aria-selected={id === one}
+        onclick={() => { id = one }}>{one}</button>
+{/for}
+</div>
+
+<p class="status">{refusal()}</p>
+
+<ul class="fields">
+    <li><span>total</span>
+        <strong>{invoice.error() ? '—' : invoice.total}</strong></li>
+</ul>

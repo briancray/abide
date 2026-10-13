@@ -1,7 +1,0 @@
-<script>
-import Header from '#ui/components/Header.abide'
-import Session from '#ui/components/Session.abide'
-</script>
-
-<Header/>
-<Session/>

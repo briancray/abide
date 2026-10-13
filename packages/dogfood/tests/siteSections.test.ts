@@ -3,7 +3,7 @@
 // page still renders.
 
 import { expect, test } from 'bun:test'
-import { sidebarGroupsOf, tabOf } from '../src/ui/siteSections.ts'
+import { sidebarGroupsOf, tabOf } from '../src/docs/siteSections.ts'
 
 test('an address is in the tab its first segment names, and the guides otherwise', () => {
     expect(tabOf('/')).toBe('/')
@@ -17,7 +17,7 @@ test('an address is in the tab its first segment names, and the guides otherwise
 })
 
 test('the sidebar lists the reference apart from the guides, and nothing beside an instrument', () => {
-    const guides = sidebarGroupsOf('/server').map((group) => group.section)
+    const guides = sidebarGroupsOf('/data').map((group) => group.section)
     expect(guides).not.toContain('Reference')
     expect(guides).toContain('Start')
     expect(

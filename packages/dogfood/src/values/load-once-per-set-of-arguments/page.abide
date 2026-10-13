@@ -1,0 +1,241 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Query from './Query.abide'
+import Regions from './Regions.abide'
+import Tiles from './Tiles.abide'
+import averageSource from './Average.abide' with { type: 'text' }
+import querySource from './Query.abide' with { type: 'text' }
+import regionSource from './Region.abide' with { type: 'text' }
+import regionsSource from './Regions.abide' with { type: 'text' }
+import tilesSource from './Tiles.abide' with { type: 'text' }
+import totalSource from './Total.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="The two forms, and which one caches">
+        <p>There is a cache at all because the body takes args, and the discriminant is exactly
+        that.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>What you get</th></tr></thead>
+            <tbody>
+                <tr><td><code>reactive(() =&gt; …)</code></td><td>tracked, one value, rerun by what it read</td></tr>
+                <tr><td><code>reactive((args) =&gt; …)</code></td><td><strong>untracked</strong>, one entry per args key, held</td></tr>
+            </tbody>
+        </table>
+
+        <p>A keyed value does not rerun because something its body read moved — its ways back are
+        <code>ttl</code>, an explicit <code>invalidate</code> or <code>refresh</code>, and eviction
+        (11.6, 14.4). Its <code>ttl</code> is the life of an entry, counted from that entry's latest
+        production (11.45, 11.49). The two are different shapes rather than one shape with an
+        option, and every signature is in the
+        <a href={url('/reference/reactive')}><code>reactive</code> reference</a>.</p>
+
+        <p>Calling it hands back a <code>Reactive</code> for that key, so a probe on the result asks
+        about that entry: <code>{'metricsFor({ range }).busy()'}</code>. The factory carries
+        <code>busy</code> and <code>ready</code> too, and <code>metricsFor.busy()</code> asks about
+        every entry, or about those a partial args matches (13.2, 13.11, 13.12). A handler declared
+        over one carries the same two, so <code>{'getMetrics.busy({ range })'}</code> on the
+        <code>GET</code> is the same question as <code>{'metricsFor.busy({ range })'}</code> on the
+        value behind it.</p>
+    </Section>
+
+    <Section title="A keyed value's cache is one entry per args key">
+        <Example
+            id="cache-shared"
+            title="`reactive((args) => …)` — identity per set of arguments"
+            summary="Two tiles on one dashboard, each on its own range. Put them both on 30d, then send one back to 7d."
+            files={{
+                'Tiles.abide': tilesSource,
+                'Total.abide': totalSource,
+                'Average.abide': averageSource,
+            }}
+        >
+            <Tiles />
+        </Example>
+
+        <p><em>1 request, 2 readers</em> — against lifting the fetch to a common parent and
+        threading it back down.</p>
+
+        <p>Neither tile can reach the other, and the range each is on is the whole of what decides
+        whether they share. On one range they are one entry, so the second tile to arrive there
+        paints with no load and the record's own count stays where it was; on two ranges they are
+        two entries and each pays for its own.</p>
+
+        <p>The first paint is the case a hand-written table usually gets wrong, and it is the one
+        the reader never causes: both tiles ask on the same tick, so the second gets <strong>the
+        load already in flight</strong>. Holding the answer stops a second load only once the first
+        has landed. What goes into the table has to be the entry, put there before the answer
+        arrives.</p>
+
+        <p>Read on: <a href={url('/values/derive-a-value-from-other-values')}>Derived values</a> ·
+        <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a></p>
+    </Section>
+
+    <Section title="Two reads share an entry when their args canonicalize the same">
+        <Example
+            id="cache-canonical"
+            title="One entry per canonical args key"
+            summary="One panel, and three ways to spell the query behind it. Change the spelling, then change the region."
+            files={{
+                'Query.abide': querySource,
+            }}
+        >
+            <Query />
+        </Example>
+
+        <p>Three spellings and one entry: the first two differ in argument order, the third writes
+        out an option that is absent. None of them is a second request, and the region beside them
+        is what the same rule looks like from the other side — a value that genuinely differs is a
+        key that genuinely differs, and coming back to <code>north</code> is the entry still
+        held.</p>
+
+        <p>That is the cache's whole question, and the answer is the wire. <code>Args</code> is a
+        <code>Record&lt;string, JsonValue&gt;</code>, serializable by contract, because <strong>the
+        key is the wire form</strong>. An args object becomes a key by its canonical serialization,
+        which is the same canonicalization the transport uses.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>The key it lands on</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'{ id: \'42\' }'}</code></td><td><code>{'{"id":"42"}'}</code></td></tr>
+                <tr><td><code>{'{ page: 2, id: \'42\' }'}</code></td><td><code>{'{"id":"42","page":2}'}</code> — sorted, so argument order never splits an entry</td></tr>
+                <tr><td><code>{'{ id: \'42\', after: undefined }'}</code></td><td><code>{'{"id":"42"}'}</code> — dropped, so an absent option is the same entry as an omitted one</td></tr>
+                <tr><td><code>{'{ since: new Date(0) }'}</code></td><td><code>{'{"since":"1970-01-01T00:00:00.000Z"}'}</code> — ISO</td></tr>
+            </tbody>
+        </table>
+
+        <p>One canonicalization rather than two: args that cannot be keyed are exactly args that
+        cannot be sent, so both fail in the same place. The key is therefore
+        <strong>structural</strong>, and <code>{'reactive(() => getMetrics({ range }))'}</code>
+        builds a fresh object on every run and still lands on the same entry — which is what makes
+        the identity cutoff hold, so a recompute onto a key already held wakes nobody and shows no
+        spinner.</p>
+
+        <p>Args are always plain args. A reactive value in an argument position
+        <strong>reads</strong>; making the call follow that value is the enclosing derived value's
+        job.</p>
+
+        <p>An <code>args</code> schema never decides the key. The key is taken before it runs
+        (11.26), so it never moves a call onto another entry (11.28), and the body gets what it
+        returned (11.68).</p>
+    </Section>
+
+    <Section title="A keyed value's cache is request-local on a server, process-local in a browser">
+        <p>One scope is one caller on both sides, and only what counts as a caller differs.</p>
+
+        <table>
+            <thead><tr><th></th><th>server</th><th>browser</th></tr></thead>
+            <tbody>
+                <tr><td>a caller is</td><td>one request</td><td>the one person at the tab</td></tr>
+                <tr><td>the cache is built</td><td>when the request arrives</td><td>when the app starts</td></tr>
+                <tr><td>and dropped</td><td>when the response is sent</td><td>when the tab closes</td></tr>
+                <tr><td><code>ttl: Infinity</code> means</td><td>to the end of that request</td><td>to the end of that session</td></tr>
+            </tbody>
+        </table>
+
+        <p>It follows that it is built and dropped with its scope. <code>ttl: Infinity</code> means
+        to the end of that scope rather than forever, the cache cannot grow without bound, and one
+        caller's answer can never be served to another. Coalescing is within a scope too: two calls
+        inside one request share one load; two concurrent requests are two scopes and load
+        twice.</p>
+    </Section>
+
+    <Section title="`global` shares one cache across callers">
+        <p><code>global: true</code> opts into a process-wide cache that outlives every request, and
+        it is the only thing that makes two <strong>callers</strong> one load — which is its job
+        where the load is expensive. No card on this page shows it, because a card is one browser
+        tab and the thing <code>global</code> changes is what a second caller gets.</p>
+
+        <p>It also decides what the answer says about caching. An rpc answer is <code>private,
+        no-store</code> by default; a <code>GET</code> over a global keyed value answers
+        <code>private, max-age=&lt;the ttl&gt;</code> instead, because those are one number and
+        writing it twice in two units is how they come apart.</p>
+
+        <p><strong>The directive stays <code>private</code>, and widening it is yours.</strong>
+        <code>global</code> guarantees the answer does not vary by caller, a global body being
+        unable to read the request scope. Whether a <strong>shared</strong> cache may hold it is a
+        different question — about who may reach the endpoint rather than about what it returns —
+        and abide cannot read that off a middleware rung. An endpoint that really is open says
+        <code>public</code> in its own <code>ResponseInit</code>.</p>
+
+        <p>Two costs, and both are yours rather than abide's.</p>
+
+        <p><strong>A global body may not read the request scope.</strong> <code>request()</code>,
+        <code>principal</code>, <code>cookies()</code>, <code>csp.nonce()</code> and
+        <code>route</code> are a build error inside one, and the error names the ambient. An entry
+        outlives the request that built it and is served to every caller after it, so a request
+        ambient in the body bakes the first caller's request into everybody's answer. Anything
+        caller-specific belongs in the <code>Args</code> instead, where it keys an entry rather than
+        hiding in one. That refusal also lets the <code>cache-control</code> be derived rather than
+        trusted: the answer is not about who asked because the shape that would make it so does not
+        compile.</p>
+
+        <p>And a global value is bounded by its own <code>ttl</code> and the app's
+        <code>invalidate</code> and by nothing else. There is no byte ceiling and no eviction count:
+        measuring an arbitrary value costs an O(size) walk, and an LRU would evict an entry a reader
+        is mid-flight on. <code>global: true</code> with <code>ttl: Infinity</code> is an unbounded
+        cache — unbounded because the app asked for it, the bound being a number the app knows and
+        abide does not.</p>
+
+        <p>A global value over a stream fans one producer out to many readers, and it needs no
+        retention to do it. A reader arriving mid-stream gets the run in flight from its start and
+        then goes live (2.5), and a reader leaving does not cancel the producer for the ones that
+        remain (11.39).</p>
+
+        <p>Read on: <a href={url('/values/keep-the-last-few-values')}>Recent values</a> ·
+        <a href={url('/app/know-who-is-calling')}>Auth &amp; principal</a> ·
+        <a href={url('/data/decide-who-may-call-what')}>Authorization</a> ·
+        <a href={url('/data/answer-with-something-other-than-json')}>Response types</a></p>
+    </Section>
+
+    <Section title="`tags` reach entries across keyed values">
+        <Example
+            id="cache-tags"
+            title="`tags` — a selection that reaches across keyed values"
+            summary="Two regions, each with revenue and recent orders behind keyed values that never mention one another. Press one region's button and watch the other stand still."
+            files={{
+                'Regions.abide': regionsSource,
+                'Region.abide': regionSource,
+            }}
+        >
+            <Regions />
+        </Example>
+
+        <p><code>tags</code> is the only thing that reaches <strong>across</strong> values. An entry
+        carries them, and a selection matches on them. The function form receives the entry's args,
+        so a tag can name the <strong>row</strong> rather than the query — which lets
+        <code>{'refresh({ tags: [\'region:north\'] })'}</code> reach every entry about that region
+        without knowing which values those were. Any other value declaring the same tag joins the
+        same selection, in any file.</p>
+
+        <p>So one press moves two numbers that came from two different handlers, and the row
+        underneath does not move at all: it declares <code>region:south</code>, and a selection is
+        as much what it leaves alone.</p>
+
+        <p>The hand-written arm is where that costs something. An entry table alone cannot answer
+        "everything about north", so the tags are a second index beside it, and every entry has to
+        be added to both or a later reload quietly misses it.</p>
+
+        <p>A tag is scoped the way a keyed value is: request-local on a server, process-local in a
+        browser. One request can never reload another's, and a <code>global</code> value, which
+        belongs to no request, is reached from every one.</p>
+
+        <p>Read on: <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a> ·
+        <a href={url('/data/change-something-on-the-server')}>Mutations</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/values/decide-when-a-value-reloads')}>Reloading</a> —
+            <code>ttl</code>, <code>invalidate</code>, <code>refresh</code> and selections</li>
+            <li><a href={url('/values/slow-down-a-value-that-changes-too-fast')}>Throttle &amp;
+            debounce</a> — capping how often an entry revalidates</li>
+            <li><a href={url('/data/read-data-without-writing-an-api')}>Reading data</a> —
+            <code>GET</code> over a keyed value you named yourself</li>
+        </ul>
+    </Section>
+</Doc>

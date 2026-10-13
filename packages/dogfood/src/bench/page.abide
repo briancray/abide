@@ -1,0 +1,9 @@
+<script>
+import BenchBoard from '#src/instruments/ui/BenchBoard.abide'
+</script>
+
+<head>
+    <title>Bench — abide</title>
+</head>
+
+<BenchBoard/>

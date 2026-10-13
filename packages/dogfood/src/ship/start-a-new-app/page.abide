@@ -1,0 +1,62 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Section from '#src/docs/Section.abide'
+</script>
+
+<Doc>
+    <Code code={`abide scaffold ledger
+cd ledger
+abide dev`} />
+
+    <Section title="What it writes">
+        <table>
+            <thead><tr><th></th><th></th></tr></thead>
+            <tbody>
+                <tr><td><code>src/page.abide</code></td><td>the page at <code>/</code></td></tr>
+                <tr><td><code>src/layout.abide</code></td><td>the root layout: the document its pages are served in, and the <code>&lt;script server&gt;</code> holding the lifecycle hooks</td></tr>
+                <tr><td><code>package.json</code>, <code>tsconfig.json</code>, <code>biome.json</code></td><td>the toolchain, configured</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>#src/*</code> is the one import alias, mapping onto <code>src/</code>. Grow the app
+        by subject — a <code>src/billing/</code> with its own pages, components and
+        <code>server</code> — and its pages answer below <code>/billing</code>, with no file moved
+        to make room.</p>
+
+        <p>Nothing generated is a framework file you are asked not to edit. The layout is a real
+        component writing a real HTML document, and the page is a component too.</p>
+
+        <p>Read on: <a href={url('/reference/configuration')}>Configuration</a> ·
+        <a href={url('/pages/give-pages-the-same-chrome')}>Layouts</a></p>
+    </Section>
+
+    <Section title="`abide` with no command prints usage">
+        <p><code>abide</code>, <code>abide -h</code> and <code>abide --help</code> all print usage
+        <strong>generated from the command list</strong>. It is generated rather than written, so a
+        command that exists is a command the help mentions and there is no second place for one to
+        go missing.</p>
+
+        <p>Read on: <a href={url('/reference/cli')}>CLI</a></p>
+    </Section>
+
+    <Section title="Where to go from the scaffold">
+        <p>The scaffolded page holds a reactive value and shows it. That is the whole of the first
+        thing to learn — a value, and markup that follows it — and everything else on this site is a
+        name for something you will want once that is boring.</p>
+
+        <p>Read on: <a href={url('/start/your-first-page')}>First page</a> ·
+        <a href={url('/start/what-abide-is-for')}>Why abide</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/ship/run-the-app-while-you-work')}>Dev server</a> — what <code>abide
+            dev</code> does while you work</li>
+            <li><a href={url('/start/your-first-page')}>First page</a> — the walk-through from
+            here</li>
+            <li><a href={url('/reference/cli')}>CLI</a> — every command and flag</li>
+        </ul>
+    </Section>
+</Doc>

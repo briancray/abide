@@ -1,7 +1,0 @@
-{
-    "title": "`s.isError(e, name)` — a refusal the page made itself",
-    "summary": "A contact's phone, normalised on the way in. Take a digit out and press Save.",
-    "app": "crm",
-    "files": ["src/shared/notAPhone.ts", "src/ui/components/Phone.abide"],
-    "render": "src/ui/components/Phone.abide"
-}

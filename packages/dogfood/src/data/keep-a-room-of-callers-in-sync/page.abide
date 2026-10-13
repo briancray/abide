@@ -1,0 +1,219 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import SupportRoom from './SupportRoom.abide'
+import supportRoomSource from './SupportRoom.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>Nothing on the page polls and nothing on it opens a connection. A page that reads the
+    <code>GET</code> follows it, and a <code>patch</code> on the server reaches every page following
+    it.</p>
+
+    <Section title="Live state is three declarations">
+        <table>
+            <thead><tr><th>You write</th><th>What it is</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'reactive(fn, { global: true })'}</code></td><td>the value every caller shares, one per args key where <code>fn</code> declares a parameter</td></tr>
+                <tr><td><code>export const room = GET(rooms)</code></td><td>its address — a browser reading it follows it</td></tr>
+                <tr><td><code>export const say = POST(…)</code></td><td>the way in from outside, a handler that patches the value</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>global: true</code> puts the value in one process-wide cache that outlives every
+        request (11.34). Leave it out and the value is request-local on a server (11.32), so every
+        caller gets one of their own and nobody hears anybody. Every signature is in the
+        <a href={url('/reference/transports')}>Transports</a> reference, and what a channel is
+        before it has an address is
+        <a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a>.</p>
+    </Section>
+
+    <Section title="A turn one tab sends reaches every tab">
+        <Example
+            id="socket-room"
+            title="`GET` + `POST` — your room, every tab"
+            summary="A support room per browser: a `GET` every tab follows and a `POST` that adds a turn. Open this page in a second tab, send from either, and the last turn changes in both — and in nobody else's."
+            files={{
+                'SupportRoom.abide': supportRoomSource,
+            }}
+        >
+            <SupportRoom />
+        </Example>
+
+        <p><em>2 handlers, 0 frames</em> — against the arm, which opens the socket, frames each
+        turn, holds a turn sent while it is down, keeps a latest turn per room, fans each turn out
+        to that room's tabs and reopens the connection when it drops.</p>
+
+        <p>Each reader gets a room of their own. The body declares a parameter, so
+        <code>rooms</code> is keyed (11.2) and <code>{'room({ id })'}</code> is one room per id. The
+        id is a cookie that every tab of one browser sends and nobody else's does, so the room is
+        yours and your tabs'.</p>
+
+        <p>A browser reading a <code>GET</code> is subscribed to that handler's productions for
+        those args (18.3), over one web socket mux every followed <code>GET</code> on the page
+        shares (18.1). So a page following four rooms holds one connection.</p>
+
+        <p>The tab that sends does not paint its own turn. <code>say</code> sends the text, the
+        handler patches the room, and what the patch wrote goes to every follower (18.11), this tab
+        included. The transcript is the server's, in the order the server took it, in every tab at
+        once.</p>
+
+        <p>Each turn carries an id the server gives it, and the room declares <code>by: 'id'</code>.
+        A follower's copy carries <code>by</code> (18.4), so a <code>{'{#for turn of room}'}</code>
+        keys its rows by it (32.32) and a new turn adds one row. <code>ttl</code> is the life of a
+        keyed entry (11.45), which is how a room nobody uses is let go.</p>
+    </Section>
+
+    <Section title="The server writes each message, so nobody forges its author">
+        <p><code>say</code> takes <code>{'{ id, text }'}</code> and nothing else. The turn's id, its
+        speaker and anything else it carries are written by the handler, so a caller can only ever
+        add a turn that says what they typed. The example writes <code>'you'</code>; an app with
+        sign-in writes who is signed in:</p>
+
+        <Code language="ts" caption="server" code={`export const say = POST(({ id, text }: { id: string; text: string }) => {
+    const { name } = principal.resolved()
+    rooms({ id }).patch((turns) => {
+        turns.push({ id: crypto.randomUUID(), speaker: name, text })
+    })
+})`} />
+
+        <p>The handler may read <code>principal</code>, because a handler is bound to the request it
+        answers (16.25). The room's own body may not: <code>global: true</code> is a build error on
+        a body reading <code>principal</code> (11.37), since one value serves every caller.</p>
+
+        <p>So the room is append-only with no rung saying so. A caller has no way to write to it
+        except the handlers you declared, and each one writes exactly what its body writes. Who may
+        post is the <code>POST</code>'s own <code>middleware</code>, which runs on every call
+        (16.11). A moderator removing a turn is a second <code>POST</code>, behind a rung of its
+        own, whose handler finds the turn by id and splices it out.</p>
+
+        <p>A <code>patch</code> mutates the value in place rather than minting a production (5.7),
+        so a <code>schema</code> on the room never sees it. The check is on the way in: the
+        <code>POST</code>'s <code>args</code> are derived from its annotation (19.9), and anything
+        stricter goes in the handler beside the push.</p>
+
+        <p>abide puts no cap on the array. The example trims in the same patch that appends —
+        <code>if (turns.length &gt; 20) turns.shift()</code> — and the <code>shift</code> is one
+        more op on the wire.</p>
+
+        <p>Read on: <a href={url('/data/change-something-on-the-server')}>Mutations</a> ·
+        <a href={url('/app/know-who-is-calling')}>Auth &amp; principal</a></p>
+    </Section>
+
+    <Section title="Rungs on the `GET` decide who may follow">
+        <p>A room anyone can follow is a room anyone can read. Put a rung on the
+        <code>GET</code>:</p>
+
+        <Code language="ts" caption="server" code={`export const room = GET(rooms, {
+    middleware: [
+        async (next, ctx) =>
+            (await isMember(ctx.request, ctx.args())) ? next(ctx) : refuse(403),
+    ],
+})`} />
+
+        <p>A read over http passes the rung like any call (16.11). A subscription runs it once, as
+        it opens, in the request the connection opened in, and is sent productions only where the
+        rung admitted it (18.8, 18.16). The decision is made per connection: access revoked after it
+        opened takes effect when it next reconnects.</p>
+
+        <p><code>crossOrigin</code> gates the same subscription from another origin, closed unless
+        the <code>GET</code> admits that origin (18.2).</p>
+
+        <p>Read on: <a href={url('/data/decide-who-may-call-what')}>Authorization</a> ·
+        <a href={url('/data/let-another-origin-call-you')}>CORS</a></p>
+    </Section>
+
+    <Section title="A follower is sent what a patch wrote, as JSON Patch">
+        <p>A <code>patch</code> on the room is sent to every follower standing at the version it was
+        made over as what it wrote, in JSON Patch (RFC 6902), and not as the array (18.11). Each
+        write is a <code>PatchOp</code>: an <code>add</code>, <code>remove</code> or
+        <code>replace</code> at a JSON Pointer, so a <code>push</code> is an <code>add</code> at
+        <code>/-</code> and a <code>shift</code> a <code>remove</code> at <code>/0</code>. A
+        twenty-turn room sends one turn per message, not twenty.</p>
+
+        <table>
+            <thead><tr><th>The patch</th><th>The follower is sent</th></tr></thead>
+            <tbody>
+                <tr><td>over the version it holds</td><td>the ops</td></tr>
+                <tr><td>over a version it does not hold</td><td>the ops, and it reads the value again (18.12)</td></tr>
+                <tr><td>over a copy the page wrote to itself</td><td>the ops, and it reads the value again (18.21)</td></tr>
+                <tr><td>one whose writes cannot be sent as data</td><td>the value, whole (18.13)</td></tr>
+            </tbody>
+        </table>
+
+        <p>A write to a followed copy stays in that tab — a <code>say</code> is how a turn reaches
+        the room — and lasts until the server next changes the room.</p>
+
+        <p>The same follow is open to anything that speaks http. Ask the <code>GET</code>'s address
+        for <code>text/event-stream</code> and it is server-sent events, each frame's op its
+        <code>event</code>, its version the <code>id</code>, and the value or the JSON Patch its
+        <code>data</code> (18.20):</p>
+
+        <Code code={`curl -N -H 'Accept: text/event-stream' \\
+  'https://app.example/server/keep-a-room-of-callers-in-sync/room?id=lobby'`} />
+
+        <p>An <code>EventSource</code> reconnecting sends the last <code>id</code> back as
+        <code>Last-Event-ID</code>, and is sent only what moved after it.</p>
+
+        <p>Read on: <a href={url('/ship/watch-a-room-from-the-terminal')}>Watch a channel</a></p>
+    </Section>
+
+    <Section title="A reconnect is sent the value, then its patches">
+        <p>A version names one production or one patch, and no other in this process or in any
+        earlier one (18.7). A client subscribing names the version it holds (18.9), and the server's
+        answer follows from it (18.6):</p>
+
+        <table>
+            <thead><tr><th>The client holds</th><th>It is sent</th></tr></thead>
+            <tbody>
+                <tr><td>the value's current version</td><td>nothing, until the next patch</td></tr>
+                <tr><td>any other version</td><td>the value, whole</td></tr>
+            </tbody>
+        </table>
+
+        <p>Seeding a first render, a connection that dropped and reopened, and a tab too slow to
+        keep up are one mechanism, and none of it is spelled by the app.</p>
+
+        <p>The value is not durable. It lives in memory, so a restart starts the room from its body
+        again. History anyone must be able to scroll back past that is app data behind an ordinary
+        rpc.</p>
+    </Section>
+
+    <Section title="A followed value is still a reactive value">
+        <p>The call hands back the same <code>Reactive</code> the handler had, <code>Produced</code>
+        included (16.3). A bare read is the array, <code>room.at(-1)</code> is the latest turn, and
+        the probes answer. A follower's copy is <code>busy()</code> until its first production
+        arrives (9.14).</p>
+
+        <p>Writing to that copy is not how to send. A <code>set</code> on it stands only until the
+        next production replaces it (9.4), so a turn goes through <code>say</code>.</p>
+
+        <p><code>{'room.invalidate({ id })'}</code> and <code>{'room.refresh({ id })'}</code> inside
+        a handler reach every browser's copy of that room (7.10, 7.18). A <code>for await</code>
+        over the room hands back the standing array once per turn, a burst collapsing to the latest
+        (2.6), so code that has to act on every message acts in <code>say</code>.</p>
+    </Section>
+
+    <Section title="Each instance holds its own room">
+        <p>A <code>global</code> value lives in the process, as its cache does. More than one
+        instance degrades rather than breaks: a reconnect landing on another instance names a
+        version that instance never minted, and is sent that instance's value whole. abide supplies
+        no cross-process mechanism for it.</p>
+
+        <p>Read on: <a href={url('/values/share-one-value-across-components')}>Sharing</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a> — what
+            a channel is, before it has an address</li>
+            <li><a href={url('/data/read-data-without-writing-an-api')}>Reading data</a> —
+            <code>GET</code>, and how any read follows the server</li>
+            <li><a href={url('/ship/watch-a-room-from-the-terminal')}>Watch a channel</a> —
+            following a <code>GET</code> from a shell</li>
+        </ul>
+    </Section>
+</Doc>

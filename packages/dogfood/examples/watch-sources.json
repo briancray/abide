@@ -1,7 +1,0 @@
-{
-    "title": "`watch(sources, effect)` — reads both, wakes on one",
-    "summary": "An audit line that should follow a reassignment and not every keystroke. Type into the notes, then change the owner.",
-    "app": "crm",
-    "files": ["src/ui/components/Assignment.abide"],
-    "render": "src/ui/components/Assignment.abide"
-}

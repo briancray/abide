@@ -1,4 +1,4 @@
-# The docs app's own bundler plugins, read by `abide build` and `abide dev` (RULEBOOK 38.44) — the
-# setup `content/templates/scope-styles-to-a-component.md` teaches, dogfooded.
+# The docs app's own bundler plugins, read by `abide build` and `abide dev` (RULEBOOK 38.43) — the
+# setup `/templates/scope-styles-to-a-component` teaches, dogfooded.
 [serve.static]
 plugins = ["bun-plugin-tailwind"]

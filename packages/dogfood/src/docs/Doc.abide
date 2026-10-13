@@ -1,0 +1,71 @@
+<script>
+// A docs page: its header and opening paragraph from `SITE`, what the page writes, the thread to
+// the pages either side, and the rail — the page's own headings, and its two markdown downloads.
+//
+// WHICH PAGE COMES FROM THE ROUTE, so a page names nothing about itself: its words are `SITE`'s,
+// keyed by where it is served.
+//
+// THE SCROLL SPY IS THE RAIL'S, bound to it rather than to `main`: on a page the reader navigated
+// to, `main` is built before the rail, and a spy installed then finds no links to mark.
+import { raw, reactive, route, url, type RouteLiteral } from '@abide/abide'
+import { inline } from './inline.ts'
+import { installDocs } from './installDocs.ts'
+import { markdownAddressOf, neighborsOf, pageAt } from './sitePages.ts'
+
+const page = pageAt(route.name())
+const { previous, next } = neighborsOf(page.route)
+const plain = page.title.replaceAll('`', '')
+const markdown = url(markdownAddressOf(page.route) as RouteLiteral)
+
+const headings = reactive.share('docHeadings', () =>
+    reactive<{ id: string; title: string; level: number }[]>([]),
+)
+</script>
+
+<head>
+    <title>{plain} — abide</title>
+    <link rel="alternate" type="text/markdown" href={markdown} title="{plain} as Markdown">
+</head>
+
+<main id="content">
+    <header>
+        {#if page.stub}
+            <p class="notice">Stub — title and intent decided, prose not written.</p>
+        {/if}
+        <h1>{raw(inline(page.title))}</h1>
+        {#if page.intent}
+            <p class="intent">{raw(inline(page.intent))}</p>
+        {/if}
+    </header>
+    <div class="flow">
+        <p>{raw(inline(page.lead))}</p>
+        <slot/>
+    </div>
+    <footer>
+        {#if previous}
+            <a href={url(previous.route as RouteLiteral)}>&larr; {raw(inline(previous.nav))}</a>
+        {/if}
+        {#if next}
+            <a class="next" href={url(next.route as RouteLiteral)}>{raw(inline(next.nav))} &rarr;</a>
+        {/if}
+    </footer>
+</main>
+<aside class="toc" bind:element={installDocs}>
+    {#if headings.length > 1}
+        <section>
+            <h2 id="toc-title">On this page</h2>
+            <ul aria-labelledby="toc-title">
+                {#for heading of headings}
+                    <li class="lvl-{heading.level}"><a href="#{heading.id}">{raw(inline(heading.title))}</a></li>
+                {/for}
+            </ul>
+        </section>
+    {/if}
+    <section>
+        <h2 id="md-title">Markdown</h2>
+        <ul class="downloads" aria-labelledby="md-title">
+            <li><a href={markdown} download>Download this page</a></li>
+            <li><a href={url('/abide.md' as RouteLiteral)} download>Download full docs</a></li>
+        </ul>
+    </section>
+</aside>

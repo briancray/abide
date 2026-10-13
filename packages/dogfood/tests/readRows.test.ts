@@ -4,7 +4,7 @@
 // `each`; the failure is taken for a row, the read resolves, and the board says nothing went wrong.
 
 import { expect, test } from 'bun:test'
-import { readRows } from '#ui/readRows.ts'
+import { readRows } from '#src/instruments/readRows.ts'
 
 test("a runner's failure after its rows rejects the read with its own message", async () => {
     const lines = `${JSON.stringify({ id: 'a', state: 'done' })}\n${JSON.stringify({ failure: 'testRows.ts exited 1\nboom' })}\n`

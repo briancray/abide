@@ -1,0 +1,172 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Library from './Library.abide'
+import Shelves from './Shelves.abide'
+import Volume from './Volume.abide'
+import librarySource from './Library.abide' with { type: 'text' }
+import nowPlayingSource from './NowPlaying.abide' with { type: 'text' }
+import queueControlSource from './QueueControl.abide' with { type: 'text' }
+import shelfSource from './Shelf.abide' with { type: 'text' }
+import shelvesSource from './Shelves.abide' with { type: 'text' }
+import trackRowSource from './TrackRow.abide' with { type: 'text' }
+import volumeSource from './Volume.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>Where a value really is one thing for the whole app, <strong>reach for a module
+    first</strong>: export the value, import it wherever you read it, and you have it typed, with no
+    key, no registry and no lifetime of its own to reason about. <code>reactive.share</code> is for
+    the value that is one thing per <em>subtree</em> — the case a module cannot reach, because two
+    shelves each want their own.</p>
+
+    <Section title="The forms of `reactive.share`">
+        <p><code>reactive.share</code> is get-or-create in the current scope, by key. One call, and
+        the key is a literal.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>What you get</th></tr></thead>
+            <tbody>
+                <tr><td><code>reactive.share(key, build)</code></td><td>the value under <code>key</code>, built by <code>build</code> only if nobody above you had one</td></tr>
+                <tr><td><code>reactive.share(key, build)</code> again</td><td>the same value, and this call's <code>build</code> never runs</td></tr>
+                <tr><td><code>reactive.share(expression, build)</code></td><td>a build error — the key is a literal or it is nothing</td></tr>
+            </tbody>
+        </table>
+
+        <p>What comes back is whatever the thunk built, which is an ordinary <code>Reactive</code>
+        with no share-shaped wrapper on it. <code>Shared</code> is the optional registry of key
+        names, and both are in the <a href={url('/reference/reactive')}><code>reactive</code>
+        reference</a>.</p>
+    </Section>
+
+    <Section title="Two components far apart read one value">
+        <Example
+            id="share-agree"
+            title="`reactive.share(key, build)` — get-or-create in this scope"
+            summary="A now-playing bar over a library of tracks. Press a title and watch the bar, which the library never speaks to."
+            files={{
+                'Library.abide': librarySource,
+                'NowPlaying.abide': nowPlayingSource,
+                'TrackRow.abide': trackRowSource,
+            }}
+        >
+            <Library />
+        </Example>
+
+        <p><em>3 instances, 1 value, 0 props</em> — against a prop through the list, or a store
+        module with a lifetime of its own.</p>
+
+        <p>The page holds the key, so every instance below it finds that one on the way up and none
+        of their <code>build</code> thunks run — three rows and a bar, one value. The page declares
+        it and hands neither of them anything.</p>
+
+        <p>That is the case a prop cannot reach. Where a parent already has the value, hand it down
+        — a plain <code>T</code> prop is a <strong>live read</strong> of the caller's expression, so
+        <code>{'title={track}'}</code> follows <code>track</code> and the child re-renders without
+        being reinstantiated. Reach for <code>reactive.share</code> when the path between the
+        readers is uninterested, and for a prop when the parent that owns the value is the one
+        rendering the reader.</p>
+
+        <p>Read on: <a href={url('/templates/reuse-a-piece-of-markup')}>Components</a> ·
+        <a href={url('/templates/bind-a-form-to-state')}>Form binding</a></p>
+    </Section>
+
+    <Section title="`reactive.share` hands back the one that won">
+        <Example
+            id="share-winner"
+            title="`reactive.share` hands back the one that won"
+            summary="One key asked for twice, once properly and once with the value built outside the call. Step the volume and watch the third tile."
+            files={{
+                'Volume.abide': volumeSource,
+            }}
+        >
+            <Volume />
+        </Example>
+
+        <p>One call rather than a share-then-read pair, so there is no ordering hazard and no miss
+        to define. So <strong>use the return value and no other name.</strong></p>
+
+        <p>Building the value outside the call and passing it in fails silently, which is what the
+        third tile is. The local name goes on being read by the module that made it while every
+        other module reads the shared one, and both are correct-looking — they even agree until
+        somebody writes. Handing a thunk instead keeps the loser's value from being built at
+        all.</p>
+    </Section>
+
+    <Section title="`Shared` is your app's own registry of keys">
+        <p><code>Shared</code> is your app's own registry, widened by declaration merging — and an
+        <strong>opt-in tightening</strong>, not a precondition. A key it declares is checked against
+        it; a key it does not is inferred from the thunk, so <code>reactive.share</code> works
+        before you have written one.</p>
+
+        <Code language="ts" caption="src/shared.ts — excerpt" code={`declare module '@abide/abide' {
+    interface Shared {
+        nowPlaying: Reactive<string>
+    }
+}`} />
+
+        <p>The registry buys one thing: two modules cannot disagree about the value under one name.
+        With the key declared, a typo is a compile error and the value type follows from the key.
+        Without one, <code>reactive.share('scratch', () =&gt; reactive(0))</code> is a
+        <code>Reactive&lt;number&gt;</code> inferred from what you built.</p>
+
+        <p>A <strong>dynamic key is a build error</strong>, declared or not, and that is deliberate
+        rather than a limitation to work around: what a dynamic key would reach for is a keyed
+        value, holding one entry per args key. It also keeps the set of shared keys fixed by the
+        source, so there is no runtime bound to enforce and nothing to refuse.</p>
+
+        <p>Read on: <a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a> ·
+        <a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a></p>
+    </Section>
+
+    <Section title="A shared value lives in the component that created it, and below">
+        <Example
+            id="share-scope"
+            title="A shared value lives where it was created, and below"
+            summary="Two shelves rendered from one component, each with a control below it asking for the same key. Queue on one shelf and watch the other."
+            files={{
+                'Shelves.abide': shelvesSource,
+                'Shelf.abide': shelfSource,
+                'QueueControl.abide': queueControlSource,
+            }}
+        >
+            <Shelves />
+        </Example>
+
+        <p>The scope is <strong>the component instance and its descendants</strong>. A key found on
+        the way up is the one you get; a key nothing above you holds is created where you asked for
+        it. So each shelf creates its own <code>queued</code>, the control below it finds that one
+        rather than building a second, and neither shelf can see the other's.</p>
+
+        <p>That scoping is what makes a short word safe as a key. A registry keyed process-wide
+        would make <code>queued</code> a name two unrelated parts of an app collide on in silence,
+        and neither side could see the collision.</p>
+
+        <p>So the scope is the choice. <strong>One per subtree is <code>reactive.share</code>; one
+        for the app is a module</strong>, and reaching for a key where a module would have done buys
+        a registry, a literal to keep in step and a scope to think about, in exchange for
+        nothing.</p>
+
+        <p>A shared value is <strong>never evicted within its scope</strong> (10.4). It goes when
+        the scope does and not before, because dropping one would orphan live readers that go on
+        reading something nobody can refresh. Even a <code>global</code> entry, which can be
+        rebuilt, is bounded only by its own <code>ttl</code> and by <code>invalidate</code> (11.35,
+        11.36).</p>
+
+        <p>Read on: <a href={url('/values/load-once-per-set-of-arguments')}>Caching</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a> — sharing
+            across callers rather than components</li>
+            <li><a href={url('/values/load-once-per-set-of-arguments')}>Caching</a> —
+            <code>global</code>, and why its rule runs the other way</li>
+            <li><a href={url('/values/do-something-when-a-value-changes')}>Watching values</a> —
+            reacting to a shared value from anywhere</li>
+        </ul>
+    </Section>
+</Doc>

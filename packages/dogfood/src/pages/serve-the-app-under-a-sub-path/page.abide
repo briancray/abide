@@ -1,0 +1,61 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Section from '#src/docs/Section.abide'
+</script>
+
+<Doc>
+    <Section title="The mount is read, never baked">
+        <table>
+            <thead><tr><th>Where</th><th>Resolved against</th></tr></thead>
+            <tbody>
+                <tr><td>a browser</td><td><code>&lt;meta name="abide-mount"&gt;</code> in the document</td></tr>
+                <tr><td>a server</td><td><code>config().APP_URL</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>A build artifact holds <strong>mount-relative</strong> addresses, and the absolute form
+        is produced at read time. That is the whole of why the same bundle deploys at the root and
+        under a sub-path: the choice is made after the build, which is when a deployment actually
+        knows it.</p>
+
+        <p><code>rpc.url</code>, <code>url</code> and every asset reference go through that
+        resolution. An address you assemble yourself does not, which is the reason to reach for
+        those rather than build the string.</p>
+
+        <p>Read on: <a href={url('/data/find-the-url-a-handler-answers-on')}>Handler URLs</a> ·
+        <a href={url('/pages/link-to-another-page')}>Links &amp; navigation</a></p>
+    </Section>
+
+    <Section title="`/__abide/**` is every endpoint abide controls">
+        <p>Everything the framework serves is under one prefix — the rpc addresses, the socket mux,
+        the health check, the principal endpoint, the OpenAPI document and the MCP endpoint. One
+        prefix, and it moves with the mount like everything else.</p>
+
+        <p>That is a routing fact worth knowing for two reasons. A reverse proxy in front of the app
+        has exactly one path family to forward, and an app route of your own cannot collide with a
+        framework one by accident.</p>
+
+        <p>Read on: <a href={url('/app/tell-a-load-balancer-you-are-healthy')}>Health</a> ·
+        <a href={url('/machines/describe-your-api-without-writing-a-spec')}>OpenAPI</a></p>
+    </Section>
+
+    <Section title="What a sub-path does not change">
+        <p>Nothing about a handler, a page or a component. There is no base-path option to thread
+        through a component, no <code>&lt;base&gt;</code> tag to remember, and no build flag — an
+        app that has never thought about mounting is already an app that mounts.</p>
+
+        <p>Read on: <a href={url('/app/configure-the-app')}>Config</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/app/configure-the-app')}>Config</a> — where <code>APP_URL</code> is
+            read from</li>
+            <li><a href={url('/data/find-the-url-a-handler-answers-on')}>Handler URLs</a> — the
+            addresses that resolve against it</li>
+            <li><a href={url('/ship/build-and-serve-the-app')}>Build &amp; start</a> — the artifact
+            this leaves alone</li>
+        </ul>
+    </Section>
+</Doc>

@@ -1,0 +1,316 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Level from './Level.abide'
+import Shelf from './Shelf.abide'
+import Shelves from './Shelves.abide'
+import levelSource from './Level.abide' with { type: 'text' }
+import shelfSource from './Shelf.abide' with { type: 'text' }
+import shelvesSource from './Shelves.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>There are three answers, and they are three because they fail differently.</p>
+
+    <table>
+        <thead><tr><th></th><th>Reloads</th><th>Costs</th></tr></thead>
+        <tbody>
+            <tr><td><code>ttl</code></td><td>on the next read after it lapses</td><td>nothing until somebody reads</td></tr>
+            <tr><td><code>invalidate()</code></td><td>on the next read</td><td>nothing at all, subscribed or not</td></tr>
+            <tr><td><code>refresh()</code></td><td>now on a named value; under a sweep, wherever something subscribes</td><td>one load per entry reloaded, a mark for the rest</td></tr>
+        </tbody>
+    </table>
+
+    <Section title="`invalidate` marks stale; `refresh` reloads now">
+        <Example
+            id="reload-triggers"
+            title="`invalidate()` marks stale; `refresh()` reloads now"
+            summary="A shelf count with both triggers under it. Press Mark stale and watch nothing happen, then press Reload now."
+            files={{
+                'Level.abide': levelSource,
+            }}
+        >
+            <Level />
+        </Example>
+
+        <p><em>2 triggers, 0 cache keys</em> — the value already holds its own args and its own
+        loader, so neither button repeats them.</p>
+
+        <p><code>invalidate()</code> marks the value stale and loads nothing. It is the cache behind
+        the value that goes, not the value — so no node moves and no request goes out, whether or
+        not anybody is looking, and the fetch belongs to the next read.</p>
+
+        <p><code>refresh()</code> is stale-while-revalidate: what is held <strong>keeps being
+        served</strong>, so the value is <code>busy()</code> and still <code>ready()</code>, and it
+        swaps when the new one lands. Nothing on screen goes blank, and a branch on
+        <code>ready()</code> stays mounted with the old value.</p>
+
+        <p>Naming one value reloads it whether or not anything is reading it. You named a single
+        thing, so the load is the whole of what you asked for — and the alternative was a call that
+        meant two things depending on what happened to be mounted. A <strong>sweep</strong> is the
+        other story, and it is the one that spares what nobody reads.</p>
+
+        <p>Each one touches the <strong>cache behind the value</strong> rather than the value on
+        screen — and the cache is exactly what decides what a reader sees next:</p>
+
+        <table>
+            <thead><tr><th></th><th>subscribed</th><th>not subscribed</th></tr></thead>
+            <tbody>
+                <tr><td><code>invalidate()</code></td><td>the value on screen stays, <code>ready()</code> with it; the next read loads with nothing underneath</td><td>the cache is dropped</td></tr>
+                <tr><td><code>refresh()</code></td><td>loads now, and what is held keeps being served</td><td>loads now; nobody is holding it, so nothing is served meanwhile</td></tr>
+            </tbody>
+        </table>
+
+        <p>A <strong>subscriber</strong> is anything reading the value into the output — the
+        template showing it, or a derived value that is itself subscribed. On screen is the common
+        case rather than the rule, which matters for a derived value nothing renders directly.
+        Either way the next read — a render, or a read by hand — is fetched fresh.</p>
+
+        <p>An <code>invalidate()</code> says what is held is <strong>wrong</strong>, and changes
+        nothing a reader can see: nothing runs and nobody wakes, a guard asking <code>ready()</code>
+        included (7.3, 7.14) — which is what lets a server say "yours is stale" without a page
+        moving. The next read or probe of it runs the producer (3.2, 7.12), and that is where the
+        held value stops being served, with nothing trusted underneath (7.8) — a first load again,
+        for a display, a read by hand and a <code>refresh()</code> alike. A <code>refresh()</code>
+        never does that: it says the held value is good, where an invalidate says it is wrong, and
+        that difference is the one a reader can see.</p>
+
+        <p>So <code>invalidate()</code> never moves a node and never sends a request (7.3). Press
+        <strong>Mark stale</strong> on the card and neither the count nor the number of loads moves.
+        The fetch belongs to whatever reads next. <strong>Reload now</strong> is the other column:
+        the request goes out on the click and 128 is on screen the whole way across.</p>
+
+        <p>The hand-written arm is where that costs something. <strong>Stale is a third
+        state</strong>, and it is the one a hand-written cache usually does not have: one variable
+        says what can be served and another says whether it may be. Collapse the two and marking
+        something stale either blanks the page or does nothing at all.</p>
+
+        <p><strong>Which makes the two dangerous in that order.</strong> <code>invalidate()</code>
+        throws away exactly what stale-while-revalidate would have served, so the
+        <code>refresh()</code> behind it is a load with nothing underneath (7.8) — the one way the
+        eager trigger blanks a page. Press <strong>Mark stale</strong> and then <strong>Reload
+        now</strong> and that is what you get: same two requests as the eager path, same value at
+        the end, and the page blank in between. <code>invalidate(); refresh()</code> over a scope is
+        how an app blanks itself, and either one alone is fine.</p>
+
+        <p>Neither one holds rendering by itself. Nothing does: a value still in flight is a hole in
+        the document that fills when it lands, and a reload is that hole reopening rather than the
+        page stopping.</p>
+
+        <p>Both are inert on a value with no producer (7.6). <code>s.invalidate()</code> on a
+        <code>reactive(0)</code> has nothing to fetch, so it does nothing rather than clearing what
+        you put there. A load handed in at construction is no producer either: it is one answer,
+        with nothing to ask again. A body is a producer and so is a <code>store</code> (8.2), and
+        with either the pair stops being inert. On a wired value the pair still reaches every
+        subscriber's copy (7.10, 7.18).</p>
+
+        <p>Read on: <a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a> ·
+        <a href={url('/values/keep-a-value-outside-the-process')}>Persistence</a></p>
+    </Section>
+
+    <Section title="A selection is the set a trigger acts on">
+        <p>The members above are conveniences over four free functions, and those four take a
+        <code>Selection</code>:</p>
+
+        <table>
+            <thead><tr><th>A <code>Selection</code> is</th><th>Means</th></tr></thead>
+            <tbody>
+                <tr><td>one <code>Reactive</code></td><td>that value</td></tr>
+                <tr><td>one keyed value</td><td>every args key of it</td></tr>
+                <tr><td>one handler</td><td>the value behind it — every args key, where it is keyed</td></tr>
+                <tr><td><code>{'{ tags: [...] }'}</code></td><td>every entry carrying any of those tags, <strong>across values</strong></td></tr>
+                <tr><td>nothing</td><td>this scope</td></tr>
+            </tbody>
+        </table>
+
+        <Code language="ts" caption="shared" code={`import { busy, invalidate, refresh } from '@abide/abide'
+
+invalidate(level)                     // ≡ level.invalidate()
+invalidate({ tags: ['sku:A-70'] })    // across every value tagging it
+refresh(getStock)                     // every args key, loaded now
+refresh(getStock, { sku: 'A-70' })    // ≡ getStock.refresh({ sku: 'A-70' })
+busy()                                // anything in this scope in flight`} />
+
+        <p>The member spellings are <strong>defined as</strong> these, not a second mechanism at a
+        second width: <code>s.refresh()</code> is <code>refresh(s)</code>, and
+        <code>getStock.refresh(args)</code> is <code>refresh(getStock, args)</code> — the selection
+        narrowed to part of its args space, which is the next section (13.4, 13.12).</p>
+
+        <p>Two rules make the wide forms safe to reach for.</p>
+
+        <p><strong>An explicit argument reaches anything; a bare sweep reaches loads.</strong>
+        Passing a <code>Reactive</code> is a deliberate act about one value, so the triggers are on
+        every <code>Reactive</code> — including the ones where they do nothing. A bare
+        <code>invalidate()</code> is indiscriminate, so it matches only entries whose producer is a
+        <strong>load</strong>: a <code>store</code>, or a body that handed back a pending answer or
+        a stream. A <code>reactive(0)</code> caught by a sweep is silent data loss, and a value with
+        no producer has nothing for a trigger to rerun (7.6). A synchronous derivation recomputes
+        from the load it reads (13.14).</p>
+
+        <p><strong>A selection is scope-bounded</strong>, as a reactive value is: this scope's
+        entries plus <code>global</code> ones. So one request can never invalidate another's. On a
+        server that makes a bare <code>invalidate()</code> reach every <code>global</code> value in
+        the process — its own request-scoped entries die with the request anyway, so the globals are
+        the whole effect. A bare <code>refresh()</code> reaches the same entries; nothing subscribes
+        on a server, so there it marks them and the two are one call. An operator's flush endpoint
+        wants that; a handler being defensive never does.</p>
+
+        <p>There is no bare form wider than the scope. A probe reports and a trigger acts, so the
+        widest read is free and the widest write is one an app should have to mean.</p>
+    </Section>
+
+    <Section title="Reload a keyed value by `Partial<Args>`">
+        <Example
+            id="reload-args"
+            title="`k.refresh(Partial<Args>)` — a slice of the args space"
+            summary="Two warehouses holding the same shelf. Book one out of east and watch which of the two loads again."
+            files={{
+                'Shelves.abide': shelvesSource,
+            }}
+        >
+            <Shelves />
+        </Example>
+
+        <p>A keyed value is a factory: <code>{'getStock({ warehouse, sku })'}</code> hands back the
+        <code>Reactive</code> for one key, and that value carries the triggers like any other —
+        <code>{'getStock({ warehouse, sku }).invalidate()'}</code> reloads that one entry. The
+        factory adds the <strong>narrowing</strong>, because one entry has one key and nothing to
+        choose among; <code>getStock</code> holds every key.</p>
+
+        <table>
+            <thead><tr><th>Written</th><th>Reaches</th></tr></thead>
+            <tbody>
+                <tr><td><code>getStock.invalidate()</code></td><td>every entry</td></tr>
+                <tr><td><code>{'getStock.invalidate({ sku: \'A-70\' })'}</code></td><td>that shelf in every warehouse</td></tr>
+                <tr><td><code>{'getStock.refresh({ warehouse: \'east\' })'}</code></td><td>one warehouse, loaded now</td></tr>
+            </tbody>
+        </table>
+
+        <p>The argument is a <code>Partial&lt;Args&gt;</code>, so it selects a slice rather than one
+        key: a <code>Selection</code> narrowed by the one thing a keyed value has that a lone
+        <code>Reactive</code> does not. It is also the only place args granularity is spelled, and
+        the place with the <code>Args</code> type to check it against, which makes it the natural
+        thing to write after a mutation.</p>
+
+        <p><strong>A write needs a trigger on each side that holds the value</strong>, because a
+        selection is scope-bounded and the two scopes are different caches. The handler above
+        reaches the process-wide entry, so the next caller loads fresh; the browser that made the
+        call is a scope of its own, and the number on its screen is still the one from before the
+        write. So the page does its own.</p>
+
+        <p>The verbs differ for the reason the table at the top gives. Both forms here are a
+        <strong>sweep</strong> over an args pattern, and a sweep reloads only what something is
+        reading — so on a server, where nothing is, <code>refresh</code> would come to exactly what
+        <code>invalidate</code> does and the shorter word is the honest one. In the page it
+        <strong>is</strong> subscribed, so <code>refresh</code> reloads it under
+        stale-while-revalidate where <code>invalidate</code> would have left the next read loading
+        with nothing trusted to serve — a write that blanks the row it just changed.</p>
+
+        <p>The pattern is also what keeps the sweep narrow. Press <strong>Book one out of
+        east</strong> and east loads again while west, holding the same shelf under a different key,
+        does not — which a refresh over every key would not have managed.</p>
+
+        <p>Read on: <a href={url('/values/load-once-per-set-of-arguments')}>Caching</a> ·
+        <a href={url('/data/change-something-on-the-server')}>Mutations</a></p>
+    </Section>
+
+    <Section title="A reconnect reloads what a reader is holding">
+        <p>At this width the lazy/eager difference stops being a nuance.</p>
+
+        <p>The eager form is <strong>bounded by what is subscribed</strong>, not by the scope: it
+        reloads the handful something is reading and degenerates to a mark for the other hundred and
+        ninety-odd. So a reconnect costs exactly what a reader is holding, and nothing stale is left
+        in front of them.</p>
+
+        <p><code>invalidate()</code> at this width is for the case where nothing on screen may move
+        — it reaches the same entries and leaves every value standing, so the catch-up happens on
+        the next read. It is not a cheaper <code>refresh()</code> to reach for first:
+        <code>invalidate()</code> and then <code>refresh()</code> blanks every reader.</p>
+
+        <p>Read on: <a href={url('/app/know-when-the-browser-goes-offline')}>Offline</a> ·
+        <a href={url('/values/do-something-when-a-value-changes')}>Watching values</a></p>
+    </Section>
+
+    <Section title="`ttl` expires a value with nobody asking">
+        <Example
+            id="reload-ttl"
+            title={'`{ ttl }` — expires with nobody asking'}
+            summary="A shelf count that keeps for three seconds. Press Read it again straight away, then wait and press it once more."
+            files={{
+                'Shelf.abide': shelfSource,
+            }}
+        >
+            <Shelf />
+        </Example>
+
+        <p><code>ttl</code> is the life of the production a value serves, or of a keyed entry
+        (11.45) — one definition reaching every producer. Past it the production is released (6.7),
+        and the next read runs the producer (6.6).</p>
+
+        <p>Expiry <strong>wakes nobody</strong> (6.1). One timer per value is armed at the deadline
+        of the production it serves (6.3), and it does not hold the process open (6.4).</p>
+
+        <p><strong>A lapsed <code>ttl</code> lands almost where an <code>invalidate()</code>
+        lands.</strong> Nothing loads, nobody is woken (6.1, 7.14), and the read that follows
+        fetches with nothing to serve underneath it. The difference is what is held meanwhile: a
+        lapse releases the production (6.7) and reads as not ready (6.8), where an invalidated value
+        goes on being served until a read or a probe runs the producer (7.17). Come back to a page
+        after an idle spell and find it pending: that is a lapsed <code>ttl</code>, not a bug.</p>
+
+        <p>They separate on how they are reached. A trigger is called, over a value or a selection
+        of them; a <code>ttl</code> is declared, so no pattern narrows it and no tag carries it
+        across values.</p>
+
+        <p>On an owned value there is no producer, and <code>ttl</code> is inert (6.2): it never
+        drops what an app put there. A value <strong>given</strong> a load is the same case, the
+        load being one answer rather than a producer. A value with a <code>store</code> is not,
+        having somewhere to get the dropped value back from (8.2).</p>
+
+        <p>Read on: <a href={url('/values/show-a-value-that-changes')}>Local state</a> ·
+        <a href={url('/values/keep-a-value-outside-the-process')}>Persistence</a></p>
+    </Section>
+
+    <Section title="`peek` reads without subscribing">
+        <p>Reading subscribes, so a read from somewhere that only wants to look is a subscription
+        you did not want. <code>peek</code> is the read that does not join the flow (2.11) — same
+        value, no subscription:</p>
+
+        <Code language="ts" caption="shared" code={`watch(() => {
+    const page = route.url().pathname
+    log.info('viewed', { page, onHand: level.peek()?.onHand })
+})`} />
+
+        <p>That effect is tracked, so the route wakes it. The level is read through
+        <code>peek</code>, so a new count never does.</p>
+
+        <p>It is otherwise a read. It runs the reload a read would run, after an
+        <code>invalidate</code> (7.12) or a lapsed <code>ttl</code> (6.6), and where nothing has
+        landed it answers <code>undefined</code> rather than throwing <code>NotLanded</code> (2.10).
+        A probe runs the same reload, since it answers about the value a read would serve (3.2), so
+        <code>ready()</code> in front of a read never admits one that throws.</p>
+
+        <p><code>watch(sources, effect)</code> is the other way to the same place, and a
+        <code>reactive</code> body has only this one, having no <code>sources</code> form. They
+        differ in what they do to the tracking: <code>sources</code> <strong>replaces</strong> it
+        with a list you write, and <code>peek</code> leaves it on and takes <strong>one
+        read</strong> out of it. So reach for one or the other — inside a <code>sources</code> list
+        there is no tracking left for a <code>peek</code> to opt out of.</p>
+
+        <p>Read on: <a href={url('/values/do-something-when-a-value-changes')}>Watching
+        values</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/values/load-once-per-set-of-arguments')}>Caching</a> — where the
+            entries being invalidated live</li>
+            <li><a href={url('/values/slow-down-a-value-that-changes-too-fast')}>Throttle &amp;
+            debounce</a> — capping revalidation, however triggered</li>
+            <li><a href={url('/data/change-something-on-the-server')}>Mutations</a> — reloading
+            after a write</li>
+        </ul>
+    </Section>
+</Doc>

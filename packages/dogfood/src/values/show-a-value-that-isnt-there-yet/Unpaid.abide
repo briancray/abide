@@ -1,0 +1,33 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const INVOICES = [
+    { id: '4021', total: '$1,240.00', paid: false },
+    { id: '4022', total: '$310.00', paid: true },
+    { id: '4023', total: '$76.50', paid: false },
+]
+
+export const listInvoices = GET(
+    async () => {
+        // A slow database, so the wait is on screen.
+        await Bun.sleep(900)
+        return INVOICES
+    },
+    { description: 'Every invoice.' },
+)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const rows = reactive(() => listInvoices())
+
+// Reads a value still in flight, so it is pending too.
+const unpaid = reactive(() => rows.filter((row) => !row.paid))
+</script>
+
+<ul class="fields stacked">
+    <li><span>unpaid</span>
+        <strong>{unpaid.ready() ? unpaid.length : 'counting…'}</strong>
+    </li>
+</ul>

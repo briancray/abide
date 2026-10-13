@@ -1,0 +1,27 @@
+<script>
+import { reactive } from '@abide/abide'
+import { getMetrics } from './Tiles.abide'
+
+const RANGES = ['7d', '30d']
+
+let range = reactive('7d')
+
+// Its own range, and no way to reach the tile above.
+const metrics = reactive(() => getMetrics({ range }))
+</script>
+
+<ul class="tiles">
+    <li><span>range</span>
+        <div class="tabs">
+        {#for one of RANGES}
+            <button aria-selected={range === one}
+                onclick={() => { range = one }}>{one}</button>
+        {/for}
+        </div></li>
+    <li><span>average order</span>
+        <strong>{metrics.ready() ? metrics.average : '—'}</strong>
+    </li>
+    <li><span>times computed</span>
+        <strong>{metrics.ready() ? metrics.computed : '—'}</strong>
+    </li>
+</ul>

@@ -1,0 +1,18 @@
+<script>
+import { reactive } from '@abide/abide'
+import NowPlaying from './NowPlaying.abide'
+import TrackRow from './TrackRow.abide'
+
+const LIBRARY = ['Kind of Blue', 'A Love Supreme', 'Blue Train']
+
+// Held HERE, above both readers, so each of them finds it on the way up.
+reactive.share('nowPlaying', () => reactive('nothing'))
+</script>
+
+<NowPlaying/>
+
+<div class="row">
+{#for title of LIBRARY}
+    <TrackRow title={title}/>
+{/for}
+</div>

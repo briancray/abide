@@ -1,0 +1,26 @@
+<script>
+import { reactive } from '@abide/abide'
+
+const WORDS = ['Rotate', 'the', 'key', 'in', 'Settings', 'then', 'Keys.']
+
+/** The last four tokens; the array is the window. */
+const token = reactive<{ at: number; text: string }[]>([], { by: 'at' })
+
+let sent = 0
+
+function emit() {
+    sent += 1
+    token.patch((tokens) => {
+        tokens.push({ at: sent, text: WORDS[sent % WORDS.length] ?? '…' })
+        if (tokens.length > 4) tokens.shift()
+    })
+}
+</script>
+
+<ul class="chat">
+{#for line of token}
+    <li><span>{line.at}</span><p>{line.text}</p></li>
+{/for}
+</ul>
+
+<button onclick={emit}>Next token</button>

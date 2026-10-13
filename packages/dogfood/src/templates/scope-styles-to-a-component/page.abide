@@ -1,0 +1,121 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import ScopedBadges from './ScopedBadges.abide'
+import GlobalLegend from './GlobalLegend.abide'
+import scopedBadgesSource from './ScopedBadges.abide' with { type: 'text' }
+import overdueSource from './Overdue.abide' with { type: 'text' }
+import paidSource from './Paid.abide' with { type: 'text' }
+import globalLegendSource from './GlobalLegend.abide' with { type: 'text' }
+import legendSource from './Legend.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="The three ways CSS reaches a component">
+        <table>
+            <thead><tr><th>You write</th><th>Reaches</th></tr></thead>
+            <tbody>
+                <tr><td><code>&lt;style&gt;</code> in the component</td><td>that component's own markup, and nothing else</td></tr>
+                <tr><td><code>:global(…)</code> inside that block</td><td>whatever the compound matches, anywhere</td></tr>
+                <tr><td><code>import './app.css'</code> from its <code>&lt;script&gt;</code></td><td>the app, as an ordinary stylesheet dependency</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="The same class name in two components is two rules">
+        <Example
+            id="style-scoped"
+            title="`<style>` — the same class name in two components"
+            summary="Two badge components that each style `.badge`, rendered side by side. Neither one reaches the other."
+            files={{
+                'ScopedBadges.abide': scopedBadgesSource,
+                'Overdue.abide': overdueSource,
+                'Paid.abide': paidSource,
+            }}
+        >
+            <ScopedBadges />
+        </Example>
+
+        <p><em>2 components, 1 class name, 0 conventions</em> — against a name per component in
+        every selector.</p>
+
+        <p>Every root element carries a <strong>scope token</strong> and every selector requires it
+        on its rightmost compound. So <code>.badge</code> compiles to "a <code>.badge</code> in this
+        component", and a second component writing the same rule is writing a different rule.</p>
+
+        <p>That is what makes the short name safe. The hand-written arm has to put the component's
+        name into the selector because nothing else will, and the cost is not the typing — it is
+        that a third component reusing <code>badge</code> has to already know the other two exist. A
+        convention holds only as long as everybody remembers it; the token is on the element whether
+        anybody remembered or not.</p>
+
+        <p>Read on: <a href={url('/templates/reuse-a-piece-of-markup')}>Components</a></p>
+    </Section>
+
+    <Section title="`:global(…)` is the per-selector escape">
+        <Example
+            id="style-global"
+            title="`:global(…)` — the per-selector escape from scoping"
+            summary="A badge component whose stylesheet also colors a paragraph the page rendered, not the component."
+            files={{
+                'GlobalLegend.abide': globalLegendSource,
+                'Legend.abide': legendSource,
+            }}
+        >
+            <GlobalLegend />
+        </Example>
+
+        <p><code>:global(…)</code> exempts the compound inside it from carrying the scope token, and
+        that is the whole of it. It is per <strong>selector</strong>, not per block, so a
+        component's stylesheet can be scoped everywhere except the one rule that genuinely is not —
+        a reset it owns, a class on markup a parent handed it, an animation another element
+        runs.</p>
+
+        <p>It is the escape rather than the tool: a stylesheet made of <code>:global</code> rules is
+        an app stylesheet written in the wrong file, and the next section is where that belongs.</p>
+    </Section>
+
+    <Section title="An imported stylesheet is a dependency of the component">
+        <p><code>import './app.css'</code> from any <code>&lt;script&gt;</code> in the file — or
+        from any <code>.ts</code> that file reaches — makes the stylesheet a dependency of that
+        component. It is not scoped and is not meant to be — it is the app's own CSS, arriving
+        through the module graph rather than through a <code>&lt;link&gt;</code> you maintain by
+        hand. A component that needs it says so, and a page that never renders that component never
+        pays for it.</p>
+
+        <p>That is also why there is one mechanism here rather than two. A stylesheet is a module
+        dependency like any other, which is what lets the build know which routes need it without
+        being told.</p>
+
+        <p>Read on: <a href={url('/templates/run-code-when-a-component-loads')}>Scripts</a></p>
+    </Section>
+
+    <Section title="A bundler plugin builds the app's stylesheet too">
+        <p>Tailwind, and anything else that turns a stylesheet into a stylesheet, is a bun plugin,
+        and you declare it where bun has you declare one: <code>bunfig.toml</code>, beside the app's
+        <code>package.json</code>.</p>
+
+        <Code language="toml" caption="bunfig.toml" code={`[serve.static]
+plugins = ["bun-plugin-tailwind"]`} />
+
+        <p><code>abide build</code> and <code>abide dev</code> both build the client with it, after
+        abide's own (38.43). Your <code>app.css</code> then opens with <code>@import
+        "tailwindcss"</code>, and the classes your <code>.abide</code> files use are the ones it
+        emits — Tailwind finds them by reading the source, <code>.abide</code> included, so there is
+        nothing to list.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/templates/reuse-a-piece-of-markup')}>Components</a> — the boundary
+            the scope is drawn around</li>
+            <li><a href={url('/templates/put-a-value-in-the-markup')}>Expressions</a> —
+            <code>class:name</code> and <code>style:prop</code> for the per-element case</li>
+            <li><a href={url('/pages/animate-from-one-page-to-the-next')}>View transitions</a> —
+            where a <code>&lt;style&gt;</code> rule turns a feature on</li>
+        </ul>
+    </Section>
+</Doc>

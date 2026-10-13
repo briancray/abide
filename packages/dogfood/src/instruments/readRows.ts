@@ -1,5 +1,5 @@
 import { isRunnerFailure, type RunnerFailure } from 'harness/rows'
-import { linesOf } from '#shared/linesOf.ts'
+import { linesOf } from './linesOf.ts'
 
 /**
  * Reads a run's newline-delimited JSON rows off `rpc.raw`'s `Response`, handing each to `each`.

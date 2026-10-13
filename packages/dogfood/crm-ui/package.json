@@ -1,0 +1,12 @@
+{
+    "name": "crm-ui",
+    "private": true,
+    "type": "module",
+    "description": "The docs app's stand-in for a design system a CRM installs: components shipped as `.abide` source",
+    "exports": {
+        "./*": "./*"
+    },
+    "peerDependencies": {
+        "@abide/abide": "*"
+    }
+}

@@ -1,0 +1,113 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Snippet from '#src/docs/Snippet.abide'
+import Widget from './Widget.abide'
+import widgetSource from './Widget.abide' with { type: 'text' }
+import layoutSource from '#src/layout.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="`csp()` lets your own build through, and nothing else">
+        <Example
+            id="csp-blocked"
+            title="`csp()` — your own scripts run, a stranger's do not"
+            summary="A support widget somebody pasted into the CRM from another origin. Add it, and the policy this page was served with refuses it."
+            files={{
+                'Widget.abide': widgetSource,
+                'src/layout.abide': layoutSource,
+            }}
+        >
+            <Widget />
+        </Example>
+
+        <p>The rung is <code>csp()</code> in the root layout, and it is the policy every page of
+        these docs is served under. Every script and stylesheet on the page ran, because the build
+        serves them from its own origin. The widget's address is another origin, so <code>script-src
+        'self'</code> refused it before a request was made. The inline script the render writes is
+        let through by a hash taken at build time, which is why <code>'unsafe-inline'</code> never
+        has to appear.</p>
+    </Section>
+
+    <Section title="Adding a source, not writing a policy">
+        <Snippet source={layoutSource} path="src/layout.abide" from={['middleware(csp(']} />
+
+        <p>These docs name one directive. They frame their own invoice previews, so
+        <code>frame-ancestors</code> is <code>'self'</code> where the baseline says
+        <code>'none'</code>, and every other directive is the baseline's.</p>
+
+        <p>Each directive you name <strong>replaces</strong> that directive, and only that one:
+        naming <code>img-src</code> because your avatars live on a CDN does not require you to also
+        know what <code>script-src</code> should say for a bundle you did not hand-write. The one
+        you name is the whole directive, so it says <code>'self'</code> again. A directive given an
+        empty array is dropped, and one the baseline lacks is added.</p>
+
+        <p>That is the shape worth insisting on: a policy an app maintains by hand goes stale the
+        first time the build changes, and it goes stale silently — the symptom is a blocked script
+        in a browser nobody was testing in.</p>
+    </Section>
+
+    <Section title="`csp.nonce` is this response's nonce">
+        <Code language="abide" caption="src/layout.abide — excerpt" code={`<script>
+import { csp } from '@abide/abide'
+</script>
+
+<head>
+    <script nonce={csp.nonce()}>window.dataLayer = []</script>
+</head>`} />
+
+        <p>A nonce is per response, which is what makes it a nonce. <code>csp.nonce()</code> hands
+        back the one this response is carrying, so an inline script the app genuinely wants is
+        allowed without <code>'unsafe-inline'</code> — and <code>'unsafe-inline'</code> is the
+        directive that turns a policy into a comment.</p>
+
+        <p>Reading it is the only way to get it. There is no configuration that stamps a nonce onto
+        markup, because a nonce on markup the app did not write is a nonce on markup nobody vouched
+        for.</p>
+
+        <p>Read on: <a href={url('/pages/set-the-title-and-social-preview')}>Head &amp;
+        metadata</a></p>
+    </Section>
+
+    <Section title="`nosniff` is separate, and unconditional">
+        <p><code>x-content-type-options: nosniff</code> is on <strong>every</strong> abide response,
+        unconditionally, and is not something <code>csp()</code> turns on. Every response declares
+        its own content type, so a browser guessing a different one is only ever the vulnerability —
+        a JSON refusal sniffed as HTML is script running on your origin.</p>
+
+        <p>Read on: <a href={url('/data/answer-with-something-other-than-json')}>Response
+        types</a></p>
+    </Section>
+
+    <Section title="No page can be framed by default">
+        <p>Every page carries <code>content-security-policy: frame-ancestors 'none'</code> before
+        any rung runs, so another site cannot put your page in an invisible frame and steer a click
+        onto it. <code>csp()</code> replaces that header with the whole policy, whose baseline says
+        the same thing — so opening the page to a frame is one directive:
+        <code>{'csp({ \'frame-ancestors\': ["\'self\'"] })'}</code>.</p>
+    </Section>
+
+    <Section title="`csp()` is a rung, and composes with the others">
+        <p><code>csp()</code> hands back a <code>Middleware</code>, so it sits in
+        <code>middleware(...)</code> alongside whatever else runs per request, in registration
+        order. It belongs on the <strong>app</strong> lane rather than a handler's: pre-routing is
+        where a response header that is about the document goes.</p>
+
+        <p>Read on: <a href={url('/data/decide-who-may-call-what')}>Authorization</a> ·
+        <a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a> — where the rung is
+            registered</li>
+            <li><a href={url('/data/decide-who-may-call-what')}>Authorization</a> — the lane it
+            runs on</li>
+            <li><a href={url('/reference/helpers')}>Helpers</a> — <code>csp</code> beside
+            <code>log</code>, <code>url</code> and <code>navigate</code></li>
+        </ul>
+    </Section>
+</Doc>

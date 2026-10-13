@@ -4,8 +4,7 @@
 // more than the happy path.
 
 import { expect, test } from 'bun:test'
-import { readExample } from '../scripts/renderExample.ts'
-import { ELISION, slice } from '../scripts/renderSnippet.ts'
+import { slice } from '../src/docs/slice.ts'
 
 const SOURCE = `<script>
 import { state } from '@abide/abide'
@@ -31,57 +30,57 @@ export const after = 1
 `
 
 test('an anchor slices one construct, whatever kind it is', () => {
-    expect(slice(SOURCE, 'const count', 'x')).toBe('const count = state(0)')
+    expect(slice(SOURCE, ['const count'], 'x')).toBe('const count = state(0)')
     // The arrow's body closes on the same line, so the slice stops there rather than
     // running to the end of the enclosing `<script>`.
-    expect(slice(SOURCE, 'const handle', 'x')).toBe(
+    expect(slice(SOURCE, ['const handle'], 'x')).toBe(
         "const handle = state('', { transform: (v) => v.trim() })",
     )
     // A tag slice takes its children; a VOID one takes only itself.
-    expect(slice(SOURCE, '<label>', 'x')).toBe(
+    expect(slice(SOURCE, ['<label>'], 'x')).toBe(
         '<label>\n    Handle\n    <input bind:value={handle}>\n</label>',
     )
-    expect(slice(SOURCE, '<input', 'x')).toBe('<input bind:value={handle}>')
-    expect(slice(SOURCE, '<script>', 'x')).toContain('</script>')
+    expect(slice(SOURCE, ['<input'], 'x')).toBe('<input bind:value={handle}>')
+    expect(slice(SOURCE, ['<script>'], 'x')).toContain('</script>')
 })
 
 // The two things a naive bracket count gets wrong: a brace inside a comment, and a
 // template literal's `${…}` — which nests, so it cannot be skipped wholesale.
 test('a brace in a comment or a template literal does not close the slice', () => {
-    const sliced = slice(CODE, 'export function describe', 'x')
+    const sliced = slice(CODE, ['export function describe'], 'x')
     expect(sliced).toContain('return label')
     expect(sliced.endsWith('}')).toBe(true)
     expect(sliced).not.toContain('export const after')
 })
 
 test('an anchor that is not exactly one line is refused', () => {
-    expect(() => slice(SOURCE, 'const gone', 'page')).toThrow(
+    expect(() => slice(SOURCE, ['const gone'], 'page')).toThrow(
         /no line starts with/,
     )
     // Two matches means the anchor stopped identifying anything, which is the failure
     // that would otherwise pick whichever line happened to come first.
-    expect(() => slice(SOURCE, 'const ', 'page')).toThrow(/matches 2 lines/)
+    expect(() => slice(SOURCE, ['const '], 'page')).toThrow(/matches 2 lines/)
 })
 
 // An anchor is matched against the TRIMMED line, so it is written the way the code
 // reads rather than the way it is indented — and what comes back is dedented to its own
 // shallowest line, since a slice from inside a block would otherwise render adrift.
 test('an anchor ignores indentation, and the slice drops its margin', () => {
-    expect(slice(CODE, 'const label', 'x')).toBe(
+    expect(slice(CODE, ['const label'], 'x')).toBe(
         `const label = \`Clicked \${count()} times\``,
     )
-    expect(slice(SOURCE, '<label>', 'x').split('\n')[1]).toBe('    Handle')
+    expect(slice(SOURCE, ['<label>'], 'x').split('\n')[1]).toBe('    Handle')
 })
 
-// THE RENDER IS NOT A FILE (40.5): the card's component sits above the file tabs and stays
-// there, and the slot the page swaps it into is inside the card.
+// THE RENDER IS NOT A FILE (40.5): the card's component sits above the file tabs and stays there,
+// in the slot inside the card.
 test('the card puts its component above its files', async () => {
-    const card = await readExample('bind-text')
-    expect(card.html.indexOf('<!--render:bind-text-->')).toBeGreaterThan(-1)
-    expect(card.html.indexOf('<!--render:bind-text-->')).toBeLessThan(
-        card.html.indexOf('ex-files'),
-    )
-    expect(card.component).toBe('BindTextContact')
+    const card = await Bun.file(
+        new URL('../src/docs/Example.abide', import.meta.url),
+    ).text()
+    const render = card.indexOf('<div class="ex-render"><slot/></div>')
+    expect(render).toBeGreaterThan(-1)
+    expect(render).toBeLessThan(card.indexOf('class="ex-files"'))
 })
 
 // Several anchors are one fence, in FILE order whatever order they were asked for, and a
@@ -91,23 +90,23 @@ test('several anchors join into one slice, and a gap is shown', () => {
     // Relative indentation is the FILE's, kept — the `<input>` is nested inside a label
     // forty lines down, and re-indenting it flat would print a file that does not exist.
     // The elision marker takes the indent of the run it introduces.
-    const both = slice(SOURCE, `const count${ELISION}<input`, 'x')
+    const both = slice(SOURCE, ['const count', '<input'], 'x')
     expect(both).toBe(
         'const count = state(0)\n    …\n    <input bind:value={handle}>',
     )
 
     // Asked for backwards, returned in file order.
-    expect(slice(SOURCE, `<input${ELISION}const count`, 'x')).toBe(both)
+    expect(slice(SOURCE, ['<input', 'const count'], 'x')).toBe(both)
 
     // Adjacent runs join with no marker, because nothing was left out.
-    expect(slice(SOURCE, `const count${ELISION}const handle`, 'x')).toBe(
+    expect(slice(SOURCE, ['const count', 'const handle'], 'x')).toBe(
         "const count = state(0)\nconst handle = state('', { transform: (v) => v.trim() })",
     )
 
     // A bad anchor is still a bad anchor when it has company.
-    expect(() =>
-        slice(SOURCE, `const count${ELISION}const gone`, 'page'),
-    ).toThrow(/no line starts with/)
+    expect(() => slice(SOURCE, ['const count', 'const gone'], 'page')).toThrow(
+        /no line starts with/,
+    )
 })
 
 // A CLASS THE BUILD EMITS AND THE STYLESHEET DOES NOT CARRY renders as unstyled text in the middle
@@ -115,17 +114,14 @@ test('several anchors join into one slice, and a gap is shown', () => {
 // reading as a stray paragraph under the frame.
 test('every example class the build emits resolves in the stylesheet', async () => {
     const css = await Bun.file(
-        new URL('../src/ui/app.css', import.meta.url),
+        new URL('../src/app.css', import.meta.url),
     ).text()
     const emitted = new Set<string>()
-    for (const file of [
-        'renderExample.ts',
-        'renderMarkdown.ts',
-        'renderSnippet.ts',
-        '../src/ui/installDocs.ts',
-    ]) {
+    for (const file of new Bun.Glob('*.abide').scanSync({
+        cwd: new URL('../src/docs/', import.meta.url).pathname,
+    })) {
         const source = await Bun.file(
-            new URL(`../scripts/${file}`, import.meta.url),
+            new URL(`../src/docs/${file}`, import.meta.url),
         ).text()
         for (const match of source.matchAll(/class="(ex-[a-z-]+)"/g))
             emitted.add(match[1] ?? '')

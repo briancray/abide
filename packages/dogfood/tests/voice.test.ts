@@ -16,15 +16,34 @@
 // would fire hardest on the tutorial, where addressing the reader is the form. Both were dropped.
 
 import { expect, test } from 'bun:test'
-import { readPages } from '../scripts/readContent.ts'
+import { docsPages, renderedMarkdown } from './docsPages.ts'
 
-// Prose only: a table cell, a fence, a directive and a heading are none of them sentences, and a
-// code span is one token however long it is — `Reactive<Stored, Failures, Produced>` is not nine
-// words of anybody's sentence.
+// Every written page with the markdown a reader gets, a stub's words not being the voice yet.
+async function written(): Promise<
+    { route: string; title: string; nav: string; body: string }[]
+> {
+    const bodies = await renderedMarkdown()
+    const pages: { route: string; title: string; nav: string; body: string }[] =
+        []
+    for (const page of await docsPages())
+        if (!page.stub)
+            pages.push({
+                route: page.route,
+                title: page.title,
+                nav: page.nav,
+                body: bodies.get(page.route) ?? '',
+            })
+    return pages
+}
+
+// Prose only: a table cell, a fence, a card's caption, a heading and the intent under the title are
+// none of them sentences, and a code span is one token however long it is —
+// `Reactive<Stored, Failures, Produced>` is not nine words of anybody's sentence.
 function prose(body: string): string {
     return body
         .replaceAll(/```[\s\S]*?```/g, '')
-        .replaceAll(/^\{%.*?%\}$/gm, '')
+        .replaceAll(/^\*\*.*?\*\* — .*$/gm, '')
+        .replaceAll(/^\*[^*\n]*\*$/gm, '')
         .replaceAll(/^\|.*$/gm, '')
         .replaceAll(/^>.*$/gm, '')
         .replaceAll(/^#{1,6} .*$/gm, '')
@@ -51,13 +70,12 @@ const LONGEST = 45
 
 test('no sentence runs past the length a reader can hold', async () => {
     const overlong: string[] = []
-    for (const page of await readPages()) {
-        if (page.stub) continue
+    for (const page of await written()) {
         for (const sentence of sentences(page.body)) {
             const words = sentence.split(/\s+/).length
             if (words > LONGEST)
                 overlong.push(
-                    `${page.slug}: ${words}w — ${sentence.slice(0, 60)}…`,
+                    `${page.route}: ${words}w — ${sentence.slice(0, 60)}…`,
                 )
         }
     }
@@ -77,15 +95,14 @@ const POSITIONAL =
 
 test('no page points at another part of itself by position', async () => {
     const offenders: string[] = []
-    for (const page of await readPages()) {
-        if (page.stub) continue
+    for (const page of await written()) {
         const found = POSITIONAL.exec(prose(page.body))
-        if (found) offenders.push(`${page.slug}: "${found[0]}"`)
+        if (found) offenders.push(`${page.route}: "${found[0]}"`)
     }
     expect(offenders).toEqual([])
 })
 
-// A THIRD RULEBOOK HAD GROWN IN `content/`. RULEBOOK format rule 2 says a rule is stated exactly
+// A THIRD RULEBOOK HAD GROWN IN THE PAGES. RULEBOOK format rule 2 says a rule is stated exactly
 // once, and `rulebook.test.ts` enforces that across the four documents in `docs/` — which is every
 // place anybody thought to look. Two pages were meanwhile carrying 77 RFC-2119 requirements under
 // their OWN clause numbers, and those numbers collide: their 6.3 was about a global body reading
@@ -98,14 +115,16 @@ test('no page points at another part of itself by position', async () => {
 // which is what it was always meant to mean.
 test("no guide states a requirement in the rulebook's keywords", async () => {
     const offenders: string[] = []
-    for (const page of await readPages()) {
+    for (const page of await written()) {
         for (const sentence of sentences(page.body)) {
             if (
                 /\b(MUST NOT|MUST|SHALL NOT|SHALL|SHOULD NOT|SHOULD|MAY)\b/.test(
                     sentence,
                 )
             )
-                offenders.push(`${page.slug}: ${sentence.trim().slice(0, 60)}…`)
+                offenders.push(
+                    `${page.route}: ${sentence.trim().slice(0, 60)}…`,
+                )
         }
     }
     expect(offenders).toEqual([])
@@ -117,11 +136,11 @@ test("no guide states a requirement in the rulebook's keywords", async () => {
 // sentence starting with the product's name is where this goes wrong, and autocorrect is patient.
 test('the product name is lowercase everywhere it is written', async () => {
     const offenders: string[] = []
-    for (const page of await readPages()) {
+    for (const page of await written()) {
         for (const source of [page.body, page.title, page.nav])
             for (const match of (source ?? '').matchAll(/\bAbide\b/g))
                 offenders.push(
-                    `${page.slug}: ${(source ?? '').slice(Math.max(0, (match.index ?? 0) - 30), (match.index ?? 0) + 30)}`,
+                    `${page.route}: ${(source ?? '').slice(Math.max(0, (match.index ?? 0) - 30), (match.index ?? 0) + 30)}`,
                 )
     }
     expect(offenders).toEqual([])

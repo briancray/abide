@@ -1,0 +1,151 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Section from '#src/docs/Section.abide'
+import Snippet from '#src/docs/Snippet.abide'
+import retriesSource from '#src/app/configure-the-app/Retries.abide' with { type: 'text' }
+import poolSource from '#src/app/run-code-at-start-and-stop/Pool.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="Environment variables">
+        <table>
+            <thead><tr><th>Name</th><th>Type</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>PORT</code></td><td><code>number</code></td><td>The listen port.</td></tr>
+                <tr><td><code>APP_URL</code></td><td><code>string | null</code></td><td>The app's public URL.</td></tr>
+                <tr><td><code>NODE_ENV</code></td><td><code>string</code></td><td>The environment name, verbatim.</td></tr>
+                <tr><td><code>APP_NAME</code></td><td><code>string</code></td><td>The app's name, and <code>log</code>'s default namespace.</td></tr>
+                <tr><td><code>APP_VERSION</code></td><td><code>string</code></td><td>The version beside that name.</td></tr>
+                <tr><td><code>APP_DATA_DIR</code></td><td><code>string</code></td><td>The platform's per-user data directory.</td></tr>
+                <tr><td><code>ABIDE_PRINCIPAL_SECRET</code></td><td><code>string | null</code></td><td>What seals the principal cookie.</td></tr>
+                <tr><td><code>ABIDE_PRINCIPAL_TTL</code></td><td><code>number</code></td><td>The principal cookie's life, in ms.</td></tr>
+                <tr><td><code>ABIDE_APP_TOKEN</code></td><td><code>string | null</code></td><td>The bearer the remote CLI sends.</td></tr>
+                <tr><td><code>ABIDE_APP_URL</code></td><td><code>string | null</code></td><td>Names an app somewhere else, for the remote CLI.</td></tr>
+                <tr><td><code>ABIDE_RPC_TIMEOUT</code></td><td><code>number</code></td><td>The default ms a call may go without progress.</td></tr>
+                <tr><td><code>ABIDE_MAX_REQUEST_BODY_SIZE</code></td><td><code>number</code></td><td>The default ceiling on a mutation's body.</td></tr>
+                <tr><td><code>ABIDE_MAX_STREAM_BUFFER_SIZE</code></td><td><code>number</code></td><td>The cap on a stream transcript held in memory.</td></tr>
+                <tr><td><code>ABIDE_MAX_LOG_BUFFER_COUNT</code></td><td><code>number</code></td><td>How many lines <code>log.records</code> is trimmed back to. Default 1000.</td></tr>
+                <tr><td><code>ABIDE_LOG_FORMAT</code></td><td><code>'tsv' | 'json' | null</code></td><td>The machine log format.</td></tr>
+                <tr><td><code>DEBUG</code></td><td><code>string | null</code></td><td>Log-namespace gating.</td></tr>
+                <tr><td><code>NO_COLOR</code></td><td><code>string | null</code></td><td>Refuses ansi anywhere.</td></tr>
+                <tr><td><code>FORCE_COLOR</code></td><td><code>string | null</code></td><td>Asks for the readable form off a pipe.</td></tr>
+            </tbody>
+        </table>
+
+        <p>Every one is read through <code>config()</code>, which validates at start rather than at
+        first use. A variable an app declares in <code>onConfig</code> joins these; a variable
+        nothing declares is not reachable through <code>config()</code> at all, which is what keeps
+        a typo from reading as <code>undefined</code>.</p>
+
+        <p>The <code>ABIDE_</code>-prefixed ceilings default to no ceiling. That is the honest
+        default — abide cannot know that your slowest report is legitimate — and the handler's own
+        option is the real knob, being the one that knows what the work costs.</p>
+    </Section>
+
+    <Section title="Files">
+        <table>
+            <thead><tr><th>Path</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/**</code></td><td>The app's source.</td></tr>
+                <tr><td><code>**/server/**</code></td><td>Source the browser never loads.</td></tr>
+                <tr><td><code>**/public/**</code></td><td>The files answered as authored, at their path below that directory.</td></tr>
+                <tr><td><code>src/public/favicon.ico</code></td><td>The file answered at <code>/favicon.ico</code>.</td></tr>
+                <tr><td><code>src/public/robots.txt</code></td><td>The file answered at <code>/robots.txt</code>.</td></tr>
+                <tr><td><code>src/public/icon.png</code> · <code>src/public/icon.icns</code></td><td>The files answered at <code>/icon.png</code> and <code>/icon.icns</code>, and the desktop app's icon.</td></tr>
+                <tr><td><code>src/**/</code></td><td>The app's addresses, each at its route.</td></tr>
+                <tr><td><code>**/page.abide</code></td><td>A route: its page, and the handlers its <code>&lt;script server&gt;</code> exports.</td></tr>
+                <tr><td><code>**/layout.abide</code></td><td>A layout, rendering every page below its route through a slot, and the hooks over that route.</td></tr>
+                <tr><td><code>src/launcher.abide</code></td><td>The desktop launcher, beside the root layout: the <code>launcher</code> options its <code>&lt;script module&gt;</code> exports, and its page in place of the launcher's own where it has markup.</td></tr>
+                <tr><td><code>src/layout.abide</code></td><td>The root layout, whose <code>&lt;script server&gt;</code> is the app's own, and whose <code>&lt;html&gt;</code> is the document its pages are served in.</td></tr>
+                <tr><td><code>**/error.abide</code></td><td>The page a refusal renders in.</td></tr>
+                <tr><td><code>**/node_modules/**/*.abide</code></td><td>A component a dependency ships as source, compiled with the app that imports it.</td></tr>
+                <tr><td><code>import '…' with {'{'} type: 'routes' {'}'}</code></td><td>A package's directory mounted at the importing file's directory, its pages, layouts, error pages and handlers answering below it.</td></tr>
+                <tr><td><code>bunfig.toml</code></td><td>Under <code>[serve.static] plugins</code>, the bundler plugins the client is built with.</td></tr>
+            </tbody>
+        </table>
+
+        <p>Every directory under <code>src</code> is a segment of an address, so
+        <code>src/billing/page.abide</code> is <code>/billing</code>. A <code>public</code> or
+        <code>server</code> directory can sit anywhere under it and is never a segment: nothing
+        under one has an address, a page there is a build error, and one inside the other is a
+        build error too. A <code>public</code> directory's files answer below the path of the
+        directories above it. Everything outside a <code>server</code> directory is both sides. <code>#src/*</code> is the one import alias,
+        mapping onto <code>src/</code>.</p>
+
+        <p><code>page.abide</code>, <code>layout.abide</code> and <code>error.abide</code> are
+        <strong>addresses rather than names</strong> — the framework's own conventions, where every
+        other file in an app is named after what it exports.</p>
+    </Section>
+
+    <Section title="Lifecycle hooks">
+        <table>
+            <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>middleware</code></td><td><code>{'(...rungs: Middleware<{ request: Request }, Response>[]) => () => void'}</code></td><td>The per-request lane at the calling file's route.</td></tr>
+                <tr><td><code>onStart</code></td><td><code>(fn: (start: () =&gt; Promise&lt;void&gt;) =&gt; void | Promise&lt;void&gt;) =&gt; () =&gt; void</code></td><td>Wraps the boot.</td></tr>
+                <tr><td><code>onStop</code></td><td><code>(fn: (stop: () =&gt; Promise&lt;void&gt;) =&gt; void | Promise&lt;void&gt;) =&gt; () =&gt; void</code></td><td>Mirrors it for teardown.</td></tr>
+                <tr><td><code>onError</code></td><td><code>(fn: (error: unknown) =&gt; unknown) =&gt; () =&gt; void</code></td><td>Runs on an unexpected error at the calling file's route.</td></tr>
+                <tr><td><code>onConfig</code></td><td><code>(fn: ConfigDefaults | null, options?: ConfigOptions) =&gt; () =&gt; void</code></td><td>The app's config defaults.</td></tr>
+                <tr><td><code>onHealth</code></td><td><code>(report: () =&gt; unknown | Promise&lt;unknown&gt;) =&gt; () =&gt; void</code></td><td>The app's health reporter.</td></tr>
+                <tr><td><code>onPrincipal</code></td><td><code>(resolve: (claims: unknown) =&gt; unknown | Promise&lt;unknown&gt;) =&gt; () =&gt; void</code></td><td>Turns claims into the app's half of a principal.</td></tr>
+            </tbody>
+        </table>
+
+        <p>Each is a hook you <strong>call</strong> from a <code>&lt;script server&gt;</code> rather
+        than an export the framework looks for, and it is filed at the route of the file that called
+        it. <code>middleware</code> runs over that route and the ones below it — before routing at
+        the root, after it anywhere else — and <code>onError</code> hears an error there, nearest
+        route first. The rest are the process's wherever they are written, and every one of a kind
+        composes: <code>onConfig</code> and <code>onPrincipal</code> merge what each answers, the
+        deeper route's over the root's.</p>
+
+        <p>Every one hands back the way off again, so a module that is torn down can remove its
+        own.</p>
+
+        <Section title="Wrapping, not listening" level={3}>
+            <p><code>onStart</code> and <code>onStop</code> take the next step as an argument rather
+            than being notified. That is what lets a hook run something <strong>around</strong> the
+            boot — open a pool, <code>await start()</code>, and know the app is up — instead of
+            racing it. A wrap that throws fails hard and the server does not come up, which is the
+            only useful answer to a failed migration.</p>
+        </Section>
+    </Section>
+
+    <Section title="Description">
+        <Section title="Where a value is read" level={3}>
+            <p><code>config()</code> is ambient, and the same name on both sides. On a server it
+            reads the process environment merged over the app's declared defaults; in a browser it
+            reads what the document was served with, which is the subset an app marked as public. A
+            secret is not in that subset, and that is a property of the declaration rather than of a
+            naming convention.</p>
+        </Section>
+
+        <Section title="`NODE_ENV` is verbatim" level={3}>
+            <p>It is the environment name as given, not a boolean and not a three-way enum. An app
+            comparing it against <code>'production'</code> is comparing against the string it was
+            started with.</p>
+        </Section>
+    </Section>
+
+    <Section title="Examples">
+        <Section title="Declaring the app's own config" level={3}>
+            <Snippet source={retriesSource} path="src/app/configure-the-app/Retries.abide" from={['onConfig(', 'export const retryPolicy']} />
+        </Section>
+
+        <Section title="Running work around the boot" level={3}>
+            <Snippet source={poolSource} path="src/app/run-code-at-start-and-stop/Pool.abide" from={['onStart(', 'onStop(']} />
+        </Section>
+    </Section>
+
+    <Section title="See also">
+        <ul>
+            <li><a href={url('/app/configure-the-app')}>Config</a> — the guide to
+            <code>config()</code></li>
+            <li><a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a> — the guide to these
+            hooks</li>
+            <li><a href={url('/pages/serve-the-app-under-a-sub-path')}>Sub-path mounting</a> — what
+            <code>APP_URL</code> decides</li>
+        </ul>
+    </Section>
+</Doc>

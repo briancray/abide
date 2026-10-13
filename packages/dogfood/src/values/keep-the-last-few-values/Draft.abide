@@ -1,0 +1,16 @@
+<script>
+import { reactive, watch } from '@abide/abide'
+import { undoStack } from './undoStack.ts'
+
+let draft = reactive('How do')
+
+// The value holds its latest; its past is the app's, pushed on every change.
+const undo = undoStack<string>(50)
+watch([draft], () => undo.record(draft))
+</script>
+
+<label>message
+    <input bind:value={draft}>
+</label>
+
+<button onclick={() => (draft = undo.back(draft))}>Undo</button>

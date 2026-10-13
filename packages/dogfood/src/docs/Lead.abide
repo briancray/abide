@@ -1,0 +1,10 @@
+<script>
+// Another page's opening paragraph, as a section overview lists it (40.30).
+import { props, raw } from '@abide/abide'
+import { inline } from './inline.ts'
+import { pageAt } from './sitePages.ts'
+
+const { of } = props<{ of: string }>()
+</script>
+
+<p>{raw(inline(pageAt(of).lead))}</p>

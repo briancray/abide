@@ -1,0 +1,266 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import ContactCard from './ContactCard.abide'
+import contactCardSource from './ContactCard.abide' with { type: 'text' }
+import Invoice from './Invoice.abide'
+import invoiceSource from './Invoice.abide' with { type: 'text' }
+import totalSource from './Total.abide' with { type: 'text' }
+import initialsSource from '../../../crm-ui/Initials.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="The four spellings">
+        <table>
+            <thead><tr><th>You write</th><th>What it is</th></tr></thead>
+            <tbody>
+                <tr><td><code>&lt;Name/&gt;</code></td><td>an invocation of a component</td></tr>
+                <tr><td><code>&lt;Tag&gt;…&lt;/Tag&gt;</code></td><td>the same, with children passed into it</td></tr>
+                <tr><td><code>{'{#component Name(pattern)}'}</code></td><td>a component declared inline, where it is used</td></tr>
+                <tr><td><code>&lt;slot/&gt;</code> / <code>&lt;slot&gt;fallback&lt;/slot&gt;</code></td><td>where children render, and what renders without them</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A component declared where it is used">
+        <p>An inline component is TitleCase like any other, and it exists for the piece of markup
+        that is worth naming but not worth a file — a row in one table, a cell shape used twice on
+        one page. The parentheses hold the pattern a <code>props()</code> call would destructure,
+        and an annotation on it is that call's type argument:</p>
+
+        <Code language="abide" caption="src/contacts/[id]/page.abide — excerpt" code={`{#component Field({ label, value }: { label: string; value: string })}
+    <li><span>{label}</span><strong>{value}</strong></li>
+{/component}
+
+<ul class="fields">
+    <Field label="email" value={contact.email}/>
+    <Field label="phone" value={contact.phone}/>
+</ul>`} />
+
+        <p>It can be written anywhere markup can: at the top of the file, inside an element, in an
+        <code>{'{#if}'}</code> arm or a <code>{'{#for}'}</code> row, or inside another inline
+        component. It is invocable anywhere in the block it is written in, before it included, and
+        nowhere outside that block.</p>
+
+        <p><strong>It closes over where it is written.</strong> A value the file's
+        <code>&lt;script&gt;</code> declares is read by name inside it, and live, the same as
+        anywhere else in the template. Declared in a row, it reads that row's item without being
+        handed it:</p>
+
+        <Code language="abide" caption="src/contacts/page.abide — excerpt" code={`<script>
+import { reactive } from '@abide/abide'
+import { listContacts } from '#src/contacts/api.abide'
+import type { Contact } from '#src/Contact.ts'
+
+const contacts = listContacts()
+let masked = reactive(true)
+</script>
+
+<ul>
+    {#for contact of contacts by contact.id}
+        {#component Phone()}
+            <strong>{masked ? '••• ••••' : contact.phone}</strong>
+        {/component}
+        <li><span>{contact.name}</span><Phone/></li>
+    {/for}
+</ul>`} />
+
+        <p>Setting <code>masked</code> rewrites each <code>&lt;strong&gt;</code> in place. Its own
+        <code>&lt;script&gt;</code> is set up once per invocation, its own
+        <code>&lt;style&gt;</code> reaches only what it writes, and the file's
+        <code>&lt;style&gt;</code> reaches it too.</p>
+    </Section>
+
+    <Section title="Markup a component fills in">
+        <p>An inline component written directly between a component's tags is <strong>passed to it
+        as a prop</strong> of the same name. The component declares that prop as a function of the
+        props it hands over, and invokes it by name:</p>
+
+        <Code language="abide" caption="src/ui/ContactTable.abide" code={`<script>
+import { props } from '@abide/abide'
+import type { Contact } from '#src/Contact.ts'
+
+const { contacts, Row } = props<{
+    contacts: Contact[]
+    Row: (props: { contact: Contact }) => unknown
+}>()
+</script>
+
+<table>
+    <tbody>
+        {#for contact of contacts by contact.id}
+            <tr><Row contact={contact}/></tr>
+        {/for}
+    </tbody>
+</table>
+<slot/>`} />
+
+        <Code language="abide" caption="src/contacts/page.abide — excerpt" code={`<ContactTable contacts={contacts}>
+    {#component Row({ contact }: { contact: Contact })}
+        <td>{contact.name}</td><td>{masked ? '••• ••••' : contact.phone}</td>
+    {/component}
+    <p>{contacts.length} contacts</p>
+</ContactTable>`} />
+
+        <p>The table decides where each row goes and the page decides what is in it, reading its own
+        <code>masked</code> as it does. Anything else between the tags is still
+        <code>children</code>, for the <code>&lt;slot/&gt;</code>. The passed component is the prop
+        and nothing more: it is not in scope anywhere else on the page. <code>abide check</code>
+        holds its pattern to the type the table declares, so a row shaped differently is an error at
+        the <code>{'{#component}'}</code>.</p>
+    </Section>
+
+    <Section title="A prop is a live read">
+        <Example
+            id="props-live"
+            title="`props()` — a prop is a live read, not a snapshot"
+            summary="An invoice's line count and the total a child component renders. Press + and watch the child."
+            files={{
+                'Invoice.abide': invoiceSource,
+                'Total.abide': totalSource,
+            }}
+        >
+            <Invoice />
+        </Example>
+
+        <p><em>1 declaration, 0 update calls</em> — the arm hands the child a reader and then owns
+        the job of telling it when.</p>
+
+        <p><code>props()</code> hands back <strong>one accessor per key</strong>, and a prop
+        declared as a plain type is a live read of the caller's expression rather than a snapshot of
+        it. So the child re-reads when the parent's value moves, and neither of them arranges that:
+        the parent does not call the child again, and the child does not subscribe to anything by
+        name.</p>
+
+        <p>You declare every prop as the type of its value, never as a <code>Reactive</code>. A
+        child may write one by name, and the caller decides where the write goes: <code>bind:</code>
+        sends it to the caller's value, and without <code>bind:</code> it stays in the child until
+        the caller's expression changes.</p>
+
+        <p>Destructuring keeps every binding live, and the pattern is <strong>flat</strong>:
+        renames, defaults and a rest element, and no nested patterns. The rest element is live too,
+        one accessor per key the call site actually passed.</p>
+
+        <p>Read on: <a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a> ·
+        <a href={url('/templates/bind-a-form-to-state')}>Form binding</a></p>
+    </Section>
+
+    <Section title="A component another package ships">
+        <Example
+            id="package-component"
+            title="`crm-ui/Initials.abide` — a design system's component, imported by name"
+            summary="The CRM's contacts carry the avatar its design system ships. Nothing in the app compiled it, and it renders with its own styles."
+            files={{
+                'ContactCard.abide': contactCardSource,
+                'crm-ui/Initials.abide': initialsSource,
+            }}
+        >
+            <ContactCard />
+        </Example>
+
+        <p>A package ships its components as <code>.abide</code> source, and the app imports one
+        by the specifier its <code>exports</code> names, the same as a module. It is compiled with
+        the app that imports it, wherever it lies: in <code>node_modules</code>, or in a package a
+        workspace links from outside the app's root. Its props are typed by the app's project, its
+        styles are scoped like the app's own, and it runs on the app's abide rather than on any copy
+        the package installed beside it.</p>
+
+        <p>What it is not is an address. A <code>page.abide</code> inside a package is the
+        package's own, and a handler a package's <code>&lt;script server&gt;</code> declares has
+        no address of its own: the app gives it one by re-exporting it from a
+        <code>&lt;script server&gt;</code> of its own, which answers at that file's route.</p>
+
+        <p>Read on: <a href={url('/templates/scope-styles-to-a-component')}>Styles</a> ·
+        <a href={url('/data/read-data-without-writing-an-api')}>Reading data</a></p>
+    </Section>
+
+    <Section title="A component with no `props` call accepts none">
+        <p>There is no implicit bag. A component that never calls <code>props()</code> takes no
+        props of its own, and a caller passing one is an error rather than a value that goes
+        nowhere. That is the failure this replaces: a typo in a prop name is otherwise a component
+        quietly rendering its default.</p>
+
+        <p><code>props()</code> with no type argument hands back an untyped record, and that is the
+        opt-out rather than the default. It is also callable from a <code>&lt;script&gt;</code>
+        block only: a <code>&lt;script module&gt;</code> block runs once for the module and has no
+        instance to read props of, so calling it there is a compile error.</p>
+    </Section>
+
+    <Section title="`children` is always accepted and never declared">
+        <p>Whatever a caller puts between the tags arrives as <code>children</code>, and
+        <code>&lt;slot/&gt;</code> is where it renders.
+        <code>&lt;slot&gt;fallback&lt;/slot&gt;</code> renders the fallback where a caller passed
+        none, which is how a panel has a default body without the caller having to know what it
+        is:</p>
+
+        <Code language="abide" caption="src/ui/Panel.abide" code={`<script>
+import { props } from '@abide/abide'
+
+const { title } = props<{ title: string }>()
+</script>
+
+<li><span>{title}</span><strong><slot>none yet</slot></strong></li>`} />
+
+        <Code language="abide" caption="src/contacts/[id]/page.abide — excerpt" code={`<ul class="fields">
+    <Panel title="phone">+1 415 555 0132</Panel>
+    <Panel title="notes"/>
+</ul>`} />
+
+        <p><code>children</code> is never declared because declaring it would make it a prop, and
+        then a component would have two ways to receive the same thing with different rules.</p>
+    </Section>
+
+    <Section title={'`{...expr}` spreads, and an explicit prop wins'}>
+        <p>A spread on a component spreads props. An <strong>explicit</strong> prop beats a spread
+        whatever the source order, so a default set and one override read the same either way round.
+        Two spreads against each other resolve in source order, there being nothing else to separate
+        them.</p>
+
+        <p>Read on: <a href={url('/templates/put-a-value-in-the-markup')}>Expressions</a></p>
+    </Section>
+
+    <Section title="`Attributes<Tag>` types what you pass on to an element">
+        <p>A component that wraps a <code>&lt;button&gt;</code> usually declares the few props it
+        reads itself and spreads the rest onto the element. <code>Attributes&lt;'button'&gt;</code>
+        types that rest as what a <code>&lt;button&gt;</code> takes, so a caller is held to the
+        element's own attributes and its <code>onclick</code> is handed a
+        <code>MouseEvent</code>:</p>
+
+        <Code language="abide" caption="src/ui/Button.abide" code={`<script>
+import { props, type Attributes } from '@abide/abide'
+
+const SIZES = { sm: 'px-2 py-1', md: 'px-3 py-2' }
+
+type Props = { size?: keyof typeof SIZES } & Attributes<'button'>
+
+const { size = 'md', ...attributes } = props<Props>()
+</script>
+
+<button class={SIZES[size]} {...attributes}><slot/></button>`} />
+
+        <p><code>&lt;Button type="submit" disabled&gt;</code> checks, and <code>&lt;Button
+        type="banana"&gt;</code> does not. The types come from the DOM types TypeScript ships, so
+        there is no list of attributes to keep up to date, and a value is typed by what writes the
+        attribute rather than by the DOM property behind it: <code>tabindex="-1"</code> and
+        <code>{'aria-disabled={true}'}</code> are both fine.</p>
+
+        <p>An SVG element works the same way: <code>Attributes&lt;'svg'&gt;</code> or
+        <code>Attributes&lt;'path'&gt;</code> types <code>viewBox</code>, <code>d</code>,
+        <code>stroke-width</code> and the rest of SVG's attributes, so an icon component can pass
+        them through.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/templates/run-code-when-a-component-loads')}>Scripts</a> — what runs
+            per instance and what runs once</li>
+            <li><a href={url('/templates/scope-styles-to-a-component')}>Styles</a> — a component's
+            own CSS, scoped to it</li>
+            <li><a href={url('/templates/respond-to-a-click')}>Events</a> — why <code>onsave</code>
+            on a component is a prop</li>
+        </ul>
+    </Section>
+</Doc>

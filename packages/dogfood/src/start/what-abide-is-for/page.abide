@@ -1,0 +1,127 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Contact from './Contact.abide'
+import contactSource from './Contact.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <ul>
+        <li>component state, for what you own</li>
+        <li>a query library, for what you fetch</li>
+        <li>a socket client, for what gets pushed to you</li>
+    </ul>
+
+    <p>Three shapes, three loading conventions, three spellings of "it broke" — for one question the
+    user is asking: <strong>is it here yet?</strong></p>
+
+    <p>abide has one answer.</p>
+
+    <Section title="Everything is a reactive value">
+        <Example
+            id="one-type"
+            title="`Reactive` — four producers, one way to ask"
+            summary="A contact and its notes. Watch which rows say “…” on arrival, then type a note and add it."
+            files={{ 'Contact.abide': contactSource }}
+        >
+            <Contact />
+        </Example>
+
+        <p><em>4 declarations, 1 type</em> — against component state, a query library and a socket
+        client, each with its own loading convention, which is what the hand-written arm has to
+        keep.</p>
+
+        <p>The card is one file. Its <code>&lt;script server&gt;</code> is the handler the loaded
+        row comes from, and the browser is sent a call to it in place of the block.</p>
+
+        <p>Four ways of getting a value, one type back — every one of them is <code>reactive</code>:
+        a value the scope owns, a value with a body, a body that loads, and a value that waits for
+        its first write. Hold an array in one and serve it from a <code>GET</code> and it is a
+        channel, state the system keeps sending to everyone connected — still a
+        <code>Reactive</code> like the other three. See
+        <a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a>.</p>
+
+        <p>That is not a naming convenience:</p>
+
+        <ul>
+            <li>the branch you write for "loading" works on all four</li>
+            <li>a component taking a <code>Reactive&lt;User&gt;</code> does not care where the user
+            came from</li>
+            <li>swapping a local value for a remote one changes how it is declared and nothing
+            downstream</li>
+        </ul>
+    </Section>
+
+    <Section title="Reading starts the work">
+        <p>No <code>useEffect</code>. No <code>load()</code>. No mount hook to put the fetch in.</p>
+
+        <p>A value with a body runs it as soon as you reach it, and runs it again on the next read
+        after something the body read changes. The page reads it because you put it in the markup.
+        That is the whole subscription.</p>
+
+        <p>The consequence worth internalizing:</p>
+
+        <aside class="tip">
+            A read of a value that has not arrived throws <code>NotLanded</code>, and the output
+            keeps a hole where it was. It does not block. The document goes out; the hole fills when
+            the value lands.
+        </aside>
+
+        <p>Nothing waits for it. The document goes out, the hole fills, and
+        <code>{'{#if invoice.ready()}'}</code> is the branch to show in the meantime — so a slow
+        value is a page that is late rather than a page that is not there.</p>
+    </Section>
+
+    <Section title="Same name, both sides">
+        <table>
+            <thead><tr><th></th><th>server</th><th>browser</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'getInvoice({ id })'}</code></td><td>calls the function</td><td>fetches the endpoint</td></tr>
+                <tr><td><code>route.url</code></td><td>the URL requested</td><td>the URL in the address bar</td></tr>
+                <tr><td><code>cookies()</code></td><td>the request's cookies</td><td>the document's cookies</td></tr>
+                <tr><td><code>log.info(…)</code></td><td>stdout</td><td>console, and the app's log feed</td></tr>
+            </tbody>
+        </table>
+
+        <p>Where a name genuinely cannot mean anything — a page reading the incoming request during
+        a static build — it throws and names the component and the accessor. It does not quietly
+        return nothing.</p>
+    </Section>
+
+    <Section title="The handler serving your page already describes itself">
+        <p>Address, method, argument and result schemas, description — all of it already written
+        down. An agent calling your app calls what your app already does.</p>
+
+        <p>That is why failures are strict. A refusal is a <strong>named value carrying
+        data</strong>, not a status code and a sentence:</p>
+
+        <Code language="abide" caption="src/groups/page.abide — excerpt" code={`<script server>
+export const join = POST(() => notMember({ group: 'staff' }))
+</script>`} />
+
+        <p>The caller narrows it by name and gets <code>.data</code> typed — your own template and a
+        model on the far side of an HTTP request, identically.</p>
+    </Section>
+
+    <Section title="Who abide is not for">
+        <table>
+            <thead><tr><th></th><th>why</th></tr></thead>
+            <tbody>
+                <tr><td>A static marketing site</td><td>It renders one fine, but nothing here earns its keep if nothing changes</td></tr>
+                <tr><td>Gradual adoption into an existing app</td><td>The <code>page</code> / <code>layout</code> / <code>error</code> files and the <code>server</code> directories are the mechanism, not a convention. No partial mode</td></tr>
+                <tr><td>Swapping the runtime</td><td>abide is Bun and web standards, deliberately, and uses Bun's APIs rather than abstracting them</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/start/your-first-page')}>First page</a> — write one and run it</li>
+            <li><a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a> — the
+            branch you write most</li>
+        </ul>
+    </Section>
+</Doc>

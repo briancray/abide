@@ -1,0 +1,87 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Section from '#src/docs/Section.abide'
+</script>
+
+<Doc>
+    <Code code={`abide compile                                     # ./ledger
+abide compile --platforms linux-x64,darwin-arm64  # ./ledger-linux-x64 …`} />
+
+    <Section title="The three flags">
+        <table>
+            <thead><tr><th></th><th></th></tr></thead>
+            <tbody>
+                <tr><td><code>--target</code></td><td>which platform and architecture to build for — <code>linux-x64</code>, <code>darwin-arm64</code>, <code>windows-x64</code></td></tr>
+                <tr><td><code>--out</code></td><td>where the executable goes — by default the app's <code>package.json</code> name, in the directory you ran the command from</td></tr>
+                <tr><td><code>--platforms</code></td><td>several targets in one run, comma-separated, each executable suffixed with its target</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>--platforms</code> exists because the common case is not one binary. A release is a
+        matrix, and a matrix built by one command is a matrix that cannot get one target's flags
+        wrong. Give it or <code>--target</code>, not both.</p>
+    </Section>
+
+    <Section title="What the executable holds">
+        <p>The built client, the server modules, the runtime. Everything an <code>abide start</code>
+        would have loaded, resolved at compile time — which is what makes the artifact's behavior a
+        property of the build rather than of what the target machine happens to have.</p>
+
+        <p>Configuration is still the environment. A compiled app reads <code>config()</code> the
+        same way, validated at start, so the same binary runs in staging and in production and the
+        difference is the variables it was started with. It reads no <code>bunfig.toml</code> from
+        where it is started.</p>
+
+        <p>What it does not hold is a file your own code opens while it runs. A handler that reads a
+        path off disk reads it on the target machine, where that path is whatever the machine
+        has.</p>
+
+        <p>Read on: <a href={url('/app/configure-the-app')}>Config</a> ·
+        <a href={url('/ship/build-and-serve-the-app')}>Build &amp; start</a></p>
+    </Section>
+
+    <Section title="The executable is `abide`, for one app">
+        <Code code={`./ledger                                  # serve, with a shell on it
+./ledger start --port 8080                # serve
+./ledger --help                           # usage
+./ledger run scripts/backfill.ts          # a script, under the app it holds
+./ledger call invoices/getInvoice id=42`} />
+
+        <p>Run with no command, it serves the app and opens the shell on it: <code>call</code>,
+        <code>handlers</code>, <code>help</code>, <code>exit</code>. <code>exit</code> stops the
+        app; input that ends leaves it serving. <code>start</code> only serves, and
+        <code>--help</code> prints its usage under its own name.</p>
+
+        <p>The shell, <code>run</code>, <code>call</code>, <code>openapi</code>, <code>mcp</code>
+        and <code>logs</code> are <code>abide</code>'s. A script <code>run</code> imports
+        <code>@abide/abide/server</code> and the app's handlers from the executable, so it needs no
+        <code>node_modules</code> beside it. What needs the source — <code>dev</code>,
+        <code>build</code>, <code>check</code> — is not listed, and answers with the
+        <code>abide</code> command to run where the source is.</p>
+
+        <p>Read on: <a href={url('/ship/call-a-handler-from-the-terminal')}>Call a handler</a></p>
+    </Section>
+
+    <Section title="When a binary is the right shape">
+        <p>An app somebody else operates. A tool that runs on a machine you do not administer, a
+        service dropped into an image with nothing else in it, an internal utility handed to a
+        colleague who should not have to know what a package manager is.</p>
+
+        <p><code>abide bundle</code> is the neighboring answer for a desktop app — the same
+        executable, inside a <code>.app</code> that opens it in a window.</p>
+
+        <p>Read on: <a href={url('/ship/ship-a-desktop-app')}>Desktop</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/ship/build-and-serve-the-app')}>Build &amp; start</a> — the build
+            this compiles</li>
+            <li><a href={url('/app/configure-the-app')}>Config</a> — what a compiled app still reads
+            at start</li>
+            <li><a href={url('/reference/cli')}>CLI</a> — every command and flag</li>
+        </ul>
+    </Section>
+</Doc>

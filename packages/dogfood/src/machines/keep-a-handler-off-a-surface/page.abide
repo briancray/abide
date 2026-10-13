@@ -1,0 +1,76 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Section from '#src/docs/Section.abide'
+</script>
+
+<Doc>
+    <Code language="ts" caption="shared" code={`type Clients = { ui?: boolean; mcp?: boolean; cli?: boolean; openapi?: boolean }`} />
+
+    <Code language="abide" caption="src/admin/api.abide — excerpt" code={`<script server>
+export const rebuildSearchIndex = POST(rebuild, {
+    clients: { ui: false, mcp: false },
+})
+</script>`} />
+
+    <Section title="Every key defaults to true">
+        <p>A handler you declare is on every surface unless you say otherwise. That is the right
+        default because the alternative — opting each handler into each surface — is four decisions
+        per handler and a fifth surface later that nothing is on.</p>
+
+        <p>Every surface is <strong>derived from the route table</strong> rather than authored
+        beside it, so a handler added is a handler listed, and there is no second file to keep in
+        step.</p>
+    </Section>
+
+    <Section title="`clients` decides what is generated, never who may call">
+        <p><strong><code>clients</code> is not access control.</strong> A handler with <code>mcp:
+        false</code> is absent from the tool list and answers on its http address exactly as it did.
+        Nothing about withholding a listing withholds the endpoint.</p>
+
+        <p>That separation is deliberate and worth stating plainly, because the shape invites the
+        other reading. A listing is a <strong>catalog</strong>; who may call is a
+        <strong>rung</strong>. An app that treated a missing catalog entry as a lock would have
+        security that depends on nobody guessing an address, which is the failure mode this design
+        refuses to make available.</p>
+
+        <p>The rule falls out of it: a handler whose own middleware would refuse a caller is
+        <strong>still listed</strong>, and still refused on the call. The catalog describes the
+        app, and the rung answers the question.</p>
+
+        <p>Read on: <a href={url('/data/decide-who-may-call-what')}>Authorization</a></p>
+    </Section>
+
+    <Section title="`ui: false` is the one that reaches the compiler">
+        <p><code>ui: false</code> generates no client wrapper, and importing that handler into a
+        page is then a <strong>compile error</strong>. That is the difference between it and the
+        other three: the others withhold a listing, and this one withholds a name.</p>
+
+        <p>It is what an admin-only mutation wants. The compile error is not a security boundary,
+        and the rung is still the answer. But a handler no page should call is a handler no page
+        should be able to <em>name</em>, and finding that out at build beats finding it out in
+        review.</p>
+    </Section>
+
+    <Section title="A `Response` turns two of them off by default">
+        <p><code>clients.mcp</code> and <code>clients.cli</code> default to <strong>false</strong>
+        on a handler that returns a whole <code>Response</code>, a <code>Response</code> having no
+        output schema to publish. Turn them back on where the body is JSON you wanted a header
+        on.</p>
+
+        <p>Read on: <a href={url('/data/answer-with-something-other-than-json')}>Response
+        types</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/machines/describe-your-api-without-writing-a-spec')}>OpenAPI</a> —
+            the surface <code>openapi</code> gates</li>
+            <li><a href={url('/machines/let-a-model-call-your-handlers')}>MCP</a> — the surface
+            <code>mcp</code> gates</li>
+            <li><a href={url('/data/decide-who-may-call-what')}>Authorization</a> — where access
+            control actually goes</li>
+        </ul>
+    </Section>
+</Doc>

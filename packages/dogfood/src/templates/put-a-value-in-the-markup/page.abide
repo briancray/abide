@@ -1,0 +1,138 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Note from './Note.abide'
+import Invoice from './Invoice.abide'
+import noteSource from './Note.abide' with { type: 'text' }
+import invoiceSource from './Invoice.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="Where a hole can go">
+        <table>
+            <thead><tr><th>You write</th><th>Where it lands</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'{expr}'}</code></td><td>a text node, escaped</td></tr>
+                <tr><td><code>{'{raw(expr)}'}</code></td><td>a text node, as markup</td></tr>
+                <tr><td><code>{'name={expr}'}</code></td><td>one attribute or property, whole</td></tr>
+                <tr><td><code>{'name="…{expr}…"'}</code></td><td>one attribute, interpolated into a string</td></tr>
+                <tr><td><code>{'class:name={cond}'}</code></td><td>one class</td></tr>
+                <tr><td><code>{'style:prop={value}'}</code></td><td>one style property</td></tr>
+                <tr><td><code>{'{...expr}'}</code></td><td>every attribute on an element, every prop on a component</td></tr>
+            </tbody>
+        </table>
+
+        <p>Each of them updates the <strong>one thing it names</strong> and nothing around it. That
+        is the difference between a hole and a re-render: a class arriving does not touch the other
+        classes, and an attribute changing does not rebuild the element.</p>
+    </Section>
+
+    <Section title="Text is escaped, and `raw` is the way out">
+        <Example
+            id="markup-escaped"
+            title={'`{expr}` and `{raw(expr)}` — escaped, and not'}
+            summary="A note imported with markup in it. Type a tag into the field and watch the two rows disagree."
+            files={{
+                'Note.abide': noteSource,
+            }}
+        >
+            <Note />
+        </Example>
+
+        <p><em>2 holes, 1 default</em> — and the arm's default is the other one.</p>
+
+        <p><code>{'{expr}'}</code> renders escaped text, so a value carrying <code>&lt;b&gt;</code>
+        is those five characters on the page. That is the direction worth having as the default: a
+        note field, a search term and an error message from somewhere else all reach a hole
+        eventually, and only one of them has to be hostile.</p>
+
+        <p><code>{'{raw(expr)}'}</code> is the opt-out, spelled at the site rather than configured.
+        It is the one place in a template where a value becomes markup, so it is also the only place
+        to look when asking whether it could.</p>
+
+        <p><code>raw</code> is an ordinary import, and the slot spelling is that same call. It hands
+        back a <code>Raw</code>, the brand a hole reads to leave the value alone. So a value branded
+        in a <code>&lt;script&gt;</code> and a value branded in the hole render identically, and a
+        <code>Raw</code> that reaches a hole you forgot about is still markup. Brand it as late as
+        you can.</p>
+    </Section>
+
+    <Section title="An attribute follows its value, whole or interpolated">
+        <p><code>{'href={invoice.url}'}</code> sets the attribute from the whole expression.
+        <code>{'class="row {status}"'}</code> mixes a literal with a hole, and the interpolation is
+        the value's — not a string you assembled and the DOM parsed back.</p>
+
+        <p>An interpolation in a <strong>URL-typed</strong> attribute is scheme-checked. A scheme
+        outside <code>http:</code>, <code>https:</code>, <code>mailto:</code> and <code>tel:</code>,
+        or a relative reference, is dropped and warned on <code>abide:render</code> — so a
+        <code>javascript:</code> that reached an <code>href</code> through a record somebody else
+        wrote does not become a listener.</p>
+
+        <p>An interpolated <code>style</code> attribute is a special case worth knowing: it lowers
+        to <code>style:prop</code> under a static property name rather than being built as a string,
+        so setting one property never rewrites the others.</p>
+
+        <p>Read on: <a href={url('/data/find-the-url-a-handler-answers-on')}>Handler URLs</a></p>
+    </Section>
+
+    <Section title="`class:` and `style:` set one name each">
+        <Example
+            id="markup-class-style"
+            title={'`class:name={cond}` and `style:prop={value}` — one class, one property'}
+            summary="An invoice's age badge. Press + until it is late, and back down again."
+            files={{
+                'Invoice.abide': invoiceSource,
+            }}
+        >
+            <Invoice />
+        </Example>
+
+        <p>The condition decides whether the class is there. Everything else in <code>class=</code>
+        stays where it was, which is what makes a component's own class and a value-driven one able
+        to live on the same element without either knowing about the other.</p>
+
+        <p><code>style:prop</code> is the same bargain for one CSS property. A measured width, a
+        transform from a value, a color from a status — each is one property assignment, and the
+        rest of the element's inline style is not a string this had to rebuild.</p>
+
+        <p>Read on: <a href={url('/templates/scope-styles-to-a-component')}>Styles</a></p>
+    </Section>
+
+    <Section title={'`{...expr}` spreads'}>
+        <p>On an element it spreads attributes; on a component it spreads props. An
+        <strong>explicit</strong> prop beats a spread whatever the source order, so
+        <code>{'<Row {...defaults} tone="urgent"/>'}</code> and
+        <code>{'<Row tone="urgent" {...defaults}/>'}</code> are both urgent. Two spreads against
+        each other resolve in source order, there being nothing else to separate them.</p>
+
+        <p>Read on: <a href={url('/templates/reuse-a-piece-of-markup')}>Components</a></p>
+    </Section>
+
+    <Section title="A hole does not hold the render">
+        <p>A hole is never the thing that waits. <code>{'{invoice.total}'}</code> renders nothing
+        while the value is in flight and fills when it lands, and
+        <code>{'{#if invoice.ready()}'}</code> gives you a branch to render in the meantime — a page
+        a reader can look at rather than a page that is not there yet.</p>
+
+        <p>Nor is anything else. There is no form — in a hole, in the <code>&lt;head&gt;</code>, in
+        the <code>&lt;script&gt;</code> — that makes the document wait for a value. A page that
+        genuinely cannot be served without one is a page whose value has to be there before the
+        render starts, which is a question for the server rather than for the markup.</p>
+
+        <p>Read on: <a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a> ·
+        <a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a> — what
+            the name in the hole means</li>
+            <li><a href={url('/templates/show-markup-conditionally')}>Conditionals</a> — a branch
+            instead of a value</li>
+            <li><a href={url('/templates/repeat-markup-over-a-list')}>Lists</a> — a hole repeated
+            over a collection</li>
+        </ul>
+    </Section>
+</Doc>

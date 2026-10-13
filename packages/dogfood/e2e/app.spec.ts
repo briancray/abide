@@ -8,7 +8,7 @@
 // example running inline as a component of the page it is on.
 
 import { expect, test } from '@playwright/test'
-import { NAV_ITEMS } from '../src/ui/NAV_ITEMS.ts'
+import { SITE } from '../src/docs/SITE.ts'
 
 // TWO PROJECTS, ONE BUILD: served at the root and again below `/docs` (16.10). Every address a
 // spec asks for goes through `underMount`, so the same spec runs at either mount.
@@ -114,7 +114,7 @@ test('a link to another page navigates without reloading — 30.7', async ({
     ).toBe('yes')
 })
 
-// `#ui/installDocs.ts` is a module and is evaluated ONCE, but the INSTALL is the page's own: the
+// `#src/ui/installDocs.ts` is a module and is evaluated ONCE, but the INSTALL is the page's own: the
 // arriving page hands `installDocs` its `<main>` and the page a reader left ran the `Disposer`
 // that took its listeners (32.9). So the rail here is wired to this page's headings rather than
 // to the ones they arrived on.
@@ -159,7 +159,7 @@ test('an example card runs on a page a reader navigated to', async ({
 // hydration warning and a handler that FAILED. A refusal is an answer: `probe-error` and
 // `rung-order` refuse on purpose (503, 401), and that is what those cards are about.
 // ONE TEST PER SECTION, so the sections run in parallel rather than as one long walk.
-for (const group of NAV_ITEMS)
+for (const group of SITE)
     test(`every card under ${group.section} renders, adopts and answers`, async ({
         page,
     }) => {
@@ -177,20 +177,22 @@ for (const group of NAV_ITEMS)
                 problems.push(`${at}: ${response.status()} ${response.url()}`)
         })
         for (const item of group.pages) {
-            at = item.href
-            await page.goto(underMount(item.href), { waitUntil: 'networkidle' })
+            at = item.route
+            await page.goto(underMount(item.route), {
+                waitUntil: 'networkidle',
+            })
         }
         expect(problems).toEqual([])
     })
 
-test('a file under public is answered at its own address — 36.11', async ({
+test('a public file and the markdown twins are answered at their own addresses — 36.11', async ({
     page,
 }) => {
     const robots = await page.request.get(underMount('/robots.txt'))
     expect(robots.status()).toBe(200)
     expect(await robots.text()).toContain('User-agent: *')
 
-    // A page's markdown twin, which is a public file rather than a page.
+    // A page's markdown twin, which the app derives from the page rather than serving a file.
     const markdown = await page.request.get(
         underMount('/values/show-a-value-that-changes.md'),
     )
@@ -202,7 +204,7 @@ test('a file under public is answered at its own address — 36.11', async ({
     expect(await bundle.text()).toContain('# abide documentation')
 })
 
-// 38.24 IN A BROWSER, which is the only arm that can say the stylesheet ARRIVED. The server test
+// 38.23 IN A BROWSER, which is the only arm that can say the stylesheet ARRIVED. The server test
 // asserts the `<link>` and that its address answers; neither can tell a sheet the document
 // applied from one it fetched and ignored, and the page looks plausible either way.
 test('the bundled stylesheet reaches the page', async ({ page }) => {
@@ -210,8 +212,8 @@ test('the bundled stylesheet reaches the page', async ({ page }) => {
 
     // The heading token out of `app.css`, computed. `--color-heading` is #8E4426, and a document
     // with no stylesheet leaves an h1 at the UA's near-black.
-    const colour = await page
+    const color = await page
         .locator('main h1')
         .evaluate((node) => getComputedStyle(node).color)
-    expect(colour).toBe('rgb(142, 68, 38)')
+    expect(color).toBe('rgb(142, 68, 38)')
 })

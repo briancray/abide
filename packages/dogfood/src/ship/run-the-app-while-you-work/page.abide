@@ -1,0 +1,70 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Section from '#src/docs/Section.abide'
+</script>
+
+<Doc>
+    <Code code={`abide dev`} />
+
+    <Section title="One runtime, in development and in production">
+        <p>The dev server does not swap in a different module resolver, a different transport or a
+        different renderer. <code>abide dev</code> and <code>abide start</code> differ in whether
+        the app is rebuilt when a file changes, and in nothing else that an app can observe.</p>
+
+        <p>That is worth insisting on. The alternative is a class of bug that exists in only one of
+        them: a value that hydrates in dev and not in prod, an import that resolves under the
+        watcher and not in the bundle. Those are the expensive ones.</p>
+
+        <p><code>--port</code> overrides <code>PORT</code>. With neither, the server takes the first
+        free port from 3000 through 3099, and prints the one it took. A port you name is the port,
+        and the command fails if it is in use. Everything else is <code>config()</code>.</p>
+
+        <p>Read on: <a href={url('/app/configure-the-app')}>Config</a> ·
+        <a href={url('/ship/build-and-serve-the-app')}>Build &amp; start</a></p>
+    </Section>
+
+    <Section title="`abide run` is one file, with your app's modules">
+        <Code code={`abide run scripts/backfill.ts --since 2026-01-01`} />
+
+        <p>Runs a script under the abide runtime, which is what lets a one-off import
+        <code>#src/server/database</code> and <code>#src/failures</code> without a build and without
+        a second tsconfig.</p>
+
+        <p>That is the shape a backfill, a migration and a fixture loader want. They are not
+        endpoints and should not become endpoints just to reach the app's own modules — which is
+        what happens in a stack where the only thing that can import them is the server.</p>
+
+        <p>Arguments after the file are the script's own.</p>
+
+        <p>Read on: <a href={url('/ship/call-a-handler-from-the-terminal')}>Call a handler</a></p>
+    </Section>
+
+    <Section title="What the watcher notices">
+        <p>A <code>.abide</code> file, a <code>.ts</code> file and a stylesheet the components
+        depend on. A stylesheet imported from any <code>&lt;script&gt;</code> in a file — or from
+        any <code>.ts</code> it reaches — is a dependency of that component, so it is watched
+        because the component is.</p>
+
+        <p>Read on: <a href={url('/templates/scope-styles-to-a-component')}>Styles</a></p>
+    </Section>
+
+    <Section title="An error names the line you wrote">
+        <p>A stack trace from code in a <code>.abide</code> file names the <code>.abide</code> and
+        the line in it, not the module it compiled to — on the server under <code>abide dev</code>,
+        <code>abide start</code> and a compiled executable alike. In the browser, the bundle
+        <code>abide dev</code> serves carries a source map, so the debugger shows your file and a
+        breakpoint goes on your line.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/ship/catch-mistakes-before-you-ship')}>Checks</a> — the type check
+            the editor runs</li>
+            <li><a href={url('/ship/build-and-serve-the-app')}>Build &amp; start</a> — the same app,
+            built</li>
+            <li><a href={url('/reference/cli')}>CLI</a> — every command and flag</li>
+        </ul>
+    </Section>
+</Doc>

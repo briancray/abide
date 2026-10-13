@@ -1,0 +1,149 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Section from '#src/docs/Section.abide'
+import Snippet from '#src/docs/Snippet.abide'
+import invoicePreviewSource from '#src/pages/render-a-document-yourself/InvoicePreview.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="Page patterns">
+        <table>
+            <thead><tr><th>Path</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>&lt;head&gt;</code></td><td>A page's contribution to the document head.</td></tr>
+                <tr><td><code>view-transition-name</code></td><td>What turns view transitions on, in the app's own stylesheet.</td></tr>
+                <tr><td><code>[name]</code></td><td>A required dynamic segment.</td></tr>
+                <tr><td><code>[[name]]</code></td><td>An optional segment.</td></tr>
+                <tr><td><code>[...name]</code></td><td>A rest segment, terminal.</td></tr>
+                <tr><td><code>/__abide/**</code></td><td>Every endpoint abide controls.</td></tr>
+            </tbody>
+        </table>
+
+        <p>A file or directory named <code>[id]</code> matches exactly one segment and is a required
+        key of <code>Params</code>. <code>[[tab]]</code> matches one segment or none, and an omitted
+        one is <strong>absent</strong> from <code>Params</code> rather than empty.
+        <code>[...rest]</code> matches what is left and is terminal, there being nothing a later
+        segment could match against.</p>
+    </Section>
+
+    <Section title="Mount paths">
+        <table>
+            <thead><tr><th>File</th><th>Export</th><th>Served at</th></tr></thead>
+            <tbody>
+                <tr><td><code>users/page.abide</code></td><td><code>getUser</code></td><td><code>/users/getUser</code></td></tr>
+                <tr><td><code>layout.abide</code></td><td><code>health</code></td><td><code>/health</code></td></tr>
+                <tr><td><code>admin/page.abide</code></td><td><code>recent</code></td><td><code>/admin/recent</code></td></tr>
+                <tr><td><code>media/[id]/page.abide</code></td><td><code>save</code></td><td><code>/media/[id]/save</code>, <code>id</code> reaching its <code>Args</code></td></tr>
+                <tr><td><code>media/[id]/comments.abide</code></td><td><code>addComment</code></td><td><code>/media/[id]/addComment</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>A handler answers at its file's DIRECTORY, then its export's name — the file's own name
+        is never part of it, so a directory's handlers sit in as many files as you like.</p>
+
+        <p>A parameter in the route reaches the handler's args from the path, whatever the method,
+        so the handler's <code>Args</code> has to declare it — one it does not is a build error
+        naming the parameter. A request that names it in the query or the body as well is refused
+        <code>400</code>.</p>
+
+        <p>A route answers each method <strong>once</strong>. A page answers <code>GET</code> at its
+        own route, so a <code>GET</code> handler beside it is a build error naming both files, and a
+        <code>POST</code> beside it is the form the page posts to. Two routes that differ only in a
+        parameter's name are one route.</p>
+    </Section>
+
+    <Section title="`render`">
+        <table>
+            <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>Component</code></td><td><code>{'interface Component {}'}</code></td><td>A component bound to its props.</td></tr>
+                <tr><td><code>render</code></td><td><code>(component: Component) =&gt; Promise&lt;Uint8Array&gt;</code></td><td>What produces a document.</td></tr>
+            </tbody>
+        </table>
+
+        <Section title="Parameters" level={3}>
+            <ul>
+                <li><code>component</code> — a <code>Component</code>, which is a component
+                <strong>already bound to its props</strong>: <code>{'Document({ invoice })'}</code>,
+                not <code>Document</code> and a props object beside it. Written inside
+                <code>&lt;html&gt;</code>, it writes the document; otherwise it renders into
+                abide's own.</li>
+            </ul>
+        </Section>
+
+        <Section title="Return value" level={3}>
+            <p>A <code>Promise&lt;Uint8Array&gt;</code> — the document's bytes, built whole. That is
+            what the page pipeline sends, and what <code>page()</code> takes directly.</p>
+        </Section>
+    </Section>
+
+    <Section title="Sinks">
+        <table>
+            <thead><tr><th>Spelling</th><th>Sink</th><th>Filled</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'href={x}'}</code>, any attribute</td><td>the element</td><td>the attribute or property</td></tr>
+                <tr><td><code>class:</code>, <code>style:</code>, <code>bind:</code></td><td>the element</td><td>the class, the style property, the bound property</td></tr>
+                <tr><td><code>{'<title>{name}</title>'}</code></td><td><code>&lt;title data-abide-sink="…"&gt;</code></td><td><code>.textContent</code></td></tr>
+                <tr><td><code>{'<textarea>{v}</textarea>'}</code></td><td>the <code>&lt;textarea&gt;</code></td><td><code>.defaultValue</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>A sink is an addressable hole in the output stream that a value still in flight fills
+        later. An attribute sink fills <strong>on the element</strong>, not by re-emitting markup
+        around it. A sink inside RCDATA — a <code>&lt;title&gt;</code>, a
+        <code>&lt;textarea&gt;</code> — fills through the element's own property, markup not parsing
+        there.</p>
+
+        <p>The batching unit of a fill is the <strong>flush</strong>, not the production: a value
+        that produces ten times before the next flush is one write.</p>
+    </Section>
+
+    <Section title="Description">
+        <Section title="Resolution order" level={3}>
+            <p>A request goes to the most specific route <strong>answering its method</strong>, a
+            literal segment beating a dynamic one at the same depth — so <code>POST
+            /media/new</code> reaches the <code>new</code> handler a <code>&lt;script
+            server&gt;</code> in <code>media/</code> exports, while <code>GET
+            /media/new</code> falls through to the page at
+            <code>media/[id]/page.abide</code>. <code>layout.abide</code> and
+            <code>error.abide</code> are both resolved <strong>nearest-ancestor by route</strong>,
+            which is what lets a section answer for itself and the app answer for the rest.</p>
+        </Section>
+
+        <Section title="The head" level={3}>
+            <p><code>&lt;head&gt;</code> contributions are hoisted at compile time and merged
+            <strong>by key</strong>, deepest contributor winning. A contribution with no key appends
+            in tree order. Nothing in the head holds the flush by default, and on a client
+            navigation the incoming page's keyed contributions replace the outgoing page's while a
+            layout's do not move.</p>
+        </Section>
+    </Section>
+
+    <Section title="Examples">
+        <Section title="A route with a required and an optional segment" level={3}>
+            <Code language="abide" caption="src/crm/invoices/[id]/[[tab]]/page.abide — excerpt" code={`<script>
+import { route } from '@abide/abide'
+
+const { id, tab = 'summary' } = route.params
+</script>
+
+<h1>Invoice {id} — {tab}</h1>`} />
+        </Section>
+
+        <Section title="A document rendered outside the page pipeline" level={3}>
+            <Snippet source={invoicePreviewSource} path="src/pages/render-a-document-yourself/InvoicePreview.abide" from={['export const previewInvoice']} />
+        </Section>
+    </Section>
+
+    <Section title="See also">
+        <ul>
+            <li><a href={url('/pages/add-a-page')}>Routes</a> — the guide to page files</li>
+            <li><a href={url('/pages/render-a-document-yourself')}>Manual rendering</a> —
+            <code>render</code> in use</li>
+            <li><a href={url('/pages/send-the-page-before-the-data-lands')}>Streaming HTML</a> —
+            what a sink is for</li>
+        </ul>
+    </Section>
+</Doc>

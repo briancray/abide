@@ -1,4 +1,4 @@
-// EVERY EXAMPLE, RENDERED AND MOUNTED, the way its card does it: the component the manifest names,
+// EVERY EXAMPLE, RENDERED AND MOUNTED, the way its card does it: the component the card renders,
 // painted on the server and adopted on the client. `abide build` asks whether each one COMPILES,
 // which is a weak bar: a module that compiles can still walk to a node that is not there or throw
 // on its first read. This one runs them.
@@ -8,75 +8,147 @@
 // reason to run them rather than more of my own pages.
 
 import { expect, test } from 'bun:test'
+import { realpathSync } from 'node:fs' // bun exposes no sync realpath of its own
+import { dirname, relative } from 'node:path' // bun exposes no path helpers of its own
 import {
     type AbideFile,
+    type Compilation,
     componentGraph,
     emitClient,
     emitComponent,
     parseAbide,
+    serveCompilation,
     TypeSession,
 } from '@abide/abide/compiler'
 import { render } from '@abide/abide/server'
-import { componentImports } from '../../abide/src/server/componentImports.ts'
+import {
+    resolverIn,
+    withDependencies,
+} from '../../abide/src/compiler/compileApp.ts'
 import { inScope } from '../../abide/src/server/requestScope.ts'
 import { browserCookies, COOKIES } from '../../abide/src/shared/cookies.ts'
 import { RPC_SERVER } from '../../abide/src/shared/RPC_SERVER.ts'
+import { placeOf, routeOf } from '../../abide/src/shared/routePattern.ts'
 import {
     removeTemporaryModules,
     temporaryModule,
 } from '../../abide/tests/temporaryModule.ts'
-import { type Manifest, readManifest } from '../scripts/renderExample.ts'
+import { allCards } from './docsPages.ts'
 
 const APP = new URL('../', import.meta.url).pathname
 const TSCONFIG = `${APP}tsconfig.json`
-const SHELL = '<!doctype html><html><head></head><body></body></html>'
 
-const examples = [...new Bun.Glob('*.json').scanSync({ cwd: `${APP}examples` })]
-    .map((file) => file.slice(0, -'.json'.length))
-    .sort()
+// A file that is the site rather than an example: the docs' own components, and the route files.
+function isSite(path: string): boolean {
+    return (
+        path.startsWith('src/docs/') ||
+        /\/(page|layout|error)\.abide$/.test(path) ||
+        path === 'src/downloads.abide'
+    )
+}
 
-// THE DOCS APP, COMPILED WHOLE: its `package.json`, every `.ts` under `src/`, and every component
-// compiled to the pair it becomes. The manifest's `imports` resolve `#server` / `#shared` / `#ui`
-// inside the copy, so nothing is rewritten on the way in. The generated pages are left out: they are
-// the site, and what is under test is what each card invokes.
-async function appTree(session: TypeSession): Promise<Record<string, string>> {
+// THE DOCS APP, COMPILED WHOLE: its `package.json`, every `.ts` and `.abide` under `src/`, and every
+// component compiled to the pair it becomes, served at its own path as a build serves it
+// (`abideModules`). The manifest's `imports` resolve `#src/*` inside the copy, so nothing is
+// rewritten on the way in. The site itself is left out: what is under test is what each card
+// invokes.
+async function appTree(
+    session: TypeSession,
+): Promise<{ tree: Record<string, string>; compilation: Compilation }> {
     const tree: Record<string, string> = {
         'package.json': await Bun.file(`${APP}package.json`).text(),
     }
     for (const path of new Bun.Glob('src/**/*.ts').scanSync({ cwd: APP }))
-        if (!path.startsWith('src/ui/pages/'))
-            tree[path] = await Bun.file(`${APP}${path}`).text()
+        if (!isSite(path)) tree[path] = await Bun.file(`${APP}${path}`).text()
     const files: { path: string; file: AbideFile }[] = []
-    for (const path of new Bun.Glob('src/ui/components/*.abide').scanSync({
+    for (const path of new Bun.Glob('src/**/*.abide').scanSync({
         cwd: APP,
     })) {
+        if (isSite(path)) continue
         // The source rides along: a handler that imports a component resolves the `.abide` itself.
         const text = await Bun.file(`${APP}${path}`).text()
         tree[path] = text
         files.push({ path: `${APP}${path}`, file: parseAbide(text) })
     }
+    // 34.27 — and every `.abide` a dependency ships that one of them imports, copied in beside its
+    // package's manifest, so the copy resolves it where the docs app does.
+    const own = files.length
+    for (const dependency of await withDependencies(
+        realpathSync(`${APP}src`),
+        files.map(({ path, file }) => ({
+            path,
+            file,
+            text: '',
+            quiet: false,
+            position: undefined,
+        })),
+        resolverIn(),
+    )) {
+        if (files.some((one) => one.path === dependency.path)) continue
+        const text = await Bun.file(dependency.path).text()
+        const below = relative(APP, dependency.path)
+        tree[below] = text
+        const manifest = `${dirname(below)}/package.json`
+        tree[manifest] ??= await Bun.file(`${APP}${manifest}`).text()
+        files.push({ path: dependency.path, file: parseAbide(text) })
+    }
     // 32.17 — which components another one invokes decides whether a module carries its own
-    // markup for a row built in the browser.
-    const graph = componentGraph(files, Bun.resolveSync)
+    // markup for a row built in the browser. THE APP'S RESOLVER, not `Bun.resolveSync`: that asks
+    // every plugin again, and a compilation an earlier file in this process served answers it from
+    // the directory read as a file — `InvoiceDocument.abide` is then looked for one level up.
+    const graph = componentGraph(files, resolverIn())
     const { answers } = await session.readsFor(files)
+    const compilation: Compilation = { files: {}, tables: {} }
     for (let at = 0; at < files.length; at += 1) {
         const { path: absolute, file } = files[at] as (typeof files)[number]
         const names = answers[at]
-        const components = graph.imports.get(absolute)
         const stem = absolute.slice(APP.length, -'.abide'.length)
-        tree[`${stem}.ts`] = emitComponent(file, names, false, components)
+        const belowRoot = absolute.slice(`${APP}src/`.length)
+        // 37.1 — a server block files its hooks at its route.
+        const server = emitComponent(
+            file,
+            names,
+            false,
+            at < own && placeOf(belowRoot) === 'address'
+                ? routeOf(belowRoot)
+                : undefined,
+        )
         // A CHILD WITH NOTHING TO HYDRATE STILL NEEDS A MODULE, because its caller imports one.
         // `emitClient` answers '' for a static file — that is what makes a static page ship no
         // runtime — so the no-op stands in wherever a caller has to have something to call.
-        tree[`${stem}.client.ts`] =
+        // IN ONE PROCESS a handler is its own server module's: the browser's module of a file
+        // declaring some binds them from it, where a build would write the wire in their place.
+        const client =
             emitClient(
                 file,
                 names,
                 graph.invoked.has(absolute) ? 'invoked' : 'none',
-                components,
             ) || 'export default () => {}'
+        const name = stem.slice(stem.lastIndexOf('/') + 1)
+        // Bound by name, as a build's stand-ins are: the file's own `<script>` calls them.
+        const handlers =
+            file.servers.length > 0
+                ? new Bun.Transpiler({ loader: 'ts' }).scan(
+                      file.servers.join('\n'),
+                  ).exports
+                : []
+        // Through a module of the app's own, which reaches the server's module where the
+        // browser's, importing it directly, would reach its own.
+        if (handlers.length > 0)
+            tree[`${stem}.handlers.ts`] =
+                `export { ${handlers.join(', ')} } from './${name}.abide?component'\n`
+        compilation.files[`${stem}.abide`] = {
+            server,
+            client:
+                handlers.length > 0
+                    ? `${client}\nimport { ${handlers.join(', ')} } from './${name}.handlers.ts'\nexport { ${handlers.join(', ')} }\n`
+                    : client,
+            sheet: undefined,
+            serverMappings: undefined,
+            clientMappings: undefined,
+        }
     }
-    return tree
+    return { tree, compilation }
 }
 
 test('every example renders on the server and mounts on the client', async () => {
@@ -124,19 +196,25 @@ test('every example renders on the server and mounts on the client', async () =>
     const serverRaw = RPC_SERVER.raw
     RPC_SERVER.raw = null
     try {
-        const dir = temporaryModule(await appTree(session))
-        Bun.plugin(componentImports(dir, dir))
+        const { tree, compilation } = await appTree(session)
+        const dir = temporaryModule(tree)
+        serveCompilation(dir, compilation)
         // 16.9 — A HANDLER HAS ITS ADDRESS FROM BOOT, so a card reading `rpc.url` or `rpc.raw` has
         // one before anything is called; the copy is given the address `mountHandlers` would give.
-        for (const path of new Bun.Glob('src/server/rpc/**/*.ts').scanSync({
+        for (const path of new Bun.Glob('src/**/*.abide').scanSync({
             cwd: APP,
         })) {
-            const module = await import(`${dir}/${path}`)
-            const at = path.slice('src/server/rpc/'.length, -'.ts'.length)
+            if (
+                isSite(path) ||
+                placeOf(path.slice('src/'.length)) !== 'address'
+            )
+                continue
+            const module = await import(`${dir}/${path}?component`)
+            const route = routeOf(path.slice('src/'.length))
             for (const [name, handler] of Object.entries(module))
                 if (typeof handler === 'function' && 'method' in handler)
                     (handler as { address?: string }).address =
-                        `/__abide/rpc/${at}/${name}`
+                        `${route}/${name}`
         }
         // A `raw` CALL GOES OVER THE WIRE, and there is no server here: it is answered `null`, which
         // is what is under test — the card paints and adopts — and not what the handler says.
@@ -147,20 +225,20 @@ test('every example renders on the server and mounts on the client', async () =>
                 }),
             { preconnect: () => {} },
         ) as typeof fetch
-        for (const example of examples) {
+        for (const card of await allCards()) {
+            const example = card.id
             painting = example
-            const manifest: Manifest = await readManifest(example)
-            const stem = manifest.render.slice(0, -'.abide'.length)
+            const stem = card.component.slice(0, -'.abide'.length)
             try {
-                const { default: Component } = await import(`${dir}/${stem}.ts`)
+                const { default: Component } = await import(
+                    `${dir}/${stem}.abide?component`
+                )
                 let html = ''
                 // IN A REQUEST, as a page is always rendered: `principal` reads the request's
                 // cookie and throws outside one (22.1).
                 COOKIES.current = serverCookies
                 await inScope(new Request('http://example.test/'), async () => {
-                    html = new TextDecoder().decode(
-                        await render(Component, SHELL),
-                    )
+                    html = new TextDecoder().decode(await render(Component))
                 })
 
                 // EACH EXAMPLE GETS ITS OWN ROOT, AND THAT IS NOT DECORATION. Overwriting one
@@ -175,7 +253,7 @@ test('every example renders on the server and mounts on the client', async () =>
                 )
                 document.body.replaceChildren(host)
                 const { default: mount } = await import(
-                    `${dir}/${stem}.client.ts`
+                    `${dir}/${stem}.abide?client`
                 )
                 // A BROWSER'S COOKIES ON THE CLIENT HALF. Importing `@abide/abide/server` pointed the slot
                 // at the request scope, which a browser never does, so a mount reading `cookies()`

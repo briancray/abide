@@ -358,7 +358,7 @@ test('every clause the working notes cite exists', async () => {
 })
 
 // The check above reads only what follows the word RULEBOOK, so a bare `(40.17, 40.18)` in the
-// notes resolves or dangles with nothing looking. A parenthesised clause number is a citation, and
+// notes resolves or dangles with nothing looking. A parenthesized clause number is a citation, and
 // one written without its document is one the check cannot see.
 test('every clause the working notes cite names its document', async () => {
     const notes = await Bun.file(new URL('../CLAUDE.md', DOCS)).text()

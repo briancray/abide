@@ -1,0 +1,9 @@
+<script>
+import TestBoard from '#src/instruments/ui/TestBoard.abide'
+</script>
+
+<head>
+    <title>Tests — abide</title>
+</head>
+
+<TestBoard/>

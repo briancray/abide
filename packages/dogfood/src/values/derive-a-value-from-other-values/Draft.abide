@@ -1,0 +1,35 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+/** The same person on every call, so a refill changes no field. */
+export const getPerson = GET(
+    async (args: { id: string }) => {
+        // A slow service, so the wait is on screen.
+        await Bun.sleep(450)
+        return { id: args.id, name: 'Ada Lovelace' }
+    },
+    { description: 'A person, by id.' },
+)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const person = reactive(() => getPerson({ id: '42' }))
+
+// Bound straight to the field, so typing IS the write.
+const draft = reactive(() => person.name)
+
+const status = reactive(() => {
+    if (!person.ready()) return 'loading…'
+    return person.busy() ? 'refreshing…' : ''
+})
+</script>
+
+<div class="row">
+    <label>your draft
+        <input bind:value={draft}>
+    </label>
+    <button onclick={person.refresh}>reload from the server</button>
+    <span class="status">{status}</span>
+</div>

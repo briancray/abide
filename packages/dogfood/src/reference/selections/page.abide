@@ -1,0 +1,85 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Section from '#src/docs/Section.abide'
+</script>
+
+<Doc>
+    <Section title="Syntax">
+        <Code language="ts" caption="browser" code={`busy(selection, pattern)
+ready(selection, pattern)
+refresh(selection, pattern)
+invalidate(selection, pattern)`} />
+
+        <p>All four take the same two arguments. Called bare, each one means the whole scope; the
+        pattern is optional and narrows a keyed selection to the entries whose args match it.</p>
+    </Section>
+
+    <Section title="Members">
+        <table>
+            <thead><tr><th>Name</th><th>Signature</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><code>Selection</code></td><td><code>{'Reactive<any, any, any, any> | Keyed<any, any, any, any> | Rpc<any, any, any, any> | { tags: string[] }'}</code></td><td>One value, one keyed value — every args key of it — one handler, which is the value behind it, or every entry carrying any of these tags, across values.</td></tr>
+                <tr><td><code>busy</code></td><td><code>(selection?: Selection, pattern?: Partial&lt;Args&gt;) =&gt; boolean</code></td><td>Whether any entry in the selection has work in flight.</td></tr>
+                <tr><td><code>ready</code></td><td><code>(selection?: Selection, pattern?: Partial&lt;Args&gt;) =&gt; boolean</code></td><td>Whether every entry in the selection has a value to serve.</td></tr>
+                <tr><td><code>refresh</code></td><td><code>(selection?: Selection, pattern?: Partial&lt;Args&gt;) =&gt; void</code></td><td>Stale while revalidate, over the selection.</td></tr>
+                <tr><td><code>invalidate</code></td><td><code>(selection?: Selection, pattern?: Partial&lt;Args&gt;) =&gt; void</code></td><td>Marks the selection stale. Nothing loads and nobody is woken until the next read.</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="Description">
+        <p><strong>Any for <code>busy</code>, all for <code>ready</code>.</strong> These are the
+        quantifiers under which <code>busy() &amp;&amp; !ready()</code> reads as one sentence:
+        anything is loading, and there is not yet everything to show. An aggregate
+        <code>error()</code> would have to decide which failure to hand back, so there is no free
+        form of it.</p>
+
+        <p>One signal is held per selection, never one per entry, so a page-level spinner over n
+        entries reloading together wakes twice rather than 2n times.</p>
+
+        <p><strong>An explicit argument reaches anything; a bare sweep reaches loads.</strong>
+        Passing a <code>Reactive</code> is a deliberate act about that one value, but a bare
+        <code>invalidate()</code> matches only entries whose producer is a load — catching a
+        <code>reactive(0)</code> would be silent data loss. A synchronous derivation is left alone,
+        and recomputes from the load it reads.</p>
+
+        <p><code>invalidate</code> is lazy and <code>refresh</code> is eager, and at this width the
+        eager one is bounded by what is subscribed. An <code>invalidate()</code> over two hundred
+        entries drops two hundred caches and loads none, where a <code>refresh()</code> reloads only
+        what something is reading and marks the rest. That makes <code>refresh()</code> the
+        reconnect default.</p>
+
+        <p>A selection is scope-bounded as a value is, and a tag with it, so one request can never
+        invalidate another's. A <code>global</code> value belongs to no request, so every selection
+        that matches it reaches it, including a tag fired inside a request. And a bare
+        <code>invalidate()</code> and a bare <code>refresh()</code> on a server each reach every
+        <code>global</code> entry in the process, that being the whole of what a bare sweep can
+        still touch once the request's own entries die with it.</p>
+    </Section>
+
+    <Section title="Examples">
+        <Section title="A page-level activity indicator" level={3}>
+            <Code language="abide" caption="abide" code={`{#if busy()}<Spinner/>{/if}`} />
+        </Section>
+
+        <Section title="Everything about one row, across values" level={3}>
+            <Code language="ts" caption="server" code={`invalidate({ tags: [\`customer:\${id}\`] })`} />
+        </Section>
+
+        <Section title="Catching up after a reconnect" level={3}>
+            <Code language="ts" caption="browser" code={`watch(() => {
+    if (online()) refresh()
+})`} />
+        </Section>
+    </Section>
+
+    <Section title="See also">
+        <ul>
+            <li><a href={url('/values/decide-when-a-value-reloads')}>Reloading</a></li>
+            <li><a href={url('/values/load-once-per-set-of-arguments')}>Caching</a></li>
+            <li><a href={url('/reference/reactive')}><code>reactive</code></a></li>
+        </ul>
+    </Section>
+</Doc>

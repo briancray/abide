@@ -1,0 +1,134 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/docs/Doc.abide'
+import Code from '#src/docs/Code.abide'
+import Example from '#src/docs/Example.abide'
+import Section from '#src/docs/Section.abide'
+import Sync from './Sync.abide'
+import syncSource from './Sync.abide' with { type: 'text' }
+import billingSource from './billing.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="`trace()` is built on first ask and held">
+        <Example
+            id="trace-lines"
+            title="`trace()` — one id for everything one request did"
+            summary="A contact synced to billing across two modules. Sync it, and both lines it logged carry that request's trace; sync again for a new one."
+            files={{
+                'Sync.abide': syncSource,
+                'billing.ts': billingSource,
+            }}
+        >
+            <Sync />
+        </Example>
+
+        <p>There is nothing to start and nothing to pass down. The id is built the first time
+        something asks for it and held for the request, so a rung, a handler and a component
+        rendering on the server all read the same one. The billing module above was handed a contact
+        id and nothing else, and the line it wrote carries the trace anyway.</p>
+
+        <p>A request arriving with a <code>traceparent</code> continues that trace rather than
+        starting a new one, which is what makes the id useful across a service boundary at all.</p>
+    </Section>
+
+    <Section title="`trace.sampled()` carries the caller's decision verbatim">
+        <p>The upstream decided whether this trace is sampled, and abide <strong>carries that
+        decision through unchanged</strong>. It does not re-decide, and it does not sample on its
+        own.</p>
+
+        <p>That is the only behavior that composes. A service that re-decides produces traces with
+        holes in them — a sampled parent whose child chose not to be, which is a trace you cannot
+        read and did not save anything by not having.</p>
+
+        <p>Read it where the cost of recording something is worth avoiding:</p>
+
+        <Code language="ts" caption="server" code={`if (trace.sampled()) log.debug('cache table', { entries: cache.size })`} />
+    </Section>
+
+    <Section title="`trace.span` wraps a body and returns what it returned">
+        <Code language="ts" caption="server" code={`const rows = await trace.span('database.search', () =>
+    database.invoices.search(query, limit),
+)`} />
+
+        <p><code>trace.span</code> hands back <strong>exactly what its body returned</strong>, so
+        wrapping a call in one is not a refactor: the value, the type and the timing are the body's,
+        and removing the wrapper later changes nothing but the record.</p>
+
+        <p>A span <strong>is a <code>LogRecord</code></strong>, not a second feed. That is the
+        decision worth knowing: there is one stream of things that happened, so a span and a log
+        line are read by the same tooling, gated by the same namespaces and tailed by the same
+        command. A separate span feed would be a second thing to ship, a second thing to configure,
+        and a second place for a correlation id to go wrong.</p>
+
+        <p>Each carries <code>startedAt</code> as ISO-8601 and its duration as a
+        <strong>monotonic</strong> measurement — a wall clock can go backwards, and a negative
+        duration is a metric nobody can act on.</p>
+
+        <p>Read on: <a href={url('/app/record-what-happened')}>Logging</a></p>
+    </Section>
+
+    <Section title="`trace.headers()` is what an outbound request carries">
+        <Code language="ts" caption="server" code={`const answer = await fetch(billing, { headers: trace.headers() })`} />
+
+        <p>It carries <code>traceparent</code> naming the <strong>current span</strong> as parent,
+        so the next service's trace hangs off the work that called it rather than off the request as
+        a whole. Merge it into whatever headers the call already has; it is a plain record.</p>
+
+        <p><code>traceresponse</code> comes back the other way, on the response, so a caller can
+        record which trace answered it without the callee having to log on the caller's behalf.</p>
+
+        <p>Read on: <a href={url('/data/find-the-url-a-handler-answers-on')}>Handler URLs</a></p>
+    </Section>
+
+    <Section title="`server-timing` is what the browser's network panel reads">
+        <p>Every handler answer carries <code>server-timing</code> with <strong>the handler's own
+        duration</strong>, which is the number the request's own timing hides. A call that took 900
+        ms because the service it reached out to took 850 shows the 850 on the handler, not
+        somewhere in the transfer.</p>
+
+        <p>The metric's name says which run the time is from, since the row already names the
+        handler:</p>
+
+        <ul>
+            <li><code>Direct</code> — the handler ran for this request.</li>
+            <li><code>Seeded</code> — the page's render had already fetched it, and the duration is
+            how long that run took. It would otherwise look exactly like a fresh call that happened
+            to be fast.</li>
+            <li><code>Cached</code> — a <code>global</code> value already held answered it, and
+            nothing ran.</li>
+            <li><code>Started</code> — a stream, timed to its first chunk, which is what the
+            response waited for.</li>
+        </ul>
+
+        <p>Where <code>middleware</code> ran — the app's, the handler's, or both — their time is
+        <strong><code>Middleware</code></strong>, and <code>Direct</code> is the handler's body
+        alone. A slow guard and a slow query no longer read as one number.</p>
+
+        <p>A span joins them where you ask it to. Its name becomes the metric, so it has to be a
+        plain token — no spaces:</p>
+
+        <Code language="ts" caption="server" code={`const rows = await trace.span(
+    'search',
+    () => database.invoices.search(query, limit),
+    { timing: true },
+)`} />
+
+        <p>Only what finished <strong>before the head went out</strong> can be in it. A page sends
+        its head before it renders, so a page's entry is its <code>Middleware</code> and nothing
+        from the render; the render's calls show their own time as <code>Seeded</code> on the
+        requests that follow. A span is opt-in because its name is visible to anyone with the
+        network panel open.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/app/record-what-happened')}>Logging</a> — the records a trace threads
+            through</li>
+            <li><a href={url('/app/tell-a-load-balancer-you-are-healthy')}>Health</a> — the other
+            thing an operator scrapes</li>
+            <li><a href={url('/reference/ambient-values')}>Ambient values</a> — <code>trace</code>
+            beside the rest</li>
+        </ul>
+    </Section>
+</Doc>
