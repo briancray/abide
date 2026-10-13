@@ -16,7 +16,6 @@ import type { Gated } from '#shared/reactive/argsContract.ts'
 import { deadlineOf, heldGenerationOf } from '#shared/reactive/index.ts'
 import type { Defaults } from '#shared/reactive/parameterDefaults.ts'
 import { notFound, refuse } from '#shared/refuse.ts'
-import { routeOf } from '#shared/routePattern.ts'
 import type { Method, Rpc } from '#shared/rpc.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
@@ -66,7 +65,14 @@ export type Mount = {
     address: string
     method: Method
     source: string
+    /** The handler file's name, or the private handler's binding. */
     name: string
+    /** What the source's module exports it as: `default` for a handler file. */
+    export: string
+    /** The route its hooks are filed at, which its rungs are read over (37.1, 16.72). */
+    scope: string
+    /** Whether it is a private handler, listed nowhere (16.71). */
+    private: boolean
     /** Whether a browser is handed a wrapper for it. 20.4. */
     ui: boolean
     /** Whether the command line lists it — the shell's listing and completion, never whether `call` reaches it. 20.3, 38.62. */
@@ -97,18 +103,15 @@ export type Mount = {
 
 /**
  * A row of the table the build wrote, with the import of the module its handler is declared in —
- * the file's server module, the one the route table loads too, so a page and a call reach one
- * handler.
+ * the handler file itself, or a private handler's `.abide` server module, the one the route table
+ * loads too, so a page and a call reach one handler.
  */
 export type MountRow = Mount & { load: () => Promise<Record<string, unknown>> }
 
 /** A handler's row, mounted: the handler imported and its args schema probed. */
 export type Mounted = Mount & {
-    method: Method
-    /** The route of the file declaring it, which its hooks are filed at (37.1, 37.2). */
-    route: string
     /**
-     * The rungs filed over `route`, read once at mount (16.14) — what an http call and a socket
+     * The rungs filed over `scope`, read once at mount (16.14) — what an http call and a socket
      * subscription to it both pass through (37.2, 18.26).
      */
     rungs: AppRung[]
@@ -148,12 +151,14 @@ export function mountedOwn(
         {
             address,
             method: 'GET',
-            route: '/',
             // The root's rungs run before routing (37.3), and nothing is filed below a route
             // of abide's own.
             rungs: [],
             source: '',
             name,
+            export: name,
+            scope: '/',
+            private: false,
             ui: false,
             cli: false,
             mcp: false,
@@ -188,20 +193,17 @@ export async function mountHandlers(
     const handlers = new Map<string, Mounted>()
     for (let at = 0; at < table.length; at += 1) {
         const mount = table[at] as Mount
-        const exported = (modules[at] as Record<string, unknown>)[mount.name]
+        const exported = (modules[at] as Record<string, unknown>)[mount.export]
         const handler = exported as Rpc<unknown, unknown> & Gated<unknown>
         const declared = argsDocumentOf(handler)
         // 16.9, 16.10 — the address `rpc.url` and `rpc.raw` build on, under the mount — and what a
         // page's render turns a call it made into the browser's request by (41.20).
         handler.address = underMount(mount.address)
-        // 23.19 — the route its address answers below, which is its mount's for a package's file,
-        // never the file's place on disk.
-        const route = routeOf(mount.address)
         handlers.set(handlerKey(mount.method, mount.address), {
             ...mount,
-            method: mount.method,
-            route,
-            rungs: rungsOver(route),
+            // 37.1, 16.72 — the route its file's hooks are filed at, which the build read off
+            // where the file answers (23.19's mount for a package's), never its place on disk.
+            rungs: rungsOver(mount.scope),
             handler,
             argsDocument: declared ?? (mount.args as Document | undefined),
             wireArgs: declared === undefined ? mount.args : undefined,
@@ -219,7 +221,7 @@ export function handlerKey(method: string, address: string): string {
  * The `Response` to a call of `found` made over http, `params` being what its route matched.
  *
  * `found` answers the request's method — or, for an `OPTIONS`, the method its preflight asks
- * about: which handler a request reaches is the route table's to say (19.21).
+ * about: which handler a request reaches is the route table's to say (19.20).
  */
 export async function answerRpc(
     found: Mounted,

@@ -7,8 +7,8 @@
 // WHICH FACE AN IMPORT GETS IS SPELLED ON ITS SPECIFIER (`MODULE_QUERIES`), because bun hands a plugin
 // no import attributes: a compiled module asks for `?component`, a browser module for its own
 // `?style`, a text import for `?text`. A `.abide` named bare is a module abide did not compile
-// asking — on a server that is the bound face 34.16 states, beside every name the module exports,
-// and in a browser the component module itself.
+// asking — on a server that is the bound face 34.16 states, and in a browser the component module
+// itself.
 //
 // THE TABLES — the route, error and handler tables, and in a browser the router's table and the
 // entry — are the build's own modules, served from `__abide` below the root, where no app writes.
@@ -17,13 +17,16 @@
 // that registered one, so a second app booted in the same process — a test's — adds its compilation
 // to this one rather than registering a plugin nobody asks.
 
-import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
+import { basename, dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
+import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import type { ServerTable } from './answerRequest.ts'
 import type { MountRow } from './answerRpc.ts'
 import { installSourceMaps, type SourceMaps } from './installSourceMaps.ts'
 import {
     CLIENT_QUERY,
     COMPONENT_QUERY,
+    HANDLER_FACE,
+    HANDLER_SUFFIX,
     STYLE_QUERY,
     TEXT_QUERY,
 } from './MODULE_QUERIES.ts'
@@ -51,8 +54,18 @@ export type CompiledFile = {
 export type Compilation = {
     /** Every `.abide` compiled, by its path below the root. */
     files: Record<string, CompiledFile>
+    /**
+     * Every handler file, by its path below the root: the route its hooks are filed at (37.1), and
+     * the module a browser is handed in its place (16.74), `''` where the browser is handed none.
+     */
+    handlers: Record<string, HandlerFace>
     /** The build's own modules, by name below `__abide`. */
     tables: Record<string, string>
+    /**
+     * 23.19 — every directory a file mounts, by its path below the root, to the position its files
+     * take: what the browser's fence reads a mounted file's place by (16.29).
+     */
+    mounted: Record<string, string>
 }
 
 // A VIRTUAL FACE'S PATH: its file's, with a suffix that is not a query. Both registries key a module
@@ -68,29 +81,40 @@ export const COMPONENT_NAMESPACE = 'abide-component'
 /** The namespaces a file's text and a component's stylesheet are loaded in. */
 export const TEXT_NAMESPACE = 'abide-text'
 export const STYLE_NAMESPACE = 'abide-style'
+const RELATIVE_OR_SUBPATH = /^(?:\.\.?\/|#)/
 
-/** What the plugin answers from: a compiled file or a table by absolute path. */
-type Served = {
-    file: (path: string) => CompiledFile | undefined
-    table: (path: string) => string | undefined
-}
+/** One handler file, as `Compilation.handlers` holds it. */
+type HandlerFace = { scope: string; client: string }
 
 /** The plugin serving `compilation`'s files and tables, for one bundle. */
 export function abideModules(
     root: string,
     compilation: Compilation,
 ): Bun.BunPlugin {
-    const files = new Map<string, CompiledFile>()
-    const tables = new Map<string, string>()
-    addCompilation(realOrAsGiven(root), compilation, files, tables)
-    return modulesPlugin({
-        file: (path) => files.get(path),
-        table: (path) => tables.get(path),
-    })
+    const held: Held = {
+        files: new Map(),
+        handlers: new Map(),
+        tables: new Map(),
+    }
+    addCompilation(realOrAsGiven(root), compilation, held)
+    return modulesPlugin(held)
 }
 
-const RUNTIME_FILES = new Map<string, CompiledFile>()
-const RUNTIME_TABLES = new Map<string, string>()
+/**
+ * A compilation as the plugin keys it, and answers from: a compiled file, a handler file or a table
+ * by absolute path.
+ */
+type Held = {
+    files: Map<string, CompiledFile>
+    handlers: Map<string, HandlerFace>
+    tables: Map<string, string>
+}
+
+const RUNTIME: Held = {
+    files: new Map(),
+    handlers: new Map(),
+    tables: new Map(),
+}
 let registered = false
 
 /**
@@ -99,16 +123,11 @@ let registered = false
  */
 export function serveCompilation(root: string, compilation: Compilation): void {
     const real = realOrAsGiven(root)
-    addCompilation(real, compilation, RUNTIME_FILES, RUNTIME_TABLES)
+    addCompilation(real, compilation, RUNTIME)
     installSourceMaps(serverMapsOf(compilation, real), real)
     if (registered) return
     registered = true
-    Bun.plugin(
-        modulesPlugin({
-            file: (path) => RUNTIME_FILES.get(path),
-            table: (path) => RUNTIME_TABLES.get(path),
-        }),
-    )
+    Bun.plugin(modulesPlugin(RUNTIME))
 }
 
 /** What the server's table exports: its routes and error pages, server blocks and handlers. */
@@ -146,14 +165,15 @@ export function serverMapsOf(
 function addCompilation(
     root: string,
     compilation: Compilation,
-    files: Map<string, CompiledFile>,
-    tables: Map<string, string>,
+    held: Held,
 ): void {
     // RESOLVED, not joined: a dependency's file is keyed above the root (`../node_modules/…`).
     for (const [relative, compiled] of Object.entries(compilation.files))
-        files.set(resolve(root, relative), compiled)
+        held.files.set(resolve(root, relative), compiled)
+    for (const [relative, face] of Object.entries(compilation.handlers))
+        held.handlers.set(resolve(root, relative), face)
     for (const [name, text] of Object.entries(compilation.tables))
-        tables.set(`${root}/${VIRTUAL_DIRECTORY}/${name}`, text)
+        held.tables.set(`${root}/${VIRTUAL_DIRECTORY}/${name}`, text)
 }
 
 // `Bun.resolveSync` asks EVERY abide plugin's `onResolve` again — this one's, and the runtime's, which
@@ -178,7 +198,7 @@ export function resolvedFile(specifier: string, from: string): string {
     }
 }
 
-function modulesPlugin(served: Served): Bun.BunPlugin {
+function modulesPlugin(served: Held): Bun.BunPlugin {
     return {
         name: 'abide-modules',
         setup(build) {
@@ -264,11 +284,54 @@ function modulesPlugin(served: Served): Bun.BunPlugin {
                         dirname(pathOf(args.importer)),
                         args.path,
                     )
-                    return served.table(path) === undefined
+                    return served.tables.get(path) === undefined
                         ? undefined
                         : { path, namespace: 'abide-table' }
                 },
             )
+
+            // A HANDLER FILE IS FOUND BY WHERE ITS IMPORT RESOLVES, however the import spells it, and
+            // only from the app's own modules: a package's never names one, and asking bun again for
+            // each of a package's relative imports is a resolve per module of the bundle. IN A BUNDLE
+            // THE FILTER IS THE HANDLER FILES' NAMES: a hook matching every relative import costs the
+            // bundle abide's own `sideEffects`, and the barrel's rest — the validator, the csp — moved
+            // into the chunk every page loads (38.94). The runtime is told of each compilation after
+            // it registered, so it matches every relative or `#` import and asks.
+            // Each handler file's name without `.ts` — what an import of one ends in.
+            let stems: string[] | undefined
+            if (bundling) {
+                const names = new Set<string>()
+                for (const path of served.handlers.keys())
+                    names.add(basename(path, '.ts'))
+                stems = [...names]
+            }
+            const handlerImport =
+                stems === undefined
+                    ? RELATIVE_OR_SUBPATH
+                    : new RegExp(
+                          `(?:^|/)(?:${stems.map(RegExp.escape).join('|')})(?:\\.ts)?$`,
+                      )
+            if (stems?.length !== 0)
+                build.onResolve({ filter: handlerImport }, (args) => {
+                    if (resolving || !RELATIVE_OR_SUBPATH.test(args.path))
+                        return undefined
+                    const importer = pathOf(args.importer)
+                    if (importer.includes('/node_modules/')) return undefined
+                    let path: string
+                    try {
+                        path = resolved(args.path, args.importer)
+                    } catch {
+                        return undefined
+                    }
+                    const face = served.handlers.get(path)
+                    if (face === undefined) return undefined
+                    // 20.4 — a handler the browser is handed no wrapper for is no import of its.
+                    if (inBrowser(args.importer) && face.client === '')
+                        throw new Error(
+                            `abide: ${pathOf(args.importer)} imports ${args.path}, whose handler withholds itself from the browser (\`clients: { ui: false }\`). Call it from a <script server>, or let the browser have it. RULEBOOK 20.4.`,
+                        )
+                    return { path: `${path}${HANDLER_SUFFIX}` }
+                })
 
             // A RELATIVE SPECIFIER A FACE IMPORTS AT RUN TIME is resolved from the file the face
             // stands for: bun's runtime reads one from an importer in a namespace as no path at
@@ -294,6 +357,22 @@ function modulesPlugin(served: Served): Bun.BunPlugin {
                     }
                 },
             )
+            // 16.74, 37.1 — A HANDLER FILE: the browser's is its wrapper, and the server's is the file
+            // as written, between the two calls that file its hooks at its route — on its first
+            // line, so every line of the file stays where its frames name it. ITS FACE is its path
+            // with a suffix, in bun's own namespace — so what it imports, relative, `#` or bare,
+            // resolves from its directory as the file's own imports do. A namespace of abide's own
+            // had bun resolve a bare one from the working directory: a second abide, run from `/`.
+            build.onLoad({ filter: HANDLER_FACE }, async (args) => {
+                const path = args.path.slice(0, -HANDLER_SUFFIX.length)
+                const face = served.handlers.get(path) as HandlerFace
+                if (browser) return { contents: face.client, loader: 'js' }
+                const text = await Bun.file(path).text()
+                return {
+                    contents: `import { fileRoute as __fileRoute } from '${SERVER_SPECIFIER}';__fileRoute(${JSON.stringify(face.scope)});${text}\n;__fileRoute(undefined)\n`,
+                    loader: 'ts',
+                }
+            })
             build.onLoad(
                 { filter: /.*/, namespace: 'abide-client' },
                 (args) => ({
@@ -307,10 +386,7 @@ function modulesPlugin(served: Served): Bun.BunPlugin {
             build.onLoad({ filter: /.*/, namespace: 'abide-bound' }, (args) => {
                 const path = args.path.slice(0, -BOUND.length)
                 return {
-                    contents: boundModule(
-                        path,
-                        compiledAt(served, path).server,
-                    ),
+                    contents: boundModule(path),
                     loader: 'js',
                 }
             })
@@ -339,7 +415,7 @@ function modulesPlugin(served: Served): Bun.BunPlugin {
             build.onLoad(
                 { filter: /.*/, namespace: 'abide-table' },
                 (args) => ({
-                    contents: served.table(args.path) ?? '',
+                    contents: served.tables.get(args.path) ?? '',
                     loader: 'ts',
                 }),
             )
@@ -355,8 +431,8 @@ function pathOf(importer: string): string {
 
 // THE PATH BUN NAMES A FILE BY HAS ITS LINKS RESOLVED, and so has the root a compilation is served
 // under (`serveCompilation`).
-function compiledAt(served: Served, path: string): CompiledFile {
-    const compiled = served.file(path)
+function compiledAt(served: Held, path: string): CompiledFile {
+    const compiled = served.files.get(path)
     if (compiled === undefined)
         throw new Error(
             `abide: ${path} is imported, and no compile of this app reached it.`,
@@ -364,22 +440,12 @@ function compiledAt(served: Served, path: string): CompiledFile {
     return compiled
 }
 
-const SCANNER = new Bun.Transpiler({ loader: 'ts' })
-
 // 34.16 — BOUND, NOT RAW. The compiled module is a function of accessors answering its markup (33.4);
 // what an app's own module calls is a function of plain props answering a `Component` (35.4), which
-// `render` invokes with nothing. Every name the module exports rides beside it: a `<script module>`'s,
-// and the handlers a `<script server>` declares (34.23).
-//
-// NAMED RATHER THAN `export *`: the server blocks load side by side at boot, and a star export
-// through a module still loading found none of its names.
-function boundModule(path: string, server: string): string {
-    const specifier = JSON.stringify(path)
-    const names: string[] = []
-    for (const name of SCANNER.scan(server).exports)
-        if (name !== 'default') names.push(name)
-    return `import component from ${specifier}
-${names.length === 0 ? '' : `export { ${names.join(', ')} } from ${specifier}\n`}export default (props = {}) => {
+// `render` invokes with nothing. The component is the module's one export (34.17).
+function boundModule(path: string): string {
+    return `import component from ${JSON.stringify(path)}
+export default (props = {}) => {
     const accessors = {}
     for (const key in props) {
         const value = props[key]

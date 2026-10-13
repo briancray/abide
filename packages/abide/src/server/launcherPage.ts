@@ -21,9 +21,9 @@ const SYSTEM_ACCENT = '#0a84ff'
 export type Launch = {
     /** The app's name, as its package gives it. */
     name: string
-    /** Where the start form posts, or `undefined` where the `launcher` export turns starting off. */
+    /** Where the start form posts, or `undefined` where what `onLauncher` answers turns starting off. */
     start: string | undefined
-    /** Where the connect form posts, or `undefined` where the `launcher` export turns connecting off. */
+    /** Where the connect form posts, or `undefined` where what `onLauncher` answers turns connecting off. */
     connect: string | undefined
     fields: ConfigField[]
     /** The URL the last connect was given. */

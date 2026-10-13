@@ -1,5 +1,5 @@
-// SECTION 37 — THE LIFECYCLE HOOKS, called from a page's or a layout's `<script server>` rather
-// than exported from it (37.1). Each call files its function here, at the ROUTE of the file that
+// SECTION 37 — THE LIFECYCLE HOOKS, called from a `.abide`'s `<script server>` or a handler file
+// rather than exported from it (37.1). Each call files its function here, at the ROUTE of the file that
 // called it, and hands back what unfiles it; `createApp` reads what is filed once every module
 // holding a server block has run.
 //
@@ -22,6 +22,7 @@ import {
 } from '#shared/routePattern.ts'
 import type { Schema } from '#shared/Schema.ts'
 import { config } from './config.ts'
+import type { LauncherOptions } from './launcherOptions.ts'
 import { currentRequestScope } from './requestScope.ts'
 
 export type AppRung = Middleware<{ request: Request }, Response>
@@ -51,17 +52,20 @@ export const HOOKS = {
         options: ConfigOptions | undefined
     }>[],
     principal: [] as Filed<(claims: unknown) => unknown | Promise<unknown>>[],
+    launcher: [] as Filed<() => LauncherOptions>[],
 }
 
 const ROOT = '/'
 
-// The route a hook called now is filed at — the server block being evaluated, or the root.
+// The route a hook called now is filed at — the server block or handler file being evaluated, or
+// the root.
 let filing: string | undefined
 
 /**
  * Sets the route the hooks called next are filed at, or the root again for `undefined`.
  *
- * 37.1 — what a compiled server module calls around its `<script server>`; nothing an app writes.
+ * 37.1 — what a compiled server module calls around its `<script server>`, and the plugin around a
+ * handler file; nothing an app writes.
  */
 export function fileRoute(route: string | undefined): void {
     filing = route
@@ -206,6 +210,15 @@ export function onPrincipal(
     resolve: (claims: unknown) => unknown | Promise<unknown>,
 ): () => void {
     return filed(HOOKS.principal, resolve)
+}
+
+/**
+ * Files what the desktop app's window and launcher are; returns what unfiles it.
+ *
+ * 38.80 — called in `src/launcher.abide` alone (38.107), and read as the app launches.
+ */
+export function onLauncher(options: () => LauncherOptions): () => void {
+    return filed(HOOKS.launcher, options)
 }
 
 /**

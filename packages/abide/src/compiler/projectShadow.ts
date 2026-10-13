@@ -24,7 +24,7 @@ import type {
     Setup,
     TemplateNode,
 } from './TemplateNode.ts'
-import { tokenize } from './tokenize.ts'
+import { nesting, tokenize } from './tokenize.ts'
 
 export type Span = { start: number; end: number }
 
@@ -45,7 +45,7 @@ export type Span = { start: number; end: number }
 export type Projection = {
     text: string
     modules: Span
-    /** 34.20 — the `<script server>` bodies, module scope like `modules` and the server's alone. */
+    /** 34.19 — the `<script server>` bodies, module scope like `modules` and the server's alone. */
     servers: Span
     scripts: Span
     /** Every template position, ascending, each with its kind — what the checker's tree is asked. */
@@ -95,7 +95,7 @@ export function projectShadow(file: AbideFile): Projection {
 
 type ImportStatement = ReturnType<typeof importStatements>[number]
 
-/** 34.26 — a binding as two blocks importing the same thing agree on it. */
+/** 34.22 — a binding as two blocks importing the same thing agree on it. */
 function bindingKey(
     statement: ImportStatement,
     binding: ImportBinding,
@@ -104,7 +104,7 @@ function bindingKey(
 }
 
 /**
- * 34.26 — what is left of an import once the bindings `drops` answers for are taken out:
+ * 34.22 — what is left of an import once the bindings `drops` answers for are taken out:
  * `undefined` where none is, `''` where every one is, and the statement over the rest otherwise,
  * spelled from its tokens.
  */
@@ -163,10 +163,10 @@ function project(file: AbideFile): Projection {
         }
         return { start, end: text.length }
     }
-    // 34.25 — a block copied as written, save that a `.abide` imported as text names the module
+    // 34.21 — a block copied as written, save that a `.abide` imported as text names the module
     // holding its text, and loses the attribute bun would otherwise read that module as text by.
     //
-    // 34.26 — and a binding a `<script server>` and the file's `<script module>` or `<script>` both
+    // 34.22 — and a binding a `<script server>` and the file's `<script module>` or `<script>` both
     // import is written once: the server's module holds the other blocks' imports too, and written
     // twice it was a duplicate binding. `drops` says which copy goes. A blank line per line it
     // spanned keeps the block line for line with the file.
@@ -215,7 +215,7 @@ function project(file: AbideFile): Projection {
             origin === undefined ? undefined : origin + from,
         )
     }
-    // 34.26 — per binding the blocks both sides run import, whether one of them imports a value;
+    // 34.22 — per binding the blocks both sides run import, whether one of them imports a value;
     // and the bindings the server block imports as values.
     const shared = new Map<string, boolean>()
     for (const body of [...file.modules, ...file.scripts])
@@ -568,11 +568,19 @@ function project(file: AbideFile): Projection {
     // 34.3 — BOTH BLOCKS. A `<script>` is a function body on both sides, where an `await` at its top
     // does not parse; a `<script module>` is module scope, where it would, and holds the import of
     // every file that reaches it until it settles — the render waiting on it in all but name.
-    refuseTopLevelAwait(file.modules.join('\n'), '<script module>')
-    refuseTopLevelAwait(file.servers.join('\n'), '<script server>')
+    const modulesText = file.modules.join('\n')
+    const serversText = file.servers.join('\n')
+    refuseTopLevelAwait(modulesText, '<script module>')
+    refuseTopLevelAwait(serversText, '<script server>')
     refuseTopLevelAwait(scriptsText, '<script>')
-    refuseInstanceExport(scriptsText)
-    refuseServerDefault(file.servers.join('\n'))
+    // A kind at a time: a token at the end of one kind's text would decide how the next one's first
+    // reads.
+    refuseExport(modulesText)
+    refuseExport(serversText)
+    refuseExport(scriptsText)
+    // 16.70 — what the server block binds, re-exported under a name no author writes, so the
+    // checker reads each one's declaring call as it reads a handler file's default.
+    text += privateExports(serversText)
     return {
         text,
         modules,
@@ -699,6 +707,7 @@ declare function ${ROWS_OF}<T>(subject: Iterable<T> | AsyncIterable<T> | null | 
  */
 function refuseTopLevelAwait(source: string, block: string): void {
     if (!source.includes(AWAIT)) return
+    // Brackets alone, not `nesting`: a template's substitution is still the top level here.
     let depth = 0
     for (const token of tokenize(source)) {
         const text = token.text
@@ -712,35 +721,72 @@ function refuseTopLevelAwait(source: string, block: string): void {
 }
 
 /**
- * Throws where a `<script>` exports.
+ * Throws where a script block exports.
  *
- * 34.18 — AN EXPORT IS THE MODULE'S, and a `<script>` runs once per instance: there is no one
- * instance an importer could be reading from. Refused rather than emitted, as 34.3's `await` is —
- * the block is a function body on both sides, and the bundler's own error names neither the page
- * nor the fix.
+ * 34.17 — A `.abide`'S ONE EXPORT IS ITS COMPONENT. A handler another file calls is a handler file
+ * (16.2), a value two files share is a module under a lib directory, and what the framework reads
+ * off a file is a hook it calls (37.1). Refused rather than emitted, as 34.3's `await` is: the
+ * bundler's own error names neither the file nor the fix.
  */
-function refuseInstanceExport(source: string): void {
+function refuseExport(source: string): void {
     if (!source.includes(EXPORT)) return
     let depth = 0
     let previous = ''
     for (const token of tokenize(source)) {
         const text = token.text
-        if (text === '{' || text === '(' || text === '[') depth += 1
-        else if (text === '}' || text === ')' || text === ']') depth -= 1
+        const moved = nesting(token.kind)
+        if (moved !== 0) depth += moved
         else if (depth === 0 && text === EXPORT && previous !== '.')
             throw new Error(
-                "abide: a <script> cannot export — it runs once per instance, and an export is the module's. Move the declaration to <script module>. RULEBOOK 34.18.",
+                'abide: a .abide cannot export — its component is its one export. A handler another file calls is a handler file (a .ts beside the page, `export default GET(…)`); a value files share is a module under a lib directory. RULEBOOK 34.17.',
             )
         previous = text
     }
 }
 
+/** The prefix a server block's bindings are re-exported under, for the build alone (16.70). */
+export const PRIVATE_EXPORT = '__handler_'
+
 /**
- * 34.22 — a `<script server>` exporting `default`, refused: the module's default is its component,
- * and a handler is addressed by its name (16.2).
+ * 16.70 — the `export { … }` re-exporting each name the server blocks bind under `PRIVATE_EXPORT`,
+ * or `''` where they bind none. One spelling for the checker's view and the emitted module, which
+ * the build's handler table reads a private handler out of by the same name.
  */
+export function privateExports(servers: string): string {
+    const listed: string[] = []
+    for (const name of serverBindings(servers))
+        listed.push(`${name} as ${PRIVATE_EXPORT}${name}`)
+    return listed.length === 0 ? '' : `export { ${listed.join(', ')} }\n`
+}
+
 /**
- * 34.26 — throws where the binding both blocks import is a `.abide`'s default or namespace: the
+ * The names a `<script server>` binds with `const`, `let` or `var` at its top level, a
+ * destructuring's aside: a handler is a call bound to one name.
+ */
+function serverBindings(source: string): string[] {
+    const names: string[] = []
+    if (source === '') return names
+    let depth = 0
+    let declaring = false
+    for (const token of tokenize(source)) {
+        const text = token.text
+        const moved = nesting(token.kind)
+        if (moved !== 0) {
+            depth += moved
+            declaring = false
+        } else if (depth !== 0) continue
+        else if (text === 'const' || text === 'let' || text === 'var')
+            declaring = true
+        else if (declaring && token.kind === SyntaxKind.Identifier) {
+            names.push(text)
+            declaring = false
+        } else declaring = false
+    }
+    return names
+}
+
+/**
+ * 34.22 — throws where the binding both blocks import is a `.abide`'s default or namespace: the
  * server block's is the function binding its props (34.16) and the other block's is the module it
  * compiles to (32.17), and one name in one module scope cannot hold both.
  */
@@ -754,29 +800,8 @@ function refuseTwoFaces(
         (binding.imported === 'default' || binding.imported === '*')
     )
         throw new Error(
-            `abide: <script server> imports ${binding.local} from '${statement.specifier}' as another script block of its file does — a server block's .abide is the function binding its props (34.16), the other block's is its module (32.17), and one name cannot be both. Import it under another name in the <script server>. RULEBOOK 34.26.`,
+            `abide: <script server> imports ${binding.local} from '${statement.specifier}' as another script block of its file does — a server block's .abide is the function binding its props (34.16), the other block's is its module (32.17), and one name cannot be both. Import it under another name in the <script server>. RULEBOOK 34.22.`,
         )
-}
-
-function refuseServerDefault(source: string): void {
-    if (!source.includes(EXPORT)) return
-    let depth = 0
-    let previous = ''
-    for (const token of tokenize(source)) {
-        const text = token.text
-        if (text === '{' || text === '(' || text === '[') depth += 1
-        else if (text === '}' || text === ')' || text === ']') depth -= 1
-        // `export { x as default }` names it too.
-        else if (
-            text === 'default' &&
-            ((depth === 0 && previous === EXPORT) ||
-                (depth === 1 && previous === 'as'))
-        )
-            throw new Error(
-                "abide: a <script server> cannot export `default` — the module's default is its component. Export the handler under a name; the name is its address's last segment. RULEBOOK 34.22.",
-            )
-        previous = text
-    }
 }
 
 /**

@@ -10,6 +10,8 @@
 
 import { mkdtemp, rm } from 'node:fs/promises' // bun exposes no temporary-directory creation or recursive removal of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary-directory path of its own
+import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
+import { nearest } from './nearest.ts'
 
 /** What every abide app in the docs and the scaffold is written against. */
 export const COMPILER_OPTIONS = {
@@ -31,7 +33,7 @@ export async function writeDefaultProject(
     await Bun.write(
         tsconfig,
         JSON.stringify({
-            compilerOptions: COMPILER_OPTIONS,
+            compilerOptions: { ...COMPILER_OPTIONS, paths: await aliasPaths(root) },
             include: [`${root}/**/*`],
         }),
     )
@@ -39,4 +41,29 @@ export async function writeDefaultProject(
         tsconfig,
         remove: () => rm(directory, { recursive: true, force: true }),
     }
+}
+
+/**
+ * The app's `imports` aliases as `paths`, each target absolute.
+ *
+ * 34.21 — the checker resolves a text import's declaration beside the file a path names, and takes
+ * an `imports` target as the exact file, so `#src/x.abide` imported as text is found through these.
+ */
+async function aliasPaths(root: string): Promise<Record<string, string[]>> {
+    const paths: Record<string, string[]> = {}
+    const manifest = nearest(root, 'package.json')
+    if (manifest === undefined) return paths
+    const imports = (
+        (await Bun.file(manifest).json()) as {
+            imports?: Record<string, unknown>
+        }
+    ).imports
+    const base = dirname(manifest)
+    for (const [key, targets] of Object.entries(imports ?? {})) {
+        const resolved: string[] = []
+        for (const target of [targets].flat())
+            if (typeof target === 'string') resolved.push(resolve(base, target))
+        if (resolved.length > 0) paths[key] = resolved
+    }
+    return paths
 }

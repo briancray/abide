@@ -10,6 +10,7 @@ import {
     withDependencies,
 } from './compileApp.ts'
 import { abideImportsOf } from './componentGraph.ts'
+import { projectShadow } from './projectShadow.ts'
 import {
     parseSources,
     type ReadSource,
@@ -17,7 +18,6 @@ import {
     refusal,
 } from './readSources.ts'
 import type { Diagnosis } from './TypeSession.ts'
-import { writeTypes } from './writeTypes.ts'
 
 /**
  * Every finding `abide check` reports for the app at `appRoot`.
@@ -39,18 +39,27 @@ export async function checkApp(
     const { root, sources } = await sourcesUnder(appRoot)
     return withChecker(root, kept, async (session) => {
         const refused: Diagnosis[] = []
-        const everyOwn = parseSources(sources, refused)
-        await writeTypes(root, everyOwn, true, refused)
-        // A file whose projection was refused is found already, and every later step projects it.
-        const refusedPaths = new Set<string>()
-        for (const found of refused) refusedPaths.add(found.path)
-        const own: typeof everyOwn = []
-        for (const source of everyOwn)
-            if (!refusedPaths.has(source.path)) own.push(source)
+        const own = parseSources(sources, refused)
+        // 23.16-23.18 — what the build's walk would refuse of the tree, at each file it names.
+        const { handlers } = appFiles(root, (path, message) => {
+            refused.push(refusal(`${root}/${path}`, message))
+        })
         const resolve = resolverIn()
-        const parsed = await withDependencies(root, own, resolve, refused)
+        const { sources: everyParsed, handlers: handlerFiles } =
+            await withDependencies(root, own, handlers, resolve, refused)
+        // 38.33 — A FILE WHOSE PROJECTION IS REFUSED (34.3, 34.17) is a finding at its file, found
+        // here because every later step projects it and would throw the refusal for the whole app.
+        // AFTER THE IMPORTS ARE FOLLOWED, so a refused file another one imports is found too.
+        const parsed: typeof everyParsed = []
+        for (const source of everyParsed)
+            try {
+                projectShadow(source.file)
+                parsed.push(source)
+            } catch (thrown) {
+                refused.push(refusal(source.path, thrown))
+            }
         const { read, warnings } = await readSources(session, parsed, refused)
-        // THE APP'S OWN FILES ARE REPORTED ON: a dependency's is compiled with them (34.27), and
+        // THE APP'S OWN FILES ARE REPORTED ON: a dependency's is compiled with them (34.23), and
         // what is wrong inside a package is the package's to report.
         const reported: ReadSource[] = []
         for (const source of read)
@@ -64,15 +73,23 @@ export async function checkApp(
         const emittable: ReadSource[] = []
         for (const source of read)
             if (!loweringRefused.has(source.path)) emittable.push(source)
-        // 23.16-23.18 — what the build's walk would refuse of the tree, at each file it names.
-        appFiles(root, (path, message) => {
-            refused.push(refusal(`${root}/${path}`, message))
-        })
         if (refused.length === 0 && ambient.length === 0)
             try {
                 warnings.push(
-                    ...(await emitApp(root, session, emittable, resolve))
-                        .warnings,
+                    ...(
+                        await emitApp(
+                            root,
+                            session,
+                            emittable,
+                            resolve,
+                            handlerFiles,
+                            // 38.33 — each at its file, and every one rather than the first.
+                            (relative, thrown) =>
+                                refused.push(
+                                    refusal(`${root}/${relative}`, thrown),
+                                ),
+                        )
+                    ).warnings,
                 )
             } catch (thrown) {
                 refused.push(refusal(root, thrown))
@@ -127,7 +144,7 @@ export async function checkSource(
     for (const other of sources) {
         if (other.path === path || lowered.has(other.path)) continue
         const text = held(other.path) ?? other.text
-        if (FILES_CONFIG.test(text))
+        if (text.includes('onConfig') && FILES_CONFIG.test(text))
             imports.push({ path: other.path, text, quiet: true })
     }
     // A component that does not parse, or that the checker refuses, is its own file's finding and

@@ -22,10 +22,17 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
 
 ## Layout
 
-- Every directory under `src/` is an address: `src/invoices/page.abide` answers `/invoices`.
-  `layout.abide` wraps the pages below it, and the outermost one writes `<html>`.
-- A module under a `server` directory runs on the server only, and importing one from browser
-  code is a compile error. A file under a `public` directory is served as it is:
-  `src/blog/public/cover.png` answers `/blog/cover.png`.
-- Handlers and hooks go in a `<script server>` block of a `.abide` file.
+- A file's path below `src/` is its address. `src/invoices/index.abide` answers `/invoices`,
+  `src/invoices/[id].abide` answers `/invoices/123`, and `layout.abide` wraps the pages below it;
+  the outermost one writes `<html>`. Run `bun run routes` to see every address and the file behind it.
+- A `.ts` beside the pages is a handler: `src/invoices/getInvoice.ts` holds
+  `export default GET(…)` and answers `/invoices/getInvoice`. It is the app's public API, for pages,
+  scripts, the CLI and MCP alike.
+- A `.abide` cannot export. A `<script server>` in one holds that file's private handlers
+  (`const save = POST(…)`), callable by that file alone, and its hooks (`onStart`, `middleware`, …).
+- A directory holds addresses and four fenced directories alone: `lib/` for components and modules,
+  `tests/` for tests, `server/` for modules the browser never loads (importing one from browser code
+  is a compile error), and `public/` for files served as they are (`src/blog/public/cover.png`
+  answers `/blog/cover.png`). Anything else beside the pages is a build error.
 - Import the app's own modules as `#src/…` (see `imports` in `package.json`).
+- A test imports `.abide` files directly: `bunfig.toml` preloads `@abide/abide/test`.

@@ -1,7 +1,9 @@
+import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { Cursor, placeTemplate } from './Cursor.ts'
 import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
+import { privateExports } from './projectShadow.ts'
 import {
     concat,
     definitions,
@@ -11,7 +13,6 @@ import {
     renderMarkup,
     SERVER_LANE,
 } from './renderMarkup.ts'
-import { SERVER_SPECIFIER } from './SPECIFIERS.ts'
 import { insideShare, SETTLED_AT, shareScope } from './shareScope.ts'
 import { splitImports, withoutProps } from './splitImports.ts'
 import type { TemplateNode } from './TemplateNode.ts'
@@ -43,8 +44,8 @@ export function emitComponent(
     file: AbideFile,
     answer: CheckerAnswer = UNCHECKED,
     settles = false,
-    /** The route a `<script server>` files its hooks at (37.1), where the file is under one. */
-    route?: string,
+    /** The route a `<script server>` files its hooks at (37.1). */
+    route = '/',
     /** 38.97 — where given, every chunk the module is written around (`sourceMapOf`). */
     chunks?: LoweredChunk[],
 ): string {
@@ -75,21 +76,20 @@ export function emitComponent(
     // 31.1 and 31.4 hold INSIDE a `.abide` file, not just in its template, so the script block is
     // lowered with the same rewrite the slots get.
     //
-    // 34.2 — A `<script module>` IS MODULE SCOPE, here as in the browser, so what it exports is the
-    // module's (34.17). What must stay per request is a `reactive`, which is by 11.32 wherever it
-    // is declared.
+    // 34.2 — A `<script module>` IS MODULE SCOPE, here as in the browser. What must stay per request
+    // is a `reactive`, which is by 11.32 wherever it is declared.
     const moduleSetup = splitImports(lowering.modules())
-    // 34.20 — A `<script server>` IS MODULE SCOPE ON THIS SIDE ALONE, run between two calls that
+    // 34.19 — A `<script server>` IS MODULE SCOPE ON THIS SIDE ALONE, run between two calls that
     // file every hook it makes at the file's route (37.1). Its body cannot await at its top level
     // (34.3), so nothing else runs inside the window.
     const serverSetup = splitImports(lowering.servers(), 'source')
     const serverBody =
         serverSetup.body === ''
             ? ''
-            : `${lowering.use('fileRoute')}(${JSON.stringify(route ?? '/')})
+            : `${lowering.use('fileRoute')}(${JSON.stringify(route)})
 ${serverSetup.body}
 ${lowering.use('fileRoute')}(undefined)
-`
+${privateExports(file.servers.join('\n'))}`
     const setup = splitImports(lowering.scripts())
     const componentBody = setup.body
 

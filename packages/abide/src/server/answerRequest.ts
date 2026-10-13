@@ -13,6 +13,7 @@ import {
     HEALTH_ADDRESS,
     MCP_ADDRESS,
     OPENAPI_ADDRESS,
+    PRIVATE_HANDLERS_ADDRESS,
 } from '#shared/ADDRESSES.ts'
 import { APP_META } from '#shared/APP_META.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
@@ -102,7 +103,7 @@ type Ranked = RankedError & {
 /**
  * One route of the app: the page at it, and the handler answering each method there.
  *
- * 19.1 — one file per method per route, so a route is a row and a method is a column, and 19.21's
+ * 19.1 — one file per method per route, so a route is a row and a method is a column, and 19.20's
  * "the most specific route answering the method" is a walk down the rows asking each column.
  */
 type RouteRow = {
@@ -196,7 +197,11 @@ export async function answerRequest(
     // 37.3 — THE MUX'S UPGRADE PASSES THE APP LANE as every request does (`muxUpgrade`).
     const admitted = muxAdmission(asked, request, app)
     if (admitted !== undefined) return admitted
-    if (asked.startsWith(`${ABIDE_ADDRESS}/`)) {
+    // 16.70 — a private handler is answered by the route table, below abide's own namespace.
+    if (
+        asked.startsWith(`${ABIDE_ADDRESS}/`) &&
+        !asked.startsWith(`${PRIVATE_HANDLERS_ADDRESS}/`)
+    ) {
         const answer = app.framework(asked, request)
         if (answer === undefined) return notFound()
         return readsOnly(request) ? answer : methodRefused(app, asked, READS)
@@ -222,7 +227,7 @@ export async function answerRequest(
             refuse(400, 'The address is not a valid path.'),
         )
 
-    // 19.21 — THE MOST SPECIFIC ROUTE ANSWERING THE METHOD, an `OPTIONS` asking about the method
+    // 19.20 — THE MOST SPECIFIC ROUTE ANSWERING THE METHOD, an `OPTIONS` asking about the method
     // its preflight names (16.24). A route that matches and answers some other method is held, so
     // an address nothing answers the method at is a 405 naming what is answered there (15.17).
     const preflight = request.method === 'OPTIONS'
@@ -271,7 +276,7 @@ export async function answerRequest(
     // above it, the root's having run already, and an error in it reaches that route's `onError`.
     const scope = currentRequestScope() as RequestScope
     scope.route =
-        found.handler === undefined ? found.route.pattern : found.handler.route
+        found.handler === undefined ? found.route.pattern : found.handler.scope
     scope.params = found.params
     const answer = found.route.answers.get(
         found.handler ?? (found.route.page as Ranked),

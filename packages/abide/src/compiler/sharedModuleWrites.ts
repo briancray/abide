@@ -11,7 +11,7 @@ import { classifyRead, FUNCTIONS } from './classifyRead.ts'
 import type { Finding } from './Finding.ts'
 import type { Span } from './projectShadow.ts'
 
-// 34.19 — A PLAIN `let` IN A `<script module>` THAT A `<script>` WRITES AS IT SETS UP. The block is
+// 34.18 — A PLAIN `let` IN A `<script module>` THAT A `<script>` WRITES AS IT SETS UP. The block is
 // module scope (34.2), which a server shares across every request, and setup runs inside a render —
 // so the value one request leaves is the one the next request starts from, and its markup drifts
 // from what the browser builds. A `reactive` is per request wherever it is declared (11.32), which
@@ -74,7 +74,7 @@ export async function sharedModuleWrites(
             if (insideFunction(node)) continue
             warnings.push({
                 at,
-                message: `abide: \`${name}\` is a plain \`let\` in <script module>, which a server shares across every request, and this <script> writes it while the page renders — so one request's value is where the next one starts. Declare it with \`reactive\`, which is per request wherever it stands, or move it into <script>. RULEBOOK 34.19.`,
+                message: `abide: \`${name}\` is a plain \`let\` in <script module>, which a server shares across every request, and this <script> writes it while the page renders — so one request's value is where the next one starts. Declare it with \`reactive\`, which is per request wherever it stands, or move it into <script>. RULEBOOK 34.18.`,
             })
         }
     }

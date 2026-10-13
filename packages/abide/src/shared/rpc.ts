@@ -501,7 +501,7 @@ export const DELETE: Declare = declare('DELETE')
 function addressOf(rpc: { address: string | undefined }): string {
     if (rpc.address === undefined)
         throw new Error(
-            'abide: this handler has no address yet. A handler is given one where it is mounted, exported from a <script server> (16.2).',
+            "abide: this handler has no address yet. A handler is given one where it is mounted: a handler file's default (16.2), or a `const` in a <script server> (16.70).",
         )
     return rpc.address
 }

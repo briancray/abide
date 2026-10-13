@@ -1,6 +1,6 @@
 // 38.1 — `abide scaffold <name>`: THE LAYOUT EVERY ABIDE APP HAS, written into `<name>`. There is
-// nothing to choose, because what is scaffolded is a route, the shell and the hooks — the files the
-// commands read.
+// nothing to choose, because what is scaffolded is a root layout and a page — the files the commands
+// read — and the test preload.
 // A file that is already there is left as it is and reported skipped, so a scaffold run over a
 // half-made project finishes it rather than overwriting it.
 
@@ -8,8 +8,8 @@ import { withoutTrailingSlash } from '#server/withoutTrailingSlash.ts'
 import abidePackage from '../../package.json' with { type: 'json' }
 import { COMPILER_OPTIONS } from './writeDefaultProject.ts'
 
-// THE STARTER'S OWN FILES, as files: a real document, a real page and a real module, copied as they
-// stand. What depends on the name — the manifests — is written here.
+// THE STARTER'S OWN FILES, as files: a real document, a real page and the agent notes, copied as
+// they stand. What depends on the name, or what a packer drops (`filesFor`), is written here.
 const STARTER = Bun.fileURLToPath(new URL('../../scaffold/', import.meta.url))
 
 // THE ABIDE THAT WROTE THE PROJECT is the one it depends on. Installed from a registry, that is its
@@ -22,23 +22,35 @@ const ABIDE_DEPENDENCY = PACKAGE_ROOT.includes('/node_modules/')
     ? `^${abidePackage.version}`
     : `file:${PACKAGE_ROOT}`
 
+// The `#src` alias, written as the package's `imports` and again as the checker's `paths`.
+const SOURCE_ALIAS = { '#src/*': ['./src/*', './src/*.ts'] }
+
+/**
+ * 38.109 — the starter's `bunfig.toml`: a test imports the app's `.abide` files as modules, with
+ * nothing booted first.
+ */
+export const TEST_PRELOAD =
+    '# 38.109 — a test imports the app\'s `.abide` files as modules, with nothing booted first.\n[test]\npreload = ["@abide/abide/test"]\n'
+
+// WRITTEN, NOT COPIED, beside the manifests: a packer drops a `bunfig.toml` or a `.gitignore` from
+// the tarball (`bun pm pack` both, `npm pack` the second), so neither survives as a starter file.
 function filesFor(name: string): Record<string, string> {
     return {
+        'bunfig.toml': TEST_PRELOAD,
+        '.gitignore': 'node_modules\n.abide\n',
         'package.json': `${JSON.stringify(
             {
                 name,
                 private: true,
                 type: 'module',
-                // 34.24 — `prepare` runs on `bun install`, so a `.ts` importing a `.abide` is typed
-                // before any other abide command has run; and never fails it, as it would where
-                // `package.json` is installed before `src` is there to sync (38.26).
                 scripts: {
-                    prepare: 'abide sync || true',
                     // 38.103 — the checker over `.abide`, which `tsc` does not read.
                     check: 'abide check',
                     dev: 'abide dev',
                     build: 'abide build',
                     start: 'abide start',
+                    // 38.108 — every address, and the file answering it.
+                    routes: 'abide routes',
                 },
                 // ONE ALIAS FOR THE SOURCE, and two targets for it, because an extensionless
                 // specifier is how an import is written and only bun probes for the extension:
@@ -47,9 +59,7 @@ function filesFor(name: string): Record<string, string> {
                 // them (31.3). The first target is what bun resolves, and the one a `.ts` or
                 // `.abide` specifier needs. Which side a module is on is its directory's to say
                 // (36.10), not its alias's.
-                imports: {
-                    '#src/*': ['./src/*', './src/*.ts'],
-                },
+                imports: SOURCE_ALIAS,
                 dependencies: { '@abide/abide': ABIDE_DEPENDENCY },
                 // `Bun`, `bun:sqlite` and the rest of the runtime a server module reaches for are
                 // typed by these, and `abide check` reports every one untyped without them.
@@ -60,20 +70,13 @@ function filesFor(name: string): Record<string, string> {
         )}\n`,
         'tsconfig.json': `${JSON.stringify(
             // TypeScript 7 includes no `@types` package it is not named, so the runtime's is named.
-            // 34.24 — `rootDirs` and the `#src/*` path reach what abide writes to `.abide/types`,
-            // where a `.ts` importing a `.abide` finds the names it exports.
+            // 34.21 — the alias as a path too: the checker resolves a text import's declaration
+            // beside the file a path names, and takes an `imports` target as the exact file.
             {
                 compilerOptions: {
                     ...COMPILER_OPTIONS,
                     types: ['bun'],
-                    rootDirs: ['.', '.abide/types'],
-                    paths: {
-                        '#src/*': [
-                            './src/*',
-                            './src/*.ts',
-                            './.abide/types/src/*',
-                        ],
-                    },
+                    paths: SOURCE_ALIAS,
                 },
                 include: ['src'],
             },

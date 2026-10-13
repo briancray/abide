@@ -31,6 +31,8 @@ export function surfaceOf(
     mount: Mount | Mounted,
     surface: Surface,
 ): Listed | undefined {
+    // 16.71 — a private handler is its file's alone.
+    if (mount.private) return undefined
     const live = 'handler' in mount ? mount : undefined
     // 16.37 — what its `clients` says, and the build's default where it says nothing.
     const carried =

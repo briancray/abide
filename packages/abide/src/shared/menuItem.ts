@@ -1,5 +1,5 @@
-// 38.88 — THE DESKTOP APP'S MENU BAR IS THE ROUTE'S: a layout or a page exports `menu` from its
-// `<script module>`, and the window shows what the route it stands on exports. An item made by
+// 38.88 — THE DESKTOP APP'S MENU BAR IS THE ROUTE'S: a layout or a page calls `onMenu` in its
+// `<script>`, and the window shows the menus filed while it stands. An item made by
 // `menuItem` is one a page answers; the rest are an address or a role, which need no page.
 
 /** What a menu item does natively, where an address or a page's own answer could not. 38.89. */

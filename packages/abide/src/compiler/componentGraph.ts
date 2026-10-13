@@ -89,26 +89,25 @@ export function appGraph<
     const nodes: AppNode<Source>[] = []
     for (const source of sources) {
         // Below the root for the app's own files, and above it — `../node_modules/…` — for a
-        // dependency's (34.28).
+        // dependency's (34.24).
         const relative = relativeTo(root, source.path)
         const position = source.position ?? relative
-        // 34.21 — a server block of the app's own under a `server` or `public` directory has no
-        // address: refused here, before anything reads one off it. A dependency's has none of its own
-        // (34.31); the app mounts what it declares where the app re-exports it.
+        // 34.20 — a server block of the app's own under a `server` or `public` directory, refused
+        // here before anything reads its handlers: neither directory holds a component that runs.
         const place = placeOf(position)
         if (
             source.file.servers.length > 0 &&
             (place === 'server' || place === 'public')
         )
             throw new Error(
-                `abide: ${relative} has a <script server>, and it is under a ${place} directory, where nothing has an address. Move the file out of it, or the code into a module under a server directory. RULEBOOK 34.21.`,
+                `abide: ${relative} has a <script server>, and it is under a ${place} directory, where nothing has an address. Move the file out of it, or the code into a module under a server directory. RULEBOOK 34.20.`,
             )
-        // 34.25 — a file imported as text is found at build, not when its module first loads.
+        // 34.21 — a file imported as text is found at build, not when its module first loads.
         for (const script of scriptBodies(source.file))
             for (const { specifier } of attributedImports(script, 'text'))
                 if (resolve(specifier, dirname(source.path)) === undefined)
                     throw new Error(
-                        `abide: ${relative} imports ${specifier} as text, and there is no such file. RULEBOOK 34.25.`,
+                        `abide: ${relative} imports ${specifier} as text, and there is no such file. RULEBOOK 34.21.`,
                     )
         const kind = fileKind(position)
         nodes.push({

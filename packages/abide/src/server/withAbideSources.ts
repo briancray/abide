@@ -96,7 +96,7 @@ export async function withAbideSources(
 }
 
 /**
- * 16.28, 34.20 — the `.abide`'s text with every `<script server>` body blanked: the map is served
+ * 16.28, 34.19 — the `.abide`'s text with every `<script server>` body blanked: the map is served
  * to a browser, which reads none of one. Each line is kept, so every line the map places is still
  * the line it names.
  */

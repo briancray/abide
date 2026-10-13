@@ -263,7 +263,7 @@ export function abideImports(
     for (const span of importSpans(script))
         if (
             span.specifier.endsWith('.abide') &&
-            // 34.25 — a `.abide` imported as text is its text, and no component edge.
+            // 34.21 — a `.abide` imported as text is its text, and no component edge.
             (span.dynamic ||
                 !IMPORT_ATTRIBUTES.text.test(
                     script.slice(span.literalEnd, span.end),
@@ -386,7 +386,7 @@ export function importStatements(script: string): {
     return found
 }
 
-// The attribute a static import is read by: as text (34.25), or as a mount of routes (23.19).
+// The attribute a static import is read by: as text (34.21), or as a mount of routes (23.19).
 export const IMPORT_ATTRIBUTES = {
     text: /\btype\s*:\s*['"]text['"]/,
     routes: /\btype\s*:\s*['"]routes['"]/,
@@ -396,7 +396,7 @@ export const IMPORT_ATTRIBUTES = {
  * Every static import a script makes `with { type }`: the specifier, where the statement and its
  * literal begin, and where the attributes end.
  *
- * 34.25 — a text import's literal-to-end span is what the projection writes over with the specifier
+ * 34.21 — a text import's literal-to-end span is what the projection writes over with the specifier
  * the checker types a `string` (`SOURCE_SUFFIX`), and the emitters ask for as text
  * (`facedSpecifier`). 23.19 — a routes import's whole statement is what the projection blanks: a
  * mount is read by the build off the file, and neither bun nor the checker has a module to give it.
@@ -466,7 +466,7 @@ export function importedNames(
  * own path, so bun resolves a relative, a `#` or a bare specifier from the file that wrote it.
  *
  * 32.17 — a component block's `.abide` import is of the module that file compiles to; a server
- * block's stays bare, for the face a module abide did not compile gets (34.16). 34.25 — a file the
+ * block's stays bare, for the face a module abide did not compile gets (34.16). 34.21 — a file the
  * projection marked as text is asked for as its text.
  */
 function facedSpecifier(specifier: string, lane: Lane): string | undefined {

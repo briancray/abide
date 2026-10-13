@@ -7,6 +7,7 @@
 // rebuild, and a test boots several apps in one process.
 
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
+import { HANDLER_FACE } from './MODULE_QUERIES.ts'
 import { decodeMappings, placeAt, type Segment } from './sourceMappings.ts'
 
 /** Per `.abide` below the root, as its server module is served there: the file, and its `mappings`. */
@@ -63,7 +64,11 @@ function placeFrames(error: Error, frames: CallSite[]): string {
 
 // A call site's column counts from 0 where the stack bun writes counts from 1.
 function placed(frame: CallSite): string {
-    const file = frame.getFileName() ?? '<anonymous>'
+    // A handler file's frames name the file the author wrote, not the face it is served as.
+    const file = (frame.getFileName() ?? '<anonymous>').replace(
+        HANDLER_FACE,
+        '',
+    )
     const line = frame.getLineNumber() ?? 0
     const column = frame.getColumnNumber() ?? 0
     const registered = registeredFor(file)

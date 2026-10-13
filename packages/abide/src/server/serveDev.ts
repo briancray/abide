@@ -22,6 +22,7 @@ import { watch } from 'node:fs' // bun exposes no file watcher of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 import {
     type AppChecker,
+    compilationOf,
     compileApp,
     openChecker,
 } from '#compiler/compileApp.ts'
@@ -144,7 +145,7 @@ export async function serveDev(
                 console.warn(formatDiagnosis(warning, process.cwd()))
             watchDependencies(compiled.files)
             return {
-                compilation: { files: compiled.files, tables: compiled.tables },
+                compilation: compilationOf(compiled),
                 published: compiled.published,
                 failure: '',
             }
@@ -154,7 +155,12 @@ export async function serveDev(
                 thrown instanceof Error ? thrown.message : String(thrown)
             console.error(`abide dev: ${failure}`)
             return {
-                compilation: { files: {}, tables: {} },
+                compilation: {
+                    files: {},
+                    handlers: {},
+                    tables: {},
+                    mounted: {},
+                },
                 published: new Map(),
                 failure,
             }

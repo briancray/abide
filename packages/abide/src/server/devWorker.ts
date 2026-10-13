@@ -378,7 +378,11 @@ async function open(
             bundleInMemory(
                 root,
                 // 16.28, 16.29 — the browser's view of the server, as `abide build` gives it.
-                [fenceServer(root), abideModules(root, compilation), ...own],
+                [
+                    fenceServer(root, compilation.mounted),
+                    abideModules(root, compilation),
+                    ...own,
+                ],
                 paged,
                 publicAddresses,
                 compilation,

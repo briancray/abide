@@ -4,10 +4,7 @@ import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 import { checkSource } from './checkApp.ts'
 import { type AppChecker, openChecker } from './compileApp.ts'
 import { nearest } from './nearest.ts'
-import { parseAbide } from './parseAbide.ts'
-import { syncTypes } from './syncTypes.ts'
 import type { Diagnosis, Inspection, Place } from './TypeSession.ts'
-import { writeTypes } from './writeTypes.ts'
 
 // 38.11 — `abide lsp`: THE `.abide` LANGUAGE SERVER, OVER STDIO. It is `abide check` (38.3) asked
 // about one open document at a time, so the squiggle an editor draws and the line CI fails on are
@@ -197,27 +194,6 @@ export async function serveLanguage(
         // A newer text has arrived while this one was checked, and will be published.
         if (documents.get(uri)?.version !== version) return
         publish(uri, found, document.text)
-        await typesFor(app, path, document.text)
-    }
-
-    // 34.24 — THE TYPES A PLAIN `.ts` READS AN OPEN FILE BY, as the editor holds it: the whole app's
-    // the first time an app is seen, and the one file as it is edited after that.
-    const synced = new Set<string>()
-    const typesFor = async (
-        app: string,
-        path: string,
-        text: string,
-    ): Promise<void> => {
-        try {
-            if (synced.has(app))
-                await writeTypes(app, [{ path, file: parseAbide(text) }], false)
-            else {
-                synced.add(app)
-                await syncTypes(app, new Map([[path, text]]))
-            }
-        } catch {
-            // A file that does not parse keeps the types it last had; its check already says why.
-        }
     }
 
     const check = (uri: string): void => {

@@ -14,7 +14,7 @@ import { servedTable } from './abideModules.ts'
 import { type AppSources, answerRequest } from './answerRequest.ts'
 import { Mux, type MuxConnection } from './answerSocket.ts'
 import { appDirectories } from './appDirectories.ts'
-import { holdsAbide } from './appTree.ts'
+import { holdsApp } from './appTree.ts'
 import { buildDirectory } from './buildDirectory.ts'
 import { APP_PACKAGE, type AppPackage, config, packageUnder } from './config.ts'
 import { McpSurface } from './generatedSurfaces.ts'
@@ -65,19 +65,31 @@ export async function createApp(): Promise<App> {
         throw new Error(
             `abide: createApp found no app. Looked for a .abide under ${resolve('src')}, or under ${process.cwd()} where it has no src.`,
         )
-    // 42.16 — under `bun test` the app is built for its sources as they stand rather than read off
-    // whatever `abide build` last left, which a test run would otherwise need first and could find
-    // stale.
-    const out =
-        process.env.NODE_ENV === 'test'
-            ? await testBuild(root)
-            : buildDirectory(root)
-    const { loadBuild, serveBuild } = await import('./serveBuild.ts')
-    if (!(await serveBuild(root, out)))
+    const out = await servedBuild(root)
+    if (out === undefined)
         throw new Error(
             `abide: createApp found nothing under ${root} to build.`,
         )
+    const { loadBuild } = await import('./serveBuild.ts')
     return bootApp(originUnder(root), () => loadBuild({ root, out }))
+}
+
+/**
+ * The build of the app under `root`, served to this process's imports — or `undefined` where
+ * nothing under it builds. `fresh` builds it for its sources as they stand.
+ *
+ * 42.16 — under `bun test` the app is built for its sources as they stand rather than read off
+ * whatever `abide build` last left, which a test run would otherwise need first and could find
+ * stale. One answer for `createApp` and the test preload (38.109), so a test that boots the app
+ * reuses the build its imports were served from.
+ */
+export async function servedBuild(
+    root: string,
+    fresh = process.env.NODE_ENV === 'test',
+): Promise<string | undefined> {
+    const out = fresh ? await testBuild(root) : buildDirectory(root)
+    const { serveBuild } = await import('./serveBuild.ts')
+    return (await serveBuild(root, out)) ? out : undefined
 }
 
 /**
@@ -99,7 +111,7 @@ export function appRoot(given: string | undefined): string | undefined {
     let packaged = false
     for (const directory of appDirectories(root))
         packaged ||= existsSync(`${directory}/package.json`)
-    return packaged && holdsAbide(root) ? root : undefined
+    return packaged && holdsApp(root) ? root : undefined
 }
 
 /**

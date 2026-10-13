@@ -1,5 +1,5 @@
-// THE DESKTOP APP'S MENU BAR (38.88): the default, with what the page the window shows exports,
-// built as an `NSMenu`.
+// THE DESKTOP APP'S MENU BAR (38.88): the default, with the menus the standing layouts and page file
+// with `onMenu`, built as an `NSMenu`.
 
 import { FFIType } from 'bun:ffi'
 import type { MenuRole } from '#shared/menuItem.ts'
@@ -77,7 +77,7 @@ const NAMED_KEYS: Record<string, string> = {
  * The menu bar the window shows: the application, File, Edit, View and Window menus, and `added`.
  *
  * 38.88 — AN ADDED MENU NAMED AS A DEFAULT ONE GROWS IT, and any other stands before Window, where
- * the platform puts an app's own. 38.83 — no Connect… where the `launcher` export turns connecting off.
+ * the platform puts an app's own. 38.83 — no Connect… where what `onLauncher` answers turns connecting off.
  */
 export function menuBar(
     appName: string,

@@ -39,7 +39,7 @@ import {
     type ValueRender,
 } from './renderMarkup.ts'
 import { SHARED_NAMES } from './SHARED_NAMES.ts'
-import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from './SPECIFIERS.ts'
+import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import {
     insideShare,
     resumedShare,
@@ -267,8 +267,8 @@ export function emitClient(
     const setup = splitImports(lowering.scripts())
     if (!live && fills === '' && setup.body === '') {
         const mount = carriesOwnMarkup ? 'export default () => {}\n' : ''
-        // 34.17 — WHAT A `<script module>` EXPORTS IS THE BROWSER'S TOO, live markup or none: a
-        // component nothing invokes is still a module something imports a name from.
+        // 34.2 — A `<script module>` RUNS IN THE BROWSER TOO, live markup or none: its module scope
+        // is the browser's as much as the server's.
         if (moduleSetup.body === '' && moduleSetup.imports === '') return mount
         return `${moduleImports(lowering, (name) => (SHARED_NAMES.has(name) ? SHARED_SPECIFIER : RUNTIME_SPECIFIER), [moduleSetup])}
 ${moduleSetup.body}

@@ -1,3 +1,4 @@
+import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Finding } from './Finding.ts'
 import {
@@ -11,7 +12,6 @@ import { holdsReactive } from './PositionTable.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { NO_PROPS, type Origin, type Span } from './projectShadow.ts'
 import { CHECKED_SUFFIX } from './ShadowMap.ts'
-import { SERVER_SPECIFIER } from './SPECIFIERS.ts'
 import { abideImports } from './splitImports.ts'
 
 // 38.3 — A `.abide` FILE AS THE PROGRAM IT RUNS AS, for the checker to report on. The projection
@@ -48,10 +48,11 @@ export const COMPONENT_STAND_IN = '__component'
  */
 function componentModule(props: string, generics?: string): string {
     // 34.13 — generic over what the file's `<script>` declares, so a caller's props infer it, the
-    // signature's own parameters shadowing the opaque stand-ins the body was checked against.
+    // signature's own parameters shadowing the opaque stand-ins the body was checked against. 34.16 —
+    // a component no prop is required of is called with none, as the runtime's bound face takes it.
     const parameters = generics === undefined ? '' : `<${generics}>`
     return `
-declare const ${COMPONENT_STAND_IN}: ${parameters}(record: ${props}) => import('${SERVER_SPECIFIER}').Component
+declare const ${COMPONENT_STAND_IN}: ${parameters}(...record: {} extends ${props} ? [record?: ${props}] : [record: ${props}]) => import('${SERVER_SPECIFIER}').Component
 export default ${COMPONENT_STAND_IN}
 `
 }
@@ -141,20 +142,52 @@ function propsOf(lowering: Lowering): string {
  * Nothing where the file files none.
  */
 function configDeclarations(lowering: Lowering): string {
+    const bound: string[] = []
+    for (const read of lowering.answer.reads)
+        if (read.shape === 'config')
+            bound.push(`${CHECKED_CONFIG}${read.start}`)
+    return configInterface(bound)
+}
+
+/** `Config` extended by what each of `bound` holds — the binding of one `onConfig` call each. */
+function configInterface(bound: readonly string[]): string {
+    if (bound.length === 0) return ''
     let aliases = ''
     let names = ''
-    for (const read of lowering.answer.reads) {
-        if (read.shape !== 'config') continue
-        const name = `${CHECKED_CONFIG}${read.start}`
+    for (const name of bound) {
         aliases += `type ${name}Type = typeof ${name}\n`
         names += names === '' ? `${name}Type` : `, ${name}Type`
     }
-    if (names === '') return ''
     return `declare function ${CHECKED_CONFIG_OF}<Options>(on: (defaults: never, options?: Options) => () => void): <Defaults>(defaults: ((env: import('${SERVER_SPECIFIER}').Env) => Defaults) | null, options?: Options) => [Defaults] extends [object] ? Pick<Defaults, keyof Defaults> : {}
 ${aliases}declare module '${SERVER_SPECIFIER}' {
     interface Config extends ${names} {}
 }
 `
+}
+
+// A call standing as a statement at a module's top level, as a formatted module writes one.
+const TOP_LEVEL_CONFIG = /^onConfig\s*\(/gm
+
+/**
+ * 27.13 FOR A MODULE THAT IS NO `.abide` — a handler file, or one under a `server` directory: its
+ * text with each `onConfig(…)` at its top level bound as the lowering binds a server block's, and
+ * `Config` extended by each, or `undefined` where it files none.
+ *
+ * A MODULE OF ITS OWN BESIDE THE FILE, which the checker reads and nothing reports on: the file's own
+ * text is the one its diagnostics are placed in, and binding a call shifts every column after it.
+ */
+export function moduleConfigShadow(text: string): string | undefined {
+    const bound: string[] = []
+    let out = ''
+    let from = 0
+    for (const found of text.matchAll(TOP_LEVEL_CONFIG)) {
+        const name = `${CHECKED_CONFIG}${bound.length}`
+        bound.push(name)
+        out += `${text.slice(from, found.index)}const ${name} = ${CHECKED_CONFIG_OF}(onConfig)(`
+        from = found.index + found[0].length
+    }
+    if (bound.length === 0) return undefined
+    return `${out}${text.slice(from)}\n${configInterface(bound)}`
 }
 
 /**

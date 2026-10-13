@@ -1,5 +1,5 @@
 import { STYLE_QUERY } from '#server/MODULE_QUERIES.ts'
-import { fileKind, placeOf, routeOf } from '#shared/routePattern.ts'
+import { fileKind, scopeOf } from '#shared/routePattern.ts'
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import { emitClient } from './emitClient.ts'
 import { emitComponent } from './emitComponent.ts'
@@ -27,8 +27,8 @@ export function emitSource(
     answer: CheckerAnswer,
     invoked: boolean,
     /**
-     * 34.23 — what the browser's module exports in place of the server block: the wrapper of each
-     * handler it declares, under the handler's name (`standInsOf`).
+     * 16.28 — what the browser's module binds in place of the server block: the wrapper of each
+     * private handler it declares, under the handler's name (`standInsOf`).
      */
     standIns = '',
     /** 38.97 — the `.abide`'s text, where the build wants each module's source map. */
@@ -46,7 +46,6 @@ export function emitSource(
     transitions: boolean
 } {
     const kind = fileKind(position)
-    const routed = placeOf(position) === 'address'
     // 34.4 — A COMPONENT WITH STYLES: its elements carry its token, and the styles, scoped,
     // are a stylesheet its client module imports — which the bundle collects into the
     // stylesheet the document links (38.23).
@@ -108,7 +107,7 @@ export function emitSource(
         file,
         answer,
         kind !== 'component',
-        routed ? routeOf(position) : undefined,
+        scopeOf(position),
         serverChunks,
     )
     const name = relative.slice(relative.lastIndexOf('/') + 1)
@@ -174,10 +173,7 @@ type Mapped = {
 // only where all three texts match, so two apps in one process sharing a path cannot cross.
 const MAPPED = new Map<string, Mapped>()
 
-/**
- * The browser's module with each handler's wrapper after it, or the wrappers alone where it had
- * nothing else to carry: a file a page imports for its handlers is imported all the same.
- */
+/** The browser's module with each private handler's wrapper after it. */
 function withStandIns(client: string, standIns: string): string {
     if (standIns === '') return client
     return client === '' ? standIns : `${client}\n${standIns}`

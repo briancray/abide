@@ -24,6 +24,9 @@ export const ABIDE_ADDRESS = '/__abide'
  */
 export const CLIENT_ADDRESS = `${ABIDE_ADDRESS}/client`
 
+/** Where a private handler is answered, below its file's path and then its name (16.70). */
+export const PRIVATE_HANDLERS_ADDRESS = `${ABIDE_ADDRESS}/handlers`
+
 // 20.5, 20.9, 36.7 — the generated surfaces, which the CLI reaches as well as the server answers.
 
 /** The generated OpenAPI document. */

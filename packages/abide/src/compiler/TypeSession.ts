@@ -21,6 +21,7 @@ import {
     COMPONENT_MODULE,
     COMPONENT_STAND_IN,
     checkedShadow,
+    moduleConfigShadow,
 } from './checkedShadow.ts'
 import type { Finding } from './Finding.ts'
 import { CHECKED_VALUES } from './Lowering.ts'
@@ -65,12 +66,17 @@ export class TypeSession {
      */
     private shadows = new Map<string, { path: string; text: string }>()
     /**
-     * 30.26 — the route table `diagnose` last declared, and the root it walked for it: kept until
-     * `edited` hears anything move, so a check asked again and again while an editor types walks and
-     * reads nothing on disk.
+     * What `diagnose` last read off one walk of the root: the route table it declared (30.26) and the
+     * modules it read for their `onConfig` (27.13). Kept until `edited` hears anything move, so a
+     * check asked again and again while an editor types walks and reads nothing on disk.
      */
-    private routes: { within: string; declaration: string } | undefined =
-        undefined
+    private walked:
+        | {
+              within: string
+              routes: string
+              configModules: Promise<[string, string][]>
+          }
+        | undefined = undefined
     /** The checker's own key for a path: resolved, and case-folded where its host folds case. */
     private keyOf: (path: string) => string
     /**
@@ -101,7 +107,7 @@ export class TypeSession {
     /**
      * The project this session opens: the app's tsconfig, with every shadow in `outside` a root.
      *
-     * 34.29 — A DEPENDENCY'S `.abide` IS TYPED AS THE APP'S OWN, and its tsconfig's `include` never
+     * 34.25 — A DEPENDENCY'S `.abide` IS TYPED AS THE APP'S OWN, and its tsconfig's `include` never
      * reaches `node_modules` or a linked package's directory. The session opens a config of its own —
      * served from here, never written — that extends the app's, names those shadows as files, which
      * TypeScript adds to what the base config includes (a linked package's shadow, asked for through
@@ -157,7 +163,7 @@ export class TypeSession {
     /**
      * The shadow registered at `name`, or at the same file through its directory's real path.
      *
-     * 34.29 — A LINKED PACKAGE IS ASKED FOR THROUGH ITS LINK: the checker resolves `kit/x.abide` to
+     * 34.25 — A LINKED PACKAGE IS ASKED FOR THROUGH ITS LINK: the checker resolves `kit/x.abide` to
      * `node_modules/kit/x.d.abide.ts` and the re-export there to the shadow beside it, while the
      * shadow is registered where bun resolved the file — the package's real directory.
      */
@@ -180,17 +186,17 @@ export class TypeSession {
     }
 
     private standIn(name: string): string | undefined {
-        // 34.25 — a file imported as text is its text, which the projection names apart.
+        // 34.21 — a file imported as text is its text, which the projection names apart.
         if (name.endsWith(`${SOURCE_SUFFIX}.d.ts`))
             return isFile(name.slice(0, -`${SOURCE_SUFFIX}.d.ts`.length))
                 ? 'declare const text: string\nexport default text\n'
                 : undefined
-        // 34.17, 34.23 — WHAT A `.abide` EXPORTS BY NAME, to anything importing it: the checker
-        // resolves `./x.abide` by trying `./x.abide.d.ts`, and is answered with the file's own
-        // module and server blocks — its projection — beside the component its checked module
-        // declares. The wildcard declaration a plain `.ts` is typed by carries the default alone.
+        // 34.17 — WHAT A `.abide` EXPORTS, to anything importing it: the component its checked
+        // module declares, and nothing else. The checker resolves `./x.abide` by trying
+        // `./x.abide.d.ts`; the bindings the projection re-exports for the build (16.70) are not
+        // the importer's to read.
         //
-        // 34.29 — AND THROUGH A PACKAGE'S `exports`, which the checker follows to the exact file and
+        // 34.25 — AND THROUGH A PACKAGE'S `exports`, which the checker follows to the exact file and
         // so asks for the arbitrary extension's declaration, `./x.d.abide.ts`, instead.
         const abide = name.endsWith(DECLARATION_SUFFIX)
             ? name.slice(0, -'.d.ts'.length)
@@ -200,8 +206,7 @@ export class TypeSession {
         if (abide !== undefined) {
             if (!isFile(abide)) return undefined
             const own = `./${basename(abide)}`
-            return `export * from '${own}${SHADOW_SUFFIX.slice(0, -'.ts'.length)}'
-export { default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
+            return `export { default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
 `
         }
         // A projection not registered — a file with nothing to read, or one this session has not
@@ -353,7 +358,7 @@ export { default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
      * checker is not told what was under it.
      */
     edited(paths: string[] | undefined): void {
-        this.routes = undefined
+        this.walked = undefined
         if (paths === undefined) {
             this.everything = true
             return
@@ -442,14 +447,49 @@ export { default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
     }
 
     /**
-     * The project as of every edit so far, for a job to ask its questions of.
+     * 34.25, 23.19 — makes `path`, a dependency's file, a root of the opened config, telling
+     * `changed` the config moved where it was not one already.
+     */
+    private openOutside(path: string, changed: string[]): void {
+        if (this.outside.has(path)) return
+        this.outside.add(path)
+        if (!changed.includes(this.opened)) changed.push(this.opened)
+    }
+
+    /**
+     * The project, with each of `modules` outside the app's own a root of it.
      *
      * THE SNAPSHOT IS THE SESSION'S, AND A QUESTION IS ANY MODULE'S: what a handler declares
      * (`declaredExports`) is asked of the same snapshot the reads were, taken only where something
      * moved since.
+     *
+     * 23.19 — a handler file a mount places is a package's, which the app's `include` does not reach:
+     * what it exports is asked all the same (16.73), as a mounted `.abide`'s shadow is.
      */
-    project(): Promise<Project | undefined> {
-        return this.currentProject()
+    async projectWith(
+        modules: readonly string[],
+    ): Promise<Project | undefined> {
+        const changed: string[] = []
+        for (const path of modules) {
+            const canonical = this.canonical(path)
+            // The app's own is a root already: telling the config it moved reloads the project.
+            if (placeOf(this.belowRoot(canonical)) === 'dependency')
+                this.openOutside(canonical, changed)
+        }
+        const project = await this.currentProject([], changed)
+        if (project === undefined) return project
+        // A KEPT SESSION HEARS OF A FILE ONLY AS A WATCHER REPORTS IT, and one saved into a
+        // directory made since the last snapshot is reported as the directory: it is no root yet,
+        // and is told to the next snapshot as created.
+        const found = await Promise.all(
+            modules.map((path) => project.program.getSourceFile(path)),
+        )
+        const missing: string[] = []
+        for (let at = 0; at < modules.length; at += 1)
+            if (found[at] === undefined) missing.push(modules[at] as string)
+        return missing.length === 0
+            ? project
+            : this.currentProject(missing, [...missing])
     }
 
     /**
@@ -482,7 +522,7 @@ export { default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
     /**
      * Where the checker holds a `.abide`'s projection, once `readsFor` has registered it.
      *
-     * 19.15 — what a `<script server>` exports is read off it as a `.ts` module's exports are.
+     * 16.70 — what a `<script server>` binds is read off it as a `.ts` module's exports are.
      */
     projectionOf(abidePath: string): string {
         return `${this.canonical(abidePath)}${SHADOW_SUFFIX}`
@@ -581,8 +621,8 @@ export { default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
             const scripts = projection.text.slice(0, projection.scripts.end)
             // A TEMPLATE POSITION IS A QUESTION TOO (14.2): a file that declares nothing but
             // writes `{format(total)}` has a position only the checker can prove static. And a
-            // `<script server>` always is (19.15): what it exports is read off this shadow, a bare
-            // `export { touch } from …` included.
+            // `<script server>` always is (16.70): what it binds is read off this shadow, re-exported
+            // under `PRIVATE_EXPORT`.
             if (
                 !DECLARES.test(scripts) &&
                 projection.slots.size === 0 &&
@@ -606,13 +646,8 @@ export { default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
             // AN UNCHANGED SHADOW IS NOT REPORTED, which is what a kept session saves on a save:
             // the one page that moved is re-read rather than all of them.
             this.register(map.shadowPath, projection.text, created, changed)
-            if (
-                placeOf(this.belowRoot(source.path)) === 'dependency' &&
-                !this.outside.has(map.shadowPath)
-            ) {
-                this.outside.add(map.shadowPath)
-                changed.push(this.opened)
-            }
+            if (placeOf(this.belowRoot(source.path)) === 'dependency')
+                this.openOutside(map.shadowPath, changed)
             queries.push({
                 map,
                 spans: {
@@ -819,14 +854,30 @@ export { default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
             created,
             changed,
         )
+        if (this.walked?.within !== within) {
+            // A refused tree is `checkApp`'s finding (38.33), never the checker's crash.
+            const files = appFiles(within, () => {})
+            this.walked = {
+                within,
+                routes: routesDeclaration(within, files),
+                configModules: configModulesUnder(within, files),
+            }
+        }
+        // 27.13 — what a handler file or a server module defaults, beside it.
+        for (const [path, text] of await this.walked.configModules) {
+            const shadow = moduleConfigShadow(text)
+            const at = `${this.canonical(path)}${CONFIG_SUFFIX}`
+            // One that stops filing keeps its place and declares nothing, so the next snapshot is
+            // told it moved.
+            if (shadow !== undefined || this.shadows.has(this.keyOf(at)))
+                this.register(at, shadow ?? 'export {}\n', created, changed)
+        }
         // 30.26 — THE APP'S ROUTE TABLE, which `url`'s literal is held to: every page under the
         // root, declared into abide's own `Routes`. A module rather than a script, since only a
         // module augments one.
-        if (this.routes?.within !== within)
-            this.routes = { within, declaration: routesDeclaration(within) }
         this.register(
             `${this.canonical(within)}/${ROUTES_DECLARATION}`,
-            this.routes.declaration,
+            this.walked.routes,
             created,
             changed,
         )
@@ -1106,10 +1157,11 @@ const URL_SOURCE = Bun.fileURLToPath(new URL('../shared/url', import.meta.url))
  * 30.26 — every page under `root`, and every public file's address, as a key of abide's `Routes`, or
  * nothing where it has neither.
  */
-function routesDeclaration(root: string): string {
+function routesDeclaration(
+    root: string,
+    { abide, published }: ReturnType<typeof appFiles>,
+): string {
     const routes = new Set<string>()
-    // A refused tree is `checkApp`'s finding (38.33), never the checker's crash.
-    const { abide, published } = appFiles(root, () => {})
     for (const path of abide)
         if (fileKind(path) === 'page') routes.add(routeOf(path))
     // 23.19 — and every page a mount places in the app, at its position.
@@ -1271,4 +1323,27 @@ function flatten(diagnostic: {
     for (const link of chain)
         message += `\n  ${flatten(link as Parameters<typeof flatten>[0]).replaceAll('\n', '\n  ')}`
     return message
+}
+
+/** What a module that is no `.abide` is checked beside as, for the `Config` it files (27.13). */
+const CONFIG_SUFFIX = '.config-shadow.ts'
+
+/**
+ * Every handler file and every module under a `server` directory below `within` that names
+ * `onConfig`, with its text — the modules a server runs that 27.13 types `Config` off.
+ */
+async function configModulesUnder(
+    within: string,
+    { handlers, modules }: ReturnType<typeof appFiles>,
+): Promise<[string, string][]> {
+    const paths: string[] = []
+    for (const name of handlers) paths.push(`${within}/${name}`)
+    for (const name of modules)
+        if (placeOf(name) === 'server') paths.push(`${within}/${name}`)
+    const texts = await Promise.all(paths.map((path) => Bun.file(path).text()))
+    const found: [string, string][] = []
+    for (let at = 0; at < paths.length; at += 1)
+        if ((texts[at] as string).includes('onConfig'))
+            found.push([paths[at] as string, texts[at] as string])
+    return found
 }

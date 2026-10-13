@@ -1,16 +1,16 @@
-// 23.19 — A PACKAGE'S DIRECTORY, MOUNTED WHERE THE APP SAYS. `import 'kit/admin' with { type: 'routes' }`
-// in a file of the app's places every `.abide` under the package's `admin` directory at the importing
-// file's directory, so its pages, layouts, error pages and handlers answer below it — and the app,
-// not the package, decides where: the mount is a line in a file the app writes, at the position the
-// app gave it.
+// 23.19 — A PACKAGE'S DIRECTORY, MOUNTED WHERE THE APP SAYS.
+// `import 'kit/admin' with { type: 'routes' }` in a file of the app's places every `.abide` and
+// handler file under the package's `admin` directory at the importing file's directory, so its
+// pages, layouts, error pages and handlers answer below it — and the app, not the package, decides
+// where: the mount is a line in a file the app writes, at the position the app gave it.
 //
 // A FILE KEEPS ITS PATH AND GAINS A POSITION. It is compiled, served and keyed by where it lies, as
-// any dependency's is (34.27); its POSITION — the path it would have below the root — is what
+// any dependency's is (34.23); its POSITION — the path it would have below the root — is what
 // `placeOf`, `fileKind` and `routeOf` read, so a mounted page is a page by the same test as the app's.
 
 import { readFileSync, realpathSync, statSync } from 'node:fs' // bun exposes no sync read, stat or realpath of its own
 import { dirname, relative, resolve } from 'node:path' // bun exposes no path helpers of its own
-import { abideUnder } from '#server/appTree.ts'
+import { appFiles } from '#server/appTree.ts'
 import { placeOf } from '#shared/routePattern.ts'
 import { nearest } from './nearest.ts'
 import { type AbideFile, parseAbide, scriptBodies } from './parseAbide.ts'
@@ -19,11 +19,17 @@ import { attributedImports, IMPORT_ATTRIBUTES } from './splitImports.ts'
 /** A `.abide` on disk, and the position it takes in the app. */
 type Placed = { path: string; position: string }
 
-/** One directory a file mounts, and each `.abide` under it at the position it takes in the app. */
-export type Mounted = {
+/**
+ * One directory a file mounts, and each `.abide` and each handler file under it at the position it
+ * takes in the app.
+ */
+type DirectoryMount = {
     specifier: string
     directory: string
+    /** The position its files take below the root: the mounting file's directory, `/`-ended. */
+    at: string
     files: Placed[]
+    handlers: Placed[]
 }
 
 /**
@@ -38,8 +44,8 @@ export function mountsOf(
     path: string,
     position: string,
     file: AbideFile,
-): Mounted[] | string {
-    const mounts: Mounted[] = []
+): DirectoryMount[] | string {
+    const mounts: DirectoryMount[] = []
     const at = position.includes('/')
         ? `${position.slice(0, position.lastIndexOf('/'))}/`
         : ''
@@ -50,13 +56,19 @@ export function mountsOf(
                 return `abide: ${position} mounts ${specifier}, and no directory answers to it. RULEBOOK 23.19.`
             if (ownDirectory(root, directory))
                 return `abide: ${position} mounts ${specifier}, which is the app's own directory already. RULEBOOK 23.20.`
-            const files: Placed[] = []
-            for (const below of abideUnder(directory))
-                files.push({
-                    path: `${directory}/${below}`,
-                    position: `${at}${below}`,
-                })
-            mounts.push({ specifier, directory, files })
+            // The package's tree is the package's to refuse; a mount places what it finds.
+            const found = appFiles(directory, () => {})
+            const placed = (below: string): Placed => ({
+                path: `${directory}/${below}`,
+                position: `${at}${below}`,
+            })
+            mounts.push({
+                specifier,
+                directory,
+                at,
+                files: found.abide.map(placed),
+                handlers: found.handlers.map(placed),
+            })
         }
     return mounts
 }

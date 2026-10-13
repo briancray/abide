@@ -40,7 +40,7 @@ export type AbideFile = {
      */
     modules: string[]
     /**
-     * `<script server>` bodies in source order — 34.20, module scope on a server alone. Apart from
+     * `<script server>` bodies in source order — 34.19, module scope on a server alone. Apart from
      * `modules` because the browser's module never carries them.
      */
     servers: string[]
@@ -177,12 +177,12 @@ export function parseAbide(source: string): AbideFile {
             // position the client walks to after it is a different node and the page hydrates
             // against the wrong tree.
             const closing = source.slice(at + 2, close).trim()
-            // 34.34 — a `<script>` is raw text whose body takes its close tag with it, so one met
+            // 34.29 — a `<script>` is raw text whose body takes its close tag with it, so one met
             // here is what is left of a block that ended early: a `</script>` in a comment or a
             // string in it, and the source after it would be rendered as the page.
             if (sameTag(closing, 'script'))
                 throw new Error(
-                    'abide: a </script> that closes no <script> — a block ends at the first `</script>` in it, even one in a comment or a string. Write it `<\\/script>` there. RULEBOOK 34.34.',
+                    'abide: a </script> that closes no <script> — a block ends at the first `</script>` in it, even one in a comment or a string. Write it `<\\/script>` there. RULEBOOK 34.29.',
                 )
             const innermost = open[open.length - 1]
             if (typeof innermost === 'string' && sameTag(innermost, closing)) {
@@ -880,10 +880,10 @@ function sameTag(left: string, right: string): boolean {
 /**
  * The list a `<script>`'s body belongs in, or `undefined` where it is markup.
  *
- * 34.1 is the bare tag, 34.2 the bare `module` attribute and 34.20 the bare `server` one; anything
+ * 34.1 is the bare tag, 34.2 the bare `module` attribute and 34.19 the bare `server` one; anything
  * else on the tag — `src`, `type`, `defer`, `nonce` —
  * is a `<script>` the author wrote for the DOCUMENT, and lifting it into component setup moves it
- * out of the markup and throws its attributes away — save beside `server`, which 34.33 refuses.
+ * out of the markup and throws its attributes away — save beside `server`, which 34.28 refuses.
  *
  * 34.13 — BUT `generics="…"` IS THE COMPONENT'S. 34.12 — `lang` is refused on any `<script>`: every
  * block is TypeScript, so it says nothing, and read as markup it took the author's whole setup out of
@@ -911,16 +911,16 @@ function scriptBlock(
             )
         else if (attribute.lowerName !== 'generics') markup = true
     }
-    // 34.33 — a `server` attribute on a tag that would be markup ships the server's source to the
+    // 34.28 — a `server` attribute on a tag that would be markup ships the server's source to the
     // document and the browser's module, so it is refused rather than demoted.
     if (server && markup)
         throw new Error(
-            'abide: a <script> carrying `server` is a server block, written `<script server>` with nothing beside it. RULEBOOK 34.33.',
+            'abide: a <script> carrying `server` is a server block, written `<script server>` with nothing beside it. RULEBOOK 34.28.',
         )
     if (markup) return undefined
     if (module && server)
         throw new Error(
-            'abide: a <script> is `module` or `server`, not both — a server block is module scope already. RULEBOOK 34.20.',
+            'abide: a <script> is `module` or `server`, not both — a server block is module scope already. RULEBOOK 34.19.',
         )
     return server ? servers : module ? modules : scripts
 }
@@ -948,16 +948,16 @@ function rawBody(
     if (tag.selfClosing) return { body: '', end: tag.end }
     // The body ends at the first literal close tag, as a browser's does, so a `</script>` inside
     // a string or a comment in a script block ends it early — and the real close tag after it
-    // is refused where the template meets it (34.34).
+    // is refused where the template meets it (34.29).
     const close = closeTagAt(source, lowerTag, tag.end)
     if (close === null)
         return { body: source.slice(tag.end), end: source.length }
-    // 34.35 — a component block's early end is refused AT the early end, because what is left
-    // over can open a `<script>` of its own that takes the real close tag, and then 34.34 meets
+    // 34.30 — a component block's early end is refused AT the early end, because what is left
+    // over can open a `<script>` of its own that takes the real close tag, and then 34.29 meets
     // nothing to refuse while the block's source between them renders as the page.
     if (code && !startsToken(source, tag.end, close.start))
         throw new Error(
-            'abide: a </script> inside a string, a comment or a regex ends the <script> block there, as a browser would. Write it `<\\/script>`. RULEBOOK 34.35.',
+            'abide: a </script> inside a string, a comment or a regex ends the <script> block there, as a browser would. Write it `<\\/script>`. RULEBOOK 34.30.',
         )
     return { body: source.slice(tag.end, close.start), end: close.end }
 }

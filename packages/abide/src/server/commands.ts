@@ -33,7 +33,7 @@ type SourceCommands = Record<
     | 'dev'
     | 'build'
     | 'check'
-    | 'sync'
+    | 'routes'
     | 'compile'
     | 'bundle'
     | 'lsp',
@@ -151,9 +151,9 @@ function commandsOf(host: Host): Row[] {
             'check',
         ),
         fromSource(
-            'sync',
-            'write the types a .ts reads a .abide by, into .abide/types',
-            'sync',
+            'routes [--json]',
+            'every address the app answers, its file, and where each hook is filed',
+            'routes',
         ),
         fromSource(
             'compile',
@@ -227,6 +227,7 @@ function parsed(argv: string[]) {
             method: { type: 'string' },
             target: { type: 'string' },
             platforms: { type: 'string' },
+            json: { type: 'boolean' },
             help: { type: 'boolean', short: 'h' },
         },
         allowPositionals: true,

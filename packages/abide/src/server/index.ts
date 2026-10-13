@@ -58,6 +58,7 @@ export {
     onConfig,
     onError,
     onHealth,
+    onLauncher,
     onPrincipal,
     onStart,
     onStop,

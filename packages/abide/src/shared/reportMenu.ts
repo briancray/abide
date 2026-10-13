@@ -1,9 +1,9 @@
-// 38.88 — A ROUTE'S MENU, TOLD TO THE WINDOW IT IS SHOWN IN. Loaded only inside a desktop app, where
-// the window has opened `abideMenu` to the page; anywhere else the router never imports it.
+// 38.88 — A ROUTE'S MENUS, TOLD TO THE WINDOW IT IS SHOWN IN. Loaded only inside a desktop app, where
+// the window has opened `abideMenu` to the page; anywhere else `onMenu` never imports it.
 
-import { MenuEntry, type MenuItem } from '#shared/menuItem.ts'
-import { navigate } from '#shared/navigate.ts'
 import { menuBridge } from './menuBridge.ts'
+import { MenuEntry, type MenuItem } from './menuItem.ts'
+import { navigate } from './navigate.ts'
 
 /** A menu item as the window builds it: an item the page answers carries the `id` it is told by. */
 type Told =
@@ -20,15 +20,13 @@ type Told =
 let numbered: Exclude<MenuItem, 'separator'>[] = []
 let listening = false
 
-/** Tells the window the menus `chain` exports, layouts outermost first and the page last. */
-export function reportMenu(chain: { menu?: unknown }[]): void {
+/** Tells the window `menus`, the layouts' outermost first and the page's last. */
+export function reportMenu(menus: readonly MenuItem[]): void {
     const bridge = menuBridge()
     if (bridge === undefined) return
     numbered = []
     const told: Told[] = []
-    for (const level of chain)
-        if (Array.isArray(level.menu))
-            for (const menu of level.menu as MenuItem[]) told.push(tell(menu))
+    for (const menu of menus) told.push(tell(menu))
     if (!listening) {
         listening = true
         // 38.90, 38.91 — the window names the item picked; the page does what it means.

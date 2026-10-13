@@ -6,14 +6,19 @@ import { existsSync, realpathSync } from 'node:fs' // bun exposes no sync existe
 import { mkdir, rename, rm } from 'node:fs/promises' // bun exposes no directory creation, rename or recursive directory removal of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { brotliCompress, constants } from 'node:zlib' // bun's brotli is `CompressionStream`, which compresses on the main thread — 1390 ms against this pool's 300 ms over the docs bundle
+import { appMap, mapText } from '#compiler/appMap.ts'
 import { checkApp } from '#compiler/checkApp.ts'
-import { type CompiledApp, compileApp, paints } from '#compiler/compileApp.ts'
+import {
+    type CompiledApp,
+    compilationOf,
+    compileApp,
+    paints,
+} from '#compiler/compileApp.ts'
 import { compiledEntry } from '#compiler/compiledEntry.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { parseAbide } from '#compiler/parseAbide.ts'
 import { scaffold } from '#compiler/scaffold.ts'
 import { serveLanguage } from '#compiler/serveLanguage.ts'
-import { syncTypes } from '#compiler/syncTypes.ts'
 import {
     abideModules,
     type Compilation,
@@ -40,7 +45,6 @@ import { appRoot, createApp, originUnder } from '#server/createApp.ts'
 import { executableName } from '#server/executableName.ts'
 import { fenceServer } from '#server/fenceServer.ts'
 import { iconAccent } from '#server/iconAccent.ts'
-import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#server/LAUNCHER_FILES.ts'
 import { manifestOf, NO_MANIFEST } from '#server/manifestOf.ts'
 import { namesUnder } from '#server/namesUnder.ts'
 import { refuseAddressCollision } from '#server/refuseAddressCollision.ts'
@@ -53,6 +57,7 @@ import {
 } from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
 import { escapeText } from '#shared/escapeText.ts'
+import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
 
 /** Where the app a command builds or serves is, and where its build goes — both absolute. */
 type AppDirectories = { root: string; out: string }
@@ -92,7 +97,7 @@ const DISK: Host = {
         dev: inApp(dev),
         build: inApp(build),
         check: inApp(check),
-        sync: inApp(sync),
+        routes: inApp(routes),
         compile: inApp(compile),
         bundle: inApp(bundle),
         lsp,
@@ -127,13 +132,16 @@ async function writeBuild({
     const app = await compileApp(root)
     for (const warning of app.warnings)
         console.warn(formatDiagnosis(warning, process.cwd()))
-    if (Object.keys(app.files).length === 0) {
+    if (
+        Object.keys(app.files).length === 0 &&
+        Object.keys(app.handlers).length === 0
+    ) {
         console.log(`abide build: no .abide sources or handlers under ${root}`)
         return undefined
     }
     // 38.6 — THE COMPILATION, KEPT WHOLE: `abide start` serves every `.abide` out of it at the
     // file's own path, with no compiler, and a module's imports resolve from the source they name.
-    const compilation: Compilation = { files: app.files, tables: app.tables }
+    const compilation = compilationOf(app)
     // 36.11 — the directories above `public` and the path below it ARE the address.
     // `src/public/favicon.ico` answers at `/favicon.ico`, and nothing declares that anywhere.
     const publicAddresses = [...app.published.values()]
@@ -145,7 +153,7 @@ async function writeBuild({
         root,
         out,
         [
-            fenceServer(root),
+            fenceServer(root, compilation.mounted),
             abideModules(root, compilation),
             ...(await appPlugins(root)),
         ],
@@ -249,12 +257,13 @@ async function bundle(
         const hasLauncher = app.files[LAUNCHER_PAGE] !== undefined
         const art = await launcherIcon(root)
         return {
-            // 34.32 — its `launcher` export is read when the app launches, off the module.
-            launch: hasLauncher ? launcherPath : undefined,
-            // 38.82 — a `launcher.abide` of its script blocks alone keeps the built-in page.
-            custom:
+            // 38.82 — the page, where it paints: a `launcher.abide` of its script blocks alone keeps
+            // the built-in page, and what its `onLauncher` answers is filed by the boot (37.1).
+            launch:
                 hasLauncher &&
-                paints(parseAbide(await Bun.file(launcherPath).text())),
+                paints(parseAbide(await Bun.file(launcherPath).text()))
+                    ? launcherPath
+                    : undefined,
             document: launchDocument(app),
             icon: art?.icon,
             accent: art?.accent,
@@ -777,6 +786,16 @@ async function scaffoldCommand({
     return 0
 }
 
+/** `abide routes`: the app's map, as text or with `--json` as one document. 38.108. */
+async function routes(
+    { root }: AppDirectories,
+    { values }: Given,
+): Promise<number> {
+    const map = await appMap(root)
+    console.log(values.json ? JSON.stringify(map, null, 4) : mapText(map))
+    return 0
+}
+
 /**
  * `abide check`: prints every finding, and fails on any error.
  *
@@ -816,22 +835,6 @@ async function check(
         `abide check: ${errors} error${errors === 1 ? '' : 's'}, ${warnings} warning${warnings === 1 ? '' : 's'}`,
     )
     return errors > 0 ? 1 : 0
-}
-
-/**
- * `abide sync`: writes the types a plain `.ts` reads the app's `.abide` files by.
- *
- * 34.24 — parse and projection alone, so it is fast enough to run on every install (the scaffold's
- * `prepare`), where no checker and no build has run.
- */
-async function sync({ root }: AppDirectories): Promise<number> {
-    const { typed, refused } = await syncTypes(root)
-    for (const diagnosis of refused)
-        console.error(formatDiagnosis(diagnosis, process.cwd()))
-    console.log(
-        `abide sync: ${typed} .abide file${typed === 1 ? '' : 's'} typed`,
-    )
-    return refused.length === 0 ? 0 : 1
 }
 
 /**

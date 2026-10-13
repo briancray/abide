@@ -33,7 +33,14 @@ const PACKAGE = Bun.fileURLToPath(new URL('../../', import.meta.url))
 function abideEntries(): Map<string, string> {
     const specifiers = new Map<string, string>()
     for (const [entry, path] of Object.entries(abidePackage.exports)) {
-        if (entry === './compiler' || !path.endsWith('.ts')) continue
+        // The compiler, and the preload a test run builds the app with (38.109), are no part of an
+        // app that is already built.
+        if (
+            entry === './compiler' ||
+            entry === './test' ||
+            !path.endsWith('.ts')
+        )
+            continue
         specifiers.set(
             entry === '.'
                 ? abidePackage.name
@@ -59,13 +66,11 @@ function abideEntries(): Map<string, string> {
 export function compiledEntry(app: {
     /**
      * 38.70 — what `abide bundle` read of the launcher's files: `launch` the path of its
-     * `launcher.abide`, and `custom` whether that file has markup of its own; `undefined` for
-     * `abide compile`.
+     * `launcher.abide` where that file has markup of its own; `undefined` for `abide compile`.
      */
     desktop:
         | {
               launch: string | undefined
-              custom: boolean
               document: string
               icon: string | undefined
               accent: string | undefined
@@ -107,7 +112,6 @@ import * as table from ${JSON.stringify(tablePath(app.root, SERVER_TABLE))}
             ? ''
             : `
     {
-        custom: ${app.desktop.custom},
         launch: ${app.desktop.launch === undefined ? 'undefined' : `() => import(${JSON.stringify(app.desktop.launch)})`},
         document: ${JSON.stringify(app.desktop.document)},
         icon: ${JSON.stringify(app.desktop.icon)},
@@ -116,7 +120,7 @@ import * as table from ${JSON.stringify(tablePath(app.root, SERVER_TABLE))}
     return `// Written by \`abide compile\`. The whole app, as what one executable holds.
 ${imports}
 // 38.56 — a file declaring handlers as a script names it through the app's one alias:
-// \`#src/invoices/page.abide\`, to the module its server block compiled into.
+// \`#src/invoices/getInvoice.ts\`, to the module it is.
 const declared = {}
 for (const row of table.handlers) declared[\`#src/\${row.source}\`] = row.load
 

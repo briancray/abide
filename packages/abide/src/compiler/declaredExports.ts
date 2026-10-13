@@ -49,7 +49,7 @@ import type { Diagnosis } from './TypeSession.ts'
 /**
  * Every value each module exports, with the abide method that declares it.
  *
- * 19.15 — EVERY VALUE EACH MODULE EXPORTS, and the method of the abide call that declares it, or
+ * 16.73 — EVERY VALUE EACH MODULE EXPORTS, and the method of the abide call that declares it, or
  * `undefined` where it is not one. The checker's own export table, so a name exported apart from
  * its declaration, under another name or from another module is the same export it is to an
  * importer; and the callee's own symbol, so `GET` imported under another name or through a
@@ -75,7 +75,7 @@ export async function declaredExports(
             const sourceFile = await project.program.getSourceFile(path)
             if (sourceFile === undefined)
                 throw new Error(
-                    `abide: ${path} is not inside the project ${projectName}, so what it exports cannot be read (19.15). Give the app a tsconfig whose include reaches it.`,
+                    `abide: ${path} is not inside the project ${projectName}, so what it exports cannot be read (16.73). Give the app a tsconfig whose include reaches it.`,
                 )
             const module = await checker.getSymbolAtLocation(sourceFile)
             if (module === undefined) return []
@@ -198,7 +198,7 @@ async function declaringMethod(
               : isExportAssignment(declaration)
                 ? declaration.expression
                 : undefined
-    // 19.15 — A BINDING NAMING ANOTHER BINDING is the call that one was declared by: `export const
+    // 16.73 — A BINDING NAMING ANOTHER BINDING is the call that one was declared by: `export const
     // named = drop` is `drop`'s handler under another name. Bounded, so a cycle the checker would
     // refuse anyway cannot spin here.
     for (

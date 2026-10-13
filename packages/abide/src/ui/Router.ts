@@ -12,7 +12,6 @@ import { applyHead, withdrawHead } from './applyHead.ts'
 import { LAYER_MOUNT, LAYER_NAVIGATE } from './LAYER_NAMES.ts'
 import { MOUNTING_LEVEL } from './MOUNTING_LEVEL.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
-import { menuBridge } from './menuBridge.ts'
 import { fillRegion, pageRegion, type Region } from './regions.ts'
 import type { Scope, Stoppable } from './Scope.ts'
 
@@ -568,11 +567,6 @@ export class Router {
     ): void {
         arrive(target.href, found.route.pattern, found.params)
         this.chain = modules
-        // 38.88 — inside a desktop app, the window shows the menus this chain exports.
-        if (menuBridge() !== undefined)
-            void import('./reportMenu.ts').then((loaded) =>
-                loaded.reportMenu(modules as { menu?: unknown }[]),
-            )
         this.standing = found.route
         this.mounted = target.pathname
         if (into === undefined) return

@@ -282,7 +282,7 @@ export async function readsIn(
     await proveSlots(checker, expressions, reads, statics)
     reads.sort(byPosition)
     const warnings = await warningsFor(checker, located, spans.positions)
-    // 34.19.
+    // 34.18.
     for (const warning of await sharedModuleWrites(
         checker,
         shadowPath,
@@ -694,7 +694,7 @@ const ROUTE_MEMBERS = new Set(['url', 'params', 'name', 'navigating'])
  * a name, and this read is spelled as a member.
  *
  * 23.9 — AND `route.params` IN A PAGE OR A LAYOUT IS WHAT THAT FILE'S OWN ROUTE PROMISES. The file
- * is the route: `media/[id]/page.abide` only ever renders where `id` matched, so its
+ * is the route: `media/[id].abide` only ever renders where `id` matched, so its
  * `route.params` has an `id`, and a layout's has its own segments and whatever a page below adds.
  * Only the checker reads that — the running module reads the one `route` every page shares.
  */

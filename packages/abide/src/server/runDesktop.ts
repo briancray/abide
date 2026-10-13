@@ -26,7 +26,7 @@ import { APP_PACKAGE, configuredMount, dataDirectory } from './config.ts'
 import { configFields } from './configFields.ts'
 import { type App, type AppOrigin, bootApp } from './createApp.ts'
 import { executableName } from './executableName.ts'
-import { reportUnexpected } from './hooks.ts'
+import { HOOKS, inOrder, reportUnexpected } from './hooks.ts'
 import { installServer } from './installServer.ts'
 import { launcherOf } from './launcherOptions.ts'
 import { type Launch, launcherPage } from './launcherPage.ts'
@@ -53,15 +53,10 @@ type Failure = {
 
 /** What `abide bundle` read of the launcher's files, carried in the executable. */
 export type Desktop = {
-    /** 38.80 — `src/launcher.abide`, where the app has one: its `launcher`, and its page. */
+    /** 38.82 — `src/launcher.abide`'s page, where the app has one that paints. */
     launch:
-        | (() => Promise<{
-              default: (props: Launch) => Component
-              launcher?: unknown
-          }>)
+        | (() => Promise<{ default: (props: Launch) => Component }>)
         | undefined
-    /** 38.82 — whether that file has markup of its own, which then stands in for the built-in page. */
-    custom: boolean
     /** The document the launch page renders into, its stylesheet already in its head (38.84). */
     document: string
     /** 38.101 — the app's icon as a data URL, and the accent taken from it. */
@@ -87,23 +82,23 @@ export async function runDesktop(
 async function launch(
     origin: AppOrigin,
     load: () => ReturnType<typeof builtSources>,
-    { launch: launchModule, custom, document, icon, accent }: Desktop,
+    { launch: launchModule, document, icon, accent }: Desktop,
 ): Promise<void> {
     installServer()
     APP_PACKAGE.current = origin.package
-    // 37.1 — imported for what it files, so the start form reads `onConfig`.
+    // 37.1 — imported for what it files, so the start form reads `onConfig` and the launcher's
+    // `onLauncher` is filed.
     await origin.hooks?.()
-    // 34.32 — the `launcher` export, read off its module as the app launches. 38.85 — one that fails
-    // to load leaves the built-in page, with its defaults.
-    const launcherModule = await launchModule?.().catch((thrown: unknown) => {
+    // 38.85 — a launcher page that fails to load leaves the built-in page, with its defaults.
+    const launchPage = await launchModule?.().catch((thrown: unknown) => {
         reportUnexpected(thrown)
         return undefined
     })
-    const options = launcherOf(launcherModule?.launcher)
-    // 38.81 — a `launcher` the checker would have refused, written where nothing checked it.
+    // 38.80 — what its `onLauncher` answers.
+    const options = launcherOf(inOrder(HOOKS.launcher).at(-1)?.())
+    // 38.81 — an `onLauncher` answer the checker would have refused, written where nothing checked it.
     if (typeof options === 'string')
         throw new Error(`abide: ${options}. RULEBOOK 38.81.`)
-    const launchPage = custom ? launcherModule : undefined
     const appName = executableName(origin.package.name)
     const directory = dataDirectory(origin.package.name ?? 'app')
     const stateFile = `${directory}/desktop.json`

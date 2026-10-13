@@ -1,35 +1,50 @@
-// 16.2 AND 19.15 — EVERY HANDLER AN APP DECLARES, AND WHERE IT IS ANSWERED. A handler is an export
-// of a `<script server>` in a `.abide` of the app's own, and its address is that file's
-// route — its directory's (23.14) — and then the export's name. A directory's handlers may sit in as
-// many of its files as an author likes; two of them exporting one name is 19.1's refusal.
+// 16.2 AND 16.70 — EVERY HANDLER AN APP DECLARES, AND WHERE IT IS ANSWERED. A handler file's default
+// export answers at that file's route (23.14), and is the app's public surface; a handler a
+// `<script server>` declares is its file's alone, answered below `/__abide/handlers/` at the file's
+// path and its binding's name, and listed nowhere (16.71).
 //
-// READ, NOT RUN. The build finds handlers by what their blocks SAY rather than by importing them,
-// so a build never runs server code: a server block may open a database at import, and nothing
+// READ, NOT RUN. The build finds handlers by what their files SAY rather than by importing them,
+// so a build never runs server code: a handler file may open a database at import, and nothing
 // about building a browser bundle is a reason to. The checker the build already holds lists what
-// the file's projection exports and which call declares each (19.15) — which is also what makes an
-// export that is not a handler a refusal here rather than an address that silently never answers.
+// each module exports and which call declares each (16.73) — which is also what makes an export
+// that is not a handler a refusal here rather than an address that silently never answers.
 
 import type { Mount } from '#server/answerRpc.ts'
 import { refuseFrameworkRoute } from '#server/appTree.ts'
 import { surfaceName } from '#server/surfaceOf.ts'
-import { parseRoutePattern, placeOf, routeOf } from '#shared/routePattern.ts'
+import { PRIVATE_HANDLERS_ADDRESS } from '#shared/ADDRESSES.ts'
+import {
+    parseRoutePattern,
+    placeOf,
+    routeOf,
+    scopeOf,
+} from '#shared/routePattern.ts'
 import { declaredExports } from './declaredExports.ts'
 import type { AbideFile } from './parseAbide.ts'
+import { PRIVATE_EXPORT } from './projectShadow.ts'
 import type { Diagnosis, TypeSession } from './TypeSession.ts'
 
-/** A `.abide` the build read, by its path and its path below the app's root. */
-type Source = {
+/** A handler file, by its path and its path below the app's root. */
+export type HandlerFile = {
     path: string
     relative: string
     /** 23.19 — the path it answers by: its own, or the one its mount gives it. */
     position: string
-    file: AbideFile
 }
 
-const TRANSPILER = new Bun.Transpiler({ loader: 'ts' })
+/** A `.abide` the build read. */
+type Source = HandlerFile & { file: AbideFile }
 
-// 19.22 — as the transpiler prints it, one statement to a line; `export * as name` names its export.
-const STAR_EXPORT = /^export \* from /m
+/**
+ * Told of each thing the emit refuses, at the file below the root it names. The build's throws;
+ * `abide check` collects every one at its file (38.33).
+ */
+export type Refuse = (relative: string, thrown: unknown) => void
+
+/** The build's answer to a refusal: the first one stops it. */
+export const THROW: Refuse = (_relative, thrown) => {
+    throw thrown
+}
 
 /**
  * The app's handler mounts, with the warnings the build raised reading them.
@@ -40,64 +55,45 @@ const STAR_EXPORT = /^export \* from /m
 export async function handlersUnder(
     session: TypeSession,
     sources: readonly Source[],
+    files: readonly HandlerFile[],
+    refuse: Refuse = THROW,
 ): Promise<{ mounts: Mount[]; warnings: Diagnosis[] }> {
-    // 34.31 — a dependency's server block has no address of its own: what it declares is mounted
-    // where a file of the app's re-exports it, and as that file's.
     const serving: Source[] = []
-    for (const source of sources) {
-        if (source.file.servers.length === 0) continue
-        if (
-            STAR_EXPORT.test(
-                TRANSPILER.transformSync(source.file.servers.join('\n')),
-            )
-        )
-            throw new Error(
-                `abide: ${source.relative} re-exports with \`export *\` from its <script server>, whose names the build cannot read without running it. Name each handler it re-exports. RULEBOOK 19.22.`,
-            )
-        if (placeOf(source.position) !== 'dependency') serving.push(source)
-    }
-    const project = await session.project()
+    for (const source of sources)
+        if (source.file.servers.length > 0) serving.push(source)
+    const paths: string[] = []
+    for (const file of files) paths.push(file.path)
+    const project = await session.projectWith(paths)
+    for (const source of serving) paths.push(session.projectionOf(source.path))
     const declared =
-        project === undefined || serving.length === 0
+        project === undefined || paths.length === 0
             ? []
-            : await declaredExports(
-                  project,
-                  session.tsconfig,
-                  serving.map((source) => session.projectionOf(source.path)),
-              )
+            : await declaredExports(project, session.tsconfig, paths)
     const mounts: Mount[] = []
     const warnings: Diagnosis[] = []
     const names = new Map<string, string>()
-    for (let at = 0; at < serving.length; at += 1) {
-        const { relative, position, file } = serving[at] as Source
-        const route = routeOf(position)
-        // 19.15 — what THE SERVER BLOCK exports, out of everything the file's module does: its
-        // component and its `<script module>`'s names are the module's own.
-        const exported = new Set(
-            TRANSPILER.scan(file.servers.join('\n')).exports,
-        )
-        for (const {
-            name,
-            method,
-            ui,
-            cli,
-            mcp,
-            description,
-            copy,
-            defaults,
-            args,
-            unread,
-        } of declared[at] ?? []) {
-            if (!exported.has(name)) continue
-            if (method === undefined)
+    for (let at = 0; at < files.length; at += 1) {
+        const { relative, position } = files[at] as HandlerFile
+        try {
+            const address = routeOf(position)
+            const exported = declared[at] ?? []
+            const handler = exported.find((each) => each.name === 'default')
+            // 16.73 — the default and nothing else, declared by one of the five methods.
+            for (const each of exported)
+                if (each.name !== 'default' || each.method === undefined)
+                    throw new Error(
+                        each.name === 'default'
+                            ? `abide: ${relative}'s default export is not declared as a handler. A handler file's default is declared by abide's \`GET(…)\` (or POST, PUT, PATCH, DELETE); anything else belongs under a lib directory. RULEBOOK 16.73.`
+                            : `abide: ${relative} exports \`${each.name}\`, and a handler file exports its handler as its default and nothing else. Move \`${each.name}\` into a module under a lib or a server directory. RULEBOOK 16.73.`,
+                    )
+            if (handler?.method === undefined)
                 throw new Error(
-                    `abide: ${relative} exports \`${name}\` from its <script server>, which is not declared as a handler. A server block exports handlers alone, each declared by abide's \`GET(…)\` (or POST, PUT, PATCH, DELETE); anything else belongs in a module of its own. RULEBOOK 19.15.`,
+                    `abide: ${relative} is a handler file — a .ts directly in an address directory — and exports no handler as its default. Export one (\`export default GET(…)\`), or move the file into a lib directory. RULEBOOK 16.73, 23.22.`,
                 )
-            const address = `${route === '/' ? '' : route}/${name}`
             refuseFrameworkRoute(address, relative)
-            refuseUndeclaredParameters(address, args, relative, name)
+            refuseUndeclaredParameters(address, handler.args, relative)
             // 20.13 — one name per handler on every generated surface.
-            const surface = surfaceName(method, address)
+            const surface = surfaceName(handler.method, address)
             const named = names.get(surface)
             if (named !== undefined)
                 throw new Error(
@@ -106,21 +102,67 @@ export async function handlersUnder(
             names.set(surface, relative)
             mounts.push({
                 address,
-                method,
+                method: handler.method,
+                source: relative,
+                name: address.slice(address.lastIndexOf('/') + 1),
+                export: 'default',
+                scope: scopeOf(position),
+                private: false,
+                ui: handler.ui,
+                cli: handler.cli,
+                mcp: handler.mcp,
+                description: handler.description,
+                copy: handler.copy,
+                defaults: handler.defaults,
+                args: handler.args,
+            })
+            warnings.push(...handler.unread)
+        } catch (thrown) {
+            refuse(relative, thrown)
+        }
+    }
+    for (let at = 0; at < serving.length; at += 1) {
+        const { relative, position } = serving[at] as Source
+        // 34.24 — a dependency's file answers where a mount places it, and its handlers below the
+        // path it has there.
+        const below = placeOf(position) === 'dependency' ? relative : position
+        for (const each of declared[files.length + at] ?? []) {
+            if (each.method === undefined) continue
+            if (!each.name.startsWith(PRIVATE_EXPORT)) continue
+            const name = each.name.slice(PRIVATE_EXPORT.length)
+            mounts.push({
+                address: privateAddress(below, name),
+                method: each.method,
                 source: relative,
                 name,
-                ui,
-                cli,
-                mcp,
-                description,
-                copy,
-                defaults,
-                args,
+                export: each.name,
+                scope: scopeOf(position),
+                private: true,
+                ui: each.ui,
+                cli: false,
+                mcp: false,
+                description: each.description,
+                copy: each.copy,
+                defaults: each.defaults,
+                args: each.args,
             })
-            warnings.push(...unread)
+            warnings.push(...each.unread)
         }
     }
     return { mounts, warnings }
+}
+
+/**
+ * The address of the private handler `name` the `.abide` at `path` declares: below
+ * `PRIVATE_HANDLERS_ADDRESS`, the file's path without its extension, each segment's brackets and
+ * dots dropped so nothing in it reads as a parameter, then its name (16.70).
+ */
+export function privateAddress(path: string, name: string): string {
+    const segments: string[] = []
+    for (const segment of path.replace(/\.abide$/, '').split('/'))
+        if (segment !== '' && segment !== '..')
+            segments.push(segment.replace(/[[\].]/g, ''))
+    return `${PRIVATE_HANDLERS_ADDRESS}/${segments.join('/')}/${name}`
 }
 
 /**
@@ -133,7 +175,6 @@ function refuseUndeclaredParameters(
     address: string,
     args: unknown,
     source: string,
-    exported: string,
 ): void {
     const schema = args as
         | {
@@ -153,7 +194,7 @@ function refuseUndeclaredParameters(
         )
             continue
         throw new Error(
-            `abide: ${source}'s \`${exported}\` answers at ${address}, and its args do not declare \`${segment.name}\`. RULEBOOK 16.67.`,
+            `abide: ${source} answers at ${address}, and its handler's args do not declare \`${segment.name}\`. RULEBOOK 16.67.`,
         )
     }
 }
