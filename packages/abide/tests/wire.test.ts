@@ -302,6 +302,19 @@ test('a page importing server code that is not a handler does not build — 16.2
     expect(built.stderr).toContain('RULEBOOK 16.29')
 })
 
+// 16.29, 23.16 — A `server` DIRECTORY UNDER `lib/` IS FENCED AS ONE AT THE TOP IS: the `lib` above
+// it does not make it code both sides load. THE REVERT: return the first fence's name in
+// `placeOf`; the build succeeds and the database module is in the bundle.
+test('a page importing a server module under lib does not build — 16.29, 23.16', async () => {
+    const leaking = appFixture({
+        'index.abide': `<script>\nimport { SECRET } from '#src/lib/server/database.ts'\n</script>\n\n<p>{SECRET}</p>`,
+        'lib/server/database.ts': `export const SECRET = '${SECRET}'\n`,
+    })
+    const built = await buildApp(leaking)
+    expect(built.exitCode).not.toBe(0)
+    expect(built.stderr).toContain('RULEBOOK 16.29')
+})
+
 // 16.73 — A HANDLER FILE EXPORTS ITS HANDLER AS ITS DEFAULT AND NOTHING ELSE: a second name is
 // refused by name and file, rather than being a value nothing can reach. THE REVERT: skip the
 // `each.name !== 'default'` refusal in `handlersUnder`; the build succeeds and `TAX_RATE` is dropped.

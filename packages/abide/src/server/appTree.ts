@@ -15,6 +15,7 @@
 import { type Dirent, existsSync, readdirSync } from 'node:fs' // bun has no directory listing or sync existence check of its own
 import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
 import {
+    HOLDS_SERVER,
     LIB_DIRECTORY,
     PUBLIC_DIRECTORY,
     RESERVED_DIRECTORIES,
@@ -28,7 +29,7 @@ type AppFiles = {
     abide: string[]
     /** Every handler file, in path order. */
     handlers: string[]
-    /** Every module under a `server` or a `lib` directory, in path order — run as it is imported. */
+    /** Every module under a `server` or a `lib` directory, in path order — read for 37.13. */
     modules: string[]
     /** Every file under a `public` directory, to the address it is answered at below the mount. */
     published: Map<string, string>
@@ -90,7 +91,14 @@ function walk(
         if (entry.isDirectory()) {
             let within = reserved
             if (RESERVED_DIRECTORIES.has(entry.name)) {
-                if (reserved !== undefined)
+                // 23.16 — `server` nests in the fences that hold code.
+                if (
+                    reserved !== undefined &&
+                    !(
+                        entry.name === SERVER_DIRECTORY &&
+                        HOLDS_SERVER.has(reserved.name)
+                    )
+                )
                     refuse(
                         path,
                         `abide: ${path} is a ${entry.name} directory under the ${reserved.name} directory ${reserved.path}. RULEBOOK 23.16.`,

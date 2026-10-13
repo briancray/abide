@@ -22,3 +22,9 @@ export const RESERVED_DIRECTORIES: ReadonlySet<string> = new Set([
     LIB_DIRECTORY,
     TESTS_DIRECTORY,
 ])
+
+/** 23.16 — the fences a `server` directory nests in: it fences a graph rather than an address. */
+export const HOLDS_SERVER: ReadonlySet<string> = new Set([
+    LIB_DIRECTORY,
+    TESTS_DIRECTORY,
+])

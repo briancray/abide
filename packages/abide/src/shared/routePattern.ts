@@ -11,7 +11,11 @@
 // router all read it and a constant crossing a seam lives where nothing pulls a graph in behind it.
 
 import { LAUNCHER_PAGE } from './LAUNCHER_FILES.ts'
-import { RESERVED_DIRECTORIES } from './RESERVED_DIRECTORIES.ts'
+import {
+    HOLDS_SERVER,
+    RESERVED_DIRECTORIES,
+    SERVER_DIRECTORY,
+} from './RESERVED_DIRECTORIES.ts'
 
 type SegmentKind = 'static' | 'required' | 'optional' | 'rest'
 
@@ -84,22 +88,31 @@ export type Place =
  * - `dependency` — 34.24: a package's, outside the root or under `node_modules`, whose directories
  *   are its package's layout and none of the app's;
  * - `skipped` — under a dot directory, which no walk of the app enters;
- * - `server`, `public`, `lib` or `tests` — 23.15: under that fence, the nearest to the root deciding
- *   (23.16 refuses one inside another);
+ * - `server`, `public`, `lib` or `tests` — 23.15: under that fence, the nearest to the root deciding,
+ *   save a `server` under a `lib` or a `tests`, which is `server` — the fence the browser's bundle
+ *   is checked against (16.29) is never hidden by one above it (23.16);
  * - `address` — 23.14: everywhere else, its directories the segments of its route.
  */
 export function placeOf(path: string): Place {
     if (path.startsWith('../') || path.startsWith('/')) return 'dependency'
     const parts = path.split('/')
+    // A `lib` or a `tests` met first, which a `server` below it still overrides.
+    let fence: Place | undefined
     // The last part is the file itself, which is never a directory.
     for (let index = 0; index < parts.length - 1; index += 1) {
         const part = parts[index] as string
-        if (part === 'node_modules') return 'dependency'
-        if (part.startsWith('.')) return 'skipped'
-        // Each fence's place is its name.
-        if (RESERVED_DIRECTORIES.has(part)) return part as Place
+        if (skipped(part))
+            return (
+                fence ?? (part === 'node_modules' ? 'dependency' : 'skipped')
+            )
+        if (fence !== undefined) {
+            if (part === SERVER_DIRECTORY) return 'server'
+        } else if (RESERVED_DIRECTORIES.has(part)) {
+            if (!HOLDS_SERVER.has(part)) return part as Place
+            fence = part as Place
+        }
     }
-    return 'address'
+    return fence ?? 'address'
 }
 
 /** Whether a walk of the app passes over the entry `name`: a dot file or directory, or `node_modules`. */
