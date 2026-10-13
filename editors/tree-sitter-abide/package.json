@@ -9,7 +9,7 @@
         "test": "tree-sitter test"
     },
     "devDependencies": {
-        "tree-sitter-cli": "0.25.10",
+        "tree-sitter-cli": "0.27.1",
         "tree-sitter-html": "0.23.2"
     },
     "trustedDependencies": [

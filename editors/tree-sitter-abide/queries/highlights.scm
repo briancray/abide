@@ -1,6 +1,6 @@
 (tag_name) @tag
 
-; 32.17 — a capitalised tag is a component.
+; 32.17 — a capitalized tag is a component.
 ((tag_name) @type
   (#match? @type "^[A-Z]"))
 

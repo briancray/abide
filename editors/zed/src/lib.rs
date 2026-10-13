@@ -1,4 +1,4 @@
-// `abide lsp` (RULEBOOK 38.12), started for Zed. The server finds each document's app itself, so
+// `abide lsp` (RULEBOOK 38.11), started for Zed. The server finds each document's app itself, so
 // what this decides is only which `abide` to run: the one the settings name, the one the project
 // installed, or the one on the PATH — in that order, so a project's own version wins over a global.
 use zed_extension_api::{self as zed, settings::LspSettings, LanguageServerId, Result};
