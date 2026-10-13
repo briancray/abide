@@ -1,14 +1,12 @@
-// THE CURSOR. RULEBOOK 2.5: `for await (… of s)` — the production in flight, then each one after
-// it. On a streaming producer that is one turn per CHUNK, read from the chunk buffer by ordinal,
-// so two chunks between two `await`s are two turns of the loop. On every other value it is the
-// standing production: a burst between two turns collapses to the latest, since nothing else is
-// held. An app that wants every message keeps them — a channel is an array.
+// THE CURSOR. RULEBOOK 2.6: a streaming producer's chunks, read from the chunk buffer by ordinal,
+// so two chunks between two `await`s are two turns of the loop, and a patch or a write over the
+// stream moves no place (5.7, 9.12). Where the run ENDS is the caller's settling, handed to
+// `closeOn`: `for await` over a `Reactive` is `Reactive.ts`'s `producedRun`.
 //
 // A NARROW FACE rather than the `Cell`, the same way `tracking.ts` takes a `Tracked`: what a
 // cursor reads is a handful of fields, and naming them keeps the cell's internals out of a
 // second file.
 
-import { PATCHES } from './PATCHES.ts'
 import {
     dropReader,
     newSubscriber,
@@ -23,20 +21,13 @@ import {
  * place in a stream's chunk buffer without the buffer having to hold one.
  */
 export type Retained = Tracked & {
-    /** The window a `throttle` or a `debounce` holds open, `holding` while a production waits on it. */
-    cap: { holding: boolean } | null
     ordinal: number
     ring: unknown[]
     ringBase: number
-    servable: boolean
-    state: number
-    /**
-     * Non-null on a streaming producer, whose ring is the accumulation of the run being served
-     * (9.1) and is retained whole — the chunks ARE the value.
-     */
-    stream: object | null
-    value: unknown
 }
+
+/** What `take` answers when the cursor has caught up — never a chunk, which may be `undefined`. */
+export const CAUGHT_UP: unique symbol = Symbol('caught up')
 
 // The cursors standing over each source, for a patch to keep the place of the ones behind (5.7).
 const CURSORS = new WeakMap<Retained, Set<Cursor>>()
@@ -70,61 +61,36 @@ export function hasCursorBehind(source: Retained): boolean {
 }
 
 /**
- * A live reader of a source's productions, one turn per production, in order.
+ * A reader of a stream's chunks, in order, waking whoever waits on it when one lands.
  *
- * A RECORD, NOT A SCOPE. The four closures this was — `take`, `notify`, `stop` and `next` — shared
- * one environment holding `at`, `waiting`, `source` and `reader`, and a cursor OUTLIVES the call
- * that made it: a `for await` holds one for the life of the loop, so the environment and every
- * function object hanging off it is live that whole time. Fields on a prototype are the object
- * alone, and `at` — read and written on every turn — becomes a property load on a fixed structure
- * rather than a scope load.
+ * A RECORD, NOT A SCOPE. A cursor outlives the call that made it — a `for await` holds one for the
+ * life of the loop — so fields on a prototype are the object alone, and `at`, read and written on
+ * every turn, is a property load on a fixed structure rather than a scope load.
  */
-export class Cursor implements AsyncIterator<unknown> {
+export class Cursor {
     source: Retained
-    /** The ordinal of the last production this cursor handed over. */
+    /** The ordinal of the last chunk this cursor handed over. */
     at: number
-    /**
-     * The patch epoch the value it last handed over stood at.
-     *
-     * A PATCH MINTS NO ORDINAL (5.7) — the follow's version tells a patch from a production by
-     * exactly that — so a cursor over a value patched in place reads the change off the object.
-     */
-    patched: number
-    /**
-     * The turns asked for and not yet answered.
-     *
-     * A QUEUE rather than one slot because a consumer may ask twice before either answer arrives
-     * — `Promise.all([ it.next(), it.next() ])` is the shape, and with one slot the second `next`
-     * overwrote the first's resolver and that promise never settled at all. `for await` asks one
-     * at a time, which is why nothing here said so.
-     */
-    waiting: ((result: IteratorResult<unknown>) => void)[]
+    /** Called once at the next wake, then cleared. */
+    wake: (() => void) | null
+    /** Whether the run `closeOn` was handed has settled. */
+    closed: boolean
+    /** What that run rejected with. */
+    failure: unknown
     reader: Subscriber
 
     constructor(source: Retained, from: number) {
         this.source = source
         this.at = from
-        this.patched = 0
-        this.waiting = []
-        // The one closure left, and it captures this cursor and nothing else. `notify` is
-        // called as a method on the SUBSCRIBER, so it cannot be the cursor's own method —
-        // and widening `Subscriber` with a back-edge would put a field on the shape every
-        // reader in the graph carries for the sake of the few that are cursors.
-        // Registered outside the tracking protocol, so the source it waits on is declared
-        // rather than discovered — see the same shape in `Reactive`'s `settled`.
+        this.wake = null
+        this.closed = false
+        this.failure = undefined
+        // The one closure left, and it captures this cursor and nothing else. `notify` is called as a
+        // method on the SUBSCRIBER, so it cannot be the cursor's own method. Registered outside the
+        // tracking protocol, so the source it waits on is declared rather than discovered — see the
+        // same shape in `Reactive`'s `settled`.
         this.reader = newSubscriber([source], null)
-        // One production per waiting turn, in the order they were asked for: a burst that
-        // lands three productions on a consumer holding two turns answers both.
-        this.reader.notify = (): void => {
-            const waiting = this.waiting
-            while (waiting.length !== 0) {
-                const next = this.take()
-                if (next === null) return
-                ;(waiting.shift() as (result: IteratorResult<unknown>) => void)(
-                    next,
-                )
-            }
-        }
+        this.reader.notify = (): void => this.woken()
         source.readers.push(this.reader)
         let cursors = CURSORS.get(source)
         if (cursors === undefined) {
@@ -135,83 +101,60 @@ export class Cursor implements AsyncIterator<unknown> {
     }
 
     /**
-     * One production, or `null` where the cursor has caught up.
+     * The next chunk, or `CAUGHT_UP`.
      *
-     * Reading a stream's chunks by ordinal is what keeps a burst from being a gap or a repeat.
+     * Reading by ordinal is what keeps a burst from being a gap or a repeat.
      */
-    take(): IteratorResult<unknown> | null {
+    take(): unknown {
         const source = this.source
-        let at = this.at
-        if (source.stream === null) {
-            const value = source.value
-            // 6.10: an `undefined` standing is caught up, not a turn.
-            if (value === undefined) return null
-            const patched =
-                value !== null && typeof value === 'object'
-                    ? (PATCHES.written.get(value) ?? 0)
-                    : 0
-            if (at >= source.ordinal && patched === this.patched) return null
-            // 5.9 — A PRODUCTION A WINDOW HOLDS has minted its ordinal and is not yet the value: the
-            // turn is the release's, which wakes this cursor.
-            if (source.cap?.holding === true) return null
-            // The standing production is the only one held, so everything minted or patched
-            // since the last turn collapses into it.
-            this.at = source.ordinal
-            this.patched = patched
-            return { value, done: false }
-        }
-        if (at >= source.ordinal) return null
-        // A run that restarted moved the buffer past this cursor: answer from its start.
-        if (at < source.ringBase) at = source.ringBase
-        const value = source.ring[at - source.ringBase]
-        this.at = at + 1
-        return { value, done: false }
-    }
-
-    next(): Promise<IteratorResult<unknown>> {
-        if (!this.reader.alive)
-            return Promise.resolve({ value: undefined, done: true })
-        // A TURN ALREADY ASKED FOR AND NOT ANSWERED KEEPS THE ORDER: taking from the
-        // ring here while one is queued would hand the later caller the earlier
-        // production.
-        if (this.waiting.length === 0) {
-            const ready = this.take()
-            // NOT `async`, and no `await` on the caught-up arm. A cursor behind a
-            // stream's chunks is the common shape while a burst drains, and an
-            // `async` here would put a microtask tick between every one of those
-            // turns.
-            if (ready !== null) return Promise.resolve(ready)
-        }
-        const waiting = this.waiting
-        return new Promise((resolve) => {
-            waiting.push(resolve)
-        })
+        if (this.at >= source.ordinal) return CAUGHT_UP
+        const value = source.ring[this.at - source.ringBase]
+        this.at += 1
+        return value
     }
 
     /**
-     * Ends the cursor: `for await` calls this on `break`, on `return` and on a throw.
+     * Ends the cursor's run where `run` settles: `closed` is set, `failure` holds a rejection, and
+     * the current `turn` wakes.
      *
-     * It is the only thing that drops the subscriber — a live cursor has no end of its own.
+     * ONE REACTION ON THE CLOSE FOR THE WHOLE RUN, never one per chunk held until the run ends. A
+     * chunk landing in the same turn as the close is still unread when the close wakes the caller,
+     * so a drain before reading `closed` hands it over rather than losing it to whichever settled
+     * first.
      */
-    return(): Promise<IteratorResult<unknown>> {
-        return this.stop()
+    closeOn(run: PromiseLike<unknown>): void {
+        run.then(
+            () => {
+                this.closed = true
+                this.woken()
+            },
+            (error: unknown) => {
+                this.closed = true
+                this.failure = error
+                this.woken()
+            },
+        )
     }
 
-    throw(): Promise<IteratorResult<unknown>> {
-        return this.stop()
+    /** Settles at the next chunk or the close, whichever lands first. */
+    turn(): Promise<void> {
+        return new Promise((resolve) => {
+            this.wake = resolve
+        })
     }
 
-    stop(): Promise<IteratorResult<unknown>> {
+    private woken(): void {
+        const wake = this.wake
+        this.wake = null
+        wake?.()
+    }
+
+    /** Drops the subscriber; nothing else does. */
+    stop(): void {
         const reader = this.reader
         reader.alive = false
         dropReader(this.source, reader)
         CURSORS.get(this.source)?.delete(this)
-        const waiting = this.waiting
-        while (waiting.length !== 0)
-            (waiting.shift() as (result: IteratorResult<unknown>) => void)({
-                value: undefined,
-                done: true,
-            })
-        return Promise.resolve({ value: undefined, done: true })
+        this.wake = null
     }
 }

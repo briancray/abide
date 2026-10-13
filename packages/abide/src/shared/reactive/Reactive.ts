@@ -19,7 +19,13 @@ import { type Found, runSchema, type Schema } from '../Schema.ts'
 import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
-import { Cursor, hasCursorBehind, keepPlaces, type Retained } from './Cursor.ts'
+import {
+    CAUGHT_UP,
+    Cursor,
+    hasCursorBehind,
+    keepPlaces,
+    type Retained,
+} from './Cursor.ts'
 import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
 import { armTimer, type Expiry, expiryFor } from './Expiry.ts'
 import { FOLLOWED } from './FOLLOWED.ts'
@@ -257,7 +263,7 @@ export type Reactive<
     invalidate(): void
     // biome-ignore lint/suspicious/noConfusingVoidType: `void` is the RETURN POSITION of an author's effect, and it is load-bearing. `undefined` there refuses `(v) => { read(v) }` — a block body returning nothing infers `void`, which is not assignable to `undefined` — so the rule's fix would reject the ordinary effect.
     watch(effect: (value: Stored) => void | (() => void)): () => void
-    /** The production in flight, and then what follows it (2.5). */
+    /** What one run produced: the settled value once, or a stream's chunks to its close (2.5, 2.6). */
     [Symbol.asyncIterator](): AsyncIterator<Produced>
     then<Result>(
         onSettled?: (value: Stored) => Result | PromiseLike<Result>,
@@ -459,7 +465,7 @@ type Stream = {
      * Whether what is served is a run that closed.
      *
      * WHETHER WHAT IS SERVED IS A RUN THAT CLOSED, which is the only accumulation a deadline
-     * reaches (6.11). A run in flight has minted nothing, so `expiry.at` says nothing about it —
+     * reaches (6.10). A run in flight has minted nothing, so `expiry.at` says nothing about it —
      * without this the standing arm reads `at` as 0 and drops the value on its first read.
      */
     closed: boolean
@@ -494,7 +500,7 @@ function becomeStream(cell: Cell, source: Cell | null): Stream {
 }
 
 /**
- * Starts a closed run's clock: the close is a streaming producer's mint (6.11), as `produce` is
+ * Starts a closed run's clock: the close is a streaming producer's mint (6.10), as `produce` is
  * every other producer's. A failed or superseded run never reaches here, so it starts no clock.
  */
 function closeRun(cell: Cell, stream: Stream): void {
@@ -651,8 +657,8 @@ class Cell {
      */
     declare schema: Schema<unknown> | null
     /**
-     * A streaming producer's chunk buffer, for a cursor to walk (2.5); `EMPTY_RING` on every
-     * other value, whose cursor answers the standing production from `value`.
+     * A streaming producer's chunk buffer, for a cursor to walk (2.6); `EMPTY_RING` on every
+     * other value.
      */
     declare ring: unknown[]
     /**
@@ -1519,9 +1525,7 @@ function produce(cell: Cell, produced: unknown): number {
     // `ttl` must not pay.
     const expiry = cell.expiry
     const mintedAt = expiry === null ? 0 : Date.now()
-    // 6.10: AN `undefined` IS SERVED AND MOVES NO ORDINAL, so no cursor is handed one — it is not a
-    // message, and not a JSON value either.
-    if (produced !== undefined) cell.ordinal += 1
+    cell.ordinal += 1
     if (expiry !== null) {
         expiry.at = mintedAt
         // A production is what 6.7 released being replaced, so the value is no longer
@@ -2336,7 +2340,7 @@ function adoptAnswer(cell: Cell, produced: unknown): void {
  *
  * 4.16: AN OPENING `undefined` IS LOADED AND IS NOT A PRODUCTION THROUGH THE PIPELINE. No `schema`
  * judges it, no `transform` shapes it, no window holds it and no `store` writes it — it is the value
- * being empty, and the first real production is what those are for. It mints no ordinal (6.10).
+ * being empty, and the first real production is what those are for. It mints no ordinal.
  */
 function landOpening(cell: Cell): void {
     const moved = settleProbes(cell)
@@ -2495,7 +2499,7 @@ async function pump(
     cell.loading = false
     // 3.7: `busy` held until the close, and this is the close.
     if (moved) probesMoved(cell)
-    // 6.11, AFTER THE CASCADE ABOVE: the entry is what a read would answer with, so it is taken
+    // 6.10, AFTER THE CASCADE ABOVE: the entry is what a read would answer with, so it is taken
     // once the last chunk has landed and the value is servable.
     closeRun(cell, stream)
     // 8.9: a stream is written once, at the close, with the accumulation and never a partial.
@@ -2773,7 +2777,7 @@ function beginLoad(cell: Cell): void {
  *
  * AND WHAT IS SERVED WAS MINTED, which every producer but a streaming one answers yes to the moment
  * it is servable. A stream serves the run it is building (9.1), and that run has minted nothing
- * until it closes (6.11) — so a deadline has nothing to measure from and must not drop it.
+ * until it closes (6.10) — so a deadline has nothing to measure from and must not drop it.
  */
 function standingLive(cell: Cell, expiry: Expiry): boolean {
     if (!reloads(cell) || expiry.dropped || !cell.servable) return false
@@ -2934,6 +2938,53 @@ function failureOf(cell: Cell): unknown {
     while (at.failure === undefined && at.adoption !== null)
         at = at.adoption.source
     return at.failure
+}
+
+/**
+ * What one run of `cell` produced, as `for await` walks it.
+ *
+ * 2.5 AND 2.6 — the settling, yielded once, or a stream's chunks from the first to the close. Which
+ * of the two is asked of the settling, since a value may only turn out to stream once its load
+ * resolves (9.6).
+ *
+ * THE CURSOR IS THE WAKE AND THE SETTLING IS THE END (`Cursor.closeOn`).
+ */
+async function* producedRun(cell: Cell): AsyncGenerator<unknown> {
+    const first = await settled(cell, true)
+    if (first !== STREAMING) {
+        yield first
+        return
+    }
+    // THE RUN IS ITS RING: a new run's first chunk replaces the array, where a patch mutates it in
+    // place (9.13) and only moves the base. A run with no chunk yet holds `EMPTY_RING`.
+    let ring = cell.ring
+    // 9.15 — a failure already standing is a revalidation's (2.4), and not this run's.
+    const standing = failureOf(cell)
+    const cursor = new Cursor(cell, cell.ringBase)
+    cursor.closeOn(settled(cell))
+    try {
+        for (;;) {
+            if (cell.ring !== ring) {
+                // 9.16.
+                if (ring !== EMPTY_RING) return
+                ring = cell.ring
+            }
+            const chunk = cursor.take()
+            if (chunk !== CAUGHT_UP) {
+                yield chunk
+                continue
+            }
+            if (cursor.closed) break
+            await cursor.turn()
+        }
+    } finally {
+        cursor.stop()
+    }
+    if (cursor.failure !== undefined) throw cursor.failure
+    // 9.15 AND 16.59 — a run that failed after its first chunk, or one its timeout ended, settles
+    // with what it had; the refusal stands beside it.
+    const ended = failureOf(cell)
+    if (ended !== undefined && ended !== standing) throw ended
 }
 
 /**
@@ -4034,20 +4085,7 @@ const MEMBERS = {
         return watchCell(this[CELL], effect)
     },
     [Symbol.asyncIterator](this: Callable): AsyncIterator<unknown> {
-        const cell = this[CELL]
-        // 2.5: "the production in flight, from its start". Starting one ordinal back is
-        // what includes it rather than skipping to whatever comes next — and clamped at
-        // zero, where a value nothing has produced into must WAIT rather than hand over
-        // the `undefined` it is holding.
-        // A STREAM'S PRODUCTION IN FLIGHT IS THE STREAM, so its start is the run's first
-        // chunk rather than the latest one.
-        const from =
-            cell.stream !== null
-                ? cell.ringBase
-                : cell.ordinal > 0
-                  ? cell.ordinal - 1
-                  : 0
-        return new Cursor(cell, from)
+        return producedRun(this[CELL])
     },
     // biome-ignore lint/suspicious/noThenProperty: RULEBOOK 1.4 — a `Reactive` MUST be thenable, which is what this rule warns about. Banning it buys a discrimination rather than a semantics, and 16.4's in-process `Rpc` arm is what that discrimination would have cost. 1.6 is the guard that makes thenability safe — the brand is read before `then`.
     then(
@@ -4164,6 +4202,15 @@ export function isStreaming(value: unknown): boolean {
     if (!isReactive(value)) return false
     const stream = (value as Partial<Callable>)[CELL]?.stream
     return stream !== null && stream !== undefined
+}
+
+/**
+ * A cursor over `value` that reads nothing and only wakes when it changes.
+ *
+ * PLACED PAST EVERY CHUNK, so it holds no place a patch has to keep (5.7) and is never behind.
+ */
+export function wakeOf(value: unknown): Cursor {
+    return new Cursor((value as Callable)[CELL], Number.POSITIVE_INFINITY)
 }
 
 /**
@@ -4347,8 +4394,7 @@ const SIMPLE_PROTOTYPE = brandedPrototype({
                 return undefined
             }
             cell.value = value
-            // 6.10: an `undefined` is served and moves no ordinal.
-            if (value !== undefined) cell.ordinal += 1
+            cell.ordinal += 1
             // `setDirect`, with `plain` known true by `simple`.
             cell.direct = cell.state === CLEAN
             if (cell.readers.length !== 0) markReaders(cell, DIRTY)

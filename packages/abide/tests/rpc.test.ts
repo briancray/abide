@@ -180,6 +180,29 @@ test('a generator handler streams, and the value is its chunks', async () => {
     ])
 })
 
+// 2.6 AND 9.15 THROUGH A CALL — the loop an app writes over a streamed answer ends with it, and
+// throws what cut it off. THE REVERT is the live cursor this replaced, which waited on the next run:
+// the first loop never ends, and the test times out.
+test('for await over a streamed call ends with the stream, and throws what failed it — 2.6, 9.15', async () => {
+    const ask = POST(async function* ({ fail }: { fail: boolean }) {
+        yield { type: 'text', text: 'a' }
+        await Bun.sleep(1)
+        if (fail) throw new Error('cut off')
+        yield { type: 'done' }
+    })
+    const seen: string[] = []
+    for await (const event of ask({ fail: false })) seen.push(event.type)
+    expect(seen).toEqual(['text', 'done'])
+    const before: string[] = []
+    let caught = 'nothing'
+    try {
+        for await (const event of ask({ fail: true })) before.push(event.type)
+    } catch (thrown) {
+        caught = (thrown as Error).message
+    }
+    expect(`${before.join(',')} caught: ${caught}`).toBe('text caught: cut off')
+})
+
 // 16.8 — EVERY `Rpc` CARRIES THE TRANSPORT'S `HttpError`, declared or not: a stream handler that
 // declares nothing still times out 504, and the wire rebuilds a 500 whose body was no `Failed` as one.
 // The runtime half pins the shape the type names — name, status, data `undefined`. The type half is

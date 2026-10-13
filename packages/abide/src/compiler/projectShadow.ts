@@ -683,7 +683,7 @@ const ROWS_OF = '__rowsOf'
  *
  * The item is read off the subject as `listOf` iterates it: what a `Reactive` read by
  * name hands back (31.1 lowers `rows` to `rows()`), or the subject itself. THE CALL IS THE FIRST
- * OVERLOAD because a `Reactive` is ALSO an `AsyncIterable` of its productions (2.5), and inferred
+ * OVERLOAD because a `Reactive` is ALSO an `AsyncIterable` of what it produced (2.5, 2.6), and inferred
  * over one union the item came out as the row OR the whole list. Declared AFTER everything, so no
  * offset above it moves, and ambient, so there is nothing to emit. Where inference fails the item
  * is `unknown`, and a member of that is unprovable — the safe side.

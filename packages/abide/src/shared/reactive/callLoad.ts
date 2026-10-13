@@ -161,33 +161,19 @@ function timeLoad(attended: Attended, milliseconds: number | undefined): void {
         }, milliseconds)
     }
     let settled = false
-    let wake = (): void => {}
     const end = (): void => {
         settled = true
         clearTimeout(timer)
-        wake()
     }
-    // A CHUNK IS PROGRESS. The live cursor wakes on each, and outlives the run — it waits on the
-    // next one — so the run settling is a wake of its own, and is what lets the cursor go.
+    // A CHUNK IS PROGRESS, and the run's close ends the loop (2.6). What the run failed with is the
+    // load's to answer, so the loop only stops on it.
     const followChunks = async (): Promise<void> => {
-        const cursor = (reached as AsyncIterable<unknown>)[
-            Symbol.asyncIterator
-        ]()
         try {
-            while (!settled) {
-                await new Promise<void>((resolve) => {
-                    wake = resolve
-                    cursor.next().then(
-                        () => resolve(),
-                        () => resolve(),
-                    )
-                })
+            for await (const _ of reached as AsyncIterable<unknown>) {
                 if (settled || loadOf(reached) !== load) return
                 arm()
             }
-        } finally {
-            void cursor.return?.(undefined)
-        }
+        } catch {}
     }
     arm()
     // 9.6 — a value behind rungs only turns out to stream once the onion resolves, so the question

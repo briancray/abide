@@ -1066,59 +1066,7 @@ test('a value is directly servable again after a mark that changed nothing', () 
     expect(inner(both).direct).toBe(true)
 })
 
-// ── The cursor: RULEBOOK 2.5, 5.10 ──────────────────────────────────────────────
-
-// Takes `count` turns and stops, so a live cursor cannot hang a test. `break` is also
-// what exercises the iterator's `return` — the only thing that drops its subscriber.
-async function take<Value>(
-    over: AsyncIterable<Value>,
-    count: number,
-): Promise<Value[]> {
-    const seen: Value[] = []
-    if (count === 0) return seen
-    for await (const value of over) {
-        seen.push(value)
-        if (seen.length === count) break
-    }
-    return seen
-}
-
-// 2.5: the bare cursor is the LIVE one. It yields the production in flight from its
-// start — so the standing message, not the next one — and replays no past value at all.
-test('a bare cursor yields the production in flight and then what follows', async () => {
-    const room = reactive<string>(undefined)
-    room.set('a')
-    room.set('b')
-    const seen = take(room, 2)
-    room.set('c')
-    // 'a' is past and is not replayed; 'b' is the production standing when the cursor
-    // opened, and it is.
-    expect(await seen).toEqual(['b', 'c'])
-})
-
-// A cursor over a value nothing has produced into MUST WAIT rather than hand over the
-// `undefined` it is holding — the clamp at ordinal zero.
-test('a bare cursor over a value with nothing produced waits', async () => {
-    const room = reactive<string>(undefined)
-    const seen = take(room, 1)
-    room.set('first')
-    expect(await seen).toEqual(['first'])
-})
-
-// 5.10 ON A VALUE THAT IS NOT A STREAM: nothing but the standing production is held, so what lands
-// between two turns is one turn, the latest — and the cursor is caught up after it rather than owed
-// the productions the burst buried. A channel that wants every message keeps them in an array.
-test('productions between two turns collapse to the latest on a value that is not a stream', async () => {
-    const room = reactive<string>(undefined)
-    const cursor = room[Symbol.asyncIterator]()
-    room.set('a')
-    expect((await cursor.next()).value).toBe('a')
-    room.set('b')
-    room.set('c')
-    expect((await cursor.next()).value).toBe('c')
-    expect(await settlesWithin(cursor.next(), 20)).toBe('pending')
-    await cursor.return?.()
-})
+// ── The cursor: RULEBOOK 2.5, 2.6 ───────────────────────────────────────────────
 
 /** `'pending'` where `promise` has not settled after `ms`, and its value where it has. */
 async function settlesWithin<Value>(
@@ -1132,32 +1080,49 @@ async function settlesWithin<Value>(
     return outcome
 }
 
-// 5.7 AGAINST 2.5 — A PATCH MINTS NO ORDINAL, so a cursor over an array patched in place reads the
-// change off the object's patch epoch: a channel that is an array yields a turn per patch. THE
-// REVERT, run: drop the `patched === this.patched` half of `Cursor.take`'s caught-up test; the turn
-// after the push never comes, and this reads 'pending'.
-test('a cursor over an array yields again after an in-place patch', async () => {
-    const room = reactive<string[]>(['a'])
-    const cursor = room[Symbol.asyncIterator]()
-    expect((await cursor.next()).value).toEqual(['a'])
-    const next = cursor.next()
-    room.patch((list) => {
-        list.push('b')
+/** Every turn of a `for await` over `over`, or `'still waiting'` where it has not ended in `ms`. */
+async function walked<Value>(
+    over: AsyncIterable<Value>,
+    ms = 200,
+): Promise<Value[] | 'still waiting'> {
+    const seen: Value[] = []
+    const ended = (async () => {
+        for await (const value of over) seen.push(value)
+        return seen
+    })()
+    return Promise.race([
+        ended,
+        Bun.sleep(ms).then(() => 'still waiting' as const),
+    ])
+}
+
+// 2.5: A VALUE IS A RUN OF ONE. `for await` over a value that is not a stream is `await` — the
+// settled value, once — and then the loop ends. THE REVERT is the live cursor this replaced, which
+// waited on the next production: 'still waiting'.
+test('for await over a value yields its settled value once and ends — 2.5', async () => {
+    const room = reactive('a')
+    expect(await walked(room)).toEqual(['a'])
+    const loading = reactive(async () => {
+        await Bun.sleep(5)
+        return 'b'
     })
-    expect(await settlesWithin(next, 200)).toEqual(['a', 'b'])
-    await cursor.return?.()
+    expect(await walked(loading)).toEqual(['b'])
 })
 
-// A live cursor has no end of its own, so the consumer leaving is the only thing that
-// drops its subscriber. A cursor per row of a list that never unsubscribed would grow
-// the reader list for the life of the page — and nothing about the output would say so.
-test('leaving a cursor drops its subscriber', async () => {
-    const room = reactive<string>(undefined)
-    room.set('a')
-    await Promise.resolve()
-    const before = cellOf<{ readers: unknown[] }>(room).readers.length
-    await take(room, 1)
-    expect(cellOf<{ readers: unknown[] }>(room).readers.length).toBe(before)
+// 2.5 AND 2.8: a value that failed is what `await` throws, and the loop throws it too.
+test('for await over a value that failed throws its failure — 2.5', async () => {
+    const failing = reactive(async (): Promise<string> => {
+        throw new Error('no')
+    })
+    let caught: unknown
+    try {
+        await walked(failing)
+    } catch (thrown) {
+        caught = thrown
+    }
+    expect(`caught: ${(caught as Error | undefined)?.message}`).toBe(
+        'caught: no',
+    )
 })
 
 // 12.8 THROUGH `s.watch`, which is 12.9's whole point: `s.watch` is `watch` narrowed to
@@ -2743,47 +2708,6 @@ test('a narrowed watch runs untracked inside a tracked body', () => {
     stop()
 })
 
-// A CONSUMER MAY ASK TWICE BEFORE EITHER ANSWER ARRIVES. `for await` asks one turn at a
-// time, which is why one resolver slot passed every test here — and a second `next()`
-// overwrote the first's resolver, so that promise never settled at all. A `Promise.all`
-// over two turns hung with the productions already retained.
-//
-// THE REVERT, run: drop every queued resolver but the newest in `Cursor.next` (a single slot);
-// the first turn reads 'pending'.
-test('two turns asked for before either lands are both answered', async () => {
-    const room = reactive<string>(undefined)
-    const cursor = room[Symbol.asyncIterator]()
-    const first = cursor.next()
-    const second = cursor.next()
-    room.set('a')
-    expect(await settlesWithin(first, 200)).toBe('a')
-    room.set('b')
-    expect(await settlesWithin(second, 200)).toBe('b')
-    await cursor.return?.()
-})
-
-// AND A TURN OUTSTANDING WHILE A PRODUCTION IS ALREADY STANDING, which the test above
-// cannot reach: it asks both turns before anything is written, so the first `next()`
-// finds the cursor caught up and both go on the queue in order whatever the guard does.
-// A cursor's reader is an EFFECT and is drained at the end of the turn, so a `set`
-// between the two `next()` calls leaves the first resolver still queued with its
-// production already standing — and a `next()` that takes it there hands the LATER caller
-// the EARLIER production.
-//
-// THE REVERT, run: drop the `waiting.length === 0` test in `Cursor.next`; `second` is handed
-// 'a' and `first` is left 'pending'.
-test('a turn outstanding is answered before a later one takes the standing production', async () => {
-    const room = reactive<string>(undefined)
-    const cursor = room[Symbol.asyncIterator]()
-    const first = cursor.next()
-    room.set('a')
-    const second = cursor.next()
-    expect(await settlesWithin(first, 200)).toBe('a')
-    room.set('b')
-    expect(await settlesWithin(second, 200)).toBe('b')
-    await cursor.return?.()
-})
-
 // ── `ttl`: the life of a production (RULEBOOK 6.1 through 6.6) ──────────────────────
 
 // A CLOCK READ IS WHAT AN EXPIRY COSTS, and counting them is the only assertion that can
@@ -4344,8 +4268,8 @@ test('a chunk from a superseded stream lands nowhere', async () => {
     expect(rows()).toEqual(['a'])
 })
 
-// 2.5 OVER A STREAM: "the production in flight, from its start" is the stream in flight, so
-// a cursor opened after three chunks hands over all three and then goes on live.
+// 2.6: the run being served, from its first chunk — so a cursor opened after three chunks hands
+// over all three and then each one the run goes on to land.
 test('a cursor over a stream replays the run in flight from its first chunk', async () => {
     const feed = streamOf<number>()
     const rows = reactive(feed.body)
@@ -4363,6 +4287,134 @@ test('a cursor over a stream replays the run in flight from its first chunk', as
     seen.push((await pending).value as number)
     expect(seen).toEqual([1, 2, 3, 4])
     await cursor.return?.()
+})
+
+// 2.6: THE LOOP ENDS WITH ITS RUN. THE REVERT, run: drop the `closed` break from `producedRun`;
+// 'still waiting', which is the hang an app looping over a streamed call hit.
+test('for await over a stream ends when its run closes — 2.6', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    const walking = walked(rows, 500)
+    run.push(1)
+    run.push(2)
+    await turns()
+    run.push(3)
+    run.close()
+    expect(await walking).toEqual([1, 2, 3])
+})
+
+// 2.6 AT THE CLOSE: a chunk landing in the same turn as the close is in the ring when the close
+// wakes the loop, and the drain hands it over. THE REVERT, run: break at `closed` before taking
+// from the ring — the turn reads `undefined`, the last chunk lost to whichever settled first.
+test('a chunk landing in the same turn as the close is not lost — 2.6', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    const cursor = rows[Symbol.asyncIterator]()
+    expect((await cursor.next()).value).toBe(1)
+    const pending = cursor.next()
+    run.push(2)
+    run.close()
+    expect(await settlesWithin(pending, 200)).toBe(2)
+    expect((await cursor.next()).done).toBe(true)
+})
+
+// 9.15: A RUN THAT FAILED AFTER ITS FIRST CHUNK settles with what it had (2.4), so the loop hands
+// that over and then throws. THE REVERT, run: drop the `failureOf` throw at the end of
+// `producedRun`; `1 caught: nothing`.
+test('for await over a stream that fails yields its chunks and then throws — 9.15', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    const seen: number[] = []
+    let caught = 'nothing'
+    const walking = (async () => {
+        try {
+            for await (const chunk of rows) seen.push(chunk as number)
+        } catch (thrown) {
+            caught = (thrown as Error).message
+        }
+    })()
+    run.push(1)
+    await turns()
+    run.fail(new Error('cut off'))
+    await walking
+    expect(`${seen.join(',')} caught: ${caught}`).toBe('1 caught: cut off')
+})
+
+// 9.15 AGAINST 2.4: a failure standing beside the accumulation before the loop began is a
+// revalidation's, not the run being served's. THE REVERT, run: throw any failure standing at the
+// end; `[] caught: refresh failed`.
+test('for await over a stream does not throw a revalidation that failed before it — 9.15', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const first = feed.runs[0] as Run<number>
+    first.push(1)
+    first.close()
+    await rows
+    rows.refresh()
+    ;(feed.runs[1] as Run<number>).fail(new Error('refresh failed'))
+    await turns()
+    expect(rows.error()).toBeDefined()
+    let caught = 'nothing'
+    let seen: unknown = []
+    try {
+        seen = await walked(rows)
+    } catch (thrown) {
+        caught = (thrown as Error).message
+    }
+    expect(`${JSON.stringify(seen)} caught: ${caught}`).toBe(
+        '[1] caught: nothing',
+    )
+})
+
+// 9.16: A REFRESH REPLACES THE RUN, and a loop over the old one ends rather than walking on into
+// the new one's chunks. THE REVERT, run: drop the `ring` test at the top of the loop; the walk
+// goes on into the new run and reads 'still waiting'.
+test('for await over a stream ends where a refresh replaces its run — 9.16', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const first = feed.runs[0] as Run<number>
+    first.push(1)
+    await turns()
+    const walking = walked(rows, 500)
+    await turns()
+    rows.refresh()
+    ;(feed.runs[1] as Run<number>).push(10)
+    expect(await walking).toEqual([1])
+})
+
+// THE QUEUE IS THE ITERATOR'S. A consumer may ask twice before either answer arrives —
+// `Promise.all([it.next(), it.next()])` — and both are answered in order.
+test('two turns asked for before either lands are both answered', async () => {
+    const feed = streamOf<string>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<string>
+    await turns()
+    const cursor = rows[Symbol.asyncIterator]()
+    const first = cursor.next()
+    const second = cursor.next()
+    run.push('a')
+    run.push('b')
+    expect(await settlesWithin(first, 200)).toBe('a')
+    expect(await settlesWithin(second, 200)).toBe('b')
+    await cursor.return?.()
+})
+
+// A loop that leaves early drops its subscriber, or a cursor per row of a list would grow the
+// reader list for the life of the page — and nothing about the output would say so.
+test('leaving a loop over a stream drops its subscriber', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    const before = cellOf<{ readers: unknown[] }>(rows).readers.length
+    for await (const _ of rows) break
+    expect(cellOf<{ readers: unknown[] }>(rows).readers.length).toBe(before)
 })
 
 // 2.7: `await rows` HOLDS FOR THE WHOLE THING. The first chunk makes the value ready, and
@@ -4938,7 +4990,7 @@ test('patch and set through a value adopting a stream reach the stream', async (
     )
 })
 
-// `ttl` ON A STREAM IS THE LIFE OF A CLOSED RUN, and it needed no reading of its own: 6.11 starts
+// `ttl` ON A STREAM IS THE LIFE OF A CLOSED RUN, and it needed no reading of its own: 6.10 starts
 // the clock at the run's close, so 6.5 and 6.6 are the same sentence they are
 // everywhere else. The run IN FLIGHT has produced nothing, so it has no deadline — which is what
 // stops a long stream expiring underneath the reader it is still filling.
@@ -5830,7 +5882,7 @@ test('awaiting a derived value settles once the source it aborted on lands', asy
     expect(`awaited: ${await awaited}`).toBe('awaited: 42')
 })
 
-// ── Writes through adoption, and `undefined` (RULEBOOK 11.59, 11.62, 4.14, 4.15, 6.10) ──────────
+// ── Writes through adoption, and `undefined` (RULEBOOK 11.59, 11.62, 4.14, 4.15) ───────────────
 
 // 11.61: A `Reactive` WRITTEN IS ADOPTED, which is 11.12's sentence about a body's return value,
 // said once more about a write. Storing it instead is what 1.6 calls the hazard: the callable is
@@ -5955,27 +6007,6 @@ test('a body answering undefined is loaded, and is not shaped', () => {
     expect(`ready: ${onboarding.ready()}`).toBe('ready: true')
     expect(onboarding()).toBeUndefined()
     expect(`transformed: ${transformed}`).toBe('transformed: 0')
-})
-
-// 6.10: the standing production is what a cursor takes, and an `undefined` standing is nothing to
-// take — a cursor that fell behind a production and then an `undefined` waits for the next.
-//
-// THE REVERT, run: `Cursor.take` handing over the standing value whatever it is: `turn: undefined`.
-test('a cursor is never handed undefined', async () => {
-    const selected = reactive<string | undefined>('a')
-    const cursor = selected[Symbol.asyncIterator]()
-    expect((await cursor.next()).value).toBe('a')
-    selected.set('b')
-    selected.set(undefined)
-    let turn: unknown = 'none'
-    const next = cursor.next().then((result) => {
-        turn = result.value
-    })
-    await Promise.resolve()
-    expect(`turn: ${turn}`).toBe('turn: none')
-    selected.set('c')
-    await next
-    expect(`turn: ${turn}`).toBe('turn: c')
 })
 
 // 4.14 AGAINST 4.15: NO ARGUMENT IS EMPTY, AND `undefined` IS A VALUE.
@@ -6492,21 +6523,6 @@ test('a long body that reads one value many times holds one subscription of it',
     expect(cellOf<{ readers: unknown[] }>(rows[99]).readers.length).toBe(1)
     repeated.set(1)
     expect(total()).toBe(5051)
-})
-
-// 5.9 AGAINST 2.5 — A CURSOR ASKING WHILE A WINDOW HOLDS A PRODUCTION waits for the release, rather
-// than reading the ordinal the held production minted beside the value still standing: that handed
-// the old value twice and was caught up when the release served the held one. THE REVERT: drop the
-// `holding` arm from `Cursor.take`; the turns read 'a a'.
-test('a cursor turn asked inside a throttle window is the production the window releases', async () => {
-    const query = reactive<string>(undefined, { throttle: 30 })
-    const cursor = query[Symbol.asyncIterator]()
-    query.set('a')
-    const first = (await cursor.next()).value
-    query.set('b')
-    const second = await settlesWithin(cursor.next(), 90)
-    await cursor.return?.()
-    expect(`${first} ${second}`).toBe('a b')
 })
 
 // 5.7 AND 2.5 FOR A CURSOR BEHIND: a patch that grew the accumulation AFTER where a cursor stands

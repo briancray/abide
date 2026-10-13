@@ -1,8 +1,7 @@
 // 18.7 — THE VERSION A VALUE'S STANDING PRODUCTION IS NAMED BY OVER THE WIRE. Stamped where it is
 // asked for rather than where a production is minted, so a value no browser follows pays nothing on
 // its production path. A production is told apart from the one before by the ordinal, what is held
-// (6.10 moves no ordinal for `undefined`) and the patch epoch of what is held (5.7 moves no ordinal
-// for a patch).
+// and the patch epoch of what is held (5.7 moves no ordinal for a patch).
 //
 // ONE COUNTER FOR THE PROCESS, started at the boot time in microseconds, so no two productions share
 // a number: not two values, not an entry evicted and built again, and not this process and the one
