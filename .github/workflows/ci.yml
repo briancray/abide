@@ -45,6 +45,9 @@ jobs:
           echo '{"name":"consumer","private":true}' > package.json
           bun add "$(echo "$RUNNER_TEMP"/abide-abide-*.tgz)"
           ./node_modules/.bin/abide scaffold my-app
+          # Written by the scaffold rather than packed: a packer drops both.
+          test -f my-app/bunfig.toml
+          test -f my-app/.gitignore
 
       - name: Assert the scaffold pins the packed version
         run: |
