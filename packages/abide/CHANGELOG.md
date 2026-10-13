@@ -1,5 +1,18 @@
 # @abide/abide
 
+## 0.104.0
+
+### Minor Changes
+
+- c95d974: Breaking: for await over a reactive is one run ([`0013bd0`](https://github.com/briancray/abide/commit/0013bd0a279bc73cbd5d5db3f4424bd2a2418fac))
+- c95d974: Breaking: mcp publishes every handler as a tool ([`a983075`](https://github.com/briancray/abide/commit/a98307582cc388f38c3d2377e176f74fe41b63da))
+- c95d974: Breaking: a hook called outside a .abide or a handler file is a build error (37.13) ([`c03e97c`](https://github.com/briancray/abide/commit/c03e97c05d27db709ecb02ad06a53574b1c98ee5))
+- c95d974: a server directory nests under lib or tests (23.16) ([`f928540`](https://github.com/briancray/abide/commit/f928540ecbe57af94c780a2b73c7109ef87faa52))
+
+### Patch Changes
+
+- c95d974: every spelling of a handler file import is the face the server mounts (16.2) ([`1e2e721`](https://github.com/briancray/abide/commit/1e2e72171950f7b3d0144fbe12b4e6d35c226fbd))
+
 ## 0.103.0
 
 ### Minor Changes
