@@ -53,7 +53,7 @@ export async function appMap(
               : 1,
     )
     const hooks: MappedHook[] = []
-    const { abide, handlers, modules } = appFiles(root, () => {})
+    const { abide, handlers } = appFiles(root, () => {})
     for (const file of abide) {
         const parsed = parseAbide(readFileSync(`${root}/${file}`, 'utf8'))
         // Block by block: one block's last token would decide how the next one's first reads.
@@ -64,11 +64,6 @@ export async function appMap(
     for (const file of handlers)
         for (const hook of hooksCalled(readFileSync(`${root}/${file}`, 'utf8')))
             hooks.push({ hook, route: scopeOf(file), file })
-    // 37.1 — A MODULE THAT IS NEITHER files at the root: it runs as it is imported, before the
-    // importing file's route is set.
-    for (const file of modules)
-        for (const hook of hooksCalled(readFileSync(`${root}/${file}`, 'utf8')))
-            hooks.push({ hook, route: '/', file })
     return { routes, hooks }
 }
 

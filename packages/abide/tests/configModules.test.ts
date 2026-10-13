@@ -1,5 +1,5 @@
-// 27.13 — `Config` IS TYPED BY AN `onConfig` IN A MODULE THAT IS NO `.abide`: a handler file and a
-// module under a `server` directory are typed beside the file (`moduleConfigShadow`), and a page that
+// 27.13 — `Config` IS TYPED BY AN `onConfig` IN A HANDLER FILE, the one module that is no `.abide`
+// and may call a hook (37.13): each is typed beside the file (`moduleConfigShadow`), and a page that
 // only reads `config()` is held to what they default.
 //
 // THE REVERT: drop the `configModulesUnder` loop from `TypeSession.diagnose`; nothing declares the
@@ -31,9 +31,11 @@ export default GET(() => {
     return { retries, wrong }
 })
 `,
-        'server/defaults.ts': `import { onConfig } from '@abide/abide/server'
+        'media/getLabel.ts': `import { GET, onConfig } from '@abide/abide/server'
 
 onConfig(() => ({ LABEL: 'grid' }))
+
+export default GET(() => 'grid')
 `,
         'reads/index.abide': `<script server>
 import { config } from '@abide/abide/server'
@@ -50,7 +52,7 @@ const wrong: number = config().LABEL
     )
 }, 60_000)
 
-test('a handler file and a server module type Config for every file that reads it — 27.13', () => {
+test('two handler files type Config for every file that reads it — 27.13', () => {
     const at: string[] = []
     for (const diagnosis of found)
         at.push(

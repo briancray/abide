@@ -45,7 +45,7 @@ import {
     readSources,
     refusal,
 } from './readSources.ts'
-import { respecified } from './splitImports.ts'
+import { importStatements, respecified } from './splitImports.ts'
 import { type Diagnosis, TypeSession } from './TypeSession.ts'
 import { writeDefaultProject } from './writeDefaultProject.ts'
 
@@ -350,7 +350,8 @@ export async function compileApp(
     const root = realpathSync(appRoot)
     // ONE WALK for the sources, the handler files and the public files, refusing a tree 23.16-23.18
     // forbids before anything is read.
-    const { abide, handlers, published } = appFiles(root)
+    const { abide, handlers, modules, published } = appFiles(root)
+    refuseModuleHooks(root, modules)
     const sources = await sourcesAt(root, abide)
     // 16.2 — an app of handler files alone is still an app.
     if (sources.length === 0 && handlers.length === 0)
@@ -584,11 +585,7 @@ export async function emitApp(
 function onAbideOf(root: string, path: string, text: string): string {
     const from = dirname(realpathSync(path))
     return respecified(text, (specifier) => {
-        if (
-            specifier !== SHARED_SPECIFIER &&
-            !specifier.startsWith(`${SHARED_SPECIFIER}/`)
-        )
-            return undefined
+        if (!isAbideSpecifier(specifier)) return undefined
         let target: string
         try {
             target = resolvedFile(specifier, root)
@@ -706,6 +703,46 @@ function refuseStrayLauncher(
             stray(source.relative)
     for (const file of handlerFiles)
         if (callsLauncher(readFileSync(file.path, 'utf8'))) stray(file.relative)
+}
+
+/**
+ * 37.13 — a hook called in a module that is neither a `.abide` nor a handler file runs as the module
+ * is imported, before any file's route is set, and not at all where nothing imports it. A hook is a
+ * name the module imports from abide, or a member of a namespace it does, so `emitter.onError(…)` in
+ * a module that imports abide for `reactive` is no hook.
+ */
+export function refuseModuleHooks(
+    root: string,
+    modules: readonly string[],
+    refuse: Refuse = THROW,
+): void {
+    for (const module of modules) {
+        const source = readFileSync(`${root}/${module}`, 'utf8')
+        if (!source.includes(SHARED_SPECIFIER)) continue
+        const imported = new Set<string>()
+        for (const statement of importStatements(source))
+            if (isAbideSpecifier(statement.specifier))
+                for (const binding of statement.bindings)
+                    if (!binding.typeOnly) imported.add(binding.imported)
+        const hook = hooksCalled(source).find(
+            (name) => imported.has(name) || imported.has('*'),
+        )
+        if (hook !== undefined)
+            refuse(
+                module,
+                new Error(
+                    `abide: ${module} calls ${hook}, and it is neither a .abide nor a handler file, so the call has no route. Export what it is handed and call ${hook} in the page, layout or handler file it serves. RULEBOOK 37.13.`,
+                ),
+            )
+    }
+}
+
+/** `@abide/abide` or one of its subpaths. */
+function isAbideSpecifier(specifier: string): boolean {
+    return (
+        specifier === SHARED_SPECIFIER ||
+        specifier.startsWith(`${SHARED_SPECIFIER}/`)
+    )
 }
 
 function callsLauncher(source: string): boolean {

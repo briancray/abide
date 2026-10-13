@@ -4,6 +4,7 @@ import { placeOf } from '#shared/routePattern.ts'
 import {
     type AppChecker,
     emitApp,
+    refuseModuleHooks,
     resolverIn,
     sourcesUnder,
     withChecker,
@@ -40,10 +41,13 @@ export async function checkApp(
     return withChecker(root, kept, async (session) => {
         const refused: Diagnosis[] = []
         const own = parseSources(sources, refused)
-        // 23.16-23.18 — what the build's walk would refuse of the tree, at each file it names.
-        const { handlers } = appFiles(root, (path, message) => {
-            refused.push(refusal(`${root}/${path}`, message))
-        })
+        // 23.16-23.18 and 37.13 — what the build's walk would refuse of the tree, at each file it names.
+        // 38.33 — each at its file, and every one rather than the first.
+        const atFile = (relative: string, thrown: unknown): void => {
+            refused.push(refusal(`${root}/${relative}`, thrown))
+        }
+        const { handlers, modules } = appFiles(root, atFile)
+        refuseModuleHooks(root, modules, atFile)
         const resolve = resolverIn()
         const { sources: everyParsed, handlers: handlerFiles } =
             await withDependencies(root, own, handlers, resolve, refused)
@@ -83,11 +87,7 @@ export async function checkApp(
                             emittable,
                             resolve,
                             handlerFiles,
-                            // 38.33 — each at its file, and every one rather than the first.
-                            (relative, thrown) =>
-                                refused.push(
-                                    refusal(`${root}/${relative}`, thrown),
-                                ),
+                            atFile,
                         )
                     ).warnings,
                 )

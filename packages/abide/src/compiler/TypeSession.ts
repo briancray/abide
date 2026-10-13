@@ -863,7 +863,7 @@ export class TypeSession {
                 configModules: configModulesUnder(within, files),
             }
         }
-        // 27.13 — what a handler file or a server module defaults, beside it.
+        // 27.13 — what a handler file defaults, beside it.
         for (const [path, text] of await this.walked.configModules) {
             const shadow = moduleConfigShadow(text)
             const at = `${this.canonical(path)}${CONFIG_SUFFIX}`
@@ -1329,17 +1329,15 @@ function flatten(diagnostic: {
 const CONFIG_SUFFIX = '.config-shadow.ts'
 
 /**
- * Every handler file and every module under a `server` directory below `within` that names
- * `onConfig`, with its text — the modules a server runs that 27.13 types `Config` off.
+ * Every handler file below `within` that names `onConfig`, with its text — the modules a server
+ * runs that 27.13 types `Config` off, since 37.13 refuses a hook anywhere else that is no `.abide`.
  */
 async function configModulesUnder(
     within: string,
-    { handlers, modules }: ReturnType<typeof appFiles>,
+    { handlers }: ReturnType<typeof appFiles>,
 ): Promise<[string, string][]> {
     const paths: string[] = []
     for (const name of handlers) paths.push(`${within}/${name}`)
-    for (const name of modules)
-        if (placeOf(name) === 'server') paths.push(`${within}/${name}`)
     const texts = await Promise.all(paths.map((path) => Bun.file(path).text()))
     const found: [string, string][] = []
     for (let at = 0; at < paths.length; at += 1)

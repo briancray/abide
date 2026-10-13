@@ -169,7 +169,7 @@ ${aliases}declare module '${SERVER_SPECIFIER}' {
 const TOP_LEVEL_CONFIG = /^onConfig\s*\(/gm
 
 /**
- * 27.13 FOR A MODULE THAT IS NO `.abide` — a handler file, or one under a `server` directory: its
+ * 27.13 FOR A HANDLER FILE, the one module that is no `.abide` and may call a hook (37.13): its
  * text with each `onConfig(…)` at its top level bound as the lowering binds a server block's, and
  * `Config` extended by each, or `undefined` where it files none.
  *

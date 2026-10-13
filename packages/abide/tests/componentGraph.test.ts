@@ -2,7 +2,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs' // bun has no sync mkdtemp/symlink/rm of its own
 import { tmpdir } from 'node:os' // bun exposes no temp-directory helper of its own
 import { compileApp } from '#compiler/compileApp.ts'
-import { fileKind } from '#shared/routePattern.ts'
+import { fileKind, placeOf } from '#shared/routePattern.ts'
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'
@@ -211,6 +211,53 @@ test('a fence under a fence, and an index.abide under lib, are build errors — 
     const indexed = await compiledTree({ 'media/lib/index.abide': '<p>x</p>' })
     expect(indexed.refused).toContain('media/lib/index.abide')
     expect(indexed.refused).toContain('RULEBOOK 23.18')
+})
+
+// 23.16 — A `server` DIRECTORY NESTS IN A `lib` OR A `tests` ONE, because it fences a graph rather
+// than an address: `media/lib/server/db.ts` is server code (16.29), and `lib/public/` is still
+// refused.
+//
+// THE REVERTS: drop the `server`-under-`lib`/`tests` exemption in `appTree`'s walk; `lib/server/`
+// is refused. Or return the first fence's name in `placeOf`; `lib/server/db.ts` places as `lib`,
+// and the browser's bundle takes it.
+test('a server directory under lib or tests builds, and is server code — 23.16', async () => {
+    const nested = await compiledTree({
+        'media/lib/server/db.ts': 'export const db = 1\n',
+        'media/tests/server/seed.ts': 'export const seed = 1\n',
+    })
+    expect(nested.refused).toBe('')
+    expect(placeOf('media/lib/server/db.ts')).toBe('server')
+    expect(placeOf('media/tests/server/seed.ts')).toBe('server')
+    expect(placeOf('media/lib/Card.abide')).toBe('lib')
+    // A dot directory is never walked, so a `server` below one fences nothing.
+    expect(placeOf('lib/.cache/server/x.ts')).toBe('lib')
+    const published = await compiledTree({ 'media/lib/public/a.txt': 'a' })
+    expect(published.refused).toContain('RULEBOOK 23.16')
+})
+
+// 37.13 — A HOOK IS CALLED IN AN ADDRESSED FILE: one in a plain module runs as the module is
+// imported, before any route is set, and never where nothing imports it. Refused naming the module
+// and the hook, under `server/` and `lib/` alike, through a namespace too; a hook's name is no hook
+// where abide did not hand it to the module.
+//
+// THE REVERTS: drop the `refuseModuleHooks` call in `compileApp`; both modules build, and their
+// middleware is filed at the root by whichever import evaluates it first. Or refuse every hook name
+// called in a module importing abide; `lib/emitter.ts` is refused.
+test('a hook called in a module that is no .abide nor handler file is a build error — 37.13', async () => {
+    const HOOKED = `import { middleware } from '@abide/abide/server'\n\nmiddleware((next) => next())\n`
+    const served = await compiledTree({ 'server/guard.ts': HOOKED })
+    expect(served.refused).toContain('server/guard.ts calls middleware')
+    expect(served.refused).toContain('RULEBOOK 37.13')
+    const library = await compiledTree({ 'media/lib/guard.ts': HOOKED })
+    expect(library.refused).toContain('media/lib/guard.ts calls middleware')
+    const namespaced = await compiledTree({
+        'lib/boot.ts': `import * as server from '@abide/abide/server'\n\nserver.onStart((start) => start())\n`,
+    })
+    expect(namespaced.refused).toContain('lib/boot.ts calls onStart')
+    const unrelated = await compiledTree({
+        'lib/emitter.ts': `import { reactive } from '@abide/abide'\n\nexport const count = reactive(0)\nexport const run = (source: { onStart(f: () => void): void }) => source.onStart(() => {})\n`,
+    })
+    expect(unrelated.refused).toBe('')
 })
 
 // 38.107 — `onLauncher` IS READ FROM THE ROOT'S `launcher.abide` ALONE, so a call anywhere else is
