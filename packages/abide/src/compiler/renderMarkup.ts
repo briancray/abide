@@ -108,7 +108,7 @@ export const HEADS = '__heads'
  * EVERY MARKUP POSITION THAT EVALUATES AN AUTHOR EXPRESSION, rather than the two that were found
  * first. A GUARD HERE IS HALF A MECHANISM — it trades a throw for a HOLE, and something on the
  * client has to fill that hole once the value lands: a text slot has `runHere` and `textHere`, a
- * `{#for}` has `List.hydrate`'s count check, an attribute has its own binding re-running on the
+ * `{#for}` has `List.hydrate`'s count check, an attribute has its own binding rerunning on the
  * value that landed (32.3), and the `{#if}` chain has `isEmptyRegion` — which is why that one is
  * guarded at the REGION rather than per subject, and says so at its own arm. The ESCAPER STAYS
  * OUTSIDE: absence is `undefined` here and what it means is already decided where it lands (see
@@ -296,7 +296,7 @@ function renderPosition(
             `abide: a ${at.kind} position holds a ${node.kind} node.`,
         )
 
-    // 32.17 — A CAPITALISED TAG IS AN INVOCATION, and the capital is the whole of the
+    // 32.17 — A CAPITALIZED TAG IS AN INVOCATION, and the capital is the whole of the
     // distinction. It is emitted as a CALL, so the child's own module renders it.
     if (isComponentTag(node.tag)) return invocationMarkup(node, at, lowering)
 
@@ -536,7 +536,7 @@ function serverComponent(
     // standing side by side are two instances, each creating what no ancestor holds (10.6).
     const { opened, closed } = shareScope(lowering, '')
     return `function ${component.name}(${PROPS} = {}) {
-${opened}${head}${setup}${definitions(sink, lowering)}return { head: '', body: ${renderMarkup(sink, lowering, SERVER_LANE)} }${closed}
+${opened}${head}${setup}${definitions(sink, lowering)}return { head: '', body: ${renderMarkup(sink, lowering, SERVER_LANE)}, document: undefined }${closed}
 }`
 }
 

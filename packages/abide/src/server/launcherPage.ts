@@ -1,21 +1,29 @@
-// 38.72 — THE DESKTOP LAUNCHER'S OWN PAGE: start the app here, under the configuration the form
+// 38.71 — THE DESKTOP LAUNCHER'S OWN PAGE: start the app here, under the configuration the form
 // holds, or connect to one running elsewhere. The app's own screen and not abide's, so it speaks
-// the platform's look rather than the docs site's.
+// the platform's look rather than the docs site's — and the app's color, read off its icon (38.101).
+//
+// TWO BUTTONS AND A DIALOG EACH (38.102): the page is the app's icon, its name and what can be done,
+// and a form opens only once it is asked for. `…` on a button is the platform's own sign that it
+// asks something first, so a Start with no configuration to ask for has none and starts at once.
 
 import { escapeAttribute, escapeText } from '#shared/escapeText.ts'
 import type { ConfigField } from './configFields.ts'
+import { inkOn } from './iconAccent.ts'
+
+// 38.101 — the accent where the app has no icon to take one from.
+const SYSTEM_ACCENT = '#0a84ff'
 
 /**
- * What a launch page is rendered with: `src/bundle/launch.abide`'s props, and the built-in page's.
+ * What a launch page is rendered with: `src/launcher.abide`'s props, and the built-in page's.
  *
- * 38.84 — a form the launcher does not offer has no address to post to.
+ * 38.83 — a form the launcher does not offer has no address to post to.
  */
 export type Launch = {
-    /** The app's name, as `launcher.json` gives it or as its package does. */
+    /** The app's name, as its package gives it. */
     name: string
-    /** Where the start form posts, or `undefined` where `launcher.json` turns starting off. */
+    /** Where the start form posts, or `undefined` where the `launcher` export turns starting off. */
     start: string | undefined
-    /** Where the connect form posts, or `undefined` where `launcher.json` turns connecting off. */
+    /** Where the connect form posts, or `undefined` where the `launcher` export turns connecting off. */
     connect: string | undefined
     fields: ConfigField[]
     /** The URL the last connect was given. */
@@ -28,8 +36,12 @@ export type Launch = {
               issues: Record<string, string[]>
           }
         | undefined
-    /** The form the page opens on. */
-    focus: 'start' | 'connect'
+    /** 38.102 — the form the page opens on: the one refused, or the one the menu asked for. */
+    focus: 'start' | 'connect' | undefined
+    /** 38.101 — the app's icon, as a data URL, where it has one. */
+    icon: string | undefined
+    /** 38.101 — the color taken from the icon, as `#rrggbb`, where it gives one. */
+    accent: string | undefined
 }
 
 /** The built-in launcher page as markup. */
@@ -74,81 +86,112 @@ export function launcherPage(page: Launch): string {
             line += `<p class="issue">${escapeText(issue)}</p>`
         return line
     }
+    const accent = page.accent ?? SYSTEM_ACCENT
+    const name = escapeText(page.name)
+    // A START WITH NOTHING TO ASK posts from the page itself; one with fields opens its dialog.
+    const asks = inputs !== '' || startFailure !== undefined
+    // A refused form opens on its refusal; a start that asks for nothing has no dialog to open.
+    const focus = page.failure?.form ?? page.focus
+    const opened =
+        focus === undefined || (focus === 'start' && !asks)
+            ? ''
+            : `${focus}-dialog`
+    let buttons = ''
+    let dialogs = ''
+    if (page.start !== undefined) {
+        buttons += asks
+            ? '<button class="primary" type="button" data-opens="start-dialog">Start…</button>'
+            : `<form method="post" action="${escapeAttribute(page.start)}"><button class="primary" type="submit">Start</button></form>`
+        if (asks)
+            dialogs += `
+<dialog id="start-dialog" aria-labelledby="start-title">
+    <form method="post" action="${escapeAttribute(page.start)}">
+        <h2 id="start-title">Start ${name}</h2>
+        <p class="about">Runs ${name} on this computer.</p>
+        ${failureLine(startFailure)}
+        ${inputs}
+        <div class="actions">
+            <button type="button" data-closes>Cancel</button>
+            <button class="primary" type="submit">Start</button>
+        </div>
+    </form>
+</dialog>`
+    }
+    if (page.connect !== undefined) {
+        buttons += `<button${page.start === undefined ? ' class="primary"' : ''} type="button" data-opens="connect-dialog">Connect…</button>`
+        dialogs += `
+<dialog id="connect-dialog" aria-labelledby="connect-title">
+    <form method="post" action="${escapeAttribute(page.connect)}">
+        <h2 id="connect-title">Connect to ${name}</h2>
+        <p class="about">Opens ${name} where it is already running.</p>
+        ${failureLine(connectFailure)}
+        <div class="field${connectFailure === undefined ? '' : ' invalid'}">
+            <label for="connect-url">URL</label>
+            <input id="connect-url" type="url" name="url" value="${escapeAttribute(page.url)}" placeholder="https://" required autocomplete="off" spellcheck="false">
+        </div>
+        <div class="actions">
+            <button type="button" data-closes>Cancel</button>
+            <button class="primary" type="submit">Connect</button>
+        </div>
+    </form>
+</dialog>`
+    }
     return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeText(page.name)}</title>
+<title>${name}</title>
 <style>
-:root { color-scheme: light dark; --ground: #f5f5f7; --card: #fff; --ink: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --accent: #0a84ff; --bad: #d70015; }
-@media (prefers-color-scheme: dark) { :root { --ground: #1c1c1e; --card: #2c2c2e; --ink: #f5f5f7; --muted: #98989d; --line: #3a3a3c; --bad: #ff6961; } }
+:root { color-scheme: light dark; --accent: ${accent}; --accent-ink: ${inkOn(accent)}; --ground: color-mix(in srgb, var(--accent) 7%, #f7f7f8); --card: #fff; --ink: #1d1d1f; --muted: #6e6e73; --line: color-mix(in srgb, var(--ink) 14%, transparent); --field: #fff; --bad: #d70015; --ring: color-mix(in srgb, var(--accent) 40%, transparent); }
+@media (prefers-color-scheme: dark) { :root { --ground: color-mix(in srgb, var(--accent) 10%, #161618); --card: #232325; --ink: #f5f5f7; --muted: #98989d; --field: #1b1b1d; --bad: #ff6961; --ring: color-mix(in srgb, var(--accent) 55%, transparent); } }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
-body { font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: var(--ground); color: var(--ink); display: flex; align-items: flex-start; justify-content: center; padding: 48px 24px; overflow-y: auto; -webkit-user-select: none; user-select: none; }
-main { width: 100%; max-width: 440px; }
-h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
-.lede { color: var(--muted); margin: 0 0 24px; }
-section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
-section.focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
-h2 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
-section > p.about { color: var(--muted); margin: 0 0 16px; }
+body { font: 13px/1.45 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: var(--ground); color: var(--ink); display: grid; place-items: center; padding: 32px; -webkit-user-select: none; user-select: none; }
+main { display: grid; justify-items: center; text-align: center; margin-top: -4vh; }
+.icon { width: 128px; height: 128px; margin-bottom: 12px; }
+.mark { display: grid; place-items: center; width: 104px; height: 104px; margin: 12px 0 24px; border-radius: 24px; background: linear-gradient(color-mix(in srgb, var(--accent) 82%, white), var(--accent)); color: var(--accent-ink); font-size: 52px; font-weight: 600; box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent); }
+h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 28px; }
+.buttons { display: flex; gap: 10px; }
+.buttons form { display: contents; }
+button { font: inherit; font-weight: 500; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 16px; min-width: 96px; cursor: default; }
+main button { font-size: 14px; padding: 8px 20px; min-width: 128px; }
+button.primary { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+button:focus-visible { outline: 3px solid var(--ring); outline-offset: 1px; }
+button:active { filter: brightness(0.92); }
+button[disabled] { opacity: 0.6; }
+dialog { width: min(400px, calc(100vw - 48px)); max-height: calc(100vh - 48px); padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink); box-shadow: 0 24px 64px rgb(0 0 0 / 0.28); text-align: left; }
+dialog::backdrop { background: rgb(0 0 0 / 0.22); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+.about { color: var(--muted); margin: 0 0 18px; }
 .field { display: grid; gap: 4px; margin-bottom: 12px; }
 .field.check { grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; }
 .field.check label { order: 2; }
-.field.check input[type=checkbox] { order: 1; margin: 0; }
+.field.check input[type=checkbox] { order: 1; margin: 0; accent-color: var(--accent); }
 .field.check .hint, .field.check .issue { grid-column: 1 / -1; order: 3; }
-label { font-weight: 500; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-input[type=text], input[type=number], input[type=password], input[type=url], select { font: inherit; color: inherit; background: var(--ground); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; -webkit-user-select: text; user-select: text; }
-input:focus, select:focus { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 0; border-color: var(--accent); }
+label { font-weight: 500; font-size: 12px; }
+input[type=text], input[type=number], input[type=password], input[type=url], select { font: inherit; color: inherit; background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; -webkit-user-select: text; user-select: text; }
+input:focus, select:focus { outline: 3px solid var(--ring); outline-offset: 0; border-color: var(--accent); }
 .invalid input, .invalid select { border-color: var(--bad); }
 .hint { color: var(--muted); margin: 0; font-size: 12px; }
 .issue, .failure { color: var(--bad); margin: 0; font-size: 12px; }
-.failure { margin-bottom: 12px; -webkit-user-select: text; user-select: text; }
-.actions { display: flex; justify-content: flex-end; margin-top: 16px; }
-button { font: inherit; font-weight: 500; color: #fff; background: var(--accent); border: 0; border-radius: 6px; padding: 6px 16px; cursor: default; }
-button:active { filter: brightness(0.9); }
-button[disabled] { opacity: 0.6; }
-.empty { color: var(--muted); margin: 0; }
+.failure { margin-bottom: 14px; -webkit-user-select: text; user-select: text; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 </style>
 </head>
 <body>
 <main>
-    <h1>${escapeText(page.name)}</h1>
-    <p class="lede">${page.start === undefined ? 'Connect to the app where it is running.' : page.connect === undefined ? 'Start the app on this computer.' : 'Start the app on this computer, or connect to one already running.'}</p>
-${
-    page.start === undefined
-        ? ''
-        : `    <section id="start"${page.focus === 'start' ? ' class="focus"' : ''}>
-        <h2>Start</h2>
-        <p class="about">Runs the app here, with this configuration.</p>
-        <form method="post" action="${escapeAttribute(page.start)}">
-            ${failureLine(startFailure)}
-            ${inputs === '' ? '<p class="empty">This app takes no configuration.</p>' : inputs}
-            <div class="actions"><button type="submit">Start</button></div>
-        </form>
-    </section>`
-}
-    ${
-        page.connect === undefined
-            ? ''
-            : `    <section id="connect"${page.focus === 'connect' ? ' class="focus"' : ''}>
-        <h2>Connect</h2>
-        <p class="about">Opens the app running at another address.</p>
-        <form method="post" action="${escapeAttribute(page.connect)}">
-            ${failureLine(connectFailure)}
-            <div class="field${connectFailure === undefined ? '' : ' invalid'}">
-                <label for="connect-url">URL</label>
-                <input id="connect-url" type="url" name="url" value="${escapeAttribute(page.url)}" placeholder="https://" required autocomplete="off" spellcheck="false">
-            </div>
-            <div class="actions"><button type="submit">Connect</button></div>
-        </form>
-    </section>`
-    }
-</main>
+    ${page.icon === undefined ? `<div class="mark" aria-hidden="true">${escapeText(page.name.charAt(0).toUpperCase())}</div>` : `<img class="icon" src="${escapeAttribute(page.icon)}" alt="">`}
+    <h1>${name}</h1>
+    <div class="buttons">${buttons}</div>
+</main>${dialogs}
 <script>
-for (const form of document.forms) form.addEventListener('submit', () => { for (const button of form.querySelectorAll('button')) { button.disabled = true; button.textContent = button.textContent === 'Start' ? 'Starting…' : 'Connecting…' } })
-document.querySelector('${page.focus === 'connect' ? '#connect-url' : '#start input:not([type=hidden]), #start select'}')?.focus()
+for (const opener of document.querySelectorAll('[data-opens]')) opener.addEventListener('click', () => open(opener.dataset.opens))
+for (const closer of document.querySelectorAll('[data-closes]')) closer.addEventListener('click', () => closer.closest('dialog').close())
+for (const dialog of document.querySelectorAll('dialog')) dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close() })
+for (const form of document.forms) form.addEventListener('submit', () => { for (const button of form.querySelectorAll('button')) { button.disabled = true; if (button.type === 'submit') button.textContent = button.textContent === 'Start' ? 'Starting…' : 'Connecting…' } })
+function open(id) { const dialog = document.getElementById(id); dialog.showModal(); (dialog.querySelector('.invalid input:not([type=hidden]), .invalid select') ?? dialog.querySelector('input:not([type=hidden]), select'))?.focus() }
+${opened === '' ? '' : `open('${opened}')`}
 </script>
 </body>
 </html>

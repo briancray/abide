@@ -1,14 +1,18 @@
-import { fileKind } from '#shared/routePattern.ts'
+import { STYLE_QUERY } from '#server/MODULE_QUERIES.ts'
+import { fileKind, placeOf, routeOf } from '#shared/routePattern.ts'
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import { emitClient } from './emitClient.ts'
 import { emitComponent } from './emitComponent.ts'
+import type { LoweredChunk } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
+import { projectShadow } from './projectShadow.ts'
 import {
     markScoped,
     namesViewTransition,
     scopeCss,
     scopeToken,
 } from './scopeStyles.ts'
+import { sourceMapOf } from './sourceMapOf.ts'
 
 /**
  * One `.abide`'s modules, in the mode the build compiles it in: its server module, its client
@@ -22,18 +26,30 @@ export function emitSource(
     file: AbideFile,
     answer: CheckerAnswer,
     invoked: boolean,
-    landed?: ReadonlyMap<string, string>,
+    /**
+     * 34.23 — what the browser's module exports in place of the server block: the wrapper of each
+     * handler it declares, under the handler's name (`standInsOf`).
+     */
+    standIns = '',
+    /** 38.97 — the `.abide`'s text, where the build wants each module's source map. */
+    source?: string,
+    /** 23.19 — the path it answers by, where a mount gives it one other than `relative`. */
+    position = relative,
 ): {
     server: string
     client: string
+    /** 38.97 — each module's `mappings` into the `.abide`, where `source` was given. */
+    serverMappings: string | undefined
+    clientMappings: string | undefined
     sheet: string | undefined
     /** 39.8 — whether a `<style>` names a view transition, read here rather than at run time. */
     transitions: boolean
 } {
-    const kind = fileKind(relative)
+    const kind = fileKind(position)
+    const routed = placeOf(position) === 'address'
     // 34.4 — A COMPONENT WITH STYLES: its elements carry its token, and the styles, scoped,
     // are a stylesheet its client module imports — which the bundle collects into the
-    // stylesheet the document links (38.24).
+    // stylesheet the document links (38.23).
     // 34.11 — each body's own `<style>`, scoped to the token its elements carry; the
     // component's token is added only where a component-level `<style>` requires it.
     const token = scopeToken(relative)
@@ -66,26 +82,103 @@ export function emitSource(
     // nothing imports it, the router is what invokes it, and a reader who navigated to a
     // page under it may arrive with the layout already standing or with nothing at all.
     // An `error.abide` is never navigated to — only the server holds the error table.
-    const routed = kind === 'page' || kind === 'layout'
+    const selfFilled = kind === 'page' || kind === 'layout'
     // The client module is emitted only where there is something to hydrate, or where something
     // fills or imports it by name (`emitClient` answers which). A static component nothing invokes
     // has no `.client.ts`, so a file shipping no runtime is a fact about the build rather than a
     // claim about the bundler.
+    const serverChunks: LoweredChunk[] | undefined =
+        source === undefined ? undefined : []
+    const clientChunks: LoweredChunk[] | undefined =
+        source === undefined ? undefined : []
     const client = emitClient(
         file,
         answer,
-        invoked ? (routed ? 'both' : 'invoked') : routed ? 'routed' : 'none',
-        landed,
+        invoked
+            ? selfFilled
+                ? 'both'
+                : 'invoked'
+            : selfFilled
+              ? 'routed'
+              : 'none',
+        clientChunks,
+    )
+    // 41.19 — a page and a layout are built a level at a time by `render`.
+    const server = emitComponent(
+        file,
+        answer,
+        kind !== 'component',
+        routed ? routeOf(position) : undefined,
+        serverChunks,
     )
     const name = relative.slice(relative.lastIndexOf('/') + 1)
+    const browser = withStandIns(
+        client !== '' && sheet !== undefined
+            ? `import './${name}${STYLE_QUERY}'\n${client}`
+            : client,
+        standIns,
+    )
+    let mapped: Mapped | undefined
+    if (source !== undefined) {
+        mapped = MAPPED.get(relative)
+        if (
+            mapped === undefined ||
+            mapped.source !== source ||
+            mapped.server !== server ||
+            mapped.client !== browser
+        ) {
+            const projected = projectShadow(file).origins
+            mapped = {
+                source,
+                server,
+                client: browser,
+                serverMappings: sourceMapOf(
+                    server,
+                    serverChunks ?? [],
+                    projected,
+                    source,
+                ),
+                clientMappings:
+                    browser === ''
+                        ? undefined
+                        : sourceMapOf(
+                              browser,
+                              clientChunks ?? [],
+                              projected,
+                              source,
+                          ),
+            }
+            MAPPED.set(relative, mapped)
+        }
+    }
     return {
-        // 41.19 — a page and a layout are built a level at a time by `render`.
-        server: emitComponent(file, answer, kind !== 'component', landed),
-        client:
-            client !== '' && sheet !== undefined
-                ? `import './${name.replace(/\.abide$/, '.style.css')}'\n${client}`
-                : client,
+        server,
+        client: browser,
+        serverMappings: mapped?.serverMappings,
+        clientMappings: mapped?.clientMappings,
         sheet,
         transitions,
     }
+}
+
+type Mapped = {
+    source: string
+    server: string
+    client: string
+    serverMappings: string
+    clientMappings: string | undefined
+}
+
+// THE LAST MAPS PER FILE, for a process that compiles again (`abide dev`, the language server): a
+// module's maps are a function of its text and the `.abide`'s, and a save changes one file. Reused
+// only where all three texts match, so two apps in one process sharing a path cannot cross.
+const MAPPED = new Map<string, Mapped>()
+
+/**
+ * The browser's module with each handler's wrapper after it, or the wrappers alone where it had
+ * nothing else to carry: a file a page imports for its handlers is imported all the same.
+ */
+function withStandIns(client: string, standIns: string): string {
+    if (standIns === '') return client
+    return client === '' ? standIns : `${client}\n${standIns}`
 }

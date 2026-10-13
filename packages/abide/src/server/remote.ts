@@ -1,12 +1,13 @@
-// THE CLIENT FOR A RUNNING APP — what the shell (`shell.ts`), `call`, `logs`, `openapi` and `mcp` talk to
+// THE CLIENT FOR A RUNNING APP — what the shell (`shell.ts`), `call`, `watch`, `openapi` and `mcp` talk to
 // it with, the shell on the app served here included.
 // Which app is `--url`, then `ABIDE_APP_URL`, then the local one; `ABIDE_APP_TOKEN` is the bearer
 // sent (36.6), and neither variable is read anywhere else.
 
-import { LOGS_ADDRESS, RPC_ADDRESS } from '#shared/ADDRESSES.ts'
 import { applyPatch } from '#shared/applyPatch.ts'
-import type { LogRecord } from '#shared/log.ts'
+import { filledPath, parametersOf } from '#shared/filledPath.ts'
+import { firstMatch, partsOf } from '#shared/matchRoute.ts'
 import type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
+import { rankRoutes } from '#shared/routePattern.ts'
 import type { Method } from '#shared/rpc.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import type { Mount } from './answerRpc.ts'
@@ -43,8 +44,8 @@ const FAULTED = 8
 /**
  * Calls one handler on a running app; returns the CLI's exit code and the answer's text.
  *
- * 38.8 — ONE CALL TO ONE HANDLER, spelled `invoices/getInvoice id=4310` in argv and in the shell
- * alike, and 38.62's args.
+ * 38.8 — ONE CALL TO ONE HANDLER, spelled `invoices/getInvoice id=4310` — or `invoices/4310` where
+ * the route carries the parameter — in argv and in the shell alike, and 38.61's args.
  */
 export async function callHandler(
     url: string,
@@ -54,10 +55,11 @@ export async function callHandler(
     handlers: Mount[],
     signal?: AbortSignal,
 ): Promise<{ code: number; text: string }> {
-    const address = `${RPC_ADDRESS}/${path.replace(/^\//, '')}`
-    const handler = handlers.find((mount) => mount.address === address)
+    const address = `/${path.replace(/^\//, '')}`
+    const asked = method?.toUpperCase()
+    const handler = handlerAt(handlers, address, asked)
     const args = callArgs(given)
-    const chosen = (method?.toUpperCase() ??
+    const chosen = (asked ??
         (handler?.method as Method | undefined) ??
         (args === undefined ? 'GET' : 'POST')) as Method
     const request =
@@ -78,7 +80,7 @@ export async function callHandler(
 /**
  * A call's args out of the words after its address, or `undefined` where there are none.
  *
- * 38.62 — `name=value` words, kept as the text they are for the app to coerce as it coerces a query's
+ * 38.61 — `name=value` words, kept as the text they are for the app to coerce as it coerces a query's
  * (19.7), against the schema it holds the call to; or, where the first word opens one, a JSON object.
  */
 function callArgs(
@@ -102,12 +104,45 @@ function callArgs(
     return pairs
 }
 
-/** The request a call with text args is: in the URL where its method carries them, a form where not. */
+/**
+ * The handler `address` names: its route as written (`media/[id]`), or an address its route matches
+ * (`media/4310`) — the most specific, of `method` where one is asked for.
+ */
+function handlerAt(
+    handlers: Mount[],
+    address: string,
+    method: string | undefined,
+): Mount | undefined {
+    const rows: { pattern: string; mount: Mount }[] = []
+    for (const mount of handlers) {
+        if (method !== undefined && mount.method !== method) continue
+        if (mount.address === address) return mount
+        rows.push({ pattern: mount.address, mount })
+    }
+    return firstMatch(rankRoutes(rows), partsOf(address) ?? [])?.route.mount
+}
+
+/**
+ * The request a call with text args is: in the URL where its method carries them, a form where not.
+ *
+ * 16.9 — a route written with its parameters takes them out of the args and into the path.
+ */
 function textRequest(
     method: Method,
-    address: string,
-    pairs: URLSearchParams,
+    route: string,
+    given: URLSearchParams,
 ): { url: string; init: RequestInit } {
+    let address = route
+    let pairs = given
+    if (route.includes('[')) {
+        const params: Record<string, string> = {}
+        pairs = new URLSearchParams()
+        const named = parametersOf(route)
+        for (const [name, value] of given)
+            if (named.has(name)) params[name] = value
+            else pairs.append(name, value)
+        address = filledPath(route, params, route)
+    }
     if (argsInURL(method))
         return { url: `${address}?${pairs}`, init: { method } }
     return {
@@ -121,48 +156,10 @@ function textRequest(
 }
 
 /**
- * Prints every line `log.records` publishes, as it is written; returns the exit code.
- *
- * 38.10.
- */
-export async function followLogs(url: string): Promise<number> {
-    const answer = await fetch(`${url}${LOGS_ADDRESS}`, {
-        headers: { ...remoteHeaders(), accept: 'text/event-stream' },
-    })
-    if (!answer.ok || answer.body === null) {
-        console.error(
-            `logs: the app answered ${answer.status}. ABIDE_LOGS opens the subscription.`,
-        )
-        return 1
-    }
-    // 18.20 — the lines held arrive as the value, and each line after as an `add` at `/-`; a trim's
-    // `remove`s are the buffer letting old lines go, which a tail has already printed.
-    for await (const event of eventsOf(answer.body)) {
-        if (event.name === 'error') console.error(`logs: ${event.data}`)
-        const lines =
-            event.name === 'value'
-                ? ((JSON.parse(event.data) as LogRecord[] | null) ?? [])
-                : event.name === 'patch'
-                  ? addedBy(JSON.parse(event.data) as PatchOp[])
-                  : []
-        for (const { time, level, namespace, message } of lines)
-            console.log(`${time} ${level} ${namespace} ${message}`)
-    }
-    return 0
-}
-
-/** The records a patch appended: the value of each `add`. */
-function addedBy(ops: PatchOp[]): LogRecord[] {
-    const added: LogRecord[] = []
-    for (const op of ops) if (op.op === 'add') added.push(op.value as LogRecord)
-    return added
-}
-
-/**
  * Follows a `GET` of the app at `url` as an event stream, printing its value and its value after each
  * patch; returns the exit code.
  *
- * 38.70, 18.20 — THE EVENT STREAM ANY CLIENT MAY ASK A FOLLOWED `GET` FOR, read by one: `event: value`
+ * 38.69, 18.20 — THE EVENT STREAM ANY CLIENT MAY ASK A FOLLOWED `GET` FOR, read by one: `event: value`
  * replaces what is held and `event: patch` is JSON Patch applied over it. A handler the server does
  * not follow — one built per request — answers once, and is printed once.
  */
@@ -172,7 +169,7 @@ export async function watch(
     given: string[],
     signal?: AbortSignal,
 ): Promise<number> {
-    const path = `${RPC_ADDRESS}/${address.replace(/^\//, '')}`
+    const path = `/${address.replace(/^\//, '')}`
     const args = callArgs(given)
     const request =
         args instanceof URLSearchParams

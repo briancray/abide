@@ -352,7 +352,7 @@ test('a bare refresh reaches the request it was made in and no other — 13.8', 
         loads += 1
         return 3
     })
-    // SUBSCRIBED ONCE LANDED: a watch that reads a load still out aborts and is re-run by the drain,
+    // SUBSCRIBED ONCE LANDED: a watch that reads a load still out aborts and is rerun by the drain,
     // under whichever request's continuation ran it rather than its own.
     const reach = (): void => {
         stock.peek()
@@ -449,7 +449,7 @@ test('request and response read the request being served, and throw outside one 
 
 // 11.26, 11.68 — A HANDLER WITH RUNGS KEYS ITS VALUE BY THE ARGS AS SENT, and its body gets what the
 // gate made of them, as one with no rungs does. THE REVERT: reach the value with `ctx.args()` at
-// the onion's centre; the two spellings land on 1 entry rather than 2.
+// the onion's center; the two spellings land on 1 entry rather than 2.
 test('a handler with rungs keys its value by the args as sent — 11.26, 11.68', async () => {
     const seen: string[] = []
     const invoice = reactive(

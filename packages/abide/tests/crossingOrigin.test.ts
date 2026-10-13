@@ -4,7 +4,7 @@ import { closedTo, crossingOrigin } from '#server/crossingOrigin.ts'
 // 36.2 — THE OWN ORIGIN IS THE REQUEST'S where no `APP_URL` names one, and a request with no
 // `Origin` crosses nothing.
 test('an Origin crosses only where it is not the own origin — 36.2', () => {
-    const url = 'http://app.test/__abide/rpc/notes'
+    const url = 'http://app.test/notes'
     expect(crossingOrigin(null, url)).toBeNull()
     expect(crossingOrigin('http://app.test', url)).toBeNull()
     expect(crossingOrigin('http://other.test', new URL(url))).toBe(

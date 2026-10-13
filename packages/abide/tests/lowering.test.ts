@@ -710,7 +710,7 @@ test('an increment and a decrement are writes — 31.4', async () => {
 })
 
 // A `++` BELONGS TO WHICHEVER OPERAND IT IS NOT SEPARATED FROM, which is JavaScript's restricted
-// production read from both ends. THE REVERT: take a neighbouring `++` TOKEN for this
+// production read from both ends. THE REVERT: take a neighboring `++` TOKEN for this
 // name's rather than the update node the checker parented it under; the two below emit
 // `a((__stored) => …)(n() + (1)) = 1` — which PARSES, and throws the write away — and
 // `n.set(n() + 1)b`, which does not. 2 wrong rewrites, and only one of them is loud.

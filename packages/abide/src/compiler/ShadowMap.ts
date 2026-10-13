@@ -3,7 +3,7 @@ import type { Origin, Span } from './projectShadow.ts'
 /** What a `.abide`'s checked module is registered with the checker as, beside the `.abide`. */
 export const CHECKED_SUFFIX = '.check.ts'
 /** What a `.abide`'s projection is registered with the checker as, beside the `.abide`. */
-const SHADOW_SUFFIX = '.shadow.ts'
+export const SHADOW_SUFFIX = '.shadow.ts'
 
 /**
  * The two files the checker reads for one `.abide`, and how a position in either is one in it.
@@ -101,7 +101,7 @@ export class ShadowMap {
 }
 
 /** The start of the run holding `position`, plus how far in; scaffolding is the run before's end. */
-function mapBack(origins: readonly Origin[], position: number): number {
+export function mapBack(origins: readonly Origin[], position: number): number {
     let low = 0
     let high = origins.length
     while (low < high) {

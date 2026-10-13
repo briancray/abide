@@ -1,16 +1,17 @@
 // SECTION 27 — THE RESOLVED CONFIGURATION. One process-wide value (27.9) over three layers, the last
 // winning (27.2): what abide derives, what the app's `onConfig` defaulted, and the environment.
 //
-// A `reactive` BODY, so `config.invalidate` is the core's own trigger and re-runs all of it (27.5),
+// A `reactive` BODY, so `config.invalidate` is the core's own trigger and reruns all of it (27.5),
 // and a throw out of `onConfig` is the value's standing error, which a read throws (27.1).
 
 import { homedir } from 'node:os' // bun exposes no home directory of its own
+import { isRecord } from '#shared/isRecord.ts'
 import { numberFromText } from '#shared/numberFromText.ts'
 import { reactive } from '#shared/reactive/index.ts'
 import { validationError } from '#shared/refuse.ts'
 import { runSchema } from '#shared/Schema.ts'
 import { appDirectories } from './appDirectories.ts'
-import { type Env, HOOKS } from './hooks.ts'
+import { type Env, HOOKS, inOrder } from './hooks.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /** The fields of an app's `package.json` 27.3 derives from. */
@@ -46,10 +47,6 @@ export interface Config {
     APP_NAME: string
     APP_VERSION: string
     APP_DATA_DIR: string
-    ABIDE_LOGS: boolean
-    ABIDE_OPENAPI: boolean
-    ABIDE_MCP: boolean
-    ABIDE_BRIDGE: boolean
 }
 
 /** The resolved configuration: abide's derived values, then `onConfig`'s defaults, then the env. */
@@ -57,24 +54,20 @@ export const config = reactive(resolve, { global: true })
 
 function resolve(): Config {
     const env: Env = { ...process.env }
-    const hooked = HOOKS.config
-    // 27.4 — SYNCHRONOUS BY CONTRACT; a promise handed back is a contract broken, not a value.
+    const hooked = inOrder(HOOKS.config)
     // 27.11 — handed what 27.3 derives under the environment, so a default can be built on
     // `APP_DATA_DIR` without deriving it a second time.
     const derivedValues = derived()
-    const defaults = hooked?.defaults?.({ ...derivedValues, ...env }) ?? {}
-    if (defaults instanceof Promise)
-        throw new Error(
-            'abide: onConfig returned a promise. ConfigDefaults is synchronous; read what the defaults need before registering them. RULEBOOK 27.4.',
-        )
-    const document: Record<string, unknown> = {
-        // 36.7 — CLOSED BY DEFAULT, and a boolean, so 27.8 reads the environment's spelling of one.
-        ABIDE_LOGS: false,
-        ABIDE_OPENAPI: false,
-        ABIDE_MCP: false,
-        ABIDE_BRIDGE: false,
-        ...derivedValues,
-        ...(defaults as Record<string, unknown>),
+    const document: Record<string, unknown> = { ...derivedValues }
+    // 27.6, 37.7 — EVERY `onConfig`'S DEFAULTS, merged over the ones before it.
+    for (const { defaults } of hooked) {
+        const given = defaults?.({ ...derivedValues, ...env }) ?? {}
+        // 27.4 — SYNCHRONOUS BY CONTRACT; a promise handed back is a contract broken, not a value.
+        if (given instanceof Promise)
+            throw new Error(
+                'abide: onConfig returned a promise. ConfigDefaults is synchronous; read what the defaults need before registering them. RULEBOOK 27.4.',
+            )
+        Object.assign(document, given as Record<string, unknown>)
     }
     // 27.8 — THE ENVIRONMENT, COERCED TO THE DEFAULT IT OVERRIDES; a value that will not coerce leaves
     // the default standing.
@@ -83,13 +76,16 @@ function resolve(): Config {
         const coerced = coerce(text, document[name])
         if (coerced !== undefined) document[name] = coerced
     }
-    // 27.7 — LAST, over the whole document.
-    const schema = hooked?.options?.schema
-    if (schema === undefined) return document as Config
-    const checked = runSchema(schema, document)
-    if (checked.issues !== null)
-        return validationError(checked.issues as never) as never
-    return checked.value as Config
+    // 27.7 — LAST, each over the whole document, and what each accepts merged back over it.
+    for (const { options } of hooked) {
+        const schema = options?.schema
+        if (schema === undefined) continue
+        const checked = runSchema(schema, document)
+        if (checked.issues !== null)
+            return validationError(checked.issues as never) as never
+        if (isRecord(checked.value)) Object.assign(document, checked.value)
+    }
+    return document as Config
 }
 
 function coerce(text: string, standing: unknown): unknown {
@@ -129,7 +125,7 @@ export function dataDirectory(name: string): string {
     return `${process.env.XDG_DATA_HOME ?? `${home}/.local/share`}/${name}`
 }
 
-// 28.5 — THE APP'S NAME IS `log`'s ROOT NAMESPACE, and the config is where the name is decided.
+// 28.4 — THE APP'S NAME IS `log`'s ROOT NAMESPACE, and the config is where the name is decided.
 // PEEKED, so a log line written inside an effect does not subscribe it to the configuration.
 export function derivedAppName(): string | undefined {
     const resolved = config.peek()

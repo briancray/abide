@@ -1,6 +1,6 @@
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { Cursor, placeTemplate } from './Cursor.ts'
-import { Lowering, PROPS } from './Lowering.ts'
+import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
     concat,
@@ -14,6 +14,7 @@ import {
 import { SERVER_SPECIFIER } from './SPECIFIERS.ts'
 import { insideShare, SETTLED_AT, shareScope } from './shareScope.ts'
 import { splitImports, withoutProps } from './splitImports.ts'
+import type { TemplateNode } from './TemplateNode.ts'
 
 // The name the body is bound to while a component's head contributions land (`HEADS`).
 const BODY = '__body'
@@ -42,12 +43,14 @@ export function emitComponent(
     file: AbideFile,
     answer: CheckerAnswer = UNCHECKED,
     settles = false,
-    /** Where each specifier this file imports landed in the build (`splitImports`). */
-    landed: ReadonlyMap<string, string> = new Map(),
+    /** The route a `<script server>` files its hooks at (37.1), where the file is under one. */
+    route?: string,
+    /** 38.97 — where given, every chunk the module is written around (`sourceMapOf`). */
+    chunks?: LoweredChunk[],
 ): string {
     // Only what the page actually uses. An emitted module carrying an import nothing calls is a
     // name the app's own tooling reports as unused, in a file nobody wrote.
-    const lowering = new Lowering(file, answer)
+    const lowering = new Lowering(file, answer, false, chunks)
 
     const page = new Cursor()
     page.components = file.components
@@ -62,6 +65,12 @@ export function emitComponent(
     // `Lowering.used` (`lowering.use`), so emitting a contribution the merge then drops leaves the
     // module importing a name nothing calls. `headSink` is the client lane's too, which is what keeps the two from drifting.
     const head = renderMarkup(headSink(file), lowering, SERVER_LANE)
+    // 35.15, 35.17 — THE DOCUMENT'S OWN TWO ELEMENTS, rendered as any element is and empty, so
+    // `render` writes their attributes onto the document's and every live one is read per request.
+    const document =
+        file.document === undefined
+            ? 'undefined'
+            : `{ html: ${renderMarkup(placed([file.document.html]), lowering, SERVER_LANE)}, body: ${renderMarkup(placed([file.document.body]), lowering, SERVER_LANE)} }`
 
     // 31.1 and 31.4 hold INSIDE a `.abide` file, not just in its template, so the script block is
     // lowered with the same rewrite the slots get.
@@ -69,8 +78,19 @@ export function emitComponent(
     // 34.2 — A `<script module>` IS MODULE SCOPE, here as in the browser, so what it exports is the
     // module's (34.17). What must stay per request is a `reactive`, which is by 11.32 wherever it
     // is declared.
-    const moduleSetup = splitImports(lowering.modules(), '', landed)
-    const setup = splitImports(lowering.scripts(), '', landed)
+    const moduleSetup = splitImports(lowering.modules())
+    // 34.20 — A `<script server>` IS MODULE SCOPE ON THIS SIDE ALONE, run between two calls that
+    // file every hook it makes at the file's route (37.1). Its body cannot await at its top level
+    // (34.3), so nothing else runs inside the window.
+    const serverSetup = splitImports(lowering.servers(), 'source')
+    const serverBody =
+        serverSetup.body === ''
+            ? ''
+            : `${lowering.use('fileRoute')}(${JSON.stringify(route ?? '/')})
+${serverSetup.body}
+${lowering.use('fileRoute')}(undefined)
+`
+    const setup = splitImports(lowering.scripts())
     const componentBody = setup.body
 
     // A child invoked inside `<head>` pushes to the same array from the head expression.
@@ -95,6 +115,7 @@ export function emitComponent(
     return {
         head: ${head}${heads ? ` + ${HEADS}.join('')` : ''},
         body: ${BODY},
+        document: ${document},
     }`
     // 41.19 — BUILT ON THE FIRST READ, and ONCE: `render` reads `head` and then `body`, and a
     // child the markup invokes must not be set up twice. The build resumes the share scope the
@@ -112,10 +133,11 @@ export function emitComponent(
         scope: ${SETTLED_AT},
         get head() { return ${BUILD}().head },
         get body() { return ${BUILD}().body },
+        get document() { return ${BUILD}().document },
     }`
         : build
-    return `${moduleImports(lowering, () => SERVER_SPECIFIER, [moduleSetup, setup])}
-${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
+    return `${moduleImports(lowering, () => SERVER_SPECIFIER, [moduleSetup, serverSetup, setup])}
+${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}${serverBody}export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
 ${opened}${componentBody}
 ${level}${closed}
 }
@@ -159,4 +181,11 @@ function importClause(names: string[]): string {
     const written: string[] = []
     for (const name of names) written.push(`${name} as __${name}`)
     return written.join(', ')
+}
+
+// `nodes` placed on a sink of their own, as `headSink` places a head.
+function placed(nodes: TemplateNode[]): Cursor {
+    const sink = new Cursor()
+    placeTemplate(nodes, sink)
+    return sink
 }

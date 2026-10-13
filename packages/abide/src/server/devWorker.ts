@@ -1,4 +1,4 @@
-// 38.15 — THE APP, IN A CHILD PROCESS. Everything an app's own code touches is in here: the modules
+// 38.14 — THE APP, IN A CHILD PROCESS. Everything an app's own code touches is in here: the modules
 // it compiled to, the client bundle, and the render. The listener is the parent (`serveDev`), so
 // replacing this process is how a reload happens and nothing an app left behind — a module in the
 // registry, a timer, a `share`, a file bun once failed to find — survives one.
@@ -6,15 +6,15 @@
 // THE COMPILER IS NOT THE APP, and it stays outside: `serveDev` compiles and sends the modules
 // in, so the compiler is loaded once for every reload — `serveDev` says what that saves.
 //
-// NOTHING IS WRITTEN TO DISK (38.17). The modules arrive as text and are reached through a
-// plugin: `Bun.plugin` for the server modules this worker imports, and a build plugin for the
-// bundle a browser fetches. The paths they are keyed under mirror the output tree `abide build`
-// would have written, so a module's imports resolve the same in either.
+// NOTHING IS WRITTEN TO DISK (38.16). The compilation arrives as text and is served through the one
+// plugin `abide start` serves a build's through (`abideModules`): at runtime for the server modules
+// this worker imports, and in the bundle a browser fetches — each `.abide` at its own path, so a
+// module's imports resolve from the source that wrote them in either.
 //
-// A REQUEST ARRIVES AS A MESSAGE, and its answer leaves as a head and then a chunk per pull (38.36,
-// 38.37): the listener asks for the next chunk when its connection has taken the last, so a stream
+// A REQUEST ARRIVES AS A MESSAGE, and its answer leaves as a head and then a chunk per pull (38.35,
+// 38.36): the listener asks for the next chunk when its connection has taken the last, so a stream
 // is read no faster than the browser reads it. A request BODY is still collected, which is what
-// lets the listener re-ask a request of the replacement (38.25).
+// lets the listener re-ask a request of the replacement (38.24).
 //
 // 18.1, 18.3 — AND SO DOES A SOCKET. The listener holds the browser's web socket, which has to
 // outlive this worker; what crosses is each frame, tagged with the connection it came over, and
@@ -23,13 +23,16 @@
 import { CLIENT_ADDRESS, DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import {
-    appSources,
-    type LoadedSources,
-    type ServerTable,
-} from './answerRequest.ts'
+    abideModules,
+    type Compilation,
+    serveCompilation,
+    servedTable,
+} from './abideModules.ts'
+import { type AppSources, appSources } from './answerRequest.ts'
 import type { Mux, MuxConnection } from './answerSocket.ts'
 import { appPlugins } from './appPlugins.ts'
-import { CLIENT_ENTRY, PUBLIC_DIRECTORY } from './CLIENT_BUILD.ts'
+import { publishedUnder } from './appTree.ts'
+import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import {
     clientBuildOptions,
     stylesheetUnderMount,
@@ -40,26 +43,28 @@ import { fenceServer } from './fenceServer.ts'
 import { type Manifest, manifestOf, NO_MANIFEST } from './manifestOf.ts'
 import { admitsMux } from './muxUpgrade.ts'
 import { refuseAddressCollision } from './refuseAddressCollision.ts'
-import { shellUnder } from './render.ts'
 import { LISTENING } from './requestScope.ts'
-import { handlersIn, pathsUnder, sourceModuleLoader } from './serveBuild.ts'
-import { VIRTUAL_DIRECTORY } from './VIRTUAL_DIRECTORY.ts'
+import { withAbideSources } from './withAbideSources.ts'
 
 // The reload client, which the worker serves and every document it answers loads.
 const RELOAD_CLIENT_ADDRESS = `${DEV_ADDRESS}/client.js`
 
 // The bundle this worker answers `/__abide/client/…` out of, the type each name is served as, and
-// the chunks each route module needs (38.29).
+// the chunks each route module needs (38.28).
 type Bundle = {
-    // A stylesheet is held as its text, rewritten (`stylesheetUnderMount`); the rest as built.
-    files: Map<string, { bytes: ArrayBuffer | string; type: string }>
+    // A stylesheet is held as its text, rewritten (`stylesheetUnderMount`); a source map as the
+    // rewrite of it, taken on the first ask (`withAbideSources`); the rest as built.
+    files: Map<
+        string,
+        { bytes: ArrayBuffer | string | (() => Promise<string>); type: string }
+    >
     manifest: Manifest
 }
 
 /**
  * A message from the listener to this worker.
  *
- * 38.15 — WHAT CROSSES BETWEEN THE LISTENER AND THIS WORKER, one union per direction. In: the app
+ * 38.14 — WHAT CROSSES BETWEEN THE LISTENER AND THIS WORKER, one union per direction. In: the app
  * compiled (and what stopped it compiling, where something did), a request, a pull or cancel of
  * its body, and each browser web socket's frames for the mux.
  */
@@ -67,7 +72,9 @@ export type ToWorker =
     | {
           kind: 'start'
           root: string
-          modules: Map<string, string>
+          compilation: Compilation
+          /** Every public file, to its address, as the compile's walk found them. */
+          published: Map<string, string>
           failure: string
       }
     | ({ kind: 'request' } & Ask)
@@ -120,12 +127,12 @@ export type Ask = {
 /**
  * Sends a message to the listener.
  *
- * 38.15 — over bun's IPC: this is its child process (`serveDev` says why a process).
+ * 38.14 — over bun's IPC: this is its child process (`serveDev` says why a process).
  */
 function toListener(message: FromWorker): void {
     process.send?.(message)
 }
-// 38.97 — EACH REQUEST'S SIGNAL, by request id, until its answer ends: the listener holds the
+// 38.96 — EACH REQUEST'S SIGNAL, by request id, until its answer ends: the listener holds the
 // connection, so a hang-up reaches this worker as a `cancel` rather than through bun.
 const HANG_UPS = new Map<number, AbortController>()
 
@@ -157,9 +164,9 @@ let app: BootedApp | undefined
 // 18.1 — the mux over this worker's handlers, and each connection the listener holds.
 let mux: Mux | undefined
 // What the mux carries, which `admitsMux` reads: an app with no handler has no mux to open.
-let carried: LoadedSources | undefined
+let carried: AppSources | undefined
 const connections = new Map<number, MuxConnection>()
-// What stopped the app compiling, kept rather than thrown: 38.4 keeps the server up and 38.18
+// What stopped the app compiling, kept rather than thrown: 38.4 keeps the server up and 38.17
 // keeps it up through a bundle that failed, so the failure is something to SERVE.
 let failure = ''
 
@@ -196,7 +203,7 @@ async function receive(message: ToWorker): Promise<void> {
                     })
                 },
                 // NOTHING TO CLOSE: the listener holds the browser's socket, and it outlives this
-                // worker (38.15). Nothing here stops the mux, either.
+                // worker (38.14). Nothing here stops the mux, either.
                 close() {},
             },
         )
@@ -343,79 +350,74 @@ async function open(
     failure = start.failure
     if (failure !== '') return
     const root = start.root
+    const compilation = start.compilation
     try {
-        const base = `${root}/${VIRTUAL_DIRECTORY}`
-        const modules = new Map<string, string>()
-        for (const [name, text] of start.modules)
-            modules.set(`${base}/${name}`, text)
         // A page among what compiled — an app of handlers alone has the tables and no client to
         // bundle.
-        const paged = modules.has(`${base}/${CLIENT_ENTRY}.ts`)
+        const paged = compilation.tables[`${CLIENT_ENTRY}.ts`] !== undefined
 
         // ONE PLUGIN, TWO CALLERS: the runtime resolves this worker's `import()` through it and
         // the bundler resolves the browser's graph through it, so the two lanes cannot disagree
         // about what a specifier means. Registering it is process-wide — which is a worker rather
         // than the command, so a reload is a new registry rather than a cache to bust.
-        const plugin = virtualModules(modules)
-        Bun.plugin(plugin)
+        serveCompilation(root, compilation)
 
-        // ASKED FOR TOGETHER. The bundle, the shell, the public directory and the server's own
+        // ASKED FOR TOGETHER. The bundle, the public directory and the server's own
         // tables depend on none of each other — the plugin is registered above, before any of
         // them asks it anything — and on a reload every one of them is latency the author waits on,
         // so the bundle is handed over still building (`SourceParts.client`).
         //
-        // ONE LISTING of the public directory, for the bundle's externals and for what is served.
-        // 38.20 — OUT OF THE SOURCE TREE. `abide build` copies these into its output and dev has no
-        // output, so the address answers where the author's file actually is.
-        const published = pathsUnder(`${root}/ui/${PUBLIC_DIRECTORY}`)
-        const publicAddresses = Array.from(
-            published.keys(),
-            (name) => `/${name}`,
-        )
-        // 38.44 — the app's own plugins, imported beside the reads below rather than ahead of them.
+        // ONE LISTING of the public directories — the compile's — for the bundle's externals and for
+        // what is served. 38.19 — OUT OF THE SOURCE TREE. `abide build` copies these into its output
+        // and dev has no output, so the address answers where the author's file actually is.
+        const publicSources = start.published
+        const published = publishedUnder(root, publicSources)
+        const publicAddresses = [...publicSources.values()]
+        // 38.43 — the app's own plugins, imported beside the reads below rather than ahead of them.
         const bundling = appPlugins(root).then((own) =>
             bundleInMemory(
                 root,
-                base,
-                // 16.28, 16.29 — the browser's view of `server/`, as `abide build` gives it.
-                [plugin, fenceServer(root, start.modules), ...own],
+                // 16.28, 16.29 — the browser's view of the server, as `abide build` gives it.
+                [fenceServer(root), abideModules(root, compilation), ...own],
                 paged,
                 publicAddresses,
+                compilation,
             ),
         )
-        const [shell, table, handlers] = await Promise.all([
-            shellUnder(root),
-            import(
-                Bun.pathToFileURL(`${base}/server.ts`).href
-            ) as Promise<ServerTable>,
-            handlersIn(base),
-        ])
-        // 38.18 — THE RELOAD CLIENT IS THIS WORKER'S, not the bundle's, and it goes in whether or
-        // not there is an entry beside it: a bundle that failed is exactly when a reader needs the
-        // next save to reach them. `clientTags` writes nothing for a manifest with no entry.
-        const sources = await appSources({
-            table,
-            shell,
-            handlers,
-            handlerModule: sourceModuleLoader(root, base),
-            published,
-            client: bundling.then((bundle) => ({
-                manifest: bundle.manifest,
-                head: `<script type="module" src="${RELOAD_CLIENT_ADDRESS}"></script>`,
-                framework: (pathname) => served(bundle, pathname),
-            })),
-            explained: (thrown) => failedDocument(describe(thrown)),
-        })
-
+        const table = await servedTable(root)
+        const handlers = table.handlers
         // 36.13, IN THIS LANE TOO. A throw here lands in `failure`, which is what 38.4 asks
         // for: the command keeps answering and what it answers names both halves. Without it
         // `answerRequest` below would silently prefer the file — its public-before-routes
         // order rests on this collision being impossible.
-        refuseAddressCollision(table.routes, publicAddresses, 'abide dev')
+        refuseAddressCollision(
+            table.routes,
+            handlers,
+            publicSources,
+            'abide dev',
+        )
 
-        carried = sources
-        // THE SAME `App` `abide start` boots, so an app's hooks and middleware run in dev too.
-        app = await bootApp(originUnder(root), async () => sources)
+        // THE SAME `App` `abide start` boots, so an app's hooks and middleware run in dev too — and its
+        // sources are read INSIDE the boot, as `abide start` reads them: a document's head carries
+        // what the resolved configuration says (28.4's app name), which is not resolved before it.
+        app = await bootApp(originUnder(root), async () => {
+            // 38.17 — THE RELOAD CLIENT IS THIS WORKER'S, not the bundle's, and it goes in whether or
+            // not there is an entry beside it: a bundle that failed is exactly when a reader needs the
+            // next save to reach them. `clientTags` writes nothing for a manifest with no entry.
+            const sources = await appSources({
+                table,
+                handlers,
+                published,
+                client: bundling.then((bundle) => ({
+                    manifest: bundle.manifest,
+                    head: `<script type="module" src="${RELOAD_CLIENT_ADDRESS}"></script>`,
+                    framework: (pathname) => served(bundle, pathname),
+                })),
+                explained: (thrown) => failedDocument(describe(thrown)),
+            })
+            carried = sources
+            return sources
+        })
         // 18.1 — the mux `App.listen` would open, over the app's own record: a frame's `rpc.raw` and
         // MCP surface are this app's.
         mux = app.openMux()
@@ -435,9 +437,21 @@ function served(bundle: Bundle, pathname: string): Response | undefined {
     if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return undefined
     const found = bundle.files.get(pathname.slice(CLIENT_ADDRESS.length + 1))
     if (found === undefined) return undefined
+    const { bytes } = found
+    const body =
+        typeof bytes === 'function'
+            ? new ReadableStream({
+                  async start(controller) {
+                      controller.enqueue(
+                          new TextEncoder().encode(await bytes()),
+                      )
+                      controller.close()
+                  },
+              })
+            : bytes
     // NO CACHING AT ALL, which is where dev parts company with 21.5: the names are stable across
     // rebuilds, so a browser told to keep `entry.js` for a year keeps the app it had at boot.
-    return new Response(found.bytes, {
+    return new Response(body, {
         headers: { 'content-type': found.type, 'cache-control': 'no-store' },
     })
 }
@@ -445,30 +459,28 @@ function served(bundle: Bundle, pathname: string): Response | undefined {
 /**
  * The client bundle, built into memory.
  *
- * 38.17 — Unminified, and the entry named by its source rather than content-hashed, so what a
+ * 38.16 — Unminified, and the entry named by its source rather than content-hashed, so what a
  * browser loads and what a stack trace names are the module the author wrote. 38.5's hashes and
  * manifest are the BUILD's, and the difference is deliberate: a dev chunk that changed has to be
  * fetched again, and a name that changes with it is a cache the reload cannot clear.
  *
- * A FAILURE IS AN EMPTY BUNDLE AND NOT A THROW (38.18). The pages still render, the document
+ * A FAILURE IS AN EMPTY BUNDLE AND NOT A THROW (38.17). The pages still render, the document
  * still loads the reload client, and the next save is what fixes it.
  */
 async function bundleInMemory(
     root: string,
-    base: string,
     plugins: Bun.BunPlugin[],
     paged: boolean,
     publicAddresses: string[],
+    compilation: Compilation,
 ): Promise<Bundle> {
     const bundle: Bundle = { files: new Map(), manifest: NO_MANIFEST }
     if (!paged) return bundle
     const built = await Bun.build({
-        // 36.15's addresses off the source tree this lane answers them out of (38.20).
-        ...clientBuildOptions(base, plugins, publicAddresses),
-        // The app's own root, because `Bun.build` opens this directory and a virtual one is not
-        // there to open. What it decides is where the output names are rooted, and the naming
-        // below makes them flat anyway.
-        root,
+        // 36.15's addresses off the source tree this lane answers them out of (38.19).
+        ...clientBuildOptions(root, plugins, publicAddresses),
+        // 38.97 — a debugger in the browser reads the `.abide` (`withAbideSources`).
+        sourcemap: 'linked',
         naming: {
             entry: '[name].[ext]',
             chunk: '[name]-[hash].[ext]',
@@ -476,7 +488,7 @@ async function bundleInMemory(
         },
         throw: false,
     })
-    // THE TERMINAL RATHER THAN THE DOCUMENT. 38.18 keeps the server up, and a page that still
+    // THE TERMINAL RATHER THAN THE DOCUMENT. 38.17 keeps the server up, and a page that still
     // paints is what it keeps up — so the pages stay served, unhydrated, and the author reads the
     // build error where they started the command.
     if (!built.success) {
@@ -493,103 +505,24 @@ async function bundleInMemory(
         const output = built.outputs[index] as Bun.BuildArtifact
         const name = output.path.slice(output.path.lastIndexOf('/') + 1)
         const bytes = read[index] as ArrayBuffer
-        bundle.files.set(name, {
-            bytes: name.endsWith('.css')
-                ? stylesheetUnderMount(new TextDecoder().decode(bytes))
-                : bytes,
-            type: output.type,
-        })
-    }
-    // `base` AS GIVEN, with no real path taken: every route module is one the plugin served, and
-    // the metafile names those under the plugin's namespace exactly as the plugin spelled them.
-    bundle.manifest = manifestOf(built.metafile as Bun.BuildMetafile, base)
-    return bundle
-}
-
-/**
- * The plugin serving the compiled modules out of `modules`, for the runtime and the bundler alike.
- *
- * A module in the map wins; everything else is resolved from where that module PRETENDS to be,
- * which is inside the app's package — so `abide`, `#ui/…` and a stylesheet all answer exactly as
- * they do for a build on disk.
- */
-function virtualModules(modules: Map<string, string>): Bun.BunPlugin {
-    return {
-        name: 'abide-dev',
-        setup(build) {
-            build.onResolve({ filter: /.*/ }, (args) => {
-                if (modules.has(args.path))
-                    return { path: args.path, namespace: 'abide-dev' }
-                // The importer carries its namespace in front of the path when it is one of
-                // ours — and the runtime puts a `/` in front of that again, where the bundler
-                // does not. Both spellings are stripped here because a `file://` URL refuses to
-                // take either as a base, and the one that was missed cost the whole route table:
-                // every dynamic import in it read as a module nobody could find.
-                const importer = args.importer.replace(/^\/?abide-dev:/, '')
-                if (!modules.has(importer)) return undefined
-                const from = importer.slice(0, importer.lastIndexOf('/'))
-                if (args.path.startsWith('.')) {
-                    const beside = Bun.fileURLToPath(
-                        new URL(args.path, Bun.pathToFileURL(`${from}/`)),
-                    )
-                    if (modules.has(beside))
-                        return { path: beside, namespace: 'abide-dev' }
-                }
-                // OUT OF THE MAP AND INTO THE PACKAGE. Resolved from the virtual directory rather
-                // than left to the default, which has an `abide-dev:` prefix to walk up from and
-                // finds nothing.
-                try {
-                    return {
-                        path: Bun.resolveSync(args.path, from),
-                        namespace: 'file',
-                    }
-                } catch {
-                    return undefined
-                }
-            })
-            // ONLY THE RUNTIME'S LOADS ARE REWRITTEN: the bundler asks `onResolve` above for a `#`
-            // specifier itself, and a reload's loads are nearly all the bundler's — 181 of 183 on
-            // the docs app, where the rewrite's parse was ~25 ms of each reload.
-            const bundling = 'config' in build
-            build.onLoad({ filter: /.*/, namespace: 'abide-dev' }, (args) => ({
-                contents: bundling
-                    ? (modules.get(args.path) ?? '')
-                    : withSeamsResolved(
-                          modules.get(args.path) ?? '',
-                          args.path,
-                      ),
-                // 34.4 — a component's scoped styles are a stylesheet the bundle collects.
-                loader: args.path.endsWith('.css') ? 'css' : 'ts',
-            }))
-        },
-    }
-}
-
-// A `#` SPECIFIER IN A MODULE FROM THE MAP, resolved before the module is handed over. The runtime
-// takes a `#` specifier to the package's `imports` itself rather than through this plugin, and from
-// a module in the map it takes the target as an exact file — so the extensionless
-// `#server/rpc/contacts` a component writes found nothing, where the bundler, which does ask the
-// plugin, probed its way to the `.ts` through the same `Bun.resolveSync` — so the rewrite is the
-// runtime's alone, and both lanes land on the same path.
-const TRANSPILER = new Bun.Transpiler({ loader: 'ts' })
-
-function withSeamsResolved(source: string, path: string): string {
-    if (!path.endsWith('.ts')) return source
-    const from = path.slice(0, path.lastIndexOf('/'))
-    let resolved = source
-    for (const { path: specifier } of TRANSPILER.scanImports(source)) {
-        if (!specifier.startsWith('#')) continue
-        let target: string
-        try {
-            target = Bun.resolveSync(specifier, from)
-        } catch {
-            continue
+        let served: ArrayBuffer | string | (() => Promise<string>) = bytes
+        if (name.endsWith('.css'))
+            served = stylesheetUnderMount(new TextDecoder().decode(bytes))
+        // 38.97 — PLACED ON THE FIRST ASK: only a debugger reads a map, and placing every chunk's
+        // up front was ~45 ms of each reload on the docs app, whether or not one was open.
+        else if (output.kind === 'sourcemap') {
+            let placed: Promise<string> | undefined
+            served = () =>
+                (placed ??= withAbideSources(
+                    new TextDecoder().decode(bytes),
+                    compilation,
+                    root,
+                ))
         }
-        resolved = resolved
-            .replaceAll(`'${specifier}'`, `'${target}'`)
-            .replaceAll(`"${specifier}"`, `"${target}"`)
+        bundle.files.set(name, { bytes: served, type: output.type })
     }
-    return resolved
+    bundle.manifest = manifestOf(built.metafile as Bun.BuildMetafile, root)
+    return bundle
 }
 
 /**
@@ -620,7 +553,7 @@ function failureMarkup(why: string): string {
     return `<main><h1>abide dev</h1><pre>${escapeText(why)}</pre></main>`
 }
 
-// 38.16's other end. The listener force-closes every live socket when it replaces this worker, so
+// 38.15's other end. The listener force-closes every live socket when it replaces this worker, so
 // a CLOSE is the rebuild and the reconnect that follows is the new app — there is no message to
 // send and nothing to version. A reader who never opened the socket is told nothing, which is the
 // same as before the save.

@@ -1,4 +1,4 @@
-// 38.89 — A ROUTE'S MENU, TOLD TO THE WINDOW IT IS SHOWN IN. Loaded only inside a desktop app, where
+// 38.88 — A ROUTE'S MENU, TOLD TO THE WINDOW IT IS SHOWN IN. Loaded only inside a desktop app, where
 // the window has opened `abideMenu` to the page; anywhere else the router never imports it.
 
 import { MenuEntry, type MenuItem } from '#shared/menuItem.ts'
@@ -31,7 +31,7 @@ export function reportMenu(chain: { menu?: unknown }[]): void {
             for (const menu of level.menu as MenuItem[]) told.push(tell(menu))
     if (!listening) {
         listening = true
-        // 38.91, 38.92 — the window names the item picked; the page does what it means.
+        // 38.90, 38.91 — the window names the item picked; the page does what it means.
         addEventListener('abide:menu', (event) => {
             const item = numbered[(event as CustomEvent<number>).detail]
             if (item === undefined) return

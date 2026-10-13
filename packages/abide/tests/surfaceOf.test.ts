@@ -1,4 +1,4 @@
-// 20.1, 20.3, 38.63 — ONE PROJECTION FROM A HANDLER TO EVERY SURFACE (`surfaceOf`), and the shell's
+// 20.1, 20.3, 38.62 — ONE PROJECTION FROM A HANDLER TO EVERY SURFACE (`surfaceOf`), and the shell's
 // listing, completion and placeholders derived from it: pure, so asked directly rather than through a
 // spawned shell (`shell.test.ts` drives the terminal-less loop end to end).
 
@@ -17,9 +17,9 @@ import { surfaceOf } from '#server/surfaceOf.ts'
 
 function row(path: string, rest: Partial<Mount> = {}): Mount {
     return {
-        address: `/__abide/rpc/${path}`,
+        address: `/${path}`,
         method: 'GET',
-        source: `server/rpc/${path.split('/')[0]}.ts`,
+        source: `${path.split('/')[0]}.ts`,
         name: path.split('/').at(-1) as string,
         ui: true,
         cli: true,
@@ -51,10 +51,10 @@ const TABLE: Mount[] = [
 
 const plain = (_code: string, text: string): string => text
 
-// 20.3, 38.63 — A ROW WITHHOLDING ITSELF FROM THE COMMAND LINE IS NOT LISTED, COMPLETED OR SUGGESTED.
+// 20.3, 38.62 — A ROW WITHHOLDING ITSELF FROM THE COMMAND LINE IS NOT LISTED, COMPLETED OR SUGGESTED.
 // THE REVERT: drop the `clients[surface] === false` test in `surfaceOf`;
 // `invoices/audit` is listed and completed, and this reads three paths.
-test('the shell lists and completes no handler whose clients.cli is false — 20.3, 38.63', () => {
+test('the shell lists and completes no handler whose clients.cli is false — 20.3, 38.62', () => {
     const listed = cliListing(TABLE)
     expect(listed.map((one) => one.path)).toEqual([
         'invoices/getInvoice',
@@ -80,15 +80,18 @@ test('a mounted handler is projected off the handler, a row off the build — 20
     const mounted: Mounted = {
         ...row('invoices/hidden', { description: 'Read by the build.' }),
         method: 'GET',
+        route: '/invoices',
         handler: hidden as Mounted['handler'],
+        rungs: [],
         argsDocument: { type: 'object' },
         wireArgs: undefined,
     }
     expect(surfaceOf(mounted, 'mcp')).toBeUndefined()
     expect(surfaceOf(mounted, 'openapi')).toEqual({
-        address: '/__abide/rpc/invoices/hidden',
+        address: '/invoices/hidden',
         method: 'GET',
         path: 'invoices/hidden',
+        name: 'get_invoices_hidden',
         description: 'At run time.',
         schema: { type: 'object' },
     })
@@ -106,7 +109,9 @@ test("a Response handler's row keeps it off MCP unless its clients puts it back 
     const mountedAs = (clients: { mcp?: boolean }): Mounted => ({
         ...row('media/playlist', { mcp: false }),
         method: 'GET',
+        route: '/media',
         handler: GET(() => new Response(''), { clients }) as Mounted['handler'],
+        rungs: [],
         argsDocument: undefined,
         wireArgs: undefined,
     })
@@ -117,9 +122,9 @@ test("a Response handler's row keeps it off MCP unless its clients puts it back 
     expect(surfaceOf(mountedAs({}), 'openapi')?.path).toBe('media/playlist')
 })
 
-// 38.63 — A HANDLER'S ARGS AS THEY ARE TYPED: required bare, optional bracketed, an enum as its
+// 38.62 — A HANDLER'S ARGS AS THEY ARE TYPED: required bare, optional bracketed, an enum as its
 // members, a list with `…`, and the JSON object where a `name=value` word cannot spell one.
-test("the shell types a handler's args as its schema declares them — 38.63", () => {
+test("the shell types a handler's args as its schema declares them — 38.62", () => {
     expect(argsText(TABLE[0]?.args)).toBe(
         'id=<number> [status=open|paid] [tags=<string>…]',
     )

@@ -2,7 +2,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { parseAbide } from '#compiler'
 import { classifyAttributes, isBound } from '#compiler/classifyTemplate.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'
-import { render } from '#server'
+import { renderDocument } from '#server/render.ts'
 import { setClass } from '#ui/setClass.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { closeTyped, serverOf } from './typed.ts'
@@ -183,7 +183,10 @@ test('the served class: condition and the bound one agree on every value — 32.
     })
     const { default: Component } = await import(`${dir}/Page.ts`)
     const html = new TextDecoder().decode(
-        await render(Component, '<!doctype html><html><body></body></html>'),
+        await renderDocument(
+            Component,
+            '<!doctype html><html><body></body></html>',
+        ),
     )
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,

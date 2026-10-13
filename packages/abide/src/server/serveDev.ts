@@ -1,5 +1,5 @@
 // 38.4 — `abide dev`: the project, watched, with the app kept up across every save. What is here
-// is the LISTENER and nothing else (38.15): the socket is bound once in this process and survives
+// is the LISTENER and nothing else (38.14): the socket is bound once in this process and survives
 // every reload, so a browser holding a connection open meets a server that is still there when
 // the app behind it has been thrown away and rebuilt.
 //
@@ -12,13 +12,14 @@
 // reload, where a compiler imported into each new app cost 4.5 s a save against the 80 ms the
 // compile takes — and the clause asks for the APP to be in the child, which the compiler is not.
 //
-// 38.16 — A RELOAD IS A NEW PROCESS, not a module cache to invalidate. An app leaves things behind
+// 38.15 — A RELOAD IS A NEW PROCESS, not a module cache to invalidate. An app leaves things behind
 // that no invalidation reaches — a timer, a `share`, a module that ran once, and bun's own memory of
 // a file it failed to find — and a process is the one boundary that takes all of them with it. Every live socket is force-closed with it, which
 // is also the whole of the reload protocol: the reload client reconnects and reloads, so nothing
 // here has a message to send.
 
 import { watch } from 'node:fs' // bun exposes no file watcher of its own
+import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 import {
     type AppChecker,
     compileApp,
@@ -26,23 +27,27 @@ import {
 } from '#compiler/compileApp.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
+import { placeOf } from '#shared/routePattern.ts'
+import type { Compilation } from './abideModules.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
 import type { Ask, FromWorker, ToWorker } from './devWorker.ts'
 import { upgraded } from './muxUpgrade.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { SETTLE_MILLISECONDS } from './SETTLE_MILLISECONDS.ts'
-import { VIRTUAL_DIRECTORY } from './VIRTUAL_DIRECTORY.ts'
 
 /** What `abide dev` serves, and where. */
 export type DevOptions = {
-    /** The app's source root — the directory `ui/` sits under, and the tree that is watched. */
+    /**
+     * The app's source root — where its pages sit, and the tree that is watched — as its real path
+     * (`appRoot`), which is how the bundler names what it built.
+     */
     root: string
     port?: number | undefined
 }
 
 // A request in flight: the request itself — because a worker replaced before it answered answers
-// nothing, and the ask has to be put to the app that exists (38.25) — and, once its head has come
-// back, the stream the body is fed into and the pull waiting on the worker's next chunk (38.36).
+// nothing, and the ask has to be put to the app that exists (38.24) — and, once its head has come
+// back, the stream the body is fed into and the pull waiting on the worker's next chunk (38.35).
 type InFlight = Omit<Ask, 'id' | 'method' | 'url'> & {
     // 16.22 — the request bun handed the listener, which is the one its idle timeout is raised on.
     request: Request
@@ -60,7 +65,12 @@ type DevWorker = {
     terminate(): void
 }
 
-type Compiled = { modules: Map<string, string>; failure: string }
+type Compiled = {
+    compilation: Compilation
+    /** The public files the compile's walk found (`appFiles`), which the worker answers. */
+    published: Map<string, string>
+    failure: string
+}
 
 const LAST_DEV_PORT = 3099
 
@@ -128,21 +138,26 @@ export async function serveDev(
             if (checker !== undefined && !checker.current())
                 await closeChecker()
             checker ??= await openChecker(options.root)
-            const compiled = await compileApp(
-                options.root,
-                `${options.root}/${VIRTUAL_DIRECTORY}`,
-                checker,
-            )
+            const compiled = await compileApp(options.root, checker)
             // 14 and 32.14 — what the compiler has to say, on every compile.
             for (const warning of compiled.warnings)
                 console.warn(formatDiagnosis(warning, process.cwd()))
-            return { modules: compiled.modules, failure: '' }
+            watchDependencies(compiled.files)
+            return {
+                compilation: { files: compiled.files, tables: compiled.tables },
+                published: compiled.published,
+                failure: '',
+            }
         } catch (thrown) {
             await closeChecker()
             const failure =
                 thrown instanceof Error ? thrown.message : String(thrown)
             console.error(`abide dev: ${failure}`)
-            return { modules: new Map(), failure }
+            return {
+                compilation: { files: {}, tables: {} },
+                published: new Map(),
+                failure,
+            }
         }
     }
 
@@ -156,9 +171,34 @@ export async function serveDev(
         }
     }
 
+    // A path a watcher saw move — or a move nobody could name — and the replacement it schedules.
+    let settling: ReturnType<typeof setTimeout> | undefined
+    function moved(path: string | undefined): void {
+        checker?.saw(path)
+        if (settling !== undefined) clearTimeout(settling)
+        settling = setTimeout(replace, SETTLE_MILLISECONDS)
+    }
+
+    // 38.99 — A DEPENDENCY'S `.abide` IS THE APP'S TOO, and a linked package's lies outside the root's
+    // watcher: each directory one was compiled from is watched once, for the session.
+    const watchedDependencies = new Set<string>()
+    function watchDependencies(files: Compilation['files']): void {
+        for (const relative of Object.keys(files)) {
+            if (placeOf(relative) !== 'dependency') continue
+            const directory = dirname(resolve(options.root, relative))
+            if (watchedDependencies.has(directory)) continue
+            watchedDependencies.add(directory)
+            watch(directory, (_event, filename) =>
+                moved(
+                    filename === null ? undefined : `${directory}/${filename}`,
+                ),
+            )
+        }
+    }
+
     // The worker, compiled and answering.
-    function open({ modules, failure }: Compiled): void {
-        // 38.15 — A PROCESS, NOT A THREAD, for the header's reason: bun remembers a file it failed
+    function open({ compilation, published, failure }: Compiled): void {
+        // 38.14 — A PROCESS, NOT A THREAD, for the header's reason: bun remembers a file it failed
         // to find for the life of the process, and a thread inherits the miss.
         //
         // THE ENVIRONMENT AS IT STANDS, `NODE_ENV` included (36.3): the child is handed what this
@@ -182,7 +222,7 @@ export async function serveDev(
                             server.timeout(asked, message.seconds)
                     } else answer(started, message)
                 },
-                // 38.42 — AN APP THAT EXITS ON ITS OWN is replaced, and says so: a listener still
+                // 38.41 — AN APP THAT EXITS ON ITS OWN is replaced, and says so: a listener still
                 // forwarding to it leaves every tab hanging.
                 onExit() {
                     if (worker !== started) return
@@ -200,7 +240,7 @@ export async function serveDev(
                 if (!child.killed && child.exitCode === null)
                     child.send(message)
             },
-            // 38.97 — SIGTERM, which the worker answers by hanging up what it is answering; a worker
+            // 38.96 — SIGTERM, which the worker answers by hanging up what it is answering; a worker
             // wedged in a loop never reads it, so a second later it is killed outright.
             terminate() {
                 child.kill()
@@ -211,7 +251,8 @@ export async function serveDev(
         started.postMessage({
             kind: 'start',
             root: options.root,
-            modules,
+            compilation,
+            published,
             failure,
         })
         // The worker holds every request behind its own compile, so what waited here only had
@@ -221,8 +262,8 @@ export async function serveDev(
     }
 
     // WHAT AN APP THAT IS GONE WAS HOLDING. A request whose head has not gone out is re-asked of the
-    // replacement (38.25), or answered where the app ended itself — the request in hand may be what
-    // ended it (38.42). 38.38 — one whose head has gone out cannot be answered again, and ends as
+    // replacement (38.24), or answered where the app ended itself — the request in hand may be what
+    // ended it (38.41). 38.37 — one whose head has gone out cannot be answered again, and ends as
     // `abide start`'s does.
     function endInFlight(reask: boolean, why: string): void {
         for (const held of inFlight.values()) {
@@ -235,11 +276,11 @@ export async function serveDev(
         inFlight.clear()
     }
 
-    // 38.16 — THE REPLACEMENT. The old worker is terminated, every socket it could still be
+    // 38.15 — THE REPLACEMENT. The old worker is terminated, every socket it could still be
     // answering is force-closed, and the new one is opened. The order matters: a socket closed
     // after the new worker is up is a reload client that reconnects to a server still compiling.
     //
-    // 38.25 — A REQUEST IN FLIGHT IS RE-ASKED rather than failed. Failing it serves a reader a
+    // 38.24 — A REQUEST IN FLIGHT IS RE-ASKED rather than failed. Failing it serves a reader a
     // network error for asking while somebody saved, and during a regeneration of a whole docs
     // tree that is every request; re-asked, they wait and get the app the source now says.
     function replace(): void {
@@ -258,24 +299,19 @@ export async function serveDev(
     await compiling
 
     // 38.4 — THE PROJECT, WATCHED. One recursive watcher over the source root: the pages, the
-    // shell, the stylesheets and `ui/public` are all under it, and every one of them is something
+    // layouts, the stylesheets and every `public` directory are all under it, and every one of them is something
     // the worker read at boot.
     //
     // IT IS NOT UNREFFED. It holds the process open, which is what a command that IS a server
     // wants: the only ways out of `abide dev` are a signal and a throw, exactly as for
     // `abide start`.
-    let settling: ReturnType<typeof setTimeout> | undefined
-    watch(options.root, { recursive: true }, (_event, filename) => {
-        checker?.saw(
-            filename === null ? undefined : `${options.root}/${filename}`,
-        )
-        if (settling !== undefined) clearTimeout(settling)
-        settling = setTimeout(replace, SETTLE_MILLISECONDS)
-    })
+    watch(options.root, { recursive: true }, (_event, filename) =>
+        moved(filename === null ? undefined : `${options.root}/${filename}`),
+    )
 
     // A REQUEST AS A MESSAGE. `Request` does not survive a structured clone, so what crosses is
     // the four things the worker rebuilds one from — and the request's body is collected here, which
-    // is what lets it be asked again of a replacement (38.25). The answer's body streams (38.36).
+    // is what lets it be asked again of a replacement (38.24). The answer's body streams (38.35).
     //
     // COLLECTED ONCE, HERE, rather than inside `forward`: a body can only be read off a
     // `Request` once, and a re-asked request is the second read that is not there.
@@ -294,7 +330,7 @@ export async function serveDev(
         })
     }
 
-    // 38.39 — ASKED WITHOUT `accept-encoding`, so the app answers uncompressed. A failure after the
+    // 38.38 — ASKED WITHOUT `accept-encoding`, so the app answers uncompressed. A failure after the
     // head is shown as markup appended to the stream (`pull` in the worker), and markup appended to a
     // compressed stream is a stream no browser can decode. Localhost buys nothing from the bytes saved.
     function identityOnly(headers: Headers): [string, string][] {
@@ -304,7 +340,7 @@ export async function serveDev(
         return kept
     }
 
-    // 38.36, 38.37 — THE HEAD SETTLES THE RESPONSE, and its body pulls one chunk from the worker per
+    // 38.35, 38.36 — THE HEAD SETTLES THE RESPONSE, and its body pulls one chunk from the worker per
     // read the connection makes: a high-water mark of 0 asks for nothing ahead of the reader.
     function answer(
         from: DevWorker,
@@ -478,7 +514,7 @@ export async function serveDev(
             },
         })
 
-    // 38.65 — A PORT SOMEONE NAMED IS THE PORT, and one taken is the failure. `Bun.serve` given
+    // 38.64 — A PORT SOMEONE NAMED IS THE PORT, and one taken is the failure. `Bun.serve` given
     // none reads `PORT` itself.
     const server =
         options.port !== undefined || process.env.PORT
@@ -487,7 +523,7 @@ export async function serveDev(
     return server as unknown as Bun.Server<undefined>
 }
 
-// 38.64 — NAMED BY NOBODY, the first free port from 3000. A port taken is the next one tried, and
+// 38.63 — NAMED BY NOBODY, the first free port from 3000. A port taken is the next one tried, and
 // any other failure is the failure.
 function listenOnFirstFree<Listener>(
     listen: (port: number) => Listener,

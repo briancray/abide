@@ -8,8 +8,9 @@ import { arrive, route } from '#shared/route.ts'
 import { rankRoutes, type Segment } from '#shared/routePattern.ts'
 import { setUpLevels } from '#shared/setUpLevels.ts'
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
-import { withdrawHead } from './applyHead.ts'
+import { applyHead, withdrawHead } from './applyHead.ts'
 import { LAYER_MOUNT, LAYER_NAVIGATE } from './LAYER_NAMES.ts'
+import { MOUNTING_LEVEL } from './MOUNTING_LEVEL.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
 import { menuBridge } from './menuBridge.ts'
 import { fillRegion, pageRegion, type Region } from './regions.ts'
@@ -73,6 +74,8 @@ type Level = {
      * wrote and the first navigation away from it withdraws that head like any other.
      */
     head: (() => string) | undefined
+    /** The heads of the components mounted in this level, joined to `head` (`contributeHead`). */
+    contributed: (() => string)[] | undefined
     /**
      * 41.19 — this level's markup, left by its mount once its setup has run, for the router to run
      * once every level below has been set up too; `undefined` once it has run, or where the module
@@ -144,20 +147,8 @@ export class Router {
      * Read off the compiled `<style>` blocks. Nothing here looks at the document's stylesheets.
      */
     transitions: boolean
-    /**
-     * The shell's keyed head entries, as the build read them off the shell (`keyedHead`).
-     *
-     * 39.4, 39.14 — THE OUTERMOST CONTRIBUTOR, and the one the document cannot say: the server
-     * merged out every entry of it a level overrode.
-     */
-    shellHead: string
 
-    constructor(
-        region: Region,
-        routes: Compiled[],
-        transitions: boolean,
-        shellHead: string,
-    ) {
+    constructor(region: Region, routes: Compiled[], transitions: boolean) {
         this.region = region
         this.routes = routes
         this.levels = []
@@ -167,7 +158,6 @@ export class Router {
         this.navigation = 0
         this.prefetched = new Set()
         this.transitions = transitions
-        this.shellHead = shellHead
     }
 
     /**
@@ -186,7 +176,7 @@ export class Router {
     /**
      * Loads a route's chunks ahead of a navigation the reader has signaled.
      *
-     * 30.14 — A NAVIGATION THE READER HAS SIGNALLED, LOADED BEFORE IT HAPPENS: the route's chunks
+     * 30.14 — A NAVIGATION THE READER HAS SIGNALED, LOADED BEFORE IT HAPPENS: the route's chunks
      * are asked for on intent, so the click finds them in the module cache and setup — and with it
      * every call the page makes — starts at once. Only the CODE: a call run on a hover would be a
      * call nobody asked for, and for anything but a `GET` one with an effect. A failed load is left
@@ -385,11 +375,9 @@ export class Router {
             // outermost first; a kept layout is not mounted again, so neither is its head.
             this.mountChain(target, found, arriving, shared, into)
             // 39.14 — what the leaving levels keyed and the arriving ones did not goes back to the
-            // nearest kept layout's, else the shell's, else leaves.
-            withdrawHead(
-                leaving,
-                this.heads(shared, this.levels.length),
-                () => this.shellHead + this.heads(0, shared),
+            // nearest kept layout's, else leaves.
+            withdrawHead(leaving, this.heads(shared, this.levels.length), () =>
+                this.heads(0, shared),
             )
             // The top of the page, or — as the browser does on a load — the fragment's element.
             if (options.keepScroll !== true) scrollToFragment(target.hash)
@@ -480,6 +468,7 @@ export class Router {
             scope: undefined,
             slot: undefined,
             head: undefined,
+            contributed: undefined,
             markup: undefined,
             share: null,
         }
@@ -505,7 +494,9 @@ export class Router {
         // runs; a module mounted by the router leaves its markup rather than using this one.
         // A deferred level answers the scope its setup made, so the watches that setup opened are
         // stopped with the level even where its markup never runs — a slot that never opens.
-        level.scope = module.default(region, props, level)
+        level.scope = mounting(level, () =>
+            module.default(region, props, level),
+        )
         return level.share
     }
 
@@ -515,7 +506,7 @@ export class Router {
         const markup = level.markup
         if (markup === undefined) return
         level.markup = undefined
-        level.scope = markup(region)
+        level.scope = mounting(level, () => markup(region))
     }
 
     /**
@@ -577,7 +568,7 @@ export class Router {
     ): void {
         arrive(target.href, found.route.pattern, found.params)
         this.chain = modules
-        // 38.89 — inside a desktop app, the window shows the menus this chain exports.
+        // 38.88 — inside a desktop app, the window shows the menus this chain exports.
         if (menuBridge() !== undefined)
             void import('./reportMenu.ts').then((loaded) =>
                 loaded.reportMenu(modules as { menu?: unknown }[]),
@@ -685,14 +676,30 @@ export function startRouter(
     routes: Route[],
     host: Element = document.body,
     transitions = false,
-    shellHead = '',
 ): Router {
-    const router = new Router(
-        pageRegion(host),
-        rankRoutes(routes),
-        transitions,
-        shellHead,
-    )
+    const router = new Router(pageRegion(host), rankRoutes(routes), transitions)
     CURRENT_ROUTER.current = router
     return router
+}
+
+/**
+ * `run`, with `level` the one its components add their `<head>` to (39.1) — and what those built on
+ * the client contributed applied once it returns, rather than once a component.
+ */
+function mounting<Result>(level: Level, run: () => Result): Result {
+    const back = MOUNTING_LEVEL.current
+    const backUnapplied = MOUNTING_LEVEL.unapplied
+    MOUNTING_LEVEL.current = level
+    MOUNTING_LEVEL.unapplied = ''
+    let unapplied: string
+    let result: Result
+    try {
+        result = run()
+    } finally {
+        unapplied = MOUNTING_LEVEL.unapplied
+        MOUNTING_LEVEL.current = back
+        MOUNTING_LEVEL.unapplied = backUnapplied
+    }
+    applyHead(unapplied)
+    return result
 }

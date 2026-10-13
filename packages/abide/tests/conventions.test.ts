@@ -1,6 +1,6 @@
 // CLAUDE.md's rules had no gate, and they are the ones a session reads first and forgets by the
 // third file. Not all of them are checkable — "a name is long enough when a reader who has not
-// opened the callee can say what it returns" is a judgement and stays one — but a few are exact,
+// opened the callee can say what it returns" is a judgment and stays one — but a few are exact,
 // and every one of those is load-bearing in a way that fails SILENTLY: an import that reads as free
 // costs a module's whole union, a `node:` import that nobody justified quietly becomes the pattern,
 // and a constants leaf that grew an import stops being a leaf without anything saying so.
@@ -17,10 +17,6 @@ import {
 const ABIDE = new URL('../', import.meta.url)
 const PACKAGES = new URL('../../', import.meta.url)
 
-// What `buildPages.ts` writes into the docs app from `content/` — gitignored, rebuilt by every
-// `bun run build`, and named after the page it renders rather than by anyone choosing a name.
-const GENERATED = ['dogfood/src/ui/pages/', 'dogfood/src/ui/public/']
-
 async function sources(
     root: URL,
     pattern = '**/*.ts',
@@ -31,20 +27,18 @@ async function sources(
         onlyFiles: true,
     })) {
         if (path.includes('node_modules')) continue
-        if (GENERATED.some((prefix) => path.startsWith(prefix))) continue
         out.push({ path, text: await Bun.file(new URL(path, root)).text() })
     }
     return out
 }
 
 // Every package's own source, relative to `packages/`: the framework (its tests are its own), the
-// harness, the docs app's source and build scripts, and the bridge. The dogfood's playwright
+// harness, the docs app's source, and the bridge. The dogfood's playwright
 // specs are left out — they run on node, under rules this file does not hold them to.
 const AUTHORED = [
     'abide/**/*.ts',
     'harness/**/*.ts',
     'dogfood/src/**/*.ts',
-    'dogfood/scripts/**/*.ts',
     'bridge/**/*.ts',
 ]
 
@@ -196,22 +190,13 @@ test('a constants leaf has no imports of its own', async () => {
 // CLAUDE.md, "writing code": a file is named after what it EXPORTS when it exports one thing, so a
 // reader holding the import line knows which of the three it is without opening it. The framework's
 // own addresses are the stated exception and are listed rather than inferred: a file the framework
-// finds BY NAME (`page`, `layout`, `error`, `preload`, `app`), a barrel (`index`), and the CLI's
-// own entry (`bin/abide.ts`). A docs app's `rpc/` module is an address too — its path is the
-// route's, and what it exports is the verb the client calls.
+// finds BY NAME (`layout`, `error`, `preload`, `app`), a barrel (`index`), and the CLI's own entry
+// (`bin/abide.ts`).
 // EVERY EXPORT SPELLING COUNTS, `export function*`, `enum`, `let`, `default` and `export { … }`
 // among them: a reading blind to one sees a file exporting two things as exporting the other one.
 // THE REVERT: a file exporting only `function* notItsName` is named here, and so is one exporting
 // only an `enum` or an `export { a as notItsName }`.
-const ADDRESSES = new Set([
-    'index',
-    'app',
-    'page',
-    'layout',
-    'error',
-    'preload',
-    'abide',
-])
+const ADDRESSES = new Set(['index', 'layout', 'error', 'preload', 'abide'])
 
 const DECLARED =
     /^export (?:default )?(?:declare )?(?:async )?(?:abstract )?(?:const enum|const|let|var|function\*?|class|type|interface|enum) (\w+)/gm
@@ -244,7 +229,6 @@ test('a file exporting one thing is named after what it exports', async () => {
     const misnamed: string[] = []
     for (const { path, text } of await authored()) {
         if (/^\w+\/tests\//.test(path)) continue
-        if (path.startsWith('dogfood/src/server/rpc/')) continue
         const name = path.slice(path.lastIndexOf('/') + 1, -'.ts'.length)
         if (ADDRESSES.has(name)) continue
         const exported = exportedNames(text)
@@ -256,16 +240,22 @@ test('a file exporting one thing is named after what it exports', async () => {
 })
 
 // The same rule for a component: a `.abide` file's one export is its default, the component, and
-// it is TitleCase. The addresses are the three a router finds by name — `routePattern.ts`'s
-// `FileKind`.
-// THE REVERT: a `lowerCase.abide` anywhere in the authored source is named here.
-const ROUTED = new Set(['page', 'layout', 'error'])
+// it is TitleCase. A `page`, `layout` or `error` is an address rather than a name (23.14,
+// `routePattern.ts`'s `FileKind`), a `launcher` is a name the framework finds (38.82), and so is a
+// file of handlers alone — what it exports is the verb
+// the client calls, at its directory's route (16.2).
+// THE REVERT: a `lowerCase.abide` with a template anywhere is named here.
+const ROUTED = new Set(['page', 'layout', 'error', 'launcher'])
 
 test('a component file is named in TitleCase', async () => {
     const misnamed: string[] = []
-    for (const { path } of await authored('abide')) {
+    for (const { path, text } of await authored('abide')) {
         const name = path.slice(path.lastIndexOf('/') + 1, -'.abide'.length)
         if (ROUTED.has(name)) continue
+        const handlersAlone =
+            text.includes('<script server>') &&
+            text.replace(/<script[^>]*>[\s\S]*?<\/script>/g, '').trim() === ''
+        if (handlersAlone) continue
         if (!/^[A-Z][a-zA-Z0-9]*$/.test(name)) misnamed.push(path)
     }
     expect(misnamed).toEqual([])
@@ -323,7 +313,7 @@ test('every clause a framework comment cites exists', async () => {
     expect(dangling).toEqual([])
 })
 
-// 38.95 — `sideEffects` in the package's `package.json` lets a bundler drop a module none of whose
+// 38.94 — `sideEffects` in the package's `package.json` lets a bundler drop a module none of whose
 // exports a build uses, and a module that WRITES OUTSIDE ITSELF as it loads is then dropped with its
 // write: the compiled executable lost `installServer()` that way, and a page its `__ABIDE_WORK__`.
 // So every such module is listed, and every file listed by name is one. A write to a module's OWN
@@ -359,7 +349,7 @@ function writesOutsideItself(text: string): boolean {
     return false
 }
 
-test('a module that writes outside itself at load is listed in sideEffects, and only one — 38.95', async () => {
+test('a module that writes outside itself at load is listed in sideEffects, and only one — 38.94', async () => {
     const listed = (
         (await Bun.file(new URL('package.json', ABIDE)).json()) as {
             sideEffects: string[]

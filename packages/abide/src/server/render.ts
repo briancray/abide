@@ -27,17 +27,25 @@ import { currentRequestScope, type PageCall } from './requestScope.ts'
 // biome-ignore lint/suspicious/noEmptyInterface: REGISTRY declares `interface Component {}`.
 export interface Component {}
 
-/** The document a render renders into, defaulting to `src/ui/app.html`. 35.6. */
-export type Shell = string | URL | undefined
-
-// Where a shell was not given and `src/ui/app.html` is not there either. The rulebook does not
-// say what happens in that case; serving nothing would be worse than serving this.
-const BARE_SHELL = '<!doctype html><html><head></head><body></body></html>'
+/**
+ * 35.6 — THE DOCUMENT EVERY RENDER WRITES INTO: an encoding and a viewport, each keyed, so the
+ * component's own replace them (35.15), and nothing else — what a document carries beyond that is
+ * the component's to write.
+ */
+export const DEFAULT_DOCUMENT =
+    '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body></body></html>'
 
 const ENCODER = new TextEncoder()
 
-/** What a compiled component answers: its head and its body markup. */
-export type Rendered = { head: string; body: string }
+/**
+ * What a compiled component answers: its head and its body markup, and the document's `<html>`
+ * and `<body>` it writes, rendered empty (35.15), or `undefined`.
+ */
+export type Rendered = {
+    head: string
+    body: string
+    document: { html: string; body: string } | undefined
+}
 
 /**
  * The page inside its layouts, every level set up first and then built.
@@ -85,7 +93,12 @@ export async function composePage(
     // THE OUTERMOST HEAD FIRST: reading it builds the chain, which is what pushes the heads below.
     // Written end to end rather than merged: `render` merges it with the shell's in one pass (39.4).
     const head = outermost.head
-    return { head: head + heads.join(''), body: outermost.body }
+    return {
+        head: head + heads.join(''),
+        body: outermost.body,
+        // 35.15 — the document's, which only the root layout writes, and it is outermost.
+        document: outermost.document,
+    }
 }
 
 /**
@@ -186,46 +199,6 @@ function dropShadowed(markup: string, total: Map<string, number>): string {
 }
 
 /**
- * The keyed elements at the top of a shell's head, end to end, and nothing else.
- *
- * 39.14 — WHAT A CLIENT NAVIGATION PUTS BACK. `mergeHead` drops every shell entry a level
- * overrides, so once the server has painted the document the shell's `<title>` is nowhere a
- * browser can read it — and a navigation to a page with no title owes it back. The build hands
- * these to the router rather than the server writing them into each page: the shell is one per
- * app, so it rides in the route table once instead of in every document. KEYED ONLY, because an
- * entry with no key is never withdrawn (39.5) and a shell's inline `<style>` would be the route
- * table's largest string for nothing. Top level only, as `mergeHead` keys it.
- */
-export function keyedHead(document: string): string {
-    const unwrap = {
-        element(element: HTMLRewriterTypes.Element) {
-            element.removeAndKeepContent()
-        },
-    }
-    const top = { depth: 0 }
-    const rewriter = new HTMLRewriter()
-        .onDocument({
-            doctype(doctype) {
-                doctype.remove()
-            },
-            comments(comment) {
-                comment.remove()
-            },
-            text(text) {
-                if (top.depth === 0) text.remove()
-            },
-        })
-        .on('html', unwrap)
-        .on('head', unwrap)
-    return dropAtHeadTop(
-        rewriter,
-        document.slice(0, headAnchor(document)),
-        (key) => key === undefined,
-        top,
-    )
-}
-
-/**
  * `markup` through `rewriter`, with each element at the top of the head removed where `drop`
  * answers true for its key — `undefined` for an element with none. `top` is the depth the walk is
  * at, for a caller's own handlers to read.
@@ -300,23 +273,25 @@ export function boundPage(
 }
 
 /**
- * The document's bytes: `component` rendered into `shell`.
+ * The document's bytes: `component` rendered into abide's own document (35.6).
  *
  * 35.4, 35.5 — the component is already bound to its props.
  */
-export async function render(
-    component: Component,
-    shell?: Shell,
-): Promise<Uint8Array<ArrayBuffer>> {
-    // GUARDED, because the string form is already settled: `shellText` is `async`, so awaiting it
-    // unconditionally wrapped a promise and spent a microtask turn per request for nothing.
-    const document = typeof shell === 'string' ? shell : await shellText(shell)
+export function render(component: Component): Promise<Uint8Array<ArrayBuffer>> {
+    return renderDocument(component, DEFAULT_DOCUMENT)
+}
 
+/**
+ * `render` into `given`: abide's own document with what the server adds to it — a page's client
+ * tags, the launcher page's stylesheet. NOT PUBLIC SURFACE — `server/index.ts` exports `render`.
+ */
+export async function renderDocument(
+    component: Component,
+    given: string,
+): Promise<Uint8Array<ArrayBuffer>> {
     // TWO INSERTION POINTS, CLAMPED AND ORDERED. `</head>` and `</body>` are both OPTIONAL end
     // tags, so a valid shell can carry neither: an absent anchor means "the end of the document",
     // and the clamp is what keeps the head ahead of the body whatever order the shell wrote them in.
-    const bodyAt = bodyAnchor(document)
-    const headAt = headAnchor(document)
     // 41.1 — NOTHING GOES OUT UNTIL THE PAGE IS BUILT. The status line goes out with the first byte,
     // and a page reading a record that is not there is a 404 only while no byte has: so the page and
     // its layouts are set up (41.19) and built before the shell's head is sent, and a refusal or a
@@ -331,6 +306,13 @@ export async function render(
     const rendered = isThenable(answered) ? await answered : answered
     const head = rendered.head
     const body = rendered.body
+    // 35.15 — the root layout's `<html>` and `<body>` attributes, on the document's own two.
+    const document =
+        rendered.document === undefined
+            ? given
+            : withDocumentAttributes(given, rendered.document)
+    const bodyAt = bodyAnchor(document)
+    const headAt = headAnchor(document)
     // 41.20 — THE PAGE'S CALLS LEAVE AHEAD OF ITS MARKUP. Setup has run, so every call the page
     // makes is known, and a script in the head starts each one as the request the browser's own
     // `Rpc` would make — while the rest of the document and the bundle are still on their way.
@@ -399,13 +381,20 @@ function bodyAnchor(document: string): number {
 }
 
 /**
- * Where a shell's head ends, clamped ahead of its body.
+ * The shell with `tags` at the head anchor `render` uses.
  *
- * NOT PUBLIC SURFACE: `server/index.ts` does not re-export it. `answerRequest` is the second
- * caller — a shell has to carry the client entry's script tag (38.23), and putting that anywhere
- * but the head this finds is the same clamped-and-ordered question over again.
+ * So a shell with no `</head>` puts them where its head content goes rather than inside the body.
+ * NOT PUBLIC SURFACE: `server/index.ts` does not re-export it. A shell has to carry the client
+ * entry's script tag (38.22), and putting that anywhere but the head `render` finds is the same
+ * clamped-and-ordered question over again.
  */
-export function headAnchor(document: string): number {
+export function intoHead(shell: string, tags: string): string {
+    const at = headAnchor(shell)
+    return shell.slice(0, at) + tags + shell.slice(at)
+}
+
+/** Where a shell's head ends, clamped ahead of its body. */
+function headAnchor(document: string): number {
     const bodyAt = bodyAnchor(document)
     // THE OPENING `<body` IS THE FALLBACK, not the body anchor. Collapsed onto `bodyAt`, a shell
     // with no `</head>` put the page's `<title>`, `<meta>` and stylesheet links after the mount
@@ -428,37 +417,19 @@ function bodyOpen(document: string): number {
 }
 
 /**
- * The text of a shell given as a URL, or of the default one.
+ * `document` with the attributes `written` carries — an `<html …></html>` and a `<body …></body>`,
+ * each rendered empty — written onto its own `<html>` and `<body>` tags.
  *
- * The URL and absent forms only — the string form is already settled and its caller above takes
- * it without a turn, so a second copy of that test here is a branch nothing reaches and a second
- * owner of the question.
+ * 35.15, 35.17 — RENDERED AS ANY ELEMENT IS, so an attribute is escaped, absent or live exactly as
+ * one on a `<div>` is, and lifted off the rendered pair by its fixed frame rather than parsed.
  */
-async function shellText(shell: URL | undefined): Promise<string> {
-    if (shell !== undefined) return await Bun.file(shell).text()
-    return await shellUnder('src')
-}
-
-/**
- * The shell at `<root>/ui/app.html`, or a bare document where there is none.
- *
- * 35.6's default, read from a ROOT rather than from the process's directory. `render` on its own
- * is called from wherever the app is, so `src` is the root it passes; `loadBuild` is handed the
- * root `abide build` compiled and the two need not be the same directory. NOT PUBLIC SURFACE —
- * `server/index.ts` does not re-export it.
- */
-export async function shellUnder(root: string): Promise<string> {
-    // `.text()` already fails when the file is not there, so no `.exists()` asks first. The read
-    // happens per render for a bare `render` call — 20 µs and 98% of the op — and `loadBuild` is the caller that hoists
-    // it, reading the shell once at boot rather than once a request.
-    try {
-        return await Bun.file(`${root}/ui/app.html`).text()
-    } catch (thrown) {
-        // NARROWED TO THE ONE CASE THE LINE ABOVE ARGUES FOR. A bare catch made every failure look
-        // like an absent file, so a project that HAS a shell which is momentarily unreadable —
-        // EACCES, EISDIR, EMFILE under load — was served the bare shell with no stylesheet, no
-        // client script and nothing said, on one request in a thousand.
-        if ((thrown as { code?: unknown }).code !== 'ENOENT') throw thrown
-        return BARE_SHELL
-    }
+function withDocumentAttributes(
+    document: string,
+    written: { html: string; body: string },
+): string {
+    const html = written.html.slice('<html'.length, -'></html>'.length)
+    const body = written.body.slice('<body'.length, -'></body>'.length)
+    return document
+        .replace(/<html(?=[\s>])/i, `<html${html}`)
+        .replace(/<body(?=[\s>])/i, `<body${body}`)
 }

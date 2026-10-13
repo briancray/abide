@@ -35,7 +35,7 @@ afterAll(removeTemporaryModules)
 
 test('a read inside what is awaited tracks, and one after it warns — 14.14', async () => {
     const compiled = await compileApp(
-        appFixture({ 'ui/pages/page.abide': PAGE }),
+        appFixture({ 'page.abide': PAGE }),
     )
     const warned: string[] = []
     for (const warning of compiled.warnings) {

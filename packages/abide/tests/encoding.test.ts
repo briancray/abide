@@ -1,4 +1,4 @@
-// 38.30 — which encoding a request takes, off `accept-encoding`, and the compression of a document
+// 38.29 — which encoding a request takes, off `accept-encoding`, and the compression of a document
 // once it has. Asserted here rather than only through a server: every case below is a
 // header a browser or a proxy really sends, and a server arm can only send the one header
 // `Bun.fetch` was given.
@@ -14,20 +14,20 @@ import { compressAnswer } from '#server/compressAnswer.ts'
 import { ENCODINGS, negotiateEncoding } from '#server/negotiateEncoding.ts'
 import { prefers } from '#server/prefers.ts'
 
-test('no header, or only identity, is the bytes as they are — 38.30', () => {
+test('no header, or only identity, is the bytes as they are — 38.29', () => {
     expect(negotiateEncoding(null, ENCODINGS)).toBeUndefined()
     expect(negotiateEncoding('', ENCODINGS)).toBeUndefined()
     expect(negotiateEncoding('identity', ENCODINGS)).toBeUndefined()
 })
 
-test('brotli wins a tie, whatever order the header lists them in — 38.30', () => {
+test('brotli wins a tie, whatever order the header lists them in — 38.29', () => {
     expect(negotiateEncoding('gzip, deflate, br, zstd', ENCODINGS)).toBe('br')
     expect(negotiateEncoding('br, gzip', ENCODINGS)).toBe('br')
     // What a browser sends over plain http.
     expect(negotiateEncoding('gzip, deflate', ENCODINGS)).toBe('gzip')
 })
 
-test('a quality is a preference and q=0 is a refusal — 38.30', () => {
+test('a quality is a preference and q=0 is a refusal — 38.29', () => {
     expect(negotiateEncoding('br;q=0.5, gzip', ENCODINGS)).toBe('gzip')
     expect(negotiateEncoding('br;q=0, gzip', ENCODINGS)).toBe('gzip')
     // THE WILDCARD NAMES WHAT IS NOT LISTED, and a listed refusal still stands beside it.
@@ -39,7 +39,7 @@ test('a quality is a preference and q=0 is a refusal — 38.30', () => {
     expect(negotiateEncoding(' GZIP ; q=1 ', ENCODINGS)).toBe('gzip')
 })
 
-test('only what is on offer is chosen — 38.30', () => {
+test('only what is on offer is chosen — 38.29', () => {
     expect(negotiateEncoding('br, gzip', ['gzip'])).toBe('gzip')
     expect(negotiateEncoding('br', ['gzip'])).toBeUndefined()
     expect(negotiateEncoding('br, gzip', [])).toBeUndefined()
@@ -68,7 +68,7 @@ test('an accept header prefers by quality, then by order, and q=0 refuses', () =
 // A DOCUMENT IS COMPRESSED WHOLE and reads back byte for byte, in each encoding a request can take,
 // with the length of what was sent declared. THE REVERT: set `content-length` off the bytes before
 // they are compressed; the brotli answer declares 2031 bytes and sends 40.
-test('a document compresses in either encoding, says its length and reads back whole — 38.30', async () => {
+test('a document compresses in either encoding, says its length and reads back whole — 38.29', async () => {
     const document = new TextEncoder().encode(
         `<!doctype html><title>x</title>${'<p>row</p>'.repeat(200)}`,
     )
@@ -102,11 +102,11 @@ test('a document compresses in either encoding, says its length and reads back w
     )
 })
 
-// 38.30, 38.69 — A JSON ANSWER NAMES `accept-encoding` IN `vary` WHETHER OR NOT IT IS COMPRESSED, and
+// 38.29, 38.68 — A JSON ANSWER NAMES `accept-encoding` IN `vary` WHETHER OR NOT IT IS COMPRESSED, and
 // under the floor goes as it is whatever the request takes; a document's `vary` is its headers'.
 // Either way it says its length, as a document does. THE REVERT: drop the floor; the small answer is
 // sent as brotli. Drop the JSON lane's `content-length`; both answers declare none.
-test('a JSON answer varies on accept-encoding, says its length and is compressed only from the floor up — 38.30, 38.69', async () => {
+test('a JSON answer varies on accept-encoding, says its length and is compressed only from the floor up — 38.29, 38.68', async () => {
     const small = await compressAnswer(
         '{"id":1}',
         asking('br'),
@@ -136,11 +136,11 @@ test('a JSON answer varies on accept-encoding, says its length and is compressed
     expect(page.headers.get('vary')).toBeNull()
 })
 
-// 38.96 — FROM 64 KB AN ANSWER IS COMPRESSED OFF THE EVENT LOOP, to the bytes the loop would have
+// 38.95 — FROM 64 KB AN ANSWER IS COMPRESSED OFF THE EVENT LOOP, to the bytes the loop would have
 // made, and under it with no await at all. A turn of the loop queued before the answer runs before
 // the answer lands only when the compression left the loop. THE REVERT: compress every answer on
 // the loop; the 620 KB answer lands with the turn not yet run, in either encoding.
-test('a large answer is compressed off the loop to the same bytes, and a small one with no await — 38.96', async () => {
+test('a large answer is compressed off the loop to the same bytes, and a small one with no await — 38.95', async () => {
     const text = JSON.stringify(
         Array.from({ length: 7000 }, (_, id) => ({ id, name: `row ${id}` })),
     ).repeat(3)

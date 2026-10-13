@@ -28,9 +28,14 @@ test('a change is serialized once for every follower of a value, and each is sen
     })
     const value = reactive(shelf(['dune']), { global: true })
     const rpc = GET(value as never) as unknown as { address: string }
-    rpc.address = '/__abide/rpc/shelf'
+    rpc.address = '/shelf'
     const mux = new Mux(
-        new Map([[rpc.address, { handler: rpc, ui: true } as never]]),
+        new Map([
+            [
+                `GET ${rpc.address}`,
+                { handler: rpc, ui: true, route: '/', rungs: [] } as never,
+            ],
+        ]),
         undefined,
     )
     const sent: {
@@ -98,9 +103,14 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
         tags: ['stock'],
     })
     const rpc = GET(value as never) as unknown as { address: string }
-    rpc.address = '/__abide/rpc/stock'
+    rpc.address = '/stock'
     const mux = new Mux(
-        new Map([[rpc.address, { handler: rpc, ui: true } as never]]),
+        new Map([
+            [
+                `GET ${rpc.address}`,
+                { handler: rpc, ui: true, route: '/', rungs: [] } as never,
+            ],
+        ]),
         undefined,
     )
     const frames: { op: string; value?: unknown }[] = []
@@ -141,9 +151,14 @@ test('an entry answered looks up the followers of its own key alone — 18.8', a
         global: true,
     })
     const rpc = GET(value as never) as unknown as { address: string }
-    rpc.address = '/__abide/rpc/keyed'
+    rpc.address = '/keyed'
     const mux = new Mux(
-        new Map([[rpc.address, { handler: rpc, ui: true } as never]]),
+        new Map([
+            [
+                `GET ${rpc.address}`,
+                { handler: rpc, ui: true, route: '/', rungs: [] } as never,
+            ],
+        ]),
         undefined,
     )
     const frames: {
@@ -206,8 +221,8 @@ test('a write reaches every event stream following a value with one serializatio
     const STREAMS = 20
     const value = reactive({ titles: ['dune'] }, { global: true })
     const rpc = GET(value as never) as unknown as { address: string }
-    rpc.address = '/__abide/rpc/events'
-    const mounted = { handler: rpc, ui: true } as never
+    rpc.address = '/events'
+    const mounted = { handler: rpc, ui: true, route: '/', rungs: [] } as never
     const readers: ReadableStreamDefaultReader<Uint8Array>[] = []
     for (let at = 0; at < STREAMS; at++)
         readers.push(followAsEvents(mounted, undefined, undefined).getReader())

@@ -54,7 +54,7 @@ export const record = GET(({ id }: { id: number }) => (id === 1 ? { title: 'The 
 
 const RECORD_PAGE = `<script>
 import { reactive, route } from '@abide/abide'
-import { record } from '#server/rpc/records'
+import { record } from '#src/records/records.abide'
 
 const found = reactive(() => record({ id: Number(route.params().id) }))
 </script>
@@ -67,25 +67,29 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': '<main>home</main>',
-        'ui/pages/error.abide': ROOT_ERROR,
-        'ui/pages/invoices/[id]/page.abide': '<main>an invoice</main>',
-        'ui/pages/invoices/error.abide': SECTION_ERROR,
-        'ui/pages/broken/error.abide': BROKEN_ERROR,
-        'ui/pages/tax returns/page.abide': '<main>tax returns</main>',
-        'ui/pages/tax returns/error.abide':
+        'page.abide': '<main>home</main>',
+        'error.abide': ROOT_ERROR,
+        'invoices/[id]/page.abide': '<main>an invoice</main>',
+        'invoices/error.abide': SECTION_ERROR,
+        'broken/error.abide': BROKEN_ERROR,
+        'tax returns/page.abide': '<main>tax returns</main>',
+        'tax returns/error.abide':
             '<h1 id="encoded">No such return</h1>',
-        'server/rpc/forms.ts': FORMS,
-        'server/rpc/records.ts': RECORDS,
-        'ui/pages/records/[id]/page.abide': RECORD_PAGE,
-        'ui/pages/records/error.abide': `<script>
+        'forms/forms.abide': `<script server>
+${FORMS}</script>
+`,
+        'records/records.abide': `<script server>
+${RECORDS}</script>
+`,
+        'records/[id]/page.abide': RECORD_PAGE,
+        'records/error.abide': `<script>
 import { props, type Failed } from '@abide/abide'
 
 const { failure } = props<{ failure: Failed<string, unknown> }>()
 </script>
 
 <h1 id="records">No such record ({failure.status})</h1>`,
-        'ui/pages/thrown/page.abide': `<script>
+        'thrown/page.abide': `<script>
 const missing = undefined as unknown as { boom: string }
 </script>
 
@@ -100,7 +104,7 @@ afterAll(() => {
 
 // 35.2, 15.7 — AN ADDRESS NOTHING ANSWERS IS `notFound`, rendered by the nearest error page at 404.
 test('an unmatched address renders the root error page at 404 — 35.2', async () => {
-    const answer = await Bun.fetch(`${base}/nowhere`)
+    const answer = await Bun.fetch(`${base}/nowhere`, AS_A_PAGE)
     expect(answer.status).toBe(404)
     expect(answer.headers.get('content-type')).toBe('text/html; charset=utf-8')
     const html = await answer.text()
@@ -115,7 +119,7 @@ test('an error page under a percent-encoded directory answers for it — 35.2', 
     expect(await (await Bun.fetch(`${base}/tax%20returns`)).text()).toContain(
         'tax returns',
     )
-    const answer = await Bun.fetch(`${base}/tax%20returns/missing`)
+    const answer = await Bun.fetch(`${base}/tax%20returns/missing`, AS_A_PAGE)
     expect(answer.status).toBe(404)
     expect(await answer.text()).toContain(
         '<h1 id="encoded">No such return</h1>',
@@ -134,7 +138,7 @@ test('an address that will not percent-decode is answered 400 — 15.16', async 
 // 35.2 — NEAREST-ANCESTOR, as a layout is. THE REVERT: sort the error pages shallowest first in
 // `appSources`; `/invoices/42/lines` is answered by the root page.
 test('the nearest error.abide answers for its own directory — 35.2', async () => {
-    const answer = await Bun.fetch(`${base}/invoices/42/lines`)
+    const answer = await Bun.fetch(`${base}/invoices/42/lines`, AS_A_PAGE)
     expect(answer.status).toBe(404)
     expect(await answer.text()).toContain(
         '<h1 id="section">No such invoice (404)</h1>',
@@ -144,12 +148,16 @@ test('the nearest error.abide answers for its own directory — 35.2', async () 
 // 35.3 — AN ERROR PAGE THAT FAILS ESCALATES past its boundary to the next ancestor, rather than
 // rendering half of itself.
 test('an error page that fails escalates to the next ancestor — 35.3', async () => {
-    const answer = await Bun.fetch(`${base}/broken/thing`)
+    const answer = await Bun.fetch(`${base}/broken/thing`, AS_A_PAGE)
     expect(answer.status).toBe(404)
     const html = await answer.text()
     expect(html).toContain('<h1 id="root">No such page</h1>')
     expect(html).not.toContain('boom')
 })
+
+// 15.22 — an address no route answers is a page's only to a reader asking for a document, as a
+// browser's navigation does.
+const AS_A_PAGE = { headers: { accept: 'text/html' } }
 
 const FORM_HEADERS = {
     accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -192,7 +200,7 @@ test('a page that throws as it is built answers 500 — 41.1, 16.41', async () =
 // from a page's script is still answered as JSON. THE REVERT: drop the `navigation` branch from
 // `answerRpc`; the form's reader is handed a JSON body where a page was due.
 test('a mutation a form posted is answered as a navigation — 16.38', async () => {
-    const saved = await Bun.fetch(`${base}/__abide/rpc/forms/save`, {
+    const saved = await Bun.fetch(`${base}/forms/save`, {
         method: 'POST',
         headers: formHeaders(),
         body: 'amount=5',
@@ -201,7 +209,7 @@ test('a mutation a form posted is answered as a navigation — 16.38', async () 
     expect(saved.status).toBe(303)
     expect(saved.headers.get('location')).toBe(`${base}/invoices/42`)
 
-    const refused = await Bun.fetch(`${base}/__abide/rpc/forms/save`, {
+    const refused = await Bun.fetch(`${base}/forms/save`, {
         method: 'POST',
         headers: formHeaders(),
         body: 'amount=0',
@@ -210,7 +218,7 @@ test('a mutation a form posted is answered as a navigation — 16.38', async () 
     expect(refused.headers.get('content-type')).toBe('text/html; charset=utf-8')
     expect(await refused.text()).toContain('<h1>Something went wrong</h1>')
 
-    const moved = await Bun.fetch(`${base}/__abide/rpc/forms/move`, {
+    const moved = await Bun.fetch(`${base}/forms/move`, {
         method: 'POST',
         headers: formHeaders(),
         redirect: 'manual',
@@ -218,7 +226,7 @@ test('a mutation a form posted is answered as a navigation — 16.38', async () 
     expect(moved.status).toBe(303)
     expect(moved.headers.get('location')).toBe('/elsewhere')
 
-    const scripted = await Bun.fetch(`${base}/__abide/rpc/forms/save`, {
+    const scripted = await Bun.fetch(`${base}/forms/save`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{"amount":"7"}',
@@ -231,7 +239,7 @@ test('a mutation a form posted is answered as a navigation — 16.38', async () 
 // reads `https://elsewhere.example/phish`.
 test('a form posted with a foreign referer goes back to the root — 16.53', async () => {
     const post = (referer: string | undefined) =>
-        Bun.fetch(`${base}/__abide/rpc/forms/save`, {
+        Bun.fetch(`${base}/forms/save`, {
             method: 'POST',
             headers:
                 referer === undefined
@@ -250,7 +258,10 @@ test('a form posted with a foreign referer goes back to the root — 16.53', asy
 // nearest error page, carrying what it would answer. THE REVERT: drop the `readsOnly` check ahead of
 // the page in `answerRequest`; the POST renders the invoice at 200.
 test('a page asked by another method is refused 405 with allow — 15.17', async () => {
-    const answer = await Bun.fetch(`${base}/invoices/42`, { method: 'POST' })
+    const answer = await Bun.fetch(`${base}/invoices/42`, {
+        ...AS_A_PAGE,
+        method: 'POST',
+    })
     expect(answer.status).toBe(405)
     expect(answer.headers.get('allow')).toBe('GET, HEAD')
     expect(answer.headers.get('content-type')).toBe('text/html; charset=utf-8')

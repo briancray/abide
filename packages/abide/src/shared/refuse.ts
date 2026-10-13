@@ -15,7 +15,7 @@ import type { JsonValue } from './JsonValue.ts'
 import { namedLogger } from './log.ts'
 import { type Found, runSchema, type Schema } from './Schema.ts'
 
-/** The `abide:refuse` logger (28.9) — 15.13 and 15.15's namespace. */
+/** The `abide:refuse` logger (28.8) — 15.13 and 15.15's namespace. */
 const REFUSE_LOG = namedLogger('abide:refuse')
 
 /**

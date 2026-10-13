@@ -1,48 +1,50 @@
-// 16.28 AND 16.29 — WHAT THE BROWSER'S BUNDLE SEES OF `server/`. A page imports a handler from the
-// module the app wrote it in, and the server's render reaches that module as written; the bundle a
-// browser loads reaches it through here instead, and gets the wrapper the build wrote in its place
-// (`WIRE_DIRECTORY`). Anything else under `server/` is refused, so a secret, a database client or
-// the server barrel cannot ride into the browser by being imported from the wrong file.
+// 16.29 — WHAT THE BROWSER'S BUNDLE SEES OF THE SERVER: nothing under a `server` directory, at any
+// depth, so a secret or a database client cannot ride into the browser by being imported from the
+// wrong file. A handler crosses as the wrapper its file's browser module carries in place of the
+// server block (34.23), which the compiler wrote; this is the fence around everything else.
 //
 // A PLUGIN ON THE BUNDLE, NOT A REWRITE OF THE PAGES. A rewrite reaches the specifiers the compiler
-// emitted; the bundle reaches every edge — a `#ui` helper importing a handler included.
+// emitted; the bundle reaches every edge — a helper the page imports, importing a server module,
+// included.
+//
+// REGISTERED AHEAD OF `abideModules`, AND IN ITS NAMESPACES: a load is answered by the first plugin
+// that answers it, and a component or a file's text is loaded there rather than as a `file`.
 
-import { realpathSync } from 'node:fs' // bun exposes no realpath of its own
-import { WIRE_DIRECTORY } from './CLIENT_BUILD.ts'
+import { SERVER_DIRECTORY } from '#shared/RESERVED_DIRECTORIES.ts'
+import { placeOf } from '#shared/routePattern.ts'
+import {
+    COMPONENT_NAMESPACE,
+    STYLE_NAMESPACE,
+    TEXT_NAMESPACE,
+} from './abideModules.ts'
+
+// Every namespace a browser bundle loads a file of the app's in: its modules, its components, a
+// file's text and a component's stylesheet.
+const FENCED = ['file', COMPONENT_NAMESPACE, TEXT_NAMESPACE, STYLE_NAMESPACE]
 
 /**
- * The bundler plugin handing the browser each handler's wrapper and refusing the rest of `server/`.
+ * The bundler plugin refusing everything under a `server` directory to the browser's bundle.
  *
- * `modules` is the compiled app, keyed by path below the output directory as `compileApp` hands it
- * back — where the wrappers are.
+ * `root` is its real path (`appRoot`), which is how the bundler names a file. Listed before
+ * `abideModules`.
  */
-export function fenceServer(
-    root: string,
-    modules: Map<string, string>,
-): Bun.BunPlugin {
-    // BOTH SPELLINGS OF THE ROOT, because the bundler names a file with its symlinks resolved and an
-    // app under `/tmp` is `/private/tmp` to it.
-    const roots = new Set([root, realpathSync(root)])
+export function fenceServer(root: string): Bun.BunPlugin {
+    // Anything with a `server` directory in its path below the root, and `placeOf` decides — a load
+    // it passes on falls through to the next plugin's, or the bundler's own.
+    const filter = new RegExp(
+        `^${RegExp.escape(root)}/(?:.*/)?${SERVER_DIRECTORY}/`,
+    )
     return {
         name: 'abide-fence',
         setup(build) {
-            for (const at of roots)
-                build.onLoad(
-                    {
-                        filter: new RegExp(`^${RegExp.escape(at)}/server/`),
-                    },
-                    (args) => {
-                        const source = args.path.slice(at.length + 1)
-                        const wrapper = modules.get(
-                            `${WIRE_DIRECTORY}/${source}`,
-                        )
-                        if (wrapper === undefined)
-                            throw new Error(
-                                `abide: ${source} is server code, and the browser's bundle imports it. A browser may import a handler from a module under server/rpc and nothing else under server/. RULEBOOK 16.29.`,
-                            )
-                        return { contents: wrapper, loader: 'ts' }
-                    },
-                )
+            for (const namespace of FENCED)
+                build.onLoad({ filter, namespace }, (args) => {
+                    const below = args.path.slice(root.length + 1)
+                    if (placeOf(below) !== 'server') return undefined
+                    throw new Error(
+                        `abide: ${below.replace(/::\w+$/, '')} is under a server directory, and the browser's bundle imports it. RULEBOOK 16.29.`,
+                    )
+                })
         },
     }
 }

@@ -78,7 +78,7 @@ test('a click runs the handler and the slot the server wrote is the slot that mo
     expect(work.elementsMoved).toBe(0)
     expect(work.textMoved).toBe(0)
 
-    // On the CLICK only the reactive slot may re-run. A static slot's binding, if one were
+    // On the CLICK only the reactive slot may rerun. A static slot's binding, if one were
     // opened, would not show up here at all — which is exactly why the mount is measured above.
     expect(work.bindingRuns).toBe(1)
     expect(work.wakes).toBe(1)
@@ -151,7 +151,7 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 
 <main><h1 id="static">Invoice</h1><strong id="slot">{invoice.number}</strong></main>`)
 
-    // THE PAGE IS THERE. The static markup either side of the hole is what the old behaviour
+    // THE PAGE IS THERE. The static markup either side of the hole is what the old behavior
     // dropped, so asserting the hole alone would pass against a render that emitted nothing.
     expect(html).toContain('<h1 id="static">Invoice</h1>')
     expect(html).toContain('<strong id="slot">')
@@ -159,7 +159,7 @@ const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
     // The hole: 32.23 leaves what it last rendered, and nothing has been rendered yet.
     expect(document.querySelector('#slot')?.textContent).toBe('')
 
-    // AND IT FILLS. The client re-runs the body (41.6), the value lands, and the binding writes
+    // AND IT FILLS. The client reruns the body (41.6), the value lands, and the binding writes
     // into a text node that was not in the document the server wrote — which is `blank`'s arm.
     mount()
     await Promise.resolve()
@@ -209,7 +209,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
 // `style:`. One class of bug, closed in the two shapes that happened to be tried.
 //
 // AND THE HOLE FILLS, which is the half that makes guarding legal rather than a silent wrong
-// value: 32.3's binding re-runs on the value that landed and writes it into the attribute the
+// value: 32.3's binding reruns on the value that landed and writes it into the attribute the
 // server left empty, exactly as `blank` does for a text run. Before that binding existed the
 // empty attribute was permanent, and the test below asserted it and called that the answer.
 //
@@ -345,7 +345,7 @@ let found = reactive<string | boolean>('until-found')
 //
 // THE `{:else}` ARM IS WHAT MAKES THE CASE DISTINGUISH. Without it an aborted chain and a chain
 // that took the false arm both render nothing, so the test passes against the bug; with it, the
-// old behaviour puts `off` in the document and leaves it there.
+// old behavior puts `off` in the document and leaves it there.
 //
 // TWO REVERTS. Drop the `slotValue` wrapper from the `{#if}` arm of `emitNode` and `render`
 // throws `NotLanded` — no document at all. Drop the `isEmptyRegion` arm of the block's watch in
@@ -497,7 +497,7 @@ const kind = 'card'
     expect(out.getAttribute('data-kind')).toBe('card')
     // ONE ATTRIBUTE WRITE FOR ONE ATTRIBUTE THAT MOVED. THE REVERT: drop the compare in
     // `setAttribute` and this stays 1 here — but the mount above reports `attributesSet` 1 where
-    // it reports 0, because hydration re-runs every binding on a value that has not moved.
+    // it reports 0, because hydration reruns every binding on a value that has not moved.
     expect(work.attributesSet).toBe(1)
     expect(mountWork.attributesSet).toBe(0)
 })

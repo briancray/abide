@@ -310,7 +310,7 @@ export function dropRow(row: Row): void {
  *
  * `abide:hydrate` RATHER THAN A CHANNEL OF ITS OWN. A repeated key is not a hydration mismatch —
  * it survives a reconcile that no hydration was anywhere near — but the registry's meaning for
- * that namespace is THE BROWSER LANE, not a mismatch, and it is the only namespace 28.9 gives the
+ * that namespace is THE BROWSER LANE, not a mismatch, and it is the only namespace 28.8 gives the
  * client runtime. A second one buys an app a second name to learn and silence for one warning,
  * where widening the lane's one meaning costs nothing that has to be taught.
  */
@@ -329,7 +329,7 @@ function warnRepeatedKey(list: List): void {
  * of that length ends on, so the binary search finds the run each row extends, and `came` walks the
  * answer back out.
  *
- * WHY A SUBSEQUENCE AND NOT A RUN OF NEIGHBOURS. The rows that can stay put are the ones already
+ * WHY A SUBSEQUENCE AND NOT A RUN OF NEIGHBORS. The rows that can stay put are the ones already
  * in the right order RELATIVE TO EACH OTHER — they need not be adjacent, and demanding they be
  * would move rows that a gap of new or removed rows had merely spread apart.
  *

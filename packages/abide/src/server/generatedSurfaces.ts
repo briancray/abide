@@ -1,6 +1,6 @@
-// SECTION 20 — WHAT IS GENERATED OFF THE ROUTE TABLE: the OpenAPI document, the MCP endpoint, and 36.7's
-// `GET` over `log.records`. Each is derived from the handlers the app mounted (20.1) and none is
-// authored beside them; each is closed until its `ABIDE_*` opens it, and a closed one is a 404 (36.7).
+// SECTION 20 — WHAT IS GENERATED OFF THE ROUTE TABLE: the OpenAPI document and the MCP endpoint. Each
+// is derived from the handlers the app mounted (20.1) and none is authored beside them; each is open
+// exactly where the route table lists a handler for it, and a closed one is a 404 (20.7, 36.7).
 //
 // THE SURFACES ANSWER INSIDE THE APP'S OWN MIDDLEWARE (20.8), because they are answered from the one
 // request path everything under `/__abide` is — and a tool call is a request through it again (20.10).
@@ -13,15 +13,15 @@
 // `cli` to false for a handler returning a `Response`, 20.4's `ui: false`, and 20.11's type-derived
 // schema (19.9) as `argsDocument`.
 
-import { log, namedLogger } from '#shared/log.ts'
+import { isFailed } from '#shared/Failed.ts'
+import { namedLogger } from '#shared/log.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
-import { refuse } from '#shared/refuse.ts'
-import { GET } from '#shared/rpc.ts'
+import { parseRoutePattern } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import { answered } from './answerFailure.ts'
 import type { Mounted } from './answerRpc.ts'
 import type { ToolDefinition } from './assistant.ts'
-import { appIdentity, config } from './config.ts'
+import { appIdentity } from './config.ts'
 import { crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
 import { MCP_PROTOCOL_VERSION } from './MCP_PROTOCOL_VERSION.ts'
 import { type Listed, surfaceOf } from './surfaceOf.ts'
@@ -29,14 +29,8 @@ import { type Listed, surfaceOf } from './surfaceOf.ts'
 const OPENAPI_LOG = namedLogger('abide:openapi')
 const MCP_LOG = namedLogger('abide:mcp')
 
-/** Whether the `ABIDE_*` setting `name` opens its surface. 36.7. */
-function opened(name: string): boolean {
-    return (config.peek()?.[name] as unknown) === true
-}
-
-// What MCP and OpenAPI add to a listing: whether the handler is keyed, and its name where only
-// letters, digits, `_` and `-` are admitted — a tool's, an operation's.
-type Published = Listed & { keyed: boolean; name: string }
+// What MCP and OpenAPI add to a listing: whether the handler is keyed.
+type Published = Listed & { keyed: boolean }
 
 /** Every handler `surface` lists (`surfaceOf`). */
 function listed(
@@ -53,7 +47,6 @@ function listed(
         found.push({
             ...one,
             keyed: mounted.handler.keyed,
-            name: one.path.replace(/[^a-zA-Z0-9_-]/g, '_'),
         })
     }
     return found
@@ -76,8 +69,27 @@ const PROBLEM_SCHEMA = {
     },
 }
 
+/** `schema` without the members the path carries, or `schema` itself where it carries none. */
+function withoutMembers(
+    schema: { properties?: Record<string, unknown>; required?: string[] },
+    names: Set<string>,
+): unknown {
+    if (names.size === 0 || schema.properties === undefined) return schema
+    const properties: Record<string, unknown> = {}
+    for (const name in schema.properties)
+        if (!names.has(name)) properties[name] = schema.properties[name]
+    const required: string[] = []
+    for (const name of schema.required ?? [])
+        if (!names.has(name)) required.push(name)
+    return { ...schema, properties, required }
+}
+
 /** The OpenAPI 3.1 document, each handler's `JsonSchema` published as it stands. 20.6. */
-function openApiOf(handlers: Map<string, Mounted>): unknown {
+function openApiOf(handlers: Map<string, Mounted>): {
+    openapi: string
+    info: { title: string; version: string }
+    paths: Record<string, Record<string, unknown>>
+} {
     const paths: Record<string, Record<string, unknown>> = {}
     for (const each of listed(handlers, 'openapi')) {
         const operation: Record<string, unknown> = {
@@ -102,36 +114,60 @@ function openApiOf(handlers: Map<string, Mounted>): unknown {
             OPENAPI_LOG.warning(
                 `${each.address} has no JSON Schema to publish for its args.`,
             )
-        if (each.schema !== undefined) {
-            if (argsInURL(each.method)) {
-                const properties =
-                    (
-                        each.schema as {
-                            properties?: Record<string, unknown>
-                            required?: string[]
-                        }
-                    ).properties ?? {}
-                const required = new Set(
-                    (each.schema as { required?: string[] }).required ?? [],
-                )
-                operation.parameters = Object.entries(properties).map(
-                    ([name, schema]) => ({
+        // 16.65 — a route's parameters are the path's, whatever the method, published with or
+        // without a schema to type them. OpenAPI has no optional path parameter, so an optional or
+        // rest segment is published present and says it may be left out (30.4, 30.5).
+        const schema = each.schema as
+            | { properties?: Record<string, unknown>; required?: string[] }
+            | undefined
+        const inPath = new Set<string>()
+        const parameters: unknown[] = []
+        for (const segment of parseRoutePattern(each.address)) {
+            if (segment.kind === 'static') continue
+            inPath.add(segment.name)
+            const parameter: Record<string, unknown> = {
+                name: segment.name,
+                in: 'path',
+                required: true,
+                schema: schema?.properties?.[segment.name] ?? {
+                    type: 'string',
+                },
+            }
+            if (segment.kind === 'optional')
+                parameter.description = 'May be left out, with its segment.'
+            else if (segment.kind === 'rest')
+                parameter.description =
+                    'The rest of the path, any number of segments, and may be left out with its segment.'
+            parameters.push(parameter)
+        }
+        const queried = schema !== undefined && argsInURL(each.method)
+        if (queried) {
+            const properties = schema.properties ?? {}
+            const required = new Set(schema.required ?? [])
+            for (const [name, member] of Object.entries(properties))
+                if (!inPath.has(name))
+                    parameters.push({
                         name,
                         in: 'query',
                         required: required.has(name),
-                        schema,
-                    }),
-                )
-            } else
-                operation.requestBody = {
-                    required: true,
-                    content: { 'application/json': { schema: each.schema } },
-                }
+                        schema: member,
+                    })
         }
-        paths[each.address] ??= {}
-        ;(paths[each.address] as Record<string, unknown>)[
-            each.method.toLowerCase()
-        ] = operation
+        if (parameters.length > 0) operation.parameters = parameters
+        if (schema !== undefined && !queried)
+            operation.requestBody = {
+                required: true,
+                content: {
+                    'application/json': {
+                        schema: withoutMembers(schema, inPath),
+                    },
+                },
+            }
+        // OpenAPI spells a parameter `{id}` where a route spells it `[id]`.
+        const path = each.address.replace(/\[+(?:\.\.\.)?([^\]]+)\]+/g, '{$1}')
+        paths[path] ??= {}
+        ;(paths[path] as Record<string, unknown>)[each.method.toLowerCase()] =
+            operation
     }
     const { name, version } = appIdentity()
     return {
@@ -163,15 +199,17 @@ function overTable<Built>(
     return found
 }
 
-const documents = new WeakMap<Map<string, Mounted>, Reactive<unknown>>()
+const documents = new WeakMap<
+    Map<string, Mounted>,
+    Reactive<ReturnType<typeof openApiOf>>
+>()
 
-/** The OpenAPI document over the route table, or `undefined` where `ABIDE_OPENAPI` is closed. */
+/** The OpenAPI document over the route table, or `undefined` where it lists no handler. 20.7. */
 export function openApi(
     handlers: Map<string, Mounted>,
 ): Reactive<unknown> | undefined {
-    return opened('ABIDE_OPENAPI')
-        ? overTable(documents, handlers, openApiOf)
-        : undefined
+    const document = overTable(documents, handlers, openApiOf)
+    return Object.keys(document().paths).length > 0 ? document : undefined
 }
 
 /** What the MCP surface publishes: a tool per call that takes args or writes, a resource per read. */
@@ -224,9 +262,10 @@ export class McpSurface {
         this.#answer = answer
     }
 
-    /** Whether `ABIDE_MCP` has opened it. 20.7. */
+    /** Whether the route table publishes any handler to it. 20.7. */
     get opened(): boolean {
-        return opened('ABIDE_MCP')
+        const { tools, resources } = this.#published()
+        return tools.length > 0 || resources.length > 0
     }
 
     #published(): Tools {
@@ -274,7 +313,14 @@ export class McpSurface {
         args: Record<string, unknown> | undefined,
         asker: Request,
     ): Promise<{ text: string; failed: boolean }> {
-        const answer = await this.#answer(callOf(asker, one, args))
+        let answer: Response
+        try {
+            answer = await this.#answer(callOf(asker, one, args))
+        } catch (thrown) {
+            // 15.8 — a path parameter no address carries, refused as the wire's 422 is (`rpcRequest`).
+            if (!isFailed(thrown)) throw thrown
+            answer = answered(thrown)
+        }
         return { text: await answer.text(), failed: answer.status >= 400 }
     }
 
@@ -355,7 +401,7 @@ export class McpSurface {
 }
 
 /**
- * Answers one MCP JSON-RPC request over `surface`, or `undefined` where `ABIDE_MCP` is closed.
+ * Answers one MCP JSON-RPC request over `surface`, or `undefined` where it publishes nothing.
  *
  * 20.9 — THE STREAMABLE-HTTP MCP ENDPOINT, answering JSON-RPC over `POST`, as the request's own
  * caller: a handler that takes no args is a resource, read at its address; one that takes args, and
@@ -406,7 +452,7 @@ function callOf(
     )
     const headers = new Headers(asked.headers)
     headers.delete('content-length')
-    // 38.69 — the answer is read here rather than sent on, and nothing in process decodes it.
+    // 38.68 — the answer is read here rather than sent on, and nothing in process decodes it.
     headers.delete('accept-encoding')
     if (call.body !== undefined) headers.set('content-type', 'application/json')
     return new Request(new URL(call.url, asked.url), {
@@ -415,16 +461,3 @@ function callOf(
         body: call.body ?? null,
     })
 }
-
-/**
- * The `GET` over `log.records`, mounted at `/__abide/logs`: closed until `ABIDE_LOGS` opens it.
- *
- * 36.7, 28.2 — A `GET` LIKE ANY OTHER, so it is followed as any `global` value is (18.20): the lines
- * held, then each line written as an `add` at `/-`. The rung is the gate, and makes it a guarded
- * `GET` — run once as a follow opens (18.8), and answering 404 while `ABIDE_LOGS` is closed.
- */
-export const LOGS_HANDLER = GET(log.records, {
-    middleware: [
-        (next, ctx) => (opened('ABIDE_LOGS') ? next(ctx) : refuse(404)),
-    ],
-})

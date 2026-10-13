@@ -8,6 +8,7 @@ import {
     isCallExpression,
     isClassDeclaration,
     isEnumDeclaration,
+    isExpressionStatement,
     isFunctionDeclaration,
     isFunctionExpression,
     isIdentifier,
@@ -66,8 +67,9 @@ import { trackingWarnings } from './trackingWarnings.ts'
 export type ShadowSpans = {
     /** Where the shadow's scripts end and its template begins. */
     scriptsEnd: number
-    /** The `<script module>` bodies, and the `<script>` bodies, in the shadow. */
+    /** The `<script module>`, `<script server>` and `<script>` bodies, in the shadow. */
     modules: Span
+    servers: Span
     scripts: Span
     positions: PositionTable
 }
@@ -123,7 +125,8 @@ export async function readsIn(
     sourceFile: SourceFile,
     shadowPath: string,
     spans: ShadowSpans,
-    abidePath: string,
+    // The file below the app's root, which its route is read off (23.14).
+    routedPath: string,
     file: AbideFile,
 ): Promise<{ answer: CheckerAnswer; warnings: Finding[] }> {
     // A destructuring pattern binds names this does not see, and that is 31.12's case.
@@ -185,7 +188,14 @@ export async function readsIn(
     // Awaited after the round trips below, so a 33.14 refusal would reject with nothing
     // listening and be reported unhandled; `await props` still throws it.
     props.catch(() => {})
-    const params = routeReads(checker, abide, sourceFile, abidePath, reads)
+    const params = routeReads(checker, abide, sourceFile, routedPath, reads)
+    const configs = configReads(
+        checker,
+        abide,
+        sourceFile,
+        spans.servers,
+        reads,
+    )
     // No name is no round trip to ask about none.
     const symbols =
         names.length === 0 ? [] : await checker.getSymbolAtLocation(names)
@@ -249,6 +259,7 @@ export async function readsIn(
     await Promise.all(holding)
     await props
     await params
+    await configs
     const statics = new Set<number>()
     const expressions = spans.positions.nodesIn(
         sourceFile,
@@ -683,7 +694,7 @@ const ROUTE_MEMBERS = new Set(['url', 'params', 'name', 'navigating'])
  * a name, and this read is spelled as a member.
  *
  * 23.9 — AND `route.params` IN A PAGE OR A LAYOUT IS WHAT THAT FILE'S OWN ROUTE PROMISES. The file
- * is the route: `ui/pages/media/[id]/page.abide` only ever renders where `id` matched, so its
+ * is the route: `media/[id]/page.abide` only ever renders where `id` matched, so its
  * `route.params` has an `id`, and a layout's has its own segments and whatever a page below adds.
  * Only the checker reads that — the running module reads the one `route` every page shares.
  */
@@ -691,11 +702,11 @@ async function routeReads(
     checker: Checker,
     abide: Abide,
     sourceFile: Node,
-    abidePath: string,
+    routedPath: string,
     reads: Read[],
 ): Promise<void> {
     if (abide.route === undefined) return
-    const routed = fileKind(abidePath)
+    const routed = fileKind(routedPath)
     const kind = routed === 'page' || routed === 'layout' ? routed : undefined
     const accesses: Node[] = []
     const owners: Node[] = []
@@ -714,7 +725,7 @@ async function routeReads(
     sourceFile.forEachChild(visit)
     if (owners.length === 0) return
     const symbols = await checker.getSymbolAtLocation(owners)
-    const pattern = routeOf(abidePath)
+    const pattern = routeOf(routedPath)
     for (let at = 0; at < accesses.length; at += 1) {
         const symbol = symbols[at]
         if (symbol === undefined) continue
@@ -775,6 +786,49 @@ function refuseDeclared(
             throw new Error(
                 `abide: {#component ${component.name}} is declared inline and \`${component.name}\` is also declared by its file's script — one name, two things. Rename one. RULEBOOK 32.55.`,
             )
+}
+
+/**
+ * 27.13 — each `onConfig(…)` standing as a statement at the top of a `<script server>`, as a read of
+ * its callee, pushed onto `reads`.
+ *
+ * The callee says which are abide's, as `props`'s does. A call anywhere else — inside a function,
+ * or handing its unfiling back to a name — is filed all the same, and declares nothing.
+ */
+async function configReads(
+    checker: Checker,
+    abide: Abide,
+    sourceFile: Node & { statements: readonly Node[] },
+    servers: Span,
+    reads: Read[],
+): Promise<void> {
+    if (abide.onConfig === undefined) return
+    const callees: Node[] = []
+    for (const statement of sourceFile.statements) {
+        const start = statement.getStart()
+        if (start < servers.start) continue
+        if (start >= servers.end) break
+        if (
+            isExpressionStatement(statement) &&
+            isCallExpression(statement.expression) &&
+            isIdentifier(statement.expression.expression)
+        )
+            callees.push(statement.expression.expression)
+    }
+    if (callees.length === 0) return
+    const named = await checker.getSymbolAtLocation(callees)
+    for (let at = 0; at < callees.length; at += 1) {
+        const symbol = named[at]
+        if (symbol === undefined) continue
+        const callee = await aliasedSymbol(checker, symbol)
+        if (
+            callee.name !== 'onConfig' ||
+            callee.valueDeclaration?.path !== abide.onConfig
+        )
+            continue
+        const node = callees[at] as Node
+        reads.push(newRead(node.getStart(), node.end, 'config'))
+    }
 }
 
 /**

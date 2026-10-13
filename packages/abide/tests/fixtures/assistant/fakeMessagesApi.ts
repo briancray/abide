@@ -1,4 +1,4 @@
-// A MESSAGES API THAT PLAYS ONE CONVERSATION: a first turn that thinks and asks for `invoices_whoami`,
+// A MESSAGES API THAT PLAYS ONE CONVERSATION: a first turn that thinks and asks for `post_invoices_whoami`,
 // and a second that answers with what the tool said. The second turn is refused 400 unless the first
 // turn's thinking block came back with its signature, as the real API refuses a tool loop without it.
 //
@@ -58,7 +58,7 @@ const server = Bun.serve({
                     content_block: {
                         type: 'tool_use',
                         id: 'toolu_1',
-                        name: 'invoices_whoami',
+                        name: 'post_invoices_whoami',
                         input: {},
                     },
                 },

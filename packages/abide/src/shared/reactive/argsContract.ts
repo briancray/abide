@@ -4,7 +4,7 @@
 // through `contractOf` so a transport reads it off whichever face it was handed.
 //
 // DEFAULTS BEFORE THE KEY, IN ONE PLACE. 11.27: a call that left a member to the parameter and one
-// that wrote it are one entry, so every reach, call and lookup takes the key through `normalised`
+// that wrote it are one entry, so every reach, call and lookup takes the key through `normalized`
 // — a caller that keyed the args as passed would file the same call twice, right in the value and
 // wrong in the work.
 //
@@ -54,7 +54,7 @@ export function gateOf(
  * `args` itself where the face has no defaults or nothing was missing, so a caller that passed
  * every member allocates nothing and a second application is free.
  */
-export function normalised<Args>(
+export function normalized<Args>(
     face: Pick<Gated<unknown>, typeof PARAMETER_DEFAULTS>,
     args: Args,
 ): Args {
@@ -62,12 +62,12 @@ export function normalised<Args>(
     return defaults === null ? args : withDefaults(args, defaults)
 }
 
-/** The entry key a call with `args` is filed under: `normalised`, then 11.24's canonical form. */
+/** The entry key a call with `args` is filed under: `normalized`, then 11.24's canonical form. */
 export function keyOf(
     face: Pick<Gated<unknown>, typeof PARAMETER_DEFAULTS>,
     args: unknown,
 ): string {
-    return canonicalKey(normalised(face, args))
+    return canonicalKey(normalized(face, args))
 }
 
 // ABSENT ARGS ARE `{}`: a wire writes the two alike (an empty query), so read apart they are one

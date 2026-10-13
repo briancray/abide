@@ -2,7 +2,9 @@ import { afterAll, expect, spyOn, test } from 'bun:test'
 import { emitClient, parseAbide } from '#compiler'
 import { projectShadow } from '#compiler/projectShadow.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'
-import { attributeText, escapeStyleValue, escapeText, render } from '#server'
+import { attributeText, escapeStyleValue, escapeText } from '#server'
+import { renderDocument } from '#server/render.ts'
+import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import {
     clientOf,
@@ -131,7 +133,8 @@ test('the compiler is not reachable from the server seam', async () => {
     // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
     // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
     // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's,
-    // `request`, `response` and `server` are 22.1's, `createApp` is 42's, the seven hooks are 37's,
+    // `request`, `response` and `server` are 22.1's, `createApp` is 42's, the seven hooks and the
+    // `fileRoute` a compiled server block files them under are 37's,
     // `trace` is 24's and `config` is 27's; the six response helpers are 17's, `reachable` is
     // 23's, and `assistant`, `claudeApi` and `claudeCode` are 45's.
     const shared = Object.keys(await import('#shared'))
@@ -149,6 +152,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'bytes',
             'config',
             'createApp',
+            'fileRoute',
             'json',
             'jsonl',
             'middleware',
@@ -181,7 +185,7 @@ test('a compiled page renders as bytes into a shell', async () => {
     const shell =
         '<!doctype html><html><head><title>t</title></head><body></body></html>'
     let out = ''
-    out += new TextDecoder().decode(await render(Page, shell))
+    out += new TextDecoder().decode(await renderDocument(Page, shell))
 
     // 39.1, 39.3 — the head contribution is hoisted at compile time and lands in the document
     // head, not where it was written. THE REVERT: emit `<head>` into the body like any other
@@ -424,7 +428,7 @@ const ok = '/docs'
     const { default: Page } = await import(`${dir}/Page.ts`)
     let out = ''
     out += new TextDecoder().decode(
-        await render(Page, '<html><body></body></html>'),
+        await renderDocument(Page, '<html><body></body></html>'),
     )
     expect(out).not.toContain('javascript:')
     expect(out).toContain('href="/docs"')
@@ -533,7 +537,7 @@ test('a head inside a {#try} is refused as inside a {#try} — 39.2', async () =
 //
 // THE REVERT: compare `name` against the lowercase literals without lowering it first. This test
 // then reports 4 live `javascript:` hrefs where 0 are due, and a real browser navigates all four.
-test('a url attribute is recognised however it is capitalised', async () => {
+test('a url attribute is recognized however it is capitalized', async () => {
     for (const name of ['HREF', 'Href', 'SRC', 'FormAction']) {
         expect(
             await serverOf(`<a ${name}="javascript:alert(1)">x</a>`),
@@ -569,7 +573,7 @@ test('a shell missing either end tag still receives the head', async () => {
     const carried: string[] = []
     for (const shell of shells) {
         let out = ''
-        out += new TextDecoder().decode(await render(Page, shell))
+        out += new TextDecoder().decode(await renderDocument(Page, shell))
         const head = out.indexOf('<title>abide</title>')
         const body = out.indexOf('<h1 class="title">')
         carried.push(
@@ -824,7 +828,7 @@ test('a script module is a block of its own on each side', async () => {
 })
 
 // 34.17 — AN EXPORT FROM A `<script module>` IS THE MODULE'S, ON BOTH SIDES. A layout or a page
-// exports `menu` there (38.89), and another file imports a helper from it. THE REVERT: emit the
+// exports `menu` there (38.88), and another file imports a helper from it. THE REVERT: emit the
 // module body inside `Component` again; the server module then fails to load with `Unexpected
 // export`, and the page renders nothing at all.
 test('a script module export is exported from the module on both sides', async () => {
@@ -869,6 +873,79 @@ test('a script the author wrote for the document stays in the markup', async () 
     )
 })
 
+// 34.33 — A `server` ATTRIBUTE NEVER LEAVES A `<script>` IN THE MARKUP. THE REVERT: drop the
+// refusal in `scriptBlock`; every tag below is then a markup `<script>`, its server source is
+// rendered into the document and shipped in the browser's module, and the build exits 0.
+test('a <script> carrying server beside anything 34.20 does not read is refused — 34.33', () => {
+    for (const tag of [
+        '<script server nonce="abc">',
+        '<script server="true">',
+        '<script server type="module">',
+        '<SCRIPT SERVER defer>',
+    ])
+        expect(() =>
+            parseAbide(`${tag}export const secret = 1</script><p>x</p>`),
+        ).toThrow('RULEBOOK 34.33')
+    expect(
+        parseAbide('<script server>export const a = 1</script>').servers,
+    ).toEqual(['export const a = 1'])
+})
+
+// 34.12 — EVERY BLOCK IS TYPESCRIPT, so `lang` says nothing, and refused it cannot demote a block to
+// markup. THE REVERT: drop the `lang` refusal from `scriptBlock`; the `lang="typescript"` server
+// block is markup and parses with no error.
+test('a <script> carrying lang is refused, whatever its block — 34.12', () => {
+    for (const tag of [
+        '<script lang="ts">',
+        '<script module lang="ts">',
+        '<script server lang="ts">',
+        '<script server lang="typescript">',
+        '<SCRIPT LANG="js" src="/a.js">',
+    ])
+        expect(() => parseAbide(`${tag}const a = 1</script><p>x</p>`)).toThrow(
+            'RULEBOOK 34.12',
+        )
+})
+
+// 34.34 — A `</script>` THE TEMPLATE MEETS CLOSES NOTHING, so one there is a block that ended
+// early. THE REVERT: drop the refusal in the close-tag branch of `parseAbide`; the comment below
+// then ends the markup block at `// `, and `send(token)` is rendered as page text.
+test('a </script> closing no <script> is refused, so a block cannot end early into markup — 34.34', () => {
+    expect(() =>
+        parseAbide(
+            '<script src="/a.js">// a note: </script>\nsend(token)\n</script><p>x</p>',
+        ),
+    ).toThrow('RULEBOOK 34.34')
+    expect(() => parseAbide('<p>a</p></SCRIPT >')).toThrow('RULEBOOK 34.34')
+})
+
+// 34.35 — 34.34 ALONE MISSES A BLOCK WHOSE LEFTOVER OPENS A `<script>` OF ITS OWN: that tag takes
+// the real `</script>`, so nothing is left over to refuse. THE REVERT: drop the 34.35 refusal in
+// `rawBody`; the first case below parses, and `export const secret = 1` is rendered as page text.
+test('a </script> in a block comment, string or regex is refused, wherever the rest of the file goes — 34.35', () => {
+    for (const body of [
+        "// drops </script> tags\nexport const secret = 1\nconst s = '<script>'\n",
+        "const s = '</script>'",
+        'const s = `a ${b} </script>`',
+        '/* </script> */',
+        'const re = /<\\/x>|</script>/',
+    ])
+        for (const open of ['<script server>', '<script>', '<script module>'])
+            expect(() => parseAbide(`${open}${body}</script><p>x</p>`)).toThrow(
+                'RULEBOOK 34.35',
+            )
+    // In code position it is the block's end, and the escape a browser needs stays the block's.
+    expect(
+        parseAbide(
+            "<script server>const re = /a/g; const s = '<\\/script>' // ok\n</script><p>x</p>",
+        ).servers,
+    ).toEqual(["const re = /a/g; const s = '<\\/script>' // ok\n"])
+    // A markup `<script>` ends where a browser ends it — its body is the document's.
+    expect(() =>
+        parseAbide('<script src="/a.js">\'</script>\'</script>'),
+    ).toThrow('RULEBOOK 34.34')
+})
+
 // One document out of one page, for the three gates below — typed, because 32.25's lowering is
 // the checker's answer (`expressionFacts`).
 async function renderPage(source: string): Promise<string> {
@@ -876,7 +953,7 @@ async function renderPage(source: string): Promise<string> {
     const { default: Page } = await import(module)
     let out = ''
     out += new TextDecoder().decode(
-        await render(
+        await renderDocument(
             Page,
             '<!doctype html><html><head></head><body></body></html>',
         ),
@@ -1456,7 +1533,7 @@ test('a shell with no closing head tag still gets its head content', async () =>
     const shell =
         '<!doctype html><html><body><div id="app"></div></body></html>'
     let out = ''
-    out += new TextDecoder().decode(await render(Page, shell))
+    out += new TextDecoder().decode(await renderDocument(Page, shell))
 
     // Present first: a title dropped altogether is at -1, which is before `<body>` too.
     expect(out).toContain('<title>abide</title>')
@@ -1489,7 +1566,7 @@ test("an author's module-scope name cannot collide with a runtime import", async
 // THE SAME EXCEPTION ON THE SAME GROUNDS, one attribute over. A plain reactive `class={expr}`
 // beside a `class:name` is merged by the server and left unbound, because `setAttribute('class',
 // …)` replaces the whole token list and takes the directive's name with it — the two bindings
-// would then overwrite each other in whichever order they re-ran. No clause spells `class`'s road
+// would then overwrite each other in whichever order they reran. No clause spells `class`'s road
 // out of it the way 32.19 does `style`'s, so the two share this answer rather than each getting
 // its own. THE REVERT: make `isBound` answer `one.live` for every `merged` member;
 // `__setAttribute` appears here.
@@ -1586,18 +1663,22 @@ test('a region made once is parsed, and one made once a row is built', async () 
 // THE REVERT: decide `heads` from `body` alone in `emitComponent`. The render then throws
 // `ReferenceError: __heads is not defined` where the child's `<meta>` is due in the head.
 test('a component invoked inside the head contributes to it', async () => {
-    const dir = temporaryModule({
-        'Seo.ts': await serverOf(
-            '<head><meta name="description" content="d"/></head><span>s</span>',
-        ),
-        'Page.ts': await serverOf(
-            `<script>\nimport Seo from './Seo.abide'\n</script>\n<head><Seo/></head><p>x</p>`,
-        ),
+    const dir = servedModules({
+        'Seo.abide': {
+            server: await serverOf(
+                '<head><meta name="description" content="d"/></head><span>s</span>',
+            ),
+        },
+        'Page.abide': {
+            server: await serverOf(
+                `<script>\nimport Seo from './Seo.abide'\n</script>\n<head><Seo/></head><p>x</p>`,
+            ),
+        },
     })
-    const { default: Page } = await import(`${dir}/Page.ts`)
+    const { default: Page } = await import(`${dir}/Page.abide?component`)
     let out = ''
     out += new TextDecoder().decode(
-        await render(
+        await renderDocument(
             Page,
             '<!doctype html><html><head></head><body></body></html>',
         ),
@@ -1627,7 +1708,7 @@ test('a slot holding a comma or a trailing comment is one expression', async () 
             const { default: Page } = await import(`${dir}/Page.ts`)
             let out = ''
             out += new TextDecoder().decode(
-                await render(
+                await renderDocument(
                     Page,
                     '<!doctype html><html><head></head><body></body></html>',
                 ),

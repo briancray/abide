@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // A CLAUDE CODE THAT PLAYS THE SAME CONVERSATION as `fakeMessagesApi.ts`, in `stream-json`: it calls
-// `invoices_whoami` through the MCP server its `--mcp-config` names — the bridge's, on loopback — and
+// `post_invoices_whoami` through the MCP server its `--mcp-config` names — the bridge's, on loopback — and
 // says what the tool answered.
 //
 // It records what it was run with to `$FAKE_RECORD` — its arguments, the prompt, its pid, and the
@@ -46,7 +46,7 @@ print({
             {
                 type: 'tool_use',
                 id: 'toolu_1',
-                name: 'mcp__app__invoices_whoami',
+                name: 'mcp__app__post_invoices_whoami',
                 input: {},
             },
         ],
@@ -61,7 +61,7 @@ const answered = (await (
             jsonrpc: '2.0',
             id: 1,
             method: 'tools/call',
-            params: { name: 'invoices_whoami', arguments: {} },
+            params: { name: 'post_invoices_whoami', arguments: {} },
         }),
     })
 ).json()) as {

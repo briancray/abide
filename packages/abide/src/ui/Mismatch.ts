@@ -1,6 +1,6 @@
 import { namedLogger } from '#shared/log.ts'
 
-/** The browser lane's hydration logger (28.9). */
+/** The browser lane's hydration logger (28.8). */
 export const HYDRATE_LOG = namedLogger('abide:hydrate')
 
 /**

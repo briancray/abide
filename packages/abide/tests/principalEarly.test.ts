@@ -183,7 +183,7 @@ test("a handler's answer that signed the caller in reloads the browser's princip
     try {
         expect(await principal.authenticated).toBe(false)
         await answerOf(
-            rpcRequest('POST', '/__abide/rpc/session/signIn', {}),
+            rpcRequest('POST', '/session/signIn', {}),
             false,
             undefined,
         )
@@ -255,7 +255,7 @@ test('a read while the sign-in reload is in flight answers the previous document
     try {
         expect(await principal.authenticated).toBe(false)
         await answerOf(
-            rpcRequest('POST', '/__abide/rpc/session/signIn', {}),
+            rpcRequest('POST', '/session/signIn', {}),
             false,
             undefined,
         )

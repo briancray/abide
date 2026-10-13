@@ -1,4 +1,4 @@
-// 38.95 — A PAGE LOADS WHAT IT USES. The `@abide/abide` barrel names every export, and a page that
+// 38.94 — A PAGE LOADS WHAT IT USES. The `@abide/abide` barrel names every export, and a page that
 // imports one of them through it must not load the modules behind the rest.
 
 import { afterAll, expect, test } from 'bun:test'
@@ -36,16 +36,16 @@ async function closureText(out: string, page: string): Promise<string> {
 
 // THE REVERT: drop `sideEffects` from the package's `package.json` and the light page loads the
 // schema validator — and the rest of the barrel with it, 20.2 KB brotli become 25.8.
-test('a page loads the modules it uses and not the barrel’s rest — 38.95', async () => {
+test('a page loads the modules it uses and not the barrel’s rest — 38.94', async () => {
     const app = appFixture({
-        'ui/pages/page.abide': `<script>
+        'page.abide': `<script>
 import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 </script>
 
 <button onclick={() => { count = count + 1 }}>{count}</button>`,
-        'ui/pages/schema/page.abide': `<script>
+        'schema/page.abide': `<script>
 import { reactive, validateJson } from '@abide/abide'
 
 let count = reactive(0)
@@ -58,12 +58,12 @@ let count = reactive(0)
     expect(built.exitCode, built.stderr).toBe(0)
     // The positive case first: the validator is in the build, so its absence below is the split.
     expect(
-        (await closureText(out, 'ui/pages/schema/page.client.ts')).includes(
+        (await closureText(out, 'schema/page.abide')).includes(
             SCHEMA_VALIDATOR,
         ),
     ).toBe(true)
     expect(
-        (await closureText(out, 'ui/pages/page.client.ts')).includes(
+        (await closureText(out, 'page.abide')).includes(
             SCHEMA_VALIDATOR,
         ),
     ).toBe(false)

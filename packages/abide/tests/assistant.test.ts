@@ -1,7 +1,7 @@
 // SECTION 45 — `assistant` over a served app, with each provider abide ships: `claudeApi` against a
 // scripted Messages API, and `claudeCode` through a real `abide-bridge` paired with the app, running a
 // scripted Claude Code (`fixtures/assistant`). Both play the same conversation: a turn that calls
-// `invoices_whoami`, and a turn that says what it answered.
+// `post_invoices_whoami`, and a turn that says what it answered.
 
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import { spawned } from 'harness/gate'
@@ -66,14 +66,16 @@ beforeAll(async () => {
         ...process.env,
         FAKE_API: printed.trim().replace(/\/$/, ''),
         FAKE_RECORD: RECORD,
-        ABIDE_MCP: '1',
-        ABIDE_BRIDGE: '1',
     }
     ;({ app, base, stop } = await serveApp(
         {
-            'ui/pages/page.abide': '<main>home</main>',
-            'server/rpc/invoices.ts': INVOICES,
-            'server/rpc/ask.ts': ASK,
+            'page.abide': '<main>home</main>',
+            'invoices/invoices.abide': `<script server>
+${INVOICES}</script>
+`,
+            'assistant.abide': `<script server>
+${ASK}</script>
+`,
         },
         environment,
     ))
@@ -98,7 +100,7 @@ function asPage(caller: string): Record<string, string> {
 }
 
 async function pairingCode(caller: string): Promise<string> {
-    const answer = await Bun.fetch(`${base}/__abide/rpc/ask/command`, {
+    const answer = await Bun.fetch(`${base}/command`, {
         headers: asPage(caller),
     })
     const { command } = (await answer.json()) as { command: string }
@@ -138,7 +140,7 @@ function ask(
     content: string,
     maxTurns?: number,
 ): Promise<Response> {
-    return Bun.fetch(`${base}/__abide/rpc/ask`, {
+    return Bun.fetch(`${base}/ask`, {
         method: 'POST',
         headers: {
             ...asPage(caller),
@@ -166,6 +168,19 @@ async function events(answer: Response): Promise<unknown[]> {
     return found
 }
 
+// 45.19, 36.7 — THE RELAY OPENS WITH THE FIRST PAIRING COMMAND, so it runs first: every test after it
+// mints one. THE REVERT: drop the `minted` check from `answerBridge`, and the first ask is the 403
+// a stale code gets rather than 404.
+test('the relay answers 404 until the app mints a pairing code — 45.19, 36.7', async () => {
+    const before = await Bun.fetch(`${base}/__abide/bridge?code=none`)
+    expect(before.status).toBe(404)
+    await before.text()
+    await pairingCode('relay')
+    const after = await Bun.fetch(`${base}/__abide/bridge?code=none`)
+    expect(after.status).toBe(403)
+    await after.text()
+})
+
 // 45.2, 45.7, 45.17 — ONE CONVERSATION, ONE EVENT SEQUENCE, WHICHEVER PROVIDER PLAYED IT, and the tool
 // called as the person asking: `whoami` reads the cookie on the ASK request, which for Claude Code is a
 // request the bridge never sees. THE REVERTS: carry no headers (`CARRIED_HEADERS = []`), and both read
@@ -175,7 +190,7 @@ async function events(answer: Response): Promise<unknown[]> {
 test('both providers play one conversation as one event sequence, tools called as the asker — 45.2, 45.7, 45.17', async () => {
     const expected = [
         { type: 'text', text: 'checking' },
-        { type: 'tool', id: 'toolu_1', name: 'invoices_whoami', input: {} },
+        { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami', input: {} },
         { type: 'result', id: 'toolu_1', text: '"ada"', failed: false },
         { type: 'text', text: 'saw "ada"' },
         { type: 'done', stop: 'end_turn', usage: { input: 3, output: 5 } },
@@ -188,14 +203,14 @@ test('both providers play one conversation as one event sequence, tools called a
 }, 30_000)
 
 // 45.11 — THE LAST TURN'S TOOL CALL IS NEVER RUN. With one turn allowed, the model's call to
-// `invoices_whoami` is announced as it streams, but no `result` follows and the conversation ends on
+// `post_invoices_whoami` is announced as it streams, but no `result` follows and the conversation ends on
 // `max_turns` rather than the `tool_use` the turn stopped for. THE REVERTS: yield `stop` as it arrived
 // in `claudeApi`'s `done`, and this reads `tool_use`; drop `turn >= maxTurns`, and the call runs and a
 // second turn answers `saw "ada"`.
 test('a conversation out of turns ends on max_turns without running the pending call — 45.11', async () => {
     expect(await events(await ask('one', 'api', 'who am I?', 1))).toEqual([
         { type: 'text', text: 'checking' },
-        { type: 'tool', id: 'toolu_1', name: 'invoices_whoami', input: {} },
+        { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami', input: {} },
         { type: 'done', stop: 'max_turns', usage: { input: 1, output: 2 } },
     ])
 })
@@ -204,7 +219,7 @@ test('a conversation out of turns ends on max_turns without running the pending 
 // ready once a bridge connects with that command's code. THE REVERT: drop `wakeWatchers` from `pair`;
 // the stream never says ready and this times out.
 test('the bridge status turns ready the moment the bridge connects — 45.20', async () => {
-    const answer = await Bun.fetch(`${base}/__abide/rpc/ask/bridge`, {
+    const answer = await Bun.fetch(`${base}/bridge`, {
         headers: { ...asPage('two'), accept: 'application/jsonl' },
     })
     const lines = (async function* () {
@@ -284,7 +299,7 @@ test('Claude Code runs alone, over the whole transcript as one message — 45.5,
     expect(await Bun.file(record.configPath).exists()).toBe(false)
 }, 30_000)
 
-// 45.18 — A CALLER WHO HANGS UP ENDS THE RUN on the visitor's machine: the page's answer cancelled once
+// 45.18 — A CALLER WHO HANGS UP ENDS THE RUN on the visitor's machine: the page's answer canceled once
 // the first event is in. THE REVERT: drop the `cancel` frame `claudeCode` sends on abort; the fake
 // waits forever and its pid still answers a signal 0.
 test('a caller hanging up kills the Claude Code run — 45.18', async () => {
@@ -308,7 +323,7 @@ test('a caller hanging up kills the Claude Code run — 45.18', async () => {
 
 // 45.3 — a transcript ending on the model's own turn is refused before any provider is reached.
 test('a transcript that does not end on a user turn is refused — 45.3', async () => {
-    const answer = await Bun.fetch(`${base}/__abide/rpc/ask`, {
+    const answer = await Bun.fetch(`${base}/ask`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -329,13 +344,14 @@ test('a tool is called through the app answering the conversation — 45.6, 42.1
     await Bun.write(
         `${app}/host.ts`,
         `import { bootApp, originUnder } from '${SERVER}/createApp.ts'
-import { loadBuild } from '${SERVER}/serveBuild.ts'
+import { loadBuild, serveBuild } from '${SERVER}/serveBuild.ts'
 
+await serveBuild('${app}', '${app}/.abide')
 const boot = () => bootApp(originUnder('${app}'), () => loadBuild({ root: '${app}', out: '${app}/.abide' }))
 const first = await boot()
 const second = await boot()
 await second.stop()
-const answer = await first.fetch(new Request('http://app.test/__abide/rpc/ask', {
+const answer = await first.fetch(new Request('http://app.test/ask', {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/jsonl', cookie: 'who=ada' },
     body: JSON.stringify({ via: 'api', messages: [{ role: 'user', content: 'who am I?' }] }),

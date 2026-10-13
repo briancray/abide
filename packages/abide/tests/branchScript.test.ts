@@ -83,7 +83,7 @@ test("a row's script runs once for the row, and once for a row added after", asy
     expect(runs().grace).toBe(hydrated.grace)
 })
 
-// 14.8 — IT TRACKS NOTHING. The script read `suffix`, and a change to it neither re-runs the script nor
+// 14.8 — IT TRACKS NOTHING. The script read `suffix`, and a change to it neither reruns the script nor
 // re-reconciles the list. THE REVERT: call `settleList` tracked in `updateList`; the list's watch
 // reads `suffix` through the script, and the change re-reads the subject — the kept rows are not set
 // up again, so what the revert costs is the reconcile, 1 where 0 are due.

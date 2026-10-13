@@ -1,4 +1,3 @@
-import { RPC_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { Method } from '#shared/rpc.ts'
 import type { Mount, Mounted } from './answerRpc.ts'
 
@@ -9,8 +8,10 @@ export type Surface = 'mcp' | 'openapi' | 'cli'
 export type Listed = {
     address: string
     method: Method
-    /** Its address below `/__abide/rpc` — what `call` spells it (38.8), and every surface names it by. */
+    /** Its route without the leading `/` — what `call` spells it (38.8). */
     path: string
+    /** What MCP and OpenAPI name it by. 20.13. */
+    name: string
     description: string | undefined
     /** Its args' JSON Schema, where it has one. 19.9, 20.11. */
     schema: unknown
@@ -39,9 +40,23 @@ export function surfaceOf(
     return {
         address: mount.address,
         method: mount.method,
-        path: mount.address.slice(RPC_ADDRESS.length + 1),
+        path: mount.address.slice(1),
+        name: surfaceName(mount.method, mount.address),
         description:
             live === undefined ? mount.description : live.handler.description,
         schema: live === undefined ? mount.args : live.argsDocument,
     }
+}
+
+/**
+ * A handler's name on MCP and OpenAPI: its method and its route, in the letters a tool's name admits.
+ *
+ * 20.13 — the method first, so two handlers at one route are two names, and a segment's brackets
+ * and dots dropped, so `/media/[id]` reads `media_id` rather than `media__id_`.
+ */
+export function surfaceName(method: Method, route: string): string {
+    return `${method.toLowerCase()}${route === '/' ? '' : route.replace(/[[\].]/g, '')}`.replace(
+        /[^a-zA-Z0-9-]/g,
+        '_',
+    )
 }

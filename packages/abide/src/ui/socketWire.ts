@@ -2,7 +2,8 @@
 // reads is followed (18.3). Each copy is kept in step with the value it was answered from: the value
 // where the version it holds is not the server's, and the writes of each patch over it (18.6, 18.11).
 
-import { ABIDE_ADDRESS, SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import { mounted } from '#shared/mount.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
 import {
     heldGenerationOf,
@@ -201,15 +202,16 @@ class Mux {
 export const MUXES = new Map<string, Mux>()
 
 /**
- * The mux a socket's or a handler's address is carried over, made on first use.
+ * The mux a handler's address is carried over, made on first use.
  *
- * `SOCKET_ADDRESS` under whatever the address stands below, so an app under a sub-path opens its
- * own.
+ * `SOCKET_ADDRESS` under the app's mount, so an app under a sub-path opens its own — at the
+ * address's own origin where it names one, and the page's where it is a path.
  */
 function muxFor(address: string): Mux {
-    const below = address.indexOf(ABIDE_ADDRESS)
-    const path = `${below === -1 ? '' : address.slice(0, below)}${SOCKET_ADDRESS}`
-    const url = new URL(path, location.href)
+    const url = new URL(
+        mounted(SOCKET_ADDRESS),
+        URL.canParse(address) ? address : location.href,
+    )
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
     let mux = MUXES.get(url.href)
     if (mux === undefined) {

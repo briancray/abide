@@ -12,7 +12,7 @@ import type { Schema } from '../Schema.ts'
 import {
     ARGS_GATE,
     type Gated,
-    normalised,
+    normalized,
     PARAMETER_DEFAULTS,
 } from './argsContract.ts'
 import { CELL } from './CELL.ts'
@@ -352,7 +352,7 @@ export function createKeyed<
     }
 
     function reach(given: Args): Reactive<Stored, Accepted, Failures> {
-        const args = normalised(self, given)
+        const args = normalized(self, given)
         const key = canonicalKey(args)
         const standing = entries.get(key)
         // 1.8: reaching an instance that exists joins the standing work — 15.19, unless that work

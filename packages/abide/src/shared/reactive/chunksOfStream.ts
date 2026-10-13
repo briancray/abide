@@ -1,3 +1,4 @@
+import { isFailed } from '../Failed.ts'
 import { chunksFrom } from './Reactive.ts'
 
 /**
@@ -48,4 +49,9 @@ export async function* chunksOfStream(value: unknown): AsyncGenerator<unknown> {
         void cursor.return?.(undefined)
     }
     if (failure !== undefined) throw failure
+    // 16.59, 16.60 — A RUN ENDED BY ITS TIMEOUT SETTLES with the chunks it had and holds its refusal
+    // rather than rejecting, so the refusal is read off the value and thrown after them: a stream
+    // answered over http then ends on it (16.68) rather than as though it had finished.
+    const held = (value as { error?: () => unknown }).error?.()
+    if (isFailed(held)) throw held
 }

@@ -3,6 +3,8 @@
 // (16.35), a document where `page` named one (17.2), a stream — a streaming handler's chunks, or
 // `Values` a handler returned — framed one chunk per pull (16.32, 16.44–16.47).
 
+import { isFailed, problemOf } from '#shared/Failed.ts'
+import { refusalFrame } from '#shared/framing.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { prefers } from './prefers.ts'
 import {
@@ -158,7 +160,7 @@ export function linesType(request: Request): string {
         : 'application/jsonl'
 }
 
-/** A stream answered at a framing already decided — a handler's, and `log.records` (36.7). */
+/** A stream answered at a framing already decided — a handler's. */
 export function framed(
     chunks: AsyncIterator<unknown>,
     framing: Framing,
@@ -185,7 +187,7 @@ export function framed(
  * was reading in its scope.
  *
  * AN EVENT STREAM OPENS ON A COMMENT: a streamed answer's head goes out with its first byte, so a
- * stream with nothing yet to say — an empty `log.records` — held its reader's headers until it did.
+ * stream with nothing yet to say held its reader's headers until it did.
  *
  * `first` is a result already pulled — the one a framing was decided from — and is sent ahead of
  * the rest.
@@ -230,7 +232,20 @@ export function bodyOf(
                     next = await chunks.next()
                 } catch (thrown) {
                     if (ended) return
-                    controller.error(thrown)
+                    // 16.68 — A REFUSAL AFTER THE STATUS WAS SENT is the stream's last frame, so the
+                    // reader refuses with it rather than reading a dropped connection. Bytes carry no
+                    // framing to hold one, and anything else is not a refusal to send.
+                    if (framing !== 'bytes' && isFailed(thrown)) {
+                        controller.enqueue(
+                            ENCODER.encode(
+                                refusalFrame(
+                                    problemOf(thrown),
+                                    framing === 'sse' ? 'data: ' : '',
+                                ),
+                            ),
+                        )
+                        controller.close()
+                    } else controller.error(thrown)
                     release()
                     return
                 }
@@ -314,12 +329,10 @@ export function answerBlobTagged(
             })
         }
     }
-    // A RANGE DECLINED — `If-Range` naming another version, or one this does not parse. Bun.serve
-    // ranges a file-backed 200 body on its own and reads no `If-Range` when it does, so the file, or
-    // its `stream()`, would go out 206 anyway; piped, the body is no longer one it can see is a file.
-    const body =
-        range === null ? blob : blob.stream().pipeThrough(new TransformStream())
-    return new Response(body, { status, headers })
+    // A RANGE DECLINED — `If-Range` naming another version, or one this does not parse — goes out
+    // whole as the blob itself: Bun.serve ranges a file-backed body on its own, but declines exactly
+    // these, so a file still leaves from disk.
+    return new Response(blob, { status, headers })
 }
 
 /**

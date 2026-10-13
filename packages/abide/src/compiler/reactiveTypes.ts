@@ -76,8 +76,8 @@ async function everyPresentMember(
     return present
 }
 
-// Where abide declares `Reactive`, `props`, `route` and `Selection`, found in the project the way
-// `METHODS_SOURCE` is.
+// Where abide declares `Reactive`, `props`, `route`, `Selection` and `onConfig`, found in the project
+// the way `METHODS_SOURCE` is.
 const REACTIVE_SOURCE = Bun.fileURLToPath(
     new URL('../shared/reactive/Reactive.ts', import.meta.url),
 )
@@ -90,16 +90,20 @@ const ROUTE_SOURCE = Bun.fileURLToPath(
 const SELECTION_SOURCE = Bun.fileURLToPath(
     new URL('../shared/reactive/index.ts', import.meta.url),
 )
+const HOOKS_SOURCE = Bun.fileURLToPath(
+    new URL('../server/hooks.ts', import.meta.url),
+)
 
 /**
- * Abide's own `Reactive`, `Selection`, `props` and `route` declarations, as this project's checker
- * names them.
+ * Abide's own `Reactive`, `Selection`, `props`, `route` and `onConfig` declarations, as this
+ * project's checker names them.
  *
  * 31.3 — A `Reactive` IS TOLD BY ITS DECLARATION, never by how it prints. Every instantiation of
  * abide's `Reactive` carries the symbol of the one type literal it is declared as, whatever alias
  * or re-export the app reached it through — so `type Counter = Reactive<number>` is one, and an
  * app's own type that happens to be spelled `Reactive` is not. `undefined` where the project never
- * reaches abide, and then nothing in it is one. `props` is abide's file as the checker names it.
+ * reaches abide, and then nothing in it is one. `props` and `onConfig` are abide's files as the
+ * checker names them.
  */
 export type Abide = {
     /** 23.9 — abide's `route`, as the file the checker names it. */
@@ -110,14 +114,17 @@ export type Abide = {
      */
     selection: CheckedSymbol | undefined
     props: string | undefined
+    /** 27.13 — abide's `onConfig`, as the file the checker names it. */
+    onConfig: string | undefined
 }
 
 export async function abideIn(project: Project): Promise<Abide> {
-    const [declares, props, selects, route] = await Promise.all([
+    const [declares, props, selects, route, hooks] = await Promise.all([
         project.program.getSourceFile(REACTIVE_SOURCE),
         project.program.getSourceFile(PROPS_SOURCE),
         project.program.getSourceFile(SELECTION_SOURCE),
         project.program.getSourceFile(ROUTE_SOURCE),
+        project.program.getSourceFile(HOOKS_SOURCE),
     ])
     let selection: CheckedSymbol | undefined
     for (const statement of selects?.statements ?? [])
@@ -142,7 +149,13 @@ export async function abideIn(project: Project): Promise<Abide> {
             reactive = await literal?.getSymbol()
             break
         }
-    return { route: route?.path, reactive, selection, props: props?.path }
+    return {
+        route: route?.path,
+        reactive,
+        selection,
+        props: props?.path,
+        onConfig: hooks?.path,
+    }
 }
 
 /**

@@ -18,19 +18,16 @@ import { brotliDecompressSync } from 'node:zlib' // bun decompresses gzip and zs
 import { buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const SHELL = `<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>`
-
-// 34.6 and 38.24: the stylesheet is a dependency of the page, and the document links what the
+// 34.6 and 38.23: the stylesheet is a dependency of the page, and the document links what the
 // build made of it. The page never names an address — that is the whole of the clause.
 //
-// 34.14 — RELATIVE, THE SPELLING REGISTRY DOCUMENTS, for a stylesheet and a `.ts` helper alike. The
-// emitted module lives in the build tree, which holds no `home.css` and no `greeting.ts`, so either
-// left as written fails the build this whole file is served from.
+// 34.14 — RELATIVE, THE SPELLING REGISTRY DOCUMENTS, for a stylesheet and a `.ts` helper alike,
+// resolved from the `.abide` that wrote it — the compiled module is served at the file's own path.
 const HOME = `<script>
 import { reactive } from '@abide/abide'
-import Badge from '#ui/components/Badge.abide'
-import '../home.css'
-import { greeting } from './greeting.ts'
+import Badge from '#src/ui/components/Badge.abide'
+import './ui/home.css'
+import { greeting } from './ui/greeting.ts'
 
 let count = reactive(0)
 </script>
@@ -40,7 +37,7 @@ let count = reactive(0)
 
 // 32.17 THROUGH A BUILD, which is the one arm that can say a component import RESOLVES. Left as
 // written with its extension swapped, the specifier the emitted page carries is
-// `#ui/components/Badge.ts` — a file that exists in the output tree and nowhere in the source tree
+// `#src/ui/components/Badge.ts` — a file that exists in the output tree and nowhere in the source tree
 // the import map points at. `componentGraph` resolves it to a path inside the build; without that
 // the bundle cannot resolve the client half and the build fails.
 const BADGE = `<script>
@@ -68,14 +65,14 @@ const { params } = props<{ params: { id: string } }>()
 const SLOW_MS = 400
 
 const SLOW = `<script>
-import '#ui/slow.ts'
+import '#src/ui/slow.ts'
 </script>
 
 <main id="slow"><h1>Slow</h1></main>`
 
 // 41.1 — a page that fails as it is imported, before anything has gone out.
 const BROKEN = `<script>
-import '#ui/broken.ts'
+import '#src/ui/broken.ts'
 </script>
 
 <main id="broken"><h1>Broken</h1></main>`
@@ -94,12 +91,11 @@ let base = ''
 
 beforeAll(async () => {
     const app = temporaryModule({
-        'ui/app.html': SHELL,
-        'ui/pages/page.abide': HOME,
-        'ui/pages/greeting.ts': `export const greeting = 'beside the page'\n`,
+        'page.abide': HOME,
+        'ui/greeting.ts': `export const greeting = 'beside the page'\n`,
         'ui/components/Badge.abide': BADGE,
-        // A SELECTOR RATHER THAN A DECLARATION, as the thing asserted on: the bundler normalises
-        // a colour (`rgb(1, 2, 3)` came back `#010203`) and a class name it cannot touch.
+        // A SELECTOR RATHER THAN A DECLARATION, as the thing asserted on: the bundler normalizes
+        // a color (`rgb(1, 2, 3)` came back `#010203`) and a class name it cannot touch.
         // 36.15 — AND ONE URL NAMING A PUBLIC FILE, which is the address below rather than a path
         // on this disk: read as a path, it fails the build this whole file is served from.
         'ui/home.css':
@@ -107,23 +103,25 @@ beforeAll(async () => {
         'package.json': JSON.stringify({
             name: 'serve-fixture',
             type: 'module',
-            imports: { '#ui/*': './ui/*' },
+            imports: { '#src/*': './*' },
         }),
-        'ui/pages/invoices/[id]/page.abide': INVOICE,
-        'ui/pages/slow/page.abide': SLOW,
+        'invoices/[id]/page.abide': INVOICE,
+        'slow/page.abide': SLOW,
         'ui/slow.ts': `await new Promise((settle) => setTimeout(settle, ${SLOW_MS}))\nexport {}\n`,
-        'ui/pages/broken/page.abide': BROKEN,
-        // 38.30, 38.69 — one answer over the floor and one under it.
-        'server/rpc/ledger.ts': LEDGER,
+        'broken/page.abide': BROKEN,
+        // 38.29, 38.68 — one answer over the floor and one under it.
+        'ledger/ledger.abide': `<script server>
+${LEDGER}</script>
+`,
         // ON THE SERVER ONLY, so the build still bundles it: the browser never evaluates it here.
         'ui/broken.ts': `if (typeof window === 'undefined') throw new Error('broken on purpose')\nexport {}\n`,
         // 36.11 — TWO DEPTHS, because "its path below that directory" is the clause and a flat
         // directory cannot tell a path from a name.
-        'ui/public/robots.txt': 'User-agent: *\nAllow: /\n',
-        'ui/public/notes.md': '# notes\n',
+        'public/robots.txt': 'User-agent: *\nAllow: /\n',
+        'public/notes.md': '# notes\n',
         // 36.11 — A NAME THE URL PARSER ESCAPES, asked for as `/my%20ph%C3%B6to.txt`.
-        'ui/public/my phöto.txt': 'escaped\n',
-        'ui/public/img/dot.svg':
+        'public/my phöto.txt': 'escaped\n',
+        'public/img/dot.svg':
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
         // THE APP'S OWN, rather than whatever the walk up from here finds. The compiler reads
         // props off the checker (19.9), so a fixture with no project of its own is one where
@@ -137,7 +135,7 @@ beforeAll(async () => {
                 allowImportingTsExtensions: true,
                 types: [],
             },
-            include: ['ui', 'server'],
+            include: ['**/*'],
         }),
     })
 
@@ -148,7 +146,7 @@ beforeAll(async () => {
         // `--port 0` and the address read back off stdout, rather than a number picked here: this
         // file runs under `--parallel` beside every other one, and a fixed port is the one way a
         // suite that passes alone fails in a batch.
-    ;({ base, stop } = await startApp(app, { ...process.env, ABIDE_MCP: '1' }))
+    ;({ base, stop } = await startApp(app))
 }, 30_000)
 
 afterAll(() => {
@@ -174,10 +172,10 @@ test('an address a page matches is painted into the shell — 38.6', async () =>
 // `answerRequest` and this reports `params is not a function` instead of the id — which is the same
 // break `Router.ts`'s `routeProps` carries on the client side of the same contract.
 // THE REVERT: hand the emitters no `componentGraph` imports in `compileApp` and the build this
-// file serves fails before any address answers — `Could not resolve: "#ui/components/Badge.client.ts"`,
+// file serves fails before any address answers — `Could not resolve: "#src/ui/components/Badge.client.ts"`,
 // the module the page imports being in the source tree, where the compiler wrote nothing.
 // THE REVERT: leave `splitImports` to rewrite `.abide` specifiers alone and the build this file
-// serves fails before any address answers — `Could not resolve: "./greeting.ts"`, beside the output.
+// serves fails before any address answers — `Could not resolve: "../ui/greeting.ts"`, beside the output.
 test('a relative import in a page resolves from the page — 34.14', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     expect(html).toContain('<p id="greeting">beside the page</p>')
@@ -206,9 +204,9 @@ async function entryOf(): Promise<string> {
     return found[1] as string
 }
 
-// 38.23. Nothing hydrates without it, and the page still looks right — so this is asserted rather
+// 38.22. Nothing hydrates without it, and the page still looks right — so this is asserted rather
 // than left to a browser noticing.
-test('the document loads the client entry — 38.23', async () => {
+test('the document loads the client entry — 38.22', async () => {
     const entry = await entryOf()
     // AND THE ADDRESS ANSWERS. The tag naming a 404 is the failure this pair exists to split:
     // the document is identical either way.
@@ -236,18 +234,18 @@ test('the entry is content-hashed and minified — 38.5', async () => {
     )
 })
 
-test('the script tag lands in the head, ahead of the body — 38.23', async () => {
+test('the script tag lands in the head, ahead of the body — 38.22', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     expect(html.indexOf('<script type="module"')).toBeLessThan(
         html.indexOf('<body>'),
     )
 })
 
-// 38.29. Nothing a reader sees moves without it — the client asks for the same chunks itself, a
+// 38.28. Nothing a reader sees moves without it — the client asks for the same chunks itself, a
 // round trip later — so the work is what is asserted: which addresses the document names.
 // THE REVERTS: drop the loop over `chunks` from `clientTags` and this reports 0 preloads; follow
 // `dynamic-import` edges in `manifestOf` too and every address preloads every page, 0 its own.
-test('the document preloads the static closure of its own route, and nothing else — 38.29', async () => {
+test('the document preloads the static closure of its own route, and nothing else — 38.28', async () => {
     const preloadsAt = async (address: string): Promise<string[]> => {
         const html = await (await Bun.fetch(`${base}${address}`)).text()
         const head = html.slice(0, html.indexOf('<body>'))
@@ -263,7 +261,7 @@ test('the document preloads the static closure of its own route, and nothing els
     // THE ENTRY IS THE SCRIPT TAG'S, and a preload of it is a second request line for it.
     expect(home).not.toContain(await entryOf())
     // NOR THE STYLESHEET, which the bundler reports as a static import of the entry: fetched as a
-    // module it is a MIME error in the console and a second request for bytes 38.24 linked.
+    // module it is a MIME error in the console and a second request for bytes 38.23 linked.
     for (const chunk of home) expect(chunk.endsWith('.js')).toBe(true)
 
     // CLOSED: every chunk a preloaded chunk imports statically is preloaded too, so the browser
@@ -292,7 +290,7 @@ test('the document preloads the static closure of its own route, and nothing els
 })
 
 // 41.1 — NOTHING OF A PAGE GOES OUT UNTIL IT IS BUILT, since the status goes with the first byte: the
-// document arrives whole, after the import. 38.30 AS WELL: COMPRESSED, and a compressor that held its
+// document arrives whole, after the import. 38.29 AS WELL: COMPRESSED, and a compressor that held its
 // input to the end would still pass, so the body is asserted complete rather than early. THE REVERT:
 // yield the shell's head before the component is asked; `modulepreload` arrives before SLOW_MS.
 test('nothing of a page is on the wire before it is built — 41.1', async () => {
@@ -331,11 +329,11 @@ test('a page that fails before it is built answers at its status — 41.1', asyn
     expect((await Bun.fetch(`${base}/`)).status).toBe(200)
 })
 
-// 38.5 AND 38.30 — THE BUNDLE, PRECOMPRESSED AND NEGOTIATED. Read with `decompress: false`, since
+// 38.5 AND 38.29 — THE BUNDLE, PRECOMPRESSED AND NEGOTIATED. Read with `decompress: false`, since
 // `Bun.fetch` otherwise sends `br` itself and hands back the decoded bytes, and every other test in
 // this file would pass whether anything was compressed or not.
 // THE REVERT: drop `precompress` from the build and the brotli arm reports no `content-encoding`.
-test('a bundled file is served in the encoding the request takes, and identical once decoded — 38.5, 38.30', async () => {
+test('a bundled file is served in the encoding the request takes, and identical once decoded — 38.5, 38.29', async () => {
     const address = `${base}/__abide/client/${await entryOf()}`
     const plain = await Bun.fetch(address, {
         headers: { 'accept-encoding': 'identity' },
@@ -363,12 +361,12 @@ test('a bundled file is served in the encoding the request takes, and identical 
         identity,
     )
 
-    // THE COPIES ARE NOT ADDRESSES OF THEIR OWN (38.21).
+    // THE COPIES ARE NOT ADDRESSES OF THEIR OWN (38.20).
     expect((await Bun.fetch(`${address}.br`)).status).toBe(404)
 })
 
-// 38.30 — THE DOCUMENT, compressed per request since it is rendered per request.
-test('the document is compressed in the encoding the request takes — 38.30', async () => {
+// 38.29 — THE DOCUMENT, compressed per request since it is rendered per request.
+test('the document is compressed in the encoding the request takes — 38.29', async () => {
     const plain = await Bun.fetch(`${base}/`, {
         headers: { 'accept-encoding': 'identity' },
     })
@@ -391,12 +389,12 @@ test('the document is compressed in the encoding the request takes — 38.30', a
     }
 })
 
-// 38.30, 38.69 — A JSON ANSWER IS COMPRESSED IN THE ENCODING THE REQUEST TAKES, AND ONLY FROM THE FLOOR
+// 38.29, 38.68 — A JSON ANSWER IS COMPRESSED IN THE ENCODING THE REQUEST TAKES, AND ONLY FROM THE FLOOR
 // UP, with `vary` named either way. THE REVERTS: answer `answerJson`'s text without negotiating, and
 // the list reads no `content-encoding` for either; drop the floor, and the one row reads `br`.
-test('a JSON answer from the floor up is compressed in the encoding asked, and under it is not — 38.30, 38.69', async () => {
+test('a JSON answer from the floor up is compressed in the encoding asked, and under it is not — 38.29, 38.68', async () => {
     const ask = (name: string, encoding: string) =>
-        Bun.fetch(`${base}/__abide/rpc/ledger/${name}`, {
+        Bun.fetch(`${base}/ledger/${name}`, {
             headers: { 'accept-encoding': encoding },
             decompress: false,
         })
@@ -420,11 +418,11 @@ test('a JSON answer from the floor up is compressed in the encoding asked, and u
     expect(await small.json()).toEqual({ id: 'row_0', status: 'open' })
 })
 
-// 38.69, 20.9 — AN MCP READ IS MADE IN PROCESS WITH THE CALLER'S HEADERS, and the handler's answer is
+// 38.68, 20.9 — AN MCP READ IS MADE IN PROCESS WITH THE CALLER'S HEADERS, and the handler's answer is
 // read there rather than sent on: a client asking for brotli still has the resource's JSON read
 // whole, and only the reply is encoded. THE REVERT: keep `accept-encoding` in `callOf`; the list is
 // read as brotli bytes, and the resource's text is not the rows.
-test('an MCP read takes its handler answer uncompressed, whatever the client accepts — 38.69, 20.9', async () => {
+test('an MCP read takes its handler answer uncompressed, whatever the client accepts — 38.68, 20.9', async () => {
     const answer = await Bun.fetch(`${base}/__abide/mcp`, {
         method: 'POST',
         headers: {
@@ -435,7 +433,7 @@ test('an MCP read takes its handler answer uncompressed, whatever the client acc
             jsonrpc: '2.0',
             id: 1,
             method: 'resources/read',
-            params: { uri: 'abide:/__abide/rpc/ledger/listRows' },
+            params: { uri: 'abide:/ledger/listRows' },
         }),
         decompress: false,
     })
@@ -450,13 +448,13 @@ test('an MCP read takes its handler answer uncompressed, whatever the client acc
     )
 })
 
-test('an address no route matches is 404 — 38.22', async () => {
+test('an address no route matches is 404 — 38.21', async () => {
     expect((await Bun.fetch(`${base}/nope`)).status).toBe(404)
     // A file the build never produced, asked for under the client address.
     expect((await Bun.fetch(`${base}/__abide/client/nope.js`)).status).toBe(404)
 })
 
-test('the document links the stylesheet the build bundled — 34.6, 38.24', async () => {
+test('the document links the stylesheet the build bundled — 34.6, 38.23', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     const linked =
         /<link rel="stylesheet" href="\/__abide\/client\/(entry-[a-z0-9]+\.css)">/.exec(
@@ -600,8 +598,9 @@ test('a public file answers a range 206 with the public headers — 16.35, 21.12
     expect(ranged.headers.get('etag')).toBe(headers.get('etag'))
 })
 
-// THE REVERT: answer a declined range with the blob itself, and Bun.serve — which reads no
-// `If-Range` — sends 206 and the ten bytes of a version the reader does not have.
+// THE REVERT: drop `ifRange` from `answerBlobTagged`'s range guard, and it answers 206 with the
+// ten bytes of a version the reader does not have. Bun.serve declines a stale `If-Range` on a
+// file-backed body itself since 1.4.3 — before that, the declined body had to be piped to hide it.
 test('a public file answers a stale if-range in full — 16.35', async () => {
     const stale = await Bun.fetch(`${base}/robots.txt`, {
         headers: { range: 'bytes=0-9', 'if-range': '"not-the-etag"' },
@@ -620,12 +619,11 @@ let bareBase = ''
 
 beforeAll(async () => {
     const app = temporaryModule({
-        'ui/app.html': SHELL,
-        'ui/pages/page.abide':
+        'page.abide':
             '<head><title>Bare</title></head>\n<main id="bare">Bare</main>',
         'tsconfig.json': JSON.stringify({
             compilerOptions: { strict: true, target: 'esnext', types: [] },
-            include: ['ui'],
+            include: ['**/*'],
         }),
     })
     const built = await buildApp(app)
@@ -639,9 +637,25 @@ afterAll(() => {
     stopBare?.()
 })
 
+// 20.7, 36.7 — MCP AND OPENAPI ARE OPEN WHERE A HANDLER IS LISTED FOR THEM, and this app has none.
+// THE REVERT: answer `McpSurface.opened` true, or hand back `openApi`'s document whatever its paths,
+// and that one is answered 200 with an empty list.
+test('an app that lists no handler for MCP or OpenAPI answers both 404 — 20.7, 36.7', async () => {
+    const mcp = await Bun.fetch(`${bareBase}/__abide/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    })
+    expect(mcp.status).toBe(404)
+    await mcp.text()
+    const openapi = await Bun.fetch(`${bareBase}/__abide/openapi.json`)
+    expect(openapi.status).toBe(404)
+    await openapi.text()
+})
+
 // THE REVERT: write the `<link>` in `clientTags` whatever the manifest says and this reports a
 // document fetching a missing stylesheet on every load — and looking exactly right doing it.
-test('an app that imports no stylesheet links none — 38.24', async () => {
+test('an app that imports no stylesheet links none — 38.23', async () => {
     const html = await (await Bun.fetch(`${bareBase}/`)).text()
     expect(html).toContain('<main id="bare">Bare</main>')
     expect(html).not.toContain('rel="stylesheet"')
@@ -650,7 +664,7 @@ test('an app that imports no stylesheet links none — 38.24', async () => {
 // THE REVERT: scan the public directory without testing for it, and `abide start` throws at boot
 // rather than at a request — so this app serves nothing at all and the failure is the address
 // never being printed.
-test('an app with no public directory still boots and serves — 38.19', async () => {
+test('an app with no public directory still boots and serves — 38.18', async () => {
     expect((await Bun.fetch(`${bareBase}/`)).status).toBe(200)
     expect((await Bun.fetch(`${bareBase}/robots.txt`)).status).toBe(404)
 })
@@ -667,15 +681,29 @@ test('an app with no public directory still boots and serves — 38.19', async (
 // one of the two lanes that serve.
 test('a public file claiming a page address is a build error naming both — 36.13', async () => {
     const app = temporaryModule({
-        'ui/pages/about/page.abide': '<main>About</main>',
-        'ui/public/about': 'the file that shadows the page',
+        'about/page.abide': '<main>About</main>',
+        'public/about': 'the file that shadows the page',
     })
     const built = await buildApp(app)
 
     expect(built.exitCode).not.toBe(0)
     const said = built.stderr
     // BOTH, which is the clause. Naming one leaves the reader to find the other.
-    expect(said).toContain('ui/public/about')
+    expect(said).toContain('public/about')
     expect(said).toContain('/about')
     expect(said).toContain('36.13')
+}, 30_000)
+
+// 38.100 OVER 38.6 — A BUILD THAT FAILED LEAVES NO BUILD BEHIND, so `abide start` builds again and
+// says why rather than booting the half a refusal left. THE REVERT: write `compilation.json` ahead
+// of 36.13's check; the second build fails with the first one's marker still there, and `start`
+// boots it.
+test('a build that fails leaves no build for start to boot — 38.100', async () => {
+    const app = temporaryModule({ 'about/page.abide': '<main>About</main>' })
+    expect((await buildApp(app)).exitCode).toBe(0)
+    await Bun.write(`${app}/public/about`, 'the file that shadows the page')
+    expect((await buildApp(app)).exitCode).not.toBe(0)
+    expect(await Bun.file(`${app}/.abide/compilation.json`).exists()).toBe(
+        false,
+    )
 }, 30_000)

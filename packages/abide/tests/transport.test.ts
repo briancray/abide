@@ -10,7 +10,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HANDLERS = `import { reactive, refuse } from '@abide/abide'
 import { GET, json, page, POST, redirect, request, response, sse } from '@abide/abide/server'
-import { reported } from '../reported.ts'
+import { reported } from '../server/reported.ts'
 
 export const shared = GET(reactive(() => ({ n: 1 }), { global: true, ttl: 90_500 }))
 
@@ -101,19 +101,23 @@ export const reports = POST(() => reported.count)
 
 let base = ''
 let stop = (): void => {}
-const RPC = '/__abide/rpc/answers'
+const RPC = '/answers'
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/answers.ts': HANDLERS,
+        'page.abide': '<main>home</main>',
+        'answers/answers.abide': `<script server>
+${HANDLERS}</script>
+`,
         'server/reported.ts': 'export const reported = { count: 0 }\n',
-        'server/app.ts': `import { onError } from '@abide/abide/server'
-import { reported } from './reported.ts'
+        'layout.abide': `<script server>
+import { onError } from '@abide/abide/server'
+import { reported } from './server/reported.ts'
 
 onError(() => {
     reported.count += 1
 })
+</script>
 `,
     }))
 }, 30_000)

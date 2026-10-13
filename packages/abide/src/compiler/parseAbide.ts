@@ -8,6 +8,7 @@ import {
     type Attribute,
     type Branch,
     bodiesOf,
+    type ElementNode,
     type ForBlock,
     type InlineComponent,
     type Setup,
@@ -18,6 +19,7 @@ import {
     nesting,
     skipQuoted,
     slotEnd,
+    startsToken,
     type Token,
     tokenize,
 } from './tokenize.ts'
@@ -38,6 +40,11 @@ export type AbideFile = {
      */
     modules: string[]
     /**
+     * `<script server>` bodies in source order — 34.20, module scope on a server alone. Apart from
+     * `modules` because the browser's module never carries them.
+     */
+    servers: string[]
+    /**
      * `<style>` bodies in source order, outside any block body — each scoped to the component (34.4). A
      * body's own is on its block (34.11).
      */
@@ -47,6 +54,12 @@ export type AbideFile = {
      * template here so no walk over the body steps around it. In tree order, which is 39.5.
      */
     head: TemplateNode[]
+    /**
+     * 35.15 — the document's `<html>` and `<body>`, where the file is written inside them: each with
+     * its attributes and none of its children, which are the head and the template. `undefined`
+     * where the template is not.
+     */
+    document: { html: ElementNode; body: ElementNode } | undefined
     template: TemplateNode[]
     /** 32.43 — the inline components the template's own body declares, in source order. */
     components: InlineComponent[]
@@ -68,11 +81,19 @@ export type AbideFile = {
     origins: Origins
 }
 
+/** Every script body a file holds — module, server and per-instance — for a walk over its imports. */
+export function scriptBodies(file: AbideFile): string[] {
+    return [...file.modules, ...file.servers, ...file.scripts]
+}
+
 type Origins = {
     modules: number[]
+    servers: number[]
     scripts: number[]
     holders: Map<object, number>
     keys: Map<object, number>
+    /** 38.39 — per `{#for}` block, where its item and its index start (`-1` where it has none). */
+    bindings: Map<object, { item: number; index: number }>
 }
 
 /**
@@ -111,13 +132,16 @@ function unwindTo(
 export function parseAbide(source: string): AbideFile {
     const scripts: string[] = []
     const modules: string[] = []
+    const servers: string[] = []
     const styles: string[] = []
     let generics: string | undefined
     const origins: Origins = {
         modules: [],
+        servers: [],
         scripts: [],
         holders: new Map(),
         keys: new Map(),
+        bindings: new Map(),
     }
     const root: TemplateNode[] = []
     // The open elements, innermost last. `root` is the floor and is never popped.
@@ -152,11 +176,16 @@ export function parseAbide(source: string): AbideFile {
             // the div — while the browser re-parsing that markup closes at `</DIV>`, so every
             // position the client walks to after it is a different node and the page hydrates
             // against the wrong tree.
+            const closing = source.slice(at + 2, close).trim()
+            // 34.34 — a `<script>` is raw text whose body takes its close tag with it, so one met
+            // here is what is left of a block that ended early: a `</script>` in a comment or a
+            // string in it, and the source after it would be rendered as the page.
+            if (sameTag(closing, 'script'))
+                throw new Error(
+                    'abide: a </script> that closes no <script> — a block ends at the first `</script>` in it, even one in a comment or a string. Write it `<\\/script>` there. RULEBOOK 34.34.',
+                )
             const innermost = open[open.length - 1]
-            if (
-                typeof innermost === 'string' &&
-                sameTag(innermost, source.slice(at + 2, close).trim())
-            ) {
+            if (typeof innermost === 'string' && sameTag(innermost, closing)) {
                 stack.pop()
                 open.pop()
             }
@@ -213,7 +242,7 @@ export function parseAbide(source: string): AbideFile {
                 lowerTag === 'style'
                     ? styles
                     : lowerTag === 'script'
-                      ? scriptBlock(tag.attributes, scripts, modules)
+                      ? scriptBlock(tag.attributes, scripts, modules, servers)
                       : undefined
             const declared =
                 block === undefined || block === styles
@@ -224,7 +253,7 @@ export function parseAbide(source: string): AbideFile {
                 // setup have no call to be generic over.
                 if (block !== scripts || blocks.length > 0)
                     throw new Error(
-                        'abide: generics="…" belongs on the component\'s own <script>, and this one is a <script module> or a block body\'s. RULEBOOK 34.13.',
+                        'abide: generics="…" belongs on the component\'s own <script>, and this one is a <script module>, a <script server> or a block body\'s. RULEBOOK 34.13.',
                     )
                 if (generics !== undefined)
                     throw new Error(
@@ -233,7 +262,12 @@ export function parseAbide(source: string): AbideFile {
                 generics = declared
             }
             if (lowerTag === 'script' || lowerTag === 'style') {
-                const raw = rawBody(source, lowerTag, tag)
+                const raw = rawBody(
+                    source,
+                    lowerTag,
+                    tag,
+                    block !== undefined && block !== styles,
+                )
                 // 14.8 — A `<script>` INSIDE A BLOCK IS THAT BODY'S, set up once each time the body is
                 // built, and not the component's: lifted, it ran once for the page and a row's own
                 // names (`{#for item …}`) were not in scope.
@@ -272,6 +306,7 @@ export function parseAbide(source: string): AbideFile {
                 if (block !== undefined) {
                     if (block === scripts) origins.scripts.push(tag.end)
                     else if (block === modules) origins.modules.push(tag.end)
+                    else if (block === servers) origins.servers.push(tag.end)
                     block.push(raw.body)
                     at = raw.end
                     continue
@@ -508,11 +543,16 @@ export function parseAbide(source: string): AbideFile {
     }
 
     const components = fileComponents(root, declared)
-    refuseImported(components, [...modules, ...scripts])
+    refuseImported(components, [...modules, ...servers, ...scripts])
     collapseWhitespace(root)
     const head: TemplateNode[] = []
     const template: TemplateNode[] = []
+    let document: AbideFile['document']
     for (const node of root) {
+        if (node.kind === 'element' && node.lowerTag === 'html') {
+            document = documentOf(node, head, template)
+            continue
+        }
         if (node.kind === 'element' && node.lowerTag === 'head') {
             assertNoNestedHead(node.children, '<head>')
             for (const child of node.children) head.push(child)
@@ -521,11 +561,23 @@ export function parseAbide(source: string): AbideFile {
         assertNoNestedHead([node], '')
         template.push(node)
     }
+    // 35.16 — the document is written once, around everything else.
+    if (document !== undefined)
+        for (const node of root)
+            if (
+                !(node.kind === 'element' && node.lowerTag === 'html') &&
+                !(node.kind === 'text' && node.text.trim() === '')
+            )
+                throw new Error(
+                    `abide: ${node.kind === 'element' ? `<${node.tag}>` : 'markup'} stands beside <html>, and a file written inside <html> has nothing outside it. RULEBOOK 35.16.`,
+                )
     return {
         scripts,
         modules,
+        servers,
         styles,
         head,
+        document,
         template,
         components,
         generics,
@@ -578,7 +630,7 @@ function inlineComponent(header: {
     }
     if (close !== tokens.length - 1)
         throw new Error(
-            `abide: {#component ${header.text}} is not a name and one parenthesised props pattern. Write {#component ${name.text}(props)}. RULEBOOK 32.39.`,
+            `abide: {#component ${header.text}} is not a name and one parenthesized props pattern. Write {#component ${name.text}(props)}. RULEBOOK 32.39.`,
         )
     const inside = (from: number, to: number): { text: string; at: number } =>
         trimmed(header.text, from, to)
@@ -696,6 +748,43 @@ function refuseImported(components: InlineComponent[], blocks: string[]): void {
 }
 
 /**
+ * 35.15 — the `<html>` a file is written inside: its `<head>`'s children added to `head`, its
+ * `<body>`'s to `template`, and the two elements handed back with their attributes alone.
+ */
+function documentOf(
+    html: ElementNode,
+    head: TemplateNode[],
+    template: TemplateNode[],
+): { html: ElementNode; body: ElementNode } {
+    let body: ElementNode | undefined
+    for (const child of html.children) {
+        if (child.kind === 'text' && child.text.trim() === '') continue
+        if (child.kind === 'element' && child.lowerTag === 'head') {
+            assertNoNestedHead(child.children, '<head>')
+            for (const node of child.children) head.push(node)
+            continue
+        }
+        if (child.kind === 'element' && child.lowerTag === 'body' && !body) {
+            body = child
+            assertNoNestedHead(child.children, '<body>')
+            for (const node of child.children) template.push(node)
+            continue
+        }
+        throw new Error(
+            `abide: <html> holds a <head> and a <body> and nothing else, and this one holds ${child.kind === 'element' ? `<${child.tag}>` : 'more'}. RULEBOOK 35.16.`,
+        )
+    }
+    if (body === undefined)
+        throw new Error(
+            'abide: <html> holds no <body>, so the page has nowhere to go. RULEBOOK 35.16.',
+        )
+    // The elements themselves, emptied, so where each attribute was written is still known.
+    html.children = []
+    body.children = []
+    return { html, body }
+}
+
+/**
  * Throws where a `<head>` stands anywhere but the top level of the file.
  *
  * 39.2 — a `<head>` MUST be top level, and MUST NOT appear inside a control block. Nested, it
@@ -711,6 +800,14 @@ function assertNoNestedHead(nodes: TemplateNode[], within: string): void {
         if (node.kind === 'element' && node.lowerTag === 'head')
             throw new Error(
                 `abide: a <head> must be top level in a .abide file, and this one is inside ${within}. RULEBOOK 39.2.`,
+            )
+        // 35.16 — the document's own elements are written once, at the top, around the rest.
+        if (
+            node.kind === 'element' &&
+            (node.lowerTag === 'html' || node.lowerTag === 'body')
+        )
+            throw new Error(
+                `abide: <${node.tag}> ${within === '' ? 'stands among the markup' : `is inside ${within}`}, and the document's <html> and <body> are written once, at the top of the root layout.abide. RULEBOOK 35.16.`,
             )
         const label =
             node.kind === 'element'
@@ -783,29 +880,49 @@ function sameTag(left: string, right: string): boolean {
 /**
  * The list a `<script>`'s body belongs in, or `undefined` where it is markup.
  *
- * 34.1 is the bare tag and 34.2 is the bare `module` attribute; anything else on the tag — `src`, `type`, `defer`, `nonce` —
+ * 34.1 is the bare tag, 34.2 the bare `module` attribute and 34.20 the bare `server` one; anything
+ * else on the tag — `src`, `type`, `defer`, `nonce` —
  * is a `<script>` the author wrote for the DOCUMENT, and lifting it into component setup moves it
- * out of the markup and throws its attributes away.
+ * out of the markup and throws its attributes away — save beside `server`, which 34.33 refuses.
  *
- * 34.12, 34.13 — BUT `lang="ts"` AND `generics="…"` ARE THE COMPONENT'S. Every block is TypeScript,
- * so `lang="ts"` says nothing, and an editor's convention read as markup took the author's whole
- * setup out of the component without a word.
+ * 34.13 — BUT `generics="…"` IS THE COMPONENT'S. 34.12 — `lang` is refused on any `<script>`: every
+ * block is TypeScript, so it says nothing, and read as markup it took the author's whole setup out of
+ * the component without a word.
  */
 function scriptBlock(
     attributes: Attribute[],
     scripts: string[],
     modules: string[],
+    servers: string[],
 ): string[] | undefined {
     let module = false
+    let server = false
+    let markup = false
     for (const attribute of attributes) {
         // `<script module>` carries the marker and no value. `module="x"` names something else.
         if (attribute.lowerName === 'module' && attribute.value === '')
             module = true
-        else if (attribute.lowerName === 'lang' && attribute.value === 'ts')
-            continue
-        else if (attribute.lowerName !== 'generics') return undefined
+        else if (attribute.lowerName === 'server') {
+            server = true
+            if (attribute.value !== '') markup = true
+        } else if (attribute.lowerName === 'lang')
+            throw new Error(
+                'abide: every <script> in a .abide file is TypeScript, so `lang` says nothing — remove it. RULEBOOK 34.12.',
+            )
+        else if (attribute.lowerName !== 'generics') markup = true
     }
-    return module ? modules : scripts
+    // 34.33 — a `server` attribute on a tag that would be markup ships the server's source to the
+    // document and the browser's module, so it is refused rather than demoted.
+    if (server && markup)
+        throw new Error(
+            'abide: a <script> carrying `server` is a server block, written `<script server>` with nothing beside it. RULEBOOK 34.33.',
+        )
+    if (markup) return undefined
+    if (module && server)
+        throw new Error(
+            'abide: a <script> is `module` or `server`, not both — a server block is module scope already. RULEBOOK 34.20.',
+        )
+    return server ? servers : module ? modules : scripts
 }
 
 /**
@@ -826,13 +943,22 @@ function rawBody(
     source: string,
     lowerTag: string,
     tag: { selfClosing: boolean; end: number },
+    code: boolean,
 ): { body: string; end: number } {
     if (tag.selfClosing) return { body: '', end: tag.end }
-    // The body ends at the first literal close tag, so a `</script>` inside a string in a script
-    // block ends it early — the case is real and is not handled yet.
+    // The body ends at the first literal close tag, as a browser's does, so a `</script>` inside
+    // a string or a comment in a script block ends it early — and the real close tag after it
+    // is refused where the template meets it (34.34).
     const close = closeTagAt(source, lowerTag, tag.end)
     if (close === null)
         return { body: source.slice(tag.end), end: source.length }
+    // 34.35 — a component block's early end is refused AT the early end, because what is left
+    // over can open a `<script>` of its own that takes the real close tag, and then 34.34 meets
+    // nothing to refuse while the block's source between them renders as the page.
+    if (code && !startsToken(source, tag.end, close.start))
+        throw new Error(
+            'abide: a </script> inside a string, a comment or a regex ends the <script> block there, as a browser would. Write it `<\\/script>`. RULEBOOK 34.35.',
+        )
     return { body: source.slice(tag.end, close.start), end: close.end }
 }
 
@@ -1005,7 +1131,18 @@ function forBlock(
     }
     origins.holders.set(block, subject.at)
     if (key.text !== '') origins.keys.set(block, key.at)
+    origins.bindings.set(block, {
+        item: header.at + leadingSpace(source),
+        index:
+            comma === undefined
+                ? -1
+                : header.at + comma.end + leadingSpace(source.slice(comma.end)),
+    })
     return block
+}
+
+function leadingSpace(text: string): number {
+    return text.length - text.trimStart().length
 }
 
 function readTag(

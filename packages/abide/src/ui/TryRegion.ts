@@ -46,7 +46,7 @@ export class TryRegion extends ArmRegion {
     /** Only a mount runs the components in a body, so a failed body is retried by mounting it again. */
     private readonly remount: () => void
     private retry: Disposer | undefined
-    /** What the retry re-runs, recorded by `fail` and watched once the catch stands (`startRetry`). */
+    /** What the retry reruns, recorded by `fail` and watched once the catch stands (`startRetry`). */
     private pending: (() => unknown) | undefined
     /** A body a retry mounted, for the swap to take in place of building one. */
     private standing: Stoppable | undefined
@@ -110,7 +110,7 @@ export class TryRegion extends ArmRegion {
      * failure of the body, and is left to the caller that rebuilds; and a value still in flight is
      * not a failure either: it aborts the run as it would anywhere (2.12).
      *
-     * `again` IS WHAT A RETRY RE-RUNS: the binding that threw, or the body mounted again.
+     * `again` IS WHAT A RETRY RERUNS: the binding that threw, or the body mounted again.
      */
     guard<T>(run: () => T, again: () => unknown): T | undefined {
         const previous = BOUNDARY.current

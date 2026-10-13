@@ -132,7 +132,7 @@ export function classifyAttributes(
             // 32.10, 32.19 — THE PLAIN `style={expr}` OR `class={expr}` BESIDE A DIRECTIVE IS LEFT
             // UNBOUND. `setAttribute` replaces the whole merged value and takes the directives'
             // halves with it, and the two bindings then overwrite each other in whichever order
-            // they re-ran.
+            // they reran.
             //
             // ALLOWED, rather than refused. The page still RENDERS right — the server writes both
             // halves into the one merged attribute — so the only thing a build error would buy is

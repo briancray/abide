@@ -16,6 +16,7 @@ import type { Gated } from '#shared/reactive/argsContract.ts'
 import { deadlineOf, heldGenerationOf } from '#shared/reactive/index.ts'
 import type { Defaults } from '#shared/reactive/parameterDefaults.ts'
 import { notFound, refuse } from '#shared/refuse.ts'
+import { routeOf } from '#shared/routePattern.ts'
 import type { Method, Rpc } from '#shared/rpc.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
@@ -30,7 +31,12 @@ import { followAsEvents } from './answerSocket.ts'
 import { answerValue, namesEtag, sseHeaders } from './answerValue.ts'
 import { argsFor } from './argsFor.ts'
 import { callerOf } from './callerOf.ts'
-import { argsDocumentOf, collapsed, type Document } from './coerceArgs.ts'
+import {
+    argsDocumentOf,
+    coerceArgs,
+    collapsed,
+    type Document,
+} from './coerceArgs.ts'
 import { positiveSetting } from './config.ts'
 import {
     allows,
@@ -38,7 +44,7 @@ import {
     crossingOrigin,
     crossingRefusal,
 } from './crossingOrigin.ts'
-import { failureOf } from './hooks.ts'
+import { type AppRung, failureOf, rungsOver } from './hooks.ts'
 import { prefers } from './prefers.ts'
 import {
     currentRequestScope,
@@ -51,7 +57,8 @@ import { type Outcome, outcomeOf, takeSeed } from './seedBuffer.ts'
 import { versionOf } from './versionOf.ts'
 
 /**
- * One row of the table the build writes to `<out>/rpc.ts`: where a handler answers, and its module.
+ * One row of the handler table the build writes into the server's table (`SERVER_TABLE`): where a
+ * handler answers, and its module.
  *
  * The module is relative to the app's root, which both commands that serve already know.
  */
@@ -62,7 +69,7 @@ export type Mount = {
     name: string
     /** Whether a browser is handed a wrapper for it. 20.4. */
     ui: boolean
-    /** Whether the command line lists it — the shell's listing and completion, never whether `call` reaches it. 20.3, 38.63. */
+    /** Whether the command line lists it — the shell's listing and completion, never whether `call` reaches it. 20.3, 38.62. */
     cli: boolean
     /**
      * Whether MCP lists it where its runtime `clients` does not say.
@@ -88,9 +95,23 @@ export type Mount = {
     args: JsonValue | undefined
 }
 
+/**
+ * A row of the table the build wrote, with the import of the module its handler is declared in —
+ * the file's server module, the one the route table loads too, so a page and a call reach one
+ * handler.
+ */
+export type MountRow = Mount & { load: () => Promise<Record<string, unknown>> }
+
 /** A handler's row, mounted: the handler imported and its args schema probed. */
 export type Mounted = Mount & {
     method: Method
+    /** The route of the file declaring it, which its hooks are filed at (37.1, 37.2). */
+    route: string
+    /**
+     * The rungs filed over `route`, read once at mount (16.14) — what an http call and a socket
+     * subscription to it both pass through (37.2, 18.26).
+     */
+    rungs: AppRung[]
     handler: Rpc<unknown, unknown> & Gated<unknown>
     /**
      * The args' JSON Schema, probed once at mount.
@@ -127,6 +148,10 @@ export function mountedOwn(
         {
             address,
             method: 'GET',
+            route: '/',
+            // The root's rungs run before routing (37.3), and nothing is filed below a route
+            // of abide's own.
+            rungs: [],
             source: '',
             name,
             ui: false,
@@ -149,20 +174,17 @@ export function environmentTimeout(): number | undefined {
 }
 
 /**
- * The table's handlers, imported and keyed by address.
+ * The table's handlers, imported and keyed by method and address.
  *
- * Imported from the SOURCE tree, so a page rendering on the server and a call over the wire reach
- * one module and so one handler. AT BOOT rather than on the first call, because a page's render
- * reaches a handler through the page's own import and has to know its address before anything has
- * called it over the wire.
+ * Imported through each row's own loader, which the route table shares, so a page rendering on the
+ * server and a call over the wire reach one module and so one handler. AT BOOT rather than on the
+ * first call, because a page's render reaches a handler through the page's own import and has to
+ * know its address before anything has called it over the wire.
  */
 export async function mountHandlers(
-    table: Mount[],
-    moduleOf: (source: string) => Promise<Record<string, unknown>>,
+    table: MountRow[],
 ): Promise<{ handlers: Map<string, Mounted> }> {
-    const modules = await Promise.all(
-        table.map((mount) => moduleOf(mount.source)),
-    )
+    const modules = await Promise.all(table.map((mount) => mount.load()))
     const handlers = new Map<string, Mounted>()
     for (let at = 0; at < table.length; at += 1) {
         const mount = table[at] as Mount
@@ -172,9 +194,14 @@ export async function mountHandlers(
         // 16.9, 16.10 — the address `rpc.url` and `rpc.raw` build on, under the mount — and what a
         // page's render turns a call it made into the browser's request by (41.20).
         handler.address = underMount(mount.address)
-        handlers.set(mount.address, {
+        // 23.19 — the route its address answers below, which is its mount's for a package's file,
+        // never the file's place on disk.
+        const route = routeOf(mount.address)
+        handlers.set(handlerKey(mount.method, mount.address), {
             ...mount,
             method: mount.method,
+            route,
+            rungs: rungsOver(route),
             handler,
             argsDocument: declared ?? (mount.args as Document | undefined),
             wireArgs: declared === undefined ? mount.args : undefined,
@@ -183,30 +210,34 @@ export async function mountHandlers(
     return { handlers }
 }
 
-/** The `Response` to a handler call made over http. */
+/** What a handler is keyed by among the mounted: its method and its route. 19.1. */
+export function handlerKey(method: string, address: string): string {
+    return `${method} ${address}`
+}
+
+/**
+ * The `Response` to a call of `found` made over http, `params` being what its route matched.
+ *
+ * `found` answers the request's method — or, for an `OPTIONS`, the method its preflight asks
+ * about: which handler a request reaches is the route table's to say (19.21).
+ */
 export async function answerRpc(
-    handlers: Map<string, Mounted>,
+    found: Mounted,
+    params: Record<string, string | string[]>,
     url: URL,
     request: Request,
     // 16.38 — what paints a refusal for a request that came as a navigation.
     pages: ErrorPages,
 ): Promise<Response> {
     const pathname = url.pathname
-    const found = handlers.get(pathname)
     const origin = request.headers.get('origin')
     // 16.24 — THE PREFLIGHT, answered by abide where the handler declared `crossOrigin`.
-    if (
-        found !== undefined &&
-        request.method === 'OPTIONS' &&
-        origin !== null &&
-        allows(found.handler.crossOrigin, origin)
-    )
-        return preflight(found, origin, request)
+    if (request.method === 'OPTIONS')
+        return origin !== null && allows(found.handler.crossOrigin, origin)
+            ? preflight(found, origin, request)
+            : answered(notFound({ path: pathname, method: request.method }))
     // 16.50 — a `HEAD` is the `GET`'s answer, which the server sends without its body.
     const head = request.method === 'HEAD'
-    // 15.7 — no handler at this address AND this method is one refusal, not two.
-    if (found === undefined || found.method !== (head ? 'GET' : request.method))
-        return answered(notFound({ path: pathname, method: request.method }))
     const handler = found.handler
     const inUrl = argsInURL(found.method)
     const form = isForm(request)
@@ -226,10 +257,12 @@ export async function answerRpc(
         return answered(overCeiling(ceiling))
     const raw = await argsOf(request, url, inUrl, form, ceiling)
     if (isFailed(raw)) return answered(raw)
+    const sent = withParameters(raw, params, inUrl || form, found)
+    if (isFailed(sent)) return answered(sent)
     let args: unknown
     try {
         // A URL's and a form's args are text, and the query tells a bare name from `name=` (19.7).
-        args = argsFor(found, raw, inUrl ? url.search : form ? '' : undefined)
+        args = argsFor(found, sent, inUrl ? url.search : form ? '' : undefined)
     } catch (refused) {
         if (isFailed(refused)) return answered(refused)
         throw refused
@@ -437,6 +470,39 @@ async function argsOf(
 }
 
 /**
+ * The args a request sent, with the parameters its route matched laid in.
+ *
+ * 16.65 — the path's, whatever the method. 16.66 — a parameter the query or the body names as
+ * well is refused rather than one of the two chosen. A JSON body's members are typed already, so the
+ * path's text is coerced to the declared types before it joins them (19.7); text args are coerced
+ * with the rest of the text.
+ */
+function withParameters(
+    sent: unknown,
+    params: Record<string, string | string[]>,
+    text: boolean,
+    found: Mounted,
+): unknown | Failed<'HttpError', undefined> {
+    let none = true
+    for (const name in params) {
+        none = false
+        if (isRecord(sent) && name in sent)
+            return refuse(
+                400,
+                `The parameter '${name}' is in the path and in the request as well.`,
+            )
+    }
+    if (none) return sent
+    const fromPath = text
+        ? params
+        : (coerceArgs(params, found.argsDocument, '') as Record<
+              string,
+              unknown
+          >)
+    return isRecord(sent) ? { ...sent, ...fromPath } : { ...fromPath }
+}
+
+/**
  * The request's body read up to `ceiling`, as a `Response`, or a 413 refusal past it.
  *
  * 16.55 — A BODY WITH NO DECLARED LENGTH, BOUNDED AS IT STREAMS: counted chunk by chunk and cut
@@ -487,6 +553,12 @@ function preflight(found: Mounted, origin: string, request: Request): Response {
  * 16.57 — `Infinity` is never reaped, which bun spells 0; any finite bound is capped at the 255
  * seconds bun's idle timeout can hold.
  *
+ * FOUR SECONDS PAST THE TIMEOUT, NOT AT IT: a load that goes its timeout is refused at that moment,
+ * and a stream's refusal is a frame written then (16.68). bun's sockets check an idle timeout on a
+ * tick four seconds wide, so an idle timeout of the same second — or one past it — fired anywhere in
+ * the tick before it and reaped the connection ahead of the frame, one stream in two under `abide
+ * dev`. Four is the tick, so the refusal always goes out first.
+ *
  * ON THE REQUEST THE LISTENER RECEIVED, never the one being answered: under a mount, or past a
  * rung that handed `next` its own, that is a copy, and bun's `timeout` does nothing for a request
  * it was not handed itself.
@@ -496,7 +568,7 @@ export function raiseTimeout(milliseconds: number): void {
     const received = scope?.received
     if (scope === undefined || received === undefined) return
     const seconds = Number.isFinite(milliseconds)
-        ? Math.min(255, Math.ceil(milliseconds / 1000))
+        ? Math.min(255, Math.ceil(milliseconds / 1000) + 4)
         : Number.POSITIVE_INFINITY
     if (seconds <= scope.timeout) return
     scope.timeout = seconds

@@ -7,15 +7,11 @@ import { spawned } from 'harness/gate'
 import { BIN, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, invalidate, log, POST, reactive, refresh, refuse } from '@abide/abide/server'
+const HANDLERS = `import { GET, invalidate, POST, reactive, refresh, refuse } from '@abide/abide/server'
 
 const shelf = reactive<string[]>(['dune'], { global: true })
 
 export const books = GET(shelf)
-
-export const note = POST(({ text }: { text: string }) => {
-    log(text)
-})
 
 export const shelve = POST(({ title }: { title: string }) => {
     shelf.set([...shelf(), title])
@@ -92,13 +88,12 @@ let base = ''
 let stop = (): void => {}
 
 beforeAll(async () => {
-    ;({ base, stop } = await serveApp(
-        {
-            'ui/pages/page.abide': '<main>home</main>',
-            'server/rpc/library.ts': HANDLERS,
-        },
-        { ...process.env, ABIDE_LOGS: '1' },
-    ))
+    ;({ base, stop } = await serveApp({
+        'page.abide': '<main>home</main>',
+        'library/library.abide': `<script server>
+${HANDLERS}</script>
+`,
+    }))
 }, 30_000)
 
 afterAll(() => {
@@ -123,8 +118,8 @@ type Frame = Record<string, unknown>
 const frames: Frame[] = []
 const ws = new WebSocket(base.replace('http', 'ws') + '/__abide/socket', { headers: ${JSON.stringify(upgrade)} } as never)
 const send = (frame: unknown) => ws.send(JSON.stringify(frame))
-const get = (path: string, headers: Record<string, string> = {}) => fetch(base + '/__abide/rpc/library/' + path, { headers })
-const post = (path: string, body: unknown) => fetch(base + '/__abide/rpc/library/' + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+const get = (path: string, headers: Record<string, string> = {}) => fetch(base + '/library/' + path, { headers })
+const post = (path: string, body: unknown) => fetch(base + '/library/' + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 const BARRIER = 1000
 let barrier = BARRIER
 const refused = new Map<number, () => void>()
@@ -132,7 +127,7 @@ const settled = () =>
     new Promise<void>((done) => {
         barrier += 1
         refused.set(barrier, done)
-        send({ op: 'sub', id: barrier, address: '/__abide/rpc/library/nothingAnswersHere' })
+        send({ op: 'sub', id: barrier, address: '/library/nothingAnswersHere' })
     })
 let arrived = () => {}
 const until = async (owed: (frames: Frame[]) => boolean) => {
@@ -173,7 +168,7 @@ const ops = (frames: Record<string, unknown>[]): unknown[] =>
 test('a follower naming the answered version is sent only what changes after it', async () => {
     const frames = await client(`const answered = await get('books')
 const version = Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, ''))
-send({ op: 'sub', id: 1, address: '/__abide/rpc/library/books', version })
+send({ op: 'sub', id: 1, address: '/library/books', version })
 await settled()
 await post('shelve', { title: 'emma' })
 await until((frames) => frames.some((frame) => frame.op === 'value'))
@@ -250,11 +245,11 @@ await post('rename', { at: 0, title: 'dune' })
     )
 })
 
-// 38.70 OVER 18.20 — `abide watch` GIVEN A GET FOLLOWS IT AS AN EVENT STREAM, the client any terminal
+// 38.69 OVER 18.20 — `abide watch` GIVEN A GET FOLLOWS IT AS AN EVENT STREAM, the client any terminal
 // is: the value, then the value again after a patch, replayed from the JSON Patch it was sent. THE
 // REVERT: answer a 404 from the mux as a refusal rather than following the address as a `GET`;
 // nothing prints.
-test('abide watch follows a GET over its event stream — 38.70, 18.20', async () => {
+test('abide watch follows a GET over its event stream — 38.69, 18.20', async () => {
     const watcher = Bun.spawn(
         ['bun', BIN, 'watch', 'library/books', '--url', base],
         {
@@ -353,7 +348,7 @@ frames.push({ op: 'probe', type: admitted.headers.get('content-type'), events: e
 // no value.
 test('a guarded GET feeds a subscription its rungs admitted when it opened — 18.8', async () => {
     const frames = await client(
-        `send({ op: 'sub', id: 1, address: '/__abide/rpc/library/locked' })
+        `send({ op: 'sub', id: 1, address: '/library/locked' })
 await until((frames) => frames.some((frame) => frame.op === 'value'))
 await post('shelve', { title: 'admitted' })
 await until((frames) => frames.filter((frame) => frame.op === 'value').length >= 2)
@@ -373,11 +368,11 @@ await until((frames) => frames.filter((frame) => frame.op === 'value').length >=
 test('a follower several patches behind is sent the writes since, not the value — 18.11', async () => {
     const frames = await client(`const answered = await get('books')
 const version = Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, ''))
-send({ op: 'sub', id: 1, address: '/__abide/rpc/library/books', version })
+send({ op: 'sub', id: 1, address: '/library/books', version })
 await settled()
 for (const title of ['one', 'two', 'three']) await post('rename', { at: 0, title })
 await until((frames) => frames.filter((frame) => frame.op === 'patch').length >= 3)
-send({ op: 'sub', id: 2, address: '/__abide/rpc/library/books', version })
+send({ op: 'sub', id: 2, address: '/library/books', version })
 await until((frames) => frames.some((frame) => frame.id === 2))
 await post('rename', { at: 0, title: 'dune' })
 `)
@@ -389,63 +384,10 @@ await post('rename', { at: 0, title: 'dune' })
     expect(second.ops?.map((op) => op.value)).toEqual(['one', 'two', 'three'])
 })
 
-// 28.2, 36.7 — \`/__abide/logs\` IS A GET OVER \`log.records\`, FOLLOWED: \`abide logs\` prints the lines held,
-// then each line a handler writes, read off the \`add\` it is on the standard event stream. THE REVERT:
-// take \`LOGS_HANDLER\` out of the handlers abide mounts; the address answers 404 and nothing prints.
-test('abide logs follows the GET over log.records, a line per add — 28.2, 36.7', async () => {
-    const tail = Bun.spawn(['bun', BIN, 'logs', '--url', base], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-    })
-    try {
-        const reader = (tail.stdout as ReadableStream<Uint8Array>).getReader()
-        let seen = ''
-        const until = async (text: string): Promise<void> => {
-            const deadline = Date.now() + 5_000
-            while (!seen.includes(text) && Date.now() < deadline) {
-                const { value, done } = await Promise.race([
-                    reader.read(),
-                    Bun.sleep(5_000).then(() => ({
-                        value: undefined,
-                        done: true,
-                    })),
-                ])
-                if (done) return
-                seen += new TextDecoder().decode(value)
-            }
-        }
-        // Held before the tail opened, so it arrives in the value.
-        await spawned([
-            'bun',
-            BIN,
-            'call',
-            'library/note',
-            'text=before the tail',
-            '--url',
-            base,
-        ])
-        await until('before the tail')
-        await spawned([
-            'bun',
-            BIN,
-            'call',
-            'library/note',
-            'text=after the tail',
-            '--url',
-            base,
-        ])
-        await until('after the tail')
-        expect(seen).toContain('before the tail')
-        expect(seen).toContain('after the tail')
-    } finally {
-        tail.kill()
-    }
-})
-
 // 18.6 — A FOLLOWER NAMING NO VERSION, or a stale one, is handed what stands.
 test('a follower naming no version is handed the value standing', async () => {
     const frames =
-        await client(`send({ op: 'sub', id: 1, address: '/__abide/rpc/library/books' })
+        await client(`send({ op: 'sub', id: 1, address: '/library/books' })
 await until((frames) => frames.length > 0)
 `)
     expect(ops(frames)).toEqual(['value'])
@@ -458,7 +400,7 @@ await until((frames) => frames.length > 0)
 // `undefined` from `patchFrom`; the follower is sent the whole shelf as a value, and no patch.
 test('a patch reaches a follower as what it wrote, over the version it held', async () => {
     const frames = await client(`const answered = await get('books')
-send({ op: 'sub', id: 1, address: '/__abide/rpc/library/books', version: Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, '')) })
+send({ op: 'sub', id: 1, address: '/library/books', version: Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, '')) })
 await settled()
 await post('rename', { at: 0, title: 'dune messiah' })
 await until((frames) => frames.length > 0)
@@ -480,7 +422,7 @@ await until((frames) => frames.length > 0)
 // `sort` call with no arguments, which on the other side sorts by a different order.
 test('a patch that cannot be sent as writes is sent as the value', async () => {
     const frames = await client(`const answered = await get('books')
-send({ op: 'sub', id: 1, address: '/__abide/rpc/library/books', version: Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, '')) })
+send({ op: 'sub', id: 1, address: '/library/books', version: Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, '')) })
 await settled()
 await post('shuffle', {})
 await until((frames) => frames.length > 0)
@@ -493,8 +435,8 @@ await until((frames) => frames.length > 0)
 // follower of id 2 is sent 0 frames.
 test('an invalidate on the server reaches the followers its pattern names', async () => {
     const frames =
-        await client(`send({ op: 'sub', id: 1, address: '/__abide/rpc/library/contact', args: { id: 1 } })
-send({ op: 'sub', id: 2, address: '/__abide/rpc/library/contact', args: { id: 2 } })
+        await client(`send({ op: 'sub', id: 1, address: '/library/contact', args: { id: 1 } })
+send({ op: 'sub', id: 2, address: '/library/contact', args: { id: 2 } })
 await settled()
 await post('touch', { id: 2 })
 await until((frames) => frames.length > 0)
@@ -505,7 +447,7 @@ await until((frames) => frames.length > 0)
 // 7.18 — the same for a refresh, over a value no production of which is fed.
 test('a refresh on the server reaches the followers its pattern names', async () => {
     const frames =
-        await client(`send({ op: 'sub', id: 2, address: '/__abide/rpc/library/contact', args: { id: 2 } })
+        await client(`send({ op: 'sub', id: 2, address: '/library/contact', args: { id: 2 } })
 await settled()
 await post('touch', { id: 2, refresh: true })
 await until((frames) => frames.length > 0)
@@ -519,8 +461,8 @@ await until((frames) => frames.length > 0)
 // browser is sent 0 frames where 2 are due.
 test('a sweep by tag on the server reaches the followed copies carrying it — 13.15', async () => {
     const frames =
-        await client(`send({ op: 'sub', id: 1, address: '/__abide/rpc/library/shows' })
-send({ op: 'sub', id: 2, address: '/__abide/rpc/library/contact', args: { id: 9 } })
+        await client(`send({ op: 'sub', id: 1, address: '/library/shows' })
+send({ op: 'sub', id: 2, address: '/library/contact', args: { id: 9 } })
 await settled()
 await post('rescan', { refresh: true })
 await post('rescan', {})
@@ -536,8 +478,8 @@ await until((frames) => frames.length >= 2)
 // `swept` where `tags` is `null`; the browser is sent 0 frames where 4 are due.
 test('a bare sweep on the server reaches every followed copy — 13.15', async () => {
     const frames =
-        await client(`send({ op: 'sub', id: 1, address: '/__abide/rpc/library/shows' })
-send({ op: 'sub', id: 2, address: '/__abide/rpc/library/contact', args: { id: 9 } })
+        await client(`send({ op: 'sub', id: 1, address: '/library/shows' })
+send({ op: 'sub', id: 2, address: '/library/contact', args: { id: 9 } })
 await settled()
 await post('rescan', { refresh: true, bare: true })
 await post('rescan', { bare: true })
@@ -557,7 +499,7 @@ await until((frames) => frames.length >= 4)
 // sweep to every follower, fed or not; the browser is sent the refresh as well, 2 frames where 1 is due.
 test('a sweep by tag on the server sends a fed copy its reload, and no trigger — 13.15', async () => {
     const frames = await client(`const answered = await get('films')
-send({ op: 'sub', id: 1, address: '/__abide/rpc/library/films', version: Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, '')) })
+send({ op: 'sub', id: 1, address: '/library/films', version: Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, '')) })
 await settled()
 await post('recatalog', {})
 await until((frames) => frames.length > 0)
@@ -570,7 +512,7 @@ await until((frames) => frames.length > 0)
 // `Rpc`'s members alone; the follower is sent no frame.
 test("the value's own invalidate reaches the followers of the GET serving it — 7.10", async () => {
     const frames = await client(`const answered = await get('level')
-send({ op: 'sub', id: 1, address: '/__abide/rpc/library/level', version: Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, '')) })
+send({ op: 'sub', id: 1, address: '/library/level', version: Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, '')) })
 await settled()
 await post('restock', {})
 await until((frames) => frames.length > 0)
@@ -583,7 +525,7 @@ await until((frames) => frames.length > 0)
 // follower is handed the shelf with no token.
 test('a guarded handler is followed for its triggers and never fed', async () => {
     const frames = await client(`await get('locked', { 'x-token': 'ok' })
-send({ op: 'sub', id: 1, address: '/__abide/rpc/library/locked' })
+send({ op: 'sub', id: 1, address: '/library/locked' })
 await settled()
 await post('shelve', { title: 'persuasion' })
 await post('touchLocked', {})
@@ -597,7 +539,7 @@ await until((frames) => frames.some((frame) => frame.op === 'invalidate'))
 // connection as the app's own whatever its `Origin` (`crossing: null` in `MuxConnection`); the other
 // origin is fed the shelf.
 test('a follow from another origin is refused a GET that did not declare it — 18.2', async () => {
-    const steps = `send({ op: 'sub', id: 1, address: '/__abide/rpc/library/books' })
+    const steps = `send({ op: 'sub', id: 1, address: '/library/books' })
 await until((frames) => frames.length > 0)
 `
     const crossing = await client(steps, { origin: 'https://elsewhere.test' })
@@ -615,8 +557,8 @@ await until((frames) => frames.length > 0)
 test('a global GET triggered by args from inside another request reaches the followers its pattern names', async () => {
     const frames = await client(`const one = await get('price?id=1')
 const two = await get('price?id=2')
-send({ op: 'sub', id: 1, address: '/__abide/rpc/library/price', args: { id: 1 }, version: Number(String(one.headers.get('etag')).replace(/[^0-9]/g, '')) })
-send({ op: 'sub', id: 2, address: '/__abide/rpc/library/price', args: { id: 2 }, version: Number(String(two.headers.get('etag')).replace(/[^0-9]/g, '')) })
+send({ op: 'sub', id: 1, address: '/library/price', args: { id: 1 }, version: Number(String(one.headers.get('etag')).replace(/[^0-9]/g, '')) })
+send({ op: 'sub', id: 2, address: '/library/price', args: { id: 2 }, version: Number(String(two.headers.get('etag')).replace(/[^0-9]/g, '')) })
 await settled()
 await post('reprice', { id: 1, refresh: true })
 await until((frames) => frames.some((frame) => frame.id === 1))
@@ -637,8 +579,8 @@ await until((frames) => frames.some((frame) => frame.id === 2))
 test('a global GET triggered with no pattern from inside another request reaches every follower', async () => {
     const frames = await client(`const one = await get('price?id=3')
 const two = await get('price?id=4')
-send({ op: 'sub', id: 1, address: '/__abide/rpc/library/price', args: { id: 3 }, version: Number(String(one.headers.get('etag')).replace(/[^0-9]/g, '')) })
-send({ op: 'sub', id: 2, address: '/__abide/rpc/library/price', args: { id: 4 }, version: Number(String(two.headers.get('etag')).replace(/[^0-9]/g, '')) })
+send({ op: 'sub', id: 1, address: '/library/price', args: { id: 3 }, version: Number(String(one.headers.get('etag')).replace(/[^0-9]/g, '')) })
+send({ op: 'sub', id: 2, address: '/library/price', args: { id: 4 }, version: Number(String(two.headers.get('etag')).replace(/[^0-9]/g, '')) })
 await settled()
 await post('reprice', {})
 await until((frames) => frames.length >= 2)
@@ -656,7 +598,7 @@ await until((frames) => frames.length >= 2)
 // fed from once, at `follow`; it is sent the refresh trigger alone (['refresh'] against two values).
 test('a follower of args no entry held yet is fed once an answer makes one', async () => {
     const frames =
-        await client(`send({ op: 'sub', id: 1, address: '/__abide/rpc/library/price', args: { id: 9 } })
+        await client(`send({ op: 'sub', id: 1, address: '/library/price', args: { id: 9 } })
 await settled()
 await get('price?id=9')
 await until((frames) => frames.length >= 1)

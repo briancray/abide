@@ -11,7 +11,7 @@ import { removeUntil } from './regions.ts'
  *
  * `html` IS UNDEFINED FOR A RUN THE SERVER PAINTED. What is between the anchors is what the server
  * parsed from the same value, so the first write keeps it (`setMarkup`) the way a hydrated arm keeps
- * the arm it was painted with — reading markup back out of nodes is a serialisation, and not the
+ * the arm it was painted with — reading markup back out of nodes is a serialization, and not the
  * string the server wrote.
  */
 export class RawRun {

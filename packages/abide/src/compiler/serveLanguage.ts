@@ -1,10 +1,15 @@
-import { type FSWatcher, watch } from 'node:fs' // bun exposes no file watcher of its own
-import { basename, dirname } from 'node:path' // bun exposes no path helpers of its own
+import { existsSync, type FSWatcher, watch } from 'node:fs' // bun exposes no file watcher or sync existence check of its own
+import { dirname } from 'node:path' // bun exposes no path helpers of its own
+import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 import { checkSource } from './checkApp.ts'
 import { type AppChecker, openChecker } from './compileApp.ts'
+import { nearest } from './nearest.ts'
+import { parseAbide } from './parseAbide.ts'
+import { syncTypes } from './syncTypes.ts'
 import type { Diagnosis, Inspection, Place } from './TypeSession.ts'
+import { writeTypes } from './writeTypes.ts'
 
-// 38.12 — `abide lsp`: THE `.abide` LANGUAGE SERVER, OVER STDIO. It is `abide check` (38.3) asked
+// 38.11 — `abide lsp`: THE `.abide` LANGUAGE SERVER, OVER STDIO. It is `abide check` (38.3) asked
 // about one open document at a time, so the squiggle an editor draws and the line CI fails on are
 // one finding rather than two implementations that agree most of the time.
 //
@@ -15,9 +20,13 @@ import type { Diagnosis, Inspection, Place } from './TypeSession.ts'
 // same text.
 //
 // THE APP IS THE DOCUMENT'S. An editor starts this at the root of whatever it has open, which in a
-// monorepo is not an app at all, so each document is checked against the directory above the
-// OUTERMOST `ui/` it sits in (`appRootOf`) — with one checker per app, kept for the session.
+// monorepo is not an app at all, so each document is checked against the root of the NEAREST
+// package above it (`appRootOf`) — with one checker per app, kept for the session.
 // `--root` pins every document to one.
+//
+// THE EDITOR'S SPELLING STOPS HERE. An app opened through a link (`/tmp` is one on macOS) is
+// checked at its real path, the one bun resolves every import to (`openChecker`), so a path is
+// made real on its way in (`placed`) and spelled under the link again on its way out (`spelled`).
 //
 // ONE CHECK AT A TIME. The checker holds one snapshot, and two checks interleaving would each
 // register the other's text for a moment; a burst of keystrokes collapses onto the last one.
@@ -52,7 +61,32 @@ export async function serveLanguage(
     const timers = new Map<string, ReturnType<typeof setTimeout>>()
     const checkers = new Map<string, AppChecker>()
     const watchers = new Map<string, FSWatcher>()
+    // Each app's real root, to the root the editor reached it by.
+    const links = new Map<string, string>()
     let queue: Promise<void> = Promise.resolve()
+
+    // The document at `uri`, in its app's real spelling; `undefined` where no app holds it.
+    const placed = (uri: string): { app: string; path: string } | undefined => {
+        const path = Bun.fileURLToPath(uri)
+        const given = root ?? appRootOf(path)
+        if (given === undefined) return undefined
+        const app = realOrAsGiven(given)
+        if (app !== given) links.set(app, given)
+        return {
+            app,
+            path: path.startsWith(`${given}/`)
+                ? `${app}${path.slice(given.length)}`
+                : path,
+        }
+    }
+
+    // `path`, real, under the root the editor reached its app by.
+    const spelled = (path: string): string => {
+        for (const [app, given] of links)
+            if (path.startsWith(`${app}/`))
+                return `${given}${path.slice(app.length)}`
+        return path
+    }
 
     const send = (message: object): void => {
         const body = ENCODER.encode(
@@ -118,8 +152,7 @@ export async function serveLanguage(
                         )
                     // What an open page says may be decided by the file that moved.
                     for (const uri of documents.keys())
-                        if ((root ?? appRootOf(Bun.fileURLToPath(uri))) === app)
-                            check(uri)
+                        if (placed(uri)?.app === app) check(uri)
                 }),
             )
         return checker
@@ -129,18 +162,18 @@ export async function serveLanguage(
         const document = documents.get(uri)
         if (document === undefined) return
         const version = document.version
-        const path = Bun.fileURLToPath(uri)
-        const app = root ?? appRootOf(path)
         // A `.abide` belonging to no app has nothing to be checked against.
-        if (app === undefined) return
+        const at = placed(uri)
+        if (at === undefined) return
+        const { app, path } = at
         let found: Diagnosis[]
         try {
             found = await checkSource(
                 await checkerOf(app),
-                app,
                 path,
                 document.text,
-                (held) => documents.get(Bun.pathToFileURL(held).href)?.text,
+                (held) =>
+                    documents.get(Bun.pathToFileURL(spelled(held)).href)?.text,
             )
         } catch (thrown) {
             // The checker's own failure, not the page's: the next check opens another.
@@ -164,6 +197,27 @@ export async function serveLanguage(
         // A newer text has arrived while this one was checked, and will be published.
         if (documents.get(uri)?.version !== version) return
         publish(uri, found, document.text)
+        await typesFor(app, path, document.text)
+    }
+
+    // 34.24 — THE TYPES A PLAIN `.ts` READS AN OPEN FILE BY, as the editor holds it: the whole app's
+    // the first time an app is seen, and the one file as it is edited after that.
+    const synced = new Set<string>()
+    const typesFor = async (
+        app: string,
+        path: string,
+        text: string,
+    ): Promise<void> => {
+        try {
+            if (synced.has(app))
+                await writeTypes(app, [{ path, file: parseAbide(text) }], false)
+            else {
+                synced.add(app)
+                await syncTypes(app, new Map([[path, text]]))
+            }
+        } catch {
+            // A file that does not parse keeps the types it last had; its check already says why.
+        }
     }
 
     const check = (uri: string): void => {
@@ -179,7 +233,20 @@ export async function serveLanguage(
 
     // A question about a document is about the text the editor shows, so a check still settling
     // runs now rather than after the answer; and it is answered in the queue, after that check.
-    const inspect = (params: unknown): Promise<Inspection | undefined> => {
+    const inspect = (params: unknown): Promise<Inspection | undefined> =>
+        ask(params, (session, path, text, offset) =>
+            session.inspect(path, text, offset),
+        )
+
+    const ask = <Answer>(
+        params: unknown,
+        question: (
+            session: AppChecker['session'],
+            path: string,
+            text: string,
+            offset: number,
+        ) => Promise<Answer | undefined>,
+    ): Promise<Answer | undefined> => {
         const { textDocument, position } = params as {
             textDocument: { uri: string }
             position: { line: number; character: number }
@@ -192,12 +259,11 @@ export async function serveLanguage(
         }
         const answered = queue.then(async () => {
             const document = documents.get(uri)
-            if (document === undefined) return undefined
-            const path = Bun.fileURLToPath(uri)
-            const app = root ?? appRootOf(path)
-            if (app === undefined) return undefined
-            return (await checkerOf(app)).session.inspect(
-                path,
+            const at = placed(uri)
+            if (document === undefined || at === undefined) return undefined
+            return question(
+                (await checkerOf(at.app)).session,
+                at.path,
                 document.text,
                 offsetOf(document.text, position),
             )
@@ -220,6 +286,7 @@ export async function serveLanguage(
                             textDocumentSync: 1,
                             hoverProvider: true,
                             definitionProvider: true,
+                            completionProvider: { triggerCharacters: ['.'] },
                         },
                         serverInfo: { name: 'abide' },
                     },
@@ -279,11 +346,39 @@ export async function serveLanguage(
                 })
                 return true
             }
+            // 38.98 — the protocol's `CompletionItemKind` is the checker's own numbering.
+            case 'textDocument/completion': {
+                const trigger = (
+                    params?.context as { triggerCharacter?: string } | undefined
+                )?.triggerCharacter
+                const found = await ask(params, (session, path, text, offset) =>
+                    session.complete(path, text, offset, trigger),
+                )
+                const items: object[] = []
+                for (const entry of found?.entries ?? [])
+                    items.push({
+                        label: entry.name,
+                        kind: entry.kind,
+                        sortText: entry.sortText,
+                        filterText: entry.filterText,
+                        insertText: entry.insertText,
+                        detail: entry.detail,
+                        labelDetails: entry.labelDetails,
+                    })
+                send({
+                    id: message.id,
+                    result:
+                        found === undefined
+                            ? null
+                            : { isIncomplete: found.isIncomplete, items },
+                })
+                return true
+            }
             case 'textDocument/definition': {
                 const found = await inspect(params)
                 const locations: object[] = []
                 for (const place of found?.definitions ?? [])
-                    locations.push(locationOf(place))
+                    locations.push(locationOf(spelled(place.path), place))
                 send({ id: message.id, result: locations })
                 return true
             }
@@ -348,20 +443,16 @@ async function closeAll(
 }
 
 /**
- * The app a file at `path` belongs to: the directory above its outermost `ui/`.
+ * The app a file at `path` belongs to: the root 38.25 finds from the nearest package above it.
  *
- * OUTERMOST, so a component folder that happens to be called `ui` inside an app is not taken for
- * the app. `undefined` where the file is under no `ui/` at all.
+ * That package's `src` where it has one, and the package itself where it does not — the same root
+ * `abide dev` run in that package would find. `undefined` where no package lies above the file.
  */
 function appRootOf(path: string): string | undefined {
-    let found: string | undefined
-    let at = dirname(path)
-    for (;;) {
-        if (basename(at) === 'ui') found = dirname(at)
-        const up = dirname(at)
-        if (up === at) return found
-        at = up
-    }
+    const manifest = nearest(dirname(path), 'package.json')
+    if (manifest === undefined) return undefined
+    const at = dirname(manifest)
+    return existsSync(`${at}/src`) ? `${at}/src` : at
 }
 
 /**
@@ -390,10 +481,10 @@ function offsetOf(
     return at + position.character
 }
 
-/** A `Place`, lines and columns from 1, as the protocol's `Location`, from 0. */
-function locationOf(place: Place): object {
+/** A `Place` at `path`, lines and columns from 1, as the protocol's `Location`, from 0. */
+function locationOf(path: string, place: Place): object {
     return {
-        uri: Bun.pathToFileURL(place.path).href,
+        uri: Bun.pathToFileURL(path).href,
         range: {
             start: {
                 line: place.start.line - 1,

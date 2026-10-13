@@ -4,7 +4,7 @@
 // What is asserted is the markup the server sent, and that nothing was set up twice to get it.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { render } from '#server'
+import { renderDocument } from '#server/render.ts'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { closeTyped, serverOf } from './typed.ts'
@@ -32,7 +32,7 @@ const LAYOUT = `<main><slot/></main>`
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import { getInvoice, getSlow } from '#server/rpc/invoices.ts'
+import { getInvoice, getSlow } from '#src/invoices/invoices.abide'
 
 const invoice = reactive(() => getInvoice({ id: '4021' }))
 const slow = reactive(() => getSlow())
@@ -45,9 +45,11 @@ let base = ''
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'ui/pages/layout.abide': LAYOUT,
-        'ui/pages/page.abide': PAGE,
-        'server/rpc/invoices.ts': HANDLERS,
+        'layout.abide': LAYOUT,
+        'page.abide': PAGE,
+        'invoices/invoices.abide': `<script server>
+${HANDLERS}</script>
+`,
     }))
 }, 30_000)
 
@@ -95,7 +97,7 @@ const second = reactive(async () => {
 <p>{first()} {second()}</p>`
     const dir = temporaryModule({ 'Overlap.ts': await serverOf(source) })
     const { default: Component } = await import(`${dir}/Overlap.ts`)
-    await render(
+    await renderDocument(
         Component,
         '<!doctype html><html><head></head><body></body></html>',
     )

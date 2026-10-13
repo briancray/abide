@@ -1,16 +1,18 @@
-import { type Dirent, readdirSync, statSync } from 'node:fs' // Bun exposes no sync directory listing of its own
+import { type Dirent, readdirSync, realpathSync, statSync } from 'node:fs' // Bun exposes no sync directory listing or realpath of its own
 import { basename, dirname, join, resolve } from 'node:path' // Bun exposes no path helpers of its own
 import { type Node, NodeFlags, SyntaxKind } from 'typescript/unstable/ast'
 import {
     API,
     type Symbol as CheckedSymbol,
     type Checker,
+    type CompletionInfo,
     NodeBuilderFlags,
     type Project,
     SignatureKind,
     SymbolFlags,
 } from 'typescript/unstable/async'
-import { fileKind, routeOf } from '#shared/routePattern.ts'
+import { appFiles } from '#server/appTree.ts'
+import { fileKind, placeOf, routeOf } from '#shared/routePattern.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReadsIn.ts'
 import { argsDefaultsIn } from './argsDefaultsIn.ts'
@@ -23,12 +25,14 @@ import {
 import type { Finding } from './Finding.ts'
 import { CHECKED_VALUES } from './Lowering.ts'
 import { diagnosisAt, lineOf } from './lineOf.ts'
+import { mountedUnder } from './mountsOf.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { projectShadow } from './projectShadow.ts'
 import { abideIn } from './reactiveTypes.ts'
 import type { ParsedSource, ReadSource } from './readSources.ts'
 import { readsIn, type ShadowSpans } from './readsIn.ts'
-import { CHECKED_SUFFIX, ShadowMap } from './ShadowMap.ts'
+import { CHECKED_SUFFIX, SHADOW_SUFFIX, ShadowMap } from './ShadowMap.ts'
+import { SOURCE_SUFFIX } from './splitImports.ts'
 import { templateWarnings } from './templateWarnings.ts'
 
 // Where 31.3 gets its answer. A `.abide` file is projected into a SHADOW `.ts` held in a virtual
@@ -60,6 +64,13 @@ export class TypeSession {
      * text's offsets.
      */
     private shadows = new Map<string, { path: string; text: string }>()
+    /**
+     * 30.26 — the route table `diagnose` last declared, and the root it walked for it: kept until
+     * `edited` hears anything move, so a check asked again and again while an editor types walks and
+     * reads nothing on disk.
+     */
+    private routes: { within: string; declaration: string } | undefined =
+        undefined
     /** The checker's own key for a path: resolved, and case-folded where its host folds case. */
     private keyOf: (path: string) => string
     /**
@@ -83,27 +94,124 @@ export class TypeSession {
     ) {
         this.api = api
         this.tsconfig = tsconfig
+        this.opened = `${dirname(tsconfig)}/${SESSION_CONFIG}`
         this.keyOf = keyOf
+    }
+
+    /**
+     * The project this session opens: the app's tsconfig, with every shadow in `outside` a root.
+     *
+     * 34.29 — A DEPENDENCY'S `.abide` IS TYPED AS THE APP'S OWN, and its tsconfig's `include` never
+     * reaches `node_modules` or a linked package's directory. The session opens a config of its own —
+     * served from here, never written — that extends the app's, names those shadows as files, which
+     * TypeScript adds to what the base config includes (a linked package's shadow, asked for through
+     * the link, is reached no other way), and allows the declaration a package's `exports` is asked
+     * for by (`standIn`).
+     */
+    private readonly opened: string
+
+    /** The shadows of the files outside the app's own, as `opened` names them. */
+    private outside = new Set<string>()
+
+    private sessionConfig(): string {
+        const config: {
+            extends: string
+            compilerOptions: Record<string, unknown>
+            files?: string[]
+        } = {
+            extends: `./${basename(this.tsconfig)}`,
+            // A package's `exports` names `./x.abide` exactly, so the checker asks for its
+            // declaration as `./x.d.abide.ts` (`standIn`) — and takes the answer only with this.
+            compilerOptions: { allowArbitraryExtensions: true },
+        }
+        // An empty `files` is a config error, and the base's `include` alone is the app.
+        if (this.outside.size > 0) config.files = [...this.outside]
+        return JSON.stringify(config)
     }
 
     /**
      * Checked-module paths a stand-in answered for, without the `.abide` being lowered.
      *
-     * 38.40 — A `.abide` THIS SESSION HAS NOT LOWERED IS STILL A MODULE ANOTHER CAN IMPORT. What its
+     * 38.39 — A `.abide` THIS SESSION HAS NOT LOWERED IS STILL A MODULE ANOTHER CAN IMPORT. What its
      * checked module exports does not depend on what the component holds (`COMPONENT_MODULE`), so an
      * editor checking one page resolves the components it imports without lowering each of them.
      * Remembered, so the lowering that replaces a stand-in is reported as a change to it.
      */
     private stoodIn = new Set<string>()
 
-    private standIn(name: string): string | undefined {
-        if (!name.endsWith(`.abide${CHECKED_SUFFIX}`)) return undefined
+    /** The app's root, real — set by `openChecker`. */
+    root = ''
+
+    /**
+     * `path` below the app's root, where it lies under it.
+     *
+     * 23.14 — what a page's route is read off: the directories below the root are it, and the
+     * machine's directories above the root are not.
+     */
+    belowRoot(path: string): string {
+        return path.startsWith(`${this.root}/`)
+            ? path.slice(this.root.length + 1)
+            : path
+    }
+
+    /**
+     * The shadow registered at `name`, or at the same file through its directory's real path.
+     *
+     * 34.29 — A LINKED PACKAGE IS ASKED FOR THROUGH ITS LINK: the checker resolves `kit/x.abide` to
+     * `node_modules/kit/x.d.abide.ts` and the re-export there to the shadow beside it, while the
+     * shadow is registered where bun resolved the file — the package's real directory.
+     */
+    private shadowAt(name: string): { path: string; text: string } | undefined {
+        const found = this.shadows.get(this.keyOf(name))
+        // Only a shadow is registered through a link, so any other name is spared the realpath.
+        if (
+            found !== undefined ||
+            !name.includes('/node_modules/') ||
+            !(name.endsWith(SHADOW_SUFFIX) || name.endsWith(CHECKED_SUFFIX))
+        )
+            return found
+        let real: string
         try {
-            if (!statSync(name.slice(0, -CHECKED_SUFFIX.length)).isFile())
-                return undefined
+            real = realpathSync(dirname(name))
         } catch {
             return undefined
         }
+        return this.shadows.get(this.keyOf(`${real}/${basename(name)}`))
+    }
+
+    private standIn(name: string): string | undefined {
+        // 34.25 — a file imported as text is its text, which the projection names apart.
+        if (name.endsWith(`${SOURCE_SUFFIX}.d.ts`))
+            return isFile(name.slice(0, -`${SOURCE_SUFFIX}.d.ts`.length))
+                ? 'declare const text: string\nexport default text\n'
+                : undefined
+        // 34.17, 34.23 — WHAT A `.abide` EXPORTS BY NAME, to anything importing it: the checker
+        // resolves `./x.abide` by trying `./x.abide.d.ts`, and is answered with the file's own
+        // module and server blocks — its projection — beside the component its checked module
+        // declares. The wildcard declaration a plain `.ts` is typed by carries the default alone.
+        //
+        // 34.29 — AND THROUGH A PACKAGE'S `exports`, which the checker follows to the exact file and
+        // so asks for the arbitrary extension's declaration, `./x.d.abide.ts`, instead.
+        const abide = name.endsWith(DECLARATION_SUFFIX)
+            ? name.slice(0, -'.d.ts'.length)
+            : name.endsWith(EXPORTED_DECLARATION_SUFFIX)
+              ? `${name.slice(0, -EXPORTED_DECLARATION_SUFFIX.length)}.abide`
+              : undefined
+        if (abide !== undefined) {
+            if (!isFile(abide)) return undefined
+            const own = `./${basename(abide)}`
+            return `export * from '${own}${SHADOW_SUFFIX.slice(0, -'.ts'.length)}'
+export { default } from '${own}${CHECKED_SUFFIX.slice(0, -'.ts'.length)}'
+`
+        }
+        // A projection not registered — a file with nothing to read, or one this session has not
+        // projected yet — exports nothing, so the declaration above always resolves.
+        if (name.endsWith(`.abide${SHADOW_SUFFIX}`))
+            return isFile(name.slice(0, -SHADOW_SUFFIX.length))
+                ? 'export {}\n'
+                : undefined
+        if (!name.endsWith(`.abide${CHECKED_SUFFIX}`)) return undefined
+        if (!isFile(name.slice(0, -CHECKED_SUFFIX.length))) return undefined
         this.stoodIn.add(this.keyOf(name))
         return COMPONENT_MODULE
     }
@@ -114,10 +222,13 @@ export class TypeSession {
             cwd: dirname(tsconfig),
             fs: {
                 readFile: (name) =>
-                    session.shadows.get(session.keyOf(name))?.text ??
-                    session.standIn(name),
+                    name === session.opened
+                        ? session.sessionConfig()
+                        : (session.shadowAt(name)?.text ??
+                          session.standIn(name)),
                 fileExists: (name) =>
-                    session.shadows.has(session.keyOf(name)) ||
+                    name === session.opened ||
+                    session.shadowAt(name) !== undefined ||
                     session.standIn(name) !== undefined
                         ? true
                         : undefined,
@@ -183,6 +294,7 @@ export class TypeSession {
         // nobody's listing — so the checker never read it and the refusal below blamed the app's
         // tsconfig for a path this class had mangled.
         const here = this.keyOf(directory)
+        this.listed.add(here)
         const mine: string[] = []
         // The key is the checker's where it is registered, so only the incoming directory needs
         // keying — one `toPath` a call rather than one a shadow.
@@ -241,6 +353,7 @@ export class TypeSession {
      * checker is not told what was under it.
      */
     edited(paths: string[] | undefined): void {
+        this.routes = undefined
         if (paths === undefined) {
             this.everything = true
             return
@@ -265,10 +378,17 @@ export class TypeSession {
                     }
                 continue
             }
-            if (directory) this.everything = true
+            // A FILE IN A DIRECTORY THE CHECKER HAS NEVER LISTED is a directory move the watcher
+            // reported as the file alone — a save that creates `late/` and the page in it
+            // at once — and the listing it already holds of the parent does not have it.
+            if (directory || !this.listed.has(this.keyOf(dirname(path))))
+                this.everything = true
             else this.edits.present.push(path)
         }
     }
+
+    /** Every directory the checker has asked this session to list (`entriesIn`). */
+    private listed = new Set<string>()
 
     /**
      * ONE SNAPSHOT TAKES EVERY EDIT WITH IT: the shadows written for it and whatever moved on disk.
@@ -282,15 +402,21 @@ export class TypeSession {
         this.edits = { present: [], deleted: [] }
         this.everything = false
         this.snapshots += 1
+        // AN EDIT NOBODY COULD NAME DROPS THE CACHE, and the files created with it are still named
+        // after it: a dropped cache re-reads what the project already listed, and a shadow written
+        // for a page in a directory it never listed is not among them.
+        if (everything)
+            await this.api.updateSnapshot({
+                openProjects: [this.opened],
+                fileChanges: { invalidateAll: true },
+            })
         const snapshot = await this.api.updateSnapshot({
-            openProjects: [this.tsconfig],
-            fileChanges: everything
-                ? { invalidateAll: true }
-                : {
-                      created: [...created, ...edits.present],
-                      changed: [...changed, ...edits.present],
-                      deleted: edits.deleted,
-                  },
+            openProjects: [this.opened],
+            fileChanges: {
+                created: [...created, ...edits.present],
+                changed: [...changed, ...edits.present],
+                deleted: edits.deleted,
+            },
         })
         this.latest = snapshot.getProjects()[0]
         return this.latest
@@ -354,6 +480,15 @@ export class TypeSession {
     }
 
     /**
+     * Where the checker holds a `.abide`'s projection, once `readsFor` has registered it.
+     *
+     * 19.15 — what a `<script server>` exports is read off it as a `.ts` module's exports are.
+     */
+    projectionOf(abidePath: string): string {
+        return `${this.canonical(abidePath)}${SHADOW_SUFFIX}`
+    }
+
+    /**
      * A file the checker reads out of `shadows`, reported to the next snapshot only when it is new,
      * its text moved, or a stand-in answered for it until now.
      */
@@ -399,6 +534,7 @@ export class TypeSession {
     async readsFor(
         sources: readonly (Pick<ParsedSource, 'path' | 'file'> & {
             text?: string
+            position?: string | undefined
         })[],
     ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
         const answered = await this.classify(sources)
@@ -421,6 +557,7 @@ export class TypeSession {
     private async classify(
         sources: readonly (Pick<ParsedSource, 'path' | 'file'> & {
             text?: string
+            position?: string | undefined
         })[],
     ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
         const warnings: Diagnosis[] = []
@@ -443,8 +580,14 @@ export class TypeSession {
             // that scope on both sides. The projection holds both from offset 0.
             const scripts = projection.text.slice(0, projection.scripts.end)
             // A TEMPLATE POSITION IS A QUESTION TOO (14.2): a file that declares nothing but
-            // writes `{format(total)}` has a position only the checker can prove static.
-            if (!DECLARES.test(scripts) && projection.slots.size === 0) {
+            // writes `{format(total)}` has a position only the checker can prove static. And a
+            // `<script server>` always is (19.15): what it exports is read off this shadow, a bare
+            // `export { touch } from …` included.
+            if (
+                !DECLARES.test(scripts) &&
+                projection.slots.size === 0 &&
+                source.file.servers.length === 0
+            ) {
                 queries.push(undefined)
                 continue
             }
@@ -463,11 +606,19 @@ export class TypeSession {
             // AN UNCHANGED SHADOW IS NOT REPORTED, which is what a kept session saves on a save:
             // the one page that moved is re-read rather than all of them.
             this.register(map.shadowPath, projection.text, created, changed)
+            if (
+                placeOf(this.belowRoot(source.path)) === 'dependency' &&
+                !this.outside.has(map.shadowPath)
+            ) {
+                this.outside.add(map.shadowPath)
+                changed.push(this.opened)
+            }
             queries.push({
                 map,
                 spans: {
                     scriptsEnd: projection.scripts.end,
                     modules: projection.modules,
+                    servers: projection.servers,
                     scripts: projection.scripts,
                     positions: projection.positions,
                 },
@@ -504,7 +655,8 @@ export class TypeSession {
                     sourceFile,
                     query.map.shadowPath,
                     query.spans,
-                    source.path,
+                    // 23.19 — a mounted page's route is its position's.
+                    source.position ?? this.belowRoot(source.path),
                     source.file,
                 )
                 answers[at] = read.answer
@@ -634,7 +786,10 @@ export class TypeSession {
      * reported at its line — `abide check` emits the rest of the app without them.
      */
     async diagnose(
-        sources: (Omit<ReadSource, 'quiet'> & { quiet?: boolean })[],
+        sources: (Omit<ReadSource, 'quiet' | 'position'> & {
+            quiet?: boolean
+            position?: string | undefined
+        })[],
         within: string,
         scripts = true,
     ): Promise<{ diagnoses: Diagnosis[]; refused: Set<string> }> {
@@ -667,9 +822,11 @@ export class TypeSession {
         // 30.26 — THE APP'S ROUTE TABLE, which `url`'s literal is held to: every page under the
         // root, declared into abide's own `Routes`. A module rather than a script, since only a
         // module augments one.
+        if (this.routes?.within !== within)
+            this.routes = { within, declaration: routesDeclaration(within) }
         this.register(
             `${this.canonical(within)}/${ROUTES_DECLARATION}`,
-            routesDeclaration(within),
+            this.routes.declaration,
             created,
             changed,
         )
@@ -750,9 +907,57 @@ export class TypeSession {
     }
 
     /**
+     * Where the author's `offset` in a `.abide` stands in what the checker reads, and the program
+     * `diagnose` last lowered it to — or `undefined` where `text` is not what was lowered.
+     */
+    private askedAt(
+        path: string,
+        text: string,
+        offset: number,
+    ):
+        | { project: Project; asked: { path: string; position: number } }
+        | undefined {
+        const lowered = this.loweredForInspect.get(this.keyOf(path))
+        const project = this.latest
+        if (
+            lowered === undefined ||
+            lowered.text !== text ||
+            project === undefined
+        )
+            return undefined
+        const asked = lowered.map.fromSource(offset)
+        if (asked === undefined || !this.shadows.has(this.keyOf(asked.path)))
+            return undefined
+        return { project, asked }
+    }
+
+    /**
+     * The members that may be written at `offset` in a `.abide`, or `undefined` where none can be.
+     *
+     * 38.98 — ASKED WHERE A HOVER IS (`askedAt`), so `config().` offers the fields 27.13 declared and
+     * a name read by name offers its value's members (31.1). MEMBERS ALONE: at an identifier the
+     * API rejects ("completion list needs auto imports"), which the language server answers as
+     * nothing offered.
+     */
+    async complete(
+        path: string,
+        text: string,
+        offset: number,
+        triggerCharacter?: string,
+    ): Promise<CompletionInfo | undefined> {
+        const at = this.askedAt(path, text, offset)
+        if (at === undefined) return undefined
+        return at.project.checker.getCompletionsAtPosition(
+            at.asked.path,
+            at.asked.position,
+            { triggerCharacter },
+        )
+    }
+
+    /**
      * The hover signature, documentation and definitions of the name at `offset` in a `.abide`.
      *
-     * 38.40 — WHAT THE NAME AT `offset` IN A `.abide` IS, asked of the program `diagnose` last lowered
+     * 38.39 — WHAT THE NAME AT `offset` IN A `.abide` IS, asked of the program `diagnose` last lowered
      * it to: its type and documentation for a hover, and where it is declared for a jump. The
      * checked module is asked where the position was copied into it, which is what a member hangs
      * off — `regions.join` is `Array`'s — and the projection where the lowering rewrote it, so a
@@ -767,17 +972,9 @@ export class TypeSession {
         text: string,
         offset: number,
     ): Promise<Inspection | undefined> {
-        const lowered = this.loweredForInspect.get(this.keyOf(path))
-        const project = this.latest
-        if (
-            lowered === undefined ||
-            lowered.text !== text ||
-            project === undefined
-        )
-            return undefined
-        const asked = lowered.map.fromSource(offset)
-        if (asked === undefined || !this.shadows.has(this.keyOf(asked.path)))
-            return undefined
+        const at = this.askedAt(path, text, offset)
+        if (at === undefined) return undefined
+        const { project, asked } = at
         const checker = project.checker
         const found = await checker.getSymbolAtPosition(
             asked.path,
@@ -888,43 +1085,41 @@ export class TypeSession {
 }
 
 const AMBIENT = 'abide-check.d.ts'
+
+// What the checker asks for when it resolves an import of `x.abide` (`standIn`).
+const DECLARATION_SUFFIX = '.abide.d.ts'
+// Beside the app's tsconfig, so `extends` and every path in it resolve as they would from there.
+const SESSION_CONFIG = 'tsconfig.abide-session.json'
+const EXPORTED_DECLARATION_SUFFIX = '.d.abide.ts'
+
+function isFile(path: string): boolean {
+    try {
+        return statSync(path).isFile()
+    } catch {
+        return false
+    }
+}
 const ROUTES_DECLARATION = 'abide-routes.d.ts'
 const URL_SOURCE = Bun.fileURLToPath(new URL('../shared/url', import.meta.url))
 
-/** 30.26 — every page under `root` as a key of abide's `Routes`, or nothing where it has none. */
+/**
+ * 30.26 — every page under `root`, and every public file's address, as a key of abide's `Routes`, or
+ * nothing where it has neither.
+ */
 function routesDeclaration(root: string): string {
     const routes = new Set<string>()
-    routesUnder(root, '', routes)
+    // A refused tree is `checkApp`'s finding (38.33), never the checker's crash.
+    const { abide, published } = appFiles(root, () => {})
+    for (const path of abide)
+        if (fileKind(path) === 'page') routes.add(routeOf(path))
+    // 23.19 — and every page a mount places in the app, at its position.
+    for (const { position } of mountedUnder(root, abide))
+        if (fileKind(position) === 'page') routes.add(routeOf(position))
+    for (const address of published.values()) routes.add(address)
     let keys = ''
     for (const route of [...routes].sort())
         keys += `        ${JSON.stringify(route)}: true\n`
     return `export {}\ndeclare module ${JSON.stringify(URL_SOURCE)} {\n    interface Routes {\n${keys}    }\n}\n`
-}
-/**
- * The routes of the pages under `directory`, added to `routes`.
- *
- * A WALK RATHER THAN A GLOB, because it runs on every check and a glob descends `node_modules` and
- * the build before a filter can drop them — 15.6 ms against 5.7 from this repo's root, same pages.
- */
-function routesUnder(
-    directory: string,
-    relative: string,
-    routes: Set<string>,
-): void {
-    let entries: Dirent[]
-    try {
-        entries = readdirSync(directory, { withFileTypes: true })
-    } catch {
-        return
-    }
-    for (const entry of entries) {
-        if (entry.name.startsWith('.') || entry.name === 'node_modules')
-            continue
-        const path = `${relative}${entry.name}`
-        if (entry.isDirectory())
-            routesUnder(join(directory, entry.name), `${path}/`, routes)
-        else if (fileKind(path) === 'page') routes.add(routeOf(path))
-    }
 }
 const AMBIENT_DECLARATIONS = `declare module '*.css' {}
 `
@@ -946,7 +1141,7 @@ export type Diagnosis = {
 /**
  * Where something is in a file the author wrote, line and column from 1.
  *
- * 38.40.
+ * 38.39.
  */
 export type Place = {
     path: string
@@ -957,7 +1152,7 @@ export type Place = {
 /**
  * The name under a cursor: how it is declared, what its doc comment says, and where.
  *
- * 38.40.
+ * 38.39.
  */
 export type Inspection = {
     signature: string

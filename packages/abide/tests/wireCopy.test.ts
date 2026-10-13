@@ -7,7 +7,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { flushSync, invalidate, watch } from '#shared'
 import { rowKeyOf } from '#ui/rowKeyOf.ts'
 import { wire } from '#ui/wire.ts'
-import { appFixture, buildApp } from './builtApp.ts'
+import { appFixture, buildApp, builtFiles } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 // Reaching a copy starts its load and its follow: answered here, and a socket that never opens, for
@@ -75,14 +75,15 @@ export const change = POST(() => undefined)
 // `optioned` loses its — the plain handler's are the `GET`'s own (16.6).
 test('the build writes what a GET declares for its copy into the wrapper, and no more', async () => {
     const app = appFixture({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/library.ts': LIBRARY,
+        'page.abide': '<main>home</main>',
+        'library/library.abide': `<script server>
+${LIBRARY}</script>
+`,
     })
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
-    const wrapper = await Bun.file(
-        `${app}/.abide/wire/server/rpc/library.ts`,
-    ).text()
+    const wrapper =
+        (await builtFiles(app))['library/library.abide']?.client ?? ''
     const line = (name: string): string =>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
         ''
@@ -91,7 +92,7 @@ test('the build writes what a GET declares for its copy into the wrapper, and no
     )
     expect(line('inline')).toContain('{"by":"isbn"}')
     expect(line('optioned')).toContain('{"by":"isbn"}')
-    // Functions have no serialisation, a plain handler declares nothing, and a mutation walks nothing.
+    // Functions have no serialization, a plain handler declares nothing, and a mutation walks nothing.
     for (const name of ['computed', 'plain', 'change'])
         expect(line(name)).not.toContain('{"')
     // …and a function form is the server's by design, which is nothing to warn on (18.15).
@@ -102,8 +103,9 @@ test('the build writes what a GET declares for its copy into the wrapper, and no
 // `named` and `handed` are written without a record, and nothing warns on `grown`.
 test('an option bound to a const carries its literal, and one the build cannot read is warned on', async () => {
     const app = appFixture({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/named.ts': `import { GET, reactive } from '@abide/abide/server'
+        'page.abide': '<main>home</main>',
+        'named/named.abide': `<script server>
+import { GET, reactive } from '@abide/abide/server'
 
 const KEY = 'isbn'
 const TAGS = ['shelf', 'named'] as const
@@ -116,20 +118,17 @@ export const named = GET(
 )
 export const handed = GET(reactive(() => [{ isbn: '1' }], OPTIONS))
 export const unread = GET(reactive(() => [{ isbn: '1' }], { by: grown }))
+</script>
 `,
     })
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
-    const wrapper = await Bun.file(
-        `${app}/.abide/wire/server/rpc/named.ts`,
-    ).text()
+    const wrapper = (await builtFiles(app))['named/named.abide']?.client ?? ''
     const line = (name: string): string =>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
         ''
     for (const name of ['named', 'handed'])
-        expect(line(name)).toContain(
-            '{"by":"isbn","tags":["shelf","named"]}',
-        )
+        expect(line(name)).toContain('{"by":"isbn","tags":["shelf","named"]}')
     expect(line('unread')).not.toContain('{"')
     expect(built.stderr).toContain('`by: grown`')
     expect(built.stderr).toContain('RULEBOOK 18.15')
@@ -138,7 +137,7 @@ export const unread = GET(reactive(() => [{ isbn: '1' }], { by: grown }))
 // 32.32 — THE KEY. THE REVERT: build the copy without its record in `wire`; the list over it is
 // positional, and the key it hands back for a row is its index.
 test('a copy the wrapper keys is what a {#for} over it keys by', () => {
-    const books = wire('GET', '/__abide/rpc/library/keyed', {
+    const books = wire('GET', '/library/keyed', {
         by: 'id',
     }) as (args?: unknown) => unknown
     const key = rowKeyOf(books(), (_item, at) => at)
@@ -149,7 +148,7 @@ test('a copy the wrapper keys is what a {#for} over it keys by', () => {
 // `tags` from `copyOptions`; the selection matches nothing and 0 loads are made where 1 is due.
 test('a selection by the tags a GET declares reaches its copy', async () => {
     answer = { body: ['dune'], life: 'private, no-store' }
-    const tagged = wire('GET', '/__abide/rpc/library/tagged', {
+    const tagged = wire('GET', '/library/tagged', {
         tags: ['shelf'],
     }) as (args?: unknown) => (() => unknown) & PromiseLike<unknown>
     await tagged()
@@ -164,7 +163,7 @@ test('a selection by the tags a GET declares reaches its copy', async () => {
 // compare calls every parse new, and the reader is woken 1 time where 0 are due.
 test('a copy compared structurally wakes nobody for a load that answers the same', async () => {
     answer = { body: [{ id: 'dune' }], life: 'private, no-store' }
-    const shelf = wire('GET', '/__abide/rpc/library/compared', {
+    const shelf = wire('GET', '/library/compared', {
         identity: 'structural',
     }) as (args?: unknown) => (() => unknown) & {
         refresh(): void
@@ -189,7 +188,7 @@ test('a copy compared structurally wakes nobody for a load that answers the same
 // good and 0 loads are made where 1 is due.
 test('a copy goes stale when the max-age its answer carried runs out', async () => {
     answer = { body: ['fresh'], life: 'private, max-age=1' }
-    const timed = wire('GET', '/__abide/rpc/library/timed') as (
+    const timed = wire('GET', '/library/timed') as (
         args?: unknown,
     ) => (() => unknown) & PromiseLike<unknown>
     await timed()
@@ -206,7 +205,7 @@ test('a copy goes stale when the max-age its answer carried runs out', async () 
 // served for good and 0 loads are made where 1 is due.
 test('a copy answered max-age=0 is stale at once', async () => {
     answer = { body: ['last'], life: 'private, max-age=0' }
-    const ending = wire('GET', '/__abide/rpc/library/ending') as (
+    const ending = wire('GET', '/library/ending') as (
         args?: unknown,
     ) => (() => unknown) & PromiseLike<unknown>
     await ending()
@@ -220,7 +219,7 @@ test('a copy answered max-age=0 is stale at once', async () => {
 // value it was dropping. THE REVERT: leave `cache` out of `rpcRequest`'s init; this reads `undefined`.
 test('a copy asks past the HTTP cache', async () => {
     answer = { body: ['fresh'], life: 'private, max-age=60' }
-    const cached = wire('GET', '/__abide/rpc/library/cached') as (
+    const cached = wire('GET', '/library/cached') as (
         args?: unknown,
     ) => (() => unknown) & PromiseLike<unknown>
     await cached()
@@ -233,20 +232,20 @@ test('a copy asks past the HTTP cache', async () => {
 // wrapper line carries `"names"`.
 test("the build writes a handler's parameter defaults into its wrapper, and refuses one it cannot read", async () => {
     const app = appFixture({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/paged.ts': `import { GET, POST, reactive } from '@abide/abide/server'
+        'page.abide': '<main>home</main>',
+        'paged/paged.abide': `<script server>
+import { GET, POST, reactive } from '@abide/abide/server'
 
 export const list = GET(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
 export const kept = GET(reactive(({ size = 20 }: { size?: number }) => size, { by: 'id' }))
 export const save = POST(async ({ draft = true }: { draft?: boolean }) => draft)
 export const plain = GET(async ({ id }: { id: string }) => id)
+</script>
 `,
     })
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
-    const wrapper = await Bun.file(
-        `${app}/.abide/wire/server/rpc/paged.ts`,
-    ).text()
+    const wrapper = (await builtFiles(app))['paged/paged.abide']?.client ?? ''
     const line = (name: string): string =>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
         ''
@@ -260,11 +259,13 @@ export const plain = GET(async ({ id }: { id: string }) => id)
     expect(line('plain')).not.toContain('"names"')
 
     const refused = appFixture({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/paged.ts': `import { GET } from '@abide/abide/server'
+        'page.abide': '<main>home</main>',
+        'paged/paged.abide': `<script server>
+import { GET } from '@abide/abide/server'
 
 const PAGE_SIZE = 20
 export const list = GET(async ({ size = PAGE_SIZE }: { size?: number }) => size)
+</script>
 `,
     })
     const stopped = await buildApp(refused)
@@ -278,7 +279,7 @@ export const list = GET(async ({ size = PAGE_SIZE }: { size?: number }) => size)
 // `declareDefaults` in `wire`; 2 loads are made where 1 is due.
 test("a copy keys a call leaving a member to the handler's default with one that wrote it", async () => {
     answer = { body: ['one'], life: 'private, no-store' }
-    const paged = wire('GET', '/__abide/rpc/paged/list', undefined, {
+    const paged = wire('GET', '/paged/list', undefined, {
         names: ['page'],
         values: [1],
     }) as (args?: unknown) => (() => unknown) & PromiseLike<unknown>
@@ -286,4 +287,23 @@ test("a copy keys a call leaving a member to the handler's default with one that
     await paged({})
     await paged({ page: 1 })
     expect(`loads: ${loads - before}`).toBe('loads: 1')
+})
+
+// 30.3, 30.19, 15.8 — A PATH PARAMETER NO ADDRESS CAN CARRY IS REFUSED AS ITS ARGS, 422, and nothing
+// is fetched: the call has no address to be made at. THE REVERT: throw a plain `Error` from
+// `rpcRequest`'s path; the copy holds that `Error`, not a `ValidationError`.
+test('a call whose path parameter has no spelling is a ValidationError, and fetches nothing', async () => {
+    const thread = wire('GET', '/comments/[id]/list') as (args?: unknown) => {
+        error(): unknown
+    } & PromiseLike<unknown>
+    const before = loads
+    for (const id of ['', '..', undefined]) {
+        const refused = thread({ id })
+        await Promise.resolve(refused).catch(() => {})
+        const error = refused.error() as { name?: string; status?: number }
+        expect(`${id}: ${error?.name} ${error?.status}`).toBe(
+            `${id}: ValidationError 422`,
+        )
+    }
+    expect(loads - before).toBe(0)
 })

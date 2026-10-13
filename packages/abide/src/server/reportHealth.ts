@@ -9,7 +9,7 @@ import { isRecord } from '#shared/isRecord.ts'
 import { namedLogger } from '#shared/log.ts'
 import abidePackage from '../../package.json' with { type: 'json' }
 import { appIdentity, config } from './config.ts'
-import { HOOKS } from './hooks.ts'
+import { HOOKS, inOrder } from './hooks.ts'
 
 const HEALTH_LOG = namedLogger('abide:health')
 
@@ -23,7 +23,7 @@ export async function reportHealth(): Promise<Health> {
         abide: abidePackage.version,
         startedAt: STARTED_AT,
     }
-    for (const report of HOOKS.health) {
+    for (const report of inOrder(HOOKS.health)) {
         let answered: unknown
         try {
             answered = await report()

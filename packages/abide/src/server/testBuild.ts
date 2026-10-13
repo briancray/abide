@@ -7,11 +7,8 @@
 import { mkdir, rename, rm, utimes, writeFile } from 'node:fs/promises' // bun exposes no directory creation, rename, removal, mtime write or exclusive create of its own
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
 import { namesUnder } from './namesUnder.ts'
+import { runBuild } from './runBuild.ts'
 
-// The CLI, spawned rather than imported: the compiler is not reachable from the server seam.
-const ABIDE_BIN = Bun.fileURLToPath(
-    new URL('../../bin/abide.ts', import.meta.url),
-)
 // The framework's own source is part of what made a build: a compiler change is a new build.
 const FRAMEWORK = Bun.fileURLToPath(new URL('../..', import.meta.url))
 const POLL_MS = 50
@@ -93,21 +90,6 @@ async function buildInto(
         if (await isDirectory(out)) return
         throw thrown
     }
-}
-
-async function runBuild(root: string, out: string): Promise<void> {
-    const child = Bun.spawn(
-        [process.execPath, ABIDE_BIN, 'build', '--root', root, '--out', out],
-        { stdout: 'ignore', stderr: 'pipe' },
-    )
-    const [exitCode, said] = await Promise.all([
-        child.exited,
-        new Response(child.stderr).text(),
-    ])
-    if (exitCode !== 0)
-        throw new Error(
-            `abide: createApp could not build the app under ${root} for this test run.\n${said}`,
-        )
 }
 
 /**

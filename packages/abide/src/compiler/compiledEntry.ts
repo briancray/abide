@@ -1,8 +1,14 @@
+import { tablePath } from '#server/abideModules.ts'
 import type { AppPackage } from '#server/config.ts'
-import type { LauncherOptions } from '#server/launcherOptions.ts'
+import type { SourceMaps } from '#server/installSourceMaps.ts'
+import { SERVER_TABLE } from '#server/TABLES.ts'
 import abidePackage from '../../package.json' with { type: 'json' }
 
-// What the executable starts from: `abide compile`'s, and `abide bundle`'s window over it (38.71).
+// What the executable starts from: `abide compile`'s, and `abide bundle`'s window over it (38.70).
+const INSTALL_SOURCE_MAPS = Bun.fileURLToPath(
+    new URL('../server/installSourceMaps.ts', import.meta.url),
+)
+
 const RUNNERS = {
     compiled: {
         name: 'runCompiled',
@@ -22,7 +28,7 @@ const PACKAGE = Bun.fileURLToPath(new URL('../../', import.meta.url))
 /**
  * Abide's own package entries, by the specifier an app imports each with, to the module behind it.
  *
- * 38.57 — the compiler is not among them: the executable does not hold it.
+ * 38.56 — the compiler is not among them: the executable does not hold it.
  */
 function abideEntries(): Map<string, string> {
     const specifiers = new Map<string, string>()
@@ -41,8 +47,8 @@ function abideEntries(): Map<string, string> {
 /**
  * The source of the module a compiled app starts from, written into the build beside `server.ts`.
  *
- * 38.11 — every part `runCompiled` boots over, named by a static import the bundler follows into
- * the executable. 38.45 — NOTHING IN IT IS FOUND AT RUN TIME — a file this module does not name is
+ * 38.10 — every part `runCompiled` boots over, named by a static import the bundler follows into
+ * the executable. 38.44 — NOTHING IN IT IS FOUND AT RUN TIME — a file this module does not name is
  * a file the executable does not hold, which is what makes the artifact a property of the build
  * rather than of the machine it lands on.
  *
@@ -52,24 +58,25 @@ function abideEntries(): Map<string, string> {
  */
 export function compiledEntry(app: {
     /**
-     * 38.71 — what `abide bundle` read out of `src/bundle/`, and `launch` the path of its
-     * `launch.abide`; `undefined` for `abide compile`.
+     * 38.70 — what `abide bundle` read of the launcher's files: `launch` the path of its
+     * `launcher.abide`, and `custom` whether that file has markup of its own; `undefined` for
+     * `abide compile`.
      */
     desktop:
         | {
-              options: LauncherOptions
               launch: string | undefined
-              shell: string
+              custom: boolean
+              document: string
+              icon: string | undefined
+              accent: string | undefined
           }
         | undefined
-    out: string
-    /** 37.1 — `src/server/app.ts`, where the app has one. */
-    hooks: string | undefined
+    /** The app's root, below which the server's table is served (`abideModules`). */
+    root: string
+    /** 38.97 — each server module's map, by the `.abide` it is served at. */
+    sourceMaps: SourceMaps
     package: AppPackage
-    shell: string
     manifest: unknown
-    /** 16.2 — each handler's source path as its row names it, to the file. */
-    handlerModules: Map<string, string>
     /** Every file under the build's `client/`, by name to the file. */
     client: Map<string, string>
     /** Every file under the build's `public/`, by name to the file. */
@@ -77,8 +84,8 @@ export function compiledEntry(app: {
 }): string {
     const runner = RUNNERS[app.desktop === undefined ? 'compiled' : 'desktop']
     let imports = `import { ${runner.name} } from ${JSON.stringify(runner.path)}
-import * as table from ${JSON.stringify(`${app.out}/server.ts`)}
-import { handlers } from ${JSON.stringify(`${app.out}/rpc.ts`)}
+import { installSourceMaps } from ${JSON.stringify(INSTALL_SOURCE_MAPS)}
+import * as table from ${JSON.stringify(tablePath(app.root, SERVER_TABLE))}
 `
     const files = (kind: string, paths: Map<string, string>): string => {
         let entries = ''
@@ -92,49 +99,46 @@ import { handlers } from ${JSON.stringify(`${app.out}/rpc.ts`)}
     }
     const client = files('client', app.client)
     const published = files('published', app.published)
-    let modules = ''
-    for (const [source, path] of app.handlerModules)
-        modules += `\n    ${JSON.stringify(source)}: () => import(${JSON.stringify(path)}),`
-    // A handler module as a script names it: `#server/rpc/invoices`, with or without its extension.
     let specifiers = ''
     for (const [specifier, path] of abideEntries())
         specifiers += `\n    ${JSON.stringify(specifier)}: () => import(${JSON.stringify(path)}),`
-    for (const source of app.handlerModules.keys())
-        for (const specifier of [
-            `#${source}`,
-            `#${source.replace(/\.ts$/, '')}`,
-        ])
-            specifiers += `\n    ${JSON.stringify(specifier)}: handlerModules[${JSON.stringify(source)}],`
-    const hooks =
-        app.hooks === undefined
-            ? 'undefined'
-            : `() => import(${JSON.stringify(app.hooks)})`
     const desktop =
         app.desktop === undefined
             ? ''
             : `
     {
-        options: ${JSON.stringify(app.desktop.options)},
+        custom: ${app.desktop.custom},
         launch: ${app.desktop.launch === undefined ? 'undefined' : `() => import(${JSON.stringify(app.desktop.launch)})`},
-        shell: ${JSON.stringify(app.desktop.shell)},
+        document: ${JSON.stringify(app.desktop.document)},
+        icon: ${JSON.stringify(app.desktop.icon)},
+        accent: ${JSON.stringify(app.desktop.accent)},
     },`
     return `// Written by \`abide compile\`. The whole app, as what one executable holds.
 ${imports}
-const handlerModules = {${modules}
-}
+// 38.56 — a file declaring handlers as a script names it through the app's one alias:
+// \`#src/invoices/page.abide\`, to the module its server block compiled into.
+const declared = {}
+for (const row of table.handlers) declared[\`#src/\${row.source}\`] = row.load
+
+// 38.97 — before anything runs, a script \`run\` included: the executable's frames name each
+// \`.abide\` as it was bundled.
+installSourceMaps(${JSON.stringify(app.sourceMaps)}, undefined)
 
 await ${runner.name}(
-    { hooks: ${hooks}, package: ${JSON.stringify(app.package)} },
+    // 37.1 — every server block, imported before the boot.
+    {
+        hooks: () => Promise.all(table.servers.map((load) => load())),
+        package: ${JSON.stringify(app.package)},
+    },
     {
         table,
-        handlers,
-        handlerModule: (source) => handlerModules[source](),
-        shell: ${JSON.stringify(app.shell)},
+        handlers: table.handlers,
         manifest: ${JSON.stringify(app.manifest)},
         client: ${client},
         published: ${published},
     },
     {${specifiers}
+        ...declared,
     },${desktop}
 )
 `

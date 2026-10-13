@@ -5,8 +5,9 @@
 //
 // ONLY ARRAYS AND PLAIN OBJECTS ARE WRAPPED. A `Map`, a `Set` or a class instance keeps internal
 // slots a proxy cannot stand in for — `Map.prototype.set` refuses a proxy as its receiver — so one
-// reached is marked written the moment it is read, path and all. That over-reports, and an
-// over-report costs a row remade where an under-report shows a stale one.
+// reached is marked written the moment it is read, path and all, and each object a `Map` or a `Set`
+// hands out is marked as it leaves (`heldView`). That over-reports, and an over-report costs a row
+// remade where an under-report shows a stale one.
 //
 // 18.11 — AND WHERE A SINK IS HANDED IN, each write is kept as data too, as JSON Patch (RFC 6902) at
 // the JSON Pointer it was reached by: a member set is `add`, an index `replace` (or `add` one past
@@ -49,7 +50,15 @@ export function recordWrites<Value>(
     sink?: { ops: PatchOp[]; lost: boolean },
 ): void {
     if (!isWrappable(root)) {
-        mutate(root)
+        // A root no proxy can stand in for is written as a whole: what the callback reads out of it
+        // reaches the rows that show it with no proxy to say so.
+        if (root === null || typeof root !== 'object') {
+            mutate(root)
+            return
+        }
+        PATCHES.epoch += 1
+        PATCHES.written.set(root, PATCHES.epoch)
+        mutate(heldView(root, PATCHES.epoch) as Value)
         return
     }
     PATCHES.epoch += 1
@@ -217,9 +226,10 @@ export function recordWrites<Value>(
             }
             if (entry.proxy !== null) return entry.proxy
             mark(value)
+            entry.view ??= heldView(value, epoch)
             // Reached, and outside what a proxy can watch: whatever it does next is not kept.
             if (sink !== undefined) sink.lost = true
-            return value
+            return entry.view
         },
         set(held, property, value) {
             mark(held)
@@ -363,7 +373,7 @@ function pointerOf(path: (string | number)[]): string {
 /**
  * The JSON Patch an array method makes, read off the array BEFORE it runs.
  *
- * A `splice`'s start and count are normalised the way the method does, so the `remove`s and `add`s
+ * A `splice`'s start and count are normalized the way the method does, so the `remove`s and `add`s
  * name the indices it touches.
  */
 function opsOfCall(
@@ -421,10 +431,13 @@ class Reached {
      * Written in this patch, directly or below — `PATCHES.written` holds this patch's epoch for it.
      */
     marked: boolean
+    /** What one no proxy can stand in for is handed out as: `heldView` of it. */
+    view: object | undefined
     constructor(proxy: object | null, parent: object | Parents | null) {
         this.proxy = proxy
         this.parent = parent
         this.marked = false
+        this.view = undefined
     }
 }
 
@@ -461,6 +474,91 @@ class Parents {
     constructor(all: object[]) {
         this.all = all
     }
+}
+
+/**
+ * `container` as the callback is handed it: a `Map` or a `Set` that marks written each object key,
+ * value or member it hands out, and anything else as it is.
+ *
+ * A row over `[...map.values()]` reads one of them, and a write the callback makes to it through
+ * `map.get(id)` reaches it with nothing on the way to record it — so each one taken out is taken as
+ * written. AS IT LEAVES rather than all of them up front, which would make a patch of one entry cost
+ * the whole container. One level down: a row reads its item.
+ */
+function heldView(container: object, epoch: number): object {
+    if (!(container instanceof Map) && !(container instanceof Set))
+        return container
+    return new Proxy(container, new HeldHandler(epoch))
+}
+
+// `Map`'s and `Set`'s own methods run on the container itself, which is the receiver their internal
+// slots answer to; the ones that hand an object out mark it first.
+class HeldHandler {
+    epoch: number
+    constructor(epoch: number) {
+        this.epoch = epoch
+    }
+    get(
+        held: Map<unknown, unknown> | Set<unknown>,
+        property: string | symbol,
+    ): unknown {
+        if (property === TARGET) return held
+        const value = Reflect.get(held, property, held)
+        if (typeof value !== 'function') return value
+        const epoch = this.epoch
+        if (property === 'get')
+            return (key: unknown) =>
+                markedOut((held as Map<unknown, unknown>).get(key), epoch)
+        if (property === 'forEach')
+            return (
+                each: (value: unknown, key: unknown, set: unknown) => void,
+                self?: unknown,
+            ) => {
+                for (const [key, member] of held.entries())
+                    each.call(
+                        self,
+                        markedOut(member, epoch),
+                        markedOut(key, epoch),
+                        held,
+                    )
+            }
+        if (
+            property === 'values' ||
+            property === 'keys' ||
+            property === 'entries' ||
+            property === Symbol.iterator
+        )
+            // A Map's own iterator is its entries; a Set's is its values.
+            return () =>
+                markedEach(
+                    (value as () => Iterator<unknown>).call(held),
+                    property === 'entries' ||
+                        (property === Symbol.iterator && held instanceof Map),
+                    epoch,
+                )
+        return (value as (...args: unknown[]) => unknown).bind(held)
+    }
+}
+
+function* markedEach(
+    each: Iterator<unknown>,
+    pairs: boolean,
+    epoch: number,
+): Generator<unknown> {
+    for (let next = each.next(); next.done !== true; next = each.next()) {
+        if (pairs) {
+            const [key, value] = next.value as [unknown, unknown]
+            markedOut(key, epoch)
+            markedOut(value, epoch)
+        } else markedOut(next.value, epoch)
+        yield next.value
+    }
+}
+
+function markedOut<Value>(value: Value, epoch: number): Value {
+    if (typeof value === 'object' && value !== null)
+        PATCHES.written.set(value, epoch)
+    return value
 }
 
 /** Whether a proxy can stand in for `value`: an array or a plain object. */

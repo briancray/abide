@@ -12,7 +12,7 @@
 // the `load` an iframe fires when it is torn out, n per reorder against 0.
 //
 // PROBED, NOT VERSIONED. Where `moveBefore` is absent this is exactly the call the reconcile made
-// before it existed, so the fallback is today's behaviour rather than a degraded one. happy-dom
+// before it existed, so the fallback is today's behavior rather than a degraded one. happy-dom
 // does not implement it, which is why the gate for this belongs in the browser lane — see
 // `packages/harness/e2e`.
 const CAN_MOVE =

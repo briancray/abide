@@ -1,4 +1,4 @@
-// 38.71 — WHAT `abide bundle` WRITES, STARTED WITH NO COMMAND: a window on the app. Given a command
+// 38.70 — WHAT `abide bundle` WRITES, STARTED WITH NO COMMAND: a window on the app. Given a command
 // it is the executable `abide compile` writes (`runCompiled`), so a terminal still reaches every one.
 //
 // ONE PROCESS. The app, the launcher's own page and the window share it: AppKit's events are drained
@@ -25,18 +25,19 @@ import {
 import { APP_PACKAGE, configuredMount, dataDirectory } from './config.ts'
 import { configFields } from './configFields.ts'
 import { type App, type AppOrigin, bootApp } from './createApp.ts'
+import { executableName } from './executableName.ts'
 import { reportUnexpected } from './hooks.ts'
 import { installServer } from './installServer.ts'
-import type { LauncherOptions } from './launcherOptions.ts'
+import { launcherOf } from './launcherOptions.ts'
 import { type Launch, launcherPage } from './launcherPage.ts'
 import { installMenu, menuBar, type NativeItem } from './nativeMenu.ts'
 import { randomToken } from './randomToken.ts'
-import { type Component, render } from './render.ts'
+import { type Component, renderDocument } from './render.ts'
 import { LISTENING } from './requestScope.ts'
 import { runCompiled } from './runCompiled.ts'
 import { type BuildParts, builtSources } from './serveBuild.ts'
 
-/** What the launcher did last, and what its forms held, kept across launches. 38.74. */
+/** What the launcher did last, and what its forms held, kept across launches. 38.73. */
 type Remembered = {
     last: { start: Record<string, string> } | { connect: string } | null
     values: Record<string, string>
@@ -50,15 +51,22 @@ type Failure = {
     issues: Record<string, string[]>
 }
 
-/** What `abide bundle` read out of `src/bundle/`, carried in the executable. */
+/** What `abide bundle` read of the launcher's files, carried in the executable. */
 export type Desktop = {
-    options: LauncherOptions
-    /** 38.83 — `src/bundle/launch.abide`, where the app has one. */
+    /** 38.80 — `src/launcher.abide`, where the app has one: its `launcher`, and its page. */
     launch:
-        | (() => Promise<{ default: (props: Launch) => Component }>)
+        | (() => Promise<{
+              default: (props: Launch) => Component
+              launcher?: unknown
+          }>)
         | undefined
-    /** The document the launch page renders into, its stylesheet already in its head. */
-    shell: string
+    /** 38.82 — whether that file has markup of its own, which then stands in for the built-in page. */
+    custom: boolean
+    /** The document the launch page renders into, its stylesheet already in its head (38.84). */
+    document: string
+    /** 38.101 — the app's icon as a data URL, and the accent taken from it. */
+    icon: string | undefined
+    accent: string | undefined
 }
 
 const LOOPBACK = '127.0.0.1'
@@ -79,14 +87,24 @@ export async function runDesktop(
 async function launch(
     origin: AppOrigin,
     load: () => ReturnType<typeof builtSources>,
-    { options, launch: launchPage, shell }: Desktop,
+    { launch: launchModule, custom, document, icon, accent }: Desktop,
 ): Promise<void> {
     installServer()
     APP_PACKAGE.current = origin.package
     // 37.1 — imported for what it files, so the start form reads `onConfig`.
     await origin.hooks?.()
-    const appName =
-        options.name ?? (origin.package.name ?? 'app').replace(/^@[^/]+\//, '')
+    // 34.32 — the `launcher` export, read off its module as the app launches. 38.85 — one that fails
+    // to load leaves the built-in page, with its defaults.
+    const launcherModule = await launchModule?.().catch((thrown: unknown) => {
+        reportUnexpected(thrown)
+        return undefined
+    })
+    const options = launcherOf(launcherModule?.launcher)
+    // 38.81 — a `launcher` the checker would have refused, written where nothing checked it.
+    if (typeof options === 'string')
+        throw new Error(`abide: ${options}. RULEBOOK 38.81.`)
+    const launchPage = custom ? launcherModule : undefined
+    const appName = executableName(origin.package.name)
     const directory = dataDirectory(origin.package.name ?? 'app')
     const stateFile = `${directory}/desktop.json`
     const remembered: Remembered = {
@@ -149,21 +167,24 @@ async function launch(
                 )
                 return connected === undefined ? onwards() : page('connect')
             }
+            // The Connect… menu item asks for the page with its connect form open.
             return page(
                 url.searchParams.get('focus') === 'connect'
                     ? 'connect'
-                    : 'start',
+                    : undefined,
             )
         },
     })
     const base = `${launcher.url.origin}/${token}/`
-    // 38.72 — the answer to a start or a connect that took: the app the window now shows.
+    // 38.71 — the answer to a start or a connect that took: the app the window now shows.
     const onwards = (): Response =>
         new Response(null, {
             status: 303,
             headers: { location: current?.url ?? base },
         })
-    const page = async (focus: 'start' | 'connect'): Promise<Response> => {
+    const page = async (
+        focus: 'start' | 'connect' | undefined,
+    ): Promise<Response> => {
         const shown = failure
         failure = undefined
         const props: Launch = {
@@ -173,17 +194,21 @@ async function launch(
             fields: configFields(derived()),
             url: remembered.url,
             failure: shown,
-            focus: shown?.form ?? (options.start ? focus : 'connect'),
+            focus:
+                shown?.form ??
+                (focus === 'connect' && options.connect ? focus : undefined),
+            icon,
+            accent,
         }
         const headers = { 'content-type': 'text/html; charset=utf-8' }
         if (launchPage !== undefined)
             try {
                 return new Response(
-                    await render((await launchPage()).default(props), shell),
+                    await renderDocument(launchPage.default(props), document),
                     { headers },
                 )
             } catch (thrown) {
-                // 38.86 — the built-in page stands in for one that failed.
+                // 38.85 — the built-in page stands in for one that failed.
                 reportUnexpected(thrown)
             }
         return new Response(launcherPage(props), { headers })
@@ -196,7 +221,7 @@ async function launch(
             await leaving.app.stop().catch(reportUnexpected)
     }
 
-    // 38.73 — the form's values are the environment the app is booted under, so 27.8 coerces them
+    // 38.72 — the form's values are the environment the app is booted under, so 27.8 coerces them
     // and 27.7's schema refuses them as it would any other.
     async function start(
         values: Record<string, string>,
@@ -215,7 +240,7 @@ async function launch(
         }
         try {
             await app
-                // 38.76.
+                // 38.75.
                 .listen({ hostname: LOOPBACK, port: remembered.port })
                 // The port the last launch served on, so the app's origin — and its storage with
                 // it — is the one it had; any free one where that is taken.
@@ -296,7 +321,7 @@ async function launch(
                     types: 'Q@:@',
                     args: [FFIType.ptr],
                     returns: FFIType.u64,
-                    // NSTerminateCancel: 38.77 — the app is stopped first, and the process ends after.
+                    // NSTerminateCancel: 38.76 — the app is stopped first, and the process ends after.
                     run: () => {
                         quit()
                         return 0
@@ -382,20 +407,20 @@ async function launch(
         ),
         null,
     )
-    // 38.89 — THE MENU BAR IS THE PAGE'S: the defaults until the page the window loads tells it
+    // 38.88 — THE MENU BAR IS THE PAGE'S: the defaults until the page the window loads tells it
     // what its route exports, and again after every navigation it makes.
     const showMenu = (told: NativeItem[]): void =>
         installMenu(menuBar(appName, options.connect, told), (item) => {
             if (item.role === 'connect')
                 return navigate(`${base}?focus=connect`)
-            // 38.75.
+            // 38.74.
             if (item.role === 'disconnect') {
                 remembered.last = null
                 void remember()
                 return void disconnect().then(() => navigate(base))
             }
             if (item.role === 'reload') return void send(view, 'reload')
-            // 38.91, 38.92 — the page that numbered the item does what it means.
+            // 38.90, 38.91 — the page that numbered the item does what it means.
             if (item.id !== undefined)
                 send(
                     view,
@@ -433,7 +458,7 @@ async function launch(
         nsString('abideMenu'),
     )
     const navigate = (address: string): void => {
-        // 38.93.
+        // 38.92.
         showMenu([])
         send(
             view,
@@ -485,7 +510,7 @@ async function launch(
         send(window, 'setTitle:', nsString(title))
     }, DRAIN_MILLISECONDS)
 
-    // 38.74 — WHAT IT DID LAST, done again.
+    // 38.73 — WHAT IT DID LAST, done again.
     const last = remembered.last
     if (options.start && last !== null && 'start' in last)
         await start(last.start)

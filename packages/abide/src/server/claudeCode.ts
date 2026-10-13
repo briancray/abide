@@ -17,7 +17,6 @@ import {
 } from './assistant.ts'
 import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
 import {
-    bridgeOpened,
     mintCode,
     openTurn,
     pairedBridge,
@@ -110,11 +109,6 @@ function foldedPrompt(messages: AssistantMessage[]): string {
 
 /** The browser asking, which a pairing is to. 45.13. */
 function askingCaller(): string {
-    // 45.19 — the relay is closed until `ABIDE_BRIDGE` opens it, and using it closed is a mistake to name.
-    if (!bridgeOpened())
-        throw new Error(
-            'abide: claudeCode reaches a visitor’s Claude Code through the bridge relay, and ABIDE_BRIDGE has not opened it. RULEBOOK 45.19.',
-        )
     const caller = callerOf()
     if (caller === undefined)
         throw refuse(

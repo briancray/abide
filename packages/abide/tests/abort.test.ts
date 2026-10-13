@@ -36,7 +36,7 @@ function held() {
 // THE REVERT: end the load on the FIRST abort in `Attended.handleEvent` (drop the loop over
 // `signals`, `#shared/reactive/callLoad.ts`); the shared load ends while the second caller is still
 // waiting, and `busy` reports false here.
-test('a load two signalled calls share ends when both abort, not the first — 16.48', async () => {
+test('a load two signaled calls share ends when both abort, not the first — 16.48', async () => {
     const { rpc, releases } = held()
     const first = new AbortController()
     const second = new AbortController()
@@ -66,10 +66,10 @@ test('a load two signalled calls share ends when both abort, not the first — 1
 // handed a signal and is still waiting on it.
 test('a call with no signal keeps the load going whatever the others abort — 16.48', async () => {
     const { rpc, releases } = held()
-    const signalled = new AbortController()
-    const value = rpc({ id: '2' }, { signal: signalled.signal })
+    const signaled = new AbortController()
+    const value = rpc({ id: '2' }, { signal: signaled.signal })
     rpc({ id: '2' })
-    signalled.abort()
+    signaled.abort()
     flushSync()
     expect(value.busy()).toBe(true)
     releases[0]?.()

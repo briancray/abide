@@ -5,19 +5,27 @@
 import { existsSync, realpathSync } from 'node:fs' // bun exposes no sync existence check or realpath of its own
 import { mkdir, rename, rm } from 'node:fs/promises' // bun exposes no directory creation, rename or recursive directory removal of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
-import { brotliCompress, constants } from 'node:zlib' // bun has gzip and zstd of its own, and no brotli
-
+import { brotliCompress, constants } from 'node:zlib' // bun's brotli is `CompressionStream`, which compresses on the main thread — 1390 ms against this pool's 300 ms over the docs bundle
 import { checkApp } from '#compiler/checkApp.ts'
-import { compileApp } from '#compiler/compileApp.ts'
+import { type CompiledApp, compileApp, paints } from '#compiler/compileApp.ts'
 import { compiledEntry } from '#compiler/compiledEntry.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
+import { parseAbide } from '#compiler/parseAbide.ts'
 import { scaffold } from '#compiler/scaffold.ts'
 import { serveLanguage } from '#compiler/serveLanguage.ts'
+import { syncTypes } from '#compiler/syncTypes.ts'
+import {
+    abideModules,
+    type Compilation,
+    servedTable,
+    serverMapsOf,
+} from '#server/abideModules.ts'
 import { appPlugins } from '#server/appPlugins.ts'
 import { banner } from '#server/banner.ts'
 import { buildDirectory } from '#server/buildDirectory.ts'
 import {
     CLIENT_DIRECTORY,
+    COMPILATION,
     ENCODING_SUFFIX,
     MANIFEST,
     PUBLIC_DIRECTORY,
@@ -27,25 +35,21 @@ import {
     stylesheetUnderMount,
 } from '#server/clientBuildOptions.ts'
 import { type Given, type Host, runCommands } from '#server/commands.ts'
-import { componentImports } from '#server/componentImports.ts'
 import { type AppPackage, packageUnder } from '#server/config.ts'
-import {
-    appRoot,
-    createApp,
-    hooksModuleUnder,
-    originUnder,
-} from '#server/createApp.ts'
+import { appRoot, createApp, originUnder } from '#server/createApp.ts'
+import { executableName } from '#server/executableName.ts'
 import { fenceServer } from '#server/fenceServer.ts'
-import { launcherOptionsUnder } from '#server/launcherOptions.ts'
+import { iconAccent } from '#server/iconAccent.ts'
+import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#server/LAUNCHER_FILES.ts'
 import { manifestOf, NO_MANIFEST } from '#server/manifestOf.ts'
 import { namesUnder } from '#server/namesUnder.ts'
 import { refuseAddressCollision } from '#server/refuseAddressCollision.ts'
-import { shellUnder } from '#server/render.ts'
+import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
 import {
-    handlersIn,
     loadBuild,
     pathsUnder,
     serveApp,
+    serveBuild,
 } from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
 import { escapeText } from '#shared/escapeText.ts'
@@ -54,35 +58,50 @@ import { escapeText } from '#shared/escapeText.ts'
 type AppDirectories = { root: string; out: string }
 
 /**
- * `abide`'s host: the app on disk, found by `--root` (38.26), and every command that needs the
+ * `abide`'s host: the app on disk, found by `--root` (38.25), and every command that needs the
  * source and the compiler.
  */
 const DISK: Host = {
     name: 'abide',
+    // A BUILD ALREADY THERE, NEVER ONE MADE FOR THE ASKING: `call` and the shell are aimed at a
+    // running app (38.7), which this tree may not even be.
     handlers: async ({ values }) => {
         const app = directoriesOf(values)
-        return app !== undefined && existsSync(`${app.out}/rpc.ts`)
-            ? await handlersIn(app.out)
-            : []
+        if (
+            app === undefined ||
+            !(await serveBuild(app.root, app.out, async () => undefined))
+        )
+            return []
+        return (await servedTable(app.root)).handlers
     },
     appPackage: () => packageUnder(appRoot(undefined) ?? process.cwd()),
     boot: createApp,
-    serve: inApp(({ root, out }, { values: { port } }) =>
-        serveApp(
+    serve: inApp(async ({ root, out }, { values: { port } }) => {
+        if (!(await serveBuild(root, out, buildInProcess))) {
+            console.error(`abide start: nothing under ${root} to serve.`)
+            return 1
+        }
+        return serveApp(
             originUnder(root),
             () => loadBuild({ root, out }),
             port === undefined ? undefined : Number(port),
-        ),
-    ),
+        )
+    }),
     source: {
         scaffold: scaffoldCommand,
         dev: inApp(dev),
         build: inApp(build),
         check: inApp(check),
+        sync: inApp(sync),
         compile: inApp(compile),
         bundle: inApp(bundle),
         lsp,
     },
+}
+
+// 38.100 — what `serveBuild` builds an app nobody built with, in this process rather than a child.
+function buildInProcess(root: string, out: string): Promise<unknown> {
+    return writeBuild({ root, out })
 }
 
 /** `abide build`: compiles the app, bundles its client and copies its public files into `out`. */
@@ -91,57 +110,57 @@ async function build(directories: AppDirectories): Promise<number> {
     return 0
 }
 
-/** `build`'s work; answers whether there was anything under `root` to build. */
-async function writeBuild({ root, out }: AppDirectories): Promise<boolean> {
+/** `build`'s work; answers the app it built, or `undefined` where there was nothing under `root`. */
+async function writeBuild({
+    root,
+    out,
+}: AppDirectories): Promise<CompiledApp | undefined> {
     process.env.NODE_ENV ??= 'production'
-    // 38.67 — what this build may remove is only what was written before it began.
+    // 38.66 — what this build may remove is only what was written before it began.
     const began = Date.now()
+    // 38.100 — a build that fails leaves no build: the previous one's marker goes before anything
+    // can fail, so `abide start` builds again and says why rather than booting what is left.
+    const marker = `${out}/${COMPILATION}`
+    await rm(marker, { force: true })
     // `--out` is a real flag rather than a constant because two test files each building into
     // one `.abide/` is the contention CLAUDE.md's "checks" section already records once.
-    const app = await compileApp(root, out)
+    const app = await compileApp(root)
     for (const warning of app.warnings)
         console.warn(formatDiagnosis(warning, process.cwd()))
-    if (app.modules.size === 0) {
+    if (Object.keys(app.files).length === 0) {
         console.log(`abide build: no .abide sources or handlers under ${root}`)
-        return false
+        return undefined
     }
-    // WRITTEN TOGETHER. 175 modules for the docs app, each independent of the others, and one
-    // `await` a time made the emit a queue — the same reason `publicFilesAt` and the dev
-    // worker's own reads are one `Promise.all` each.
-    const writes: Promise<void>[] = []
-    for (const [name, text] of app.modules)
-        writes.push(writeWhole(`${out}/${name}`, text))
-    await Promise.all(writes)
-
-    // A MODULE WHOSE SOURCE IS GONE IS REMOVED, not left standing, or the output is the union of
-    // every build and a grep over it answers about code no build produces — the same class as the
-    // orphan chunks `bundleClient` prunes, one level up.
-    //
-    // PRUNED AGAINST WHAT WAS JUST WRITTEN rather than by emptying `out`: the directory is named
-    // by `--out` and a flag that deletes a tree is a different kind of thing from one that writes
-    // into it. `client/` holds `.js` and is pruned where it is built.
-    await pruneStale(out, '**/*.ts', app.modules, began)
-    // 36.11 — the path below the directory IS the address. `favicon.ico` answers at
-    // `/favicon.ico`, and nothing declares that anywhere.
-    const publicNames = namesUnder(`${root}/ui/${PUBLIC_DIRECTORY}`)
-    const publicAddresses = publicNames.map((name) => `/${name}`)
+    // 38.6 — THE COMPILATION, KEPT WHOLE: `abide start` serves every `.abide` out of it at the
+    // file's own path, with no compiler, and a module's imports resolve from the source they name.
+    const compilation: Compilation = { files: app.files, tables: app.tables }
+    // 36.11 — the directories above `public` and the path below it ARE the address.
+    // `src/public/favicon.ico` answers at `/favicon.ico`, and nothing declares that anywhere.
+    const publicAddresses = [...app.published.values()]
     // 36.13 IS CHECKED BEFORE A BYTE IS BUNDLED OR COPIED, through `refuseAddressCollision` — which
     // `abide dev` runs too. Checking it mid-copy left a partial output behind on the throw, and it
     // left the dev lane unchecked entirely.
-    refuseAddressCollision(app.routes, publicAddresses, 'abide build')
+    refuseAddressCollision(app.routes, app.mounts, app.published, 'abide build')
     await bundleClient(
+        root,
         out,
-        [fenceServer(root, app.modules), ...(await appPlugins(root))],
+        [
+            fenceServer(root),
+            abideModules(root, compilation),
+            ...(await appPlugins(root)),
+        ],
         publicAddresses,
         app.routes.length > 0,
         began,
     )
     // An app's static files are its own whether or not it has a page yet.
-    const published = await copyPublic(root, out, publicNames)
+    const copied = await copyPublic(root, out, app.published, began)
+    // LAST, because its presence is what `serveBuild` reads as a finished build (38.100).
+    await writeWhole(marker, JSON.stringify(compilation))
     console.log(
-        `abide build: ${app.sources} source(s), ${published} public file(s) -> ${out}`,
+        `abide build: ${app.sources} source(s), ${copied} public file(s) -> ${out}`,
     )
-    return true
+    return app
 }
 
 /**
@@ -165,35 +184,35 @@ const SERVER_STYLESHEETS: Bun.BunPlugin = {
 /**
  * `abide compile`: builds the app, then one executable per target platform.
  *
- * 38.11 — THE BUILD, AND THEN ONE EXECUTABLE PER TARGET with all of it inside (`compiledEntry`).
+ * 38.10 — THE BUILD, AND THEN ONE EXECUTABLE PER TARGET with all of it inside (`compiledEntry`).
  * `--out` is the executable rather than the build, which goes where `abide build` puts it; with no
- * `--out` the executable is the app's own name, in the directory the command was run from (38.47).
+ * `--out` the executable is the app's own name, in the directory the command was run from (38.46).
  */
 async function compile(
     { root }: AppDirectories,
     { values }: Given,
 ): Promise<number> {
-    // 38.49.
+    // 38.48.
     if (values.target !== undefined && values.platforms !== undefined) {
         console.error(
             'abide compile: --target is one platform and --platforms is several; give one of them.',
         )
         return 1
     }
-    const entry = await writtenEntry(root, undefined)
-    if (entry === undefined) {
+    const written = await writtenEntry(root, undefined)
+    if (written === undefined) {
         console.error(`abide compile: nothing under ${root} to compile.`)
         return 1
     }
-    const named = resolve(values.out ?? executableName(root))
+    const named = resolve(values.out ?? executableName(packageUnder(root).name))
     const platforms =
         values.platforms?.split(',') ??
         (values.target === undefined ? [undefined] : [values.target])
     for (const platform of platforms) {
-        // 38.48.
+        // 38.47.
         const outfile =
             values.platforms === undefined ? named : `${named}-${platform}`
-        await compileExecutable(root, entry, platform, outfile)
+        await compileExecutable(root, written, platform, outfile)
         console.log(`abide compile: ${outfile}`)
     }
     return 0
@@ -202,39 +221,43 @@ async function compile(
 /**
  * `abide bundle`: builds the app, then a desktop app for this platform around its executable.
  *
- * 38.11, 38.71 — `compile`'s executable, started from `runDesktop`, inside a `.app` named after the
+ * 38.10, 38.70 — `compile`'s executable, started from `runDesktop`, inside a `.app` named after the
  * app where the command was run, or at `--out`.
  */
 async function bundle(
     { root }: AppDirectories,
     { values }: Given,
 ): Promise<number> {
-    // 38.78.
+    // 38.77.
     if (process.platform !== 'darwin') {
         console.error(
             `abide bundle: a desktop app is built for macOS, and this is ${process.platform}. \`abide compile\` builds an executable for any platform.`,
         )
         return 1
     }
-    const out = resolve(values.out ?? `${executableName(root)}.app`)
+    const out = resolve(
+        values.out ?? `${executableName(packageUnder(root).name)}.app`,
+    )
     if (!out.endsWith('.app')) {
         console.error(
             `abide bundle: --out names the .app to write, and ${out} is not one.`,
         )
         return 1
     }
-    // 38.81 — REFUSED BEFORE ANYTHING IS BUILT, so a mistyped key costs no build.
-    const options = await launcherOptionsUnder(root)
-    if (typeof options === 'string') {
-        console.error(`abide bundle: ${options}.`)
-        return 1
-    }
-    const entry = await writtenEntry(root, async (out) => {
-        const launch = `${root}/bundle/launch.abide`
+    const entry = await writtenEntry(root, async (app) => {
+        const launcherPath = `${root}/${LAUNCHER_PAGE}`
+        const hasLauncher = app.files[LAUNCHER_PAGE] !== undefined
+        const art = await launcherIcon(root)
         return {
-            options,
-            launch: (await Bun.file(launch).exists()) ? launch : undefined,
-            shell: await launchShell(root, out),
+            // 34.32 — its `launcher` export is read when the app launches, off the module.
+            launch: hasLauncher ? launcherPath : undefined,
+            // 38.82 — a `launcher.abide` of its script blocks alone keeps the built-in page.
+            custom:
+                hasLauncher &&
+                paints(parseAbide(await Bun.file(launcherPath).text())),
+            document: launchDocument(app),
+            icon: art?.icon,
+            accent: art?.accent,
         }
     })
     if (entry === undefined) {
@@ -242,7 +265,7 @@ async function bundle(
         return 1
     }
     const identity = packageUnder(root)
-    const name = executableName(root)
+    const name = executableName(packageUnder(root).name)
     await compileExecutable(
         root,
         entry,
@@ -252,7 +275,7 @@ async function bundle(
     const icon = await writeIcon(root, `${out}/Contents/Resources`)
     await Bun.write(
         `${out}/Contents/Info.plist`,
-        infoPlist(name, options.name ?? name, identity, icon),
+        infoPlist(name, identity, icon),
     )
     // AD-HOC SIGNED, WHOLE: the executable bun wrote is signed on its own, and a bundle around a
     // signed executable that is not itself signed is one Gatekeeper reads as damaged.
@@ -260,11 +283,6 @@ async function bundle(
         return 1
     console.log(`abide bundle: ${out}`)
     return 0
-}
-
-// 38.47 — A SCOPED NAME IS NAMED BY ITS LAST PART: `@acme/ledger` is `ledger`, as `bunx` calls it.
-function executableName(root: string): string {
-    return (packageUnder(root).name ?? 'app').replace(/^@[^/]+\//, '')
 }
 
 /**
@@ -276,53 +294,46 @@ async function writtenEntry(
     root: string,
     desktop:
         | ((
-              out: string,
+              app: CompiledApp,
           ) => Promise<Parameters<typeof compiledEntry>[0]['desktop']>)
         | undefined,
-): Promise<string | undefined> {
+): Promise<{ entry: string; compilation: Compilation } | undefined> {
     const out = buildDirectory(root)
-    if (!(await writeBuild({ root, out }))) return undefined
-    const handlerModules = new Map<string, string>()
-    for (const { source } of await handlersIn(out))
-        handlerModules.set(source, `${root}/${source}`)
+    const app = await writeBuild({ root, out })
+    if (app === undefined) return undefined
     const entry = `${out}/compiled.ts`
     await Bun.write(
         entry,
         compiledEntry({
-            desktop: await desktop?.(out),
-            out,
-            hooks: hooksModuleUnder(root),
+            desktop: await desktop?.(app),
+            root,
+            sourceMaps: serverMapsOf(app, root),
             package: packageUnder(root),
-            shell: await shellUnder(root),
             manifest: await Bun.file(`${out}/${MANIFEST}`).json(),
-            handlerModules,
             client: pathsUnder(`${out}/${CLIENT_DIRECTORY}`),
             published: pathsUnder(`${out}/${PUBLIC_DIRECTORY}`),
         }),
     )
-    return entry
+    return { entry, compilation: app }
 }
 
-/** One executable from `entry`, for `platform` or this one, written to `outfile`. */
+/** One executable from `written`'s entry, for `platform` or this one, written to `outfile`. */
 async function compileExecutable(
     root: string,
-    entry: string,
+    written: { entry: string; compilation: Compilation },
     platform: string | undefined,
     outfile: string,
 ): Promise<void> {
     const compiled = await Bun.build({
-        entrypoints: [entry],
+        entrypoints: [written.entry],
         target: 'bun',
-        // 35.4 — a handler's `.abide` import, as `abide start` lands it.
-        plugins: [
-            SERVER_STYLESHEETS,
-            componentImports(root, buildDirectory(root)),
-        ],
+        // 34.16 — every `.abide` the app imports, as `abide start` serves it.
+        plugins: [SERVER_STYLESHEETS, abideModules(root, written.compilation)],
         // UNMINIFIED, AND MAPPED: the executable is a server, and an error it logs is read by
         // whoever operates it — a minified line prints as the whole page module it sits in. The
         // map is embedded in the executable, which reads it from there.
         sourcemap: 'inline',
-        // 38.94 — parsed at build time rather than on every boot. ESM because the entry awaits at
+        // 38.93 — parsed at build time rather than on every boot. ESM because the entry awaits at
         // its top level, and bun's bytecode default is CommonJS, which refuses that. Nothing in the
         // executable or the build's outputs says bytecode is inside, so no test can see this.
         bytecode: true,
@@ -332,7 +343,7 @@ async function compileExecutable(
                 ? {}
                 : { target: `bun-${platform}` as Bun.Build.CompileTarget }),
             outfile,
-            // 38.46 — THE EXECUTABLE IS THE BUILD'S, not the machine's: a `bunfig.toml`
+            // 38.45 — THE EXECUTABLE IS THE BUILD'S, not the machine's: a `bunfig.toml`
             // wherever it is started must not change what it runs. `.env` is still read, as
             // `abide start` reads it — configuration is the environment's (27.8).
             autoloadBunfig: false,
@@ -350,39 +361,67 @@ async function compileExecutable(
 }
 
 /**
- * The document `src/bundle/launch.abide` renders into: `src/bundle/launch.html`, or a bare one.
+ * The document `src/launcher.abide` renders into: abide's own, which the page writes its
+ * `<html>` onto (35.15).
  *
- * 38.85 — THE PAGE'S OWN `<style>` IS IN ITS HEAD. A component's stylesheet reaches a browser with
+ * 38.84 — THE PAGE'S OWN `<style>` IS IN ITS HEAD. A component's stylesheet reaches a browser with
  * its client module, and a launch page has none: it is rendered before the app it would load from
  * is served.
  */
-async function launchShell(root: string, out: string): Promise<string> {
-    const given = Bun.file(`${root}/bundle/launch.html`)
-    const document = (await given.exists())
-        ? await given.text()
-        : '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n</head>\n<body></body>\n</html>\n'
-    const sheet = Bun.file(`${out}/bundle/launch.style.css`)
-    if (!(await sheet.exists())) return document
-    const style = `<style>\n${await sheet.text()}</style>\n`
-    const headEnd = document.search(/<\/head>/i)
-    return headEnd === -1
-        ? `${style}${document}`
-        : `${document.slice(0, headEnd)}${style}${document.slice(headEnd)}`
+function launchDocument(app: CompiledApp): string {
+    const sheet = app.files[LAUNCHER_PAGE]?.sheet
+    return sheet === undefined
+        ? DEFAULT_DOCUMENT
+        : intoHead(DEFAULT_DOCUMENT, `<style>\n${sheet}</style>`)
 }
 
 /**
- * Writes the bundle's icon from `src/bundle/`, and answers whether there was one.
+ * The icon the launcher page shows, as a data URL, and the accent it takes from it — or nothing
+ * where the app has no icon.
  *
- * 38.80 — `icon.icns` as it is, or `icon.png` drawn at every size an `.icns` holds.
+ * 38.101 — drawn small by `sips` first: the accent is a fact about the picture, not its pixels.
+ */
+async function launcherIcon(
+    root: string,
+): Promise<{ icon: string; accent: string | undefined } | undefined> {
+    const source = await publishedIcon(root)
+    if (source === undefined) return undefined
+    const drawn = async (size: number): Promise<Uint8Array | undefined> => {
+        const path = `${buildDirectory(root)}/icon-${size}.png`
+        const code = await spawnedTool('sips', [
+            '-s',
+            'format',
+            'png',
+            '-z',
+            String(size),
+            String(size),
+            source,
+            '--out',
+            path,
+        ])
+        return code === 0 ? await Bun.file(path).bytes() : undefined
+    }
+    const [shown, sampled] = await Promise.all([drawn(256), drawn(64)])
+    if (shown === undefined) return undefined
+    return {
+        icon: `data:image/png;base64,${shown.toBase64()}`,
+        accent: sampled === undefined ? undefined : iconAccent(sampled),
+    }
+}
+
+/**
+ * Writes the bundle's icon from the public files the build copied, and answers whether there was one.
+ *
+ * 38.79 — the file at `/icon.icns` as it is, or the one at `/icon.png` drawn at every size an
+ * `.icns` holds.
  */
 async function writeIcon(root: string, resources: string): Promise<boolean> {
-    const icns = Bun.file(`${root}/bundle/icon.icns`)
-    if (await icns.exists()) {
-        await Bun.write(`${resources}/icon.icns`, icns)
+    const source = await publishedIcon(root)
+    if (source === undefined) return false
+    if (source.endsWith(ICON_ADDRESSES.icns)) {
+        await Bun.write(`${resources}/icon.icns`, Bun.file(source))
         return true
     }
-    const png = `${root}/bundle/icon.png`
-    if (!(await Bun.file(png).exists())) return false
     const iconset = `${buildDirectory(root)}/icon.iconset`
     await rm(iconset, { recursive: true, force: true })
     await mkdir(iconset, { recursive: true })
@@ -395,7 +434,7 @@ async function writeIcon(root: string, resources: string): Promise<boolean> {
                     '-z',
                     String(size * scale),
                     String(size * scale),
-                    png,
+                    source,
                     '--out',
                     `${iconset}/icon_${size}x${size}${scale === 2 ? '@2x' : ''}.png`,
                 ]),
@@ -410,6 +449,15 @@ async function writeIcon(root: string, resources: string): Promise<boolean> {
             `${resources}/icon.icns`,
         ])) === 0
     )
+}
+
+/** 38.79 — the public file the app's icon is drawn from: `/icon.icns`, else `/icon.png`. */
+async function publishedIcon(root: string): Promise<string | undefined> {
+    const published = `${buildDirectory(root)}/${PUBLIC_DIRECTORY}`
+    for (const address of [ICON_ADDRESSES.icns, ICON_ADDRESSES.png])
+        if (await Bun.file(`${published}${address}`).exists())
+            return `${published}${address}`
+    return undefined
 }
 
 /** Runs one of macOS's own tools, warning with what it wrote where it fails; answers its exit code. */
@@ -427,12 +475,7 @@ async function spawnedTool(tool: string, args: string[]): Promise<number> {
 }
 
 /** The `Info.plist` a bundle names its executable, its identity and its icon in. */
-function infoPlist(
-    name: string,
-    displayName: string,
-    identity: AppPackage,
-    icon: boolean,
-): string {
+function infoPlist(name: string, identity: AppPackage, icon: boolean): string {
     const entries: [string, string][] = [
         ...(icon
             ? ([['CFBundleIconFile', '<string>icon</string>']] as [
@@ -445,8 +488,8 @@ function infoPlist(
             'CFBundleIdentifier',
             `<string>abide.app.${name.replace(/[^A-Za-z0-9.-]/g, '-')}</string>`,
         ],
-        ['CFBundleName', `<string>${escapeText(displayName)}</string>`],
-        ['CFBundleDisplayName', `<string>${escapeText(displayName)}</string>`],
+        ['CFBundleName', `<string>${escapeText(name)}</string>`],
+        ['CFBundleDisplayName', `<string>${escapeText(name)}</string>`],
         ['CFBundlePackageType', '<string>APPL</string>'],
         [
             'CFBundleShortVersionString',
@@ -456,7 +499,7 @@ function infoPlist(
         ['LSMinimumSystemVersion', '<string>13.0</string>'],
         ['NSHighResolutionCapable', '<true/>'],
         ['NSPrincipalClass', '<string>NSApplication</string>'],
-        // 38.72 — the app served on loopback over http, and one connected to wherever it runs.
+        // 38.71 — the app served on loopback over http, and one connected to wherever it runs.
         [
             'NSAppTransportSecurity',
             '<dict><key>NSAllowsArbitraryLoads</key><true/></dict>',
@@ -475,30 +518,35 @@ ${body}</dict>
 }
 
 /**
- * Copies the app's public files into the build output, and returns how many.
+ * Copies the app's public files into the build output, each at its address, and returns how many.
  *
- * 38.19 — `src/ui/public`, copied into the built output. Copied rather than left where it is, so
- * `abide start` answers out of what the build produced and an app moving a file after a build
- * cannot change what is served.
+ * 38.18 — every `public` directory, copied into the built output at the address each file is
+ * answered at, so `abide start` reads the address off the output's own layout. Copied rather than
+ * left where it is, so `abide start` answers out of what the build produced and an app moving a
+ * file after a build cannot change what is served.
  */
 async function copyPublic(
     root: string,
     out: string,
-    names: string[],
+    published: Map<string, string>,
+    began: number,
 ): Promise<number> {
-    const from = `${root}/ui/${PUBLIC_DIRECTORY}`
-
     const copies: Promise<void>[] = []
+    const produced = new Set<string>()
     // 36.12 — the bytes as authored. `Bun.write` of a `BunFile` is a copy and not a re-encode.
-    for (const name of names)
+    for (const [source, address] of published) {
+        produced.add(address.slice(1))
         copies.push(
             writeWhole(
-                `${out}/${PUBLIC_DIRECTORY}/${name}`,
-                Bun.file(`${from}/${name}`),
+                `${out}/${PUBLIC_DIRECTORY}${address}`,
+                Bun.file(`${root}/${source}`),
             ),
         )
+    }
     await Promise.all(copies)
-    return names.length
+    // 38.66 — a public file the app no longer has is no longer answered.
+    await pruneStale(`${out}/${PUBLIC_DIRECTORY}`, produced, began)
+    return published.size
 }
 
 /**
@@ -511,10 +559,11 @@ async function copyPublic(
  * `--splitting`, so a destination's markup and bindings stay in the chunk its own route loads
  * (30.11) rather than landing in the entry every page pays for. 38.5 IS THIS FUNCTION: hashed and
  * minified by the bundler, the manifest off its metafile (the entry's name, and the chunks each
- * route module needs for 38.29), and the precompressed copies (`precompressOne`). What the manifest
- * does NOT carry yet is 38.19's list of public files.
+ * route module needs for 38.28), and the precompressed copies (`precompressOne`). What the manifest
+ * does NOT carry yet is 38.18's list of public files.
  */
 async function bundleClient(
+    root: string,
     out: string,
     plugins: Bun.BunPlugin[],
     publicAddresses: string[],
@@ -525,18 +574,18 @@ async function bundleClient(
     // AN APP OF HANDLERS ALONE has no page to boot, and is served with no client — the manifest
     // written anyway, so `abide start` reads one shape whatever the app holds.
     if (!paged) {
-        await pruneStale(client, '**/*', new Set(), began)
+        await pruneStale(client, new Set(), began)
         await writeWhole(`${out}/${MANIFEST}`, JSON.stringify(NO_MANIFEST))
         return
     }
-    // 38.67 — STAGED, THEN MOVED IN FILE BY FILE. `Bun.build` writes in place, so a second build
+    // 38.66 — STAGED, THEN MOVED IN FILE BY FILE. `Bun.build` writes in place, so a second build
     // into the same `out` — or `abide start` serving it — read a chunk half written, and emptying
     // `client/` first took the one it was serving away. Every name but the manifest's is a hash of
     // what it holds, so two builds of one tree move in the same bytes under the same names.
     const staging = `${out}/.staging-${crypto.randomUUID()}`
     try {
         const built = await Bun.build({
-            ...clientBuildOptions(out, plugins, publicAddresses),
+            ...clientBuildOptions(root, plugins, publicAddresses),
             outdir: staging,
             // 38.5 — MINIFIED, and EVERY NAME HASHED, the entry's included: chunks and assets are
             // already `[name]-[hash]` by default and the entry is not, which left the one file every
@@ -575,16 +624,11 @@ async function bundleClient(
             )
         }
         await Promise.all(moves)
-        await pruneStale(client, '**/*', produced, began)
-        // THE REAL PATH, because the metafile names a file on disk with its symlinks resolved — and an
-        // `--out` under `/tmp` is `/private/tmp` to the bundler, which would key nothing at all.
+        await pruneStale(client, produced, began)
         await writeWhole(
             `${out}/${MANIFEST}`,
             JSON.stringify(
-                manifestOf(
-                    built.metafile as Bun.BuildMetafile,
-                    realpathSync(out),
-                ),
+                manifestOf(built.metafile as Bun.BuildMetafile, root),
             ),
         )
     } finally {
@@ -597,18 +641,17 @@ async function bundleClient(
  *
  * A CHUNK WHOSE HASH CHANGED leaves the old one behind otherwise, and the directory is the union of
  * every build ever run into it — and the cost is not disk: a grep over the built output answers about
- * code no page loads. 38.67 — only what was written before this build began: anything newer is a
+ * code no page loads. 38.66 — only what was written before this build began: anything newer is a
  * concurrent build's, and its manifest may name it.
  */
 async function pruneStale(
     directory: string,
-    pattern: string,
-    produced: { has(name: string): boolean },
+    produced: ReadonlySet<string>,
     began: number,
 ): Promise<void> {
     const stale: Promise<void>[] = []
     // A file gone since the scan reads as last written in the far future, and is left alone.
-    for (const name of namesUnder(directory, pattern))
+    for (const name of namesUnder(directory))
         if (
             !produced.has(name) &&
             Bun.file(`${directory}/${name}`).lastModified < began
@@ -620,7 +663,7 @@ async function pruneStale(
 /**
  * Writes `path` whole: to a name of its own beside it, then renamed over it.
  *
- * 38.67 — a reader, or a second build, finds the last complete file there and never a partial one.
+ * 38.66 — a reader, or a second build, finds the last complete file there and never a partial one.
  */
 async function writeWhole(path: string, content: string | Blob): Promise<void> {
     const partial = `${path}.${crypto.randomUUID()}.partial`
@@ -687,7 +730,7 @@ function inApp<Answer>(
         const app = directoriesOf(given.values)
         if (app === undefined) {
             console.error(
-                `abide ${given.positionals[0]}: no app here. Looked for ui/ in ${process.cwd()} and in ${resolve('src')}. Point --root at the directory ui/ sits under.`,
+                `abide ${given.positionals[0]}: no app here. Looked for a .abide under ${resolve('src')}, or under ${process.cwd()} where it has no src. Point --root at the directory your pages sit under.`,
             )
             return 1
         }
@@ -776,9 +819,25 @@ async function check(
 }
 
 /**
+ * `abide sync`: writes the types a plain `.ts` reads the app's `.abide` files by.
+ *
+ * 34.24 — parse and projection alone, so it is fast enough to run on every install (the scaffold's
+ * `prepare`), where no checker and no build has run.
+ */
+async function sync({ root }: AppDirectories): Promise<number> {
+    const { typed, refused } = await syncTypes(root)
+    for (const diagnosis of refused)
+        console.error(formatDiagnosis(diagnosis, process.cwd()))
+    console.log(
+        `abide sync: ${typed} .abide file${typed === 1 ? '' : 's'} typed`,
+    )
+    return refused.length === 0 ? 0 : 1
+}
+
+/**
  * `abide lsp`: the language server over stdio.
  *
- * 38.12 — the language server, for as long as the editor holds stdin open. Nothing is printed: stdout
+ * 38.11 — the language server, for as long as the editor holds stdin open. Nothing is printed: stdout
  * is the protocol.
  *
  * Not `inApp`: an editor starts it wherever its workspace is, and each document finds its own app.

@@ -13,6 +13,8 @@ import { installServer } from './installServer.ts'
 // emitted module reaches through here: 32.1's escaping and 32.2's `raw`, which both sides render
 // markup with, 32.20's `safeUrl`, and 31.8's `writePath`.
 export * from '#shared'
+// 18.11 — one write a patch made, as a followed `GET`'s `patch` carries it.
+export type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
 export {
     type Clients,
     DELETE,
@@ -23,8 +25,6 @@ export {
     type Rpc,
     type RpcOptions,
 } from '#shared/rpc.ts'
-// 18.11 — one write a patch made, as a followed `GET`'s `patch` carries it.
-export type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
 // 45 — a conversation with a model, piped through a handler, and the two providers abide ships.
 export {
     type AssistantEvent,
@@ -43,12 +43,17 @@ export {
 } from './claudeCode.ts'
 // 27 — the resolved configuration.
 export { type Config, config } from './config.ts'
-// 42 — the app object, and 37's hooks an `src/server/app.ts` calls.
+// 38.82 — the props `src/launcher.abide` is rendered with.
+export type { ConfigField } from './configFields.ts'
+// 42 — the app object, and 37's hooks a `<script server>` calls.
 export { type App, createApp } from './createApp.ts'
+// 37.1's run-time half: what a compiled server module calls around its `<script server>`, so the
+// hooks it makes are filed at its route.
 export {
     type ConfigDefaults,
     type ConfigOptions,
     type Env,
+    fileRoute,
     middleware,
     onConfig,
     onError,
@@ -57,12 +62,11 @@ export {
     onStart,
     onStop,
 } from './hooks.ts'
+export type { LauncherOptions } from './launcherOptions.ts'
+export type { Launch } from './launcherPage.ts'
 // 23.10 — whether a host answers, asked before a call to it.
 export { reachable } from './reachable.ts'
-export { type Component, render, type Shell } from './render.ts'
-// 38.83 — the props `src/bundle/launch.abide` is rendered with.
-export type { ConfigField } from './configFields.ts'
-export type { Launch } from './launcherPage.ts'
+export { type Component, render } from './render.ts'
 // 32.17's run-time half: one invocation, rendered where it stands, with the anchors that make the
 // child's markup one thing for the client to walk to.
 export { renderComponent } from './renderComponent.ts'

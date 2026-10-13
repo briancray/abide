@@ -134,7 +134,7 @@ async function objectOf(
     }
     const schema: Schema = { type: 'object', properties }
     if (required.length > 0) schema.required = required
-    // 19.20 — A MEMBER THE TYPE DOES NOT DECLARE IS REFUSED, where no index signature declares the
+    // 19.19 — A MEMBER THE TYPE DOES NOT DECLARE IS REFUSED, where no index signature declares the
     // rest: a caller outside the process sends whatever it likes, and a body writing its args to a
     // row would write that too. An author who wants the rest declares a schema of their own.
     schema.additionalProperties = false

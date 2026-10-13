@@ -4,6 +4,7 @@
 
 import { expect, test } from 'bun:test'
 import type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
+import { PATCHES } from '#shared/reactive/PATCHES.ts'
 import { recordWrites } from '#shared/reactive/recordWrites.ts'
 import { applyPatch } from '#shared/applyPatch.ts'
 
@@ -398,4 +399,68 @@ test('a replay applies move and copy, and a failed test refuses at 409', () => {
         status = (refusal as { status: number }).status
     }
     expect(status).toBe(409)
+})
+
+type Entry = { id: number; n: number }
+
+// How many of `rows` the last patch marked written.
+function markedOf(rows: readonly Entry[]): number {
+    let marked = 0
+    for (const row of rows)
+        if (PATCHES.written.get(row) === PATCHES.epoch) marked += 1
+    return marked
+}
+
+// 32.33 — A `Map` NO PROXY CAN WATCH MARKS WHAT THE CALLBACK TAKES OUT OF IT, not all it holds: a
+// stream patching one entry a message would otherwise walk the whole Map a message. THE REVERT: mark
+// every key and value of the container where it is reached (`markHeld`) — 1000 marked, not 1.
+test('a patch through a Map marks the entry it took out, not every entry — 32.33', () => {
+    const rows: Entry[] = []
+    for (let id = 0; id < 1000; id += 1) rows.push({ id, n: 0 })
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    recordWrites(byId, (held) => {
+        const row = held.get(7)
+        if (row) row.n = 1
+    })
+    expect(`marked: ${markedOf(rows)}`).toBe('marked: 1')
+    recordWrites({ byId }, (state) => {
+        const row = state.byId.get(8)
+        if (row) row.n = 1
+    })
+    expect(`marked: ${markedOf(rows)}`).toBe('marked: 1')
+})
+
+// What a callback walks, it may have written: every value a Map or a Set hands out is marked.
+test('a patch walking a Map or a Set marks everything it walked — 32.33', () => {
+    const rows: Entry[] = [
+        { id: 0, n: 0 },
+        { id: 1, n: 0 },
+    ]
+    recordWrites(new Map(rows.map((row) => [row.id, row])), (held) => {
+        for (const row of held.values()) row.n += 1
+    })
+    expect(markedOf(rows)).toBe(2)
+    recordWrites(new Map(rows.map((row) => [row.id, row])), (held) => {
+        for (const [, row] of held) row.n += 1
+    })
+    expect(markedOf(rows)).toBe(2)
+    recordWrites(new Map(rows.map((row) => [row.id, row])), (held) => {
+        held.forEach((row) => {
+            row.n += 1
+        })
+    })
+    expect(markedOf(rows)).toBe(2)
+    recordWrites(new Set(rows), (held) => {
+        for (const row of held) row.n += 1
+    })
+    expect(markedOf(rows)).toBe(2)
+    // And the Map itself is what it is: its own methods run on it, and handing it back stores it.
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    const state = { byId, again: undefined as Map<number, Entry> | undefined }
+    recordWrites(state, (held) => {
+        held.byId.set(2, { id: 2, n: 0 })
+        held.again = held.byId
+    })
+    expect(byId.size).toBe(3)
+    expect(state.again).toBe(byId)
 })

@@ -1,6 +1,6 @@
 // 41.5, 41.7, 41.13 AND 41.16-41.18 — THE BROWSER'S CALL IS ANSWERED FROM THE RENDER. What is counted
 // is how many times the handler RAN, because an answer from a second run is the same invoice: the
-// output cannot tell a seeded answer from a re-run, and the run count is the whole of the contract.
+// output cannot tell a seeded answer from a rerun, and the run count is the whole of the contract.
 
 import { afterAll, beforeAll, expect, setSystemTime, test } from 'bun:test'
 import { onConfig } from '#server/hooks.ts'
@@ -25,7 +25,7 @@ export const getInvoice = GET(async ({ id }: { id: string }) => {
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import { getInvoice } from '#server/rpc/invoices.ts'
+import { getInvoice } from '#src/invoices/invoices.abide'
 
 const invoice = reactive(() => getInvoice({ id: '4021' }))
 </script>
@@ -56,7 +56,7 @@ export const getLines = GET(async function* ({ id }: { id: string }) {
 
 const PAINTED = `<script>
 import { reactive } from '@abide/abide'
-import { getLines, getMissing, getTotal } from '#server/rpc/totals.ts'
+import { getLines, getMissing, getTotal } from '#src/totals/totals.abide'
 
 const total = reactive(() => getTotal({ id: 't' }))
 const missing = reactive(() => getMissing({ id: 'm' }))
@@ -87,7 +87,7 @@ export const art = GET(cover)
 
 const SHELF_PAGE = `<script>
 import { reactive } from '@abide/abide'
-import { books } from '#server/rpc/shelf.ts'
+import { books } from '#src/shelf/shelf.abide'
 
 const shelved = reactive(() => books())
 </script>
@@ -99,14 +99,24 @@ let base = ''
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': PAGE,
-        'ui/pages/painted/page.abide': PAINTED,
-        'ui/pages/shelf/page.abide': SHELF_PAGE,
-        'server/rpc/shelf.ts': SHELF,
-        'server/rpc/covers.ts': COVERS,
-        'server/rpc/totals.ts': TOTALS,
-        'server/rpc/invoices.ts': INVOICES,
-        'server/app.ts': SIGN_OUT,
+        'page.abide': PAGE,
+        'painted/page.abide': PAINTED,
+        'shelf/page.abide': SHELF_PAGE,
+        'shelf/shelf.abide': `<script server>
+${SHELF}</script>
+`,
+        'covers/covers.abide': `<script server>
+${COVERS}</script>
+`,
+        'totals/totals.abide': `<script server>
+${TOTALS}</script>
+`,
+        'invoices/invoices.abide': `<script server>
+${INVOICES}</script>
+`,
+        'layout.abide': `<script server>
+${SIGN_OUT}</script>
+`,
     }))
 }, 30_000)
 
@@ -115,7 +125,7 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-const CALL = '/__abide/rpc/invoices/getInvoice?id=4021'
+const CALL = '/invoices/getInvoice?id=4021'
 
 async function call(
     cookie?: string,
@@ -238,7 +248,7 @@ test('the head starts every call the page made, before its markup — 41.20', as
         /<script type="application\/json">[\s\S]*?<\/script><script>\(function\(s,c\)[\s\S]*?<\/script>/.exec(
             html,
         )?.[0] ?? ''
-    expect(script).toContain('/__abide/rpc/invoices/getInvoice?id=4021')
+    expect(script).toContain('/invoices/getInvoice?id=4021')
     expect(script).toContain('__abideCalls')
     // In the head, and ahead of the markup.
     expect(html.indexOf(script)).toBeLessThan(html.indexOf('</head>'))
@@ -310,7 +320,7 @@ async function hydrateWarnings(body: () => unknown): Promise<string[]> {
 // list in `takeSeed`; 0 warnings where 1 is due. And keep `drop` deleting a key's emptied list; the
 // refresh warns too, 2 where 1 is due.
 test('a call the render made with other args runs the handler and warns on abide:hydrate, and a refresh is quiet — 41.12, 41.22', async () => {
-    const handler = { address: '/__abide/rpc/invoices/getInvoice' }
+    const handler = { address: '/invoices/getInvoice' }
     const seed = seedFor('caller-miss')
     seed(handler, { id: 1 }, Promise.resolve('one'))
     seed(handler, { id: 2 }, Promise.resolve('two'))
@@ -326,7 +336,7 @@ test('a call the render made with other args runs the handler and warns on abide
         expect(takeSeed('caller-miss', handler, { id: 1 })).toBeUndefined()
     })
     expect(warned.length).toBe(1)
-    expect(warned[0]).toContain('/__abide/rpc/invoices/getInvoice')
+    expect(warned[0]).toContain('/invoices/getInvoice')
     expect(warned[0]).toContain('41.12')
 })
 
@@ -337,7 +347,7 @@ test('a call the render made with other args runs the handler and warns on abide
 test('a seeded stream whose transcript passes ABIDE_MAX_STREAM_BUFFER_SIZE is not answered from the buffer — 16.33, 41.12', async () => {
     const unfile = onConfig(() => ({ ABIDE_MAX_STREAM_BUFFER_SIZE: 10 }))
     try {
-        const handler = { address: '/__abide/rpc/reports/rows' }
+        const handler = { address: '/reports/rows' }
         const streamOf = (count: number) =>
             reactive(async function* () {
                 for (let at = 0; at < count; at += 1) yield 'aaaa'
@@ -373,16 +383,16 @@ test('a seeded answer the production moved past does not name the version standi
     const cookie = (page.headers.get('set-cookie') ?? '').split(
         ';',
     )[0] as string
-    const shelved = await Bun.fetch(`${base}/__abide/rpc/shelf/shelve`, {
+    const shelved = await Bun.fetch(`${base}/shelf/shelve`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ title: 'emma' }),
     })
     await shelved.text()
-    const seeded = await Bun.fetch(`${base}/__abide/rpc/shelf/books`, {
+    const seeded = await Bun.fetch(`${base}/shelf/books`, {
         headers: { cookie },
     })
-    const fresh = await Bun.fetch(`${base}/__abide/rpc/shelf/books`)
+    const fresh = await Bun.fetch(`${base}/shelf/books`)
     const standing = fresh.headers.get('etag')
     expect(
         `${await seeded.text()} ${seeded.headers.get('etag') === standing ? 'current' : 'not current'}`,
@@ -394,7 +404,7 @@ test('a seeded answer the production moved past does not name the version standi
 // answered the bytes. THE REVERT: drop the binary arm from `answerOutcome`'s `serving`; the answer is
 // a follow, 'text/event-stream' where 'image/png' is due.
 test('a global GET answering a binary is answered, not followed — 18.23', async () => {
-    const answer = await Bun.fetch(`${base}/__abide/rpc/covers/art`, {
+    const answer = await Bun.fetch(`${base}/covers/art`, {
         headers: { accept: 'text/event-stream' },
     })
     await answer.body?.cancel()

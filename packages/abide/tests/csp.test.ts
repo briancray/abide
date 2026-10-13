@@ -7,7 +7,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import { getTotal } from '#server/rpc/totals.ts'
+import { getTotal } from '#src/totals/totals.abide'
 
 const total = reactive(() => getTotal())
 </script>
@@ -32,17 +32,22 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': PAGE,
-        'ui/pages/inline/page.abide': INLINE,
-        'server/rpc/totals.ts': `import { GET } from '@abide/abide/server'\n\nexport const getTotal = GET(() => 1240)\n`,
-        'server/app.ts': `import { csp, middleware } from '@abide/abide/server'
+        'page.abide': PAGE,
+        'inline/page.abide': INLINE,
+        'totals/totals.abide': `<script server>
+import { GET } from '@abide/abide/server'\n\nexport const getTotal = GET(() => 1240)\n</script>
+`,
+        'layout.abide': `<script server>
+import { csp, middleware } from '@abide/abide/server'
 
 middleware(csp({ 'img-src': ['https:'], 'frame-ancestors': [], 'worker-src': ["'self'"] }))
 
-export default (request: Request) =>
+middleware((next, { request }) =>
     new URL(request.url).pathname === '/nonce'
         ? new Response(csp.nonce(), { headers: { 'content-type': 'text/html' } })
-        : undefined
+        : next(),
+)
+</script>
 `,
     }))
 }, 30_000)
@@ -111,7 +116,7 @@ test('csp.nonce is the nonce in the header, and a non-document carries no policy
         ),
     ).toContain(`'nonce-${nonce}'`)
     expect(await second.text()).not.toBe(nonce)
-    const json = await Bun.fetch(`${base}/__abide/rpc/totals/getTotal`)
+    const json = await Bun.fetch(`${base}/totals/getTotal`)
     expect(json.headers.get('content-security-policy')).toBeNull()
 })
 

@@ -20,6 +20,8 @@ export function headKeyOf(
 ): string | undefined {
     if (lowerTag === 'title' || lowerTag === 'base') return lowerTag
     if (lowerTag === 'meta') {
+        // One encoding a document, so a layout's replaces the default document's.
+        if (attribute('charset') != null) return 'meta charset'
         const named = attribute('name')
         const key = named === null ? attribute('property') : named
         return key == null ? undefined : `meta ${key}`

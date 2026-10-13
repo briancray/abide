@@ -32,6 +32,20 @@ export function tokenize(source: string): Token[] {
 }
 
 /**
+ * Whether a token of the code scanned from `from` begins at `at` — false where `at` is inside a
+ * string, a template, a regex or a comment.
+ */
+export function startsToken(source: string, from: number, at: number): boolean {
+    let found = false
+    scan(source, from, (_kind, scanner) => {
+        const start = scanner.getTokenStart()
+        found = start === at
+        return start < at
+    })
+    return found
+}
+
+/**
  * How far `kind` moves the bracket depth a top-level separator is found at: a template's
  * substitutions nest as a call's arguments do, so `${a, b}` holds its comma.
  */

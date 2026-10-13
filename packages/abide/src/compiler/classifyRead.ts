@@ -27,10 +27,11 @@ import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
  * statement ends and whether `{ n }` is a literal are TypeScript's answers rather than a token
  * walk's guess at them. Every offset is into the file's projection (`projectShadow`).
  *
- * ONE SHAPE IS NOT A REACTIVE NAME: `raw` is the callee of a template expression's bare `raw(…)`
- * (32.25), which lowers to the framework's own `raw`; a `<script>`'s is left as written. It rides
- * this list because it is a rewrite at an occurrence, which is what the splice walks; what the
- * checker proved about a whole position is `CheckerAnswer`'s.
+ * TWO SHAPES ARE NOT A REACTIVE NAME: `raw` is the callee of a template expression's bare `raw(…)`
+ * (32.25), which lowers to the framework's own `raw`; a `<script>`'s is left as written. `config`
+ * is the callee of an `onConfig(…)` statement in a `<script server>` (27.13), which only a checked
+ * lowering rewrites. They ride this list because each is a rewrite at an occurrence, which is what
+ * the splice walks; what the checker proved about a whole position is `CheckerAnswer`'s.
  *
  * THE SHAPE IS FIXED: every field on every read, so `Lowering`'s splice sees one hidden class.
  */
@@ -69,6 +70,7 @@ export type Read = {
         | 'restMember'
         | 'restWhole'
         | 'raw'
+        | 'config'
     /** What the rewrite replaces: the name, or a whole write or update from its first token. */
     from: number
     to: number

@@ -12,17 +12,19 @@ import { appFixture, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
-const ADDRESS = '/__abide/rpc/environment/name'
+const ADDRESS = '/environment/name'
 
 let app = ''
 const stops: (() => void)[] = []
 
 beforeAll(async () => {
     app = appFixture({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/environment.ts': `import { GET } from '@abide/abide/server'
+        'page.abide': '<main>home</main>',
+        'environment/environment.abide': `<script server>
+import { GET } from '@abide/abide/server'
 
 export const name = GET(() => process.env.NODE_ENV ?? null)
+</script>
 `,
     })
     const built = await buildApp(app)

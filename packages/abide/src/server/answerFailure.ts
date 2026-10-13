@@ -6,10 +6,11 @@
 import { type Failed, problemOf } from '#shared/Failed.ts'
 import { RENDER_LOG } from '#shared/log.ts'
 import { coversPrefix, partsOf } from '#shared/matchRoute.ts'
+import { coversRoute, parseRoutePattern } from '#shared/routePattern.ts'
 import type { AppSources } from './answerRequest.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
-import { boundPage, render } from './render.ts'
-import { beginRender } from './requestScope.ts'
+import { boundPage, renderDocument } from './render.ts'
+import { beginRender, currentRequestScope } from './requestScope.ts'
 
 /** What a page's failure is painted from: the error pages, and the document they go into. */
 export type ErrorPages = Pick<AppSources, 'errors' | 'errorDocument'>
@@ -47,13 +48,22 @@ export function answered(failure: Failed<string, unknown>): Response {
 /**
  * The error pages for `pathname`, nearest first.
  *
- * 35.2 — every one whose directory is a prefix of the address, each segment meaning what it means
- * in a route.
+ * 35.2 — AS A LAYOUT IS: over the route the request matched, every one whose route covers it, as
+ * a layout's and an `onError`'s does (35.1, 37.5). An address no route matched has only its path,
+ * and every one whose directory is a prefix of it answers, each segment meaning what it means in a
+ * route.
  */
 function errorsFor(errors: RankedError[], pathname: string): RankedError[] {
+    const route = currentRequestScope()?.route
+    const found: RankedError[] = []
+    if (route !== undefined) {
+        const segments = parseRoutePattern(route)
+        for (const error of errors)
+            if (coversRoute(error.segments, segments)) found.push(error)
+        return found
+    }
     // 15.16's address has no parts to be nearest to, so the root's page paints it.
     const parts = partsOf(pathname) ?? []
-    const found: RankedError[] = []
     for (const error of errors)
         if (coversPrefix(error.segments, parts)) found.push(error)
     return found
@@ -77,7 +87,7 @@ export async function answerFailure(
         try {
             const bound = boundPage(error, { failure: () => failure })
             beginRender(undefined)
-            const document = await render(bound, app.errorDocument)
+            const document = await renderDocument(bound, app.errorDocument)
             return new Response(document, { status, headers })
         } catch (thrown) {
             RENDER_LOG.warning(

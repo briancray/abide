@@ -35,7 +35,7 @@ const nameOf = (value: Loading): string | undefined =>
 
 // THE REVERT: return from `Attended.handleEvent` on the first aborted signal rather than looping over
 // all of them; this reads `busy: false` after the first abort.
-test('a load two signalled calls share ends when both abort — 16.48', () => {
+test('a load two signaled calls share ends when both abort — 16.48', () => {
     const { call } = held()
     const first = new AbortController()
     const second = new AbortController()
@@ -54,10 +54,10 @@ test('a load two signalled calls share ends when both abort — 16.48', () => {
 // that never handed a signal, and this reads `busy: false`.
 test('a call with no signal pins the load — 16.48', () => {
     const { call } = held()
-    const signalled = new AbortController()
-    const value = call({ id: '2' }, signalled.signal)
+    const signaled = new AbortController()
+    const value = call({ id: '2' }, signaled.signal)
     call({ id: '2' })
-    signalled.abort()
+    signaled.abort()
     flushSync()
     expect(`busy: ${value.busy()}`).toBe('busy: true')
 })

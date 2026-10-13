@@ -1,5 +1,5 @@
 // HOW AN APP ANSWERS, given what it has. Two commands supply the parts — `abide start` off what
-// the build wrote (38.6) and `abide dev` out of memory (38.17) — and the request path itself is
+// the build wrote (38.6) and `abide dev` out of memory (38.16) — and the request path itself is
 // this one, because a dev server that resolves an address differently from the served one is a
 // bug a reader meets in production and never in development.
 //
@@ -11,18 +11,19 @@ import {
     BRIDGE_ADDRESS,
     CLIENT_ADDRESS,
     HEALTH_ADDRESS,
-    LOGS_ADDRESS,
     MCP_ADDRESS,
     OPENAPI_ADDRESS,
-    RPC_ADDRESS,
 } from '#shared/ADDRESSES.ts'
+import { APP_META } from '#shared/APP_META.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
-import { isFailed } from '#shared/Failed.ts'
+import { type Failed, isFailed } from '#shared/Failed.ts'
 import { health } from '#shared/health.ts'
+import { appName } from '#shared/log.ts'
+import { compose } from '#shared/Middleware.ts'
 import { MOUNT_META } from '#shared/MOUNT_META.ts'
-import { firstMatch, partsOf } from '#shared/matchRoute.ts'
+import { matchOf, type Params, partsOf } from '#shared/matchRoute.ts'
 import { MOUNT, mounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
 import { refuse, notFound as refusedNotFound } from '#shared/refuse.ts'
@@ -32,13 +33,13 @@ import {
     rankRoutes,
     type Segment,
 } from '#shared/routePattern.ts'
-import type { Rpc } from '#shared/rpc.ts'
+import type { Method, Rpc } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
-import { answerFailure } from './answerFailure.ts'
+import { answered, answerFailure } from './answerFailure.ts'
 import {
     answerRpc,
-    type Mount,
     type Mounted,
+    type MountRow,
     mountedOwn,
     mountHandlers,
 } from './answerRpc.ts'
@@ -48,24 +49,32 @@ import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import { callerOrMint } from './callerOf.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
-import { answerMcp, LOGS_HANDLER, openApi } from './generatedSurfaces.ts'
-import { failureOf } from './hooks.ts'
+import { answerMcp, openApi } from './generatedSurfaces.ts'
+import { type AppRung, failureOf, rungsOver } from './hooks.ts'
 import { chunksOf, type Manifest } from './manifestOf.ts'
 import { muxAdmission } from './muxUpgrade.ts'
 import { plainAnswer } from './plainAnswer.ts'
+import { prefers } from './prefers.ts'
 import { PRINCIPAL_MOUNT } from './principal.ts'
-import { boundPage, type Component, headAnchor, render } from './render.ts'
+import {
+    boundPage,
+    type Component,
+    DEFAULT_DOCUMENT,
+    intoHead,
+    renderDocument,
+} from './render.ts'
 import {
     type AnsweringApp,
     adoptRequest,
     beginRender,
     currentRequestScope,
+    type RequestScope,
     within,
     writtenStatus,
 } from './requestScope.ts'
 import { seedFor } from './seedBuffer.ts'
 
-// One row of the table the compiler writes to `<out>/server.ts`. The loader is a dynamic import
+// One row of the server's table the compiler writes (`SERVER_TABLE`). The loader is a dynamic import
 // so a page's markup is off the boot path until an address asks for it, which is the same reason
 // the client table's loaders are (30.11).
 type ServerRoute = {
@@ -73,7 +82,7 @@ type ServerRoute = {
     load: () => Promise<{ default: Component }>
     // 35.1 — the layouts this page renders inside, outermost first, as the compiler found them.
     layouts: (() => Promise<{ default: Component }>)[]
-    // 38.29 — the modules a browser loads at this address, the page's then its layouts', as keys
+    // 38.28 — the modules a browser loads at this address, the page's then its layouts', as keys
     // into the manifest `manifestOf` reads.
     clientModules: string[]
 }
@@ -85,9 +94,32 @@ type RankedError = ServerError & { segments: Segment[] }
 
 type Ranked = RankedError & {
     // The document this route is painted into, with the tags that load the app already in its
-    // head (38.23, 38.24) and the preloads for this route's own modules (38.29). One per route and
+    // head (38.22, 38.23) and the preloads for this route's own modules (38.28). One per route and
     // built at boot, so a request pays for none of it.
     document: string
+}
+
+/**
+ * One route of the app: the page at it, and the handler answering each method there.
+ *
+ * 19.1 — one file per method per route, so a route is a row and a method is a column, and 19.21's
+ * "the most specific route answering the method" is a walk down the rows asking each column.
+ */
+type RouteRow = {
+    pattern: string
+    segments: Segment[]
+    page: Ranked | undefined
+    handlers: Map<Method, Mounted>
+    /**
+     * The page and each handler, keyed by itself, inside the rungs its file's route filed (37.2).
+     *
+     * 16.14 — composed once with the table. Every server block is imported before it is built
+     * (37.1), so these are the rungs the boot found, as the root's are.
+     */
+    answers: Map<
+        Ranked | Mounted,
+        (ctx: { request: Request }) => Promise<Response>
+    >
 }
 
 /** A public file, read once at boot: where the bytes are, the etag off them, and its type. */
@@ -95,19 +127,19 @@ type PublicFile = { path: string; etag: string; type: string }
 
 /** Everything `answerRequest` answers from: the ranked routes, the lanes and the handlers. */
 export type AppSources = {
-    /** The routes in 30.9's order, which `appSources` is the only way to get. */
-    routes: Ranked[]
+    /** The routes, pages and handlers both, in 30.9's order, which `appSources` is the only way to get. */
+    routes: RouteRow[]
     /**
      * Everything under `/__abide`: the bundle, and `abide dev`'s reload client beside it.
      *
-     * The bundle is 38.21's and the reload client 38.18's. One lane rather than an asset table
+     * The bundle is 38.20's and the reload client 38.17's. One lane rather than an asset table
      * plus an exception, so what a command answers there is a fact about the command.
      */
     framework: (pathname: string, request: Request) => Response | undefined
     /**
      * A file's address below `public`, to the file itself.
      *
-     * 38.19 and 38.20 — from the built output for `abide start` and from the source tree for
+     * 38.18 and 38.19 — from the built output for `abide start` and from the source tree for
      * `abide dev`.
      */
     published: Map<string, PublicFile>
@@ -115,14 +147,8 @@ export type AppSources = {
     errors: RankedError[]
     /** The document the error pages are painted into. */
     errorDocument: string
-    /** Every handler's address, to what answers it (`mountHandlers`). 16.2. */
+    /** Every handler, keyed by its method and address (`handlerKey`), to what answers it. 16.2. */
     handlers: Map<string, Mounted>
-    /**
-     * The app's own route, asked where nothing of abide's answers.
-     *
-     * 37.2 — `bootApp` fills it from `src/server/app.ts`'s `default`.
-     */
-    own: ((request: Request) => Promise<Response | undefined>) | undefined
     /**
      * What a page that threw, unrefused, is answered with in place of 16.41's bare 500.
      *
@@ -131,9 +157,6 @@ export type AppSources = {
      */
     explained: ((thrown: unknown) => Response) | undefined
 }
-
-/** What a command reads or compiles, before `bootApp` adds what the `App` itself supplies. */
-export type LoadedSources = Omit<AppSources, 'own'>
 
 /** The `Response` to one request: a handler, a surface of abide's own, a file, or a page. */
 export async function answerRequest(
@@ -145,15 +168,16 @@ export async function answerRequest(
     adoptRequest(request)
     const url = new URL(request.url)
     const asked = url.pathname
+    const method = request.method === 'HEAD' ? 'GET' : request.method
 
-    if (asked.startsWith(`${RPC_ADDRESS}/`))
-        return answerRpc(app.handlers, url, request, app)
     // 25.1, 25.3, 26.17 — the principal and the account of the app are handlers abide mounts,
     // answered as the app's are.
-    if (OWN_HANDLERS.has(asked))
-        return answerRpc(OWN_HANDLERS, url, request, app)
-    // 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where its `ABIDE_*` has not
-    // opened it.
+    const own = OWN_HANDLERS.get(asked)
+    if (own !== undefined)
+        return own.method === method
+            ? answerRpc(own, {}, url, request, app)
+            : methodRefused(app, asked, [own.method])
+    // 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where it answers nothing.
     const surface = SURFACES.get(asked)
     if (surface !== undefined) {
         const answer = await surface(app, request)
@@ -175,7 +199,7 @@ export async function answerRequest(
     if (asked.startsWith(`${ABIDE_ADDRESS}/`)) {
         const answer = app.framework(asked, request)
         if (answer === undefined) return notFound()
-        return readsOnly(request) ? answer : methodRefused(app, asked)
+        return readsOnly(request) ? answer : methodRefused(app, asked, READS)
     }
 
     // 36.11 — A PUBLIC FILE IS ITS PATH BELOW THE DIRECTORY, so `/favicon.ico` is answered
@@ -187,7 +211,7 @@ export async function answerRequest(
     if (file !== undefined)
         return readsOnly(request)
             ? publicResponse(request, file)
-            : methodRefused(app, asked)
+            : methodRefused(app, asked, READS)
 
     // 15.16 — an address that will not percent-decode names nothing, and is the caller's fault.
     const parts = partsOf(asked)
@@ -198,20 +222,79 @@ export async function answerRequest(
             refuse(400, 'The address is not a valid path.'),
         )
 
-    const found = firstMatch(app.routes, parts)
-    // 38.22. The client router leaves an unmatched address to the document (30.10), so this
-    // is where that address arrives — and where the app's own route is asked before the 404.
-    if (found === undefined)
-        return (
-            (await app.own?.(request)) ??
-            (await answerFailure(
-                app,
-                asked,
-                refusedNotFound({ path: asked, method: request.method }),
-            ))
+    // 19.21 — THE MOST SPECIFIC ROUTE ANSWERING THE METHOD, an `OPTIONS` asking about the method
+    // its preflight names (16.24). A route that matches and answers some other method is held, so
+    // an address nothing answers the method at is a 405 naming what is answered there (15.17).
+    const preflight = request.method === 'OPTIONS'
+    // `null` for an `OPTIONS` that names no method, which is no preflight (Fetch's CORS-preflight
+    // request carries one) and so no handler's: the route answers 15.17's 405 with what it allows.
+    const asking = preflight
+        ? request.headers.get('access-control-request-method')
+        : method
+    let allowed: Set<string> | undefined
+    let found:
+        | { route: RouteRow; params: Params; handler: Mounted | undefined }
+        | undefined
+    for (const route of app.routes) {
+        const params = matchOf(route.segments, parts)
+        if (params === undefined) continue
+        const handler =
+            asking === null ? undefined : route.handlers.get(asking as Method)
+        if (
+            handler !== undefined ||
+            (!preflight && asking === 'GET' && route.page !== undefined)
+        ) {
+            found = { route, params, handler }
+            break
+        }
+        allowed ??= new Set()
+        if (route.page !== undefined) allowed.add('GET').add('HEAD')
+        for (const method of route.handlers.keys()) {
+            allowed.add(method)
+            if (method === 'GET') allowed.add('HEAD')
+        }
+    }
+    if (found === undefined) {
+        if (allowed !== undefined)
+            return methodRefused(app, asked, [...allowed], request)
+        // 38.21. The client router leaves an unmatched address to the document (30.10), so this
+        // is where that address arrives. An app answering one itself does it in a root rung (37.3),
+        // which ran before this.
+        return laneFailure(
+            app,
+            asked,
+            refusedNotFound({ path: asked, method: request.method }),
+            request,
         )
+    }
+    // 37.2, 37.5 — WHAT THE FILE'S ROUTE FILED: the request runs inside every rung filed at it or
+    // above it, the root's having run already, and an error in it reaches that route's `onError`.
+    const scope = currentRequestScope() as RequestScope
+    scope.route =
+        found.handler === undefined ? found.route.pattern : found.handler.route
+    scope.params = found.params
+    const answer = found.route.answers.get(
+        found.handler ?? (found.route.page as Ranked),
+    ) as (ctx: { request: Request }) => Promise<Response>
+    return answer({ request })
+}
 
-    if (!readsOnly(request)) return methodRefused(app, asked)
+/**
+ * The answer of `found`, a page or a handler, once its middleware has admitted `request`, with the
+ * params routing put on the request's scope.
+ */
+async function answerMatched(
+    app: AppSources,
+    request: Request,
+    found: Ranked | Mounted,
+): Promise<Response> {
+    // 37.2 — a route's rung may hand `next` a request of its own, adopted as a root rung's is.
+    adoptRequest(request)
+    const url = new URL(request.url)
+    const asked = url.pathname
+    const params = (currentRequestScope() as RequestScope).params as Params
+    if ('handler' in found) return answerRpc(found, params, url, request, app)
+    const page = found
 
     // 30.16 — THE CLIENT ROUTER ASKING, not a reader loading the page. `middleware` has already run
     // over this request by the time it gets here, and it is what the router came for: a refusal
@@ -226,8 +309,8 @@ export async function answerRequest(
     // 33.4 — a prop is an ACCESSOR, which is the contract `renderComponent` renders a child under
     // and the one the client router mounts a page under; the params are the record `firstMatch`
     // hands the client for this same address.
-    const bound = boundPage(found.route, { params: () => found.params })
-    // 38.30 — `vary` WHETHER OR NOT THIS ONE IS COMPRESSED: the document is negotiated, and a cache
+    const bound = boundPage(page, { params: () => params })
+    // 38.29 — `vary` WHETHER OR NOT THIS ONE IS COMPRESSED: the document is negotiated, and a cache
     // that stored the identity answer for a reader who sent no `accept-encoding` must not hand it
     // to one who did, nor the reverse.
     const headers = new Headers(DOCUMENT_HEADERS)
@@ -244,7 +327,7 @@ export async function answerRequest(
     // would otherwise render one address and hydrate against another.
     const at = new URL(request.url)
     at.pathname = mounted(at.pathname)
-    arrive(at.href, found.route.pattern, found.params)
+    arrive(at.href, page.pattern, params)
     // 11.32 — the page renders in a scope of its own, so what its values hold is this request's —
     // and 41.13, every call it makes is left for the browser's own call to be answered from.
     beginRender({ seed: seedFor(caller), calls: [] })
@@ -253,7 +336,7 @@ export async function answerRequest(
     // status rather than as a 200 the stream then abandons.
     let document: Uint8Array<ArrayBuffer>
     try {
-        document = await render(bound, found.route.document)
+        document = await renderDocument(bound, page.document)
     } catch (thrown) {
         const failure = failureOf(thrown)
         // Explained only where it was the server's fault — not a refusal, not a client that left.
@@ -277,11 +360,10 @@ export async function answerRequest(
 const OWN_HANDLERS = new Map([
     PRINCIPAL_MOUNT,
     mountedOwn(HEALTH_ADDRESS, 'health', health),
-    mountedOwn(LOGS_ADDRESS, 'logs', LOGS_HANDLER),
 ])
 
 // THE ADDRESSES ABIDE ANSWERS ITSELF, looked up once rather than asked in turn: each to its value,
-// a `Response` of its own, or `undefined` where its `ABIDE_*` has not opened it.
+// a `Response` of its own, or `undefined` for a 404.
 const SURFACES = new Map<
     string,
     (app: AppSources, request: Request) => unknown
@@ -321,9 +403,9 @@ export function reachedInRender(
 }
 
 /**
- * What the compiler writes to `<out>/server.ts`: the routes and the error pages.
+ * The server's table the compiler writes (`SERVER_TABLE`): the routes and the error pages.
  *
- * Read off disk by `abide start` and out of memory by `abide dev`.
+ * Served out of the compilation (`abideModules`) — the one a build kept, or `abide dev`'s.
  */
 export type ServerTable = { routes: ServerRoute[]; errors: ServerError[] }
 
@@ -336,14 +418,12 @@ export type ServerTable = { routes: ServerRoute[]; errors: ServerError[] }
  */
 export type SourceParts = {
     table: ServerTable
-    shell: string
-    /** The handler table the build wrote, and where each row's module is loaded from. 16.2. */
-    handlers: Mount[]
-    handlerModule: (source: string) => Promise<Record<string, unknown>>
-    /** Every public file, by its name below the directory to its path. 38.19, 38.20. */
+    /** The handler table the build wrote, each row with its module's loader. 16.2. */
+    handlers: MountRow[]
+    /** Every public file, by its name below the directory to its path. 38.18, 38.19. */
     published: Map<string, string>
     /**
-     * The bundle's manifest, its lane, and `head` — `abide dev`'s reload client (38.18), after the
+     * The bundle's manifest, its lane, and `head` — `abide dev`'s reload client (38.17), after the
      * app's own tags.
      *
      * A PROMISE WHERE THE BUNDLE IS STILL BUILDING: `abide dev`'s handlers mount and its public files
@@ -363,33 +443,57 @@ type ClientLane = {
  * The sources an `App` is booted over, off the parts a command supplies.
  *
  * 30.9 — MOST SPECIFIC FIRST, ranked off the table rather than in it. The ordering IS the client
- * router's own: both seams compile through `rankRoutes` and resolve through `firstMatch`, so
+ * router's own: both seams compile through `rankRoutes` and walk a route with `matchOf` — the
+ * server past a route that has no answer for the method asked, which the router never is — so
  * "the two cannot resolve one address differently" is a grep rather than a promise. 35.2 — the
  * error pages deepest directory first, so the nearest answers.
  */
-export async function appSources(parts: SourceParts): Promise<LoadedSources> {
+export async function appSources(parts: SourceParts): Promise<AppSources> {
     const [mounted, published, client] = await Promise.all([
-        mountHandlers(parts.handlers, parts.handlerModule),
+        mountHandlers(parts.handlers),
         publicFilesAt(parts.published),
         parts.client,
     ])
-    const underMount = shellUnderMount(parts.shell)
+    // 35.6 — every page is served in abide's own document; what it carries beyond that, the root
+    // `layout.abide` writes (35.15).
     const documentOf = (modules: string[]): string =>
-        intoHead(underMount, clientTags(client.manifest, modules) + client.head)
-    const routes: Omit<Ranked, 'segments'>[] = []
+        intoHead(
+            DEFAULT_DOCUMENT,
+            clientTags(client.manifest, modules) + client.head,
+        )
+    const pages: Omit<Ranked, 'segments'>[] = []
     for (const route of parts.table.routes)
-        routes.push({
+        pages.push({
             pattern: route.pattern,
             load: route.load,
             layouts: route.layouts,
             document: documentOf(route.clientModules),
         })
+    // 19.1 — the build refused two files at one route and method, so a route is one row however
+    // many methods answer at it.
+    const rows = new Map<string, Omit<RouteRow, 'segments'>>()
+    const rowAt = (pattern: string): Omit<RouteRow, 'segments'> => {
+        let row = rows.get(pattern)
+        if (row === undefined) {
+            row = {
+                pattern,
+                page: undefined,
+                handlers: new Map(),
+                answers: new Map(),
+            }
+            rows.set(pattern, row)
+        }
+        return row
+    }
+    for (const page of rankRoutes(pages)) rowAt(page.pattern).page = page
+    for (const handler of mounted.handlers.values())
+        rowAt(handler.address).handlers.set(handler.method, handler)
     const errors: RankedError[] = []
     for (const error of parts.table.errors)
         errors.push({ ...error, segments: parseRoutePattern(error.pattern) })
     errors.sort((a, b) => b.segments.length - a.segments.length)
-    return {
-        routes: rankRoutes(routes),
+    const sources: AppSources = {
+        routes: rankRoutes([...rows.values()]),
         errors,
         errorDocument: documentOf([]),
         framework: client.framework,
@@ -397,12 +501,34 @@ export async function appSources(parts: SourceParts): Promise<LoadedSources> {
         explained: parts.explained,
         ...mounted,
     }
+    for (const row of sources.routes) {
+        if (row.page !== undefined)
+            row.answers.set(
+                row.page,
+                answerInside(sources, row.page, rungsOver(row.pattern)),
+            )
+        for (const handler of row.handlers.values())
+            row.answers.set(
+                handler,
+                answerInside(sources, handler, handler.rungs),
+            )
+    }
+    return sources
+}
+
+/** `found`'s answer inside the rungs filed over its route. 16.14, 37.2. */
+function answerInside(
+    app: AppSources,
+    found: Ranked | Mounted,
+    rungs: AppRung[],
+): (ctx: { request: Request }) => Promise<Response> {
+    return compose(rungs, ({ request }) => answerMatched(app, request, found))
 }
 
 /**
  * The head tags that load the app: its metas, stylesheet, entry script and the route's preloads.
  *
- * 38.23, and 38.24 for the stylesheet beside it. An app does not write either: the bundle's
+ * 38.22, and 38.23 for the stylesheet beside it. An app does not write either: the bundle's
  * address is the build's, and a hand-written one is a path that goes stale the first time the
  * output layout moves.
  *
@@ -417,23 +543,25 @@ export async function appSources(parts: SourceParts): Promise<LoadedSources> {
  * component is not on it matches nothing. An imported stylesheet carries no token and applies as
  * written, wherever it is served.
  *
- * 38.29 — THE ROUTE'S CHUNKS ARE PRELOADED BESIDE THE ENTRY. Left to the client, the page's chunk
+ * 38.28 — THE ROUTE'S CHUNKS ARE PRELOADED BESIDE THE ENTRY. Left to the client, the page's chunk
  * and the shared runtime it imports are only asked for once the entry has arrived and run the
  * router — a whole round trip after the document, for the largest file in the bundle. Named here,
  * they are requested while the document is still being parsed.
  *
  * EVERY NAME IS THE MANIFEST'S, the entry's included: a build hashes it (38.5). A manifest with no
- * entry is a bundle that failed under `abide dev` (38.18), and gets no tags rather than a
+ * entry is a bundle that failed under `abide dev` (38.17), and gets no tags rather than a
  * `<script>` at a 404.
  */
 export function clientTags(manifest: Manifest, modules: string[]): string {
     if (manifest.entry === undefined) return ''
-    // 28.11 — `DEBUG`, through the document rather than the bundle, where the server has one.
+    // 28.10 — `DEBUG`, through the document rather than the bundle, where the server has one.
     const debug = process.env.DEBUG
     let tags =
         debug === undefined || debug === ''
             ? ''
             : `<meta name="${DEBUG_META}" content="${escapeAttribute(debug)}">`
+    // 28.4 — the app's name, so a browser's `log.named` prefixes the one the server's does.
+    tags += `<meta name="${APP_META}" content="${escapeAttribute(appName())}">`
     // 16.10 — the mount the browser resolves every address against, the root's `''` included: a
     // lookup that finds no tag has walked the whole document to say so.
     tags += `<meta name="${MOUNT_META}" content="${escapeAttribute(MOUNT.current())}">`
@@ -449,37 +577,9 @@ export function clientTags(manifest: Manifest, modules: string[]): string {
 }
 
 /**
- * The shell with every root-absolute `href` and `src` it writes put below the mount.
- *
- * 16.10, 36.11 — THE SHELL IS NOT A TEMPLATE, so it has no `url` to spell an address with, and the
- * `/fonts/…` it preloads is a public file answered below the mount. The same shell is every page's
- * at every depth, so a relative address is no spelling either. `//` is another host's.
- */
-function shellUnderMount(shell: string): string {
-    const root = mounted('/')
-    return root === '/'
-        ? shell
-        : shell.replace(
-              /\b(href|src)=(["'])\/(?!\/)/g,
-              (_whole, name: string, quote: string) =>
-                  `${name}=${quote}${root}`,
-          )
-}
-
-/**
- * The shell with `tags` at the head anchor `render` uses.
- *
- * So a shell with no `</head>` puts them where its head content goes rather than inside the body.
- */
-function intoHead(shell: string, tags: string): string {
-    const at = headAnchor(shell)
-    return shell.slice(0, at) + tags + shell.slice(at)
-}
-
-/**
  * The public files by address, off each file's name and where its bytes are.
  *
- * 38.19 and 38.20's directory, as an address per file — or a compiled app's, whose bytes are
+ * 38.18 and 38.19's directory, as an address per file — or a compiled app's, whose bytes are
  * inside itself. Read at boot rather than per request, and the ETAG IS READ WITH IT: 21.13
  * derives it from the bytes, so there is no cheaper moment than the one read that is happening
  * anyway. The bytes are hashed and dropped — `Bun.file` streams the body when somebody asks, so a
@@ -531,13 +631,42 @@ function readsOnly(request: Request): boolean {
     return request.method === 'GET' || request.method === 'HEAD'
 }
 
+const READS = ['GET', 'HEAD']
+
+/**
+ * 15.17 — a 405, naming what is answered at `pathname`.
+ *
+ * `request` where a route's methods were asked, which 15.22 answers in the asker's lane; a public
+ * file and the bundle are a document's alone.
+ */
 async function methodRefused(
     app: AppSources,
     pathname: string,
+    allowed: string[],
+    request?: Request,
 ): Promise<Response> {
-    const answer = await answerFailure(app, pathname, refuse(405))
-    answer.headers.set('allow', 'GET, HEAD')
+    const failure = refuse(405)
+    const answer =
+        request === undefined
+            ? await answerFailure(app, pathname, failure)
+            : await laneFailure(app, pathname, failure, request)
+    answer.headers.set('allow', allowed.join(', '))
     return answer
+}
+
+/**
+ * A failure at an address whose lane only the request can say: a page's, painted, where it prefers
+ * a document, and a handler's otherwise. 15.22.
+ */
+function laneFailure(
+    app: AppSources,
+    pathname: string,
+    failure: Failed<string, unknown>,
+    request: Request,
+): Response | Promise<Response> {
+    return prefers(request, 'text/html', 'application/json')
+        ? answerFailure(app, pathname, failure)
+        : answered(failure)
 }
 
 /**

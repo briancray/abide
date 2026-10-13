@@ -1,4 +1,5 @@
 import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
+import { tablePath } from './abideModules.ts'
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 
 /**
@@ -9,13 +10,17 @@ import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
  * where the output goes and how it is named.
  */
 export function clientBuildOptions(
-    entryDirectory: string,
+    root: string,
     plugins: Bun.BunPlugin[],
     publicAddresses: string[],
 ) {
     return {
-        entrypoints: [`${entryDirectory}/${CLIENT_ENTRY}.ts`] as string[],
-        // 16.28, 16.29 — a handler module is its wrapper here, and the rest of `server/` refuses.
+        // The entry is a table the plugin serves (`abideModules`), below the root.
+        entrypoints: [tablePath(root, `${CLIENT_ENTRY}.ts`)] as string[],
+        // The app's own root, because `Bun.build` opens the entry's directory otherwise, and the
+        // tables' is not on disk to open.
+        root,
+        // 16.28, 16.29 — a `<script server>` is its stand-ins here, and a `server/` module refuses.
         plugins,
         target: 'browser',
         format: 'esm',

@@ -211,10 +211,10 @@ const label = 'level ' + depth
     )
 })
 
-// 38.40 — A HOVER INSIDE THE BLOCK IS ANSWERED, from the file's own projection, where the body is
+// 38.39 — A HOVER INSIDE THE BLOCK IS ANSWERED, from the file's own projection, where the body is
 // typed. THE REVERT: project no inline component (`declare` doing nothing); `diagnose` reports
 // `Price` unbound (TS2304) and nothing in the body is typed.
-test('a hover inside an inline component is answered — 38.40', async () => {
+test('a hover inside an inline component is answered — 38.39', async () => {
     const page = `{#component Price({ amount }: { amount: number })}
 <b>{amount.toFixed(2)}</b>
 {/component}
@@ -302,7 +302,7 @@ let app = ''
 
 beforeAll(async () => {
     app = appFixture({
-        'ui/pages/page.abide': `<script>
+        'page.abide': `<script>
 import { reactive } from '@abide/abide'
 
 let count = reactive(0)
@@ -318,8 +318,8 @@ let count = reactive(0)
 .row { color: red }
 </style>`,
         'ui/components/Outer.abide': OUTER,
-        'ui/pages/passed/page.abide': `<script>
-import Outer from '../../components/Outer.abide'
+        'passed/page.abide': `<script>
+import Outer from '../ui/components/Outer.abide'
 </script>
 
 <Outer title="t">{#component Item({ n }: { n: string })}<li>{n}</li>{/component}</Outer>
@@ -328,13 +328,13 @@ import Outer from '../../components/Outer.abide'
     })
 }, 60_000)
 
-// 38.41, 32.54 — A TAG IS HELD TO THE PROPS ITS PATTERN'S ANNOTATION DECLARES, and a component passed
+// 38.40, 32.54 — A TAG IS HELD TO THE PROPS ITS PATTERN'S ANNOTATION DECLARES, and a component passed
 // between the tags to the type its receiver declares for it, each on the file's own line; and a
 // component passed is in scope nowhere after the tag (32.51). THE REVERTS: key the record on no
 // passed component (`invocation` skipping `node.passed`) — each `<Outer>` reports `Item` missing
 // (TS2741) and the `n: string` mismatch is not; or declare the passed components without braces
 // around the call — `<Item n={1}/>` after the tags resolves, and two `Item`s collide (TS2393).
-test('abide check holds an inline component to its props and a passed one to its receiver — 32.40, 32.51, 32.54, 38.41', async () => {
+test('abide check holds an inline component to its props and a passed one to its receiver — 32.40, 32.51, 32.54, 38.40', async () => {
     const found = await checkApp(app)
     const reported: {
         path: string
@@ -345,14 +345,14 @@ test('abide check holds an inline component to its props and a passed one to its
     for (const { path, line, column, code } of found)
         reported.push({ path: path.slice(app.length), line, column, code })
     expect(reported).toEqual([
-        { path: '/ui/pages/page.abide', line: 11, column: 17, code: 2322 },
+        { path: '/page.abide', line: 11, column: 17, code: 2322 },
         {
-            path: '/ui/pages/passed/page.abide',
+            path: '/passed/page.abide',
             line: 5,
             column: 30,
             code: 2322,
         },
-        { path: '/ui/pages/passed/page.abide', line: 7, column: 2, code: 2304 },
+        { path: '/passed/page.abide', line: 7, column: 2, code: 2304 },
     ])
 })
 
@@ -361,11 +361,11 @@ test('abide check holds an inline component to its props and a passed one to its
 // the file's components in `emitApp` — the `<li>` carries no token, and `.row` matches nothing.
 test('an inline component is scoped by its file and by its own style — 32.45, 32.47', async () => {
     const compiled = await compileApp(app)
-    const server = compiled.modules.get('ui/pages/page.ts') ?? ''
+    const server = compiled.files['page.abide']?.server ?? ''
     const token = /li class=\\"row\\" (a-[\w]+) (a-[\w]+-0)/.exec(server)
     expect(token).not.toBeNull()
     const [, file, own] = token as RegExpExecArray
-    const sheet = compiled.modules.get('ui/pages/page.style.css')
+    const sheet = compiled.files['page.abide']?.sheet
     expect(sheet).toContain(`.row[${file}]`)
     expect(sheet).toContain(`li[${own}]`)
 })

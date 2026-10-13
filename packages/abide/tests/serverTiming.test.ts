@@ -57,13 +57,17 @@ export const spanned = GET(() =>
 
 let base = ''
 let stop = (): void => {}
-const RPC = '/__abide/rpc/timed'
+const RPC = '/timed'
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/app.ts': APP,
-        'server/rpc/timed.ts': HANDLERS,
+        'page.abide': '<main>home</main>',
+        'layout.abide': `<script server>
+${APP}</script>
+`,
+        'timed/timed.abide': `<script server>
+${HANDLERS}</script>
+`,
     }))
 }, 30_000)
 

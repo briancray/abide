@@ -57,9 +57,9 @@ beforeAll(async () => {
         'package.json': JSON.stringify({
             name: 'args-defaults-fixture',
             type: 'module',
-            imports: { '#ui/*': './ui/*', '#shared/*': './shared/*' },
+            imports: { '#src/*': './*' },
         }),
-        'ui/pages/page.abide': PAGE,
+        'page.abide': PAGE,
         'shared/queries.ts': QUERIES,
     })
     found = (await checkApp(app)).filter((diagnosis) =>
@@ -92,6 +92,11 @@ test('an args default the parameter does not write is warned on at the args — 
         })),
     ).toEqual([
         {
+            file: 'page.abide',
+            ...place(PAGE, 'jsonSchema({'),
+            category: 'warning',
+        },
+        {
             file: 'shared/queries.ts',
             ...place(QUERIES, 'jsonSchema({'),
             category: 'warning',
@@ -106,16 +111,11 @@ test('an args default the parameter does not write is warned on at the args — 
             ...place(QUERIES, "jsonSchema({ type: 'object', properties: { per"),
             category: 'warning',
         },
-        {
-            file: 'ui/pages/page.abide',
-            ...place(PAGE, 'jsonSchema({'),
-            category: 'warning',
-        },
     ])
-    expect(found[0]?.message).toContain('`page`')
-    expect(found[1]?.message).toContain('`size`')
-    expect(found[2]?.message).toContain('`per`')
-    expect(found[3]?.message).toContain('`limit`')
+    expect(found[0]?.message).toContain('`limit`')
+    expect(found[1]?.message).toContain('`page`')
+    expect(found[2]?.message).toContain('`size`')
+    expect(found[3]?.message).toContain('`per`')
 })
 
 // A WARNING, AND THE BUILD GOES ON. THE REVERT: drop `unkeyed` from `compileApp`'s warnings; the
@@ -127,9 +127,9 @@ test('a build warns on an args default the parameter does not write, and compile
         if (warning.message.includes('11.30'))
             warned.push(warning.path.slice(app.length + 1))
     expect(warned).toEqual([
+        'page.abide',
         'shared/queries.ts',
         'shared/queries.ts',
         'shared/queries.ts',
-        'ui/pages/page.abide',
     ])
 }, 60_000)

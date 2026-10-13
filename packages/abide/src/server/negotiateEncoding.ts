@@ -1,4 +1,4 @@
-// 38.30 — WHICH OF THE ENCODINGS ON OFFER A REQUEST TAKES, or `undefined` for the bytes as they
+// 38.29 — WHICH OF THE ENCODINGS ON OFFER A REQUEST TAKES, or `undefined` for the bytes as they
 // are. What is on offer is asked rather than assumed: a request preferring brotli for a file with
 // only a gzip copy takes the gzip, where picking first and checking after would send it neither.
 //

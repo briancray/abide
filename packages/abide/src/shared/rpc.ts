@@ -6,7 +6,7 @@
 // A HANDLER IS A `reactive` OR BECOMES ONE (16.1), so an `Rpc` is not a second kind of value: the
 // call hands back the handler's own `Reactive` (16.3), and every probe, trigger and failure on it is
 // the reactive core's — the `Rpc`'s own `busy`, `ready`, `refresh` and `invalidate` are the
-// handler's, passed through. What this file adds is the normalising — a plain function or a value becomes the
+// handler's, passed through. What this file adds is the normalizing — a plain function or a value becomes the
 // `reactive` it would have been (16.6) — and the method.
 //
 // A HANDLER DECLARING `middleware` IS REACHED THROUGH ITS RUNGS (16.11), in process as over the wire:
@@ -14,6 +14,7 @@
 // handler's own.
 
 import { type Failed, isFailedNamed } from './Failed.ts'
+import { filledSegments } from './filledPath.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { compose, type Middleware } from './Middleware.ts'
 import { principalRotated } from './principalRotated.ts'
@@ -23,7 +24,7 @@ import {
     type Gated,
     gateOf,
     keyOf,
-    normalised,
+    normalized,
 } from './reactive/argsContract.ts'
 import { callLoad } from './reactive/callLoad.ts'
 import {
@@ -48,7 +49,8 @@ import { MUTATION } from './reactive/MUTATION.ts'
 import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { isForwarder } from './reactive/scoped.ts'
 import { checkArgs } from './refuse.ts'
-import { rpcRequest } from './rpcRequest.ts'
+import { parseRoutePattern, type Segment } from './routePattern.ts'
+import { pathRefusal, rpcRequest } from './rpcRequest.ts'
 import type { Schema } from './Schema.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -131,7 +133,7 @@ export type RpcContext<Args = unknown> = { request: Request; args: () => Args }
  * The context key holding the args as sent.
  *
  * 11.26 — THE ARGS AS SENT, carried on the context under a key no rung spells, so the reach at the
- * onion's centre keys the value by them rather than by what the gate made of them.
+ * onion's center keys the value by them rather than by what the gate made of them.
  */
 const SENT: unique symbol = Symbol('abide.sent')
 
@@ -331,10 +333,10 @@ export function declare(method: Method): Declare {
                 args: argsOnce(gateOf(contract), args),
                 [SENT]: args,
             }) as RpcContext
-        // 16.32 BEHIND RUNGS — A STREAM'S CHUNKS ARE FORWARDED, not collected. The centre of the
+        // 16.32 BEHIND RUNGS — A STREAM'S CHUNKS ARE FORWARDED, not collected. The center of the
         // onion is an async function, and a `Reactive` is thenable (1.4), so handing a streaming value
         // out through it would wait out the whole run and answer the accumulation once it closed. So
-        // the centre waits only until the value settles or turns out to stream (9.6), and hands a
+        // the center waits only until the value settles or turns out to stream (9.6), and hands a
         // stream on as its chunks — a generator, which is not thenable. The value the call reaches
         // resolves to it and is a stream of its own from then (9.6), so a second call joining it
         // (1.8) reads the same accumulation. A refusal a rung answers with is the value's refusal.
@@ -369,8 +371,35 @@ export function declare(method: Method): Declare {
         // this handler and these args is then answered from what this one reached, rather than by
         // running the handler again. In a browser nothing fills the slot, so the report is one load
         // of a `null`.
+        //
+        // 15.8 — AND REFUSED AHEAD OF THE HANDLER where the args leave a parameter of its route no
+        // spelling (30.3, 30.19), as the wire refuses them: a render and the browser's call then
+        // reach the same refusal, and there is no request for the render to report. The route is
+        // parsed once per address, which is stamped after the declaration (16.10).
+        let routed: string | undefined
+        let routeSegments: Segment[] | null = null
         const call = (given?: unknown, options?: CallOptions): unknown => {
-            const args = normalised(contract, given)
+            const args = normalized(contract, given)
+            const address = rpc.address
+            if (address !== routed) {
+                routed = address
+                routeSegments =
+                    address?.includes('[') === true
+                        ? parseRoutePattern(address)
+                        : null
+            }
+            if (routeSegments !== null) {
+                try {
+                    filledSegments(
+                        routeSegments,
+                        (args ?? {}) as Record<string, unknown>,
+                        routed as string,
+                        pathRefusal,
+                    )
+                } catch (refused) {
+                    return reactive(() => refused)
+                }
+            }
             const reached = callLoad(
                 reachThrough,
                 args,
@@ -472,7 +501,7 @@ export const DELETE: Declare = declare('DELETE')
 function addressOf(rpc: { address: string | undefined }): string {
     if (rpc.address === undefined)
         throw new Error(
-            'abide: this handler has no address yet. A handler is given one where it is mounted, under src/server/rpc (16.2).',
+            'abide: this handler has no address yet. A handler is given one where it is mounted, exported from a <script server> (16.2).',
         )
     return rpc.address
 }

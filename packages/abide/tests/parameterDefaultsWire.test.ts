@@ -22,7 +22,7 @@ export const list = GET(async ({ page = 1 }: { page?: number }) => {
 // One page leaves the member to the default and the other writes it.
 const pageCalling = (args: string): string => `<script>
 import { reactive } from '@abide/abide'
-import { list } from '#server/rpc/pages.ts'
+import { list } from '#src/pages/pages.abide'
 
 const shown = reactive(() => list(${args}))
 </script>
@@ -34,9 +34,11 @@ let base = ''
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': pageCalling('{}'),
-        'ui/pages/written/page.abide': pageCalling('{ page: 1 }'),
-        'server/rpc/pages.ts': PAGES,
+        'page.abide': pageCalling('{}'),
+        'written/page.abide': pageCalling('{ page: 1 }'),
+        'pages/pages.abide': `<script server>
+${PAGES}</script>
+`,
     }))
 }, 30_000)
 
@@ -45,7 +47,7 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-const ADDRESS = '/__abide/rpc/pages/list'
+const ADDRESS = '/pages/list'
 
 async function call(query: string, cookie?: string): Promise<number> {
     const answer = await Bun.fetch(`${base}${ADDRESS}${query}`, {
@@ -64,7 +66,7 @@ async function render(path: string): Promise<{ cookie: string; html: string }> {
 
 // A RENDER THAT LEFT `page` TO THE DEFAULT is answered to the browser's call that wrote it — which is
 // the call the browser's copy makes, its early call in the head included. THE REVERT: drop
-// `normalised` from `call` in `rpc.ts`; the render's run is filed under `{}`, the head starts
+// `normalized` from `call` in `rpc.ts`; the render's run is filed under `{}`, the head starts
 // `list` with no query, and the call is answered by a run of its own — 2 past the anchor where 1 is
 // due.
 test("a render's call leaving a member to the default answers the browser's call writing it — 11.29", async () => {
@@ -75,7 +77,7 @@ test("a render's call leaving a member to the default answers the browser's call
 })
 
 // AND THE OTHER WAY: a call arriving with no args is keyed by the defaults before its seed is looked
-// up. THE REVERT: drop `normalised` after `coerceArgs` in `answerRpc`; the call is looked up under
+// up. THE REVERT: drop `normalized` after `coerceArgs` in `answerRpc`; the call is looked up under
 // no args and runs again — 2 past the anchor where 1 is due.
 test('a call arriving with no args is answered from a render that wrote the default — 11.27', async () => {
     const anchor = await call('?page=1')

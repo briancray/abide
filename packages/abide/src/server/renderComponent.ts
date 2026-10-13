@@ -28,6 +28,11 @@ export function renderComponent(
     const rendered = (
         component as (props: Record<string, () => unknown>) => Rendered
     )(props)
+    // 35.16 — a document is written by the outermost component alone, and this one is placed.
+    if (rendered.document !== undefined)
+        throw new Error(
+            'abide: a component that writes <html> is placed inside another, and only the outermost component writes the document. RULEBOOK 35.16.',
+        )
     if (rendered.head !== '') heads.push(rendered.head)
     return regionMarkup(rendered.body)
 }

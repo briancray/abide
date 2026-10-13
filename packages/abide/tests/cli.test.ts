@@ -22,18 +22,16 @@ const PAGE = `<head><title>Home</title></head>
 // An app laid out the way a scaffold leaves one: the package at the top, the source under `src`.
 function scaffolded(): string {
     return temporaryModule({
-        'src/ui/app.html':
-            '<!doctype html><html><head></head><body></body></html>',
-        'src/ui/pages/page.abide': PAGE,
+        'src/page.abide': PAGE,
         'package.json': JSON.stringify({
             name: 'cli-fixture',
             type: 'module',
-            imports: { '#ui/*': './src/ui/*' },
+            imports: { '#src/*': './src/*' },
         }),
     })
 }
 
-test('an app is found at src/ where the command is run — 38.26, 38.28', async () => {
+test('an app is found at src/ where the command is run — 38.25, 38.27', async () => {
     const app = scaffolded()
     const built = await spawned(['bun', BIN, 'build'], { cwd: app })
     expect(built.stderr).toBe('')
@@ -41,7 +39,7 @@ test('an app is found at src/ where the command is run — 38.26, 38.28', async 
 
     // BESIDE THE APP, which is the other half of saying nothing: a build whose output lands
     // wherever the shell happened to stand is one `abide start` cannot find twice running.
-    expect(await Bun.file(`${app}/.abide/server.ts`).exists()).toBe(true)
+    expect(await Bun.file(`${app}/.abide/compilation.json`).exists()).toBe(true)
     // THE ENTRY UNDER THE NAME THE MANIFEST GIVES IT, which a build hashes (38.5).
     const manifest = (await Bun.file(`${app}/.abide/manifest.json`).json()) as {
         entry: string
@@ -51,16 +49,16 @@ test('an app is found at src/ where the command is run — 38.26, 38.28', async 
     ).toBe(true)
 })
 
-test('an app is found where the command is run, when ui/ is right there — 38.26', async () => {
+test('an app is found where the command is run, when ui/ is right there — 38.25', async () => {
     const app = scaffolded()
     const built = await spawned(['bun', BIN, 'build'], { cwd: `${app}/src` })
     expect(built.exitCode).toBe(0)
     // `dirname(root)` again, and the root here IS `src` — so the build goes beside it rather
     // than inside the tree it compiled.
-    expect(await Bun.file(`${app}/.abide/server.ts`).exists()).toBe(true)
+    expect(await Bun.file(`${app}/.abide/compilation.json`).exists()).toBe(true)
 })
 
-test('a directory with no app is a refusal naming where it looked — 38.27', async () => {
+test('a directory with no app is a refusal naming where it looked — 38.26', async () => {
     const nowhere = temporaryModule({ 'readme.md': 'nothing to build here\n' })
     const built = await spawned(['bun', BIN, 'build'], { cwd: nowhere })
     expect(built.exitCode).toBe(1)
@@ -70,7 +68,7 @@ test('a directory with no app is a refusal naming where it looked — 38.27', as
     expect(said).toContain('--root')
 })
 
-test('asking for help is a success and an unknown command is not — 38.13', async () => {
+test('asking for help is a success and an unknown command is not — 38.12', async () => {
     for (const asked of [['help'], ['-h'], ['--help']]) {
         const helped = await spawned(['bun', BIN, ...asked])
         expect(helped.exitCode).toBe(0)

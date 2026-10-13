@@ -61,7 +61,7 @@ export class Scope {
             this.stops.push(watchTracked(effect))
             return
         }
-        // UNDER A BOUNDARY, a throw is the boundary's and the scopes a re-run builds are too, and a
+        // UNDER A BOUNDARY, a throw is the boundary's and the scopes a rerun builds are too, and a
         // failed binding is retried by running it again.
         this.stops.push(watchTracked(() => boundary.guard(effect, effect)))
     }

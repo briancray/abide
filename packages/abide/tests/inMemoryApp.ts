@@ -8,26 +8,28 @@
 // `Bun.serve` (see `serve.test.ts`).
 
 import { appSources } from '#server/answerRequest.ts'
-import type { Mount } from '#server/answerRpc.ts'
+import type { Mount, MountRow } from '#server/answerRpc.ts'
 import { type App, bootApp } from '#server/createApp.ts'
 import { NO_MANIFEST } from '#server/manifestOf.ts'
-import { RPC_ADDRESS } from '#shared/ADDRESSES.ts'
+import { routeOf } from '#shared/routePattern.ts'
 import type { Method } from '#shared/rpc.ts'
 
 /**
- * An `App` over `modules`, by source path below the app's root — `server/rpc/invoices.ts` — to the
- * module's exports, with `rows` laid over the table derived from them by address.
+ * An `App` over `modules`, by the path below the app's root of the file declaring them —
+ * `invoices/page.abide` — to its server block's exports,
+ * with `rows` laid over the table derived from them by address.
  */
 export function inMemoryApp(
     modules: Record<string, Record<string, unknown>>,
     rows: Partial<Mount>[] = [],
 ): Promise<App> {
-    const handlers: Mount[] = []
+    const handlers: MountRow[] = []
     for (const [source, exported] of Object.entries(modules)) {
-        const path = source.replace(/^server\/rpc\//, '').replace(/\.ts$/, '')
+        const route = routeOf(source)
         for (const [name, handler] of Object.entries(exported)) {
-            const address = `${RPC_ADDRESS}/${path}${name === 'default' ? '' : `/${name}`}`
+            const address = `${route === '/' ? '' : route}/${name}`
             handlers.push({
+                load: async () => exported,
                 address,
                 method: (handler as { method: Method }).method,
                 source,
@@ -46,9 +48,7 @@ export function inMemoryApp(
     return bootApp({ hooks: undefined, package: {} }, () =>
         appSources({
             table: { routes: [], errors: [] },
-            shell: '<!doctype html><html><head></head><body></body></html>',
             handlers,
-            handlerModule: async (source) => modules[source] ?? {},
             published: new Map(),
             client: {
                 manifest: NO_MANIFEST,

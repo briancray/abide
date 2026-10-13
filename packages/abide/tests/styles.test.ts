@@ -84,7 +84,7 @@ const { title } = props<{ title: string }>()
 </style>`
 
 const PAGE = `<script>
-import Card from '#ui/components/Card.abide'
+import Card from '#src/ui/components/Card.abide'
 </script>
 
 <main><Card title="first"><p id="passed">from the page</p></Card></main>
@@ -98,7 +98,7 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': PAGE,
+        'page.abide': PAGE,
         'ui/components/Card.abide': CARD,
     }))
 }, 30_000)
@@ -157,25 +157,24 @@ test('a stylesheet names a view transition by a rule, not by the words — 39.7'
 })
 
 // 39.8 — DECIDED BY THE BUILD, written into the route table the client boots from. THE REVERT:
-// leave `transitions` false in `compileApp`; the styled app's table reads `startRouter(routes, host, false, …)`.
+// leave `transitions` false in `compileApp`; the styled app's table reads `startRouter(routes, host, false)`.
 test('the build turns view transitions on from the compiled styles — 39.8', async () => {
     const app = (style: string) => ({
         'package.json': JSON.stringify({
             name: 'transition-fixture',
             type: 'module',
-            imports: { '#ui/*': './ui/*' },
+            imports: { '#src/*': './*' },
         }),
-        'ui/app.html': '<!doctype html><html><head></head><body></body></html>',
-        'ui/pages/page.abide': `<main><p class="total">1</p></main>\n\n<style>\n${style}\n</style>`,
+        'page.abide': `<main><p class="total">1</p></main>\n\n<style>\n${style}\n</style>`,
     })
     const on = await compileApp(
         temporaryModule(app('.total { view-transition-name: total }')),
     )
     const off = await compileApp(temporaryModule(app('.total { color: red }')))
-    expect(on.modules.get('routes.ts')).toContain(
-        'startRouter(routes, host, true,',
+    expect(on.tables['routes.ts']).toContain(
+        'startRouter(routes, host, true)',
     )
-    expect(off.modules.get('routes.ts')).toContain(
-        'startRouter(routes, host, false,',
+    expect(off.tables['routes.ts']).toContain(
+        'startRouter(routes, host, false)',
     )
 })

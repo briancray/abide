@@ -1,8 +1,8 @@
-// 38.73 — THE FIELDS THE DESKTOP LAUNCHER'S START FORM ASKS FOR: the members of the `onConfig`
+// 38.72 — THE FIELDS THE DESKTOP LAUNCHER'S START FORM ASKS FOR: the members of the `onConfig`
 // schema's JSON Schema, probed as 20.11 probes a handler's, and the fields `onConfig`'s defaults
 // return where the schema has no document to read.
 
-import { HOOKS } from './hooks.ts'
+import { HOOKS, inOrder } from './hooks.ts'
 
 type Property = {
     type?: string | string[]
@@ -30,32 +30,38 @@ export type ConfigField = {
 export function configFields(
     env: Record<string, string | undefined>,
 ): ConfigField[] {
-    const hooked = HOOKS.config
-    let defaults: Record<string, unknown> = {}
-    try {
-        const given = hooked?.defaults?.({ ...env })
-        if (given !== null && typeof given === 'object')
-            defaults = given as Record<string, unknown>
-    } catch {}
-    const schema = hooked?.options?.schema as
-        | {
-              '~standard'?: {
-                  jsonSchema?: { input?: (options: unknown) => unknown }
+    // 27.6, 37.7 — EVERY `onConfig`, its defaults and its schema's fields merged in route order.
+    const defaults: Record<string, unknown> = {}
+    let declared: Record<string, Property> | undefined
+    const required = new Set<string>()
+    for (const { defaults: given, options } of inOrder(HOOKS.config)) {
+        try {
+            const answered = given?.({ ...env })
+            if (answered !== null && typeof answered === 'object')
+                Object.assign(defaults, answered)
+        } catch {}
+        const schema = options?.schema as
+            | {
+                  '~standard'?: {
+                      jsonSchema?: { input?: (options: unknown) => unknown }
+                  }
               }
-          }
-        | undefined
-    let document:
-        | { properties?: Record<string, Property>; required?: string[] }
-        | undefined
-    try {
-        document = schema?.['~standard']?.jsonSchema?.input?.({
-            target: 'draft-2020-12',
-        }) as typeof document
-    } catch {}
+            | undefined
+        let document:
+            | { properties?: Record<string, Property>; required?: string[] }
+            | undefined
+        try {
+            document = schema?.['~standard']?.jsonSchema?.input?.({
+                target: 'draft-2020-12',
+            }) as typeof document
+        } catch {}
+        if (document?.properties !== undefined)
+            declared = { ...declared, ...document.properties }
+        for (const name of document?.required ?? []) required.add(name)
+    }
     const properties: Record<string, Property> =
-        document?.properties ??
+        declared ??
         Object.fromEntries(Object.keys(defaults).map((name) => [name, {}]))
-    const required = new Set(document?.required ?? [])
     const fields: ConfigField[] = []
     for (const [name, property] of Object.entries(properties)) {
         const fallback = defaults[name] ?? property.default

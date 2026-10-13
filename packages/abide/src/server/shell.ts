@@ -9,7 +9,7 @@ import { useColor } from '#shared/log.ts'
 import { paint as painted } from '#shared/paint.ts'
 import type { Mount } from './answerRpc.ts'
 import { LogPanel } from './LogPanel.ts'
-import { callHandler, followLogs, watch } from './remote.ts'
+import { callHandler, watch } from './remote.ts'
 import { type Listed, surfaceOf } from './surfaceOf.ts'
 
 /**
@@ -48,8 +48,7 @@ function wordsOf(text: string): string[] {
  * is in argv (38.8). Answers `exit` where the line said so and `ended` where the input did, so a
  * host that owns the app can stop it on the one and keep serving on the other.
  *
- * `local` is the app in this process — the one `abide` alone serves — whose console already tails into the panel, so
- * `logs` has nothing to add, and whose `exit` stops it.
+ * `local` is the app in this process — the one `abide` alone serves — whose `exit` stops it.
  */
 export async function shell(options: {
     url: string
@@ -78,7 +77,7 @@ export async function shell(options: {
             ),
     })
     // CTRL-C AS A SHELL TAKES IT — raw mode takes the key from the terminal, so no signal is sent for
-    // it: a call running is cancelled, then every watch standing, a line typed is dropped, and on
+    // it: a call running is canceled, then every watch standing, a line typed is dropped, and on
     // an empty line it asks once and leaves on the second, as `node`'s REPL does.
     let exited = false
     let closed = false
@@ -169,7 +168,6 @@ export async function shell(options: {
           )
         : undefined
     if (panel === undefined) console.log(options.heading)
-    let tailing = false
     try {
         for await (const line of lines) {
             const [word, address] = line.trim().split(/\s+/)
@@ -199,7 +197,7 @@ export async function shell(options: {
                 ).catch((thrown: Error) => ({
                     code: 1,
                     text: running?.signal.aborted
-                        ? '(cancelled)'
+                        ? '(canceled)'
                         : thrown.message,
                 }))
                 running = undefined
@@ -210,14 +208,8 @@ export async function shell(options: {
                 )
             } else if (word === 'call')
                 console.log('call: name the handler — call <address> [args]')
-            // TAILED ALONGSIDE THE PROMPT rather than in place of it, so the shell still answers.
-            else if (word === 'logs' && !local && !tailing) {
-                tailing = true
-                void followLogs(url).then(() => {
-                    tailing = false
-                })
-            } else if (word === 'watch' && address !== undefined) {
-                // Followed alongside the prompt, as `logs` is.
+            // FOLLOWED ALONGSIDE THE PROMPT rather than in place of it, so the shell still answers.
+            else if (word === 'watch' && address !== undefined) {
                 const following = new AbortController()
                 watching.add(following)
                 void watch(
@@ -235,12 +227,6 @@ export async function shell(options: {
                     .finally(() => watching.delete(following))
             } else if (word === 'watch')
                 console.log('watch: name a GET — watch <address> [args]')
-            else if (word === 'logs')
-                console.log(
-                    local
-                        ? "logs: the app's log already tails here."
-                        : 'logs: already tailing.',
-                )
             else
                 console.log(
                     `unknown: ${word} — help lists what the shell takes`,
@@ -456,7 +442,6 @@ export function shellWords(local: boolean): [usage: string, meaning: string][] {
         ['handlers', 'every handler call can reach, with its args'],
         ['watch <address> [args]', 'follow a GET — watch chat/room room=lobby'],
     ]
-    if (!local) words.push(['logs', "tail the app's log.records here"])
     words.push(
         ['help', 'this list — Ctrl+C clears the line, Ctrl+L the panel'],
         ['exit', local ? 'stop the app and leave' : 'leave the shell'],
@@ -488,7 +473,7 @@ export function cliListing(handlers: Mount[]): Listed[] {
 
 /**
  * The handlers the shell lists: each address with the args it is typed with, and its description on
- * the line under it where it declares one. 38.63.
+ * the line under it where it declares one. 38.62.
  */
 export function handlersText(
     listed: Listed[],

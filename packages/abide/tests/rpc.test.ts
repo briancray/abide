@@ -16,7 +16,7 @@ const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0))
 
 // 16.6 — GET OVER A PLAIN FUNCTION IS GET OVER THE `reactive` OF IT, so a parameter makes it keyed
 // and a second call with the same args joins the first (1.8). The work is what is asserted: a
-// call that re-ran the body still answers the same invoice. THE REVERT: have each call wrap
+// call that reran the body still answers the same invoice. THE REVERT: have each call wrap
 // `handler(args)` in a fresh `reactive` instead of reaching one — the second call hands back a
 // different value, and the body runs again for an invoice that was already held.
 test('a plain handler is the reactive of itself, and a repeated call joins it — 16.6', async () => {

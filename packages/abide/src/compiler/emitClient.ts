@@ -26,7 +26,7 @@ import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { moduleImports } from './emitComponent.ts'
 import { invocationProps, passedName } from './invocationProps.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
-import { Lowering, PROPS } from './Lowering.ts'
+import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
     CLIENT_LANE,
@@ -143,11 +143,11 @@ export function emitClient(
     file: AbideFile,
     answer: CheckerAnswer = UNCHECKED,
     selfFill: SelfFill = 'none',
-    /** Where each specifier this file imports landed in the build (`splitImports`). */
-    landed: ReadonlyMap<string, string> = new Map(),
+    /** 38.97 — where given, every chunk the module is written around (`sourceMapOf`). */
+    chunks?: LoweredChunk[],
 ): string {
     const carriesOwnMarkup = selfFill !== 'none'
-    const lowering = new Lowering(file, answer)
+    const lowering = new Lowering(file, answer, false, chunks)
     // THE TEMPLATE IS PLACED ONCE (`placeTemplate`) and everything this module emits is rendered
     // from what was placed: the mount's walk, a region's build, and the markup a region made once
     // fills from — the same positions the server's markup is rendered from.
@@ -163,11 +163,25 @@ export function emitClient(
         page,
         new RegionEmission(lowering),
     )
+    // 35.17 — THE DOCUMENT'S OWN `<html>` AND `<body>`, bound as any element is: the server wrote
+    // the values standing at render, and these keep writing them. Nothing to find, so no walk.
+    if (file.document !== undefined)
+        for (const [element, node, slot] of [
+            ['document.documentElement', file.document.html, 'html'],
+            ['document.body', file.document.body, 'body'],
+        ] as const) {
+            const classified = classifyAttributes(node, lowering)
+            if (!classified.some(isBound)) continue
+            const units = elementUnits(element, classified, slot, lowering)
+            for (const unit of units.handlers) lines.push(unit)
+            for (const unit of units.attributes) lines.push(unit)
+            for (const unit of units.elements) lines.push(unit)
+        }
 
     // 34.2 — A `<script module>` IS PROCESS-WIDE IN A BROWSER, which is MODULE SCOPE: it is
     // evaluated once when this module is first imported rather than once per `mount`, so a second
     // mount of the same page reads what the first one left.
-    const moduleSetup = splitImports(lowering.modules(), '.client', landed)
+    const moduleSetup = splitImports(lowering.modules())
     // 32.17 — A COMPONENT FILLS ITS OWN REGION where the server wrote none. A row the list grew by
     // is built in the browser, and the child's markup is in the child's SERVER module — which the
     // browser may not reach. So the caller writes the anchor pair alone and the child fills it
@@ -210,14 +224,25 @@ export function emitClient(
         lines.push(
             `if (${ROUTED}) ${lowering.use('liveHead')}(${SCOPE}, ${ROUTED}.head)`,
         )
+    // 39.1, 39.6 — A COMPONENT'S HEAD IS ITS PAGE'S, on a navigation as on the server: added to the
+    // level the router is mounting (`contributeHead`), which a row grown later is not.
+    const ownHead = routed ? undefined : headSink(file)
+    const ownMarkup =
+        ownHead === undefined
+            ? "''"
+            : renderMarkup(ownHead, lowering, CLIENT_LANE)
+    const contributed =
+        ownMarkup === "''"
+            ? ''
+            : `${lowering.use('contributeHead')}(${REGION_ROOT}, () => ${ownMarkup})\n`
     const builds = carriesOwnMarkup && page.positions.length > 0
-    let fills = ''
+    let fills = contributed
     if (applied !== '' || builds) {
         const build = builds
             ? `function __build(__document) {\n    ${emitMaker(page, lowering)}\n}\n`
             : ''
         // THE HEAD GOES BEFORE THE FILL, so the guard is written out where there is one to apply.
-        fills =
+        fills +=
             applied === ''
                 ? `${registered}${build}${lowering.use('fillEmpty')}(${REGION_ROOT}, __build)\n`
                 : `${registered}${build}if (${lowering.use('isEmptyRegion')}(${REGION_ROOT})) { ${applied}${builds ? `${lowering.use('fillRegion')}(${REGION_ROOT}, __build)` : ''} }\n`
@@ -236,12 +261,19 @@ export function emitClient(
     // A FILE MOUNTED AGAINST AN EMPTY REGION SHIPS A MODULE REGARDLESS: the router or the caller's
     // client module imports it by name, so the no-op is what it ships.
     //
-    // 41.6 — BUT A `<script>` IS SOMETHING TO DO: hydration re-runs every setup, and a static
+    // 41.6 — BUT A `<script>` IS SOMETHING TO DO: hydration reruns every setup, and a static
     // component's can still open a watch, write a shared value or listen on the window.
     const live = lines.length > 0
-    const setup = splitImports(lowering.scripts(), '.client', landed)
-    if (!live && fills === '' && setup.body === '')
-        return carriesOwnMarkup ? 'export default () => {}\n' : ''
+    const setup = splitImports(lowering.scripts())
+    if (!live && fills === '' && setup.body === '') {
+        const mount = carriesOwnMarkup ? 'export default () => {}\n' : ''
+        // 34.17 — WHAT A `<script module>` EXPORTS IS THE BROWSER'S TOO, live markup or none: a
+        // component nothing invokes is still a module something imports a name from.
+        if (moduleSetup.body === '' && moduleSetup.imports === '') return mount
+        return `${moduleImports(lowering, (name) => (SHARED_NAMES.has(name) ? SHARED_SPECIFIER : RUNTIME_SPECIFIER), [moduleSetup])}
+${moduleSetup.body}
+${mount}`
+    }
 
     // A SCOPE IS WHAT THERE IS TO STOP, so a module with nothing live opens none. A static child
     // still ships a module — it fills the anchors of a row the browser grew — and making it
@@ -606,64 +638,15 @@ ${SCOPE}.watch(() => {
             )
             continue
         }
-        const element = `${lowering.use('elementHere')}(${at.name}, ${JSON.stringify(at.tag)})`
-        // 32.3 — THE ATTRIBUTE BINDING. The server wrote the value standing at render; this is
-        // what keeps writing it. ONCE PER ELEMENT, NOT PER ATTRIBUTE: `<a href={u} title={t}>` is
-        // one element and two bindings, and a refusal loses exactly what it should either way,
-        // because every binding in the group needs the element the check refused.
-        const writes: string[] = []
-        const binds: string[] = []
-        const spreads: string[] = []
-        for (const one of bound.get(at) as ClassifiedAttribute[]) {
-            if (!isBound(one)) continue
-            if (one.kind === 'handler')
-                handlers.push(
-                    `${element}.addEventListener(${JSON.stringify(one.event)}, ${lowering.expression(one.attribute)})`,
-                )
-            // 32.5, 32.7, 32.8 — THE PROPERTY AND THE VALUE, IN STEP BOTH WAYS: a watch on this
-            // region's scope writes the property, and a listener writes it back.
-            else if (one.kind === 'bound')
-                binds.push(
-                    `${lowering.use('bindProperty')}(${element}, ${JSON.stringify(one.bind)}, ${lowering.reference(one.attribute)}, ${SCOPE})`,
-                )
-            // 32.11 — THE SPREAD, KEPT WRITTEN: an attribute it stops carrying is removed.
-            else if (one.kind === 'spread')
-                spreads.push(
-                    `${lowering.use('bindSpread')}(${element}, () => (${lowering.expression(one.attribute)}), ${JSON.stringify(one.explicit)}, ${SCOPE})`,
-                )
-            // 32.9 — THE NODE, HANDED OVER, once. Not a watch: what the value takes is the element,
-            // which is the same node on every run a watch would have made — and the callback
-            // form's `Disposer` goes on this region's scope, so a widget it set up is torn down
-            // when the nodes it was set up over leave.
-            else if (one.kind === 'element')
-                elements.push(
-                    `const __r${slot} = ${lowering.use('bindElement')}(${element}, ${lowering.reference(one.attribute)})
-if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
-                )
-            // 32.20 IS THE INTERPOLATION'S CLAUSE ON THIS SIDE TOO, and 32.37's absence with it:
-            // `setAttribute` answers through `attributeText`, as the server's markup did, so a
-            // `javascript:` the server refused is refused the moment the value moves too.
-            // A WATCH PER ATTRIBUTE, not one over the group: two attributes reading two
-            // different values would otherwise each wake for the other's write.
-            else {
-                const { write, name } =
-                    one.kind === 'merged' && one.toggles !== undefined
-                        ? one.toggles
-                        : {
-                              write: 'attribute' as const,
-                              name: one.attribute.name,
-                          }
-                writes.push(
-                    `${SCOPE}.watch(() => ${lowering.use(WRITES[write])}(__a${slot}, ${JSON.stringify(name)}, ${lowering.expression(one.attribute)}))`,
-                )
-            }
-        }
-        if (writes.length > 0)
-            attributes.push(
-                `const __a${slot} = ${element}\n${writes.join('\n')}`,
-            )
-        for (const unit of binds) attributes.push(unit)
-        for (const unit of spreads) attributes.push(unit)
+        const units = elementUnits(
+            `${lowering.use('elementHere')}(${at.name}, ${JSON.stringify(at.tag)})`,
+            bound.get(at) as ClassifiedAttribute[],
+            slot,
+            lowering,
+        )
+        for (const unit of units.handlers) handlers.push(unit)
+        for (const unit of units.attributes) attributes.push(unit)
+        for (const unit of units.elements) elements.push(unit)
     }
     for (const unit of texts) lines.push(unit)
     for (const unit of handlers) lines.push(unit)
@@ -686,6 +669,81 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
     // mount is the shared empty one.
     if (lines.length > 0) region.defs = definitions(sink, region)
     return region
+}
+
+/**
+ * One bound element's units — its listeners, its attribute bindings and the node it hands over —
+ * against the element `element` evaluates to.
+ *
+ * 32.3 — THE ATTRIBUTE BINDING. The server wrote the value standing at render; this is what keeps
+ * writing it. ONCE PER ELEMENT, NOT PER ATTRIBUTE: `<a href={u} title={t}>` is one element and two
+ * bindings, and a refusal loses exactly what it should either way, because every binding in the
+ * group needs the element the check refused. The document's own `<html>` and `<body>` are bound
+ * through here too (35.17), an element being whatever `element` reaches.
+ */
+function elementUnits(
+    element: string,
+    classified: ClassifiedAttribute[],
+    slot: string,
+    lowering: Lowering,
+): { handlers: string[]; attributes: string[]; elements: string[] } {
+    const handlers: string[] = []
+    const attributes: string[] = []
+    const elements: string[] = []
+    const writes: string[] = []
+    const binds: string[] = []
+    const spreads: string[] = []
+    for (const one of classified) {
+        if (!isBound(one)) continue
+        if (one.kind === 'handler')
+            handlers.push(
+                `${element}.addEventListener(${JSON.stringify(one.event)}, ${lowering.expression(one.attribute)})`,
+            )
+        // 32.5, 32.7, 32.8 — THE PROPERTY AND THE VALUE, IN STEP BOTH WAYS: a watch on this
+        // region's scope writes the property, and a listener writes it back.
+        else if (one.kind === 'bound')
+            binds.push(
+                `${lowering.use('bindProperty')}(${element}, ${JSON.stringify(one.bind)}, ${lowering.reference(one.attribute)}, ${SCOPE})`,
+            )
+        // 32.11 — THE SPREAD, KEPT WRITTEN: an attribute it stops carrying is removed.
+        else if (one.kind === 'spread')
+            spreads.push(
+                `${lowering.use('bindSpread')}(${element}, () => (${lowering.expression(one.attribute)}), ${JSON.stringify(one.explicit)}, ${SCOPE})`,
+            )
+        // 32.9 — THE NODE, HANDED OVER, once. Not a watch: what the value takes is the element,
+        // which is the same node on every run a watch would have made — and the callback
+        // form's `Disposer` goes on this region's scope, so a widget it set up is torn down
+        // when the nodes it was set up over leave.
+        else if (one.kind === 'element')
+            elements.push(
+                `const __r${slot} = ${lowering.use('bindElement')}(${element}, ${lowering.reference(one.attribute)})
+if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
+            )
+        // 32.20 IS THE INTERPOLATION'S CLAUSE ON THIS SIDE TOO, and 32.37's absence with it:
+        // `setAttribute` answers through `attributeText`, as the server's markup did, so a
+        // `javascript:` the server refused is refused the moment the value moves too.
+        // A WATCH PER ATTRIBUTE, not one over the group: two attributes reading two
+        // different values would otherwise each wake for the other's write.
+        else {
+            const { write, name } =
+                one.kind === 'merged' && one.toggles !== undefined
+                    ? one.toggles
+                    : {
+                          write: 'attribute' as const,
+                          name: one.attribute.name,
+                      }
+            writes.push(
+                `${SCOPE}.watch(() => ${lowering.use(WRITES[write])}(__a${slot}, ${JSON.stringify(name)}, ${lowering.expression(one.attribute)}))`,
+            )
+        }
+    }
+    if (writes.length > 0)
+        attributes.push(
+            `const __a${slot} = ${element}\n${writes.join('\n')}`,
+        )
+    for (const unit of binds) attributes.push(unit)
+    for (const unit of spreads) attributes.push(unit)
+    return { handlers, attributes, elements }
 }
 
 // A region's bindings go through its SCOPE, so what replaced the region can stop them (see
@@ -934,6 +992,12 @@ function emitFillable(
     name: string,
     sink: Cursor,
     region: RegionEmission,
+    /**
+     * 10.5 — CHILDREN ARE MOUNTED BY THE CHILD, so they are its descendants: the scope current when
+     * it mounts them is the one their components find, as it is the one the server built them in.
+     * The caller's own is the fallback for a mount with none current.
+     */
+    children = false,
 ): void {
     const lowering = region.lowering
     const filled = emitRegion(sink, region.nested())
@@ -948,6 +1012,10 @@ function emitFillable(
             `${lowering.use('fillRegion')}(${REGION_ROOT}, ${name}_build)`,
             lowering,
             sink.defersSetup,
+            false,
+            children
+                ? `(${lowering.use('currentShare')}() ?? ${SHARE_AT})`
+                : SHARE_AT,
         ),
     )
 }
@@ -972,6 +1040,8 @@ function mountFunction(
      * mount binds into it. A refusal stops only what the mount opened, past `__mark`.
      */
     declared = false,
+    /** The share scope a `resumes` mount puts back. */
+    resumed = SHARE_AT,
 ): string {
     // A BODY THAT BINDS NOTHING HAS NOTHING TO STOP AND NOTHING TO REFUSE, so it opens no scope
     // and no `try`: every mount of it answers the one shared empty scope. A static row's two
@@ -995,7 +1065,7 @@ function mountFunction(
     ].join('\n')
     // 10.5 — the instance's own scope, put back for a mount that happens later than its caller's.
     // Only where a component stands below this region: nothing else can read it.
-    return `const ${name}_mount = (${parameters}, __rebuilt) => {\n${resumes ? insideShare(lowering, SHARE_AT, mount) : mount}\n}`
+    return `const ${name}_mount = (${parameters}, __rebuilt) => {\n${resumes ? insideShare(lowering, resumed, mount) : mount}\n}`
 }
 
 /**
@@ -1023,7 +1093,7 @@ function emitInvocation(
     const children = at.inner[0]
     if (children !== undefined) {
         const kids = region.claim('kd')
-        emitFillable(kids, children, region)
+        emitFillable(kids, children, region, true)
         props.push(
             `${JSON.stringify(CHILDREN)}: () => ({ build: ${kids}_build, mount: ${kids}_mount })`,
         )

@@ -12,12 +12,14 @@ const HANDLER = `import { GET } from '@abide/abide/server'
 
 export const ping = GET(() => 'pong')
 `
-const ADDRESS = '/__abide/rpc/health/ping'
+const ADDRESS = '/health/ping'
 
 afterAll(removeTemporaryModules)
 
 test('abide start answers an app of handlers alone — 16.2', async () => {
-    const app = appFixture({ 'server/rpc/health.ts': HANDLER })
+    const app = appFixture({ 'health/health.abide': `<script server>
+${HANDLER}</script>
+`})
     const built = await buildApp(app)
     expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
@@ -32,7 +34,9 @@ test('abide start answers an app of handlers alone — 16.2', async () => {
 }, 30_000)
 
 test('abide dev answers an app of handlers alone — 16.2', async () => {
-    const app = appFixture({ 'server/rpc/health.ts': HANDLER })
+    const app = appFixture({ 'health/health.abide': `<script server>
+${HANDLER}</script>
+`})
     const dev = Bun.spawn(['bun', BIN, 'dev', '--root', app, '--port', '0'], {
         stdout: 'pipe',
         stderr: 'pipe',

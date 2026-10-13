@@ -10,7 +10,7 @@ import { RAW_WRITES, Raw, textOf } from './Raw.ts'
 // the fallback: a clean string is returned as it arrived, with no allocation.
 //
 // THE DETECTION IS THE ENGINE'S, not a `charCodeAt` loop. The hand-written scan is one JS
-// iteration per character where this is vectorised, and it lost on the case it was written for:
+// iteration per character where this is vectorized, and it lost on the case it was written for:
 // 5x on a clean 74-character slot and 14x on a clean 320-character one, over two runs that did
 // not swap places. The share is named — `escapeText` is 74-86% of a 500-row x 4-slot markup
 // build, and the whole build moves 1.7x.

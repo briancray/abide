@@ -1,5 +1,5 @@
 // 32.16 — `{#try}`: A RENDER-TIME BOUNDARY OVER A REGION. A failure replaces the whole body with the
-// catch arm, on the server as it renders and in the browser as a binding re-runs — and a body whose
+// catch arm, on the server as it renders and in the browser as a binding reruns — and a body whose
 // failure clears comes back.
 
 import { afterAll, expect, test } from 'bun:test'

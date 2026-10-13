@@ -364,7 +364,7 @@ test('a constraint whose value cannot be read is refused rather than skipped', (
 // same object refused for arriving with its members in the other order, accepts one carrying an
 // extra `undefined` member the const never named, and throws `cannot serialize cyclic structures`
 // out of the validator on the last case.
-test('const compares by value, not by serialisation', () => {
+test('const compares by value, not by serialization', () => {
     const schema = { const: { a: 1, b: [2, 3] } }
     expect(validateJson<Anywhere>(schema, { a: 1, b: [2, 3] })).toBeNull()
     expect(validateJson<Anywhere>(schema, { b: [2, 3], a: 1 })).toBeNull()

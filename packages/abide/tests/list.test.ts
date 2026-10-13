@@ -400,7 +400,7 @@ test('a refetch that keeps every key and replaces every row remakes them in plac
 // AND THE ROWS AROUND A REPLACED ONE ARE NOT TOUCHED. A whole-list refetch cannot tell a correct
 // remake from one that rebuilds the list — every row is new either way — so this replaces two of
 // four and asks whether the other two are the same nodes.
-test('a row remade between two that survive keeps its neighbours', async () => {
+test('a row remade between two that survive keeps its neighbors', async () => {
     await mountPage(REFETCH)
     const first = document.querySelectorAll('#refetched li')[0] as HTMLElement
     const last = document.querySelectorAll('#refetched li')[3] as HTMLElement
@@ -582,12 +582,12 @@ test('a repeated {#for} key keeps the last row, drops what it shadows, and warns
     }
 })
 
-// A RE-RUN IS NOT A NEW SOURCE. The subject expression is read inside a watch, so any OTHER
-// reactive it touches re-runs it with the SAME iterable — and the append stopped every row,
+// A RERUN IS NOT A NEW SOURCE. The subject expression is read inside a watch, so any OTHER
+// reactive it touches reruns it with the SAME iterable — and the append stopped every row,
 // removed every node and started a second pump over an async generator already run to completion.
 // The list went permanently blank with nothing said about it.
 //
-// THE REVERT: drop the `list.pumping === source` return in `List.ts`. This reports `['a']` after the re-run where `['a','b']` is due, and `['a']` at the end
+// THE REVERT: drop the `list.pumping === source` return in `List.ts`. This reports `['a']` after the rerun where `['a','b']` is due, and `['a']` at the end
 // where `['a','b','c']` is.
 test('a second call with the same source does not restart the pump', async () => {
     document.body.replaceChildren()
@@ -626,7 +626,7 @@ test('a second call with the same source does not restart the pump', async () =>
     await new Promise((settle) => setTimeout(settle, 0))
     expect(text()).toEqual(['a', 'b'])
 
-    // The watch re-runs over an unrelated write and hands back the same iterable.
+    // The watch reruns over an unrelated write and hands back the same iterable.
     updateList(list, source)
     await new Promise((settle) => setTimeout(settle, 0))
     expect(text()).toEqual(['a', 'b'])
@@ -825,7 +825,7 @@ test('a list stopped while its source is quiet returns the source at once — 12
 // under the list's watch that subscribed the whole list to whatever a row read — a `class:danger`
 // on `selected` cost a full reconcile on the next `selected` write. THE REVERT: call `settleList`
 // tracked from `updateList`; this reports 1 list run where 0 are due.
-test('a value a row read while it was built does not re-run the list', () => {
+test('a value a row read while it was built does not rerun the list', () => {
     document.body.replaceChildren()
     const host = document.createElement('ul')
     const open = document.createComment(REGION_OPEN)
@@ -1123,6 +1123,25 @@ test('a patch remakes the one row it wrote to and keeps the rest', async () => {
     expect(work.nodesCreated).toBe(2)
 })
 
+// 32.33 THROUGH A `Map`, which no proxy can watch: a row over `[...byId.values()]` shows the item a
+// patch wrote through `byId.get(id)`. THE REVERT: drop `markHeld` from `recordWrites`' unwrappable
+// root; the row keeps showing 1.
+test("a list over a Map's values shows a patch written through get — 32.33", async () => {
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+const byId = reactive(new Map([['a', { id: 'a', n: 1 }], ['b', { id: 'b', n: 2 }]]))
+const rows = reactive(() => [...byId.values()])
+</script>
+
+<ul id="list">{#for row of rows by row.id}<li data-id={row.id}>{row.n}</li>{/for}</ul>
+<button id="patch" onclick={() => byId.patch((held) => { const row = held.get('a'); if (row) row.n = 9 })}>p</button>`)
+    ;(document.querySelector('#patch') as HTMLElement).click()
+    flushSync()
+    expect(textOf('a')).toBe('9')
+    expect(textOf('b')).toBe('2')
+})
+
 // THE CASE A KEY ON THE VALUE CANNOT REACH: the list walks a new array built from the value, over the
 // same objects, so what was written travels with the object rather than with the value.
 test('a list over an array computed from a patched value shows the patch', async () => {
@@ -1320,13 +1339,18 @@ test('a {#for} over a followed GET adopts the rows the server painted, over the 
     const { wire } = await import('#ui/wire.ts')
     // AN ORIGIN OF THIS CASE'S OWN, for `followWire.test.ts`'s reason: the browser's follows are
     // process-wide, keyed by address.
-    const address = 'http://list-follow.test/__abide/rpc/transcript'
+    const address = 'http://list-follow.test/transcript'
     const turns = ['ask', 'answer', 'follow-up']
     const owner = reactive<string[]>([...turns], { global: true })
     const handler = GET(owner as never) as unknown as { address: string }
-    handler.address = '/__abide/rpc/transcript'
+    handler.address = '/transcript'
     const mux = new Mux(
-        new Map([[handler.address, { handler, ui: true } as never]]),
+        new Map([
+            [
+                `GET ${handler.address}`,
+                { handler, ui: true, route: '/', rungs: [] } as never,
+            ],
+        ]),
         undefined,
     )
     // A web socket whose far end is the mux above: every frame either way is its own task. A frame

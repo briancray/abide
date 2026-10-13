@@ -69,7 +69,7 @@ test('the emitted binding walks the markup and adds nothing to the document', as
 })
 
 // THE WALK IS SHARED BECAUSE IT IS ONE WALK. Four bindings under one parent reach it once, and
-// each is one step from its neighbour — where walking every binding alone from the root was
+// each is one step from its neighbor — where walking every binding alone from the root was
 // measured at 2.3x a marker walk on a wide tree (`depth.spec.ts`).
 //
 // Nothing to revert: sharing is not a pass over the bindings any more but the shape of the walk,

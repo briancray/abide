@@ -7,8 +7,8 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAGE = `<script>
 import { reactive, url } from '@abide/abide'
-import { getInvoice } from '#server/rpc/invoices.ts'
-import '#ui/face.css'
+import { getInvoice } from '#src/invoices/invoices.abide'
+import '#src/ui/face.css'
 
 const invoice = reactive(() => getInvoice({ id: '4' }))
 </script>
@@ -21,17 +21,23 @@ let stop = (): void => {}
 beforeAll(async () => {
     ;({ base, stop } = await serveApp(
         {
-            'ui/pages/page.abide': PAGE,
-            'ui/pages/invoices/[id]/page.abide': `<script>
+            'page.abide': PAGE,
+            'invoices/[id]/page.abide': `<script>
 import { route } from '@abide/abide'
 </script>
 
 <main>an invoice at <b id="at">{route.url().pathname}</b></main>`,
-            'ui/app.html': `<!doctype html><html><head><meta charset="utf-8"><link rel="preload" href="/fonts/face.woff2" as="font"><link rel="preconnect" href="//cdn.example.test"></head><body></body></html>`,
+            'layout.abide': `<script>
+import { url } from '@abide/abide'
+</script>
+
+<html><head><link rel="preload" href={url('/fonts/face.woff2')} as="font"><link rel="preconnect" href="//cdn.example.test"></head><body><slot/></body></html>`,
             'ui/face.css': `@font-face { font-family: Face; src: url('/fonts/face.woff2'); }\n`,
-            'ui/public/fonts/face.woff2': 'a face',
-            'ui/public/robots.txt': 'User-agent: *\n',
-            'server/rpc/invoices.ts': `import { GET, reactive } from '@abide/abide/server'\n\nexport const getInvoice = GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n\nexport const count = GET(reactive({ open: 3 }, { global: true }))\n`,
+            'public/fonts/face.woff2': 'a face',
+            'public/robots.txt': 'User-agent: *\n',
+            'invoices/invoices.abide': `<script server>
+import { GET, reactive } from '@abide/abide/server'\n\nexport const getInvoice = GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n\nexport const count = GET(reactive({ open: 3 }, { global: true }))\n</script>
+`,
         },
         { ...process.env, APP_URL: 'http://example.test/docs/' },
     ))
@@ -55,7 +61,7 @@ test('a page under the mount loads from under it — 16.10', async () => {
     )
     expect(html).toContain('<a id="link" href="/docs/invoices/4">four</a>')
     // 41.20 — the early call is the address the browser's own call is made at.
-    expect(html).toContain('/docs/__abide/rpc/invoices/getInvoice?id=4')
+    expect(html).toContain('/docs/invoices/getInvoice?id=4')
     const entry = /src="(\/docs\/__abide\/client\/entry-[^"]+\.js)"/.exec(
         html,
     )?.[1] as string
@@ -69,7 +75,7 @@ test('routes, handlers and public files answer under the mount — 36.11', async
     )
     expect(
         await (
-            await Bun.fetch(`${base}/docs/__abide/rpc/invoices/getInvoice?id=4`)
+            await Bun.fetch(`${base}/docs/invoices/getInvoice?id=4`)
         ).json(),
     ).toEqual({
         id: '4',
@@ -94,8 +100,8 @@ ws.onmessage = (event) => {
     if (frames.length === 2) bothArrived()
 }
 await new Promise((done) => (ws.onopen = done))
-ws.send(JSON.stringify({ op: 'sub', id: 1, address: '/docs/__abide/rpc/invoices/count' }))
-ws.send(JSON.stringify({ op: 'sub', id: 2, address: base + '/docs/__abide/rpc/invoices/count' }))
+ws.send(JSON.stringify({ op: 'sub', id: 1, address: '/docs/invoices/count' }))
+ws.send(JSON.stringify({ op: 'sub', id: 2, address: base + '/docs/invoices/count' }))
 await Promise.race([arrived, new Promise((done) => setTimeout(done, 3000).unref())])
 // CLOSED AND DRAINED before anything is said: a frame sent before the close lands ahead of it.
 ws.close()
@@ -122,12 +128,12 @@ test('a page reads the address it is served at — 16.10, 23.4', async () => {
     expect(html).toMatch(/id="at">(<!--[^>]*-->)?\/docs\/invoices\/4</)
 })
 
-// 16.10, 36.11 — WHAT THE SHELL AND THE STYLESHEET NAME AT THE ROOT IS THE MOUNT'S. Neither is a
-// template with a `url` to spell an address in, so the shell's `/…` is put under the mount as the
-// document is prepared and the stylesheet's is written relative to the bundle it is served from.
-// THE REVERTS: `shellUnderMount` returning the shell, and `stylesheetUnderMount` the sheet — both
-// then name `/fonts/face.woff2`, the origin's root, where nothing of this app's is.
-test('the shell and the stylesheet name a public file under the mount — 16.10, 36.11', async () => {
+// 16.10, 30.26, 36.11 — WHAT THE ROOT LAYOUT AND THE STYLESHEET NAME AT THE ROOT IS THE MOUNT'S. The
+// layout's head spells a public file with `url`, and the stylesheet's is written relative to the
+// bundle it is served from. THE REVERTS: `url` returning its pattern unmounted, and
+// `stylesheetUnderMount` the sheet — both then name `/fonts/face.woff2`, the origin's root, where
+// nothing of this app's is.
+test('the root layout and the stylesheet name a public file under the mount — 16.10, 36.11', async () => {
     const html = await (await Bun.fetch(`${base}/docs/`)).text()
     expect(html).toContain(
         '<link rel="preload" href="/docs/fonts/face.woff2" as="font">',

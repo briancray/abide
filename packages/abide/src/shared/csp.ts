@@ -41,7 +41,7 @@ export function documentNonce(): string {
  * A middleware rung that sets the content security policy, and `csp.nonce()` for the current one.
  *
  * THE RUNG IS BUILT ON ITS FIRST REQUEST, because an app's `middleware` can be read before the
- * server half has filled `CSP`: `app.ts` is one more module, and nothing orders it after that one.
+ * server half has filled `CSP`: the root `layout.abide` is one more module, and nothing orders it after that one.
  */
 export const csp = Object.assign(
     (sources?: Record<string, string[]>): Rung => {

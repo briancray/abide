@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
+import { clientTags } from '#server/answerRequest.ts'
 import { log } from '#shared'
+import { APP_META } from '#shared/APP_META.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { documentDebug, namedLogger } from '#shared/log.ts'
-import { clientTags } from '#server/answerRequest.ts'
 
 // Every line reaches the console as well as the records, and a test's output is not where it
 // should land.
@@ -57,9 +58,9 @@ test('every written line is appended to the log.records array — 28.1', () => {
     expect(written.length).toBe(2)
 })
 
-// 28.3, 28.4 — THE BARE CALL, WARNINGS AND ERRORS ALWAYS WRITE; `info` and `debug` wait on `DEBUG`.
+// 28.2, 28.3 — THE BARE CALL, WARNINGS AND ERRORS ALWAYS WRITE; `info` and `debug` wait on `DEBUG`.
 // THE REVERT: gate the bare call on `isEnabled`; with `DEBUG` unset, 1 line is written of the 3.
-test('log, log.warning and log.error always write; info and debug are gated — 28.3, 28.4', () => {
+test('log, log.warning and log.error always write; info and debug are gated — 28.2, 28.3', () => {
     log('a')
     log.warning('b')
     log.error('c')
@@ -72,9 +73,9 @@ test('log, log.warning and log.error always write; info and debug are gated — 
     expect(written.length).toBe(5)
 })
 
-// 28.5, 28.6 — `named` PREFIXES THE APP NAME and a second `named` appends a segment, carrying the
+// 28.4, 28.5 — `named` PREFIXES THE APP NAME and a second `named` appends a segment, carrying the
 // same levels and `enabled`.
-test('log.named prefixes the app name, and again appends — 28.5, 28.6', () => {
+test('log.named prefixes the app name, and again appends — 28.4, 28.5', () => {
     const db = log.named('db')
     const pool = db.named('pool')
     pool.warning('exhausted')
@@ -84,21 +85,21 @@ test('log.named prefixes the app name, and again appends — 28.5, 28.6', () => 
     expect(typeof pool.debug).toBe('function')
 })
 
-// 28.13 — THE PREFIX IS READ PER LINE. A module names its logger at load, which is before the server's
+// 28.12 — THE PREFIX IS READ PER LINE. A module names its logger at load, which is before the server's
 // `config` has derived the app's name, so a prefix taken then is the `app` fallback forever after.
 // THE REVERT: take `namespaceOf()` once in `logger.named`; the line reads `ledger:db` where
 // `books:db` is due.
-test('a logger named before the app name changes writes under the new name — 28.13', () => {
+test('a logger named before the app name changes writes under the new name — 28.12', () => {
     const early = log.named('db')
     process.env.APP_NAME = 'books'
     early.warning('late')
     expect(JSON.parse(written.at(-1) as string).namespace).toBe('books:db')
 })
 
-// 28.7, 28.10 — `DEBUG` IN debug-npm GRAMMAR: a wildcard, a list, and an exclusion that beats an
+// 28.6, 28.9 — `DEBUG` IN debug-npm GRAMMAR: a wildcard, a list, and an exclusion that beats an
 // inclusion. THE REVERT: test the inclusions before the exclusions in `isEnabled`; `ledger:db` then
 // answers open under `ledger:*,-ledger:db`.
-test('log.enabled answers DEBUG in debug-npm grammar — 28.7, 28.10', () => {
+test('log.enabled answers DEBUG in debug-npm grammar — 28.6, 28.9', () => {
     process.env.DEBUG = 'ledger:*,-ledger:db'
     expect(log.named('http').enabled()).toBe(true)
     expect(log.named('db').enabled()).toBe(false)
@@ -119,10 +120,10 @@ test('tsv writes one line per record — 36.8', () => {
     expect(line.split('\t').slice(1, 3)).toEqual(['info', 'ledger'])
 })
 
-// 28.11, 28.12 — `DEBUG` REACHES A BROWSER THROUGH THE DOCUMENT, and the browser's own stored setting
+// 28.10, 28.11 — `DEBUG` REACHES A BROWSER THROUGH THE DOCUMENT, and the browser's own stored setting
 // answers only where the document carries none. THE REVERT: read `localStorage` first in
 // `documentDebug`; the stored `other` overrides what the server said.
-test("a browser's DEBUG is the document's, then its own stored one — 28.11, 28.12", () => {
+test("a browser's DEBUG is the document's, then its own stored one — 28.10, 28.11", () => {
     process.env.DEBUG = 'ledger:*'
     const tags = clientTags(
         { entry: 'entry.js', stylesheet: undefined, chunks: {} } as never,
@@ -139,11 +140,11 @@ test("a browser's DEBUG is the document's, then its own stored one — 28.11, 28
     localStorage.removeItem('debug')
 })
 
-// 28.11 — A BROWSER READS THE DOCUMENT'S `DEBUG` ONCE, not per gated line. A document with no
+// 28.10 — A BROWSER READS THE DOCUMENT'S `DEBUG` ONCE, not per gated line. A document with no
 // `DEBUG` has no `<meta>`, so every ask walked the whole document to miss: 10 µs a `log.debug` in
 // chromium beside a 1000-row list. THE REVERT: drop the memo in `environment`; the selector runs
 // 100 times rather than at most 1.
-test('a browser reads the document DEBUG at most once — 28.11', () => {
+test('a browser reads the document DEBUG at most once — 28.10', () => {
     const querySelector = document.querySelector.bind(document)
     let lookups = 0
     document.querySelector = ((selector: string) => {
@@ -164,4 +165,27 @@ test('a browser reads the document DEBUG at most once — 28.11', () => {
         document.querySelector = querySelector
     }
     expect(lookups).toBeLessThanOrEqual(1)
+})
+
+// 28.4 IN A BROWSER — `log.named` prefixes the app's name there too, read off the `<meta>` the server
+// writes beside `DEBUG`: a logger was `dogfood:billing` on the server and `app:billing` in the browser,
+// so one `DEBUG` could never open both. THE REVERT: drop the `APP_NAME` arm from `environment`; the
+// browser's line is under `app:billing`.
+test("a browser's log.named prefixes the app name the document carries — 28.4", () => {
+    const meta = document.createElement('meta')
+    meta.name = APP_META
+    meta.content = 'ledger'
+    document.head.append(meta)
+    const server = Object.getOwnPropertyDescriptor(globalThis, 'process')
+    Object.defineProperty(globalThis, 'process', {
+        value: undefined,
+        configurable: true,
+    })
+    try {
+        log.named('billing').warning('sent')
+    } finally {
+        Object.defineProperty(globalThis, 'process', server ?? {})
+        meta.remove()
+    }
+    expect(log.records().at(-1)?.namespace).toBe('ledger:billing')
 })

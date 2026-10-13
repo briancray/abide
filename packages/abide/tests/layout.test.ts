@@ -11,14 +11,11 @@ import { spawned } from 'harness/gate'
 import { addressOf, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-// THE SHELL KEYS A HEAD TOO, and is the outermost contributor (39.4): every level below replaces
-// what it keys, and what no level keys stands.
-const SHELL = `<!doctype html><html><head><meta charset="utf-8"><title>Shell</title><meta name="description" content="shell"><meta name="theme-color" content="shell"></head><body></body></html>`
-
-// The app's own chrome, and the one thing every page under it renders inside.
-const ROOT_LAYOUT = `<head><meta name="chrome" content="root"><meta name="description" content="root"></head>
-
-<div id="chrome"><nav id="rail">rail</nav><main id="main"><slot/></main></div>`
+// The app's own document and chrome, and the one thing every page under it renders inside. ITS HEAD
+// KEYS TOO (39.4): every level below replaces what it keys, and what no level keys stands.
+const ROOT_LAYOUT = `<html><head><meta charset="utf-8"><title>Shell</title><meta name="theme-color" content="shell"><meta name="chrome" content="root"><meta name="description" content="root"></head><body>
+<div id="chrome"><nav id="rail">rail</nav><main id="main"><slot/></main></div>
+</body></html>`
 
 // A section's chrome, which is the case a layout exists for: an invoices sidebar that does not
 // mention the app's header.
@@ -31,18 +28,17 @@ let base = ''
 
 beforeAll(async () => {
     const app = temporaryModule({
-        'ui/app.html': SHELL,
-        'ui/pages/layout.abide': ROOT_LAYOUT,
-        'ui/pages/page.abide': `<head><title>Home</title><meta name="description" content="home"></head>
+        'layout.abide': ROOT_LAYOUT,
+        'page.abide': `<head><title>Home</title><meta name="description" content="home"></head>
 
 <p id="home">home</p>`,
-        // No level above or at it keys a `<title>`, so the shell's is the one it reads.
-        'ui/pages/about/page.abide': `<p id="about">about</p>`,
-        'ui/pages/invoices/layout.abide': SECTION_LAYOUT,
-        'ui/pages/invoices/page.abide': `<head><title>Invoices</title></head>
+        // No level below the root layout keys a `<title>`, so the root layout's is the one it reads.
+        'about/page.abide': `<p id="about">about</p>`,
+        'invoices/layout.abide': SECTION_LAYOUT,
+        'invoices/page.abide': `<head><title>Invoices</title></head>
 
 <p id="list">two invoices</p>`,
-        'ui/pages/invoices/[id]/page.abide': `<script>
+        'invoices/[id]/page.abide': `<script>
 import { props } from '@abide/abide'
 
 const { params } = props<{ params: { id: string } }>()
@@ -52,7 +48,7 @@ const { params } = props<{ params: { id: string } }>()
         'package.json': JSON.stringify({
             name: 'layout-fixture',
             type: 'module',
-            imports: { '#ui/*': './ui/*' },
+            imports: { '#src/*': './*' },
         }),
         'tsconfig.json': JSON.stringify({
             compilerOptions: {
@@ -63,7 +59,7 @@ const { params } = props<{ params: { id: string } }>()
                 allowImportingTsExtensions: true,
                 types: [],
             },
-            include: ['ui'],
+            include: ['**/*'],
         }),
     })
 
@@ -138,7 +134,7 @@ test('a layout and its page both contribute to the head — 39.1', async () => {
 // `<meta name="description">`, and a browser reads the FIRST `<title>` — so a head written as the
 // two contributions end to end is the outermost layout's, against the deepest winning.
 // THE REVERT: write the head unmerged in `render` (no `mergeHead`) and the page reads `Shell`
-// ahead of `Home`, and three descriptions, the shell's first.
+// ahead of `Home`, and two descriptions, the root layout's first.
 test("a page's keyed head contributions replace its layout's — 39.4", async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     const head = html.slice(0, html.indexOf('<body>'))
@@ -158,12 +154,11 @@ test("a page's keyed head contributions replace its layout's — 39.4", async ()
     ).toEqual(['<title>Section</title>'])
 })
 
-// 39.4 — THE SHELL IS THE OUTERMOST CONTRIBUTOR. `app.html` is written into the document apart
-// from the levels' heads, and a browser reads the first `<title>`: so a shell title ahead of the
-// page's beat it on every server-painted page.
-// THE REVERT: key only the levels' heads (the shell's head left out of `mergeHead`) and `/` reads
-// `['Shell', 'Home']` and two descriptions, the shell's first.
-test("a level's keyed head contributions replace the shell's — 39.4", async () => {
+// 39.4 — THE DOCUMENT'S HEAD IS THE OUTERMOST CONTRIBUTOR, and the root layout's is the next: abide's
+// own document carries an encoding the root layout writes again, and a browser reads the first
+// `<title>`, so a root title ahead of the page's would beat it on every server-painted page.
+// THE REVERT: drop `meta charset` from `headKeyOf`, and `/` carries two `<meta charset>`.
+test("a level's keyed head contributions replace the one above — 39.4", async () => {
     const titles = (html: string): string[] | null =>
         html.slice(0, html.indexOf('<body>')).match(/<title>[^<]*<\/title>/g)
     const home = await (await Bun.fetch(`${base}/`)).text()
@@ -172,11 +167,11 @@ test("a level's keyed head contributions replace the shell's — 39.4", async ()
     expect(head.match(/<meta name="description"[^>]*>/g)).toEqual([
         '<meta name="description" content="home">',
     ])
-    // Keyed by no level, the shell's stands — once.
+    // Keyed by no level below the root, the root layout's stands — once.
     expect(head.match(/<meta name="theme-color"[^>]*>/g)).toEqual([
         '<meta name="theme-color" content="shell">',
     ])
-    expect(head).toContain('<meta charset="utf-8">')
+    expect(head.match(/<meta charset[^>]*>/g)).toEqual(['<meta charset="utf-8">'])
     const about = await (await Bun.fetch(`${base}/about`)).text()
     expect(titles(about)).toEqual(['<title>Shell</title>'])
 })

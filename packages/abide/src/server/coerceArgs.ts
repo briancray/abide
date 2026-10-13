@@ -30,7 +30,7 @@ export function argsDocumentOf(handler: Gated<unknown>): Document | undefined {
 /**
  * Name and value pairs as args: a name given more than once is a list, one given once its text.
  *
- * 16.18 — a query's and a form's members, and 38.62 — `abide call`'s `name=value` words, alike.
+ * 16.18 — a query's and a form's members, and 38.61 — `abide call`'s `name=value` words, alike.
  */
 export function collapsed(
     entries: URLSearchParams | FormData,

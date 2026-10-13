@@ -55,8 +55,18 @@ function walk(
     if (index === segments.length)
         return prefix || at === parts.length ? {} : null
     const segment = segments[index] as Segment
-    // 30.5 — A REST TAKES WHAT IS LEFT, including nothing, and it is last by construction.
-    if (segment.kind === 'rest') return { [segment.name]: parts.slice(at) }
+    // 30.5 — A REST TAKES THE MOST THE SEGMENTS AFTER IT LEAVE, nothing included, so a handler's
+    // name after one (`/docs/[...path]/save`) is reached rather than spent on the rest.
+    if (segment.kind === 'rest') {
+        for (let end = parts.length; end >= at; end -= 1) {
+            const params = walk(segments, index + 1, parts, end, prefix)
+            if (params !== null) {
+                params[segment.name] = parts.slice(at, end)
+                return params
+            }
+        }
+        return null
+    }
     const part = parts[at]
     if (segment.kind === 'optional') {
         if (part !== undefined) {
@@ -80,8 +90,9 @@ function walk(
  * The first route whose pattern matches `parts`, with its params, or `undefined`.
  *
  * 30.9 — THE FIRST PATTERN THAT MATCHES WINS, over a table already ranked most-specific-first.
- * BOTH SEAMS WALK THIS ONE. The server resolving an address and the client router resolving the
- * same one is the isomorphism 30.8 rests on.
+ * The client router resolves through this, and the server walks the same ranked table with
+ * `matchOf`, passing a route with no answer for the method asked. The two resolving one address
+ * alike is the isomorphism 30.8 rests on.
  *
  * Walked rather than compiled to a regex: a route table is matched once per navigation, so the
  * walk is never the cost, and a regex would have to encode three segment kinds in a grammar nobody
@@ -96,4 +107,12 @@ export function firstMatch<T extends { segments: Segment[] }>(
         if (params !== null) return { route, params }
     }
     return undefined
+}
+
+/** The params `segments` match the whole of `parts` with, or `undefined` where they do not. */
+export function matchOf(
+    segments: Segment[],
+    parts: string[],
+): Params | undefined {
+    return walk(segments, 0, parts, 0, false) ?? undefined
 }

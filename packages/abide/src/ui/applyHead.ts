@@ -9,7 +9,9 @@
 // contribution a page makes several of.
 
 import { headKeyOf } from '#shared/headKeyOf.ts'
+import { MOUNTING_LEVEL } from './MOUNTING_LEVEL.ts'
 import { markupNodes } from './parseMarkup.ts'
+import { isEmptyRegion, type Region } from './regions.ts'
 import type { Scope } from './Scope.ts'
 
 export function applyHead(markup: string): void {
@@ -143,4 +145,35 @@ export function liveHead(scope: Scope, markup: () => string): void {
         if (subscribing) subscribing = false
         else applyHead(text)
     })
+}
+
+/**
+ * A component's `<head>`, added to the page or layout the router is mounting it under (39.1).
+ *
+ * Joined to that level's head, so it is withdrawn as the level's is when it leaves (39.14), and
+ * deeper than the level's own, so it wins by key (39.4). Applied where the component builds its own
+ * markup, once the level is mounted (`MOUNTING_LEVEL.unapplied`); a region the server painted
+ * already carries the head the server wrote. Nothing where no level is mounting — a row grown after
+ * the fact titles nothing.
+ *
+ * A LIST, NOT A CLOSURE PER CONTRIBUTION: a `{#for}` of components with a `<head>` contributes once a
+ * row, and a chain of them is read through as deep a stack.
+ */
+export function contributeHead(region: Region, head: () => string): void {
+    const level = MOUNTING_LEVEL.current
+    if (level === undefined) return
+    let contributed = level.contributed
+    if (contributed === undefined) {
+        const own = level.head
+        const joined: (() => string)[] = []
+        contributed = joined
+        level.contributed = joined
+        level.head = () => {
+            let markup = own?.() ?? ''
+            for (const one of joined) markup += one()
+            return markup
+        }
+    }
+    contributed.push(head)
+    if (isEmptyRegion(region)) MOUNTING_LEVEL.unapplied += head()
 }

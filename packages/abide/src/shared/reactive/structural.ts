@@ -2,7 +2,7 @@
  * The by-value comparator an app passes as `identity`: deep equality over arrays and plain objects.
  *
  * Not the default: the default is the reference, and this is what a value whose producer
- * RE-MATERIALISES declares — `reactive(() => getInvoice({ id }), { identity: structural })`. A
+ * RE-MATERIALIZES declares — `reactive(() => getInvoice({ id }), { identity: structural })`. A
  * fresh-but-equal payload waking every reader is why it exists at all; what it stops being is the
  * price every other value pays.
  *

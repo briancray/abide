@@ -1,10 +1,17 @@
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Finding } from './Finding.ts'
-import { CHECKED_VALUES, CHECKED_WRITE, Lowering } from './Lowering.ts'
+import {
+    CHECKED_CONFIG,
+    CHECKED_CONFIG_OF,
+    CHECKED_VALUES,
+    CHECKED_WRITE,
+    Lowering,
+} from './Lowering.ts'
 import { holdsReactive } from './PositionTable.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { NO_PROPS, type Origin, type Span } from './projectShadow.ts'
 import { CHECKED_SUFFIX } from './ShadowMap.ts'
+import { SERVER_SPECIFIER } from './SPECIFIERS.ts'
 import { abideImports } from './splitImports.ts'
 
 // 38.3 — A `.abide` FILE AS THE PROGRAM IT RUNS AS, for the checker to report on. The projection
@@ -18,7 +25,7 @@ import { abideImports } from './splitImports.ts'
 //
 // A `.abide` IMPORT NAMES ITS CHECKED MODULE, so a component a page imports resolves to something
 // the checker can read rather than to a file it cannot parse. What a checked module exports as its
-// default is a component taking what its `props` call declares, so a tag is held to it (38.41).
+// default is a component taking what its `props` call declares, so a tag is held to it (38.40).
 
 /** A `.abide` lowered as the program it runs as, with its runs mapped back to the projection. */
 export type CheckedShadow = {
@@ -35,15 +42,16 @@ export type CheckedShadow = {
 export const COMPONENT_STAND_IN = '__component'
 
 /**
- * The whole of what a checked module exports, and so all a module importing one sees of it: a
- * component, called with the record its tag passes (`projectShadow`'s `invocation`).
+ * The component a checked module exports as its default: called with the record its tag passes
+ * (`projectShadow`'s `invocation`), and answering the `Component` a server module's call of it
+ * renders (34.16). What its blocks export by name is beside it.
  */
 function componentModule(props: string, generics?: string): string {
     // 34.13 — generic over what the file's `<script>` declares, so a caller's props infer it, the
     // signature's own parameters shadowing the opaque stand-ins the body was checked against.
     const parameters = generics === undefined ? '' : `<${generics}>`
     return `
-declare const ${COMPONENT_STAND_IN}: ${parameters}(record: ${props}) => void
+declare const ${COMPONENT_STAND_IN}: ${parameters}(record: ${props}) => import('${SERVER_SPECIFIER}').Component
 export default ${COMPONENT_STAND_IN}
 `
 }
@@ -61,6 +69,7 @@ export function checkedShadow(
     // Every span the emitters lower, with whether it holds the `Reactive` rather than reading it.
     const units: { span: Span; holds: boolean }[] = [
         { span: projection.modules, holds: false },
+        { span: projection.servers, holds: false },
         { span: projection.scripts, holds: false },
     ]
     for (const span of projection.slots.values())
@@ -101,6 +110,7 @@ export function checkedShadow(
         }\n`
     text += `declare const ${CHECKED_VALUES}: {\n${values}}\n`
     text += `declare function ${CHECKED_WRITE}<Cell extends { (): unknown; set(value: never): unknown }, Value extends Parameters<Cell['set']>[0]>(cell: Cell, value: Value): Value extends ReturnType<Cell> ? Value : ReturnType<Cell>\n`
+    text += configDeclarations(lowering)
     return {
         ...pointAtCheckedModules(text, origins, scriptsEnd),
         refusals: lowering.refusals,
@@ -121,6 +131,30 @@ function propsOf(lowering: Lowering): string {
         : `ReturnType<typeof ${lowering.projection.text
               .slice(read.from, read.to)
               .replace(/\(\s*\)$/, '')}>`
+}
+
+/**
+ * 27.13 — WHAT EACH `onConfig` DEFAULTS IS DECLARED INTO `Config`, so `config().RETRIES` is the
+ * `number` its defaults return rather than the index's `unknown`. Each call is bound by the lowering
+ * (`CHECKED_CONFIG`) and typed by `CHECKED_CONFIG_OF` as what its defaults return; an interface can
+ * only extend a name, so each is aliased, and a union is narrowed to the keys every member has.
+ * Nothing where the file files none.
+ */
+function configDeclarations(lowering: Lowering): string {
+    let aliases = ''
+    let names = ''
+    for (const read of lowering.answer.reads) {
+        if (read.shape !== 'config') continue
+        const name = `${CHECKED_CONFIG}${read.start}`
+        aliases += `type ${name}Type = typeof ${name}\n`
+        names += names === '' ? `${name}Type` : `, ${name}Type`
+    }
+    if (names === '') return ''
+    return `declare function ${CHECKED_CONFIG_OF}<Options>(on: (defaults: never, options?: Options) => () => void): <Defaults>(defaults: ((env: import('${SERVER_SPECIFIER}').Env) => Defaults) | null, options?: Options) => [Defaults] extends [object] ? Pick<Defaults, keyof Defaults> : {}
+${aliases}declare module '${SERVER_SPECIFIER}' {
+    interface Config extends ${names} {}
+}
+`
 }
 
 /**

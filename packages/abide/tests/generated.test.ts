@@ -43,21 +43,20 @@ let base = ''
 let stop = (): void => {}
 
 beforeAll(async () => {
-    ;({ base, stop } = await serveApp(
-        {
-            'ui/pages/page.abide': '<main>home</main>',
-            'server/rpc/invoices.ts': HANDLERS,
-        },
-        {
-            ...process.env,
-            ABIDE_OPENAPI: '1',
-            // 36.7, 27.8 — A SURFACE'S SWITCH IS A BOOLEAN, read in the environment's spelling of
-            // one. THE REVERT: drop the standing `false`s from `config`; `TRUE` stays text and MCP
-            // answers 404.
-            ABIDE_MCP: 'TRUE',
-            ABIDE_LOGS: '1',
-        },
-    ))
+    ;({ base, stop } = await serveApp({
+        'page.abide': '<main>home</main>',
+        'invoices/invoices.abide': `<script server>
+${HANDLERS}</script>
+`,
+        'files/[[folder]]/files.abide': `<script server>
+import { GET } from '@abide/abide/server'
+
+export const listFiles = GET(({ folder }: { folder?: string }) => [folder ?? '/'], {
+    clients: { mcp: false },
+})
+</script>
+`,
+    }))
 }, 30_000)
 
 afterAll(() => {
@@ -106,15 +105,16 @@ test('the OpenAPI document is derived from the route table — 20.1, 20.6, 20.11
     expect(document.openapi).toBe('3.1.0')
     const paths = Object.keys(document.paths).sort()
     expect(paths).toEqual([
-        '/__abide/rpc/invoices/getInvoice',
-        '/__abide/rpc/invoices/guarded',
-        '/__abide/rpc/invoices/listInvoices',
-        '/__abide/rpc/invoices/pay',
-        '/__abide/rpc/invoices/playlist',
-        '/__abide/rpc/invoices/shout',
-        '/__abide/rpc/invoices/tagged',
+        '/files/{folder}/listFiles',
+        '/invoices/getInvoice',
+        '/invoices/guarded',
+        '/invoices/listInvoices',
+        '/invoices/pay',
+        '/invoices/playlist',
+        '/invoices/shout',
+        '/invoices/tagged',
     ])
-    const get = document.paths['/__abide/rpc/invoices/getInvoice']?.get
+    const get = document.paths['/invoices/getInvoice']?.get
     expect(get?.description).toBe('One invoice.')
     expect(get?.parameters).toEqual([
         {
@@ -122,6 +122,27 @@ test('the OpenAPI document is derived from the route table — 20.1, 20.6, 20.11
             in: 'query',
             required: true,
             schema: { type: 'integer' },
+        },
+    ])
+})
+
+// 20.6 — EVERY PATH PARAMETER IS DECLARED, an optional one as present and required, as OpenAPI has no
+// other kind, and saying it may be left out. THE REVERT: drop the description from `openApi`'s path
+// parameters; `folder` reads as a segment every address carries.
+test('every path parameter is declared, an optional one as required — 20.6', async () => {
+    const answer = await Bun.fetch(`${base}/__abide/openapi.json`)
+    const document = (await answer.json()) as {
+        paths: Record<string, Record<string, { parameters?: unknown[] }>>
+    }
+    expect(
+        document.paths['/files/{folder}/listFiles']?.get?.parameters,
+    ).toEqual([
+        {
+            name: 'folder',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+            description: 'May be left out, with its segment.',
         },
     ])
 })
@@ -143,17 +164,17 @@ test('MCP lists tools and resources by the arm GET took — 20.9', async () => {
         (await mcp('tools/list')).result as { tools: { name: string }[] }
     ).tools
     expect(tools.map((tool) => tool.name).sort()).toEqual([
-        'invoices_getInvoice',
-        'invoices_guarded',
-        'invoices_pay',
-        'invoices_shout',
-        'invoices_tagged',
+        'get_invoices_getInvoice',
+        'post_invoices_guarded',
+        'post_invoices_pay',
+        'post_invoices_shout',
+        'post_invoices_tagged',
     ])
     const resources = (
         (await mcp('resources/list')).result as { resources: { uri: string }[] }
     ).resources
     expect(resources.map((resource) => resource.uri)).toEqual([
-        'abide:/__abide/rpc/invoices/listInvoices',
+        'abide:/invoices/listInvoices',
     ])
 })
 
@@ -162,7 +183,7 @@ test('MCP lists tools and resources by the arm GET took — 20.9', async () => {
 test('an MCP call is answered through the app, refusals included — 20.10', async () => {
     const called = (
         await mcp('tools/call', {
-            name: 'invoices_getInvoice',
+            name: 'get_invoices_getInvoice',
             arguments: { id: 4 },
         })
     ).result as { content: { text: string }[]; isError: boolean }
@@ -173,13 +194,16 @@ test('an MCP call is answered through the app, refusals included — 20.10', asy
     })
 
     const refused = (
-        await mcp('tools/call', { name: 'invoices_guarded', arguments: {} })
+        await mcp('tools/call', {
+            name: 'post_invoices_guarded',
+            arguments: {},
+        })
     ).result as { isError: boolean }
     expect(refused.isError).toBe(true)
 
     const read = (
         await mcp('resources/read', {
-            uri: 'abide:/__abide/rpc/invoices/listInvoices',
+            uri: 'abide:/invoices/listInvoices',
         })
     ).result as { contents: { text: string }[] }
     expect(JSON.parse(read.contents[0]?.text as string)).toEqual([{ id: 1 }])
@@ -199,7 +223,7 @@ test('a cross-origin POST to the MCP endpoint is refused, and a same-origin one 
                 jsonrpc: '2.0',
                 id: 1,
                 method: 'tools/call',
-                params: { name: 'invoices_pay', arguments: { amount: 5 } },
+                params: { name: 'post_invoices_pay', arguments: { amount: 5 } },
             }),
         })
     const crossing = await payFrom('https://elsewhere.example')
@@ -212,35 +236,4 @@ test('a cross-origin POST to the MCP endpoint is refused, and a same-origin one 
     }
     expect(called.isError).toBe(false)
     expect(JSON.parse(called.content[0]?.text as string)).toEqual({ paid: 5 })
-})
-
-// 36.7, 28.1 — THE `GET` OVER `log.records`: a line written after the reader subscribed arrives as an
-// event.
-//
-// RUN ALONE nothing is held when the subscription opens. THE REVERT: drop the comment frame an
-// sse `bodyOf` opens with; the head is held until the first record, and alone this times out.
-// 28.2 — a `GET` like any other: the held lines as JSON where nothing asks for a stream, and a follow
-// where the reader asks for one, as an `EventSource` does.
-test('the logs GET streams log.records as events — 36.7, 28.1', async () => {
-    const held = await Bun.fetch(`${base}/__abide/logs`)
-    expect(held.headers.get('content-type')).toBe('application/json')
-    expect(Array.isArray(await held.json())).toBe(true)
-    const answer = await Bun.fetch(`${base}/__abide/logs`, {
-        headers: { accept: 'text/event-stream' },
-    })
-    expect(answer.headers.get('content-type')).toBe('text/event-stream')
-    const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
-    await Bun.fetch(`${base}/__abide/rpc/invoices/shout`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{"text":"a line worth reading"}',
-    })
-    let seen = ''
-    while (!seen.includes('a line worth reading')) {
-        const next = await reader.read()
-        if (next.done) break
-        seen += new TextDecoder().decode(next.value)
-    }
-    await reader.cancel()
-    expect(seen).toContain('"message":"a line worth reading"')
 })

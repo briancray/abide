@@ -363,7 +363,7 @@ const boom = (): string => {
     const file = parseAbide(source)
     const names = await session.reads(`${TYPED_ROOT}src/page.abide`, file)
     const { server, client } = emitSource(
-        'ui/pages/page.abide',
+        'page.abide',
         file,
         names,
         false,
@@ -781,6 +781,42 @@ const theme = reactive.share('theme', () => reactive('row-own'))
     ).toEqual(['one dark', 'two dark'])
 })
 
+// 10.5 — CHILDREN ARE DESCENDANTS OF THE COMPONENT THAT RENDERS THEM, in the browser as on the
+// server. A `<Section>` slotted into a `<Doc>` finds the list `Doc` shares: the server built it inside
+// `Doc` and listed both, and the browser mounted it in its CALLER's scope, so it filled a list of its
+// own and the rail the server painted emptied as the page hydrated. THE REVERT: drop `true` from
+// `emitFillable(kids, children, region, true)`; the rail reads '' once mounted.
+test('children slotted into a component find the share it holds — 10.5', async () => {
+    const DOC = `<script>
+import { reactive } from '@abide/abide'
+
+const headings = reactive.share('headings', () => reactive<string[]>([]))
+</script>
+
+<main><slot/></main>
+<aside id="rail">{headings.join('|')}</aside>`
+    const SECTION = `<script>
+import { props, reactive } from '@abide/abide'
+
+const { title } = props<{ title: string }>()
+let headings = reactive.share('headings', () => reactive<string[]>([]))
+headings = [...headings, title]
+</script>
+
+<h2>{title}</h2>`
+    const { html } = await mountPage(
+        `<script>
+import Doc from './Doc.abide'
+import Section from './Section.abide'
+</script>
+
+<Doc><Section title="one"/><Section title="two"/></Doc>`,
+        { Doc: DOC, Section: SECTION },
+    )
+    expect(html).toContain('<aside id="rail">one|two</aside>')
+    expect(document.querySelector('#rail')?.textContent).toBe('one|two')
+})
+
 // 12.14 — A ROW THAT LEAVES LETS GO OF WHAT ITS VALUES READ. A `reactive` a row's
 // `<script>` built stayed on the reader list of what it read for the life of the page, so the work
 // a write does grows with every row ever dropped, and nothing on the page shows it. An adoption's
@@ -915,7 +951,7 @@ let on = reactive(true)
 
 // 14.1 — AN ARM IS BUILT UNTRACKED. The browser fills an arm from inside the watch that chose it,
 // and the build evaluates every value it writes — so the `{#if}` below subscribed to `count`, which
-// only its arm shows, and every write re-ran the arm choice as well as the two bindings. The output
+// only its arm shows, and every write reran the arm choice as well as the two bindings. The output
 // is identical either way; the wake is the whole of the difference, so the wake is what is counted.
 // The arm is toggled ON in the browser first: an arm the server painted is hydrated, never built.
 //
@@ -1197,7 +1233,7 @@ const ROW_SHAPES: [string, string][] = [
     ],
 ]
 
-// THE NODE TREE, NOT THE MARKUP. `innerHTML` SERIALISES — three adjacent text nodes come back as
+// THE NODE TREE, NOT THE MARKUP. `innerHTML` SERIALIZES — three adjacent text nodes come back as
 // one string, identical to the merged node they should have been. The first version of this gate
 // compared `innerHTML`, passed against the very revert that motivated it, and was a green test
 // measuring nothing: comparing the OUTPUT is exactly what a structural contract cannot be checked
@@ -1525,7 +1561,7 @@ function swap() {
 })
 
 // 12.13, 41.10 — AN ARM THAT REFUSES ITS DOCUMENT REBUILDS ITS BINDINGS AND KEEPS ITS `<script>`'S
-// WATCHES. The script ran once, into the arm's scope, ahead of the mount; the rebuild re-runs the
+// WATCHES. The script ran once, into the arm's scope, ahead of the mount; the rebuild reruns the
 // mount and not the script, so the refusal stops only what the mount opened. THE REVERT: stop the
 // whole scope on a refusal (`stop()` for `stop(__mark)` in `mountFunction`) — the script's watch is
 // disposed at the rebuild and wakes 0 times at the bump where once is due.

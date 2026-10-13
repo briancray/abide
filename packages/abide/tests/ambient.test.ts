@@ -38,9 +38,9 @@ beforeAll(async () => {
         'package.json': JSON.stringify({
             name: 'ambient-fixture',
             type: 'module',
-            imports: { '#ui/*': './ui/*', '#shared/*': './shared/*' },
+            imports: { '#src/*': './*' },
         }),
-        'ui/pages/page.abide': PAGE,
+        'page.abide': PAGE,
         'shared/session.ts': SESSION,
     })
     found = (await checkApp(app)).filter((diagnosis) =>

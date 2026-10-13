@@ -18,7 +18,7 @@ import { WORK } from '#shared/WORK.ts'
  * the same call on both sides.
  *
  * THE COMPARE IS THE REST OF THE POINT. `getAttribute` reads a value the element already holds —
- * it is not a layout read and forces nothing — and a binding re-run by a value that landed on the
+ * it is not a layout read and forces nothing — and a binding rerun by a value that landed on the
  * same string is the common case rather than the rare one, so the branch is cheaper than the
  * mutation it skips.
  */

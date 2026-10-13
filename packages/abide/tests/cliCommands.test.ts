@@ -32,13 +32,12 @@ let base = ''
 let stop = (): void => {}
 
 beforeAll(async () => {
-    ;({ base, stop } = await serveApp(
-        {
-            'ui/pages/page.abide': '<main>home</main>',
-            'server/rpc/things.ts': HANDLERS,
-        },
-        { ...process.env, ABIDE_OPENAPI: '1', ABIDE_MCP: '1' },
-    ))
+    ;({ base, stop } = await serveApp({
+        'page.abide': '<main>home</main>',
+        'things/things.abide': `<script server>
+${HANDLERS}</script>
+`,
+    }))
 }, 30_000)
 
 afterAll(() => {
@@ -48,7 +47,7 @@ afterAll(() => {
 
 // 38.1 — THE LAYOUT, WRITTEN, and a step already done is skipped rather than overwritten. The
 // scaffolded app then builds, which is what "a starter project" has to mean.
-test('scaffold writes a starter project, skips what is there, and builds — 38.1, 38.43', async () => {
+test('scaffold writes a starter project, skips what is there, and builds — 38.1, 38.42, 38.103, 38.104', async () => {
     const into = temporaryModule({ 'readme.md': 'here\n' })
     const first = await spawned(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
@@ -56,12 +55,13 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
     expect(first.exitCode).toBe(0)
     const app = `${into}/ledger`
     for (const path of [
-        'src/ui/pages/page.abide',
-        'src/ui/app.html',
-        'src/server/app.ts',
+        'src/page.abide',
+        'src/layout.abide',
         'package.json',
         'tsconfig.json',
         'biome.json',
+        'AGENTS.md',
+        'CLAUDE.md',
     ])
         expect(`${path} ${Bun.file(`${app}/${path}`).size > 0}`).toBe(
             `${path} true`,
@@ -69,43 +69,64 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
 
     // A dependency that installs: this checkout's own path, since no registry carries its version,
     // and the runtime's types beside it. THE REVERT: `^0.0.0` fails `bun install`, and without
-    // `@types/bun` `abide check` reports `Bun` untyped in the starter's own `app.ts`.
+    // `@types/bun` `abide check` reports `Bun` untyped in the starter's own root layout.
     const manifest = await Bun.file(`${app}/package.json`).json()
     expect(manifest.dependencies['@abide/abide']).toBe(
         `file:${new URL('..', import.meta.url).pathname.replace(/\/$/, '')}`,
     )
     expect(Object.keys(manifest.devDependencies)).toEqual(['@types/bun'])
+    // 38.103, 38.104 — the checker `tsc` cannot stand in for, and an agent pointed at the docs the
+    // package installs with. THE REVERT: drop `check` from the scripts, or the paths from AGENTS.md.
+    expect(manifest.scripts.check).toBe('abide check')
+    const agents = await Bun.file(`${app}/AGENTS.md`).text()
+    for (const shipped of ['abide.md', 'REGISTRY.md', 'RULEBOOK.md'])
+        expect(agents).toContain(`node_modules/@abide/abide/docs/${shipped}`)
+    expect(await Bun.file(`${app}/CLAUDE.md`).text()).toBe('@AGENTS.md\n')
     expect(
         (await Bun.file(`${app}/tsconfig.json`).json()).compilerOptions.types,
     ).toEqual(['bun'])
 
+    const scaffolded = await Bun.file(`${app}/src/page.abide`).text()
     const edited = 'edited by the author\n'
-    await Bun.write(`${app}/src/ui/app.html`, edited)
+    await Bun.write(`${app}/src/page.abide`, edited)
     const again = await spawned(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
     })
     expect(again.exitCode).toBe(0)
-    expect(again.stdout).toContain('kept    src/ui/app.html')
-    expect(await Bun.file(`${app}/src/ui/app.html`).text()).toBe(edited)
+    expect(again.stdout).toContain('kept    src/page.abide')
+    expect(await Bun.file(`${app}/src/page.abide`).text()).toBe(edited)
 
-    await Bun.write(
-        `${app}/src/ui/app.html`,
-        '<!doctype html><html><head></head><body></body></html>',
-    )
+    await Bun.write(`${app}/src/page.abide`, scaffolded)
     const built = await spawned(['bun', BIN, 'build'], { cwd: app })
     expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
 })
 
-// 38.44 — THE APP'S BUNDLER PLUGINS, where bun has an app declare them. A local plugin stands in for
+// 38.105, 38.106 — WHAT AN INSTALL CARRIES BESIDE THE CODE: the docs the scaffold's AGENTS.md
+// names, written by `prepack` into a directory `files` ships. THE REVERT: drop `docs` from `files`,
+// or the `prepack` that writes it, and the paths AGENTS.md names are absent from every install.
+test('the published package carries the docs and the rulebook — 38.105, 38.106', async () => {
+    const manifest = await Bun.file(
+        new URL('../package.json', import.meta.url),
+    ).json()
+    expect(manifest.files).toContain('docs')
+    expect(manifest.scripts.prepack).toBe('bun ../../scripts/packDocs.ts')
+    const packDocs = await Bun.file(
+        new URL('../../../scripts/packDocs.ts', import.meta.url),
+    ).text()
+    for (const shipped of ['abide.md', 'RULEBOOK.md', 'REGISTRY.md'])
+        expect(packDocs).toContain(shipped)
+})
+
+// 38.43 — THE APP'S BUNDLER PLUGINS, where bun has an app declare them. A local plugin stands in for
 // `bun-plugin-tailwind`, which is the same shape and a network install. THE REVERT: drop
 // `appPlugins` from `bundleClient`; the stylesheet is built without the stamp.
-test('build runs the plugins bunfig.toml declares over the client — 38.44', async () => {
+test('build runs the plugins bunfig.toml declares over the client — 38.43', async () => {
     const app = temporaryModule({
         'package.json': JSON.stringify({
             name: 'stamped',
             type: 'module',
-            imports: { '#ui/*': './src/ui/*' },
+            imports: { '#src/*': './src/*' },
         }),
         'bunfig.toml': '[serve.static]\nplugins = ["./stamp.ts"]\n',
         'stamp.ts': `export default {
@@ -118,11 +139,9 @@ test('build runs the plugins bunfig.toml declares over the client — 38.44', as
     },
 }
 `,
-        'src/ui/app.html':
-            '<!doctype html><html><head></head><body></body></html>',
         'src/ui/app.css': 'main { color: blue }',
-        'src/ui/pages/page.abide':
-            "<script>\nimport '#ui/app.css'\n</script>\n<main>hi</main>",
+        'src/page.abide':
+            "<script>\nimport '#src/ui/app.css'\n</script>\n<main>hi</main>",
     })
     const built = await spawned(['bun', BIN, 'build'], { cwd: app })
     expect(built.stderr).toBe('')
@@ -188,11 +207,11 @@ test('call answers with the value, and exits 7 on a refusal and 8 on a fault —
     )
 })
 
-// 38.62 — A WORD IS COERCED BY THE APP IT REACHES, against the schema the app holds the call to: the
+// 38.61 — A WORD IS COERCED BY THE APP IT REACHES, against the schema the app holds the call to: the
 // handler's `args` gate where it declares one, not the annotation the build read. THE REVERT: coerce
 // in the CLI against the build's annotation schema and send JSON; `n` stays text and the gate answers
 // 422, "must be number, was string".
-test('call coerces a word against the schema the app holds the call to — 38.62', async () => {
+test('call coerces a word against the schema the app holds the call to — 38.61', async () => {
     const answered = await spawned([
         'bun',
         BIN,
@@ -204,6 +223,25 @@ test('call coerces a word against the schema the app holds the call to — 38.62
     ])
     expect(answered.stderr).toBe('')
     expect(answered.stdout.trim()).toBe('"number"')
+})
+
+// 38.7, 38.8 — A CALL AIMED AT `--url` BUILDS NOTHING HERE, run from inside an app that would refuse to
+// build. THE REVERT: read the handler table through `serveBuild`'s build; the local refusal (34.3)
+// aborts the call with exit 1 before the remote app sees a request, and no build is left beside it.
+test('a call to --url builds nothing where it is run — 38.7, 38.8', async () => {
+    const here = temporaryModule({
+        'package.json': '{"name":"elsewhere"}',
+        'src/page.abide': '<script>await Promise.resolve()</script><p>x</p>',
+    })
+    const answered = await spawned(
+        ['bun', BIN, 'call', '--url', base, 'things/add', 'a=2', 'b=3'],
+        { cwd: here },
+    )
+    expect(answered.stderr).toBe('')
+    expect(answered.stdout).toBe('5\n')
+    expect(await Bun.file(`${here}/.abide/compilation.json`).exists()).toBe(
+        false,
+    )
 })
 
 // 38.9 — the document from the running app, written rather than served.
@@ -222,11 +260,11 @@ test('openapi writes the document the app serves — 38.9', async () => {
     const document = (await Bun.file(out).json()) as {
         paths: Record<string, unknown>
     }
-    expect(Object.keys(document.paths)).toContain('/__abide/rpc/things/echo')
+    expect(Object.keys(document.paths)).toContain('/things/echo')
 })
 
-// 38.9, 38.14 — THE MCP BRIDGE OVER STDIO: a line in is a message, a line out is its answer.
-test('mcp bridges stdio to the app — 38.14', async () => {
+// 38.9, 38.13 — THE MCP BRIDGE OVER STDIO: a line in is a message, a line out is its answer.
+test('mcp bridges stdio to the app — 38.13', async () => {
     const bridge = Bun.spawn(['bun', BIN, 'mcp', '--url', base], {
         stdin: 'pipe',
         stdout: 'pipe',
@@ -243,5 +281,7 @@ test('mcp bridges stdio to the app — 38.14', async () => {
     const answer = JSON.parse(seen.trim()) as {
         result: { tools: { name: string }[] }
     }
-    expect(answer.result.tools.map((tool) => tool.name)).toContain('things_add')
+    expect(answer.result.tools.map((tool) => tool.name)).toContain(
+        'post_things_add',
+    )
 })

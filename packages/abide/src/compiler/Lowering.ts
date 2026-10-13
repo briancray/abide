@@ -42,6 +42,9 @@ const SHORT_CIRCUIT: ReadonlySet<string> = new Set(['||', '&&', '??'])
  * so the import goes with the call; left to the callers it is one `used.add` per call site and a
  * missed one emits a module calling a name it never imported.
  */
+/** A run of emitted code a `Lowering` wrote, and where each of its runs stood in the projection. */
+export type LoweredChunk = { text: string; origins: Origin[] }
+
 export class Lowering {
     readonly projection: Projection
     readonly used = new Set<string>()
@@ -77,12 +80,23 @@ export class Lowering {
      * still checked.
      */
     readonly refusals: Finding[] = []
+    /**
+     * 38.97 — where given, each chunk this lowering hands an emitter, with where its runs stood in
+     * the projection: what `sourceMapOf` finds in the module the emitter writes.
+     */
+    private readonly chunks: LoweredChunk[] | undefined
 
-    constructor(file: AbideFile, answer: CheckerAnswer, checking = false) {
+    constructor(
+        file: AbideFile,
+        answer: CheckerAnswer,
+        checking = false,
+        chunks?: LoweredChunk[],
+    ) {
         this.projection = projectShadow(file)
         this.answer = answer
         this.holdsSlot = holdsSlot(file.template)
         this.checking = checking
+        this.chunks = chunks
     }
 
     /**
@@ -160,17 +174,22 @@ export class Lowering {
 
     /** The `<script module>` blocks, joined as the file wrote them and lowered. */
     modules(): string {
-        return this.lower(this.projection.modules)
+        return this.lowerChunk(this.projection.modules)
+    }
+
+    /** The `<script server>` blocks, joined as the file wrote them and lowered. */
+    servers(): string {
+        return this.lowerChunk(this.projection.servers)
     }
 
     /** The `<script>` blocks, joined as the file wrote them and lowered. */
     scripts(): string {
-        return this.lower(this.projection.scripts)
+        return this.lowerChunk(this.projection.scripts)
     }
 
     /** A template expression, lowered. */
     expression(holder: object): string {
-        return grouped(this.lower(this.spanOf(holder)))
+        return grouped(this.lowerChunk(this.spanOf(holder)))
     }
 
     /**
@@ -180,7 +199,7 @@ export class Lowering {
      * lowers to its own record as a file's does to the file's.
      */
     setup(holder: Setup | InlineComponent): string {
-        return this.lower(this.spanOf(holder))
+        return this.lowerChunk(this.spanOf(holder))
     }
 
     /**
@@ -196,7 +215,36 @@ export class Lowering {
      * passed through.
      */
     reference(holder: object): string {
-        return grouped(this.lower(this.spanOf(holder), true))
+        const span = this.spanOf(holder)
+        return this.boundPath(span) ?? grouped(this.lowerChunk(span, true))
+    }
+
+    /**
+     * 32.5, 31.8 — A `bind:` OPERAND THAT IS A PATH INTO A VALUE, `contact.address.city`, as the
+     * `{ get, set }` pair a binding writes through: the read for its get, and the write 31.8 lowers
+     * `contact.address.city = v` to for its set. Lowered as a read, the binding was handed the city
+     * as a string and had nothing to write the typed text back into.
+     *
+     * A STATIC PATH ONLY — names and dots, which carry no read of their own. `undefined` for any
+     * other operand, which `reference` lowers as it stands.
+     */
+    private boundPath(span: Span): string | undefined {
+        if (this.checking) return undefined
+        const source = this.projection.text
+        const text = source.slice(span.start, span.end)
+        const from = span.start + (text.length - text.trimStart().length)
+        const to = span.start + text.trimEnd().length
+        const reads = this.answer.reads
+        const read = reads[this.answer.firstRead(from)]
+        if (read === undefined || read.from !== from || read.shape !== 'value')
+            return undefined
+        const path = source.slice(read.to, to)
+        if (!/^(\s*\.\s*[A-Za-z_$][\w$]*)+$/.test(path)) return undefined
+        const name = this.nameOf(read)
+        const segments: string[] = []
+        for (const [, segment] of path.matchAll(/\.\s*([A-Za-z_$][\w$]*)/g))
+            segments.push(JSON.stringify(segment))
+        return `{ get: () => ${this.lowerChunk({ start: from, end: to })}, set: (${STORED}) => ${name}.set(${this.use('writePath')}(${name}(), [${segments.join(', ')}], ${STORED})) }`
     }
 
     /**
@@ -209,7 +257,7 @@ export class Lowering {
     chosenTag(node: object): string | undefined {
         const span = this.projection.tags.get(node)
         if (span === undefined || !this.answer.holdsRead(span)) return undefined
-        return this.lower(span)
+        return this.lowerChunk(span)
     }
 
     /** A `{#for}` block's key expression, lowered. */
@@ -217,7 +265,7 @@ export class Lowering {
         const span = this.projection.keys.get(block)
         if (span === undefined)
             throw new Error('abide: a {#for} key was never projected.')
-        return grouped(this.lower(span))
+        return grouped(this.lowerChunk(span))
     }
 
     /**
@@ -281,6 +329,15 @@ export class Lowering {
         if (span === undefined)
             throw new Error('abide: a template expression was never projected.')
         return span
+    }
+
+    /** `lower`, the chunk recorded where `chunks` was given. */
+    private lowerChunk(span: Span, holds = false): string {
+        if (this.chunks === undefined) return this.lower(span, holds)
+        const origins: Origin[] = []
+        const text = this.lower(span, holds, origins)
+        this.chunks.push({ text, origins })
+        return text
     }
 
     /**
@@ -484,6 +541,11 @@ export class Lowering {
             // the call (`expressionFacts`), so a `<script>`'s `raw` stays the file's.
             case 'raw':
                 return this.use('raw')
+            // 27.13 — the call bound to a name, for the checker to read the defaults' type off.
+            case 'config':
+                return this.checking
+                    ? `const ${CHECKED_CONFIG}${read.start} = ${CHECKED_CONFIG_OF}(${spelled})`
+                    : undefined
         }
         const value =
             read.value === undefined ? '1' : this.lower(read.value).trim()
@@ -610,6 +672,13 @@ export const PROPS = '__props'
 
 /** The record a checked lowering reads each value through (`Lowering.values`). */
 export const CHECKED_VALUES = '__values'
+
+/**
+ * 27.13 — what a checked lowering binds an `onConfig(…)` statement to, suffixed by where the call
+ * stands, and the declared function that hands that call back typed as what its defaults return.
+ */
+export const CHECKED_CONFIG = '__config'
+export const CHECKED_CONFIG_OF = '__configOf'
 
 /**
  * The checked lowering's write guard: holds a written value to what `set` takes.

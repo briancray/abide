@@ -185,12 +185,12 @@ export function serializeCookie(init: CookieInit, inBrowser: boolean): string {
     // A page's own script cannot set an `HttpOnly` cookie, and a browser drops the whole line that
     // asks to — so the attribute is a server's alone.
     if (init.httpOnly === true && !inBrowser) line += '; HttpOnly'
-    line += `; SameSite=${capitalised(init.sameSite ?? 'lax')}`
+    line += `; SameSite=${capitalized(init.sameSite ?? 'lax')}`
     if (init.partitioned === true) line += '; Partitioned'
     return line
 }
 
-function capitalised(sameSite: string): string {
+function capitalized(sameSite: string): string {
     return sameSite.charAt(0).toUpperCase() + sameSite.slice(1)
 }
 

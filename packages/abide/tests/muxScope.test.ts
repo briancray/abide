@@ -21,7 +21,7 @@ import { inMemoryApp } from './inMemoryApp.ts'
 
 installServer()
 
-const ADDRESS = '/__abide/rpc/room'
+const ADDRESS = '/room'
 
 type Frame = { op: string; id?: number; error?: { status: number } }
 
@@ -32,7 +32,12 @@ function guarded(middleware: Middleware<never, unknown>[]): Mux {
     }) as unknown as { address: string }
     handler.address = ADDRESS
     return new Mux(
-        new Map([[ADDRESS, { handler, ui: true } as never]]),
+        new Map([
+            [
+                `GET ${ADDRESS}`,
+                { handler, ui: true, route: '/', rungs: [] } as never,
+            ],
+        ]),
         undefined,
     )
 }

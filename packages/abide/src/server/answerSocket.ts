@@ -10,18 +10,20 @@
 // built per request, since a trigger names args rather than a value. A `global` value is also fed its productions, a guarded one only to a
 // subscription its rungs admitted when it opened (18.8) — they run once, in the connection's request.
 
-import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
 import { type Problem, problemOf } from '#shared/Failed.ts'
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { namedLogger } from '#shared/log.ts'
+import { compose } from '#shared/Middleware.ts'
+import { unmounted } from '#shared/mount.ts'
+import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
 import { FOLLOWED } from '#shared/reactive/FOLLOWED.ts'
 import { servedCellOf } from '#shared/reactive/index.ts'
 import { matchesPattern } from '#shared/reactive/matchesPattern.ts'
 import { PATCH_SINKS } from '#shared/reactive/PATCH_SINKS.ts'
 import { unowned } from '#shared/reactive/watch.ts'
 import { refuse } from '#shared/refuse.ts'
-import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
-import type { Mounted } from './answerRpc.ts'
+import { rpcRequest } from '#shared/rpcRequest.ts'
+import { handlerKey, type Mounted } from './answerRpc.ts'
 import { argsFor } from './argsFor.ts'
 import { closedTo, crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
 import { failureOf } from './hooks.ts'
@@ -38,7 +40,7 @@ import { patchesSince, versionOf } from './versionOf.ts'
  * The far end of one connection to the mux, which its frames are written to.
  *
  * Bun's socket under `abide start`, and under `abide dev` a stand-in that posts each frame to the
- * listener holding the real one (38.15).
+ * listener holding the real one (38.14).
  */
 export type Peer = {
     send(text: string): unknown
@@ -141,10 +143,10 @@ export function feedFromServed(
  * Only where that entry is not the one it is fed from already.
  */
 function attach(rpc: Mounted['handler'], follower: Follower): unknown {
-    const serving =
-        rpc.guarded && !follower.admitted
-            ? undefined
-            : GLOBAL_GETS.get(rpc)?.at(follower.key)
+    // 18.8, 18.26 — what its own rungs or its route's refused is sent its triggers alone.
+    const serving = !follower.admitted
+        ? undefined
+        : GLOBAL_GETS.get(rpc)?.at(follower.key)
     if (serving === follower.serving) return serving
     follower.stopFeed?.()
     // A version is one entry's count, so what it was sent of another says nothing about this one.
@@ -250,8 +252,8 @@ export class MuxConnection {
             return
         }
         const id = frame.id ?? 0
-        // THE ADDRESS FROM `/__abide` ON, which is what both tables are keyed by: a browser names
-        // it as its wrapper resolved it, which is a whole URL, or a path under the app's mount.
+        // THE ADDRESS BELOW THE MOUNT, which is what the handlers are keyed by: a browser names it
+        // as its wrapper resolved it, which is a whole URL, or a path under the app's mount.
         const address = addressIn(frame.address ?? '')
         const subscriptions = this.subscriptions
         if (frame.op === 'unsub') {
@@ -260,7 +262,9 @@ export class MuxConnection {
             return
         }
         const handler =
-            frame.op === 'sub' ? this.mux.handlers.get(address) : undefined
+            frame.op === 'sub'
+                ? this.mux.handlers.get(handlerKey('GET', address))
+                : undefined
         const followed = handler?.ui ? handler : undefined
         if (followed === undefined) {
             send(this.peer, {
@@ -295,16 +299,24 @@ export class MuxConnection {
             // 18.8 — A GUARDED `GET`'s RUNGS RUN ONCE, as the subscription opens, in this
             // connection's request: one they admit is fed the value, and one they refuse is sent its
             // triggers alone.
-            let admitted = !followed.handler.guarded
+            // 18.26 — AND THE MIDDLEWARE ITS FILE'S ROUTE FILED, over the request a `GET` of it
+            // would be: one a rung answers in the handler's place is not fed, as an http call it
+            // answered would never reach the handler.
+            const routed = followed.rungs.length > 0
+            let admitted = !followed.handler.guarded && !routed
             if (!admitted) {
                 subscriptions.get(id)?.()
                 subscriptions.set(id, pending)
-                admitted = await Promise.resolve(
-                    followed.handler(args as never) as PromiseLike<unknown>,
-                ).then(
-                    () => true,
-                    () => false,
-                )
+                // No route rungs, no turn: a guarded `GET`'s rungs start in this frame's own run.
+                admitted =
+                    !routed || (await routeAdmits(this.scope, followed, args))
+                if (admitted && followed.handler.guarded)
+                    admitted = await Promise.resolve(
+                        followed.handler(args as never) as PromiseLike<unknown>,
+                    ).then(
+                        () => true,
+                        () => false,
+                    )
                 if (subscriptions.get(id) !== pending) return
             }
             follow(this, id, followed, args, frame.version, admitted)
@@ -312,6 +324,39 @@ export class MuxConnection {
             if (subscriptions.get(id) === pending) subscriptions.delete(id)
             send(this.peer, { op: 'error', id, error: failure(thrown) })
         }
+    }
+}
+
+/**
+ * Whether the rungs over `mounted`'s route let a `GET` of it with `args` through, asked over the
+ * upgrade's own request at the handler's address. 18.26.
+ */
+async function routeAdmits(
+    scope: RequestScope,
+    mounted: Mounted,
+    args: unknown,
+): Promise<boolean> {
+    const upgrade = scope.request as Request
+    const asked = rpcRequest(
+        'GET',
+        mounted.address,
+        args as Record<string, unknown> | undefined,
+    )
+    const request = new Request(new URL(asked.url, upgrade.url), {
+        headers: upgrade.headers,
+        signal: upgrade.signal,
+    })
+    // REACHED BY A FLAG, not by the answer's identity: a rung that wraps or re-heads what `next`
+    // answered still let the call through, and a shared answer would carry every rung's headers.
+    let reached = false
+    try {
+        const answered = await compose(mounted.rungs, async () => {
+            reached = true
+            return new Response(null, { status: 204 })
+        })({ request })
+        return reached && answered.ok
+    } catch {
+        return false
     }
 }
 
@@ -564,8 +609,8 @@ function sendAll(serving: unknown, fed: Iterable<Follower>): void {
 }
 
 function addressIn(named: string): string {
-    const at = named.indexOf(ABIDE_ADDRESS)
-    return at === -1 ? named : named.slice(at)
+    const path = URL.parse(named)?.pathname ?? named
+    return unmounted(path) ?? path
 }
 
 /**

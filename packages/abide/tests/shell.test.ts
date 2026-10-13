@@ -1,6 +1,6 @@
-// 38.59, 38.60, 38.62 — WHAT `abide` ALONE SAYS: the addresses first, a shell that answers `help`
+// 38.58, 38.59, 38.61 — WHAT `abide` ALONE SAYS: the addresses first, a shell that answers `help`
 // with what it takes, and a call's `name=value` args read as the handler declares them. Driven over
-// a pipe, which is the shell with no panel — 38.61's is a terminal's, and no pipe can show a prompt
+// a pipe, which is the shell with no panel — 38.60's is a terminal's, and no pipe can show a prompt
 // staying put.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -11,14 +11,16 @@ let app = ''
 
 beforeAll(async () => {
     app = appFixture({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/greetings.ts': `import { GET, POST } from '@abide/abide/server'
+        'page.abide': '<main>home</main>',
+        'greetings/greetings.abide': `<script server>
+import { GET, POST } from '@abide/abide/server'
 
 export const hello = GET(() => 'hello')
 export const remember = POST((args: { name: string }) => args.name)
 export const add = POST((args: { a: number; b: number }) => args.a + args.b, {
     description: 'Adds two numbers.',
 })
+</script>
 `,
     })
     const built = await buildApp(app)
@@ -31,7 +33,7 @@ afterAll(removeTemporaryModules)
 // RUN FROM ELSEWHERE, so the handler table is the one `--root` names and not the one under the
 // working directory. THE REVERT: drop `help` from the shell's words and it answers `unknown: help`;
 // read the table from `process.cwd()` and `handlers` answers that there are none.
-test('abide alone serves, prints its address, then help, handlers and a name=value call answer — 38.59, 38.60, 38.62', async () => {
+test('abide alone serves, prints its address, then help, handlers and a name=value call answer — 38.58, 38.59, 38.61', async () => {
     const started = Bun.spawn(
         ['bun', BIN, '--root', app, '--out', `${app}/.abide`, '--port', '0'],
         {
@@ -64,20 +66,20 @@ test('abide alone serves, prints its address, then help, handlers and a name=val
         / {2}greetings\/add +a=<number> b=<number>\n +Adds two numbers\.\n/,
     )
     expect(printed).toMatch(/ {2}greetings\/remember +name=<string>\n/)
-    // 38.62 — THE REVERT: send a mutation's words as a JSON body, which the app never coerces, and
+    // 38.61 — THE REVERT: send a mutation's words as a JSON body, which the app never coerces, and
     // `add` answers "23".
     expect(printed).toContain('\n5\n')
     expect(printed).toContain('"Ada Lovelace"')
 }, 30_000)
 
-// 38.68 — `start` ONLY SERVES: the `exit` piped to it is never read, and the process is still serving
+// 38.67 — `start` ONLY SERVES: the `exit` piped to it is never read, and the process is still serving
 // when the bound runs out. THE REVERT: open the shell from `start` too, and the `exit` stops the app
 // with 0.
 //
 // 38.7 — `abide --url` IS THE SHELL ON THAT APP, BOOTING NOTHING: a call is answered by the app
 // `start` serves, and no address of its own is printed. THE REVERT: ignore `--url`, and the shell
 // serves the build itself and prints a `Local:` address.
-test('start reads no input and keeps serving, and abide --url is a shell on it — 38.68, 38.7', async () => {
+test('start reads no input and keeps serving, and abide --url is a shell on it — 38.67, 38.7', async () => {
     const started = Bun.spawn(
         [
             'bun',

@@ -115,10 +115,10 @@ function appSurface(): McpSurface {
         throw new Error(
             'abide: assistant tools are the app’s MCP surface, and no app is answering this request. RULEBOOK 45.6.',
         )
-    // 45.8, 20.7 — asking for tools over a closed surface is a mistake to name.
+    // 45.8, 20.7 — asking for tools where no handler is published to MCP is a mistake to name.
     if (!app.mcp.opened)
         throw new Error(
-            'abide: assistant was asked for tools, and ABIDE_MCP has not opened the MCP surface. RULEBOOK 45.8.',
+            'abide: assistant was asked for tools, and this app publishes no handler to MCP. RULEBOOK 45.8.',
         )
     return app.mcp
 }

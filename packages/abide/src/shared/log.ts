@@ -1,14 +1,15 @@
 // SECTION 28 — the logger, on both sides. A line is written to the console AND published to
-// `log.records` (28.1), so a subscriber — `abide logs`, a test, a page — sees exactly what the
+// `log.records` (28.1), so a subscriber — a handler, a test, a page — sees exactly what the
 // terminal saw.
 //
 // THE RECORDS ARE BUILT ON FIRST ASK. The reactive core warns through this module, so a
 // `reactive` built at this module's evaluation would be a cycle evaluated in the wrong order;
 // built on the first line or the first read of `log.records`, the core has long since loaded.
 //
-// 28.11, 28.12 — IN A BROWSER, `DEBUG` IS THE DOCUMENT'S: the server names it in a `<meta>` it writes
+// 28.10, 28.11 — IN A BROWSER, `DEBUG` IS THE DOCUMENT'S: the server names it in a `<meta>` it writes
 // into the head, and the browser's own stored `debug` answers only where the document carries none.
 
+import { APP_META } from './APP_META.ts'
 import { DEBUG_META } from './DEBUG_META.ts'
 import { paint } from './paint.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -53,7 +54,7 @@ function recordsValue(): Reactive<LogRecord[]> {
             Number.isInteger(configured) && configured >= 0
                 ? configured
                 : DEFAULT_BUFFER
-        // 28.1 — one array for the process, which `/__abide/logs` follows (28.2).
+        // 28.1 — one array for the process.
         records = reactive<LogRecord[]>([], { global: true })
     }
     return records
@@ -62,7 +63,7 @@ function recordsValue(): Reactive<LogRecord[]> {
 /**
  * Appends `record` to `log.records`, trimming to the buffer it keeps.
  *
- * THE TRIM IS AMORTISED: grown to twice the buffer and cut back in one move, rather than a `shift`
+ * THE TRIM IS AMORTIZED: grown to twice the buffer and cut back in one move, rather than a `shift`
  * per line that moves every record still held.
  */
 function keep(list: LogRecord[], record: LogRecord): void {
@@ -81,14 +82,26 @@ function keep(list: LogRecord[], record: LogRecord): void {
  */
 let documentDebugRead: string | undefined
 
+let documentAppRead: string | undefined
+
 function environment(name: string): string | undefined {
     if (typeof process !== 'undefined') return process.env[name]
+    // 28.4 — the app's name, as the server wrote it into the document.
+    if (name === 'APP_NAME') {
+        documentAppRead ??=
+            (typeof document === 'undefined'
+                ? undefined
+                : document
+                      .querySelector(`meta[name="${APP_META}"]`)
+                      ?.getAttribute('content')) ?? ''
+        return documentAppRead === '' ? undefined : documentAppRead
+    }
     if (name !== 'DEBUG') return undefined
     documentDebugRead ??= documentDebug() ?? ''
     return documentDebugRead
 }
 
-/** The document's `DEBUG`, or the browser's own stored one where it carries none (28.11, 28.12). */
+/** The document's `DEBUG`, or the browser's own stored one where it carries none (28.10, 28.11). */
 export function documentDebug(): string | undefined {
     if (typeof document === 'undefined') return undefined
     const named = document
@@ -106,7 +119,7 @@ export function documentDebug(): string | undefined {
 /**
  * The compiled `DEBUG` patterns: namespaces included, and namespaces excluded.
  *
- * 28.10 — THE debug-npm GRAMMAR: a list split on commas or whitespace, `*` any run of characters,
+ * 28.9 — THE debug-npm GRAMMAR: a list split on commas or whitespace, `*` any run of characters,
  * and a leading `-` an exclusion that beats every inclusion. Compiled once per distinct `DEBUG`.
  */
 type Gate = { include: RegExp[]; exclude: RegExp[] }
@@ -131,7 +144,7 @@ function currentGate(): Gate {
     return gate
 }
 
-/** Whether `DEBUG` enables a namespace's gated lines (28.7). */
+/** Whether `DEBUG` enables a namespace's gated lines (28.6). */
 function isEnabled(namespace: string): boolean {
     const { include, exclude } = currentGate()
     for (const pattern of exclude) if (pattern.test(namespace)) return false
@@ -215,12 +228,12 @@ function write(
     recordsValue().patch((list) => keep(list, record))
 }
 
-/** A logger under `namespace`, which 28.5 builds from the app's name and 28.9 from `abide:`. */
+/** A logger under `namespace`, which 28.4 builds from the app's name and 28.8 from `abide:`. */
 export function namedLogger(namespace: string): Logger {
     return loggerOver(() => namespace)
 }
 
-/** Both lanes' render logger (28.9): the server's escalations and 32.20's dropped URLs. */
+/** Both lanes' render logger (28.8): the server's escalations and 32.20's dropped URLs. */
 export const RENDER_LOG = namedLogger('abide:render')
 
 /**
@@ -229,7 +242,7 @@ export const RENDER_LOG = namedLogger('abide:render')
  * The namespace is ASKED per line rather than held, which is all `log` needs over a named logger.
  */
 function loggerOver(namespaceOf: () => string): Logger {
-    // 28.3 — the bare call always writes. 28.4 — so do warnings and errors.
+    // 28.2 — the bare call always writes. 28.3 — so do warnings and errors.
     const logger = ((...args: unknown[]): void => {
         write(namespaceOf(), 'info', args)
     }) as Logger
@@ -243,7 +256,7 @@ function loggerOver(namespaceOf: () => string): Logger {
     }
     logger.warning = (...args) => write(namespaceOf(), 'warning', args)
     logger.error = (...args) => write(namespaceOf(), 'error', args)
-    // 28.5 — another segment, below this one. 28.13 — asked per line too, so a logger named at module
+    // 28.4 — another segment, below this one. 28.12 — asked per line too, so a logger named at module
     // load, before the app's name resolved, writes under the name once it has.
     logger.named = (name) => loggerOver(() => `${namespaceOf()}:${name}`)
     logger.enabled = () => isEnabled(namespaceOf())
@@ -254,14 +267,15 @@ function loggerOver(namespaceOf: () => string): Logger {
 /**
  * The slot the derived app name is read through, filled by the server's `config`.
  *
- * 28.5 — the app's name is the root every `log.named` hangs off: the environment's, or what 27.3
+ * 28.4 — the app's name is the root every `log.named` hangs off: the environment's, or what 27.3
  * derived, which the server's `config` fills in here.
  */
 export const APP_NAME: { derived: () => string | undefined } = {
     derived: () => undefined,
 }
 
-function appName(): string {
+/** The name every `log.named` hangs off: the environment's, or the one the app derived (28.4). */
+export function appName(): string {
     return environment('APP_NAME') ?? APP_NAME.derived() ?? 'app'
 }
 

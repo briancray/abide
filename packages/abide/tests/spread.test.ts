@@ -32,9 +32,9 @@ const { value } = props<{ value: string }>()
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import Badge from '#ui/components/Badge.abide'
-import Field from '#ui/components/Field.abide'
-import Echo from '#ui/components/Echo.abide'
+import Badge from '#src/ui/components/Badge.abide'
+import Field from '#src/ui/components/Field.abide'
+import Echo from '#src/ui/components/Echo.abide'
 
 const first = { label: 'from first', tone: 'first', size: 'first' }
 const second = { tone: 'second' }
@@ -56,7 +56,7 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': PAGE,
+        'page.abide': PAGE,
         'ui/components/Badge.abide': BADGE,
         'ui/components/Field.abide': FIELD,
         'ui/components/Echo.abide': ECHO,

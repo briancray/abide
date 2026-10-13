@@ -45,10 +45,10 @@ test('a lock whose holder has ended is taken over — 42.16', async () => {
 // is served for it.
 test("an edit to the app's source is a new build, and no edit is the same one — 42.16", async () => {
     const app = temporaryModule({
-        'ui/pages/page.abide': '<main>before</main>',
+        'page.abide': '<main>before</main>',
     })
     const first = await sourceHash(app)
     expect(await sourceHash(app)).toBe(first)
-    await Bun.write(`${app}/ui/pages/page.abide`, '<main>after</main>')
+    await Bun.write(`${app}/page.abide`, '<main>after</main>')
     expect(await sourceHash(app)).not.toBe(first)
 })

@@ -4,7 +4,7 @@ import { putOwn } from './putOwn.ts'
  * A copy of `value` with `next` written at `path`, each level down the path copied.
  *
  * 31.8 — a write through a member path COPIES DOWN THE PATH AND THEN WRITES, and the copy is not
- * optimised away. The copy is the whole point: a `Reactive` wakes its readers on IDENTITY, so
+ * optimized away. The copy is the whole point: a `Reactive` wakes its readers on IDENTITY, so
  * `user.name = 'x'` done as a mutation of the held object writes the right value and wakes nobody
  * — the page renders correctly on load and then never moves again, with nothing about it saying
  * so.

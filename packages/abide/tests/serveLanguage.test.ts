@@ -1,9 +1,10 @@
-// 38.12 — `abide lsp`, OVER STDIO, as an editor drives it: the handshake, a document opened with text
+// 38.11 — `abide lsp`, OVER STDIO, as an editor drives it: the handshake, a document opened with text
 // that was never saved, a change that fixes it, and the shutdown. What it publishes is what `abide
 // check` finds (38.3), on the line and character the editor shows — the editor's text, not the
 // disk's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { basename, dirname } from 'node:path' // bun exposes no path helpers of its own
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -11,7 +12,7 @@ const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const SAVED = `<script>
 import { reactive } from '@abide/abide'
-import Card from '../components/Card.abide'
+import Card from './ui/components/Card.abide'
 
 let count = reactive(0)
 </script>
@@ -22,7 +23,7 @@ let count = reactive(0)
 // Never written to disk — only the editor holds it.
 const EDITED = `<script>
 import { reactive } from '@abide/abide'
-import Card from '../components/Card.abide'
+import Card from './ui/components/Card.abide'
 
 let count = reactive(0)
 </script>
@@ -38,12 +39,27 @@ const { title } = props<{ title: string }>()
 
 <p>{title}</p>`
 
-// Reads a name its neighbour does not export until the test saves it.
+// Reads a name its neighbor does not export until the test saves it.
 const LATER = `<script>
-import { later } from '../../extra.ts'
+import { later } from '../ui/extra.ts'
 </script>
 
 <p>{later}</p>`
+
+// 38.98 — at the member access, as the editor holds it while the author types the member.
+const READING = `<script server>
+import { config } from '@abide/abide/server'
+
+const retries = config().
+void retries
+</script>`
+
+// 38.39 — a row's bindings, named in the block's head.
+const ROWS = `<script>
+const paths = ['a', 'b']
+</script>
+
+{#for path, index of paths}<p>{path}{index}</p>{/for}`
 
 let app = ''
 let server: Bun.Subprocess<'pipe', 'pipe', 'pipe'> | undefined
@@ -86,10 +102,17 @@ async function next(
 
 beforeAll(() => {
     app = appFixture({
-        'ui/pages/page.abide': SAVED,
+        'page.abide': SAVED,
         'ui/components/Card.abide': CARD,
         'ui/extra.ts': 'export const extra = 1\n',
-        'ui/pages/more/page.abide': LATER,
+        'more/page.abide': LATER,
+        'reading/page.abide': READING,
+        'rows/page.abide': ROWS,
+        'settings/page.abide': `<script server>
+import { onConfig } from '@abide/abide/server'
+
+onConfig(() => ({ RETRIES: 3 }))
+</script>`,
     })
     // AS AN EDITOR STARTS IT: no `--root`, and from a directory that is not the app — a monorepo's
     // root, here the filesystem's. The document says which app it is in.
@@ -110,13 +133,13 @@ afterAll(() => {
 // THE REVERT: publish the diagnostics of the saved file (`Bun.file(path).text()`) in place of the
 // document's; the edited text's error is never reported, and the first publish is empty. Or check
 // every document against the directory the server started in; nothing is published at all.
-test('an open document is checked as the editor holds it, and cleared when fixed — 38.12', async () => {
+test('an open document is checked as the editor holds it, and cleared when fixed — 38.11', async () => {
     send({ id: 1, method: 'initialize', params: { capabilities: {} } })
     const initialized = await next((message) => message.id === 1)
     expect(initialized).toMatchObject({
         result: { capabilities: { textDocumentSync: 1 } },
     })
-    const uri = Bun.pathToFileURL(`${app}/ui/pages/page.abide`).href
+    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
     send({
         method: 'textDocument/didOpen',
         params: {
@@ -164,8 +187,8 @@ test('an open document is checked as the editor holds it, and cleared when fixed
 // THE REVERT: answer `textDocument/hover` from the checked module alone, as a build lowers it; the
 // name read by name is a rewrite there and nothing is found at `count`. Or map the position through
 // the projection only; `toFixed` is then asked of the `Reactive`, which has no such member.
-test('a hover and a jump answer about the document as the editor holds it — 38.40', async () => {
-    const uri = Bun.pathToFileURL(`${app}/ui/pages/page.abide`).href
+test('a hover and a jump answer about the document as the editor holds it — 38.39', async () => {
+    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
     const line = SAVED.split('\n').findIndex((text) => text.includes('toFixed'))
     const character = (name: string): number =>
         (SAVED.split('\n')[line] as string).indexOf(name) + 1
@@ -268,7 +291,7 @@ test('a hover and a jump answer about the document as the editor holds it — 38
         ],
     })
 
-    // 38.41 — A TAG IS HELD TO THE PROPS ITS COMPONENT DECLARES, with the component not open: the
+    // 38.40 — A TAG IS HELD TO THE PROPS ITS COMPONENT DECLARES, with the component not open: the
     // page's imports are lowered beside it. THE REVERT: check the page alone (`checkSource` with
     // no imports); `Card`'s checked module is the stand-in that takes anything, and nothing is
     // published but the empty list.
@@ -348,12 +371,12 @@ test('a hover and a jump answer about the document as the editor holds it — 38
     })
 }, 60_000)
 
-// 38.12 — THE DISK MOVES UNDER A KEPT CHECKER: a page open in the editor imports a name its `.ts`
-// neighbour does not export yet, and the neighbour is saved with it. The page itself is not touched,
+// 38.11 — THE DISK MOVES UNDER A KEPT CHECKER: a page open in the editor imports a name its `.ts`
+// neighbor does not export yet, and the neighbor is saved with it. The page itself is not touched,
 // so nothing but the watcher can say the finding is gone. THE REVERT: drop the `session.edited(…)`
 // call in `AppChecker.current`; the page reports "has no exported member" for as long as it is open.
-test('a save to a plain .ts beside an open page reaches its findings — 38.12', async () => {
-    const uri = Bun.pathToFileURL(`${app}/ui/pages/more/page.abide`).href
+test('a save to a plain .ts beside an open page reaches its findings — 38.11', async () => {
+    const uri = Bun.pathToFileURL(`${app}/more/page.abide`).href
     send({
         method: 'textDocument/didOpen',
         params: {
@@ -391,7 +414,7 @@ test('a save to a plain .ts beside an open page reaches its findings — 38.12',
 // A DOCUMENT WITH NO FILE BEHIND IT has no path to find an app from, and its check threw out of the
 // queue every later check waits behind. THE REVERT: accept any `.abide` in `didOpen`; the page's
 // change is never published.
-test('an untitled document leaves every other one checked — 38.12', async () => {
+test('an untitled document leaves every other one checked — 38.11', async () => {
     send({
         method: 'textDocument/didOpen',
         params: {
@@ -403,7 +426,7 @@ test('an untitled document leaves every other one checked — 38.12', async () =
             },
         },
     })
-    const uri = Bun.pathToFileURL(`${app}/ui/pages/page.abide`).href
+    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
     send({
         method: 'textDocument/didChange',
         params: {
@@ -425,8 +448,8 @@ test('an untitled document leaves every other one checked — 38.12', async () =
 // A DELETED COMPONENT TAKES ITS CHECKED MODULE WITH IT. THE REVERT: drop the `CHECKED_SUFFIX` arm in
 // `TypeSession.edited`; the page goes on checking `<Card title="x"/>` against the props the deleted
 // file declared, and reports nothing.
-test('a page importing a deleted component says it cannot find it — 38.12', async () => {
-    const uri = Bun.pathToFileURL(`${app}/ui/pages/page.abide`).href
+test('a page importing a deleted component says it cannot find it — 38.11', async () => {
+    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
     await Bun.file(`${app}/ui/components/Card.abide`).delete()
     send({
         method: 'textDocument/didChange',
@@ -446,7 +469,119 @@ test('a page importing a deleted component says it cannot find it — 38.12', as
     expect(published.params).toMatchObject({ uri })
 }, 60_000)
 
-test('the server shuts down when asked — 38.12', async () => {
+// 34.24 — WHAT A PLAIN `.ts` READS AN OPEN FILE BY FOLLOWS THE EDITOR'S TEXT, never saved: the
+// language server writes the file's types beside the build as it checks it. THE REVERT: drop
+// `typesFor` from `run` in `serveLanguage.ts`; nothing is written, and this waits out its poll.
+test("an edited file's types follow the editor's text — 34.24", async () => {
+    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
+    send({
+        method: 'textDocument/didChange',
+        params: {
+            textDocument: { uri, version: 40 },
+            contentChanges: [
+                {
+                    text: `<script module>\nexport const editedOnly = 1\n</script>\n\n${SAVED}`,
+                },
+            ],
+        },
+    })
+    await next(
+        (message) => message.method === 'textDocument/publishDiagnostics',
+    )
+    const types = Bun.file(
+        `${dirname(app)}/.abide/types/${basename(app)}/page.abide.ts`,
+    )
+    let text = ''
+    for (let turn = 0; turn < 100 && !text.includes('editedOnly'); turn += 1) {
+        await Bun.sleep(50)
+        text = (await types.exists()) ? await types.text() : ''
+    }
+    expect(text).toContain('export const editedOnly = 1')
+}, 60_000)
+
+// 38.98, 27.13 — `config().` OFFERS WHAT AN `onConfig` IT NEVER IMPORTED DEFAULTS, beside what abide
+// derives. THE REVERT: drop the `textDocument/completion` case; the request is refused (-32601).
+test('a completion offers the fields onConfig declared — 38.98', async () => {
+    const uri = Bun.pathToFileURL(`${app}/reading/page.abide`).href
+    send({
+        method: 'textDocument/didOpen',
+        params: {
+            textDocument: {
+                uri,
+                languageId: 'abide',
+                version: 1,
+                text: READING,
+            },
+        },
+    })
+    const lines = READING.split('\n')
+    const line = lines.findIndex((text) => text.includes('config()'))
+    send({
+        id: 20,
+        method: 'textDocument/completion',
+        params: {
+            textDocument: { uri },
+            position: { line, character: (lines[line] as string).length },
+            context: { triggerKind: 2, triggerCharacter: '.' },
+        },
+    })
+    const answered = (await next((message) => message.id === 20)) as {
+        result: { items: { label: string; kind: number }[] }
+    }
+    const labels = answered.result.items.map((item) => item.label)
+    expect(labels).toContain('RETRIES')
+    expect(labels).toContain('APP_NAME')
+
+    // An identifier is a position the checker's API offers nothing at, and it is answered.
+    send({
+        id: 21,
+        method: 'textDocument/completion',
+        params: {
+            textDocument: { uri },
+            position: { line: line + 1, character: 'void '.length },
+        },
+    })
+    expect(await next((message) => message.id === 21)).toMatchObject({
+        result: null,
+    })
+}, 60_000)
+
+// 38.39 — A `{#for}`'s ITEM AND INDEX HOVER AS THE BINDINGS THEY ARE, where the head names them.
+// THE REVERT: write them into the projection as scaffolding (`for (const ${node.item} of …`); both
+// hovers are null.
+test("a {#for}'s item and index hover in its head — 38.39", async () => {
+    const uri = Bun.pathToFileURL(`${app}/rows/page.abide`).href
+    send({
+        method: 'textDocument/didOpen',
+        params: {
+            textDocument: { uri, languageId: 'abide', version: 1, text: ROWS },
+        },
+    })
+    const lines = ROWS.split('\n')
+    const line = lines.findIndex((text) => text.startsWith('{#for'))
+    const hover = async (id: number, name: string): Promise<unknown> => {
+        send({
+            id,
+            method: 'textDocument/hover',
+            params: {
+                textDocument: { uri },
+                position: {
+                    line,
+                    character: (lines[line] as string).indexOf(name) + 1,
+                },
+            },
+        })
+        return (await next((message) => message.id === id)) as unknown
+    }
+    expect(await hover(30, 'path,')).toMatchObject({
+        result: { contents: { value: '```ts\nconst path: string\n```' } },
+    })
+    expect(await hover(31, 'index')).toMatchObject({
+        result: { contents: { value: '```ts\nconst index: number\n```' } },
+    })
+}, 60_000)
+
+test('the server shuts down when asked — 38.11', async () => {
     send({ id: 2, method: 'shutdown' })
     expect(await next((message) => message.id === 2)).toMatchObject({
         result: null,

@@ -1,22 +1,26 @@
-// 38.5 AND 38.29 — THE MANIFEST: the files the entry was written under, and each module a route
+// 38.5 AND 38.28 — THE MANIFEST: the files the entry was written under, and each module a route
 // loads in a browser to every chunk that module needs before it can run. Read off the bundler's
 // own metafile rather than off the emitted code, so a chunk the bundler hoisted into a shared file
 // is in the list because the bundler says it is imported, not because a pattern over its output
 // happened to match.
 //
 // THE ENTRY'S NAME IS HERE BECAUSE A BUILD HASHES IT (38.5). `abide dev` names it by its source
-// (38.17) and reads it off this all the same, so the tags the document carries come from one
+// (38.16) and reads it off this all the same, so the tags the document carries come from one
 // place in both lanes rather than from a constant in one and a lookup in the other.
 //
 // THE STATIC CLOSURE AND NOTHING ELSE. An `import-statement` edge is a chunk the module cannot
 // run without; a `dynamic-import` edge is a destination somebody may never navigate to, and
 // preloading it is the whole route table on every page.
 //
-// THE ENTRY IS LEFT OUT of every list, because the document already loads it by name (38.23) and
+// THE ENTRY IS LEFT OUT of every list, because the document already loads it by name (38.22) and
 // a preload of the same address is a second request line for bytes already on their way.
 
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
+import { VIRTUAL_DIRECTORY } from './VIRTUAL_DIRECTORY.ts'
+
+// The entry's key: the table it is served as, below the root.
+const ENTRY_MODULE = `${VIRTUAL_DIRECTORY}/${CLIENT_ENTRY}.ts`
 
 export type Manifest = {
     /** The entry's file name, or undefined where the bundle has none — a dev build that failed. */
@@ -24,10 +28,10 @@ export type Manifest = {
     /**
      * The stylesheet the bundler collected under the entry, or undefined where none was imported.
      *
-     * 38.24.
+     * 38.23.
      */
     stylesheet: string | undefined
-    /** A module's path below `base` to the chunk file names it needs, its own first. */
+    /** A module's path below the root — a route's `.abide` — to the chunk file names it needs, its own first. */
     chunks: Record<string, string[]>
 }
 
@@ -40,19 +44,18 @@ export const NO_MANIFEST: Manifest = {
 /**
  * The manifest read off a bundle's metafile: the entry, its stylesheet, and each module's chunks.
  *
- * `base` IS THE TREE THE ROUTE TABLE NAMES MODULES BELOW. The metafile names a file on disk
- * relative to the working directory with symlinks resolved, and a module a plugin served under its
- * namespace as the plugin spelled it — so `abide build` passes its output's real path, and
- * `abide dev` passes the virtual directory its plugin resolves into.
+ * `root` IS THE TREE THE ROUTE TABLE NAMES MODULES BELOW, as its real path: the metafile names a file
+ * relative to the working directory with symlinks resolved, and a table the plugin served under its
+ * namespace as the plugin spelled it (`abideModules`).
  */
 export function manifestOf(
     metafile: Bun.BuildMetafile,
-    base: string,
+    root: string,
 ): Manifest {
     const manifest: Manifest = { ...NO_MANIFEST, chunks: {} }
     const imports = new Map<string, string[]>()
     const modules = new Map<string, string>()
-    const prefix = `${base}/`
+    const prefix = `${root}/`
     for (const [output, described] of Object.entries(metafile.outputs)) {
         if (!isModule(output)) continue
         const statically: string[] = []
@@ -66,7 +69,7 @@ export function manifestOf(
         if (!path.startsWith(prefix)) continue
         const module = path.slice(prefix.length)
         modules.set(module, chunkName(output))
-        if (module !== `${CLIENT_ENTRY}.ts`) continue
+        if (module !== ENTRY_MODULE) continue
         manifest.entry = chunkName(output)
         // NOT IN bun-types, and in the metafile: the stylesheet an entry's CSS was collected into.
         const sheet = (described as { cssBundle?: string }).cssBundle
@@ -103,7 +106,7 @@ export function chunksOf(modules: string[], manifest: Manifest): string[] {
  *
  * A MODULE, NOT A STYLESHEET. The bundler reports the CSS it collected both as a static import of
  * the entry and as an output whose entry point IS the entry — so unfiltered it is fetched as a
- * script, and it takes the entry's own place in the manifest. 38.24 links it already.
+ * script, and it takes the entry's own place in the manifest. 38.23 links it already.
  */
 function isModule(output: string): boolean {
     return output.endsWith('.js')

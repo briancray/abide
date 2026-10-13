@@ -1,6 +1,6 @@
 // WHERE THE BROWSER BUNDLE LANDS, named once for the commands that have to agree about it:
 // `abide build` writes it, `abide start` answers it, and `abide dev` builds it into memory
-// (38.17, 38.21). A leaf, with no imports of its own, for the reason every constant crossing a
+// (38.16, 38.20). A leaf, with no imports of its own, for the reason every constant crossing a
 // seam is one — the build is in `bin/` and the server is in `src/server/`, and a string spelled out
 // in both is a build that silently serves nothing. The addresses it is answered at are
 // `#shared/ADDRESSES.ts`.
@@ -24,9 +24,15 @@ export const CLIENT_ENTRY = 'entry'
  *
  * 38.5 — the manifest `manifestOf` reads off the bundle, below the build's own output directory
  * and BESIDE the client directory rather than in it: everything in there is answered under
- * `CLIENT_ADDRESS` (38.21), and the manifest is the server's, not the browser's.
+ * `CLIENT_ADDRESS` (38.20), and the manifest is the server's, not the browser's.
  */
 export const MANIFEST = 'manifest.json'
+
+/**
+ * The compilation `abide build` keeps beside the client directory: every `.abide` compiled, and
+ * the build's own tables (`Compilation`), which `abide start` serves without the compiler.
+ */
+export const COMPILATION = 'compilation.json'
 
 /**
  * The encodings a response can be compressed in, each with its precompressed file's suffix.
@@ -39,18 +45,10 @@ export const MANIFEST = 'manifest.json'
 export const ENCODING_SUFFIX = { br: '.br', gzip: '.gz' } as const
 
 /**
- * Where `abide build` copies `src/ui/public`, below its own output directory.
+ * Where `abide build` copies every `public` directory, each file at its address, below its own
+ * output directory. The source's own name for one is `#shared/RESERVED_DIRECTORIES.ts`'s.
  *
- * 38.19 — a directory rather than the source tree: `abide start` boots what the build produced and
+ * 38.18 — a directory rather than the source tree: `abide start` boots what the build produced and
  * reaches for nothing an app might have moved since.
  */
 export const PUBLIC_DIRECTORY = 'public'
-
-/**
- * Where the build puts the module a browser gets in place of each handler module.
- *
- * 16.28 — below the build's own output: the source's path, with this in front. One lookup for the
- * client bundle to make (`fenceServer`), and a place a reader can open to see exactly what the
- * browser was handed.
- */
-export const WIRE_DIRECTORY = 'wire'

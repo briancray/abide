@@ -9,13 +9,12 @@
 //
 // A PAIRING IS TO A BROWSER — the `abide-caller` its page carries (26.5) — for as long as the bridge's
 // stream is open. HELD IN THIS PROCESS: an app served by several needs a visitor's requests to reach
-// the one its bridge dialled.
+// the one its bridge dialed.
 
 import { refuse } from '#shared/refuse.ts'
 import { answered } from './answerFailure.ts'
 import { raiseTimeout } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
-import { config } from './config.ts'
 import { Inbox } from './Inbox.ts'
 import { randomToken } from './randomToken.ts'
 
@@ -53,10 +52,8 @@ const BY_CALLER = new Map<string, Bridge>()
 const BY_TOKEN = new Map<string, Bridge>()
 const WATCHERS = new Map<string, Set<() => void>>()
 
-/** Whether `ABIDE_BRIDGE` has opened the relay. 45.19. */
-export function bridgeOpened(): boolean {
-    return (config.peek()?.ABIDE_BRIDGE as unknown) === true
-}
+// 45.19 — the relay answers once the app has handed out a pairing command, and never before.
+let minted = false
 
 /** A single-use pairing code for `caller`, and when it stops standing. 45.14. */
 export function mintCode(caller: string): { code: string; expires: number } {
@@ -66,6 +63,7 @@ export function mintCode(caller: string): { code: string; expires: number } {
     const code = randomToken(12, 'base64url')
     const expires = now + CODE_LIFETIME
     CODES.set(code, { caller, expires })
+    minted = true
     return { code, expires }
 }
 
@@ -172,9 +170,9 @@ function dropBridge(bridge: Bridge): void {
     wakeWatchers(bridge.caller)
 }
 
-/** Answers `/__abide/bridge`, or `undefined` where `ABIDE_BRIDGE` is closed. 45.19. */
+/** Answers `/__abide/bridge`, or `undefined` until a pairing code has been minted. 45.19. */
 export async function answerBridge(request: Request): Promise<unknown> {
-    if (!bridgeOpened()) return undefined
+    if (!minted) return undefined
     if (request.method === 'GET') return pair(request)
     if (request.method === 'POST') return relay(request)
     return new Response(null, { status: 405, headers: { allow: 'GET, POST' } })

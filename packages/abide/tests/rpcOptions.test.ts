@@ -137,16 +137,20 @@ export const rawLookup = GET(async () => {
 
 let base = ''
 let stop = (): void => {}
-const RPC = '/__abide/rpc/options'
+const RPC = '/options'
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/options.ts': HANDLERS,
+        'page.abide': '<main>home</main>',
+        'options/options.abide': `<script server>
+${HANDLERS}</script>
+`,
         // 16.55 — the environment's ceiling, for a handler that names none of its own.
-        'server/app.ts': `import { onConfig } from '@abide/abide/server'
+        'layout.abide': `<script server>
+import { onConfig } from '@abide/abide/server'
 
 onConfig(() => ({ ABIDE_MAX_REQUEST_BODY_SIZE: 1024 }))
+</script>
 `,
     }))
 }, 30_000)
@@ -180,9 +184,9 @@ test('a GET arg is coerced from the type its JSON Schema declares — 19.7, 19.8
 // handler defaults is not required, whatever the annotation says. THE REVERT: drop `args` from the
 // mount row in `handlersUnder`; `id` arrives the string `'42'`, and `id=abc` and `kind=film` both
 // reach the handler and answer 200. Drop `defaulted` from `argsSchemaOf` and the first call is 422.
-// 19.20 — and a member the annotation does not declare is refused: drop `additionalProperties`
+// 19.19 — and a member the annotation does not declare is refused: drop `additionalProperties`
 // from `objectOf` and `extra=1` reaches the handler and answers 200.
-test('a GET typed only by its annotation is coerced and held to it — 19.9, 19.10, 19.20', async () => {
+test('a GET typed only by its annotation is coerced and held to it — 19.9, 19.10, 19.19', async () => {
     const answer = await Bun.fetch(
         `${base}${RPC}/annotated?id=42&kind=movie&tags=a`,
     )
@@ -372,6 +376,7 @@ test('a cross-origin mutation is refused unless declared, and its preflight answ
         method: 'OPTIONS',
         headers: {
             origin: 'https://partner.example',
+            'access-control-request-method': 'POST',
             'access-control-request-headers': 'content-type',
         },
     })
@@ -380,6 +385,15 @@ test('a cross-origin mutation is refused unless declared, and its preflight answ
         'https://partner.example',
     )
     expect(preflight.headers.get('access-control-allow-methods')).toBe('POST')
+
+    // 16.24 — an `OPTIONS` naming no method is no preflight, so 15.17 answers it. THE REVERT: hand it
+    // the route's first handler; this one is preflighted 204.
+    const methodless = await Bun.fetch(`${base}${RPC}/shared`, {
+        method: 'OPTIONS',
+        headers: { origin: 'https://partner.example' },
+    })
+    expect(methodless.status).toBe(405)
+    expect(methodless.headers.get('allow')).toBe('POST')
 
     const partner = await Bun.fetch(`${base}${RPC}/shared`, {
         method: 'POST',
@@ -425,7 +439,7 @@ test('rpc.url builds the address and rpc.raw answers the call as a response — 
     ])
 })
 
-// 16.32 BEHIND A RUNG — A STREAMING HANDLER'S CHUNKS LEAVE AS THEY LAND. The onion's centre is async
+// 16.32 BEHIND A RUNG — A STREAMING HANDLER'S CHUNKS LEAVE AS THEY LAND. The onion's center is async
 // and a `Reactive` is thenable, so a rung between the call and a generator used to settle the stream
 // and answer its accumulation when it closed. The generator here does not close until the test asks
 // it to, AFTER the first chunk has arrived — so a collecting onion never sends that chunk, and the
@@ -433,7 +447,7 @@ test('rpc.url builds the address and rpc.raw answers the call as a response — 
 //
 // AND A HANDLER HANDING ONE BACK (9.6) as much as one declared `async function*`.
 //
-// THE REVERT: await `reach` in `rpc.ts`'s centre in place of `streamingOrSettled`; the first read
+// THE REVERT: await `reach` in `rpc.ts`'s center in place of `streamingOrSettled`; the first read
 // loses the race, and the answer is `application/json` rather than jsonl.
 test.each(['streamed', 'arrowStreamed'])(
     'a streaming handler behind a rung sends each chunk as it lands — %s, 16.32, 16.11',
@@ -464,7 +478,7 @@ test.each(['streamed', 'arrowStreamed'])(
 )
 
 // 1.8 BEHIND A RUNG — A SECOND CALL WITH THE SAME ARGS JOINS THE STREAM, and both read every chunk:
-// the value the call reaches is a stream of its own (9.6), not the one-shot generator the centre
+// the value the call reaches is a stream of its own (9.6), not the one-shot generator the center
 // hands it. THE REVERT: drop the `isAsyncGenerator` arm of `absorb`'s settle; the value holds the
 // generator, and neither await is the chunks.
 test('two calls with the same args behind a rung join one stream and read all of it — 1.8, 9.6', async () => {

@@ -5,7 +5,7 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, POST, principal } from '@abide/abide/server'
-import { RESOLVED } from '#server/RESOLVED.ts'
+import { RESOLVED } from '#src/server/RESOLVED.ts'
 
 export const signIn = POST(async ({ name }: { name: string }) => {
     await principal.set({ name })
@@ -38,16 +38,20 @@ import { principal } from '@abide/abide'
 
 let base = ''
 let stop = (): void => {}
-const RPC = '/__abide/rpc/session'
+const RPC = '/session'
 
 beforeAll(async () => {
     process.env.ABIDE_PRINCIPAL_SECRET = 'new-secret,old-secret'
     ;({ base, stop } = await serveApp({
-        'ui/pages/page.abide': PAGE,
-        'server/rpc/session.ts': HANDLERS,
+        'page.abide': PAGE,
+        'session/session.abide': `<script server>
+${HANDLERS}</script>
+`,
         'server/RESOLVED.ts': RESOLVED,
         // 26.4 — an app answer that tries to claim the baseline's fields.
-        'server/app.ts': `import { onPrincipal } from '@abide/abide/server'\nimport { RESOLVED } from '#server/RESOLVED.ts'\n\nonPrincipal((claims) => {\n    RESOLVED.count += 1\n    return { ...(claims as object), role: 'admin', authenticated: 'spoofed' }\n})\n`,
+        'layout.abide': `<script server>
+import { onPrincipal } from '@abide/abide/server'\nimport { RESOLVED } from '#src/server/RESOLVED.ts'\n\nonPrincipal((claims) => {\n    RESOLVED.count += 1\n    return { ...(claims as object), role: 'admin', authenticated: 'spoofed' }\n})\n</script>
+`,
     }))
 }, 30_000)
 

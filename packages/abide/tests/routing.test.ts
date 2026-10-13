@@ -8,10 +8,8 @@
 
 import { afterAll, afterEach, expect, test } from 'bun:test'
 import { emitClient, emitComponent, parseAbide } from '#compiler'
-import { compileApp } from '#compiler/compileApp.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
-import { composePage } from '#server/render.ts'
+import { composePage, renderDocument } from '#server/render.ts'
 import { flushSync, navigate, route } from '#shared'
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
 import { CURRENT_ROUTER } from '#shared/CURRENT_ROUTER.ts'
@@ -29,6 +27,7 @@ import {
 } from '#shared/routePattern.ts'
 import { applyHead } from '#ui/applyHead.ts'
 import { listenForRoutes, type PageMount, startRouter } from '#ui/routing.ts'
+import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
@@ -99,7 +98,7 @@ async function pages(
     // The server's painting of the HOME page only — the one the reader arrived at.
     const { default: Component } = await import(`${dir}/Home.ts`)
     let html = ''
-    html += new TextDecoder().decode(await render(Component, shell))
+    html += new TextDecoder().decode(await renderDocument(Component, shell))
     document.body.innerHTML = html.slice(
         html.indexOf('<body>') + '<body>'.length,
         html.indexOf('</body>'),
@@ -543,17 +542,18 @@ test("a pointer over a routed link loads the route's chunk, and does not navigat
     stop()
 })
 
-test('a route literal is matched in the spelling its directory is filed under — 30.3, 30.5', () => {
-    expect(routeOf('src/ui/pages/invoices/[id]/page.abide')).toBe(
-        '/invoices/[id]',
-    )
-    expect(routeOf('src/ui/pages/page.abide')).toBe('/')
-    // 23.3 — the routes directory is the first `ui/pages/`, so a section named `pages` keeps its
-    // name. THE REVERT: cut at the last `/pages/`; this reports `/add-a-page`.
-    expect(routeOf('ui/pages/pages/add-a-page/page.abide')).toBe(
-        '/pages/add-a-page',
-    )
-    expect(routeOf('ui/pages/pages/page.abide')).toBe('/pages')
+test('a route literal is matched in the spelling its directory is filed under — 30.3, 30.5, 23.14', () => {
+    expect(routeOf('invoices/[id]/page.abide')).toBe('/invoices/[id]')
+    expect(routeOf('page.abide')).toBe('/')
+    // 23.14 — the directories above `routes` are the route's front, and every file in a directory
+    // answers at the directory's route, whatever its name. THE REVERT: drop the directories above
+    // `routes` in `routeOf`; the first reports `/[id]`.
+    expect(routeOf('media/[id]/page.abide')).toBe('/media/[id]')
+    expect(routeOf('media/[id]/comments.abide')).toBe('/media/[id]')
+    expect(routeOf('admin/media/layout.abide')).toBe('/admin/media')
+    // A section named `pages` keeps its name.
+    expect(routeOf('pages/add-a-page/page.abide')).toBe('/pages/add-a-page')
+    expect(routeOf('pages/page.abide')).toBe('/pages')
     expect(
         matchRoute(parseRoutePattern('/invoices/[id]'), '/invoices/42'),
     ).toEqual({ id: '42' })
@@ -563,6 +563,19 @@ test('a route literal is matched in the spelling its directory is filed under �
     expect(
         matchRoute(parseRoutePattern('/files/[...rest]'), '/files/a/b'),
     ).toEqual({ rest: ['a', 'b'] })
+    // 16.69 — a rest leaves the segments after it what they need.
+    expect(
+        matchRoute(
+            parseRoutePattern('/files/[...rest]/save'),
+            '/files/a/b/save',
+        ),
+    ).toEqual({ rest: ['a', 'b'] })
+    expect(
+        matchRoute(parseRoutePattern('/files/[...rest]/save'), '/files/save'),
+    ).toEqual({ rest: [] })
+    expect(
+        matchRoute(parseRoutePattern('/files/[...rest]/save'), '/files/a/b'),
+    ).toBeNull()
     expect(matchRoute(parseRoutePattern('/x/[[y]]'), '/x')).toEqual({})
 })
 
@@ -616,6 +629,15 @@ test('the most specific of two matching routes is tried first — 30.9', () => {
     // An exhausted prefix is the only tie left, and the shorter pattern is the narrower claim:
     // `/a` admits one address where `/a/[[b]]` admits two, and both answer `/a`.
     expect(order(['/a/[[b]]', '/a'])).toEqual(['/a', '/a/[[b]]'])
+    // UNLESS THE PREFIX LEAVES AN OPTIONAL OUT: both match `/about`, the shorter by taking `about`
+    // as `lang` and the longer by a static segment, which is the narrower claim. THE REVERT: the
+    // shorter always wins a tie; `/[[lang]]/about` — and a handler in the `[[lang]]` directory —
+    // ranks second and `/about` paints the `[[lang]]` page.
+    expect(order(['/[[lang]]', '/[[lang]]/about'])).toEqual([
+        '/[[lang]]/about',
+        '/[[lang]]',
+    ])
+    expect(order(['/[[a]]', '/[[a]]/[b]'])).toEqual(['/[[a]]/[b]', '/[[a]]'])
 })
 
 // 39.6 — THE INCOMING PAGE'S KEYED CONTRIBUTIONS REPLACE THE OUTGOING PAGE'S, BY KEY. The head a
@@ -721,6 +743,60 @@ const title = 'Arrived'
     expect(thrown).toBe('')
     expect(document.title).toBe('Arrived')
     expect(document.querySelector('#titled h1')?.textContent).toBe('Arrived')
+})
+
+// 39.1, 39.6 — A COMPONENT'S HEAD TITLES THE PAGE IT IS ON, after a navigation as on the server. A
+// docs page's `<head>` is its frame component's, and a navigation left the title the page the reader
+// came from had set. THE REVERT: drop `contributed` from `emitClient`'s fills; the document keeps
+// `Home`.
+test("a navigated page's component titles the document — 39.1, 39.6", async () => {
+    history.replaceState(null, '', '/')
+    document.head.innerHTML = '<title>Home</title>'
+    const mounts = await pages()
+    const frame = parseAbide(`<head><title>Framed</title></head>
+<main id="framed"><slot/></main>`)
+    const page = parseAbide(`<script>
+import Frame from './Frame.abide'
+</script>
+<Frame><p>inside</p></Frame>`)
+    const dir = servedModules({
+        'Frame.abide': {
+            server: '',
+            client: emitClient(
+                frame,
+                await session.reads(`${ROOT}src/Frame.abide`, frame),
+                'invoked',
+            ),
+        },
+        'Framed.abide': {
+            server: '',
+            client: emitClient(
+                page,
+                await session.reads(`${ROOT}src/Framed.abide`, page),
+                'routed',
+            ),
+        },
+    })
+    const r = startRouter(
+        [
+            {
+                pattern: '/framed',
+                load: () => import(`${dir}/Framed.abide?client`),
+                layouts: [],
+            },
+            {
+                pattern: '/',
+                load: async () => ({ default: mounts.home as PageMount }),
+                layouts: [],
+            },
+        ],
+        document.body,
+    )
+    await r.hydrate()
+    await r.go('/framed')
+    flushSync()
+    expect(document.querySelector('#framed p')?.textContent).toBe('inside')
+    expect(document.title).toBe('Framed')
 })
 
 // 39.13 — A HEAD FOLLOWS WHAT IT READS. A detail page's title reads the record it loads, which has
@@ -962,7 +1038,7 @@ async function chained(): Promise<{
     const Home = (await import(`${dir}/Home.ts`)).default
     let html = ''
     html += new TextDecoder().decode(
-        await render(
+        await renderDocument(
             () => composePage([Layout], Home, { params: () => ({}) }),
             '<!doctype html><html><head></head><body></body></html>',
         ),
@@ -1018,7 +1094,7 @@ const theme = reactive.share('theme', () => reactive('page-own'))
     const client = async (name: string): Promise<PageMount> =>
         (await import(`${dir}/${name}.client.ts`)).default as PageMount
     const html = new TextDecoder().decode(
-        await render(
+        await renderDocument(
             async () =>
                 composePage(
                     [(await import(`${dir}/Themed.ts`)).default],
@@ -1162,7 +1238,7 @@ crumbs.set(['Home'])
     const Leaf = (await import(`${dir}/Leaf.ts`)).default
     let html = ''
     html += new TextDecoder().decode(
-        await render(
+        await renderDocument(
             () => composePage([Layout], Leaf, { params: () => ({}) }),
             '<!doctype html><html><head></head><body></body></html>',
         ),
@@ -1618,10 +1694,6 @@ test("a kept layout's slot mounts the current page whenever it opens — 35.1, 1
 // (39.4), so the client has to end where that paint would: a title the reader left standing is
 // a tab naming a page they are no longer on.
 //
-// THE SHELL'S ENTRIES ARE GONE FROM THE DOCUMENT once a level overrode them — the server merged
-// them out — which is why the router is handed them rather than reading them off `document.head`.
-const SHELL_HEAD =
-    '<title>Shell</title><meta name="description" content="shell">'
 
 async function withdrawing() {
     const sources: Record<string, string> = {
@@ -1647,12 +1719,12 @@ async function withdrawing() {
     const loaded = async (name: string): Promise<{ default: PageMount }> =>
         await import(`${dir}/${name}.client.ts`)
     const section = () => loaded('Section')
-    // THE SERVER'S PAINT OF `/`: the shell's title and description merged out under the page's.
+    // THE SERVER'S PAINT OF `/`.
     const Titled = (await import(`${dir}/Titled.ts`)).default
     const html = new TextDecoder().decode(
-        await render(
+        await renderDocument(
             Titled,
-            `<!doctype html><html><head>${SHELL_HEAD}</head><body></body></html>`,
+            '<!doctype html><html><head></head><body></body></html>',
         ),
     )
     document.head.innerHTML = html.slice(
@@ -1681,8 +1753,6 @@ async function withdrawing() {
             },
         ],
         document.body,
-        false,
-        SHELL_HEAD,
     )
     await r.hydrate()
     return r
@@ -1697,42 +1767,21 @@ const description = (): string | null | undefined =>
 // the page it left painted. Leave the head on the level only where the region is empty (inside
 // `emitClient`'s `isEmptyRegion` branch), and it still does: the painted page never said what it
 // keyed, so there is nothing to withdraw.
-test("a page leaving a title the next page has none of puts back the shell's — 39.14", async () => {
+test('a page leaving a title the next page has none of takes it with it — 39.14', async () => {
     const r = await withdrawing()
     expect(document.title).toBe('Home')
-    // THE SERVER'S PAINT: one title, the page's — the shell's is not in the document.
+    // THE SERVER'S PAINT: one title, the page's.
     expect(document.head.querySelectorAll('title')).toHaveLength(1)
     await r.go('/plain')
     flushSync()
     expect(document.querySelector('#plain')?.textContent).toBe('plain')
-    expect(document.title).toBe('Shell')
-    expect(description()).toBe('shell')
-    expect(document.head.querySelectorAll('title')).toHaveLength(1)
-    expect(
-        document.head.querySelectorAll('meta[name="description"]'),
-    ).toHaveLength(1)
+    expect(document.head.querySelectorAll('title')).toHaveLength(0)
+    expect(description()).toBeUndefined()
 })
 
-// THE REVERT: hand the kept levels' heads to `withdrawHead` without the shell's in front of them
-// (`outer` = kept levels alone); leaving the section removes the title rather than putting back
-// `Shell`, and `document.title` reads ''.
-test("leaving a layout's section puts back the shell's title — 39.14", async () => {
-    const r = await withdrawing()
-    await r.go('/section/bare')
-    flushSync()
-    expect(document.title).toBe('Section')
-    expect(description()).toBe('section')
-    await r.go('/plain')
-    flushSync()
-    expect(document.querySelector('#section')).toBeNull()
-    expect(document.title).toBe('Shell')
-    expect(description()).toBe('shell')
-})
-
-// A KEPT LAYOUT IS AN OUTER CONTRIBUTOR, and the nearer one: the page that overrode its
-// description leaves, the layout stays, and the layout's is what the server would paint.
-// THE REVERT: pass the shell's head alone as `outer` in `Router.commit`; this reads `shell` where
-// `section` is due.
+// A KEPT LAYOUT IS AN OUTER CONTRIBUTOR: the page that overrode its description leaves, the
+// layout stays, and the layout's is what the server would paint.
+// THE REVERT: pass no outer heads in `Router.commit`; the description leaves where `section` is due.
 test("a page overriding its layout's description hands it back to a sibling with none — 39.14", async () => {
     const r = await withdrawing()
     await r.go('/section/described')
@@ -1763,28 +1812,6 @@ test('a key no outer contributor has is removed with the page that keyed it — 
     flushSync()
     expect(document.head.querySelectorAll('meta[name="robots"]')).toHaveLength(
         0,
-    )
-    expect(document.title).toBe('Shell')
-})
-
-// THE BUILD HANDS THE ROUTER THE SHELL'S KEYED ENTRIES, off the same `app.html` the server paints
-// with — and only the keyed ones, since an entry with no key is never withdrawn (39.5).
-// THE REVERT: write `clientTable` without the shell's head; the table reads `startRouter(routes,
-// host)` and every assertion on the shell above has nothing to restore from in a built app.
-test("the route table carries the shell's keyed head entries — 39.14", async () => {
-    const built = await compileApp(
-        temporaryModule({
-            'package.json': JSON.stringify({
-                name: 'shell-head-fixture',
-                type: 'module',
-                imports: { '#ui/*': './ui/*' },
-            }),
-            'ui/app.html': `<!doctype html><html><head><meta charset="utf-8"><!-- note --><title>Shell</title><style>p{color:red}</style><meta name="description" content="shell"></head><body></body></html>`,
-            'ui/pages/page.abide': '<main>home</main>',
-        }),
-    )
-    expect(built.modules.get('routes.ts')).toContain(
-        `startRouter(routes, host, false, ${JSON.stringify(SHELL_HEAD)})`,
     )
 })
 

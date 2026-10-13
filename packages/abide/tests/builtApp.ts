@@ -3,19 +3,21 @@
 // `abide start`. The app is a temporary module, so `removeTemporaryModules` takes it away.
 
 import { spawned } from 'harness/gate'
+import { type Compilation, servedTable } from '#server/abideModules.ts'
+import { COMPILATION } from '#server/CLIENT_BUILD.ts'
+import { serveBuild } from '#server/serveBuild.ts'
 import { temporaryModule } from './temporaryModule.ts'
 
 export const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 // The shell and the package every fixture needs, under `files`. No tsconfig: an app without one is
-// typed against the default project (38.31), which is the path an author starting out takes.
+// typed against the default project (38.30), which is the path an author starting out takes.
 export function appFixture(files: Record<string, string>): string {
     return temporaryModule({
-        'ui/app.html': `<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>`,
         'package.json': JSON.stringify({
             name: 'fixture',
             type: 'module',
-            imports: { '#ui/*': './ui/*', '#server/*': './server/*' },
+            imports: { '#src/*': './*' },
         }),
         ...files,
     })
@@ -93,4 +95,22 @@ export async function serveApp(
     if (built.exitCode !== 0)
         throw new Error(`abide build failed: ${built.stderr}`)
     return { app, ...(await startApp(app, env)) }
+}
+
+// WHAT A BUILD KEPT, read as `abide start` reads it: each `.abide` compiled, by its path below the app.
+export async function builtFiles(
+    app: string,
+    out = `${app}/.abide`,
+): Promise<Compilation['files']> {
+    return ((await Bun.file(`${out}/${COMPILATION}`).json()) as Compilation)
+        .files
+}
+
+// The handler table a build wrote, served to this process as `abide start` serves it.
+export async function builtHandlers(
+    app: string,
+    out = `${app}/.abide`,
+): Promise<Awaited<ReturnType<typeof servedTable>>['handlers']> {
+    await serveBuild(app, out)
+    return (await servedTable(app)).handlers
 }

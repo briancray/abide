@@ -4,11 +4,12 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { flushSync, invalidate, refresh, watch } from '#shared'
-import type { Reactive } from '#shared/reactive/index.ts'
 import { answerOf } from '#shared/answerOf.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
+import type { Reactive } from '#shared/reactive/index.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { wire } from '#ui/wire.ts'
+import { disarmMuxes } from './disarmMuxes.ts'
 
 type Sent = {
     op: string
@@ -22,7 +23,7 @@ type Sent = {
 // (`socketWire`), so at the page's own origin this file would be handed a mux an earlier file in
 // the same process opened — over its socket, not one of these — and every follow it reads would be
 // another file's.
-const LIBRARY = 'http://follow-wire.test/__abide/rpc/library'
+const LIBRARY = 'http://follow-wire.test/library'
 const MUX = 'ws://follow-wire.test/__abide/socket'
 
 const sockets: FakeSocket[] = []
@@ -81,9 +82,12 @@ beforeAll(() => {
     }) as unknown as typeof fetch
 })
 
+// The muxes this file opens are disarmed with it (`disarmMuxes`).
+const disarm = disarmMuxes()
 afterAll(() => {
     globalThis.WebSocket = unstubbedSocket
     globalThis.fetch = unstubbedFetch
+    disarm()
 })
 
 const settle = (): Promise<void> => new Promise((done) => setTimeout(done, 10))
@@ -339,11 +343,17 @@ test('a bare refresh does not send a mutation again — 13.16', async () => {
 // caller awaiting it is never told. THE REVERT: drop the `cell.loading` guard from `invalidateIn`; the
 // await below reads 'hung'.
 test('a bare refresh during a mutation leaves its answer to land — 13.17', async () => {
-    let answer: (response: Response) => void = () => {}
+    // EVERY REQUEST THE REFRESH STARTS IS ANSWERED, not the last one: a bare refresh reaches every
+    // global value in the process (13.10), an earlier file's among them, and a stub holding one
+    // resolver answered that file's reload and left the write hanging.
+    const answers: ((response: Response) => void)[] = []
+    const answer = (response: Response): void => {
+        for (const resolve of answers.splice(0)) resolve(response.clone())
+    }
     const answering = globalThis.fetch
     globalThis.fetch = (() =>
         new Promise<Response>((resolve) => {
-            answer = resolve
+            answers.push(resolve)
         })) as unknown as typeof fetch
     try {
         const save = wire('POST', `${LIBRARY}/save`) as (

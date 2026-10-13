@@ -1,5 +1,5 @@
 // 37.10-37.12, 42.15 — HOW A SERVED APP ENDS: through `App.stop`, so `onStop` runs, whether the
-// process was signalled or faulted. `abide start` spawned, for `serve.test.ts`'s reason, and every
+// process was signaled or faulted. `abide start` spawned, for `serve.test.ts`'s reason, and every
 // wait bounded, so a revert fails here rather than hanging the suite.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -38,9 +38,13 @@ let app = ''
 
 beforeAll(async () => {
     app = appFixture({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/app.ts': HOOKS,
-        'server/rpc/probe.ts': HANDLERS,
+        'page.abide': '<main>home</main>',
+        'layout.abide': `<script server>
+${HOOKS}</script>
+`,
+        'probe/probe.abide': `<script server>
+${HANDLERS}</script>
+`,
     })
     const built = await buildApp(app)
     if (built.exitCode !== 0)
@@ -102,7 +106,7 @@ test('SIGTERM stops the app through onStop and exits 0 — 37.11', async () => {
 test('a rejection nobody awaited reaches onError, then stops the app and exits 1 — 37.8, 37.10', async () => {
     const mark = `${app}/fault.txt`
     const { base, served } = await started(mark)
-    const answer = await Bun.fetch(`${base}/__abide/rpc/probe/fault`, {
+    const answer = await Bun.fetch(`${base}/probe/fault`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{"reason":"nobody awaited this"}',
@@ -138,7 +142,6 @@ test('App.stop asked twice runs onStop once — 42.15', async () => {
     await Bun.write(
         `${app}/twice.ts`,
         `import { createApp } from '@abide/abide/server'
-import './server/app.ts'
 
 const app = await createApp()
 const first = app.stop()
@@ -162,7 +165,7 @@ console.log(first === second)
 // runs out.
 test('App.stop ends a stream it is still writing — 42.11', async () => {
     const app = await inMemoryApp({
-        'server/rpc/feed.ts': {
+        'feed/feed.abide': {
             ticks: GET(async function* () {
                 let tick = 0
                 while (true) {
@@ -174,7 +177,7 @@ test('App.stop ends a stream it is still writing — 42.11', async () => {
         },
     })
     const answer = await app.fetch(
-        new Request('http://app.internal/__abide/rpc/feed/ticks'),
+        new Request('http://app.internal/feed/ticks'),
     )
     const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
     expect((await reader.read()).done).toBe(false)
@@ -221,7 +224,7 @@ test('a raw call outside every request after App.stop does not reach the stopped
         answered += 1
         return 'hello'
     })
-    const app = await inMemoryApp({ 'server/rpc/stopped.ts': { greeting } })
+    const app = await inMemoryApp({ 'stopped/stopped.abide': { greeting } })
     expect(await (await greeting.raw()).json()).toBe('hello')
     expect(answered).toBe(1)
     await app.stop()

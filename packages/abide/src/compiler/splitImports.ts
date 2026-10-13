@@ -1,4 +1,5 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
+import { COMPONENT_QUERY, TEXT_QUERY } from '#server/MODULE_QUERIES.ts'
 import { isContextualKeyword, type Token, tokenize } from './tokenize.ts'
 
 /**
@@ -11,13 +12,12 @@ import { isContextualKeyword, type Token, tokenize } from './tokenize.ts'
  * WHERE AN IMPORT BEGINS AND ENDS IS READ OFF the one tokenizer, which carries the template
  * re-scan a bare `` ` `` needs, so an import after a template literal is still found.
  *
- * With `landed`, every specifier the build moved is rewritten where it stands, a static import's
- * and an `import('…')`'s alike (`landedSpecifier`) — so the two cannot land in different places.
+ * Every specifier naming a face of a `.abide` is rewritten where it stands, a static import's and an
+ * `import('…')`'s alike (`facedSpecifier`) — so the two cannot ask for different faces.
  */
 export function splitImports(
     script: string,
-    lane: '' | '.client' = '',
-    landed?: ReadonlyMap<string, string>,
+    lane: Lane = 'component',
 ): {
     imports: string
     body: string
@@ -29,18 +29,13 @@ export function splitImports(
     let body = ''
     let at = 0
     for (const span of spans) {
+        const moved = facedSpecifier(span.specifier, lane)
         if (span.dynamic) {
-            if (landed === undefined) continue
-            const moved = landedSpecifier(span.specifier, lane, landed)
             if (moved === undefined) continue
             body += `${script.slice(at, span.literalStart + 1)}${moved}`
             at = span.end - 1
             continue
         }
-        const moved =
-            landed === undefined
-                ? undefined
-                : landedSpecifier(span.specifier, lane, landed)
         imports +=
             moved === undefined
                 ? `${script.slice(span.start, span.end)}\n`
@@ -50,12 +45,26 @@ export function splitImports(
         // a `[` that automatic semicolon insertion does NOT break — it reads as `f()[2]`, a
         // different program with nothing about it saying so. The empty statement left in its
         // place is the separator the import was.
-        body += `${script.slice(at, span.start)};`
+        // 38.97 — and as many lines as it spanned, so the body stays line for line with the
+        // script it came from and a source map can read the one off the other.
+        body += `${script.slice(at, span.start)};${'\n'.repeat(newlinesIn(script, span.start, span.end))}`
         at = span.end
         // The `;` an import may end with would otherwise be left behind beside the one above.
         if (script[at] === ';') at += 1
     }
     return { imports, body: body + script.slice(at) }
+}
+
+/** How many line breaks `text` holds between `start` and `end`. */
+export function newlinesIn(text: string, start: number, end: number): number {
+    let count = 0
+    for (
+        let at = text.indexOf('\n', start);
+        at !== -1 && at < end;
+        at = text.indexOf('\n', at + 1)
+    )
+        count += 1
+    return count
 }
 
 // What can stand between `import` and its specifier. A token that cannot is a malformed import,
@@ -252,7 +261,14 @@ export function abideImports(
     const found: { specifier: string; closingQuote: number }[] = []
     if (!script.includes('.abide')) return found
     for (const span of importSpans(script))
-        if (span.specifier.endsWith('.abide'))
+        if (
+            span.specifier.endsWith('.abide') &&
+            // 34.25 — a `.abide` imported as text is its text, and no component edge.
+            (span.dynamic ||
+                !IMPORT_ATTRIBUTES.text.test(
+                    script.slice(span.literalEnd, span.end),
+                ))
+        )
             found.push({
                 specifier: span.specifier,
                 closingQuote: span.literalEnd - 1,
@@ -260,40 +276,167 @@ export function abideImports(
     return found
 }
 
-/**
- * Every relative specifier a script imports, re-exports or `import('…')`s, as written, other than
- * a `.abide` one.
- *
- * 34.14 — what the build rewrites to the path from the compiled module back to the source.
- */
-export function relativeSpecifiers(script: string): string[] {
-    const specifiers: string[] = []
-    if (!script.includes('./')) return specifiers
-    for (const span of importSpans(script))
-        if (
-            (span.specifier.startsWith('./') ||
-                span.specifier.startsWith('../')) &&
-            !span.specifier.endsWith('.abide')
-        )
-            specifiers.push(span.specifier)
-    return specifiers
+/** One name an import statement binds. */
+export type ImportBinding = {
+    /** `default`, `*`, or the name imported — a string literal's text where one is written. */
+    imported: string
+    local: string
+    /** Under a `type` modifier, on the binding or on the whole statement: no value of its own. */
+    typeOnly: boolean
+    /** The binding as a statement's clause spells it, its own modifier kept: `type a as b`. */
+    written: string
 }
 
 /**
- * Every import declaration in a script: its text and where it starts.
+ * Every static import statement a script makes: where it stands, what it names, and each binding,
+ * read off the one tokenizer — so a comment or a line break inside the clause is trivia, as it is
+ * to bun, and never part of a name.
  *
- * `import …` alone — an `export … from` binds nothing in the script it stands in.
+ * `attributes` is the statement's text after its specifier, a `with { … }` or nothing. A statement of
+ * no shape this reads answers no bindings.
  */
-function importDeclarations(script: string): { text: string; start: number }[] {
-    const declarations: { text: string; start: number }[] = []
-    if (!script.includes('import')) return declarations
-    for (const span of importSpans(script))
-        if (!span.dynamic && script.startsWith('import', span.start))
-            declarations.push({
-                text: script.slice(span.start, span.end),
-                start: span.start,
+export function importStatements(script: string): {
+    start: number
+    end: number
+    specifier: string
+    typeOnly: boolean
+    attributes: string
+    bindings: ImportBinding[]
+}[] {
+    const found: ReturnType<typeof importStatements> = []
+    if (!script.includes('import')) return found
+    for (const span of importSpans(script)) {
+        if (span.dynamic || !script.startsWith('import', span.start)) continue
+        const tokens = tokenize(script.slice(span.start, span.literalStart))
+        const bindings: ImportBinding[] = []
+        let at = 1
+        // `type` modifies the statement unless it is the default's own name: `import type from`.
+        const typeOnly =
+            tokens[at]?.text === 'type' &&
+            tokens[at + 1] !== undefined &&
+            tokens[at + 1]?.kind !== SyntaxKind.FromKeyword &&
+            tokens[at + 1]?.kind !== SyntaxKind.CommaToken
+        if (typeOnly) at += 1
+        const head = tokens[at]
+        if (
+            head !== undefined &&
+            head.kind !== SyntaxKind.OpenBraceToken &&
+            head.kind !== SyntaxKind.AsteriskToken &&
+            (tokens[at + 1]?.kind === SyntaxKind.FromKeyword ||
+                tokens[at + 1]?.kind === SyntaxKind.CommaToken)
+        ) {
+            bindings.push({
+                imported: 'default',
+                local: head.text,
+                typeOnly,
+                written: head.text,
             })
-    return declarations
+            at += tokens[at + 1]?.kind === SyntaxKind.CommaToken ? 2 : 1
+        }
+        if (tokens[at]?.kind === SyntaxKind.AsteriskToken) {
+            const local = tokens[at + 2]?.text ?? ''
+            bindings.push({
+                imported: '*',
+                local,
+                typeOnly,
+                written: `* as ${local}`,
+            })
+        } else if (tokens[at]?.kind === SyntaxKind.OpenBraceToken) {
+            // Each element between the braces: `[type] imported [as local]`.
+            let element: Token[] = []
+            for (at += 1; at < tokens.length; at += 1) {
+                const token = tokens[at] as Token
+                const closed = token.kind === SyntaxKind.CloseBraceToken
+                if (closed || token.kind === SyntaxKind.CommaToken) {
+                    // `type as t` imports `type`; `type x` and `type x as y` modify.
+                    const modified =
+                        element[0]?.text === 'type' &&
+                        (element.length === 2 || element.length === 4)
+                    const name = element[modified ? 1 : 0]
+                    if (name !== undefined) {
+                        const imported =
+                            name.kind === SyntaxKind.StringLiteral
+                                ? name.text.slice(1, -1)
+                                : name.text
+                        let written = ''
+                        for (const part of element)
+                            written +=
+                                written === '' ? part.text : ` ${part.text}`
+                        bindings.push({
+                            imported,
+                            local: (element.at(-1) as Token).text,
+                            typeOnly: typeOnly || modified,
+                            written,
+                        })
+                    }
+                    element = []
+                    if (closed) break
+                } else element.push(token)
+            }
+        }
+        found.push({
+            start: span.start,
+            end: span.end,
+            specifier: span.specifier,
+            typeOnly,
+            attributes: script.slice(span.literalEnd, span.end).trim(),
+            bindings,
+        })
+    }
+    return found
+}
+
+// The attribute a static import is read by: as text (34.25), or as a mount of routes (23.19).
+export const IMPORT_ATTRIBUTES = {
+    text: /\btype\s*:\s*['"]text['"]/,
+    routes: /\btype\s*:\s*['"]routes['"]/,
+} as const
+
+/**
+ * Every static import a script makes `with { type }`: the specifier, where the statement and its
+ * literal begin, and where the attributes end.
+ *
+ * 34.25 — a text import's literal-to-end span is what the projection writes over with the specifier
+ * the checker types a `string` (`SOURCE_SUFFIX`), and the emitters ask for as text
+ * (`facedSpecifier`). 23.19 — a routes import's whole statement is what the projection blanks: a
+ * mount is read by the build off the file, and neither bun nor the checker has a module to give it.
+ */
+export function attributedImports(
+    script: string,
+    type: keyof typeof IMPORT_ATTRIBUTES,
+): ImportSpan[] {
+    const found: ImportSpan[] = []
+    if (!script.includes(type)) return found
+    const attribute = IMPORT_ATTRIBUTES[type]
+    for (const span of importSpans(script))
+        if (
+            !span.dynamic &&
+            attribute.test(script.slice(span.literalEnd, span.end))
+        )
+            found.push(span)
+    return found
+}
+
+/** What a file imported as text is written as once projected: `./X.abide` → `./X.abide.source`. */
+export const SOURCE_SUFFIX = '.source'
+
+/**
+ * `source` with each module specifier — of a declaration, an `export … from` or an `import('…')` —
+ * written as `rewrite` answers for it, and left as it is where `rewrite` answers `undefined`.
+ */
+export function respecified(
+    source: string,
+    rewrite: (specifier: string) => string | undefined,
+): string {
+    let out = ''
+    let at = 0
+    for (const span of importSpans(source)) {
+        const written = rewrite(span.specifier)
+        if (written === undefined) continue
+        out += `${source.slice(at, span.literalStart + 1)}${written}`
+        at = span.literalEnd - 1
+    }
+    return at === 0 ? source : out + source.slice(at)
 }
 
 /**
@@ -305,61 +448,40 @@ export function importedNames(
     script: string,
 ): { name: string; specifier: string }[] {
     const names: { name: string; specifier: string }[] = []
-    for (const declaration of importDeclarations(script)) {
-        const tokens = tokenize(declaration.text)
-        const last = tokens.findLastIndex(
-            (token) => token.kind === SyntaxKind.StringLiteral,
-        )
-        if (last === -1) continue
-        const specifier = (tokens[last] as Token).text.slice(1, -1)
-        for (let at = 1; at < last; at += 1) {
-            const token = tokens[at] as Token
-            if (token.kind === SyntaxKind.FromKeyword) break
-            if (token.kind === SyntaxKind.AsKeyword) continue
-            if (
-                token.kind !== SyntaxKind.Identifier &&
-                !isContextualKeyword(token.kind)
-            )
-                continue
-            const next = tokens[at + 1] as Token
-            // A name followed by `as` is renamed, and a modifier is followed by what it modifies.
-            if (next.kind === SyntaxKind.AsKeyword) continue
-            if (
-                token.text === 'type' &&
-                (next.kind === SyntaxKind.Identifier ||
-                    next.kind === SyntaxKind.OpenBraceToken ||
-                    next.kind === SyntaxKind.AsteriskToken ||
-                    isContextualKeyword(next.kind))
-            )
-                continue
-            names.push({ name: token.text, specifier })
-        }
-    }
+    // `import …` alone — an `export … from` binds nothing in the script it stands in.
+    for (const declaration of importStatements(script))
+        for (const binding of declaration.bindings)
+            names.push({
+                name: binding.local,
+                specifier: declaration.specifier,
+            })
     return names
 }
 
 /**
- * Where the build moved `specifier`: a `.abide` one to the lane's compiled module for it, and a
- * relative one to its source — or `undefined` where it stays as written.
+ * The face of a `.abide` a specifier asks for, spelled on it (`MODULE_QUERIES`), or `undefined`
+ * where the specifier stays as written.
  *
- * 32.17 — A `.abide` IMPORT IS AN IMPORT OF THE MODULE THAT FILE COMPILES TO, and which of the two
- * it is is the LANE's business: the server module renders the child, the client module mounts it.
- * WHERE that module is, is the build's: `landed` maps a specifier to the path, relative and
- * without an extension, the build resolved it to (`componentGraph`) — and a `.abide` specifier it
- * does not map keeps the path as written.
+ * 34.14 — EVERY OTHER SPECIFIER STAYS AS WRITTEN: the compiled module is served at its `.abide`'s
+ * own path, so bun resolves a relative, a `#` or a bare specifier from the file that wrote it.
  *
- * 34.14 — `landed` maps any other relative specifier to the path from the module, in the output
- * tree, back to the file the author meant, which the output tree does not hold.
+ * 32.17 — a component block's `.abide` import is of the module that file compiles to; a server
+ * block's stays bare, for the face a module abide did not compile gets (34.16). 34.25 — a file the
+ * projection marked as text is asked for as its text.
  */
-function landedSpecifier(
-    specifier: string,
-    lane: '' | '.client',
-    landed: ReadonlyMap<string, string>,
-): string | undefined {
-    if (specifier.endsWith('.abide'))
-        return `${landed.get(specifier) ?? specifier.slice(0, -'.abide'.length)}${lane}.ts`
-    return landed.get(specifier)
+function facedSpecifier(specifier: string, lane: Lane): string | undefined {
+    if (specifier.endsWith(SOURCE_SUFFIX))
+        return `${specifier.slice(0, -SOURCE_SUFFIX.length)}${TEXT_QUERY}`
+    if (lane === 'component' && specifier.endsWith('.abide'))
+        return `${specifier}${COMPONENT_QUERY}`
+    return undefined
 }
+
+/**
+ * Which face a block's imports are written for: a component's — its `<script>` and
+ * `<script module>`, in either lane — or a server block's, whose `.abide` imports stay bare (34.16).
+ */
+export type Lane = 'component' | 'source'
 
 /**
  * `imports` with `props` dropped from the abide import that names it.

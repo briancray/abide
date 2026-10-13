@@ -80,7 +80,7 @@ test('a prop re-reads when the caller value moves, and nothing is rebuilt — 33
 
 // 14.7 — A CHILD'S SETUP DOES NOT TRACK, WHEREVER IT IS INVOKED. An arm mounts inside the watch
 // that chose it, so a child in an arm whose setup read a prop subscribed the caller's `{#if}` to
-// that prop: a write re-ran the arm choice as well as the child's binding. The setup's snapshot
+// that prop: a write reran the arm choice as well as the child's binding. The setup's snapshot
 // staying `0` is the same with the fix in or out — the wake is the difference.
 //
 // THE REVERT: drop the `untracked` round the call in `emitInvocation` — `wakes` 1 -> 2.
@@ -253,17 +253,17 @@ const { class: className = '', ...attributes } = props<Attributes<'section'>>()
     expect(html.split('inside').length - 1).toBe(1)
 })
 
-// 34.12, 34.13 — `lang="ts"` AND `generics` LEAVE A `<script>` THE COMPONENT'S SETUP, where any
-// other attribute makes it markup. THE REVERT: drop the two from `scriptBlock`; the setup is
-// written into the document as an inline script, `items` is never declared, and the render throws.
-test('a script carrying lang="ts" and generics is component setup — 34.12, 34.13', async () => {
+// 34.13 — `generics` LEAVES A `<script>` THE COMPONENT'S SETUP, where any other attribute makes it
+// markup. THE REVERT: drop it from `scriptBlock`; the setup is written into the document as an
+// inline script, `items` is never declared, and the render throws.
+test('a script carrying generics is component setup — 34.13', async () => {
     const { html } = await renderPage(
         `<script>
 import List from './List.abide'
 </script>
 <List items={['a', 'b']}/>`,
         {
-            List: `<script lang="ts" generics="Item extends string">
+            List: `<script generics="Item extends string">
 import { props } from '@abide/abide'
 
 const { items } = props<{ items: Item[] }>()
@@ -357,11 +357,14 @@ let count = reactive(0)
     ])
     expect(built.exitCode).toBe(0)
 
-    const client = await Bun.file(`${out}/Static.client.ts`).text()
+    const { files } = (await Bun.file(`${out}/compilation.json`).json()) as {
+        files: Record<string, { client: string }>
+    }
+    const client = files['Static.abide']?.client ?? ''
     expect(client).not.toBe('export default () => {}\n')
     expect(client).toContain('nothing moves here')
-    expect(await Bun.file(`${out}/page.client.ts`).text()).toContain(
-        "from './Static.client.ts'",
+    expect(files['page.abide']?.client).toContain(
+        "from './Static.abide?component'",
     )
 })
 

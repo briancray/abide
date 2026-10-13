@@ -3,7 +3,7 @@ import { rmSync, symlinkSync } from 'node:fs' // bun has no sync symlink/rm of i
 import { emitComponent, parseAbide } from '#compiler'
 import type { CheckerAnswer } from '#compiler/CheckerAnswer.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
-import { render } from '#server'
+import { renderDocument } from '#server/render.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { namesRead } from './typed.ts'
 
@@ -77,7 +77,7 @@ count = count + step
     const { default: Page } = await import(module)
     let out = ''
     out += new TextDecoder().decode(
-        await render(
+        await renderDocument(
             Page,
             '<!doctype html><html><head></head><body></body></html>',
         ),
@@ -108,7 +108,7 @@ import { onboarding } from '${ROOT}src/conversations.ts'
     const { default: Page } = await import(module)
     let out = ''
     out += new TextDecoder().decode(
-        await render(
+        await renderDocument(
             Page,
             '<!doctype html><html><head></head><body></body></html>',
         ),
@@ -144,7 +144,7 @@ const held: import('@abide/abide').Reactive<number> = a
     const { default: Page } = await import(module)
     let out = ''
     out += new TextDecoder().decode(
-        await render(
+        await renderDocument(
             Page,
             '<!doctype html><html><head></head><body></body></html>',
         ),
@@ -312,7 +312,7 @@ const { label } = props()
     const { default: Page } = await import(module)
     let out = ''
     out += new TextDecoder().decode(
-        await render(
+        await renderDocument(
             Page,
             '<!doctype html><html><head></head><body></body></html>',
         ),

@@ -6,11 +6,11 @@ import { projectShadow } from '#compiler/projectShadow.ts'
 import { parseSources, readSources } from '#compiler/readSources.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { type Token, tokenize } from '#compiler/tokenize.ts'
-import { render } from '#server'
+import { renderDocument } from '#server/render.ts'
 import { flushSync } from '#shared'
 import { pageRegion } from '#ui/regions.ts'
 import type { Scope } from '#ui/Scope.ts'
-import { temporaryModule } from './temporaryModule.ts'
+import { servedModules } from './servedModules.ts'
 
 // THE CHECKER DECIDES WHAT IS REACTIVE, so a test that means "`n` is a `Reactive` here" has to say
 // so in a way the checker reads. `typed` declares every name it is given as one at module scope —
@@ -178,7 +178,7 @@ export async function renderPage(
     components: Record<string, string> = {},
 ): Promise<{ html: string; client: string; mount: () => Scope }> {
     const checker = await typedSession()
-    const modules: Record<string, string> = {}
+    const modules: Record<string, { server: string; client: string }> = {}
     let pageClient = ''
     for (const [name, source] of Object.entries({
         ...components,
@@ -191,28 +191,28 @@ export async function renderPage(
             file,
         )
         const { server, client } = emitSource(
-            isPage ? 'ui/pages/page.abide' : `${name}.abide`,
+            isPage ? 'page.abide' : `${name}.abide`,
             file,
             reads,
             !isPage,
         )
-        modules[`${name}.ts`] = server
-        modules[`${name}.client.ts`] = client
+        modules[`${name}.abide`] = { server, client }
         if (isPage) pageClient = client
     }
-    const dir = temporaryModule(modules)
-    const { default: Component } = await import(`${dir}/Page.ts`)
+    const dir = servedModules(modules)
+    const { default: Component } = await import(`${dir}/Page.abide?component`)
     const html = new TextDecoder().decode(
-        await render(
+        await renderDocument(
             Component,
             '<!doctype html><html><head></head><body></body></html>',
         ),
     )
+    // After the `<body …>` open tag, whatever attributes a page's own `<body>` wrote onto it (35.15).
     document.body.innerHTML = html.slice(
-        html.indexOf('<body>') + '<body>'.length,
+        html.indexOf('>', html.indexOf('<body')) + 1,
         html.indexOf('</body>'),
     )
-    const { default: mount } = await import(`${dir}/Page.client.ts`)
+    const { default: mount } = await import(`${dir}/Page.abide?client`)
     return {
         html,
         client: pageClient,

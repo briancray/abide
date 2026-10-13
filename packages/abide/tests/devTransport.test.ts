@@ -1,5 +1,5 @@
 // WHAT CROSSES THE WORKER UNDER `abide dev`: the app's mux (18.1, 18.3), which the listener holds
-// and the worker answers, and a response body, streamed a chunk per read (38.36, 38.37). Spawned for
+// and the worker answers, and a response body, streamed a chunk per read (38.35, 38.36). Spawned for
 // `dev.test.ts`'s reasons, and the client is a spawned bun script for `follow.test.ts`'s: happy-dom's
 // `WebSocket` is not bun's.
 
@@ -34,7 +34,7 @@ export const release = POST(() => {
 
 // Counts a 64 KB chunk per pull, forever — large, so the socket's own buffer fills in a few — and says how far it got. A \`Response\` of its own (16.36) rather
 // than a generator: a streaming \`reactive\` pumps its body to accumulate it (9.1) whoever reads it,
-// and what 38.37 is about is the body the connection pulls.
+// and what 38.36 is about is the body the connection pulls.
 let counted = 0
 export const count = GET(
     () =>
@@ -73,12 +73,14 @@ let app = ''
 
 beforeAll(async () => {
     app = temporaryModule({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/library.ts': HANDLERS,
+        'page.abide': '<main>home</main>',
+        'library/library.abide': `<script server>
+${HANDLERS}</script>
+`,
         'package.json': JSON.stringify({
             name: 'dev-follow-fixture',
             type: 'module',
-            imports: { '#server/*': './server/*', '#ui/*': './ui/*' },
+            imports: { '#src/*': './*' },
         }),
     })
     server = Bun.spawn(['bun', BIN, 'dev', '--root', app, '--port', '0'], {
@@ -133,17 +135,19 @@ test('an upgrade some other address answers 204 opens nothing under abide dev �
 // 204 at the mux's own address opens a mux over nothing, and this reads ['open'].
 test('a rung answering 204 opens no mux where the app carries nothing under abide dev — 37.3', async () => {
     const bare = temporaryModule({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/app.ts': `import { middleware } from '@abide/abide/server'
+        'page.abide': '<main>home</main>',
+        'layout.abide': `<script server>
+import { middleware } from '@abide/abide/server'
 
 middleware(async (next, { request }) =>
     request.headers.get('upgrade') === 'websocket' ? new Response(null, { status: 204 }) : next(),
 )
+</script>
 `,
         'package.json': JSON.stringify({
             name: 'dev-bare-fixture',
             type: 'module',
-            imports: { '#server/*': './server/*', '#ui/*': './ui/*' },
+            imports: { '#src/*': './*' },
         }),
     })
     const bareServer = Bun.spawn(
@@ -183,7 +187,7 @@ async function followed(
     const dir = temporaryModule({
         'client.ts': `const base = process.argv[2] + process.argv[3]
 const frames: { op: string }[] = []
-const answered = await fetch(base + '/__abide/rpc/library/books')
+const answered = await fetch(base + '/library/books')
 const version = Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, ''))
 const ws = new WebSocket(base.replace('http', 'ws') + '/__abide/socket')
 // A subscription to an address nothing answers is refused as the mux reads it, so the refusal
@@ -205,10 +209,10 @@ const opened = await Promise.race([
 ])
 clearTimeout(refused)
 if (opened) {
-    ws.send(JSON.stringify({ op: 'sub', id: 1, address: process.argv[3] + '/__abide/rpc/library/books', version }))
-    ws.send(JSON.stringify({ op: 'sub', id: 2, address: process.argv[3] + '/__abide/rpc/library/nothingAnswersHere' }))
+    ws.send(JSON.stringify({ op: 'sub', id: 1, address: process.argv[3] + '/library/books', version }))
+    ws.send(JSON.stringify({ op: 'sub', id: 2, address: process.argv[3] + '/library/nothingAnswersHere' }))
     await Promise.race([followed, new Promise((done) => setTimeout(done, 3000).unref())])
-    await fetch(base + '/__abide/rpc/library/shelve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'emma' }) })
+    await fetch(base + '/library/shelve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'emma' }) })
     await Promise.race([shelved, new Promise((done) => setTimeout(done, 3000).unref())])
     // Closed and drained, so a second frame sent before the close lands ahead of what is said.
     ws.close()
@@ -224,7 +228,7 @@ console.log(JSON.stringify(frames))
 async function run(steps: string): Promise<unknown> {
     const dir = temporaryModule({
         'client.ts': `const base = process.argv[2]
-const rpc = base + '/__abide/rpc/library/'
+const rpc = base + '/library/'
 let said: unknown
 const say = (value: unknown) => { said = value }
 ${steps}
@@ -235,7 +239,7 @@ process.exit(0)
     return lastLinePrinted(['bun', `${dir}/client.ts`, base])
 }
 
-// 38.36 — THE FIRST LINE ARRIVES BEFORE THE HANDLER HAS WRITTEN THE LAST, which is only possible
+// 38.35 — THE FIRST LINE ARRIVES BEFORE THE HANDLER HAS WRITTEN THE LAST, which is only possible
 // where it is sent as it is produced: the second line waits on a release the client sends after it
 // has read the first. THE REVERT: collect the whole body in \`devWorker\`'s \`answerAsk\` before the
 // head goes out; the first read waits on a release that is never sent, and reports 'timed out'.
@@ -253,7 +257,7 @@ say(first)
     expect(String(said)).not.toContain('second')
 }, 20_000)
 
-// 38.37 — A READER THAT STOPS STOPS THE HANDLER: an endless body, read once, is pulled only as far as
+// 38.36 — A READER THAT STOPS STOPS THE HANDLER: an endless body, read once, is pulled only as far as
 // the socket's buffers take it — 21 to 31 chunks of 64 KB over three runs on macOS, 71 on a
 // linux CI runner, whose buffers autotune larger, and 256 is the bound. THE REVERT: have \`pull\` in \`devWorker\` loop the reader to the end rather than read one chunk; the
 // worker reads the endless body flat out, and the client's second request is never answered.
@@ -268,7 +272,7 @@ reader.cancel()
     expect(Number(said)).toBeLessThan(256)
 }, 20_000)
 
-// 38.97 — A HANDLER'S CHILD GOES WITH ITS REQUEST: the listener holds the connection, so a hang-up
+// 38.96 — A HANDLER'S CHILD GOES WITH ITS REQUEST: the listener holds the connection, so a hang-up
 // reaches the worker as a message, and the request the app reads has to abort on it as bun's would.
 // The answer never ends, so only the signal can stop the child; `gone` looks for it for 3 s, and
 // kills it itself where it is still there.
@@ -286,7 +290,7 @@ const gone = async () => {
 
 // THE REVERT: drop `signal` from the `Request` `answerAsk` builds in `devWorker`. Run:
 // `child gone: false`.
-test('a caller hanging up aborts the request under abide dev — 38.97', async () => {
+test('a caller hanging up aborts the request under abide dev — 38.96', async () => {
     const said = await run(`${SPAWNED}
 await reader.cancel()
 say(\`child gone: \${await gone()}\`)
@@ -296,9 +300,9 @@ say(\`child gone: \${await gone()}\`)
 
 // THE REVERT: drop `process.on('SIGTERM', hangUpAndExit)` in `devWorker`. Run: `child gone: false` —
 // the worker replaced on a reload, and the child it spawned left running.
-test('a reload aborts the requests the replaced worker was answering — 38.97', async () => {
+test('a reload aborts the requests the replaced worker was answering — 38.96', async () => {
     const said = await run(`${SPAWNED}
-const library = ${JSON.stringify(`${app}/server/rpc/library.ts`)}
+const library = ${JSON.stringify(`${app}/library/library.abide`)}
 await Bun.write(library, await Bun.file(library).text())
 say(\`child gone: \${await gone()}\`)
 reader.cancel().catch(() => {})
@@ -326,7 +330,7 @@ Bun.serve = ((options: never) => {
     return bound
 }) as typeof Bun.serve
 const server = await serveDev({ root: process.argv[2] as string, port: 0 })
-const answered = await fetch(new URL('/__abide/rpc/library/patient', server.url))
+const answered = await fetch(new URL('/library/patient', server.url))
 console.log(JSON.stringify({ status: answered.status, raised }))
 process.exit(0)
 `,
@@ -339,14 +343,14 @@ process.exit(0)
         ]),
     ).toEqual({
         status: 200,
-        raised: [40],
+        raised: [44],
     })
 }, 30_000)
 
 // Opens a web socket at each address in turn, and says which opened.
 async function upgrades(
     at: string,
-    addresses = ['/__abide/socket', '/__abide/rpc/library/nothing'],
+    addresses = ['/__abide/socket', '/library/nothing'],
 ): Promise<string[]> {
     const dir = temporaryModule({
         'upgrade.ts': `// A page first: the listener holds it until the worker is ready, where an upgrade would be refused

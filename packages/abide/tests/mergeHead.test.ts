@@ -4,11 +4,11 @@
 // served app does not happen to reach.
 
 import { expect, test } from 'bun:test'
-import { render } from '#server/render.ts'
+import { renderDocument } from '#server/render.ts'
 
 const heads = async (shell: string, head: string): Promise<string> => {
     const html = new TextDecoder().decode(
-        await render(() => ({ head, body: '' }), shell),
+        await renderDocument(() => ({ head, body: '' }), shell),
     )
     return html.slice(0, html.indexOf('</head>'))
 }

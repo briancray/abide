@@ -1,4 +1,4 @@
-// 38.31 — AN APP WITH NO tsconfig.json IS TYPED AGAINST ONE OF ABIDE'S, not read untyped. The checker
+// 38.30 — AN APP WITH NO tsconfig.json IS TYPED AGAINST ONE OF ABIDE'S, not read untyped. The checker
 // is what tells the compiler which names are `Reactive`s (31.3), and with no project to ask every
 // template position read as static: the server painted an unlanded read by throwing out of the
 // render (41.4), the client never bound a slot at all, and `props` went unseen — an app that built

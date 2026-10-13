@@ -2,7 +2,7 @@
 // off the wire: over http (16.2) and a `GET` followed over the socket mux (18.3). Each lane reads the
 // args off its own transport and answers a refusal in its own form.
 
-import { normalised } from '#shared/reactive/argsContract.ts'
+import { normalized } from '#shared/reactive/argsContract.ts'
 import { validationError } from '#shared/refuse.ts'
 import { validateJson } from '#shared/validateJson.ts'
 import type { Mounted } from './answerRpc.ts'
@@ -31,7 +31,7 @@ export function argsFor(
                   found.argsDocument,
                   query,
               )
-    const args = normalised(found.handler, coerced)
+    const args = normalized(found.handler, coerced)
     if (found.wireArgs !== undefined && args !== undefined) {
         const issues = validateJson(found.wireArgs, args)
         if (issues !== null) throw validationError(issues)

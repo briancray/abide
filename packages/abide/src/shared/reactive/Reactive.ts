@@ -10,7 +10,7 @@
 //
 // Every field `Cell` declares is written in its constructor, in one order, `undefined`
 // included — a shape that grows a field on a later path is two hidden classes and every
-// read downstream of it deoptimises.
+// read downstream of it deoptimizes.
 
 import { type Failed, isFailed, isFailedNamed } from '../Failed.ts'
 import { namedLogger } from '../log.ts'
@@ -139,7 +139,7 @@ export type ReactiveOptions<
     /**
      * Shapes a settled value on the way in, or refuses it by returning a `Failed`.
      *
-     * RULEBOOK 4.6, 4.7: runs untracked, on the settled value, once per materialisation,
+     * RULEBOOK 4.6, 4.7: runs untracked, on the settled value, once per materialization,
      * and refuses by RETURNING a `Failed` rather than by throwing. A throw here would be
      * indistinguishable from the body having failed, and 4.9 has a refused write mint
      * nothing where a failed producer (2.3) may still have something to say.
@@ -180,7 +180,7 @@ export type ReactiveOptions<
      * What tells one array element from another.
      *
      * RULEBOOK 5.22, 32.32: what tells one element from another. The property-name form is the one
-     * that crosses a wire (18.4) — a function has no serialisation.
+     * that crosses a wire (18.4) — a function has no serialization.
      */
     by?:
         | (keyof ElementOf<Stored> & string)
@@ -374,7 +374,7 @@ type Persisted = {
  * A STREAMING PRODUCER'S OWN STATE (9.1, 9.2, 9.6), and `null` on every value whose body is
  * not an async generator — the shape `cap` and `adoption` already use.
  *
- * THE ACCUMULATION IS PUSHED INTO AND MATERIALISED ON THE READ. A chunk is one push and one
+ * THE ACCUMULATION IS PUSHED INTO AND MATERIALIZED ON THE READ. A chunk is one push and one
  * cascade; the copy a reader is handed is taken by the read that follows, so a hundred
  * chunks between two reads are one copy rather than a hundred (9.2). The copy is FRESH per
  * chunk count and has to be: a reader holding an earlier snapshot still holds what it read,
@@ -401,13 +401,13 @@ type Stream = {
      *
      * A version rather than a chunk count because a patch changes the accumulation without
      * changing its length (9.13), and a write stands at the version it was made at until the
-     * accumulation moves past it (9.11). -1 where nothing has been materialised.
+     * accumulation moves past it (9.11). -1 where nothing has been materialized.
      */
-    materialisedAt: number
+    materializedAt: number
     /**
-     * Whether `value` is a write rather than a materialisation.
+     * Whether `value` is a write rather than a materialization.
      *
-     * WHETHER `value` IS A WRITE rather than a materialisation, while `materialisedAt` stands. A value
+     * WHETHER `value` IS A WRITE rather than a materialization, while `materializedAt` stands. A value
      * forwarding this stream serves the write the way it would have served a production (11.59).
      */
     written: boolean
@@ -416,7 +416,7 @@ type Stream = {
      *
      * HOW MANY CHUNKS A READER HAS BEEN TOLD OF. Every chunk as it lands, without a cap; with one,
      * only what the window has released (5.18) — the rest are in `chunks` for a cursor (5.10) and
-     * out of what a read materialises until the release.
+     * out of what a read materializes until the release.
      */
     visible: number
     /** The run in flight, told to return when a newer run supersedes it. */
@@ -470,7 +470,7 @@ function newStream(source: Cell | null): Stream {
         chunks: EMPTY_RING,
         version: 0,
         visible: 0,
-        materialisedAt: -1,
+        materializedAt: -1,
         written: false,
         iterator: null,
         run: 0,
@@ -498,7 +498,7 @@ function becomeStream(cell: Cell, source: Cell | null): Stream {
  * every other producer's. A failed or superseded run never reaches here, so it starts no clock.
  */
 function closeRun(cell: Cell, stream: Stream): void {
-    // Materialised here so 9.8's gates run on the accumulation the run closed with.
+    // Materialized here so 9.8's gates run on the accumulation the run closed with.
     if (heldValue(cell) === undefined) return
     stream.closed = true
     const expiry = cell.expiry
@@ -739,7 +739,7 @@ class Cell {
      * Whether a read may ever take the field straight, fixed at construction.
      *
      * WHETHER A READ MAY EVER TAKE THE FIELD STRAIGHT, fixed at construction: no expiry to
-     * check and no accumulation to materialise. `setDirect` reads this one field where it
+     * check and no accumulation to materialize. `setDirect` reads this one field where it
      * would otherwise read one per mechanism that needs the read to go a frame in.
      */
     declare plain: boolean
@@ -965,7 +965,7 @@ function capFor(
  *
  * So the framework takes the cheap, predictable default — `===` is what JavaScript
  * means by "the same value" — and the app names `identity: structural` on the values
- * where re-materialisation is the common case. 5.5's "not equal wherever it cannot
+ * where re-materialization is the common case. 5.5's "not equal wherever it cannot
  * decide" is unchanged; it is just no longer the default reading.
  *
  * `identity` is discriminated by ARITY (5.3), once, at construction — not per compare.
@@ -1102,7 +1102,7 @@ export function flushSync(): void {
  * is never direct, so every read of it goes a frame in to `readIndirect` — which is
  * exactly where 6.5 and 6.6 are answered, and is why a value declaring no `ttl`
  * never reaches a clock. See `Expiry.ts`. A stream is never direct either, for the same
- * shape of reason: its read is where the accumulation is materialised (9.1).
+ * shape of reason: its read is where the accumulation is materialized (9.1).
  */
 function setDirect(cell: Cell, when: boolean): void {
     cell.direct = when && cell.plain
@@ -1438,7 +1438,7 @@ function drainPending(): void {
         // derived CELL on 2.13's aborted-body path, and for one of those `state` is not a
         // reminder to run — it IS the pull the next read takes (`state !== CLEAN` is what sends
         // a read a frame in). Forced back to `CLEAN` it is not deaf, it is settled: the read
-        // path skips `resolve`, the aborted body is never re-run and the `ready()` guard that
+        // path skips `resolve`, the aborted body is never rerun and the `ready()` guard that
         // queued it answers false for the life of the page — undoing, on any throw anywhere in
         // the drain, exactly what that push was added to repair.
         for (let index = pendingAt; index < pendingCount; index += 1) {
@@ -1747,7 +1747,7 @@ function openWindow(cell: Cell, cap: Cap): void {
  *
  * THE WAY IN, AND THE ORDER IS 4.3 THEN 4.4: the schema gates, and what it RETURNS is
  * what `transform` receives — not the original value. A transform reading the raw input
- * where a schema had normalised it is a second answer to what this value holds.
+ * where a schema had normalized it is a second answer to what this value holds.
  * What it hands back is the ordinal, or the refusal a gate answered with (4.18) — `unknown`
  * because the one caller that cares tells the two apart by type.
  */
@@ -1769,7 +1769,7 @@ function accept(cell: Cell, value: unknown): unknown {
     if (transform === null) return produce(cell, checked)
     // 4.7 — A `transform` RUNS UNTRACKED: a write can be made from inside a tracked body
     // (`watch(() => target.set(…))`, a recompute that writes), and run tracked, the transform's
-    // reads were attributed to that reader — which then re-ran on a value it never read, with
+    // reads were attributed to that reader — which then reran on a value it never read, with
     // those reads spliced into its cursor-ordered `sources`.
     const shaped = untracked(transform, checked, undefined)
     // 4.6 AND 4.9: a `transform` that returned a refusal stops the write here — nothing is
@@ -1844,7 +1844,7 @@ function writeStream(cell: Cell, value: unknown): unknown {
 function standWrite(cell: Cell, stream: Stream, value: unknown): number {
     // 7.9, as `produce` settles it.
     if (cell.owes === OWES_RELOAD) cell.owes = OWES_NOTHING
-    // 5.2 against what is served now, which on a stream may not have been materialised yet.
+    // 5.2 against what is served now, which on a stream may not have been materialized yet.
     if (cell.servable) {
         const previous = heldValue(cell)
         if (
@@ -1855,7 +1855,7 @@ function standWrite(cell: Cell, stream: Stream, value: unknown): number {
             return cell.ordinal
     }
     cell.value = value
-    stream.materialisedAt = stream.version
+    stream.materializedAt = stream.version
     stream.written = true
     const moved = !cell.servable || cell.failure !== undefined
     landChunks(cell)
@@ -2030,13 +2030,13 @@ function follow(cell: Cell, stream: Stream, inner: Cell): Error | undefined {
     if (standing !== null) unfollow(cell)
     // What `standWrite`'s identity gate compares against is what is served now.
     heldValue(cell)
-    stream.materialisedAt = stream.version
+    stream.materializedAt = stream.version
     stream.written = true
     const stop = watchOver([inner], cell, (): undefined => {
         // The accumulation moved past the write. The drop is `wakeStreams`'s or the read's, not
         // this one's: a mirror runs inside the mark walk over `inner.readers`, and detaching here
         // would splice the list that walk is iterating.
-        if (!stream.written || stream.materialisedAt !== stream.version)
+        if (!stream.written || stream.materializedAt !== stream.version)
             return undefined
         if (inner.owes !== OWES_NOTHING) settleOwed(inner)
         // 11.16: the followed value has nothing to serve, so neither has this.
@@ -2075,7 +2075,7 @@ function unserve(cell: Cell): void {
 }
 
 function mirror(cell: Cell, inner: Cell): void {
-    // 7.13 through the adoption: the re-settle a re-run of the adopter makes reaches a reload the
+    // 7.13 through the adoption: the re-settle a rerun of the adopter makes reaches a reload the
     // adopted value owes, rather than finding it unservable and giving up.
     if (inner.owes !== OWES_NOTHING) settleOwed(inner)
     const adopted = inner.stream
@@ -2136,7 +2136,7 @@ function dropAdoption(cell: Cell): void {
  * Makes an adopter forward an adopted stream's buffer, ring and ordinals.
  *
  * 11.15 FOR A STREAM: the adopter takes the adopted value's buffer, ring and ordinals by
- * reference and materialises from them on its own reads, through its own gates (11.14, 9.8).
+ * reference and materializes from them on its own reads, through its own gates (11.14, 9.8).
  * Mirroring the value instead copied the accumulation once per wake whether or not anything
  * read it, and handed a cursor over the adopter whole accumulations where it wanted chunks.
  */
@@ -2151,8 +2151,8 @@ function forwardStream(cell: Cell, inner: Cell, adopted: Stream): void {
     stream.chunks = adopted.chunks
     stream.version = adopted.version
     stream.visible = adopted.visible
-    if (adopted.written && adopted.materialisedAt === adopted.version) {
-        stream.materialisedAt = stream.version
+    if (adopted.written && adopted.materializedAt === adopted.version) {
+        stream.materializedAt = stream.version
         stream.written = true
         gateInto(cell, inner.value)
     }
@@ -2188,9 +2188,9 @@ function stopForwarding(cell: Cell): void {
  * THE ABORT. A body that reads a value which has not landed throws `NotLanded`, and
  * this catches it and returns — the body is ABANDONED, not retried in place. The read
  * that threw has already registered this cell as a reader of it (tracking happens
- * before the throw), so the source landing is what re-runs the body.
+ * before the throw), so the source landing is what reruns the body.
  *
- * "Throw a sentinel and re-run" was refused once on three grounds. Two are answered
+ * "Throw a sentinel and rerun" was refused once on three grounds. Two are answered
  * by the reach starting the work (1.7) — the loads are in flight before the body
  * runs, so the abort costs a re-entry rather than a round trip. The third, that
  * nothing on a server wakes an abandoned body, is answered by the sink rather than
@@ -2532,7 +2532,7 @@ function acceptChunk(cell: Cell, stream: Stream, chunk: unknown): void {
 /**
  * Tells readers of every chunk landed so far, waking them at most once per task.
  *
- * What a reader is told of: every chunk landed so far becomes what a read materialises, and the
+ * What a reader is told of: every chunk landed so far becomes what a read materializes, and the
  * wake goes out at most once per task (9.9).
  */
 function releaseChunks(cell: Cell, stream: Stream): void {
@@ -2546,7 +2546,7 @@ function releaseChunks(cell: Cell, stream: Stream): void {
  * The streams holding a wake, all drained by one task.
  *
  * THE STREAMS HOLDING A WAKE, and one task drains all of them — never a task per stream.
- * The pull is untouched: a read taken before the task runs materialises what has landed
+ * The pull is untouched: a read taken before the task runs materializes what has landed
  * (12.12), so what waits is only the telling.
  */
 const WAKING: Cell[] = []
@@ -2621,18 +2621,18 @@ function landChunks(cell: Cell): void {
 }
 
 /**
- * Materialises a stream's visible chunks into `value`, through both gates.
+ * Materializes a stream's visible chunks into `value`, through both gates.
  *
  * 9.1 AND 9.8: the read that asks is where the accumulation becomes a `Stored`, through both
  * gates, once per chunk count however many reads ask.
  */
-function materialise(cell: Cell, stream: Stream): void {
-    if (stream.materialisedAt === stream.version || !cell.servable) return
+function materialize(cell: Cell, stream: Stream): void {
+    if (stream.materializedAt === stream.version || !cell.servable) return
     // 9.11: the accumulation moved past a write following a `Reactive`, which lets go of it here
     // where no chunk's wake did — a patch, or a run that closed empty. Only an own stream follows;
     // a forwarding one's `adoption` is what it forwards.
     if (cell.adoption !== null && stream.source === null) unfollow(cell)
-    stream.materialisedAt = stream.version
+    stream.materializedAt = stream.version
     stream.written = false
     gateInto(cell, stream.chunks.slice(0, stream.visible))
 }
@@ -2677,7 +2677,7 @@ function gateThrough(cell: Cell, raw: unknown): void {
  */
 function heldValue(cell: Cell): unknown {
     const stream = cell.stream
-    if (stream !== null) materialise(cell, stream)
+    if (stream !== null) materialize(cell, stream)
     return cell.value
 }
 
@@ -2840,7 +2840,7 @@ function readIndirect(cell: Cell): unknown {
     // 6.5: THE READ THAT FOLLOWS. Every value carrying an expiry arrives here and no
     // other value does, which is the whole of what `setDirect` buys.
     if (cell.expiry !== null) expire(cell)
-    if (cell.stream !== null) materialise(cell, cell.stream)
+    if (cell.stream !== null) materialize(cell, cell.stream)
     if (!cell.servable) {
         // 2.3: a failed producer with nothing landed is the one case holding no value
         // and a refusal that explains the absence.
@@ -2866,7 +2866,7 @@ const EMPTY_RING = Object.freeze([]) as unknown as unknown[]
  * so a shared subgraph is re-walked once per path that reaches it, and a 26-cell DAG
  * with 130 edges cost 19,660 edge visits and 4,010 hash operations per probe read.
  *
- * The stamp MEMOISES, and it is sound for one reason worth stating: within a pass,
+ * The stamp MEMOIZES, and it is sound for one reason worth stating: within a pass,
  * "already visited while the walk is still running" IMPLIES "not busy", because a busy
  * node short-circuits the whole walk at its first visit. So a second arrival at a
  * stamped node answers false without descending.
@@ -2883,7 +2883,7 @@ let PROBE_PASS = 0
  * Propagation, derived on the read that asks (11.22) rather than held as a
  * subscription per source. 11.20: a value is busy where a source it read is busy —
  * and the premise is what `busy` MEANS, not which trigger produced it, so a refresh
- * over a landed source reports through here even though the body never re-ran.
+ * over a landed source reports through here even though the body never reran.
  */
 function walkBusy(cell: Cell, pass: number): boolean {
     if (cell.loading) return true
@@ -2967,7 +2967,7 @@ function busyNow(cell: Cell): boolean {
  * serving the figure it had computed before — right by its own lights, and a lie about the
  * data. Nothing in the output says so, which is why this is a walk and not a field.
  *
- * The stamp MEMOISES the same way `walkBusy`'s does and is sound for the mirrored reason:
+ * The stamp MEMOIZES the same way `walkBusy`'s does and is sound for the mirrored reason:
  * this walk short-circuits on NOT ready, so a second arrival at a node the walk is still
  * inside is a node that has not refused, and answering `true` there is answering what the
  * first visit will.
@@ -3053,7 +3053,7 @@ function settled(cell: Cell, untilStreaming = false): Promise<unknown> {
         const waiter: Subscriber = newSubscriber([cell], null)
         waiter.notify = (): void => {
             // THE WAITER PULLS. A value built from a source that has just landed is marked and
-            // not yet re-run — nothing else reads it — so asking whether it is busy before
+            // not yet rerun — nothing else reads it — so asking whether it is busy before
             // pulling it answers from the run that aborted, and the await never settles.
             if (cell.state !== CLEAN) resolve(cell)
             if (untilStreaming && cell.stream !== null) {
@@ -3093,7 +3093,7 @@ function settled(cell: Cell, untilStreaming = false): Promise<unknown> {
  * than discovered — and one source given is what `s.watch` means. What was here before was
  * a second copy of the subscriber, the disposer, the re-entrancy guard and 12.8, which is
  * exactly the divergence 12.9 forbids: the copy had no `catch` at all, so a throwing effect
- * re-ran into the same throw on every write where `watch` stops.
+ * reran into the same throw on every write where `watch` stops.
  *
  * The value is handed over rather than read, so the effect never reaches the tracked path
  * and never throws `NotLanded` from this source.
@@ -3721,7 +3721,7 @@ const TAGGED = new Map<string, Set<WeakRef<Cell>>>()
  * O(1) delete on eviction; here an evicted value drops its `ref` instead, and a handle whose value
  * no longer points back at it is dead, the same as one whose value was collected. Because a bare
  * sweep may never run, the filing that finds the array past `compactProducersAt` compacts it, and
- * the bar doubles past what survives, so the walk is amortised over the filings between two.
+ * the bar doubles past what survives, so the walk is amortized over the filings between two.
  */
 let filedProducers: WeakRef<Cell>[] = []
 let compactProducersAt = 1024
@@ -3736,7 +3736,7 @@ let compactProducersAt = 1024
 const SIGNALS = new Map<string, Tracked>()
 const SIGNALS_BY_TAG = new Map<string, Tracked[]>()
 /**
- * The bare selection's one signal. Not a key in `SIGNALS`: `{ tags: [] }` canonicalises to the
+ * The bare selection's one signal. Not a key in `SIGNALS`: `{ tags: [] }` canonicalizes to the
  * empty set and matches nothing, where the bare selection matches every filed load in reach.
  */
 const EVERY_PRODUCER = newTracked()
@@ -4171,7 +4171,7 @@ export function isStreaming(value: unknown): boolean {
  *
  * 16.32 — THE CHUNKS A STREAMING VALUE HAS TOLD ITS READERS OF PAST `from`, for a writer sending each
  * once. Ungated they are read out of the accumulation in place, to `visible` rather than its length
- * (5.18): a read materialises a copy of the whole of it (9.1), which for a writer woken per chunk is
+ * (5.18): a read materializes a copy of the whole of it (9.1), which for a writer woken per chunk is
  * n²/2 elements copied to send n. A schema or a transform has to see the whole accumulation (9.8),
  * so a gated value answers from what a read would.
  */

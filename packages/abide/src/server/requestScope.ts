@@ -11,6 +11,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
 import { Cookies } from '#shared/cookies.ts'
+import type { Params } from '#shared/matchRoute.ts'
 import type { Principal } from '#shared/principal.ts'
 import { SCOPING, type Scope } from '#shared/reactive/scoping.ts'
 import type { RpcRequest } from '#shared/rpcRequest.ts'
@@ -51,6 +52,14 @@ export type RequestScope = Scope & {
     trace: { id: string; span: string; flags: string } | undefined
     /** `undefined` where the scope was opened without one — 42.8's scope, which 22.1 throws in. */
     request: Request | undefined
+    /**
+     * The route the request matched, once routing has run: the file route whose hooks answer it.
+     *
+     * 37.5 — which `onError` hooks an error in this request reaches.
+     */
+    route: string | undefined
+    /** What that route matched in the address, for the answer its rungs reach (16.14). */
+    params: Params | undefined
     /**
      * The app that opened this scope: the `App.fetch` `RPC_SERVER.raw` answers through, and its MCP
      * surface.
@@ -158,6 +167,8 @@ export function scopeFor(
         principal: undefined,
         applied: false,
         request: given,
+        route: undefined,
+        params: undefined,
         received,
         app,
         response: { status: 200, headers: new Headers() },
@@ -376,7 +387,7 @@ export function handlerTook(rpc: object, duration: number): void {
 /**
  * Adds `duration` to the time spent in rungs.
  *
- * 21.20 — or takes it back out where it was the centre's.
+ * 21.20 — or takes it back out where it was the center's.
  */
 export function rungsTook(duration: number): void {
     const timing = STORAGE.getStore()?.timing

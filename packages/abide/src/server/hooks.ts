@@ -1,14 +1,25 @@
-// SECTION 37 — THE LIFECYCLE HOOKS, called from `src/server/app.ts` rather than exported from it
-// (37.1). Each call files its function here and hands back what unfiles it; `createApp` reads what
-// is filed once the app module has run.
+// SECTION 37 — THE LIFECYCLE HOOKS, called from a page's or a layout's `<script server>` rather
+// than exported from it (37.1). Each call files its function here, at the ROUTE of the file that
+// called it, and hands back what unfiles it; `createApp` reads what is filed once every module
+// holding a server block has run.
 //
-// PROCESS-WIDE, like the module that calls them: `app.ts` is evaluated once per process, so a
-// second `App` in it boots under the same hooks (42.12's sharing, from the other side).
+// WHICH ROUTE IS ASKED OF THE MODULE BEING EVALUATED, not of the hook: the compiled server module
+// calls `fileRoute` with its route before its server block's body and with `undefined` after it,
+// and a server block cannot await at its top level (34.3), so the window is synchronous. A hook
+// called outside every server block — a test, a script — files at the root.
+//
+// PROCESS-WIDE, like the modules that call them: each is evaluated once per process, so a second
+// `App` in it boots under the same hooks (42.12's sharing, from the other side).
 
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { namedLogger } from '#shared/log.ts'
 import type { Middleware } from '#shared/Middleware.ts'
 import { aborted, refuse } from '#shared/refuse.ts'
+import {
+    coversRoute,
+    parseRoutePattern,
+    type Segment,
+} from '#shared/routePattern.ts'
 import type { Schema } from '#shared/Schema.ts'
 import { config } from './config.ts'
 import { currentRequestScope } from './requestScope.ts'
@@ -21,40 +32,103 @@ export type ConfigOptions = { schema?: Schema<unknown> }
 
 type Wrapper = (inner: () => Promise<void>) => void | Promise<void>
 
-/** Everything the lifecycle hooks filed, for `createApp` to read once the app module has run. */
+/** One hook, at the route of the file that filed it. 37.1. */
+type Filed<T> = {
+    route: string
+    segments: Segment[]
+    item: T
+}
+
+/** Everything the lifecycle hooks filed, for `createApp` to read once the app's modules have run. */
 export const HOOKS = {
-    rungs: [] as AppRung[],
-    starts: [] as Wrapper[],
-    stops: [] as Wrapper[],
-    errors: [] as ((error: unknown) => unknown)[],
-    health: [] as (() => unknown)[],
-    config: undefined as
-        | {
-              defaults: ConfigDefaults | null
-              options: ConfigOptions | undefined
-          }
-        | undefined,
-    principal: undefined as
-        | ((claims: unknown) => unknown | Promise<unknown>)
-        | undefined,
+    rungs: [] as Filed<AppRung>[],
+    starts: [] as Filed<Wrapper>[],
+    stops: [] as Filed<Wrapper>[],
+    errors: [] as Filed<(error: unknown) => unknown>[],
+    health: [] as Filed<() => unknown>[],
+    config: [] as Filed<{
+        defaults: ConfigDefaults | null
+        options: ConfigOptions | undefined
+    }>[],
+    principal: [] as Filed<(claims: unknown) => unknown | Promise<unknown>>[],
+}
+
+const ROOT = '/'
+
+// The route a hook called now is filed at — the server block being evaluated, or the root.
+let filing: string | undefined
+
+/**
+ * Sets the route the hooks called next are filed at, or the root again for `undefined`.
+ *
+ * 37.1 — what a compiled server module calls around its `<script server>`; nothing an app writes.
+ */
+export function fileRoute(route: string | undefined): void {
+    filing = route
 }
 
 const LIFECYCLE_LOG = namedLogger('abide:lifecycle')
-const CONFIG_LOG = namedLogger('abide:config')
-const PRINCIPAL_LOG = namedLogger('abide:principal')
 
-function filed<T>(list: T[], item: T): () => void {
-    list.push(item)
+function filed<T>(list: Filed<T>[], item: T): () => void {
+    const route = filing ?? ROOT
+    const entry: Filed<T> = {
+        route,
+        segments: parseRoutePattern(route),
+        item,
+    }
+    list.push(entry)
+    // 37.7 — by route depth, then by route, then in the order called: kept sorted as it is filed,
+    // so a reader walks it in order and sorts nothing per request. The sort is stable and the
+    // entry lands last, so a tie stays in the order called.
+    list.sort(byRoute)
     return () => {
-        const at = list.indexOf(item)
+        const at = list.indexOf(entry)
         if (at !== -1) list.splice(at, 1)
     }
 }
 
+function byRoute(one: Filed<unknown>, two: Filed<unknown>): number {
+    if (one.segments.length !== two.segments.length)
+        return one.segments.length - two.segments.length
+    if (one.route !== two.route) return one.route < two.route ? -1 : 1
+    return 0
+}
+
+/** What `list` filed, in 37.7's order. */
+export function inOrder<T>(list: readonly Filed<T>[]): T[] {
+    const items: T[] = []
+    for (const entry of list) items.push(entry.item)
+    return items
+}
+
+/** The rungs filed at the root route, which run before routing. 37.3. */
+export function rootRungs(): AppRung[] {
+    const rungs: AppRung[] = []
+    for (const entry of HOOKS.rungs)
+        if (entry.route === ROOT) rungs.push(entry.item)
+    return rungs
+}
+
 /**
- * Files middleware rungs the app runs before routing; returns what unfiles them.
+ * The rungs filed below the root over `route`, outermost first.
  *
- * 37.3 — pre-routing, over the request and the response, in the order registered.
+ * 37.2 — every rung filed at `route` or at a route that is its front, the root's aside: those ran
+ * before routing (37.3).
+ */
+export function rungsOver(route: string): AppRung[] {
+    const segments = parseRoutePattern(route)
+    const rungs: AppRung[] = []
+    for (const entry of HOOKS.rungs)
+        if (entry.route !== ROOT && coversRoute(entry.segments, segments))
+            rungs.push(entry.item)
+    return rungs
+}
+
+/**
+ * Files middleware rungs over the calling file's route; returns what unfiles them.
+ *
+ * 37.3 at the root — pre-routing, over the request and the response, in the order registered. 37.2
+ * below it — after routing, over what that route and those below it answer.
  */
 export function middleware(...rungs: AppRung[]): () => void {
     const unfile: (() => void)[] = []
@@ -87,7 +161,7 @@ export function onStop(
 }
 
 /**
- * Files a hook handed every unexpected error; returns what unfiles it.
+ * Files a hook handed every unexpected error its route answers; returns what unfiles it.
  *
  * 37.5.
  */
@@ -98,52 +172,40 @@ export function onError(fn: (error: unknown) => unknown): () => void {
 /**
  * Files a health reporter whose account is merged over the baseline; returns what unfiles it.
  *
- * 25.2.
+ * 25.2, 37.7.
  */
 export function onHealth(report: () => unknown | Promise<unknown>): () => void {
     return filed(HOOKS.health, report)
 }
 
 /**
- * Sets the app's config defaults and schema; returns what unsets them.
+ * Files config defaults and a schema, composed with every other; returns what unfiles them.
  *
- * 27.6, 37.7 — a second replaces the first, schema and all, and says so. 27.10 — the read after
- * either is resolved under what is filed now, not what was filed when `config` was last read.
+ * 27.6, 37.7 — merged in route order rather than replacing. 27.10 — the read after either is
+ * resolved under what is filed now, not what was filed when `config` was last read.
  */
 export function onConfig(
     fn: ConfigDefaults | null,
     options?: ConfigOptions,
 ): () => void {
-    if (HOOKS.config !== undefined)
-        CONFIG_LOG.warning(
-            'a second onConfig replaced the first, and its schema with it. RULEBOOK 27.6.',
-        )
-    const entry = { defaults: fn, options }
-    HOOKS.config = entry
+    const unfile = filed(HOOKS.config, { defaults: fn, options })
     config.invalidate()
     return () => {
-        if (HOOKS.config !== entry) return
-        HOOKS.config = undefined
+        unfile()
         config.invalidate()
     }
 }
 
 /**
- * Sets the function resolving a principal from its claims; returns what unsets it.
+ * Files a function resolving a principal from its claims, composed with every other; returns what
+ * unfiles it.
  *
- * 37.7 — a second replaces the first, and says so.
+ * 37.7 — each is handed the claims, and what they answer is merged in route order.
  */
 export function onPrincipal(
     resolve: (claims: unknown) => unknown | Promise<unknown>,
 ): () => void {
-    if (HOOKS.principal !== undefined)
-        PRINCIPAL_LOG.warning(
-            'a second onPrincipal replaced the first. RULEBOOK 37.7.',
-        )
-    HOOKS.principal = resolve
-    return () => {
-        if (HOOKS.principal === resolve) HOOKS.principal = undefined
-    }
+    return filed(HOOKS.principal, resolve)
 }
 
 /**
@@ -163,12 +225,22 @@ export function reportUnexpected(error: unknown): void {
  * 12.6 — the half of 37.5 a failure already warned on its own namespace is owed.
  */
 export function handOnError(error: unknown): void {
-    for (const hook of HOOKS.errors)
+    // 37.5 — NEAREST ROUTE FIRST, over the route the request matched; outside every request, or
+    // before one matched, the root's alone.
+    const route = currentRequestScope()?.route
+    const segments = route === undefined ? undefined : parseRoutePattern(route)
+    for (let at = HOOKS.errors.length - 1; at >= 0; at -= 1) {
+        const entry = HOOKS.errors[at] as Filed<(error: unknown) => unknown>
+        const reaches =
+            entry.route === ROOT ||
+            (segments !== undefined && coversRoute(entry.segments, segments))
+        if (!reaches) continue
         try {
-            hook(error)
+            entry.item(error)
         } catch (thrown) {
             LIFECYCLE_LOG.error('an onError hook threw', thrown)
         }
+    }
 }
 
 /**

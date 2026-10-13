@@ -2,22 +2,14 @@
 // modules already loaded (`inMemoryApp.ts`): the same `bootApp` and `appSources` every command boots
 // through, with no `abide build` and no child process ahead of it.
 
-import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { afterAll, expect, test } from 'bun:test'
 import { GET, jsonSchema, POST, reactive, refuse, request } from '#server'
 import { config } from '#server/config.ts'
 import type { McpSurface } from '#server/generatedSurfaces.ts'
 import { currentRequestScope, LISTENING } from '#server/requestScope.ts'
 import { inMemoryApp } from './inMemoryApp.ts'
 
-const RPC = '/__abide/rpc/invoices'
-
-// 36.7 — read by the boot, so opened before any app here is built, and closed again after: a
-// flag left on `process.env` reaches every app the worker serves after this file.
-const mcpAsFound = process.env.ABIDE_MCP
-beforeAll(() => {
-    process.env.ABIDE_MCP = '1'
-    config.invalidate()
-})
+const RPC = '/invoices'
 
 const INVOICES = {
     getInvoice: GET(
@@ -36,13 +28,11 @@ const INVOICES = {
 
 afterAll(() => {
     LISTENING.server = undefined
-    if (mcpAsFound === undefined) delete process.env.ABIDE_MCP
-    else process.env.ABIDE_MCP = mcpAsFound
-    config.invalidate()
 })
 
 // 16.22, 16.56, 16.57 — WHAT A CALL RAISES THE REQUEST'S IDLE TIMEOUT TO, read off a recording server:
-// nothing where no `timeout` is named, the seconds where one is, and bun's 0 — never reaped — for
+// nothing where no `timeout` is named, a socket tick past the seconds where one is (its refusal is
+// written at the timeout, 16.68), and bun's 0 — never reaped — for
 // `Infinity`. In process, because the idle timeout a socket was given is not observable from the
 // far end short of waiting it out. THE REVERT: fall back to 30_000 for `ABIDE_RPC_TIMEOUT`; the
 // untimed call raises to 30.
@@ -54,7 +44,7 @@ test('a call raises the idle timeout only as far as its timeout says — 16.56, 
         timeout: (_request: Request, seconds: number) =>
             raised[calling]?.push(seconds),
     } as never
-    await using app = await inMemoryApp({ 'server/rpc/invoices.ts': INVOICES })
+    await using app = await inMemoryApp({ 'invoices/invoices.abide': INVOICES })
     for (const name of ['untimed', 'slow', 'endless']) {
         calling = name
         raised[name] = []
@@ -63,7 +53,7 @@ test('a call raises the idle timeout only as far as its timeout says — 16.56, 
         ).status
     }
     expect({ raised, answered }).toEqual({
-        raised: { untimed: [], slow: [40], endless: [0] },
+        raised: { untimed: [], slow: [44], endless: [0] },
         answered: { untimed: 200, slow: 200, endless: 200 },
     })
 })
@@ -74,7 +64,7 @@ test('a call raises the idle timeout only as far as its timeout says — 16.56, 
 // and set that to `fetch` alone; the stopped app answers the call, and its text reads "the app is
 // stopping".
 test('an MCP call is answered by its own App, not the last one built — 20.10, 42.12', async () => {
-    const modules = { 'server/rpc/invoices.ts': INVOICES }
+    const modules = { 'invoices/invoices.abide': INVOICES }
     await using first = await inMemoryApp(modules)
     const second = await inMemoryApp(modules)
     await second.stop()
@@ -86,7 +76,10 @@ test('an MCP call is answered by its own App, not the last one built — 20.10, 
                 jsonrpc: '2.0',
                 id: 1,
                 method: 'tools/call',
-                params: { name: 'invoices_getInvoice', arguments: { id: 4 } },
+                params: {
+                    name: 'get_invoices_getInvoice',
+                    arguments: { id: 4 },
+                },
             }),
         }),
     )
@@ -102,7 +95,7 @@ test('an MCP call is answered by its own App, not the last one built — 20.10, 
 // 16.22, 16.10 — THE TIMEOUT IS RAISED ON THE REQUEST THE LISTENER RECEIVED. Under a mount the app
 // answers a copy below it, and bun's `timeout` does nothing for a request it was not handed itself.
 // THE REVERT: raise it on the request `answerRpc` answers; the recording server is handed the copy,
-// and reads `[false, 40]`.
+// and reads `[false, 44]`.
 test('a call under a mount raises the idle timeout on the request the listener received — 16.22, 16.10', async () => {
     const received = new Request(`http://app.test/app${RPC}/slow`)
     const raised: [boolean, number][] = []
@@ -113,11 +106,11 @@ test('a call under a mount raises the idle timeout on the request the listener r
     process.env.APP_URL = 'http://app.test/app'
     try {
         await using app = await inMemoryApp({
-            'server/rpc/invoices.ts': INVOICES,
+            'invoices/invoices.abide': INVOICES,
         })
         const status = (await app.fetch(received)).status
         expect({ raised, status }).toEqual({
-            raised: [[true, 40]],
+            raised: [[true, 44]],
             status: 200,
         })
     } finally {
@@ -142,23 +135,60 @@ const ASKED = {
 // `callOf`'s headers empty rather than from the asker's, and `whoami` reads "nobody"; answer a call
 // off the handler's own function rather than through the app, and `guarded` is not refused.
 test('the MCP surface lists and calls in process, as the asker — 20.9, 20.10, 45.7', async () => {
-    await using app = await inMemoryApp({ 'server/rpc/asked.ts': ASKED })
+    await using app = await inMemoryApp({ 'asked/asked.abide': ASKED })
     const surface = await app.run(
         () => currentRequestScope()?.app?.mcp as McpSurface,
     )
     const names = []
     for (const tool of surface.list()) names.push(tool.name)
-    expect(names.sort()).toEqual(['asked_guarded', 'asked_whoami'])
+    expect(names.sort()).toEqual(['post_asked_guarded', 'post_asked_whoami'])
     const asker = new Request('http://app.test/', {
         headers: { authorization: 'Bearer ada' },
     })
-    expect(await surface.call('asked_whoami', {}, asker)).toEqual({
+    expect(await surface.call('post_asked_whoami', {}, asker)).toEqual({
         text: '"Bearer ada"',
         failed: false,
     })
-    expect((await surface.call('asked_guarded', {}, asker)).failed).toBe(true)
-    expect(await surface.call('asked_missing', {}, asker)).toEqual({
-        text: 'No tool named asked_missing.',
+    expect((await surface.call('post_asked_guarded', {}, asker)).failed).toBe(
+        true,
+    )
+    expect(await surface.call('post_asked_missing', {}, asker)).toEqual({
+        text: 'No tool named post_asked_missing.',
         failed: true,
     })
+})
+
+// 30.3, 30.19, 15.8 — A TOOL CALL WHOSE PATH PARAMETER NO ADDRESS CAN CARRY IS A TOOL ERROR, the
+// `ValidationError` the wire answers, rather than a JSON-RPC failure the app's `onError` hears. THE
+// REVERT: drop the catch around `callOf` in `McpSurface.#called`; the call answers 500.
+test('an MCP tool call missing a path parameter is a ValidationError tool result — 30.3, 15.8', async () => {
+    await using app = await inMemoryApp({
+        'comments/[id]/comments.abide': {
+            thread: GET(({ id }: { id: string }) => [id]),
+        },
+    })
+    const ask = async (method: string, params: unknown): Promise<Response> =>
+        app.fetch(
+            new Request('http://app.test/__abide/mcp', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+            }),
+        )
+    const listed = (await (await ask('tools/list', {})).json()) as {
+        result: { tools: { name: string }[] }
+    }
+    const name = listed.result.tools[0]?.name as string
+    for (const id of [undefined, '', '..']) {
+        const answer = await ask('tools/call', { name, arguments: { id } })
+        expect(`${id}: ${answer.status}`).toBe(`${id}: 200`)
+        const called = (
+            (await answer.json()) as {
+                result: { content: { text: string }[]; isError: boolean }
+            }
+        ).result
+        expect(called.isError).toBe(true)
+        const problem = JSON.parse(called.content[0]?.text as string)
+        expect(`${problem.status} ${problem.type}`).toContain('422')
+    }
 })

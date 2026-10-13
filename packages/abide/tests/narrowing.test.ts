@@ -29,7 +29,7 @@ let status = reactive<{ kind: 'ok'; total: number } | { kind: 'failed'; reason: 
 // THE REVERT: project each subject as a bare `(subject)` statement beside its arms, as before; every
 // arm is checked unnarrowed and this reports 7 errors where 0 are due.
 test('an {#if} narrows the arm it opens, its {:else}, and a row inside a {#for}', async () => {
-    const app = appFixture({ 'ui/pages/page.abide': NARROWED })
+    const app = appFixture({ 'page.abide': NARROWED })
     const found = await checkApp(app)
     const errors = found.filter((one) => one.category === 'error')
     expect(errors.map((one) => one.message)).toEqual([])
@@ -38,7 +38,7 @@ test('an {#if} narrows the arm it opens, its {:else}, and a row inside a {#for}'
 // AND NOTHING WIDER: a read outside the guard is still the union it was.
 test('a read outside the {#if} is not narrowed', async () => {
     const app = appFixture({
-        'ui/pages/page.abide': `<script>
+        'page.abide': `<script>
 import { reactive } from '@abide/abide'
 
 let contact = reactive<{ name: string } | undefined>(undefined)

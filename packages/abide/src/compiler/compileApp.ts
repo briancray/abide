@@ -1,28 +1,53 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs' // bun exposes no sync existence check, read or realpath of its own
-import { dirname, posix, resolve } from 'node:path' // bun exposes no path helpers of its own
-
+import { dirname, posix, relative as relativeTo } from 'node:path' // bun exposes no path helpers of its own
+import {
+    type Compilation,
+    type CompiledFile,
+    resolvedFile,
+} from '#server/abideModules.ts'
 import type { Mount } from '#server/answerRpc.ts'
-import { buildDirectory } from '#server/buildDirectory.ts'
-import { CLIENT_ENTRY, WIRE_DIRECTORY } from '#server/CLIENT_BUILD.ts'
-import { keyedHead, shellUnder } from '#server/render.ts'
+import { abideUnder, appFiles } from '#server/appTree.ts'
+import { CLIENT_ENTRY } from '#server/CLIENT_BUILD.ts'
+import { COMPONENT_QUERY } from '#server/MODULE_QUERIES.ts'
+import { ROUTES_TABLE, SERVER_TABLE } from '#server/TABLES.ts'
+import { VIRTUAL_DIRECTORY } from '#server/VIRTUAL_DIRECTORY.ts'
 import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
-import { appGraph } from './componentGraph.ts'
+import {
+    coversRoute,
+    parseRoutePattern,
+    placeOf,
+    routeOf,
+    type Segment,
+} from '#shared/routePattern.ts'
+import { abideImportsOf, appGraph } from './componentGraph.ts'
 import { emitSource } from './emitSource.ts'
 import { formatDiagnosis } from './formatDiagnosis.ts'
-import { declaresHandlers, handlersUnder } from './handlersUnder.ts'
-import { parseSources, type ReadSource, readSources } from './readSources.ts'
-import { ROUTING_SPECIFIER, WIRE_SPECIFIER } from './SPECIFIERS.ts'
+import { handlersUnder } from './handlersUnder.ts'
+import { mountsOf } from './mountsOf.ts'
+import { nearest } from './nearest.ts'
+import type { AbideFile } from './parseAbide.ts'
+import {
+    type ParsedSource,
+    parseSources,
+    type ReadSource,
+    readSources,
+    refusal,
+} from './readSources.ts'
+import {
+    ROUTING_SPECIFIER,
+    SHARED_SPECIFIER,
+    WIRE_SPECIFIER,
+} from './SPECIFIERS.ts'
+import { respecified } from './splitImports.ts'
 import { type Diagnosis, TypeSession } from './TypeSession.ts'
 import { writeDefaultProject } from './writeDefaultProject.ts'
+import { writeTypes } from './writeTypes.ts'
 
-// AN APP'S `.abide` SOURCES, COMPILED — every module the output tree holds, keyed by where it goes
-// in it. Nothing here touches the output directory: `abide build` writes what this hands back and
-// `abide dev` keeps it in memory (38.17), and the two commands serving different markup from the
-// same sources is exactly what one compile in two sinks makes impossible.
-//
-// THE KEYS ARE THE OUTPUT LAYOUT, which mirrors the source tree so a module's neighbours are where
-// its imports say they are — `appGraph` lands a `.abide` import on its module whatever the
-// spelling, and every other relative import is pointed back at the source it named (34.14).
+// AN APP'S `.abide` SOURCES, COMPILED — every file keyed by its path below the root, and loaded
+// there through its `?component` face (`abideModules`). Nothing here touches the output directory:
+// `abide build` writes what this hands back and `abide dev` keeps it in memory (38.16), and the two
+// commands serving different markup from the same sources is exactly what one compile in two sinks
+// makes impossible.
 
 type AppRoute = {
     /** The address, in the bracket spelling `routePattern` parses. */
@@ -38,21 +63,17 @@ type AppRoute = {
     layouts: string[]
 }
 
-/** An app's compiled output: every module by output path, its routes, and its warnings. */
-export type CompiledApp = {
-    /**
-     * Module text by path below the output directory.
-     *
-     * `ui/pages/page.ts`, its `.client.ts`, and what the build writes rather than an author
-     * (`routes.ts`, `server.ts`, `entry.ts`, `rpc.ts` and a wrapper per handler module under
-     * `WIRE_DIRECTORY`).
-     */
-    modules: Map<string, string>
+/** An app's compiled output: every file and table (`Compilation`), its routes, and its warnings. */
+export type CompiledApp = Compilation & {
     routes: AppRoute[]
+    /** Every handler, where it is mounted. 16.2. */
+    mounts: Mount[]
     /** How many `.abide` files were read, which is what the commands report. */
     sources: number
     /** What the compiler has to say that does not stop the build, on the `.abide` line. */
     warnings: Diagnosis[]
+    /** Every public file's source path to its address, as `appFiles` read them. 36.11. */
+    published: Map<string, string>
 }
 
 /**
@@ -64,12 +85,19 @@ export type CompiledApp = {
  */
 export type AppChecker = {
     session: TypeSession
+    /** The app's root, real — every path a checker is asked about is spelled under it. */
+    root: string
     /**
      * Records a path a watcher saw move, or `undefined` for a move it could not place.
      *
      * Held until `current`.
      */
     saw: (path: string | undefined) => void
+    /**
+     * The app's own `.abide`, read (`sourcesUnder`) — kept until `saw` hears anything move, so a
+     * check asked again and again while an editor types re-reads nothing on disk.
+     */
+    sources: () => ReturnType<typeof sourcesUnder>
     /**
      * Whether the project it was opened on is still the app's; if so, flushes what `saw` held.
      *
@@ -82,9 +110,15 @@ export type AppChecker = {
     close: () => Promise<void>
 }
 
-/** Opens the checker for the app at `root`, on a default tsconfig where it has none (38.31). */
-export async function openChecker(root: string): Promise<AppChecker> {
-    // Where the app has no tsconfig it is typed against a default one (38.31), so every app is
+/**
+ * Opens the checker for the app at `appRoot`, on a default tsconfig where it has none (38.30).
+ *
+ * AT ITS REAL PATH, which is the one bun resolves every import to: an editor holding the app
+ * through a link (`/tmp` is one on macOS) is spelled back at its own edge (`serveLanguage`).
+ */
+export async function openChecker(appRoot: string): Promise<AppChecker> {
+    const root = realpathSync(appRoot)
+    // Where the app has no tsconfig it is typed against a default one (38.30), so every app is
     // read by the same compiler.
     const found = nearest(root, 'tsconfig.json')
     const opened = projectFiles(root)
@@ -93,13 +127,24 @@ export async function openChecker(root: string): Promise<AppChecker> {
             ? await writeDefaultProject(root)
             : { tsconfig: found, remove: async (): Promise<void> => {} }
     const session = await TypeSession.open(project.tsconfig)
+    session.root = root
     const moved = new Set<string>()
     let movedSomewhere = false
+    let sources: ReturnType<typeof sourcesUnder> | undefined
     return {
         session,
+        root,
         saw: (path) => {
+            sources = undefined
             if (path === undefined) movedSomewhere = true
             else moved.add(path)
+        },
+        sources: () => {
+            sources ??= sourcesUnder(root).catch((thrown: unknown) => {
+                sources = undefined
+                throw thrown
+            })
+            return sources
         },
         current: () => {
             if (projectFiles(root) !== opened) return false
@@ -146,7 +191,7 @@ export async function withChecker<Result>(
 }
 
 /**
- * Every `.abide` under the app, read, in path order — and the root as bun resolves it.
+ * Every `.abide` of the app's own, read, in path order — and the root as bun resolves it.
  *
  * `Bun.resolveSync` answers a symlink-free path (`/tmp` is `/private/tmp` on macOS), so a root
  * spelled through a link would have every import resolve to a file this walk never listed, and
@@ -157,36 +202,128 @@ export async function sourcesUnder(
     appRoot: string,
 ): Promise<{ root: string; sources: { path: string; text: string }[] }> {
     const root = realpathSync(appRoot)
-    const paths = [
-        ...new Bun.Glob('**/*.abide').scanSync({ cwd: root, absolute: true }),
-    ].sort()
+    return { root, sources: await sourcesAt(root, abideUnder(root)) }
+}
+
+/** The `.abide` at each of `relatives`, below `root`, read. */
+async function sourcesAt(
+    root: string,
+    relatives: readonly string[],
+): Promise<{ path: string; text: string }[]> {
+    const paths: string[] = []
+    for (const path of relatives) paths.push(`${root}/${path}`)
     const texts = await Promise.all(paths.map((path) => Bun.file(path).text()))
     const sources: { path: string; text: string }[] = []
     for (let at = 0; at < paths.length; at += 1)
         sources.push({ path: paths[at] as string, text: texts[at] as string })
-    return { root, sources }
+    return sources
 }
 
 /**
- * Compiles every `.abide` source and handler of the app at `appRoot` into its output modules.
+ * `parsed` and every `.abide` outside them that one of them imports — a dependency's, or a linked
+ * package's — parsed, and every one those import in turn; and every `.abide` under a directory one
+ * of them mounts, at the position the mount gives it (23.19).
  *
- * `out` is where the modules will be written, which only a relative import's path back to its
- * source depends on (34.14). `kept` is a checker the caller holds across compiles and closes itself.
+ * 34.27 — COMPILED WITH THE APP, by the app's checker, so a component a package ships as source is
+ * one of the app's in every way but its address: it is never routed (`placeOf`) unless mounted.
+ */
+export async function withDependencies(
+    root: string,
+    parsed: readonly ParsedSource[],
+    resolve: (specifier: string, from: string) => string | undefined,
+    refused?: Diagnosis[],
+): Promise<ParsedSource[]> {
+    const all = [...parsed]
+    const byPath = new Map<string, ParsedSource>()
+    for (const source of all) byPath.set(source.path, source)
+    // 23.20 — a directory mounts once, and by whom.
+    const mountedBy = new Map<string, string>()
+    const refuse = (path: string, message: string): void => {
+        if (refused === undefined) throw new Error(message)
+        refused.push(refusal(path, new Error(message)))
+    }
+    const add = async (found: {
+        path: string
+        position?: string
+    }): Promise<void> => {
+        const text = await Bun.file(found.path).text()
+        for (const one of parseSources([{ ...found, text }], refused)) {
+            byPath.set(one.path, one)
+            all.push(one)
+        }
+    }
+    for (let at = 0; at < all.length; at += 1) {
+        const source = all[at] as ParsedSource
+        const position = source.position ?? relativeTo(root, source.path)
+        const mounts = mountsOf(root, source.path, position, source.file)
+        if (typeof mounts === 'string') {
+            refuse(source.path, mounts)
+            continue
+        }
+        for (const mount of mounts) {
+            const other = mountedBy.get(mount.directory)
+            if (other !== undefined) {
+                refuse(
+                    source.path,
+                    `abide: ${other} and ${position} both mount ${mount.specifier}, and a directory answers at one place. RULEBOOK 23.20.`,
+                )
+                continue
+            }
+            mountedBy.set(mount.directory, position)
+            for (const { path, position: placed } of mount.files) {
+                // A file a component import reached first takes its mount's position all the same.
+                const known = byPath.get(path)
+                if (known !== undefined) {
+                    known.position = placed
+                    continue
+                }
+                await add({ path, position: placed })
+            }
+        }
+        for (const target of abideImportsOf(
+            source.path,
+            source.file,
+            resolve,
+        ).values()) {
+            if (!byPath.has(target)) await add({ path: target })
+        }
+    }
+    return all
+}
+
+/**
+ * Compiles every `.abide` source and handler of the app at `appRoot` (`Compilation`).
+ *
+ * `kept` is a checker the caller holds across compiles and closes itself.
  */
 export async function compileApp(
     appRoot: string,
-    out = buildDirectory(appRoot),
     kept?: AppChecker,
 ): Promise<CompiledApp> {
-    const { root, sources } = await sourcesUnder(appRoot)
-    if (sources.length === 0 && !declaresHandlers(root))
-        return { modules: new Map(), routes: [], sources: 0, warnings: [] }
+    const root = realpathSync(appRoot)
+    // ONE WALK for the sources and the public files, refusing a tree 23.16-23.18 forbids before
+    // anything is read.
+    const { abide, published } = appFiles(root)
+    const sources = await sourcesAt(root, abide)
+    if (sources.length === 0)
+        return {
+            files: {},
+            tables: {},
+            routes: [],
+            mounts: [],
+            sources: 0,
+            warnings: [],
+            published,
+        }
 
     // One session for the whole build: opening it spawns the checker, and the cost is paid once
     // rather than per file.
     return withChecker(root, kept, async (session) => {
         // A BUILD STOPS AT THE FIRST REFUSAL, so neither step is handed a list to report it in.
-        const parsed = parseSources(sources)
+        const own = parseSources(sources)
+        await writeTypes(root, own)
+        const resolve = resolverIn()
+        const parsed = await withDependencies(root, own, resolve)
         const { read, warnings } = await readSources(session, parsed)
         const { ambient, unkeyed } = await session.lints(root, parsed)
         // 11.37 — a build error, every read named, rather than a first one and a second run.
@@ -196,14 +333,10 @@ export async function compileApp(
                 lines.push(formatDiagnosis(read, process.cwd()))
             throw new Error(lines.join('\n'))
         }
-        const emitted = await emitApp(
-            root,
-            session,
-            read,
-            posix.relative(resolve(appRoot), resolve(out)),
-        )
+        const emitted = await emitApp(root, session, read, resolve)
         return {
             ...emitted,
+            published,
             sources: sources.length,
             // 11.30 — warned on, and the build goes on.
             warnings: [...warnings, ...unkeyed, ...emitted.warnings],
@@ -216,137 +349,260 @@ export async function compileApp(
  *
  * `abide check` has done both by then, file by file, and asks this for only what the whole app can
  * refuse: two handlers at one address, or a template the emit cannot lower.
- *
- * `output` is where the modules are written, relative to `root`.
  */
 export async function emitApp(
     root: string,
     session: TypeSession,
     sources: readonly ReadSource[],
-    output: string,
-): Promise<Pick<CompiledApp, 'modules' | 'routes' | 'warnings'>> {
-    const modules = new Map<string, string>()
+    /** The resolver the sources' dependencies were found with, whose answers it keeps. */
+    resolve: (specifier: string, from: string) => string | undefined,
+): Promise<
+    Pick<CompiledApp, 'files' | 'tables' | 'routes' | 'mounts' | 'warnings'>
+> {
+    const files: Record<string, CompiledFile> = {}
+    const tables: Record<string, string> = {}
     const routes: AppRoute[] = []
     // 32.17 AND 34.14 — WHICH FILES ARE INVOKED AS COMPONENTS, and where each import lands. A
     // caller's client module imports its child's, so a child with nothing to hydrate still
     // needs one to exist (`emitClient`'s no-op), and an invoked file carries its own markup
     // (`emitClient`). Built before the emit loop because a page may invoke a component the
     // walk reaches later.
-    const graph = appGraph(root, sources, output, resolverIn(root))
+    const graph = appGraph(root, sources, resolve)
     const parsed = graph.nodes
 
-    const layouts: string[] = []
-    for (const entry of parsed)
-        if (entry.kind === 'layout') layouts.push(entry.relative)
-    // 35.2 — every `error.abide`, with the directory it answers for and the layouts around it.
+    // 35.1, 35.12 — every `layout.abide` by the route it covers, one to a route; 35.13 — and one
+    // with no template wraps nothing, being the route's hooks alone.
+    const layouts: AppLayout[] = []
+    const layoutAt = new Map<string, string>()
+    const errorAt = new Map<string, string>()
+    for (const entry of parsed) {
+        if (entry.kind !== 'layout' && entry.kind !== 'error') continue
+        const route = routeOf(entry.position)
+        const held = entry.kind === 'layout' ? layoutAt : errorAt
+        const other = held.get(shapeOf(route))
+        if (other !== undefined)
+            throw new Error(
+                `abide: ${other} and ${entry.relative} are both the ${entry.kind}.abide at ${route}. RULEBOOK 35.12.`,
+            )
+        held.set(shapeOf(route), entry.relative)
+        if (entry.kind === 'layout' && entry.file.template.length > 0)
+            layouts.push({
+                source: entry.relative,
+                segments: parseRoutePattern(route),
+            })
+    }
+    // 35.2 — every `error.abide`, with the route it answers for and the layouts around it.
     const errors: AppRoute[] = []
     for (const entry of parsed) {
         if (entry.kind !== 'page' && entry.kind !== 'error') continue
+        // 23.3, 35.14 — a `page.abide` or an `error.abide` with nothing to paint is its route's
+        // handlers and hooks alone.
+        if (!paints(entry.file)) continue
         ;(entry.kind === 'page' ? routes : errors).push({
             pattern: entry.route as string,
             source: entry.relative,
-            layouts: layoutsAround(entry.relative, layouts),
+            layouts: layoutsAround(entry.route as string, layouts),
         })
     }
 
+    // 16.2 AND 16.28 — THE HANDLERS, read before a module is emitted: the server mounts each one,
+    // and the browser's module of the file declaring it carries its wrapper in the server block's
+    // place (34.23). Written whether or not there is a page: a handler is answered over http to a
+    // caller that has none.
+    const { mounts, warnings } = await handlersUnder(session, parsed)
+    refuseSharedRoutes(routes, mounts)
+    const standIns = standInsOf(mounts)
+    // 37.1 — every module a server block runs in, for the boot to import before `onStart`.
+    const servers: string[] = []
     let transitions = false
     for (const entry of parsed) {
+        // 35.16 — of the files with an address, the root layout alone is outermost in every render.
+        if (
+            entry.file.document !== undefined &&
+            entry.kind !== 'component' &&
+            !(entry.kind === 'layout' && routeOf(entry.position) === '/')
+        )
+            throw new Error(
+                `abide: ${entry.relative} writes <html>, and of the pages, layouts and error pages only the root layout.abide writes the document. RULEBOOK 35.16.`,
+            )
         const emitted = emitSource(
             entry.relative,
             entry.file,
             entry.answer,
             graph.invoked.has(entry.path),
-            graph.imports.get(entry.path),
+            standIns.get(entry.relative),
+            entry.text,
+            entry.position,
         )
-        const stem = entry.relative.replace(/\.abide$/, '')
-        if (emitted.sheet !== undefined)
-            modules.set(`${stem}.style.css`, emitted.sheet)
+        if (entry.file.servers.length > 0) servers.push(entry.relative)
         transitions ||= emitted.transitions
-        modules.set(`${stem}.ts`, emitted.server)
-        if (emitted.client !== '')
-            modules.set(`${stem}.client.ts`, emitted.client)
+        // 34.30 — a dependency's module runs on the app's runtime, whatever the package carries.
+        const onAppRuntime =
+            placeOf(entry.relative) === 'dependency'
+                ? (text: string) => onAbideOf(root, entry.path, text)
+                : (text: string) => text
+        files[entry.relative] = {
+            server: onAppRuntime(emitted.server),
+            client: onAppRuntime(emitted.client),
+            sheet: emitted.sheet,
+            // A map placing nothing — a file of markup alone — is left out.
+            serverMappings: placing(emitted.serverMappings),
+            clientMappings: placing(emitted.clientMappings),
+        }
     }
     // THE ROUTE TABLE, as the build's own knowledge rather than a list an app maintains. Which
-    // addresses exist is a fact about the file tree (`page.abide` is an address, CLAUDE.md),
-    // so a route that is not a directory cannot be written and a directory that is one cannot
-    // be forgotten. The loaders are dynamic imports, which is what keeps a destination's
+    // addresses exist is a fact about the file tree (a `page.abide` is an address, 23.3),
+    // so a route that is not a file cannot be written and a file that is one cannot be
+    // forgotten. The loaders are dynamic imports, which is what keeps a destination's
     // markup and bindings off the entry page's bundle until somebody navigates there.
     //
-    // TWO TABLES OFF ONE WALK. The client's loads the `.client.ts` that mounts a page and the
-    // server's loads the `.ts` that paints it — the same addresses either way, which is what
-    // keeps the pair from being two walks that can disagree. The server's is written with no
+    // TWO TABLES OFF ONE WALK, each importing a file's `?component` face — the same addresses
+    // either way, which is what keeps the pair from being two walks that can disagree. The
+    // server's is written with no
     // page too — an app of handlers alone still answers — and the client's, with the entry
     // that boots it, only where there is a page to boot.
-    modules.set('server.ts', serverTable(routes, errors))
+    tables[SERVER_TABLE] = serverTable(routes, errors, servers, mounts)
     if (routes.length > 0) {
-        // 39.14 — the shell the server paints this app into, read where the server reads it.
-        const shellHead = keyedHead(await shellUnder(root))
-        modules.set('routes.ts', clientTable(routes, transitions, shellHead))
+        tables[ROUTES_TABLE] = clientTable(routes, transitions)
         // The entry's SOURCE carries the name the bundle is written under — `entry-<hash>.js`
-        // from a build and `entry.js` in dev — and its key in the manifest (38.23, 38.5).
-        modules.set(`${CLIENT_ENTRY}.ts`, ENTRY_MODULE)
+        // from a build and `entry.js` in dev — and its key in the manifest (38.22, 38.5).
+        tables[`${CLIENT_ENTRY}.ts`] = ENTRY_MODULE
     }
-    // 16.2 AND 16.28 — THE HANDLERS, TWICE OFF ONE READ: the table the server mounts them
-    // from, and the module a browser is handed in place of each one's source. Written whether
-    // or not there is a page: a handler is answered over http to a caller that has none.
-    const { mounts, warnings } = await handlersUnder(root, session)
-    modules.set('rpc.ts', mountTable(mounts))
-    for (const [source, wrapper] of wrappersOf(mounts))
-        modules.set(`${WIRE_DIRECTORY}/${source}`, wrapper)
-    return { modules, routes, warnings }
+    return {
+        files,
+        tables,
+        routes,
+        mounts,
+        warnings,
+    }
 }
+
+/**
+ * `text`, a module compiled from the dependency's `.abide` at `path`, with each of abide's own
+ * specifiers written as the path to the file the app's root resolves it to.
+ *
+ * 34.30 — RELATIVE, so the compilation still serves once the app and its `node_modules` are moved
+ * together, and THE FILE the app's own code loads, so the two are one module instance. A path and
+ * not a specifier a plugin answers: bun's runtime hands a plugin no bare specifier that names no
+ * file, so a mark on `@abide/abide/server` was never read.
+ */
+function onAbideOf(root: string, path: string, text: string): string {
+    const from = dirname(realpathSync(path))
+    return respecified(text, (specifier) => {
+        if (
+            specifier !== SHARED_SPECIFIER &&
+            !specifier.startsWith(`${SHARED_SPECIFIER}/`)
+        )
+            return undefined
+        let target: string
+        try {
+            target = resolvedFile(specifier, root)
+        } catch {
+            return undefined
+        }
+        const relativePath = posix.relative(from, target)
+        return relativePath.startsWith('.') ? relativePath : `./${relativePath}`
+    })
+}
+
+// `mappings` that place something, or `undefined` for a module of markup alone.
+function placing(mappings: string | undefined): string | undefined {
+    return mappings !== undefined && /[^;]/.test(mappings)
+        ? mappings
+        : undefined
+}
+
+/**
+ * How a table imports the `.abide` at `source`: from `__abide`, one directory below the root, as
+ * the module the file compiles to.
+ */
+function tableImport(source: string): string {
+    return JSON.stringify(`../${source}${COMPONENT_QUERY}`)
+}
+
+// A layout and the route it covers, parsed.
+type AppLayout = { source: string; segments: Segment[] }
 
 /**
  * The layouts a page renders inside, outermost first.
  *
- * Every `layout.abide` in a directory ON THE WAY DOWN to the page wraps it and no other does, so
- * the test is a prefix and the nesting order is the depth — which is what makes a section's own
- * chrome a file rather than a registration.
+ * 35.1 — every `layout.abide` whose route lies ON THE WAY DOWN to the page's wraps it and no other
+ * does: `src/layout.abide` wraps the page `src/media/page.abide` serves at `/media`, and so does
+ * `src/[section]/layout.abide`. So the test is a prefix of the route, kind by kind, and the nesting
+ * order is the route's depth.
  */
-function layoutsAround(page: string, layouts: string[]): string[] {
-    const within = page.slice(0, page.lastIndexOf('/') + 1)
-    const chain: string[] = []
-    for (const layout of layouts) {
-        const at = layout.slice(0, layout.lastIndexOf('/') + 1)
-        if (within.startsWith(at)) chain.push(layout)
-    }
-    // A shorter directory is an outer one: they are prefixes of each other by construction.
-    chain.sort((one, two) => one.length - two.length)
-    return chain
+function layoutsAround(route: string, layouts: AppLayout[]): string[] {
+    const page = parseRoutePattern(route)
+    const chain: AppLayout[] = []
+    for (const layout of layouts)
+        if (coversRoute(layout.segments, page)) chain.push(layout)
+    // A shorter route is an outer one: they are prefixes of each other by construction.
+    chain.sort((one, two) => one.segments.length - two.segments.length)
+    const sources: string[] = []
+    for (const layout of chain) sources.push(layout.source)
+    return sources
 }
 
 /**
- * Resolves a specifier from a directory as bun does, in `root`'s spelling, or `undefined` where it
- * does not resolve.
+ * A route with its parameters' names erased: what two routes answering one address share.
+ *
+ * 19.1 — `/media/[id]` and `/media/[slug]` are one route.
+ */
+function shapeOf(route: string): string {
+    let shape = ''
+    for (const segment of parseRoutePattern(route))
+        shape += `/${segment.kind === 'static' ? segment.name : `[${segment.kind}]`}`
+    return shape === '' ? '/' : shape
+}
+
+/**
+ * Throws, naming both, where two files answer one method at one route.
+ *
+ * 19.1 — a page answers `GET` at its own, and a handler its method at its address.
+ */
+function refuseSharedRoutes(routes: AppRoute[], mounts: Mount[]): void {
+    const owners = new Map<string, string>()
+    const claim = (method: string, route: string, source: string): void => {
+        const key = `${method} ${shapeOf(route)}`
+        const owner = owners.get(key)
+        if (owner !== undefined)
+            throw new Error(
+                `abide: ${owner} and ${source} both answer ${method} at ${route}. RULEBOOK 19.1.`,
+            )
+        owners.set(key, source)
+    }
+    for (const route of routes) claim('GET', route.pattern, route.source)
+    for (const mount of mounts) claim(mount.method, mount.address, mount.source)
+}
+
+/**
+ * Resolves a specifier from a directory as bun does, or `undefined` where it does not resolve.
  *
  * A COMPONENT IMPORT RESOLVES THE WAY THE APP'S OWN IMPORTS DO — its import map, from the file
- * that wrote it. One that does not resolve is left as written, and the bundle names it.
- *
- * THE RESOLVER FOLLOWS SYMLINKS AND `root` MAY NOT: under a linked root — `/tmp` is one on macOS —
- * a component resolves outside the root's own spelling of the app, where an editor's file, its
- * unsaved text and the checked module pointed at it are not found. So an answer under the root's
- * real path is spelled back under `root`; a build hands `sourcesUnder`'s real root, and nothing
- * is spelled back.
+ * that wrote it. One that does not resolve is left as written, and the bundle names it. THE
+ * ANSWER IS A REAL PATH, as every root handed to the compiler is.
  */
-export function resolverIn(
-    root: string,
-): (specifier: string, from: string) => string | undefined {
-    const linked = realpathSync(root)
+export function resolverIn(): (
+    specifier: string,
+    from: string,
+) => string | undefined {
+    // ONE ANSWER PER SPECIFIER AND DIRECTORY for as long as the resolver lives: a compile resolves
+    // every import once for its dependencies and again for its graph, and hands both one resolver.
+    const answered = new Map<string, string | undefined>()
     return (specifier, from) => {
-        const resolved = resolveFrom(specifier, from)
-        return resolved !== undefined &&
-            linked !== root &&
-            resolved.startsWith(`${linked}/`)
-            ? `${root}${resolved.slice(linked.length)}`
-            : resolved
+        const key = `${from}\0${specifier}`
+        if (answered.has(key)) return answered.get(key)
+        const found = resolveFrom(specifier, from)
+        answered.set(key, found)
+        return found
     }
 }
 
 function resolveFrom(specifier: string, from: string): string | undefined {
     try {
-        return Bun.resolveSync(specifier, from)
+        return resolvedFile(specifier, from)
     } catch {
-        // 38.66 — BUN KEEPS A DIRECTORY'S LISTING FOR THE LIFE OF THE PROCESS, and looks a `#` specifier up
+        // 38.65 — BUN KEEPS A DIRECTORY'S LISTING FOR THE LIFE OF THE PROCESS, and looks a `#` specifier up
         // in it with no second look — where a relative one that misses reads the directory again.
         // `abide dev` compiles in one process for its whole session, so a component created since
         // its directory was listed never resolved, and was read as uninvoked. The `imports` map is
@@ -392,29 +648,21 @@ function throughImports(specifier: string, from: string): string | undefined {
     return undefined
 }
 
-/**
- * The rows of either route table, one per route.
- *
- * The two differ only in which module a pattern loads, so a row is written once and the extension
- * is the argument.
- */
+/** The rows of either route table, one per route, `column` appending the fields only one carries. */
 function tableOf(
     routes: AppRoute[],
-    extension: string,
     column: (route: AppRoute) => string = () => '',
 ): string {
     const rows: string[] = []
     for (const route of routes) {
-        const module = `./${route.source.replace(/\.abide$/, extension)}`
         // 35.1 — THE CHAIN IS PART OF THE ADDRESS, so it is in the table rather than resolved at
         // run time: which layouts wrap a page is a fact about the file tree, and the server and
         // the client read it off the same walk for the reason the addresses are (30.8).
         const wrapping = route.layouts.map(
-            (layout) =>
-                `() => import(${JSON.stringify(`./${layout.replace(/\.abide$/, extension)}`)})`,
+            (layout) => `() => import(${tableImport(layout)})`,
         )
         rows.push(
-            `    { pattern: ${JSON.stringify(route.pattern)}, load: () => import(${JSON.stringify(module)}), layouts: [${wrapping.join(', ')}]${column(route)} },`,
+            `    { pattern: ${JSON.stringify(route.pattern)}, load: () => import(${tableImport(route.source)}), layouts: [${wrapping.join(', ')}]${column(route)} },`,
         )
     }
     return rows.join('\n')
@@ -427,23 +675,19 @@ function tableOf(
  * tsconfig includes its build output typechecks it — and a bare `host` is an implicit `any` that
  * fails `tsc` under the `strict` every abide app is written against.
  */
-function clientTable(
-    routes: AppRoute[],
-    transitions: boolean,
-    shellHead: string,
-): string {
+function clientTable(routes: AppRoute[], transitions: boolean): string {
     return `// Written by \`abide build\`. The addresses this app answers, and what to load for each.
 import { listenForRoutes, startRouter } from '${ROUTING_SPECIFIER}'
 
 export const routes = [
-${tableOf(routes, '.client.ts')}
+${tableOf(routes)}
 ]
 
 // The router this document gets, the page it arrived on, and the two places a reader navigates
 // from (30.7). Hydrating here rather than leaving it to the app is what makes the page the server
 // painted live without anybody wiring it.
 export function start(host: Element) {
-    const router = startRouter(routes, host, ${transitions}, ${JSON.stringify(shellHead)})
+    const router = startRouter(routes, host, ${transitions})
     listenForRoutes(router)
     const ready = router.hydrate()
     return { router, ready }
@@ -452,57 +696,70 @@ export function start(host: Element) {
 }
 
 /**
- * The source of `server.ts`: the same addresses, loading the module that PAINTS each page.
+ * The source of `server.ts`: the same addresses, loading the module that PAINTS each page, the
+ * error pages, the modules a server block runs in, and every handler.
  *
  * No `start` here and nothing imported: the server holds the matching and the ranking already,
  * and a server table that carried either would be a second copy of both.
  */
-function serverTable(routes: AppRoute[], errors: AppRoute[]): string {
+function serverTable(
+    routes: AppRoute[],
+    errors: AppRoute[],
+    servers: string[],
+    mounts: Mount[],
+): string {
+    let loaders = ''
+    for (const source of servers)
+        loaders += `    () => import(${tableImport(source)}),\n`
+    let handlers = ''
+    for (const mount of mounts) {
+        const fields = JSON.stringify(mount)
+        // The module the handler is declared in — the file's server module, the route table's own.
+        handlers += `    { load: () => import(${tableImport(mount.source)}), ${fields.slice(1, -1)} },\n`
+    }
     return `// Written by \`abide build\`. The addresses this app answers, and what paints each.
 export const routes = [
-${tableOf(routes, '.ts', clientModules)}
+${tableOf(routes, clientModules)}
 ]
 
 // 35.2 — the error pages, by the directory each answers for.
 export const errors = [
-${tableOf(errors, '.ts')}
+${tableOf(errors)}
 ]
+
+// 37.1 — every module a \`<script server>\` runs in, imported before the app boots.
+export const servers = [
+${loaders}]
+
+// 16.2 — every handler this app answers over http, and where each is.
+export const handlers = [
+${handlers}]
 `
 }
 
 /**
  * The server row's `clientModules` column: what the browser will load at this address.
  *
- * 38.29 — named on the SERVER's row: the server writes the document, and the preloads for the page
+ * 38.28 — named on the SERVER's row: the server writes the document, and the preloads for the page
  * and its chain have to be in it before the client has run at all. Keys into the manifest
  * `manifestOf` reads off the bundle.
  */
 function clientModules(route: AppRoute): string {
-    const modules: string[] = []
-    for (const source of [route.source, ...route.layouts])
-        modules.push(source.replace(/\.abide$/, '.client.ts'))
-    return `, clientModules: ${JSON.stringify(modules)}`
-}
-
-/** The source of `rpc.ts`: the handler rows `mountHandlers` answers from. */
-function mountTable(mounts: Mount[]): string {
-    return `// Written by \`abide build\`. Every handler this app answers over http, and where each is.
-export const handlers = ${JSON.stringify(mounts, null, 4)}
-`
+    return `, clientModules: ${JSON.stringify([route.source, ...route.layouts])}`
 }
 
 /**
- * The browser's stand-in module for each handler module, by source path.
+ * The wrappers the browser's module of each file exports in its server block's place, by source.
  *
- * 16.28 — WHAT A BROWSER IMPORTS WHERE THE APP WROTE A HANDLER'S MODULE: the same export names,
- * each the same call over the wire. The address is written RELATIVE to the bundle's own directory
- * and resolved against the chunk at run time (16.10), so an app mounted under a sub-path calls its
- * own handlers rather than the root's.
+ * 16.28, 34.23 — WHAT A BROWSER IMPORTS WHERE THE APP WROTE A HANDLER: the same export name, the
+ * same call over the wire. The address is written RELATIVE to the bundle's own directory and
+ * resolved against the chunk at run time (16.10), so an app mounted under a sub-path calls its own
+ * handlers rather than the root's.
  */
-function wrappersOf(mounts: Mount[]): Map<string, string> {
-    const modules = new Map<string, string>()
+function standInsOf(mounts: Mount[]): Map<string, string> {
+    const lines = new Map<string, string>()
     for (const mount of mounts) {
-        // 20.4 — withheld from the browser: no wrapper, so an import of it is 16.29's refusal.
+        // 20.4 — withheld from the browser: no wrapper, so an import of it names nothing there.
         if (!mount.ui) continue
         const at = JSON.stringify(posix.relative(CLIENT_ADDRESS, mount.address))
         // 18.4 — what the handler's value declares that the browser's copy behaves by.
@@ -513,47 +770,30 @@ function wrappersOf(mounts: Mount[]): Map<string, string> {
                 : mount.copy === undefined
                   ? ''
                   : `, ${JSON.stringify(mount.copy)}`
-        const call = `wire(${JSON.stringify(mount.method)}, new URL(${at}, import.meta.url).pathname${copy})`
-        const line =
-            mount.name === 'default'
-                ? `export default ${call}\n`
-                : `export const ${mount.name} = ${call}\n`
-        modules.set(mount.source, (modules.get(mount.source) ?? '') + line)
+        const line = `export const ${mount.name} = __wire(${JSON.stringify(mount.method)}, new URL(${at}, import.meta.url).pathname${copy})\n`
+        lines.set(mount.source, (lines.get(mount.source) ?? '') + line)
     }
-    const wrappers = new Map<string, string>()
-    for (const [source, body] of modules)
-        wrappers.set(
+    const standIns = new Map<string, string>()
+    for (const [source, body] of lines)
+        standIns.set(
             source,
-            `// Written by \`abide build\`. What a browser holds in place of ${source} (16.28).
-import { wire } from '${WIRE_SPECIFIER}'
-
+            `// 34.23 — what a browser holds in place of the server block.
+import { wire as __wire } from '${WIRE_SPECIFIER}'
 ${body}`,
         )
-    return wrappers
+    return standIns
+}
+
+/** Whether a page or an error page has anything to paint: a template, or a head. 23.3, 35.14. */
+export function paints(file: AbideFile): boolean {
+    return file.template.length > 0 || file.head.length > 0
 }
 
 // THE ENTRY. An app does not write it: which module boots the client is the build's knowledge,
 // exactly as the route table is, and a hand-written entry is one more file to keep in step with a
 // layout that moves.
 const ENTRY_MODULE = `// Written by \`abide build\`. What boots this app in a browser.
-import { start } from './routes.ts'
+import { start } from '../${VIRTUAL_DIRECTORY}/${ROUTES_TABLE}'
 
 start(document.body)
 `
-
-/**
- * The nearest file of this name at or above `from`, or `undefined`.
- *
- * The compiler needs a project for 31.3, and an app's own tsconfig is the one whose paths and lib
- * its pages are written against.
- */
-function nearest(from: string, name: string): string | undefined {
-    let at = from
-    while (true) {
-        const candidate = `${at}/${name}`
-        if (existsSync(candidate)) return candidate
-        const up = dirname(at)
-        if (up === at) return undefined
-        at = up
-    }
-}

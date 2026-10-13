@@ -174,7 +174,7 @@ test('a guard over an aborted body comes back when the reload lands what was hel
 
 // 11.20 on the truth-conditional premise: the derived value's data IS being refreshed
 // when its source's is, so `busy` is true whether or not anything asks. Note the body
-// never re-runs here — 7.4 keeps serving, the value does not change, 11.5 gives no
+// never reruns here — 7.4 keeps serving, the value does not change, 11.5 gives no
 // recompute — so nothing but a walk of the source list can report it.
 test('busy propagates through a derived value while its source refreshes', async () => {
     const answer = 1
@@ -191,9 +191,9 @@ test('busy propagates through a derived value while its source refreshes', async
 })
 
 // THE ABORT. A body that reads an unlanded value is abandoned, mints nothing (11.52),
-// and re-runs when the source lands. The count is what matters: a body run to
+// and reruns when the source lands. The count is what matters: a body run to
 // completion against an unlanded read would have produced once with the wrong input.
-test('a body reading an unlanded value mints nothing and re-runs on landing', async () => {
+test('a body reading an unlanded value mints nothing and reruns on landing', async () => {
     let resolveSource: (value: number) => void = (): void => {}
     const source = reactive(
         new Promise<number>((resolve) => {
@@ -211,7 +211,7 @@ test('a body reading an unlanded value mints nothing and re-runs on landing', as
 
     resolveSource(41)
     await source
-    // THE READ IS WHAT RE-RUNS IT (11.5). Nothing watches this value, so the source
+    // THE READ IS WHAT RERUNS IT (11.5). Nothing watches this value, so the source
     // landing marks it and stops; under eager the body had already run again by the time
     // the `await` returned. The contract 2.12 and 11.52 state is unchanged either way — the
     // body is abandoned rather than completed against an absent value, and it mints
@@ -228,7 +228,7 @@ test('a body reading an unlanded value mints nothing and re-runs on landing', as
 // long as the page is open, and every number on it is right.
 //
 // THE REVERT is dropping the `aborted` queue from `markReaders`: `after: counting… | counting…`.
-test('a body something only guards re-runs when the value it aborted on lands', async () => {
+test('a body something only guards reruns when the value it aborted on lands', async () => {
     let landRows: (rows: { paid: boolean }[]) => void = (): void => {}
     const pending = new Promise<{ paid: boolean }[]>((resolve) => {
         landRows = resolve
@@ -258,9 +258,9 @@ test('a body something only guards re-runs when the value it aborted on lands', 
 
 // 11.5 THROUGH AN EFFECT, which is the case the one above cannot answer. A value
 // something WATCHES is not lazy: the mark reaches the effect, the effect's read pulls the
-// body forward, and it re-runs inside the write. This is the shape a template makes, so
+// body forward, and it reruns inside the write. This is the shape a template makes, so
 // it is the one that decides whether push-pull is visible to an app at all.
-test('a watched derived value re-runs on the write, not on a later read', async () => {
+test('a watched derived value reruns on the write, not on a later read', async () => {
     let resolveSource: (value: number) => void = (): void => {}
     const source = reactive(
         new Promise<number>((resolve) => {
@@ -300,7 +300,7 @@ test('a body declaring a parameter is keyed, and one declaring none is not', () 
 
 // 11.64: WHAT THE CANONICAL WIRE FORM CANNOT WRITE IS REFUSED AT THE REACH. `JSON.stringify`
 // fails on none of it — a `Set`, a `Map` and a class instance each have no own enumerable keys
-// and canonicalise to `{}`, and a non-finite number is written `null` — so 1.8 joined the second
+// and canonicalize to `{}`, and a non-finite number is written `null` — so 1.8 joined the second
 // reach to the first's standing work and served it a value computed from other arguments.
 //
 // THE BODY RUN IS THE ASSERTION, not the message: the collision is invisible in the VALUE, which
@@ -432,10 +432,10 @@ test('an effect runs immediately and again on change, and its disposer runs firs
 
 // THE DEFAULT IS THE REFERENCE. A fresh object with the same contents is a different
 // value to `Object.is`, so it produces and wakes — which is what `===` means and what
-// an author who has not read the rulebook will predict. The re-materialisation
+// an author who has not read the rulebook will predict. The re-materialization
 // hazard is real and is now the APP's to declare against, not the framework's to
 // charge every value for.
-test('the default identity is the reference, so a re-materialised value wakes', () => {
+test('the default identity is the reference, so a re-materialized value wakes', () => {
     const invoice = reactive({ id: 1, total: 100 })
     const counter = wakes(invoice)
     invoice.set({ id: 1, total: 100 })
@@ -497,7 +497,7 @@ test('the signed zeroes are two values, which is what Object.is costs', () => {
     expect(woken).toBe(1)
 })
 
-// 5.2 through the OVERRIDE. A value whose producer re-materialises — a reload that
+// 5.2 through the OVERRIDE. A value whose producer re-materializes — a reload that
 // fetched an equal payload and built a fresh object for it — declares `structural` and
 // stops waking every reader on every reload. The output stays right either way and
 // only the work moves, which is why this is a wake count and not a value assertion.
@@ -526,7 +526,7 @@ gate(
             reverted ? undefined : { identity: structural },
         )
         const counter = wakes(invoice)
-        // A FRESH OBJECT with the same contents — the re-materialisation every reload
+        // A FRESH OBJECT with the same contents — the re-materialization every reload
         // produces, and the case the default cannot see.
         invoice.set({ id: 1, total: 100 })
         const woken = counter.count()
@@ -915,7 +915,7 @@ test('a body that reorders its sources keeps every one of them subscribed', () =
 })
 
 // PROPAGATION PAST DEPTH 1. The only probe test in the repo was depth 1, so a
-// mis-memoising walk would have passed it.
+// mis-memoizing walk would have passed it.
 test('busy propagates through three levels of derivation', async () => {
     const answer = 1
     const source = reactive(() => Promise.resolve(answer))
@@ -1162,7 +1162,7 @@ test('leaving a cursor drops its subscriber', async () => {
 
 // 12.8 THROUGH `s.watch`, which is 12.9's whole point: `s.watch` is `watch` narrowed to
 // one source, so it must answer a throwing effect the same way. It did not — it had no
-// catch at all, so the reader stayed alive and re-ran into the same throw on every write,
+// catch at all, so the reader stayed alive and reran into the same throw on every write,
 // where `watch(…)` stops. Nothing about the values either one serves says so.
 // 12.8 STOPS THE EFFECT THAT THREW AND NOTHING ELSE. The throw unwinds out of the drain,
 // whose `finally` abandons the queue — and a reader abandoned at `DIRTY` takes
@@ -1485,7 +1485,7 @@ test('a watch over sources runs its disposer before each rerun and at teardown',
 
 // 14.10 — A DISPOSER DOES NOT TRACK, wherever its watch was stopped from. A stop called inside
 // another watch's effect ran the disposer under that effect's reader, so the effect subscribed to
-// what the disposer read and re-ran on a value it never read itself. THE REVERT: drop the
+// what the disposer read and reran on a value it never read itself. THE REVERT: drop the
 // `TRACKING.reader = null` from `runDisposer` — `outer` reads 3 runs where 2 are due.
 test('a disposer run from inside another effect does not subscribe it — 14.10', () => {
     const read = reactive(0)
@@ -1558,7 +1558,7 @@ test('a body that hands back a Reactive adopts it rather than storing it', () =>
 // `accept` would skip the transform and is the obvious wrong spelling.
 // 4.7: A `transform` RUNS UNTRACKED, and the reader it must not be attributed to is
 // whatever happens to be on the stack — a write made from inside a `watch`, or from a
-// recompute. Run tracked, the transform's own reads became that reader's, so it re-ran on
+// recompute. Run tracked, the transform's own reads became that reader's, so it reran on
 // a value it never read AND had those reads spliced into its cursor-ordered `sources`,
 // where the next run's positions no longer line up. `gateInto` has always cleared this;
 // `accept` and `acceptIntoStream` did not.
@@ -1848,7 +1848,7 @@ test('busy propagates from the adopted value', async () => {
 })
 
 // A TRIGGER ON THE OUTER VALUE WAS A VALUE STUCK FOR THE LIFE OF THE PAGE. `invalidate`
-// marks the outer unservable and re-runs its body, the body hands back the SAME inner value,
+// marks the outer unservable and reruns its body, the body hands back the SAME inner value,
 // and 11.18 makes that recompute decide nothing — so nothing ever made the outer servable
 // again. `refresh` stuck `busy` the same way. The inner here has no producer, so 7.6 makes
 // reaching it inert and the outer has to settle from what the inner already serves.
@@ -1887,7 +1887,7 @@ test('refreshing over the same adoption wakes no reader', () => {
 })
 
 // 11.51: THE ADOPTED VALUE IS WHERE THE DATA IS. The outer's own body only hands back a
-// reference, so re-running it reloads nothing — without the reach a `refresh` on the value
+// reference, so rerunning it reloads nothing — without the reach a `refresh` on the value
 // an app holds is a spinner over a load that never happens.
 //
 // THE REVERT is dropping the reach from `eachAdopted`: `inner runs: 0`
@@ -2103,7 +2103,7 @@ test('a derived value that aborts wakes the guard asking whether it is ready', (
 test('the floor reaches the adopted value as well as the read ones', async () => {
     const answer = 41
     // A producer, since `invalidate` is inert on a value with no body (7.x) — there is
-    // nothing to re-run and nothing to be invalid against.
+    // nothing to rerun and nothing to be invalid against.
     const inner = reactive(() => Promise.resolve(answer))
     await inner
     const outer = reactive(() => inner)
@@ -2201,7 +2201,7 @@ test('the hit after an invalidate wakes a reader that asked whether it was ready
 // A DERIVED BODY READING A PROBE, which is the reader half of the probe edge landing on a
 // `Cell` rather than on a watch subscriber. It was broken and nothing here caught it —
 // every probe test read from a `watch`, so the field a `Cell` needs to carry the edge was
-// never initialised and the first such body threw on `undefined.length`.
+// never initialized and the first such body threw on `undefined.length`.
 test('a derived body may read a probe and wakes when it moves', async () => {
     const answer = 1
     const source = reactive(() => Promise.resolve(answer))
@@ -2498,7 +2498,7 @@ test('a run of writes wakes once per window rather than twice at its edges', asy
 //
 // THE MARGIN IS 7.5x — a 150 ms window against 20 ms between writes — and the direction
 // that breaks it is contention stretching one gap past the whole window. A timing failure
-// under `--parallel` is re-run with `test:serial` before it is believed.
+// under `--parallel` is rerun with `test:serial` before it is believed.
 test('a debounce waits for the changes to stop, not for the first of them', async () => {
     const LONG = 150
     const query = reactive<number>(0, { debounce: LONG })
@@ -2719,7 +2719,7 @@ test('a body that stops handing back a Reactive stops mirroring it', () => {
 
 // 12.3's NARROWED FORM IS UNTRACKED, and being given its sources is only half of that: the
 // effect still RUNS wherever it was reached from. Opened inside a tracked body — a `watch`,
-// or a `reactive` body — its reads were attributed to that outer reader, which then re-ran
+// or a `reactive` body — its reads were attributed to that outer reader, which then reran
 // on a value it had never read. Nothing about either value says so; the outer just runs
 // twice as often as its own body justifies.
 //
@@ -2822,7 +2822,7 @@ test('a value that declares no ttl never asks what time it is', () => {
     expect(`clock reads: ${asked}`).toBe('clock reads: 0')
 })
 
-// 6.2, AND IT IS AN ALLOCATION CLAIM AS MUCH AS A BEHAVIOUR ONE. A plain state's contents
+// 6.2, AND IT IS AN ALLOCATION CLAIM AS MUCH AS A BEHAVIOR ONE. A plain state's contents
 // are what the app put there, so `ttl` on one does not merely answer the same — it builds
 // no record, arms no timer and leaves `direct` alone, which is what keeps the clock off
 // the read. Asserting the value survived would pass against a branch that expired it and
@@ -2986,7 +2986,7 @@ test('a keyed entry does not recompute when a value its body read changes', () =
 // 2.13 STILL HOLDS FOR AN ENTRY. An abort is not a completed run: the read that threw has
 // subscribed, and that subscription is the only thing that brings the entry back when the value
 // lands. What a keyed body gives up is the recompute AFTER it has an answer.
-test('a keyed body aborted on a value that had not landed re-runs when it lands, and then holds', async () => {
+test('a keyed body aborted on a value that had not landed reruns when it lands, and then holds', async () => {
     let settle: (value: number) => void = (): void => {}
     const rate = reactive(
         new Promise<number>((resolve) => {
@@ -3064,10 +3064,10 @@ test('an args gate refuses before the body runs, and the refusal is the entry fo
 })
 
 // 11.28 AND 11.68: THE GATE DOES NOT DECIDE THE ENTRY, AND THE BODY GETS WHAT IT RETURNED. Two
-// args the gate would normalise to one are still two keys, and each body sees the normalised form.
+// args the gate would normalize to one are still two keys, and each body sees the normalized form.
 //
 // THE REVERT is handing the body the args the caller sent: `body saw: string`.
-test("an args gate that normalises decides the body's args but not the entry", () => {
+test("an args gate that normalizes decides the body's args but not the entry", () => {
     const seen: string[] = []
     const keyed = reactive(
         (args: { id: string | number }) => {
@@ -3610,7 +3610,7 @@ test('servable implies landed across every transition', async () => {
 // spared on purpose, and a count would call that a failure. The one move let off is the one a
 // clause makes silent — an invalidate dropping `busy` (7.14, 7.16).
 //
-// A READER IS NEVER WOKEN ONTO WHAT IT ALREADY READ (5.1). A watch reading the value that re-runs
+// A READER IS NEVER WOKEN ONTO WHAT IT ALREADY READ (5.1). A watch reading the value that reruns
 // and reads the same thing — the same identity, the same refusal, or not landed again — was woken
 // for nothing, except where the operation's clause mints a repeat on purpose (5.7, an ungated
 // publish), and where the operation settled a reload an invalidate left owing: 7.8 unserves
@@ -3898,7 +3898,7 @@ test('a body that fails over a value still being served wakes nobody, thrown or 
 })
 
 // THE OTHER SIDE OF THE SAME TEST, and why it is `servable` rather than `landed`. An invalidated
-// value has landed and is no longer served (7.8): its reader re-ran on the unserve and aborted on
+// value has landed and is no longer served (7.8): its reader reran on the unserve and aborted on
 // `NotLanded`. A reload that fails there is the reader's answer — it has nothing else coming — so
 // it must wake, or the reader waits on a load that has already ended.
 //
@@ -3922,7 +3922,7 @@ test('a reload that fails over an invalidated value wakes the reader it left wai
     })
     loaded.invalidate()
     failNext = true
-    // The read that settles the debt (7.13): it unserves, the watch re-runs onto the abort,
+    // The read that settles the debt (7.13): it unserves, the watch reruns onto the abort,
     // and the reload is in flight.
     expect(() => loaded()).toThrow()
     flushSync()
@@ -3950,7 +3950,7 @@ test('s.isError takes the error and the name, in that order', () => {
 // ── `schema`: the gate on the way in (RULEBOOK 4.3, 4.4, 4.5, 19.2, 19.3, 19.4) ──
 
 // 4.3 AND 4.4 ARE ONE CLAIM ABOUT ORDER: the schema runs FIRST and what it RETURNS is what
-// `transform` receives. A transform reading the raw input where a schema had normalised it
+// `transform` receives. A transform reading the raw input where a schema had normalized it
 // is a second answer to what the value holds, and the output looks right either way — the
 // number reaching storage is the same whenever the trim happened.
 //
@@ -4261,12 +4261,12 @@ test('a body whose promise resolves to an async generator streams — 9.6', asyn
 })
 
 // 9.2 AND 9.8, ASSERTED AS THE WORK. The accumulation is pushed into per chunk and
-// materialised on the read — so a hundred chunks and one read are ONE run of the transform,
+// materialized on the read — so a hundred chunks and one read are ONE run of the transform,
 // and a second read with nothing new in between is none. The output cannot show this: a
-// materialisation per chunk hands the reader the same array.
+// materialization per chunk hands the reader the same array.
 //
-// THE REVERT is materialising in `acceptChunk` rather than in the read: `transforms: 100`.
-test('a stream materialises its accumulation on the read, not per chunk', async () => {
+// THE REVERT is materializing in `acceptChunk` rather than in the read: `transforms: 100`.
+test('a stream materializes its accumulation on the read, not per chunk', async () => {
     const feed = streamOf<number>()
     let transforms = 0
     const rows = reactive(feed.body, {
@@ -4546,12 +4546,12 @@ test('a value adopting a stream is that stream to a cursor, a guard and an await
     expect(`guard: ${guard[guard.length - 1]}`).toBe('guard: false')
 })
 
-// 9.1 THROUGH THE ADOPTION, AS THE WORK. The adopter materialises on the read that asks, with
+// 9.1 THROUGH THE ADOPTION, AS THE WORK. The adopter materializes on the read that asks, with
 // its OWN gates (11.14) — and a mirror that copied the accumulation to hand it over did it
 // once per wake with nothing reading at all.
 //
 // THE REVERT is the same as above: `outer transforms before a read: 3`.
-test('a value adopting a stream materialises nothing until it is read, through its own transform', async () => {
+test('a value adopting a stream materializes nothing until it is read, through its own transform', async () => {
     const feed = streamOf<number>()
     const inner = reactive(feed.body)
     let transforms = 0
@@ -4604,7 +4604,7 @@ test('a value that stops adopting a stream serves its own value again', async ()
 // producer never made.
 //
 // THE REVERT, run: `standWrite` not recording the version it stood at. Where something is served,
-// the comparison 5.2 makes materialises it first and stamps the version as a side effect, so it is
+// the comparison 5.2 makes materializes it first and stamps the version as a side effect, so it is
 // a write over a stream that has served NOTHING yet that shows it — `before any chunk: ` with the
 // write read back as the empty accumulation.
 test('a set on a stream stands until the next chunk overwrites it', async () => {
@@ -4732,7 +4732,7 @@ test('a busy guard on a stream hears a write that follows a call in flight', asy
 // (9.12), so a cursor walks straight from the chunk before to the chunk after.
 //
 // THE REVERT is `STREAM_PROTOTYPE.set` handing a `Reactive` to `writeStream` as a value: `stored: true`
-// — the callable itself is served; and `unfollow` in `wakeStreams` and `materialise` doing nothing:
+// — the callable itself is served; and `unfollow` in `wakeStreams` and `materialize` doing nothing:
 // `adopted readers after: 1`.
 test('a Reactive set on a stream is followed until the next chunk', async () => {
     const feed = streamOf<number>()
@@ -5034,7 +5034,7 @@ test('throttle on a stream wakes readers once per window, and a cursor still get
 // 5.18: WHAT A READER SEES IS WHAT THE WINDOW RELEASED, not the chunks it is holding — the read
 // agrees with the wake, so a value that has not been told of a chunk does not show it either.
 //
-// THE REVERT is `materialise` slicing the whole buffer: `during: 1,2`.
+// THE REVERT is `materialize` slicing the whole buffer: `during: 1,2`.
 test('a read of a throttled stream serves the accumulation as the last release left it', async () => {
     const feed = streamOf<number>()
     const rows = reactive(feed.body, { throttle: WINDOW })
@@ -6005,7 +6005,7 @@ test('a body with an optional parameter is typed keyed — 11.2', async () => {
     expect(await tags()).toBe('all')
     expect(await tags({ type: 'mood' })).toBe('mood')
     // @ts-expect-error — a type the parameter does not take.
-    void tags({ type: 'colour' })
+    void tags({ type: 'color' })
     const count = reactive(() => 1)
     const counted: number = count()
     const invoice = reactive(({ id }: { id: number }) => id)
@@ -6124,7 +6124,7 @@ test('a debounce on a keyed stream opens one stream for a burst of reaches', asy
 })
 
 // 31.8 — A WRITE THROUGH A MEMBER PATH COPIES DOWN THE PATH AND THEN WRITES, AND THE COPY IS NOT
-// OPTIMISED AWAY. The copy is the whole of the clause: a `Reactive` wakes its readers on IDENTITY,
+// OPTIMIZED AWAY. The copy is the whole of the clause: a `Reactive` wakes its readers on IDENTITY,
 // so the value being right says nothing about whether anything saw it change. THE REVERT: have
 // `copyOf` in `writePath` hand the value back instead of copying it. Every assertion about the
 // VALUE below still passes — the page renders the right text on load — and the reader wakes 1 time
@@ -6152,7 +6152,7 @@ test('a write through a member path mints a new identity', () => {
     stop()
 })
 
-// 31.15 — AN OBJECT WITH ITS OWN BEHAVIOUR IS WRITTEN, NOT COPIED. `video.currentTime = t` over a
+// 31.15 — AN OBJECT WITH ITS OWN BEHAVIOR IS WRITTEN, NOT COPIED. `video.currentTime = t` over a
 // `bind:element` ref is a seek: the element's setter is the whole point, and a spread of it is a
 // plain object holding a few own fields. THE REVERT: drop the `isPlain` walk from `writePath`; the
 // setter never runs (seeked reads undefined where 5 is due), the `Reactive` holds a husk rather than
@@ -6213,7 +6213,7 @@ test('a write through a path keeps the shape of every level it copies', () => {
 
 // 11.24's key is a STRING, and `__proto__` is a setter on `Object.prototype` rather than a member:
 // assigned onto a plain accumulator it created no own property, so it vanished from the wire form
-// and two different `Args` canonicalised to one key — 1.8 then joined the second reach to the
+// and two different `Args` canonicalized to one key — 1.8 then joined the second reach to the
 // first's standing work. The revert is the accumulator's prototype: `{}` in place of
 // `Object.create(null)` reports `'{"id":1}'` for both lines below.
 test('an Args member named __proto__ keeps its own key', () => {

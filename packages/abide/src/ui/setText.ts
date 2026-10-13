@@ -12,7 +12,7 @@ import { markupToText, RawRun } from './RawRun.ts'
  * particular emitter remembered to write.
  *
  * The COMPARE is the rest of the point: a write to `data` that does not change it still costs,
- * and a slot re-run by a value that landed on the same string is the common case rather than the
+ * and a slot rerun by a value that landed on the same string is the common case rather than the
  * rare one.
  *
  * THE RUN'S STATE COMES BACK, because a run that held markup is a text node again after this and the

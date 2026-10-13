@@ -67,6 +67,25 @@ test('bind:value reads the property and writes it back on input — 32.5', async
 })
 
 // 32.7 — A BOOLEAN BIND IS A BOOLEAN, both ways.
+// 32.5, 31.8 — A PATH INTO A VALUE IS WRITTEN THROUGH, as `contact.address.city = v` is: the binding
+// is handed the path's read and its write. THE REVERT: drop `boundPath` from `Lowering.reference`;
+// the binding is handed the city as a string, and what is typed never reaches the value.
+test('bind:value on a path into a value writes the path — 32.5, 31.8', async () => {
+    const { html } = await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let contact = reactive({ name: 'Ada', address: { city: 'London' } })
+</script>
+
+<input id="city" bind:value={contact.address.city}>
+<p id="out">{contact.name} {contact.address.city}</p>`)
+    expect(html).toContain('value="London"')
+    input('city').value = 'Paris'
+    input('city').dispatchEvent(new Event('input'))
+    flushSync()
+    expect(out()).toBe('Ada Paris')
+})
+
 test('bind:checked and bind:open are booleans both ways — 32.7', async () => {
     await mounted()
     const box = input('subscribed')

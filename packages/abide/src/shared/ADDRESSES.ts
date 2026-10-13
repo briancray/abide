@@ -7,20 +7,19 @@
 /**
  * The namespace every framework address lives under.
  *
- * UNDER `/__abide`, which is the namespace the framework's own addresses live in (19.1, 20.5,
- * 25.1). That is what makes a route table and an asset table incapable of colliding: a page is a
- * directory under `pages/` and no directory there can be named `__abide` without an author
- * writing it, so nothing has to be checked at build time and nothing can be shadowed at run time.
- * 38.21 is the clause.
+ * UNDER `/__abide`, which is the namespace the framework's own addresses live in (20.5, 25.1).
+ * That is what keeps the app's routes and abide's own addresses from colliding: a route whose first
+ * segment is `__abide` is refused at build (23.17), so nothing can be shadowed at run time. 38.20
+ * is the clause.
  */
 export const ABIDE_ADDRESS = '/__abide'
 
 /**
  * Where the browser bundle is served.
  *
- * The bundle's own address below `ABIDE_ADDRESS` (38.17, 38.21). One request path answers
+ * The bundle's own address below `ABIDE_ADDRESS` (38.16, 38.20). One request path answers
  * everything under `ABIDE_ADDRESS` and the command supplying the app decides what is there, so a
- * command with a second address of its own — the reload client `abide dev` serves (38.18) — adds
+ * command with a second address of its own — the reload client `abide dev` serves (38.17) — adds
  * one rather than a lane.
  */
 export const CLIENT_ADDRESS = `${ABIDE_ADDRESS}/client`
@@ -31,8 +30,6 @@ export const CLIENT_ADDRESS = `${ABIDE_ADDRESS}/client`
 export const OPENAPI_ADDRESS = `${ABIDE_ADDRESS}/openapi.json`
 /** The MCP endpoint. */
 export const MCP_ADDRESS = `${ABIDE_ADDRESS}/mcp`
-/** The stream of log records. */
-export const LOGS_ADDRESS = `${ABIDE_ADDRESS}/logs`
 /** The health check. */
 export const HEALTH_ADDRESS = `${ABIDE_ADDRESS}/health`
 /** Where a visitor's Claude Code bridge pairs, and is relayed turns (45.13). */
@@ -41,18 +38,10 @@ export const BRIDGE_ADDRESS = `${ABIDE_ADDRESS}/bridge`
 /**
  * The socket the dev reload client holds open.
  *
- * 38.18 — the LISTENER upgrades it on the main thread and the dev WORKER serves the script that
+ * 38.17 — the LISTENER upgrades it on the main thread and the dev WORKER serves the script that
  * opens it.
  */
 export const DEV_ADDRESS = `${ABIDE_ADDRESS}/dev`
-
-/**
- * Where a `server/rpc` handler is answered over http.
- *
- * 16.2 — its path below that directory, then its export name (19.1). The build writes the address
- * into the browser's wrapper and the server answers at it.
- */
-export const RPC_ADDRESS = `${ABIDE_ADDRESS}/rpc`
 
 /**
  * Where the one web socket a page follows its `GET`s over is served, below the app's root.

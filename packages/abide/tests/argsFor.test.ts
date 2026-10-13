@@ -1,4 +1,4 @@
-// 16.18, 19.7, 19.9, 38.62 — WHAT A CALL'S ARGS ARE BEFORE ITS HANDLER SEES THEM, asked without a
+// 16.18, 19.7, 19.9, 38.61 — WHAT A CALL'S ARGS ARE BEFORE ITS HANDLER SEES THEM, asked without a
 // request or a scope: name and value pairs collapsed (a name given twice a list, for a query, a form
 // and `abide call` alike), text coerced to the declared types, and the result held to the annotation.
 
@@ -26,9 +26,9 @@ const found: Pick<Mounted, 'handler' | 'argsDocument' | 'wireArgs'> = {
     wireArgs: SCHEMA,
 }
 
-// 16.18, 38.62 — THE REVERT: keep only the last value of a repeated name in `collapsed`; `tags` reads
+// 16.18, 38.61 — THE REVERT: keep only the last value of a repeated name in `collapsed`; `tags` reads
 // 'b' and the CLI's `tag=a tag=b` sends one.
-test('a name given twice is a list, given once its text — 16.18, 38.62', () => {
+test('a name given twice is a list, given once its text — 16.18, 38.61', () => {
     expect(collapsed(new URLSearchParams('id=4&tags=a&tags=b'))).toEqual({
         id: '4',
         tags: ['a', 'b'],

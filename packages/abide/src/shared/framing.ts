@@ -1,6 +1,34 @@
 // 16.32 — A FRAMED ANSWER, read one JSON value per line: the whole line for jsonl, the `data:` line of
 // each event for sse. A line that does not carry the prefix — an sse `event:` line, a blank line — is
 // skipped. One line reader behind both a body read to the end and one read as it lands.
+//
+// 16.68 — AND ITS LAST FRAME MAY BE A REFUSAL: one that reached the stream after it had answered, so
+// after its status was sent. An sse `event: refusal` and the Problem Details on its `data:` line, or a
+// jsonl line `{"$refusal": <Problem Details>}` — read here as the refusal, thrown where it lands.
+
+import { failedFrom, isProblem, type Problem } from './Failed.ts'
+
+/** The key a jsonl line carries a refusal under (16.68). */
+const REFUSAL_KEY = '$refusal'
+
+/** A framed stream's last frame, as the server writes it for a refusal (16.68). */
+export function refusalFrame(problem: Problem, prefix: string): string {
+    return prefix === ''
+        ? `${JSON.stringify({ [REFUSAL_KEY]: problem })}\n`
+        : `event: refusal\n${prefix}${JSON.stringify(problem)}\n\n`
+}
+
+// What a read of one framed body carries from one line to the next: whether an sse event named the
+// data line after it a refusal.
+type Reading = { refusal: boolean }
+
+// A refusal's frame, read: thrown where it lands among the chunks.
+class Refused {
+    problem: Problem
+    constructor(problem: Problem) {
+        this.problem = problem
+    }
+}
 
 /**
  * What precedes a chunk's JSON on its line: nothing for jsonl, `data: ` for sse, and `null` where
@@ -67,14 +95,16 @@ async function* bytesStream(
 /** The chunks a framed text carried, every line of it complete. */
 export function framedChunks(text: string, prefix: string): unknown[] {
     const chunks: unknown[] = []
-    readLines(text, prefix, true, chunks)
+    readLines(text, prefix, true, chunks, { refusal: false })
+    for (const chunk of chunks)
+        if (chunk instanceof Refused) throw failedFrom(chunk.problem)
     return chunks
 }
 
 /**
  * A framed body's chunks, yielded as each line completes.
  *
- * Cancelled when the reader stops reading — a refresh starts a new run and the old one's reader has
+ * Canceled when the reader stops reading — a refresh starts a new run and the old one's reader has
  * nothing left to hand anything.
  */
 export async function* framedStream(
@@ -84,6 +114,7 @@ export async function* framedStream(
     const reader = body.getReader()
     const decoder = new TextDecoder()
     const chunks: unknown[] = []
+    const reading: Reading = { refusal: false }
     let buffered = ''
     try {
         for (;;) {
@@ -97,8 +128,17 @@ export async function* framedStream(
                 buffered += decoded
                 continue
             }
-            buffered = readLines(buffered + decoded, prefix, done, chunks)
-            yield* chunks
+            buffered = readLines(
+                buffered + decoded,
+                prefix,
+                done,
+                chunks,
+                reading,
+            )
+            for (const chunk of chunks) {
+                if (chunk instanceof Refused) throw failedFrom(chunk.problem)
+                yield chunk
+            }
             chunks.length = 0
             if (done) return
         }
@@ -117,15 +157,48 @@ function readLines(
     prefix: string,
     ended: boolean,
     chunks: unknown[],
+    reading: Reading,
 ): string {
     let start = 0
     for (;;) {
         const newline = text.indexOf('\n', start)
         if (newline === -1 && !ended) return text.slice(start)
         const end = newline === -1 ? text.length : newline
-        if (end > start && text.startsWith(prefix, start))
-            chunks.push(JSON.parse(text.slice(start + prefix.length, end)))
+        if (prefix !== '' && text.startsWith('event: refusal', start))
+            reading.refusal = true
+        else if (end > start && text.startsWith(prefix, start)) {
+            const value: unknown = JSON.parse(
+                text.slice(start + prefix.length, end),
+            )
+            chunks.push(refusalIn(value, prefix, reading) ?? value)
+            reading.refusal = false
+        }
         if (newline === -1) return ''
         start = newline + 1
     }
+}
+
+// The refusal a value carries as its frame: the data line an sse event named one, or a jsonl line
+// holding the one reserved key and Problem Details under it.
+function refusalIn(
+    value: unknown,
+    prefix: string,
+    reading: Reading,
+): Refused | undefined {
+    if (prefix !== '')
+        return reading.refusal && isProblem(value)
+            ? new Refused(value)
+            : undefined
+    // Per chunk: the reserved key is tested before any key list is built.
+    if (
+        value === null ||
+        typeof value !== 'object' ||
+        !Object.hasOwn(value, REFUSAL_KEY)
+    )
+        return undefined
+    const keys = Object.keys(value)
+    const problem = (value as Record<string, unknown>)[REFUSAL_KEY]
+    return keys.length === 1 && isProblem(problem)
+        ? new Refused(problem)
+        : undefined
 }

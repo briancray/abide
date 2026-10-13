@@ -31,9 +31,13 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ app, base, stop } = await serveApp({
-        'ui/pages/page.abide': '<main>home</main>',
-        'server/rpc/library.ts': HANDLERS,
-        'server/app.ts': APP,
+        'page.abide': '<main>home</main>',
+        'library/library.abide': `<script server>
+${HANDLERS}</script>
+`,
+        'layout.abide': `<script server>
+${APP}</script>
+`,
     }))
 }, 30_000)
 
@@ -91,7 +95,7 @@ test('an upgrade some other address answers 204 opens nothing — 37.3', async (
     expect(
         await opened([
             ['/__abide/socket', {}],
-            ['/__abide/rpc/library/nothing', {}],
+            ['/library/nothing', {}],
         ]),
     ).toEqual(['open', 'refused'])
 })

@@ -255,7 +255,7 @@ export function dropProbeReader(source: Tracked, reader: Subscriber): void {
  * sweep below takes it out.
  *
  * SWEPT ONCE HALF THE LIST IS DEAD, which keeps a walk to at most twice the live readers and the
- * sweep amortised O(1) a drop — and keeps the invariant every `length` test leans on: a list with
+ * sweep amortized O(1) a drop — and keeps the invariant every `length` test leans on: a list with
  * entries has a LIVE one, since a list that is all dead is at least half dead. HALF, NOT MORE THAN
  * HALF: a keyed replace ends on exactly half, n old rows dead behind n new ones, and a sweep that
  * waited for one more drop kept the old rows — and through each one's `notify`, its scope and its

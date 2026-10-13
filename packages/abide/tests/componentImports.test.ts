@@ -1,32 +1,33 @@
-// 35.4 — A HANDLER THAT IMPORTS A `.abide` RENDERS IT, in both lanes. The handler is the app's own
-// `.ts` and is not compiled, so its import reached bun as written and bun loaded the unknown
-// extension as a `file`: the handler held the component's PATH, and `render(Card({ name }))` threw
-// "Card is not a function" — a 500 where the document is due.
+// 35.4 — A HANDLER THAT IMPORTS A `.abide` RENDERS IT, in both lanes. Without a plugin binding the
+// import, bun loads the unknown extension as a `file`: the handler holds the component's PATH, and
+// `render(Card({ name }))` throws "Card is not a function" — a 500 where the document is due.
 //
-// THE REVERT: drop the `Bun.plugin(componentImports(…))` line from `sourceModuleLoader`. Both
-// lanes then answer 500 rather than 200, 2 of 2.
+// THE REVERT: in `abideModules`' `.abide` resolve, answer a server importer with `componentFor`
+// rather than the `abide-bound` face. Both lanes then answer 500 rather than 200, 2 of 2.
 
 import { afterAll, expect, test } from 'bun:test'
 import { addressOf, appFixture, BIN, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const FILES = {
-    'ui/components/Card.abide': `<script>
+    'components/Card.abide': `<script>
 import { props } from '@abide/abide'
 
 const { name } = props<{ name: string }>()
 </script>
 <p>hello {name}</p>
 `,
-    'server/rpc/preview.ts': `import { GET, page, render } from '@abide/abide/server'
-import Card from '#ui/components/Card.abide'
+    'preview.abide': `<script server>
+import { GET, page, render } from '@abide/abide/server'
+import Card from '#src/components/Card.abide'
 
 export const preview = GET(async ({ name }: { name: string }) =>
     page(await render(Card({ name }), '<html><body></body></html>')),
 )
+</script>
 `,
 }
-const ADDRESS = '/__abide/rpc/preview?name=ada'
+const ADDRESS = '/preview?name=ada'
 
 afterAll(removeTemporaryModules)
 

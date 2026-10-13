@@ -20,7 +20,7 @@ import { declare } from '#shared/rpc.ts'
 import { mountedOwn } from './answerRpc.ts'
 import { callerOrMint, mintCaller } from './callerOf.ts'
 import { config, positiveSetting } from './config.ts'
-import { HOOKS } from './hooks.ts'
+import { HOOKS, inOrder } from './hooks.ts'
 import { within } from './requestScope.ts'
 
 // 26.18.
@@ -150,12 +150,17 @@ async function documentOf(
         expiresAt: new Date(expires).toISOString(),
         error: undefined,
     }
-    const resolve = HOOKS.principal
-    if (resolve === undefined)
+    const resolvers = inOrder(HOOKS.principal)
+    if (resolvers.length === 0)
         return { ...(isRecord(claims) ? claims : {}), ...baseline }
     try {
-        const resolved = await resolve(claims)
-        return { ...(isRecord(resolved) ? resolved : {}), ...baseline }
+        // 37.7 — EVERY RESOLVER, handed the claims, its answer merged over the ones before it.
+        const resolved: Record<string, unknown> = {}
+        for (const resolve of resolvers) {
+            const answered = await resolve(claims)
+            if (isRecord(answered)) Object.assign(resolved, answered)
+        }
+        return { ...resolved, ...baseline }
     } catch (thrown) {
         // 26.3 — a resolver that failed leaves the caller unauthenticated, and says why.
         PRINCIPAL_LOG.warning('onPrincipal threw', thrown)

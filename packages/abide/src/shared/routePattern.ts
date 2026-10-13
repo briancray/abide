@@ -1,5 +1,5 @@
-// A ROUTE LITERAL, PARSED. One grammar for two things that would otherwise drift: the directory a
-// page is filed under (`ui/pages/invoices/[id]/page.abide`) and the literal an author writes
+// A ROUTE LITERAL, PARSED. One grammar for two things that would otherwise drift: the file a
+// page is filed as (`invoices/[id]/page.abide`) and the literal an author writes
 // (`'/invoices/[id]'`). The bracket spelling is the file system's, so the address is read off the
 // tree rather than declared beside it and the two cannot disagree.
 //
@@ -7,8 +7,10 @@
 // required takes a value, optional may be left out and omits its segment with it, and rest takes
 // an array as well as a scalar.
 //
-// A LEAF: no imports, because the compiler, the client router and a server router all read it and
-// a constant crossing a seam lives where nothing pulls a graph in behind it.
+// A LEAF: nothing imported but another leaf, because the compiler, the client router and a server
+// router all read it and a constant crossing a seam lives where nothing pulls a graph in behind it.
+
+import { PUBLIC_DIRECTORY, SERVER_DIRECTORY } from './RESERVED_DIRECTORIES.ts'
 
 type SegmentKind = 'static' | 'required' | 'optional' | 'rest'
 
@@ -40,26 +42,23 @@ export function parseRoutePattern(pattern: string): Segment[] {
     return out
 }
 
-const ROUTES = 'ui/pages/'
-
 /** Whether a source is a page, a layout, an error page or a component. */
 export type FileKind = 'page' | 'layout' | 'error' | 'component'
 
 /**
  * Whether the `.abide` at `path` is a page, a layout, an error page or a component.
  *
- * AN ADDRESS RATHER THAN A NAME. Both halves are load-bearing: the file name is the address and
- * the directory is what says the address is a ROUTE rather than a component filed anywhere. One
- * test for every name (35.1 reads `layout.abide` the same way), so the directory half cannot be
- * got right for one and wrong for another — and one test for every reader: the build's routes,
- * the checker's `Routes` and the `route.params` a page is typed by.
+ * AN ADDRESS RATHER THAN A NAME. The file name says which of the three it is, and only a file
+ * whose place is an `address` (`placeOf`) is one: a `page.abide` under a `server` directory is a
+ * component.
+ * One test for every reader: the build's routes, the checker's `Routes` and the `route.params` a
+ * page is typed by.
  *
- * 23.3 — under `ui/pages/` and nowhere else: a `page.abide` filed in some other `pages/`
- * directory is a component, as it is to the `Routes` the checker declares. `path` may be relative
- * to the app or the project, or absolute.
+ * `path` is RELATIVE TO THE APP'S ROOT: its directories are its route, so an absolute path would
+ * read the machine's directories as the app's.
  */
 export function fileKind(path: string): FileKind {
-    if (routesAt(path) === -1) return 'component'
+    if (placeOf(path) !== 'address') return 'component'
     // The WHOLE basename: `homepage.abide` ends with `page.abide` and is a component.
     const name = path.slice(path.lastIndexOf('/') + 1)
     if (name === 'page.abide') return 'page'
@@ -67,30 +66,50 @@ export function fileKind(path: string): FileKind {
     return name === 'error.abide' ? 'error' : 'component'
 }
 
+/** Where a file sits in an app, which is what it is to every reader (`placeOf`). */
+export type Place = 'address' | 'server' | 'public' | 'dependency' | 'skipped'
+
 /**
- * The route literal a page file is filed under, read off its path below `ui/pages/`.
+ * Where the file at `path`, relative to the app's root, sits — THE ONE ANSWER every walk, fence and
+ * emit reads, so no two of them disagree about a path.
  *
- * `page.abide` is an address rather than a name (CLAUDE.md), so the directories above it ARE the
- * route and the file itself contributes nothing.
- *
- * 23.3 — BELOW THE FIRST `ui/pages/`, which is the routes directory, and not below the last `pages/`:
- * a section an app files as `ui/pages/pages/` is the address `/pages`, and cutting at the last one
- * served `ui/pages/pages/add-a-page` at `/add-a-page` and gave `/` two pages.
+ * - `dependency` — 34.28: a package's, outside the root or under `node_modules`, whose directories
+ *   are its package's layout and none of the app's;
+ * - `skipped` — under a dot directory, which no walk of the app enters;
+ * - `server` or `public` — 23.15: under that reserved directory, the nearest to the root deciding
+ *   (23.16 refuses one inside the other);
+ * - `address` — 23.14: everywhere else, its directories the segments of its route.
  */
-export function routeOf(pagePath: string): string {
-    const at = routesAt(pagePath)
-    const tail = at === -1 ? pagePath : pagePath.slice(at + ROUTES.length)
-    const parts: string[] = []
-    for (const part of tail.split('/'))
-        if (part !== '' && !part.endsWith('.abide')) parts.push(part)
-    return `/${parts.join('/')}`
+export function placeOf(path: string): Place {
+    if (path.startsWith('../') || path.startsWith('/')) return 'dependency'
+    const parts = path.split('/')
+    // The last part is the file itself, which is never a directory.
+    for (let index = 0; index < parts.length - 1; index += 1) {
+        const part = parts[index] as string
+        if (part === 'node_modules') return 'dependency'
+        if (part.startsWith('.')) return 'skipped'
+        if (part === SERVER_DIRECTORY) return 'server'
+        if (part === PUBLIC_DIRECTORY) return 'public'
+    }
+    return 'address'
 }
 
-/** Where the first `ui/pages/` in `path` begins, as whole directories, or -1. */
-function routesAt(path: string): number {
-    if (path.startsWith(ROUTES)) return 0
-    const at = path.indexOf(`/${ROUTES}`)
-    return at === -1 ? -1 : at + 1
+/** Whether a walk of the app passes over the entry `name`: a dot file or directory, or `node_modules`. */
+export function skipped(name: string): boolean {
+    return name.startsWith('.') || name === 'node_modules'
+}
+
+/**
+ * The route a file answers at — its DIRECTORY's below the root, whatever its name.
+ *
+ * 23.14 — `media/[id]/page.abide` is `/media/[id]`, and so is every other file beside it, which is
+ * what lets a directory's handlers sit in as many files as an author likes (16.2). `path` is
+ * relative to the app's root, as `fileKind`'s is.
+ */
+export function routeOf(path: string): string {
+    const parts = path.split('/')
+    parts.pop()
+    return `/${parts.filter((part) => part !== '').join('/')}`
 }
 
 /**
@@ -107,25 +126,42 @@ function routesAt(path: string): number {
  * themselves, and `/x` ranked BELOW `/[[a]]/[[b]]` for the path `/x`: a static segment beaten by
  * two optionals, which is 30.9 exactly inverted. Both were live on the scalar this replaced.
  *
- * THE SHORTER PATTERN WINS A TIE, and only an exhausted prefix can produce one: every segment the
- * two share is the same kind, so what is left is the extra segments of the longer, which can only
- * be optional or rest or the two would not match one path. `/a` admits one address and
- * `/a/[[b]]` admits two, so the shorter is the narrower claim.
+ * WHERE ONE PATTERN ENDS, ITS END RANKS AS A SEGMENT: below a static or a required one and above an
+ * optional or a rest. `/a` admits one address and `/a/[[b]]` admits two, so the shorter is the
+ * narrower claim; but `/[[lang]]` and `/[[lang]]/about` both match `/about`, the longer by a static
+ * segment where the shorter spends `about` on an optional, so there the longer is.
  */
 export function compareRoutes(a: Segment[], b: Segment[]): number {
-    const shared = a.length < b.length ? a.length : b.length
-    for (let at = 0; at < shared; at += 1) {
-        const kind =
-            specificity(b[at] as Segment) - specificity(a[at] as Segment)
+    const longest = a.length > b.length ? a.length : b.length
+    for (let at = 0; at < longest; at += 1) {
+        const kind = specificity(b[at]) - specificity(a[at])
         if (kind !== 0) return kind
     }
-    return a.length - b.length
+    return 0
 }
 
-function specificity(segment: Segment): number {
-    if (segment.kind === 'static') return 3
-    if (segment.kind === 'required') return 2
+function specificity(segment: Segment | undefined): number {
+    if (segment === undefined) return 2
+    if (segment.kind === 'static') return 4
+    if (segment.kind === 'required') return 3
     return segment.kind === 'optional' ? 1 : 0
+}
+
+/**
+ * Whether `outer` is the front of `route`: a static segment by name, a parameter by kind.
+ *
+ * 35.1, 37.2 — what a layout wraps and what a route's hooks run over: the routes at or below its
+ * own, a parameter's name aside, so `/media/[id]` covers `/media/[slug]/edit`.
+ */
+export function coversRoute(outer: Segment[], route: Segment[]): boolean {
+    if (outer.length > route.length) return false
+    for (let at = 0; at < outer.length; at += 1) {
+        const one = outer[at] as Segment
+        const two = route[at] as Segment
+        if (one.kind !== two.kind) return false
+        if (one.kind === 'static' && one.name !== two.name) return false
+    }
+    return true
 }
 
 /**

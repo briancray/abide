@@ -18,7 +18,7 @@ export class List {
     region: Region
     rows: Row[]
     /**
-     * The async iterable last started, or null — so a re-run with the same iterable is not a new
+     * The async iterable last started, or null — so a rerun with the same iterable is not a new
      * source.
      */
     pumping: unknown
@@ -209,8 +209,8 @@ function settleList(
  * async subject writes no rows inline and the region arrives empty. The pump fills it.
  */
 function appendRows(list: List, source: AsyncIterable<unknown>): void {
-    // A RE-RUN IS NOT A NEW SOURCE. The subject is read inside a watch, so any other reactive
-    // the expression touches re-runs it with the SAME iterable — and emptying the list to pump an
+    // A RERUN IS NOT A NEW SOURCE. The subject is read inside a watch, so any other reactive
+    // the expression touches reruns it with the SAME iterable — and emptying the list to pump an
     // async generator that has already run to completion left the region blank for good.
     if (list.pumping === source) return
     // A NEW SOURCE IS A NEW LIST. What the last one appended is stopped and removed, or its

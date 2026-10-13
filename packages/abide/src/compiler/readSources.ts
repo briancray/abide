@@ -13,6 +13,8 @@ export type ParsedSource = {
     text: string
     file: AbideFile
     quiet: boolean
+    /** 23.19 — where a mounted package's file stands in the app; `undefined` for one at its own path. */
+    position: string | undefined
 }
 
 /** One `.abide` as the emitters and the checked lowering take it: parsed, and answered. */
@@ -25,7 +27,12 @@ export type ReadSource = ParsedSource & { answer: CheckerAnswer }
  * parsed around it — a quiet one's is nobody's. Without it the refusal is thrown, as a build stops.
  */
 export function parseSources(
-    sources: readonly { path: string; text: string; quiet?: boolean }[],
+    sources: readonly {
+        path: string
+        text: string
+        quiet?: boolean
+        position?: string
+    }[],
     refused?: Diagnosis[],
 ): ParsedSource[] {
     const parsed: ParsedSource[] = []
@@ -39,7 +46,13 @@ export function parseSources(
             if (!quiet) refused.push(refusal(source.path, thrown))
             continue
         }
-        parsed.push({ path: source.path, text: source.text, file, quiet })
+        parsed.push({
+            path: source.path,
+            text: source.text,
+            file,
+            quiet,
+            position: source.position,
+        })
     }
     return parsed
 }

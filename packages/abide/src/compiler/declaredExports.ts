@@ -189,8 +189,8 @@ async function declaringMethod(
       }
     | undefined
 > {
-    const declaration = await symbol.valueDeclaration?.resolve()
-    const call =
+    let declaration = await symbol.valueDeclaration?.resolve()
+    let call =
         declaration === undefined
             ? undefined
             : isVariableDeclaration(declaration)
@@ -198,6 +198,24 @@ async function declaringMethod(
               : isExportAssignment(declaration)
                 ? declaration.expression
                 : undefined
+    // 19.15 — A BINDING NAMING ANOTHER BINDING is the call that one was declared by: `export const
+    // named = drop` is `drop`'s handler under another name. Bounded, so a cycle the checker would
+    // refuse anyway cannot spin here.
+    for (
+        let hops = 0;
+        hops < 8 && call !== undefined && isIdentifier(call);
+        hops += 1
+    ) {
+        const bound = await checker.getSymbolAtLocation(call)
+        if (bound === undefined) return undefined
+        declaration = await (
+            await aliasedSymbol(checker, bound)
+        ).valueDeclaration?.resolve()
+        call =
+            declaration !== undefined && isVariableDeclaration(declaration)
+                ? declaration.initializer
+                : undefined
+    }
     if (call === undefined || !isCallExpression(call)) return undefined
     const callee = isPropertyAccessExpression(call.expression)
         ? call.expression.name
@@ -520,11 +538,10 @@ function describedAs(
 /**
  * What a handler call's inline `clients` declares for `surface`, or `undefined` where it does not.
  *
- * 20.4, 38.63 — written on the declaration, which is what the build can read without running it:
- * `ui: false` hands a browser no wrapper, and importing the handler from `#ui` is 16.29's compile
- * error; `cli: false` keeps it off the shell's listing, which reads the table the build wrote (38.7);
- * and an explicit `true` overrides 16.37's default. An options object built elsewhere, or a value
- * that is not a literal, is not read.
+ * 20.4, 38.62 — written on the declaration, which is what the build can read without running it:
+ * `ui: false` gives the file's browser copy no stand-in for it; `cli: false` keeps it off the
+ * shell's listing, which reads the table the build wrote (38.7); and an explicit `true` overrides
+ * 16.37's default. An options object built elsewhere, or a value that is not a literal, is not read.
  */
 function declaredFor(
     call: Node & { arguments?: readonly Node[] },

@@ -203,7 +203,7 @@ export function watchOver(
         // UNTRACKED, AND THE CLEAR IS WHAT MAKES IT SO. The sources are given rather
         // than discovered, but the effect still RUNS wherever it was reached from — a
         // `s.watch` opened inside a `watch` had its reads attributed to the OUTER
-        // reader, which then re-ran on a value it never read. A mirror is the same
+        // reader, which then reran on a value it never read. A mirror is the same
         // shape one turn up: it runs inside the mark walk, and 4.7 has the `transform`
         // it calls there running untracked.
         const previous = TRACKING.reader
@@ -219,7 +219,7 @@ export function watchOver(
             // subscribed to, so its landing is what runs this again.
             if (thrown instanceof NotLanded) return
             // 12.8: one that throws once usually throws every run, and a watch
-            // re-running into the same throw is a loop with a log line per iteration.
+            // rerunning into the same throw is a loop with a log line per iteration.
             reader.alive = false
             detach(reader)
             effectThrew(thrown)
@@ -242,7 +242,7 @@ export function watchOver(
 }
 
 /**
- * The bare form: runs `effect` as a tracked context, re-running when anything it read changes.
+ * The bare form: runs `effect` as a tracked context, rerunning when anything it read changes.
  *
  * UNOWNED — the caller holds the stop. `watch` is this handed to its owners (`owned`); a template
  * binding's `Scope` and a `{#try}`'s retry hold their own, and call this direct.

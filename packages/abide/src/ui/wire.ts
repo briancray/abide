@@ -1,5 +1,5 @@
 // 16.28 — A HANDLER, AS A BROWSER HOLDS IT. What a page imported as `getInvoice` is, in the bundle,
-// `wire('GET', '/__abide/rpc/invoices/getInvoice')`: the same declaration the server made, over a
+// `wire('GET', '/invoices/getInvoice')`: the same declaration the server made, over a
 // body that fetches rather than one that reads the database. So it is the same `Rpc` — the call
 // hands back a `Reactive`, the keyed face narrows by args, a mutation's `ttl` is 0 (16.7), and a
 // refusal narrows through `isError` — because it is built by the one `declare` both seams share.

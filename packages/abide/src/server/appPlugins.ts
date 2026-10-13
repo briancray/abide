@@ -3,7 +3,7 @@ import { appDirectories } from './appDirectories.ts'
 /**
  * The app's own bundler plugins, loaded from `bunfig.toml`'s `[serve.static] plugins`.
  *
- * 38.44 — declared where bun already has an app declare them, the key `bun-plugin-tailwind`
+ * 38.43 — declared where bun already has an app declare them, the key `bun-plugin-tailwind`
  * documents. `Bun.build` reads no bunfig, so both client builds read this one — in
  * `appDirectories`, as `config` finds the app's `package.json`.
  */

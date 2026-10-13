@@ -8,6 +8,14 @@ import {
     PositionTable,
 } from './PositionTable.ts'
 import type { AbideFile } from './parseAbide.ts'
+import {
+    attributedImports,
+    IMPORT_ATTRIBUTES,
+    type ImportBinding,
+    importStatements,
+    newlinesIn,
+    SOURCE_SUFFIX,
+} from './splitImports.ts'
 import type {
     Body,
     Branch,
@@ -37,6 +45,8 @@ export type Span = { start: number; end: number }
 export type Projection = {
     text: string
     modules: Span
+    /** 34.20 — the `<script server>` bodies, module scope like `modules` and the server's alone. */
+    servers: Span
     scripts: Span
     /** Every template position, ascending, each with its kind — what the checker's tree is asked. */
     positions: PositionTable
@@ -83,6 +93,45 @@ export function projectShadow(file: AbideFile): Projection {
     return projection
 }
 
+type ImportStatement = ReturnType<typeof importStatements>[number]
+
+/** 34.26 — a binding as two blocks importing the same thing agree on it. */
+function bindingKey(
+    statement: ImportStatement,
+    binding: ImportBinding,
+): string {
+    return `${statement.specifier}|${statement.attributes}|${binding.imported}|${binding.local}`
+}
+
+/**
+ * 34.26 — what is left of an import once the bindings `drops` answers for are taken out:
+ * `undefined` where none is, `''` where every one is, and the statement over the rest otherwise,
+ * spelled from its tokens.
+ */
+function keptImport(
+    statement: ImportStatement,
+    drops: (statement: ImportStatement, binding: ImportBinding) => boolean,
+): string | undefined {
+    const parts: string[] = []
+    const named: string[] = []
+    for (const binding of statement.bindings) {
+        if (drops(statement, binding)) continue
+        // The default's own slot and a namespace stand outside the braces; `{ default as x }` in.
+        if (
+            (binding.imported === 'default' &&
+                binding.written === binding.local) ||
+            binding.imported === '*'
+        )
+            parts.push(binding.written)
+        else named.push(binding.written)
+    }
+    const kept = parts.length + named.length
+    if (kept === statement.bindings.length) return undefined
+    if (kept === 0) return ''
+    if (named.length > 0) parts.push(`{ ${named.join(', ')} }`)
+    return `import ${statement.typeOnly ? 'type ' : ''}${parts.join(', ')} from '${statement.specifier}'${statement.attributes === '' ? '' : ` ${statement.attributes}`}`
+}
+
 function project(file: AbideFile): Projection {
     const origins: Origin[] = []
     // 34.13 — scaffolding ahead of every block, so each one and the template are in their scope.
@@ -102,17 +151,115 @@ function project(file: AbideFile): Projection {
     }
 
     // Blocks of one kind, joined as the file wrote them, each run placed where it stood.
-    const blocks = (bodies: string[], starts: number[]): Span => {
+    const blocks = (
+        bodies: string[],
+        starts: number[],
+        drops: (statement: ImportStatement, binding: ImportBinding) => boolean,
+    ): Span => {
         const start = text.length
         for (let at = 0; at < bodies.length; at += 1) {
             if (at > 0) text += '\n'
-            copied(bodies[at] as string, starts[at])
+            script(bodies[at] as string, starts[at], drops)
         }
         return { start, end: text.length }
     }
-    const modules = blocks(file.modules, file.origins.modules)
+    // 34.25 — a block copied as written, save that a `.abide` imported as text names the module
+    // holding its text, and loses the attribute bun would otherwise read that module as text by.
+    //
+    // 34.26 — and a binding a `<script server>` and the file's `<script module>` or `<script>` both
+    // import is written once: the server's module holds the other blocks' imports too, and written
+    // twice it was a duplicate binding. `drops` says which copy goes. A blank line per line it
+    // spanned keeps the block line for line with the file.
+    const script = (
+        body: string,
+        origin: number | undefined,
+        drops: (statement: ImportStatement, binding: ImportBinding) => boolean,
+    ): void => {
+        const edits: { start: number; end: number; written: string }[] = []
+        for (const one of attributedImports(body, 'text'))
+            edits.push({
+                start: one.literalStart,
+                end: one.end,
+                written: `'${one.specifier}${SOURCE_SUFFIX}'`,
+            })
+        // 23.19 — a mount is the build's to read, and no module of the checker's or bun's.
+        for (const one of attributedImports(body, 'routes'))
+            edits.push({
+                start: one.start,
+                end: one.end,
+                written: `;${'\n'.repeat(newlinesIn(body, one.start, one.end))}`,
+            })
+        for (const one of importStatements(body)) {
+            const kept = keptImport(one, drops)
+            if (kept === undefined) continue
+            edits.push({
+                start: one.start,
+                end: one.end,
+                written: `${kept === '' ? ';' : kept}${'\n'.repeat(newlinesIn(body, one.start, one.end))}`,
+            })
+        }
+        edits.sort((one, two) => one.start - two.start)
+        let from = 0
+        for (const edit of edits) {
+            if (edit.start < from) continue
+            copied(
+                body.slice(from, edit.start),
+                origin === undefined ? undefined : origin + from,
+            )
+            place(origin === undefined ? undefined : origin + edit.start, 0)
+            text += edit.written
+            from = edit.end
+        }
+        copied(
+            body.slice(from),
+            origin === undefined ? undefined : origin + from,
+        )
+    }
+    // 34.26 — per binding the blocks both sides run import, whether one of them imports a value;
+    // and the bindings the server block imports as values.
+    const shared = new Map<string, boolean>()
+    for (const body of [...file.modules, ...file.scripts])
+        for (const one of importStatements(body))
+            for (const binding of one.bindings) {
+                const key = bindingKey(one, binding)
+                shared.set(key, shared.get(key) === true || !binding.typeOnly)
+            }
+    const serverValues = new Set<string>()
+    for (const body of file.servers)
+        for (const one of importStatements(body))
+            for (const binding of one.bindings)
+                if (!binding.typeOnly)
+                    serverValues.add(bindingKey(one, binding))
+    // A TYPE-ONLY IMPORT NEVER STANDS FOR A VALUE ONE: erased, it binds nothing at run time, so where
+    // the server block imports the value, it is the other block's type-only copy that goes.
+    const typeOnlyOfServerValue = (
+        statement: ImportStatement,
+        binding: ImportBinding,
+    ): boolean =>
+        binding.typeOnly && serverValues.has(bindingKey(statement, binding))
+    const modules = blocks(
+        file.modules,
+        file.origins.modules,
+        typeOnlyOfServerValue,
+    )
     text += '\n;\n'
-    const scripts = blocks(file.scripts, file.origins.scripts)
+    const servers = blocks(
+        file.servers,
+        file.origins.servers,
+        (statement, binding) => {
+            const value = shared.get(bindingKey(statement, binding))
+            if (value === undefined || (value === false && !binding.typeOnly))
+                return false
+            if (value && !binding.typeOnly) refuseTwoFaces(statement, binding)
+            return true
+        },
+    )
+    text += '\n;\n'
+    const scripts = blocks(
+        file.scripts,
+        file.origins.scripts,
+        typeOnlyOfServerValue,
+    )
     const scriptsText = text.slice(scripts.start, scripts.end)
     text += '\n'
     const positions: Position[] = []
@@ -161,7 +308,7 @@ function project(file: AbideFile): Projection {
     // 32.17 — A COMPONENT TAG IS A CALL, AND IT IS PROJECTED AS ONE: the name it invokes, handed the
     // record the build hands it (`invocationProps`), so the checker holds each value to the prop the
     // child declares (33.4), reports a name nobody imported, and answers a hover or a jump on the
-    // tag with the import's (38.40). Spreads first and explicit keys after, which is the order 33.12
+    // tag with the import's (38.39). Spreads first and explicit keys after, which is the order 33.12
     // resolves them in.
     const invocation = (node: ElementNode): void => {
         // 32.36 — CALLED OPTIONALLY, so a value that may be absent is checked as one that may
@@ -386,8 +533,17 @@ function project(file: AbideFile): Projection {
                 ),
             )
             text += ')\n'
-            text += `for (const ${node.item} of ${ROWS_OF}(${subject})) {\n`
-            if (node.index !== '') text += `const ${node.index} = 0\n`
+            // 38.39 — the item and the index copied from where they stand, so a hover on either is
+            // the binding's. The index is a `number`: `= 0` alone types it the literal `0`.
+            const bound = file.origins.bindings.get(node)
+            text += 'for (const '
+            copied(node.item, bound?.item)
+            text += ` of ${ROWS_OF}(${subject})) {\n`
+            if (node.index !== '') {
+                text += 'const '
+                copied(node.index, bound?.index)
+                text += ': number = 0\n'
+            }
             // `inBody` but for the key, which stands after the row's setup and before its nodes.
             setup(node.setup)
             declare(node.components)
@@ -402,6 +558,9 @@ function project(file: AbideFile): Projection {
     }
     declare(file.components)
     walk(file.head)
+    // 35.17 — the document's attributes are read as any element's are.
+    if (file.document !== undefined)
+        walk([file.document.html, file.document.body])
     walk(file.template)
     if (subjects > 0) text += ROWS_OF_DECLARATION
     if (inlineProps) text += INLINE_PROPS_IMPORT
@@ -410,11 +569,14 @@ function project(file: AbideFile): Projection {
     // does not parse; a `<script module>` is module scope, where it would, and holds the import of
     // every file that reaches it until it settles — the render waiting on it in all but name.
     refuseTopLevelAwait(file.modules.join('\n'), '<script module>')
+    refuseTopLevelAwait(file.servers.join('\n'), '<script server>')
     refuseTopLevelAwait(scriptsText, '<script>')
     refuseInstanceExport(scriptsText)
+    refuseServerDefault(file.servers.join('\n'))
     return {
         text,
         modules,
+        servers,
         scripts,
         positions: new PositionTable(positions),
         slots,
@@ -568,6 +730,50 @@ function refuseInstanceExport(source: string): void {
         else if (depth === 0 && text === EXPORT && previous !== '.')
             throw new Error(
                 "abide: a <script> cannot export — it runs once per instance, and an export is the module's. Move the declaration to <script module>. RULEBOOK 34.18.",
+            )
+        previous = text
+    }
+}
+
+/**
+ * 34.22 — a `<script server>` exporting `default`, refused: the module's default is its component,
+ * and a handler is addressed by its name (16.2).
+ */
+/**
+ * 34.26 — throws where the binding both blocks import is a `.abide`'s default or namespace: the
+ * server block's is the function binding its props (34.16) and the other block's is the module it
+ * compiles to (32.17), and one name in one module scope cannot hold both.
+ */
+function refuseTwoFaces(
+    statement: ImportStatement,
+    binding: ImportBinding,
+): void {
+    if (
+        statement.specifier.endsWith('.abide') &&
+        !IMPORT_ATTRIBUTES.text.test(statement.attributes) &&
+        (binding.imported === 'default' || binding.imported === '*')
+    )
+        throw new Error(
+            `abide: <script server> imports ${binding.local} from '${statement.specifier}' as another script block of its file does — a server block's .abide is the function binding its props (34.16), the other block's is its module (32.17), and one name cannot be both. Import it under another name in the <script server>. RULEBOOK 34.26.`,
+        )
+}
+
+function refuseServerDefault(source: string): void {
+    if (!source.includes(EXPORT)) return
+    let depth = 0
+    let previous = ''
+    for (const token of tokenize(source)) {
+        const text = token.text
+        if (text === '{' || text === '(' || text === '[') depth += 1
+        else if (text === '}' || text === ')' || text === ']') depth -= 1
+        // `export { x as default }` names it too.
+        else if (
+            text === 'default' &&
+            ((depth === 0 && previous === EXPORT) ||
+                (depth === 1 && previous === 'as'))
+        )
+            throw new Error(
+                "abide: a <script server> cannot export `default` — the module's default is its component. Export the handler under a name; the name is its address's last segment. RULEBOOK 34.22.",
             )
         previous = text
     }
