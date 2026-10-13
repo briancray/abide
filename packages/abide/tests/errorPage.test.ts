@@ -36,25 +36,28 @@ const missing = undefined as unknown as { boom: string }
 <p>{missing.boom} {failure.data.path}</p>`
 
 // 16.38 — handlers a form posts to with no script on the page.
-const FORMS = `import { POST, redirect, refuse } from '@abide/abide/server'
+const SAVE = `import { POST, refuse } from '@abide/abide/server'
 
-export const save = POST(({ amount }: { amount: string | string[] }) =>
+export default POST(({ amount }: { amount: string | string[] }) =>
     Number(amount) > 0 ? { saved: amount } : refuse(422, 'The amount has to be above zero.'),
 )
+`
 
-export const move = POST(() => redirect('/elsewhere', 303))
+const MOVE = `import { POST, redirect } from '@abide/abide/server'
+
+export default POST(() => redirect('/elsewhere', 303))
 `
 
 // 41.1, 35.2 — A DETAIL PAGE WHOSE RECORD IS NOT THERE. The handler refuses, the page reads the
 // refusal while it is built, and nothing of the document has gone out yet.
-const RECORDS = `import { GET, notFound } from '@abide/abide/server'
+const RECORD = `import { GET, notFound } from '@abide/abide/server'
 
-export const record = GET(({ id }: { id: number }) => (id === 1 ? { title: 'The first record' } : notFound()))
+export default GET(({ id }: { id: number }) => (id === 1 ? { title: 'The first record' } : notFound()))
 `
 
 const RECORD_PAGE = `<script>
 import { reactive, route } from '@abide/abide'
-import { record } from '#src/records/records.abide'
+import record from '#src/records/record.ts'
 
 const found = reactive(() => record({ id: Number(route.params().id) }))
 </script>
@@ -67,21 +70,17 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': '<main>home</main>',
+        'index.abide': '<main>home</main>',
         'error.abide': ROOT_ERROR,
-        'invoices/[id]/page.abide': '<main>an invoice</main>',
+        'invoices/[id]/index.abide': '<main>an invoice</main>',
         'invoices/error.abide': SECTION_ERROR,
         'broken/error.abide': BROKEN_ERROR,
-        'tax returns/page.abide': '<main>tax returns</main>',
-        'tax returns/error.abide':
-            '<h1 id="encoded">No such return</h1>',
-        'forms/forms.abide': `<script server>
-${FORMS}</script>
-`,
-        'records/records.abide': `<script server>
-${RECORDS}</script>
-`,
-        'records/[id]/page.abide': RECORD_PAGE,
+        'tax returns/index.abide': '<main>tax returns</main>',
+        'tax returns/error.abide': '<h1 id="encoded">No such return</h1>',
+        'forms/save.ts': SAVE,
+        'forms/move.ts': MOVE,
+        'records/record.ts': RECORD,
+        'records/[id]/index.abide': RECORD_PAGE,
         'records/error.abide': `<script>
 import { props, type Failed } from '@abide/abide'
 
@@ -89,7 +88,7 @@ const { failure } = props<{ failure: Failed<string, unknown> }>()
 </script>
 
 <h1 id="records">No such record ({failure.status})</h1>`,
-        'thrown/page.abide': `<script>
+        'thrown/index.abide': `<script>
 const missing = undefined as unknown as { boom: string }
 </script>
 

@@ -8,7 +8,7 @@ import { spawned } from 'harness/gate'
 import { BRIDGE_PATH } from '../../bridge/src/bridge.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
 import { BRIDGE_ADDRESS } from '../src/shared/ADDRESSES.ts'
-import { lastLinePrinted, serveApp } from './builtApp.ts'
+import { handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const FIXTURES = new URL('./fixtures/assistant/', import.meta.url).pathname
@@ -19,7 +19,7 @@ const SERVER = new URL('../src/server', import.meta.url).pathname
 
 const INVOICES = `import { cookies, POST } from '@abide/abide/server'
 
-export const whoami = POST(() => cookies().get('who') ?? 'nobody', { description: 'Who is asking.' })
+export default POST(() => cookies().get('who') ?? 'nobody', { description: 'Who is asking.' })
 `
 
 const ASK = `import { assistant, type AssistantMessage, claudeApi, claudeCode, GET, POST } from '@abide/abide/server'
@@ -69,13 +69,10 @@ beforeAll(async () => {
     }
     ;({ app, base, stop } = await serveApp(
         {
-            'page.abide': '<main>home</main>',
-            'invoices/invoices.abide': `<script server>
-${INVOICES}</script>
-`,
-            'assistant.abide': `<script server>
-${ASK}</script>
-`,
+            'index.abide': '<main>home</main>',
+            'invoices/whoami.ts': INVOICES,
+            // 16.2 — three handler files at the root, each re-exporting the module's binding.
+            ...handlerFiles('', ASK),
         },
         environment,
     ))
@@ -190,7 +187,12 @@ test('the relay answers 404 until the app mints a pairing code — 45.19, 36.7',
 test('both providers play one conversation as one event sequence, tools called as the asker — 45.2, 45.7, 45.17', async () => {
     const expected = [
         { type: 'text', text: 'checking' },
-        { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami', input: {} },
+        {
+            type: 'tool',
+            id: 'toolu_1',
+            name: 'post_invoices_whoami',
+            input: {},
+        },
         { type: 'result', id: 'toolu_1', text: '"ada"', failed: false },
         { type: 'text', text: 'saw "ada"' },
         { type: 'done', stop: 'end_turn', usage: { input: 3, output: 5 } },
@@ -210,7 +212,12 @@ test('both providers play one conversation as one event sequence, tools called a
 test('a conversation out of turns ends on max_turns without running the pending call — 45.11', async () => {
     expect(await events(await ask('one', 'api', 'who am I?', 1))).toEqual([
         { type: 'text', text: 'checking' },
-        { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami', input: {} },
+        {
+            type: 'tool',
+            id: 'toolu_1',
+            name: 'post_invoices_whoami',
+            input: {},
+        },
         { type: 'done', stop: 'max_turns', usage: { input: 1, output: 2 } },
     ])
 })

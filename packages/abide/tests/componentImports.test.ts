@@ -10,21 +10,19 @@ import { addressOf, appFixture, BIN, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const FILES = {
-    'components/Card.abide': `<script>
+    'lib/Card.abide': `<script>
 import { props } from '@abide/abide'
 
 const { name } = props<{ name: string }>()
 </script>
 <p>hello {name}</p>
 `,
-    'preview.abide': `<script server>
-import { GET, page, render } from '@abide/abide/server'
-import Card from '#src/components/Card.abide'
+    'preview.ts': `import { GET, page, render } from '@abide/abide/server'
+import Card from '#src/lib/Card.abide'
 
-export const preview = GET(async ({ name }: { name: string }) =>
+export default GET(async ({ name }: { name: string }) =>
     page(await render(Card({ name }), '<html><body></body></html>')),
 )
-</script>
 `,
 }
 const ADDRESS = '/preview?name=ada'

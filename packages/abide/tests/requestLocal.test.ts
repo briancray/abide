@@ -10,7 +10,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 // THE PAGE WRITES DURING ITS OWN RENDER, which is the one write a request makes that nothing else
 // can explain: with the value process-wide, the second request starts from the first one's count.
 const PAGE = `<script>
-import { visits } from '#src/ui/visits.ts'
+import { visits } from '#src/lib/visits.ts'
 
 visits.set(visits() + 1)
 </script>
@@ -22,8 +22,8 @@ let base = ''
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': PAGE,
-        'ui/visits.ts': `import { reactive } from '@abide/abide'\n\nexport const visits = reactive(0)\n`,
+        'index.abide': PAGE,
+        'lib/visits.ts': `import { reactive } from '@abide/abide'\n\nexport const visits = reactive(0)\n`,
     }))
 }, 30_000)
 

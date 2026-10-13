@@ -1,8 +1,10 @@
-// 23.14 — AN APP'S ADDRESSES ARE ITS DIRECTORIES: a page is a `page.abide` answering at its
-// directory's path below the root, a handler an export of a `<script server>` in any `.abide` of the
-// directory, and pages and handlers answer in one table of routes (19.1, 19.21). A `server` or
-// `public` directory is never an address (23.15, 23.16), and the first fences the server's graph
-// (16.29). A route's hooks run over it and what lies below it (37.1, 37.2).
+// 23.14 — AN APP'S ADDRESSES ARE ITS FILES' PATHS: a page is a `.abide` directly in an address
+// directory (23.21), an `index.abide` answering at its directory's path; a handler file is a `.ts`
+// there, answering at its own path (16.2); a `<script server>` declares private handlers below
+// `/__abide/handlers/` (16.70); and pages and handlers answer in one table of routes (19.1, 19.20).
+// A fence is never an address (23.15, 23.16), and `server` fences the server's graph (16.29). A
+// route's hooks run over it and what lies below it, a fenced file's at the route holding its fence
+// (37.1, 37.2, 16.72).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { checkApp } from '#compiler/checkApp.ts'
@@ -10,20 +12,10 @@ import { compileApp } from '#compiler/compileApp.ts'
 import { surfaceName } from '#server/surfaceOf.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { appFixture, buildApp, startApp } from './builtApp.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'
 
 afterAll(removeTemporaryModules)
-
-const PACKAGE = JSON.stringify({
-    name: 'routes-fixture',
-    type: 'module',
-    imports: { '#src/*': './*' },
-})
-
-function app(files: Record<string, string>): string {
-    return temporaryModule({ 'package.json': PACKAGE, ...files })
-}
 
 // A file holding nothing but a server block declaring `body`.
 const SERVED = (body: string): string =>
@@ -33,11 +25,11 @@ const SERVED = (body: string): string =>
 // the FILE's directory; `/media` is wrapped in no layout, against 1.
 test('a layout wraps the pages below its route — 35.1, 35.13, 23.14', async () => {
     const { routes } = await compileApp(
-        app({
+        appFixture({
             'layout.abide': '<slot/>',
-            'page.abide': '<p>home</p>',
-            'media/page.abide': '<p>media</p>',
-            'media/[id]/page.abide': '<p>one</p>',
+            'index.abide': '<p>home</p>',
+            'media/index.abide': '<p>media</p>',
+            'media/[id]/index.abide': '<p>one</p>',
             'media/[id]/layout.abide': SERVED(''),
             'media/layout.abide': '<slot/>',
         }),
@@ -52,15 +44,15 @@ test('a layout wraps the pages below its route — 35.1, 35.13, 23.14', async ()
 })
 
 // 35.14 — AN `error.abide` WITH NOTHING TO PAINT IS ITS ROUTE'S SERVER BLOCK ALONE, as a page
-// with nothing to paint is (23.3). THE REVERT: limit `paints` in `emitApp` to `page.abide`; the
+// with nothing to paint is (23.3). THE REVERT: limit `paints` in `compileApp` to pages; the
 // server's error table lists the hooks-only file, which would shadow every error page above it.
 test('an error.abide with neither template nor head answers for no page — 35.14', async () => {
     const { tables } = await compileApp(
-        app({
-            'page.abide': '<p>home</p>',
+        appFixture({
+            'index.abide': '<p>home</p>',
             'error.abide': '<p>root error</p>',
             'media/error.abide': SERVED(''),
-            'media/page.abide': '<p>media</p>',
+            'media/index.abide': '<p>media</p>',
         }),
     )
     const table = tables['server.ts'] as string
@@ -72,47 +64,50 @@ test('an error.abide with neither template nor head answers for no page — 35.1
     expect(errors).not.toContain('media/error.abide')
 })
 
-// 23.15 — `ui` IS A DIRECTORY LIKE ANY OTHER: a page in one has an address, and a server block may
-// import a module from one. THE REVERT: add `ui` back to `RESERVED_DIRECTORIES`;
-// `/ui` has no page, and the build refuses the page under it (23.18).
+// 23.15 — `ui` IS A DIRECTORY LIKE ANY OTHER: a page in one has an address, a `.ts` in one is a
+// handler file, and a server block may import a module from a `lib` under one. THE REVERT: add `ui`
+// back to `RESERVED_DIRECTORIES`; `/ui` has no page, and the build refuses the page under it (23.18).
 test('a ui directory is an ordinary one — 23.15', async () => {
-    const { routes } = await compileApp(
-        app({
-            'page.abide': '<p>home</p>',
-            'ui/page.abide': '<p>ui</p>',
-            'media/ui/format.ts':
+    const { routes, mounts } = await compileApp(
+        appFixture({
+            'index.abide': '<p>home</p>',
+            'ui/index.abide': '<p>ui</p>',
+            'media/ui/lib/format.ts':
                 'export const format = (n: number) => `${n}`\n',
-            'media/page.abide': SERVED(
-                "import { format } from './ui/format.ts'\n\nexport const count = GET(() => format(1))",
+            'media/ui/status.ts':
+                "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'up')\n",
+            'media/index.abide': SERVED(
+                "import { format } from './ui/lib/format.ts'\n\nconst count = GET(() => format(1))",
             ),
         }),
     )
     expect(routes.map((route) => route.pattern).sort()).toEqual(['/', '/ui'])
+    expect(mounts.map((mount) => mount.address)).toContain('/media/ui/status')
 })
 
 // 23.14 — A ROUTE IS THE APP'S OWN: a page a dependency ships is not one, nor one
-// under a dot directory. THE REVERT: list `sourcesUnder`'s files with `Bun.Glob('**/*.abide')`, as it
+// under a dot directory. THE REVERT: list `appFiles`'s files with `Bun.Glob('**/*.abide')`, as it
 // once did; the scaffold a package carries answers at `/node_modules/kit/scaffold`.
 test("a page inside node_modules is not the app's — 23.14", async () => {
     const { routes } = await compileApp(
-        app({
-            'page.abide': '<p>home</p>',
-            'node_modules/kit/scaffold/page.abide': '<p>kit</p>',
-            '.cache/page.abide': '<p>cached</p>',
+        appFixture({
+            'index.abide': '<p>home</p>',
+            'node_modules/kit/scaffold/index.abide': '<p>kit</p>',
+            '.cache/index.abide': '<p>cached</p>',
         }),
     )
     expect(routes.map((route) => route.pattern)).toEqual(['/'])
 })
 
 // 35.12 — one layout to a route, parameter names aside: `[id]` and `[slug]` are one route. THE
-// REVERT: drop the `held` check in `emitApp`; the build succeeds with the route wrapped twice.
+// REVERT: drop the `held` check in `compileApp`; the build succeeds with the route wrapped twice.
 test('two layouts at one route are refused, naming both — 35.12', async () => {
     const refused = await refusal(
         compileApp(
-            app({
+            appFixture({
                 'media/[id]/layout.abide': '<slot/>',
                 'media/[slug]/layout.abide': '<slot/>',
-                'media/[id]/page.abide': '<p>media</p>',
+                'media/[id]/index.abide': '<p>media</p>',
             }),
         ),
     )
@@ -121,49 +116,56 @@ test('two layouts at one route are refused, naming both — 35.12', async () => 
     expect(refused).toContain('media/[slug]/layout.abide')
 })
 
-// 16.2, 23.14 — EVERY FILE IN A DIRECTORY ANSWERS AT ITS ROUTE, so a directory's handlers sit in as
-// many files as its author likes and the file's name is never part of the address; 23.3 — a
-// `page.abide` with nothing to paint is no page. THE REVERT: read a handler's route off its file's
-// name in `routeOf`; `addComment` answers at `/media/[id]/comments/addComment`.
-test("a directory's handlers answer at its route from whichever file declares them — 16.2, 23.3, 23.14", async () => {
+// 16.2, 16.70, 23.14 — A HANDLER FILE ANSWERS AT ITS OWN PATH, and a private handler below
+// `/__abide/handlers/` at its file's path, brackets dropped, and its binding's name — taking no
+// parameter from the path, and filed at its file's route, or for one under a `lib`, at the route
+// holding it (37.1); 23.3 — a page with nothing to paint is no page. THE REVERTS: route a handler
+// file by its directory in `routeOf`; `save` answers at `/media/[id]`. Address a private handler
+// by its binding alone in `handlersUnder`; `rate` answers at `/__abide/handlers/rate`.
+test('a handler file answers at its path, and a private handler below /__abide/handlers — 16.2, 16.70, 23.3, 23.14', async () => {
     const { mounts, routes } = await compileApp(
-        app({
-            'media/[id]/page.abide': `${SERVED('export const save = POST(({ id }: { id: string }) => id)')}<p>one</p>`,
-            'media/[id]/comments.abide': SERVED(
-                'export const addComment = POST(({ id }: { id: string }) => id)',
-            ),
-            'admin/page.abide': SERVED('export const recent = GET(() => 1)'),
-            'layout.abide': SERVED('export const health = GET(() => 1)'),
+        appFixture({
+            'media/[id]/index.abide': `${SERVED('const rate = POST(() => 1)')}<p>one</p>`,
+            'media/[id]/save.ts':
+                "import { POST } from '@abide/abide/server'\n\nexport default POST(({ id }: { id: string }) => id)\n",
+            'media/[id]/comments/addComment.ts':
+                "import { POST } from '@abide/abide/server'\n\nexport default POST(({ id }: { id: string }) => id)\n",
+            'admin/lib/Panel.abide': `${SERVED('const recent = GET(() => 1)')}<p>panel</p>`,
+            'admin/index.abide': SERVED(''),
+            'health.ts':
+                "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1)\n",
         }),
     )
     const addresses: string[] = []
     for (const mount of mounts)
-        addresses.push(`${mount.method} ${mount.address}`)
+        addresses.push(
+            `${mount.method} ${mount.address} ${mount.private ? 'private' : 'public'} ${mount.scope}`,
+        )
     expect(addresses.sort()).toEqual([
-        'GET /admin/recent',
-        'GET /health',
-        'POST /media/[id]/addComment',
-        'POST /media/[id]/save',
+        'GET /__abide/handlers/admin/lib/Panel/recent private /admin',
+        'GET /health public /health',
+        'POST /__abide/handlers/media/id/index/rate private /media/[id]',
+        'POST /media/[id]/comments/addComment public /media/[id]/comments/addComment',
+        'POST /media/[id]/save public /media/[id]/save',
     ])
     expect(routes.map((route) => route.pattern)).toEqual(['/media/[id]'])
 })
 
 // 19.1 — ONE FILE PER METHOD PER ROUTE, two routes differing only in their parameters' names being one
-// route. THE REVERT: drop `refuseSharedRoutes` from `emitApp`; the build succeeds.
+// route. THE REVERT: drop `refuseSharedRoutes` from `compileApp`; the build succeeds.
 test('a page and a GET handler at one address are refused, parameter names aside — 19.1', async () => {
     const page = await refusal(
         compileApp(
-            app({
-                'media/[id]/save/page.abide': '<p>saving</p>',
-                'media/[slug]/actions.abide': SERVED(
-                    'export const save = GET(({ slug }: { slug: string }) => slug)',
-                ),
+            appFixture({
+                'media/[id]/save/index.abide': '<p>saving</p>',
+                'media/[slug]/save.ts':
+                    "import { GET } from '@abide/abide/server'\n\nexport default GET(({ slug }: { slug: string }) => slug)\n",
             }),
         ),
     )
     expect(page).toContain('19.1')
-    expect(page).toContain('media/[id]/save/page.abide')
-    expect(page).toContain('media/[slug]/actions.abide')
+    expect(page).toContain('media/[id]/save/index.abide')
+    expect(page).toContain('media/[slug]/save.ts')
 })
 
 // 16.67 — a parameter the handler's `Args` does not declare. THE REVERT: drop
@@ -172,10 +174,10 @@ test('a page and a GET handler at one address are refused, parameter names aside
 test('a handler whose args do not declare its route parameter is refused — 16.67', async () => {
     const refused = await refusal(
         compileApp(
-            app({
-                'media/[id]/page.abide': SERVED(
-                    'export const read = GET(() => 1)',
-                ),
+            appFixture({
+                'index.abide': '<p>home</p>',
+                'media/[id]/read.ts':
+                    "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1)\n",
             }),
         ),
     )
@@ -183,54 +185,71 @@ test('a handler whose args do not declare its route parameter is refused — 16.
     expect(refused).toContain('`id`')
 })
 
-// 19.22 — `export *` names nothing the build can read without running the module, so its handlers
-// were never mounted and what was not a handler escaped 19.15. THE REVERT: drop the star check from
-// `handlersUnder`; the build succeeds with no mount at all.
-test('a server block re-exporting with export * is refused — 19.22', async () => {
-    const refused = await refusal(
+// 34.17, 16.73 — `export *` IS AN EXPORT LIKE ANY OTHER: refused from a `.abide`'s server block, and
+// from a handler file beside its default, where each name it carries is an export of the file's
+// own. THE REVERTS: skip `export` in `projectShadow`'s `refuseExport`; the `.abide` builds. Refuse
+// only a default that is not a handler in `handlersUnder`'s 16.73 loop; the handler file builds,
+// `charge` and `helper` exported beside it.
+test('export * is refused from a server block and from a handler file — 34.17, 16.73', async () => {
+    const charges = `import { POST } from '@abide/abide/server'\n\nexport const charge = POST(() => 1)\nexport const helper = 2\n`
+    const block = await refusal(
         compileApp(
-            app({
-                'billing/server/charges.ts': `import { POST } from '@abide/abide/server'\n\nexport const charge = POST(() => 1)\nexport const helper = 2\n`,
-                'billing/page.abide': `<script server>\nexport * from './server/charges.ts'\n</script>\n\n<p>billing</p>`,
+            appFixture({
+                'billing/server/charges.ts': charges,
+                'billing/index.abide': `<script server>\nexport * from './server/charges.ts'\n</script>\n\n<p>billing</p>`,
             }),
         ),
     )
-    expect(refused).toContain('19.22')
-    expect(refused).toContain('billing/page.abide')
+    expect(block).toContain('34.17')
+    const file = await refusal(
+        compileApp(
+            appFixture({
+                'index.abide': '<p>home</p>',
+                'billing/server/charges.ts': charges,
+                'billing/charge.ts':
+                    "import { POST } from '@abide/abide/server'\n\nexport default POST(() => 1)\nexport * from './server/charges.ts'\n",
+            }),
+        ),
+    )
+    expect(file).toContain('16.73')
+    expect(file).toContain('billing/charge.ts')
 })
 
-// 34.21, 34.22 — a server block under a `server` or `public` directory has no address, and one is
-// addressed by name alone.
-// THE REVERTS: drop the throw in `appGraph`; drop `refuseServerDefault` from `projectShadow`.
-test('a server block under a server directory, and one exporting default, are refused — 34.21, 34.22', async () => {
+// 34.20, 34.17 — a server block under a `server` or `public` directory has no route to be filed at,
+// and a server block exports nothing, `default` included.
+// THE REVERTS: drop the throw in `appGraph`; skip `export` in `projectShadow`'s `refuseExport`.
+test('a server block under a server directory, and one exporting default, are refused — 34.20, 34.17', async () => {
     const outside = await refusal(
         compileApp(
-            app({
-                'page.abide': '<p>home</p>',
+            appFixture({
+                'index.abide': '<p>home</p>',
                 'media/server/Rating.abide': SERVED(
-                    'export const rate = POST(() => 1)',
+                    'const rate = POST(() => 1)',
                 ),
             }),
         ),
     )
-    expect(outside).toContain('34.21')
+    expect(outside).toContain('34.20')
     expect(outside).toContain('media/server/Rating.abide')
     const named = await refusal(
         compileApp(
-            app({ 'page.abide': SERVED('export default GET(() => 1)') }),
+            appFixture({
+                'index.abide': SERVED('export default GET(() => 1)'),
+            }),
         ),
     )
-    expect(named).toContain('34.22')
+    expect(named).toContain('34.17')
 })
 
-// 23.16, 23.17, 23.18 — what the tree may not hold: a reserved directory under another, a route
-// in abide's own namespace, and a page where nothing has an address. THE REVERTS: drop each throw
-// in `appFiles`'s `walk` (or `refuseFrameworkRoute`); its build succeeds.
-test('a reserved directory under another, a page under one, and an __abide route are refused — 23.16, 23.17, 23.18', async () => {
+// 23.16, 23.17, 23.18, 23.22 — what the tree may not hold: a fence under another, a route in abide's
+// own namespace, a page where nothing has an address, and a file directly in an address directory
+// that is neither a `.abide` nor a handler file. THE REVERTS: drop each throw in `appFiles`'s `walk`
+// (or `refuseFrameworkRoute`); its build succeeds.
+test('a fence under another, a page under one, an __abide route and a stray file are refused — 23.16, 23.17, 23.18, 23.22', async () => {
     const nested = await refusal(
         compileApp(
-            app({
-                'page.abide': '<p>home</p>',
+            appFixture({
+                'index.abide': '<p>home</p>',
                 'media/server/public/format.ts': 'export const format = 1\n',
             }),
         ),
@@ -239,18 +258,29 @@ test('a reserved directory under another, a page under one, and an __abide route
     expect(nested).toContain('media/server/public')
     const hidden = await refusal(
         compileApp(
-            app({
-                'page.abide': '<p>home</p>',
-                'media/server/page.abide': '<p>hidden</p>',
+            appFixture({
+                'index.abide': '<p>home</p>',
+                'media/server/index.abide': '<p>hidden</p>',
             }),
         ),
     )
     expect(hidden).toContain('23.18')
-    expect(hidden).toContain('media/server/page.abide')
+    expect(hidden).toContain('media/server/index.abide')
     const framework = await refusal(
-        compileApp(app({ '__abide/page.abide': '<p>mine</p>' })),
+        compileApp(appFixture({ '__abide/index.abide': '<p>mine</p>' })),
     )
     expect(framework).toContain('23.17')
+    const stray = await refusal(
+        compileApp(
+            appFixture({
+                'index.abide': '<p>home</p>',
+                'media/notes.json': '{}',
+            }),
+        ),
+    )
+    expect(stray).toContain('23.22')
+    expect(stray).toContain('media/notes.json')
+    expect(stray).toContain('lib')
 })
 
 // 16.29 — ANYTHING UNDER A `server` DIRECTORY, AT ANY DEPTH, is refused to the browser's bundle.
@@ -259,7 +289,7 @@ test('a reserved directory under another, a page under one, and an __abide route
 test('a page importing a module under a nested server directory fails the build — 16.29', async () => {
     const fixture = appFixture({
         'media/server/secret.ts': "export const SECRET = 'hunter2'\n",
-        'media/page.abide': `<script>\nimport { SECRET } from '#src/media/server/secret.ts'\n</script>\n\n<p>{SECRET}</p>`,
+        'media/index.abide': `<script>\nimport { SECRET } from '#src/media/server/secret.ts'\n</script>\n\n<p>{SECRET}</p>`,
     })
     const built = await buildApp(fixture)
     expect(built.exitCode).not.toBe(0)
@@ -267,7 +297,7 @@ test('a page importing a module under a nested server directory fails the build 
     expect(built.stderr).toContain('media/server/secret.ts')
 })
 
-// 16.29 — EVERY EDGE INTO `server/`, not only a module's: a file's text (34.25) and a component
+// 16.29 — EVERY EDGE INTO `server/`, not only a module's: a file's text (34.21) and a component
 // under it are as much the server's as a `.ts`. THE REVERT: register `fenceServer` after
 // `abideModules`; both build, the key and the component in the bundle.
 test('a page importing a server file as text, or a component under server, fails the build — 16.29', async () => {
@@ -284,7 +314,7 @@ test('a page importing a server file as text, or a component under server, fails
         const fixture = appFixture({
             'server/key.pem': 'BEGIN-PRIVATE-KEY\n',
             'server/Panel.abide': '<p>BEGIN-PRIVATE-PANEL</p>',
-            'page.abide': page,
+            'index.abide': page,
         })
         const built = await buildApp(fixture)
         expect(built.stderr).toContain('RULEBOOK 16.29')
@@ -298,8 +328,8 @@ test('a page importing a server file as text, or a component under server, fails
 // `file` path; the build fails with "must be absolute".
 test('an app with a page under a rest directory builds — 23.5', async () => {
     const fixture = appFixture({
-        'page.abide': '<p>home</p>',
-        'docs/[...rest]/page.abide': `<script>\nimport { reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n\n<button onclick={() => { count = count + 1 }}>rest-page {count}</button>`,
+        'index.abide': '<p>home</p>',
+        'docs/[...rest]/index.abide': `<script>\nimport { reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n\n<button onclick={() => { count = count + 1 }}>rest-page {count}</button>`,
     })
     const built = await buildApp(fixture)
     expect(built.stderr).not.toContain('must be absolute')
@@ -309,7 +339,7 @@ test('an app with a page under a rest directory builds — 23.5', async () => {
     ).json()) as {
         chunks: Record<string, string[]>
     }
-    const own = manifest.chunks['docs/[...rest]/page.abide']?.[0]
+    const own = manifest.chunks['docs/[...rest]/index.abide']?.[0]
     expect(own).toBeDefined()
     expect(await Bun.file(`${fixture}/.abide/client/${own}`).text()).toContain(
         'rest-page',
@@ -322,7 +352,7 @@ test("a dependency's server directory is not the app's fence — 16.29", async (
     const fixture = appFixture({
         'node_modules/kit/package.json': '{"name":"kit","type":"module"}',
         'node_modules/kit/server/clock.ts': 'export const TICK = 1\n',
-        'page.abide': `<script>
+        'index.abide': `<script>
 import { TICK } from 'kit/server/clock.ts'
 </script>
 
@@ -333,17 +363,19 @@ import { TICK } from 'kit/server/clock.ts'
     expect(built.exitCode).toBe(0)
 })
 
-// 34.20, 34.23 — THE BROWSER'S MODULE CARRIES A WRAPPER PER HANDLER AND NONE OF THE BLOCK: not the
-// secret its body holds, not the hooks it files. THE REVERT: emit `lowering.servers()` into the
-// client lane too; the secret and the `fileRoute` call reach the browser's module.
-test("a component's browser module carries its handlers' wrappers and none of its server block — 34.20, 34.23", async () => {
+// 34.19, 16.70 — THE BROWSER'S MODULE CARRIES A WRAPPER PER PRIVATE HANDLER AND NONE OF THE BLOCK:
+// the same binding, unexported, over the wire — not the secret its body holds, not the hooks it
+// files, which for a component under `lib` are filed at the route holding the fence (37.1). THE
+// REVERT: emit `lowering.servers()` into the client lane too; the secret and the `fileRoute` call
+// reach the browser's module.
+test("a component's browser module carries its private handlers' wrappers and none of its server block — 34.19, 16.70", async () => {
     const { files } = await compileApp(
-        app({
-            'media/[id]/Rating.abide': `<script server>
+        appFixture({
+            'media/[id]/lib/Rating.abide': `<script server>
 import { POST } from '@abide/abide/server'
 
 const KEY = 'sk-not-for-browsers'
-export const rate = POST(({ id, stars }: { id: string; stars: number }) => KEY.length + stars)
+const rate = POST(({ stars }: { stars: number }) => KEY.length + stars)
 </script>
 
 <script>
@@ -352,31 +384,33 @@ import { reactive } from '@abide/abide'
 let stars = reactive(0)
 </script>
 
-<button onclick={() => rate({ id: '1', stars })}>rate</button>`,
-            'media/[id]/page.abide': `<script>\nimport Rating from './Rating.abide'\n</script>\n\n<Rating/>`,
+<button onclick={() => rate({ stars })}>rate</button>`,
+            'media/[id]/index.abide': `<script>\nimport Rating from './lib/Rating.abide'\n</script>\n\n<Rating/>`,
         }),
     )
-    const client = files['media/[id]/Rating.abide']?.client ?? ''
-    expect(client).toContain('export const rate = __wire("POST"')
+    const client = files['media/[id]/lib/Rating.abide']?.client ?? ''
+    expect(client).toContain('const rate = __wire("POST"')
+    expect(client).toContain('../handlers/media/id/lib/Rating/rate')
+    expect(client).not.toContain('export const rate')
     expect(client).not.toContain('sk-not-for-browsers')
     expect(client).not.toContain('fileRoute')
-    const server = files['media/[id]/Rating.abide']?.server ?? ''
+    const server = files['media/[id]/lib/Rating.abide']?.server ?? ''
     expect(server).toContain('sk-not-for-browsers')
     expect(server).toContain('__fileRoute("/media/[id]")')
 })
 
-// 34.26 — ONE FILE, ONE MODULE SCOPE ON THE SERVER: a server block importing a name its `<script>`
+// 34.22 — ONE FILE, ONE MODULE SCOPE ON THE SERVER: a server block importing a name its `<script>`
 // imports is the one binding, which the browser's module carries alone — binding by binding, so a
 // statement importing one name both blocks use and one only the server does keeps the second.
 // THE REVERT: drop `shared` from `projectShadow`'s server blocks; the check reports `reactive` a
 // duplicate identifier twice.
-test('a server block importing what its <script> imports compiles as one binding — 34.26', async () => {
-    const root = app({
-        'page.abide': `<script server>
+test('a server block importing what its <script> imports compiles as one binding — 34.22', async () => {
+    const root = appFixture({
+        'index.abide': `<script server>
 import { GET } from '@abide/abide/server'
 import { reactive, refuse } from '@abide/abide'
 
-export const count = GET(({ n }: { n: number }) => (n > 0 ? reactive(n)() : refuse(400)))
+const count = GET(({ n }: { n: number }) => (n > 0 ? reactive(n)() : refuse(400)))
 </script>
 
 <script>
@@ -390,99 +424,99 @@ let n = reactive(2)
     const found = await checkApp(root)
     expect(found.filter((one) => one.category === 'error')).toEqual([])
     const { files } = await compileApp(root)
-    const server = files['page.abide']?.server ?? ''
+    const server = files['index.abide']?.server ?? ''
     expect(server.split("import { reactive } from '@abide/abide'").length).toBe(
         2,
     )
     // What only the server block imports is all of its statement that is left.
     expect(server).toContain("import { refuse } from '@abide/abide'")
-    expect(files['page.abide']?.client).toContain(
+    expect(files['index.abide']?.client).toContain(
         "import { reactive } from '@abide/abide'",
     )
 })
 
-// 34.26 — A TYPE-ONLY IMPORT NEVER STANDS FOR A VALUE ONE: the zod pattern imports the schema's type
+// 34.22 — A TYPE-ONLY IMPORT NEVER STANDS FOR A VALUE ONE: the zod pattern imports the schema's type
 // into the `<script>` and the schema itself into the server block. THE REVERT: key a binding with
 // its `type` modifier stripped in `projectShadow`; the server module imports no `Contact` and the
 // check reports TS1361.
-test('a type-only import in the <script> leaves the server block its value import — 34.26', async () => {
-    const root = app({
-        'schema.ts': `export const Contact = { parse: (value: unknown) => value }
+test('a type-only import in the <script> leaves the server block its value import — 34.22', async () => {
+    const root = appFixture({
+        'lib/schema.ts': `export const Contact = { parse: (value: unknown) => value }
 export type Contact = { name: string }`,
-        'page.abide': `<script>
-import type { Contact } from './schema.ts'
+        'index.abide': `<script>
+import type { Contact } from './lib/schema.ts'
 
 const empty: Contact = { name: '' }
 </script>
 
-${SERVED("import { Contact } from './schema.ts'\n\nexport const save = POST((a: unknown) => Contact.parse(a))")}
+${SERVED("import { Contact } from './lib/schema.ts'\n\nconst save = POST((a: unknown) => Contact.parse(a))")}
 <p>{empty.name}</p>`,
     })
     const found = await checkApp(root)
     expect(found.filter((one) => one.category === 'error')).toEqual([])
     const { files } = await compileApp(root)
-    expect(files['page.abide']?.server ?? '').toMatch(
-        /import \{ Contact \} from '\.\/schema\.ts'/,
+    expect(files['index.abide']?.server ?? '').toMatch(
+        /import \{ Contact \} from '\.\/lib\/schema\.ts'/,
     )
 })
 
-// 34.26, 34.16 — A `.abide`'s DEFAULT IS TWO FACES, the module to a `<script>` and a bound function
+// 34.22, 34.16 — A `.abide`'s DEFAULT IS TWO FACES, the module to a `<script>` and a bound function
 // to a server block, and one name in one module scope cannot hold both. THE REVERT: drop the
 // `.abide` refusal in `projectShadow`; the build passes and the handler's `Card(…)` is the module.
-test('a .abide default both a server block and its <script> import is refused — 34.26', async () => {
+test('a .abide default both a server block and its <script> import is refused — 34.22', async () => {
     const refused = await refusal(
         compileApp(
-            app({
-                'Card.abide': '<p>card</p>',
-                'page.abide': `${SERVED("import Card from './Card.abide'\n\nexport const preview = GET(() => Card({}))")}
+            appFixture({
+                'lib/Card.abide': '<p>card</p>',
+                'index.abide': `${SERVED("import Card from './lib/Card.abide'\n\nconst preview = GET(() => Card({}))")}
 <script>
-import Card from './Card.abide'
+import Card from './lib/Card.abide'
 </script>
 
 <Card />`,
             }),
         ),
     )
-    expect(refused).toContain('34.26')
+    expect(refused).toContain('34.22')
     expect(refused).toContain('Card')
 })
 
-// 34.26 — WHAT IS LEFT OF A SHARED STATEMENT IS READ OFF ITS TOKENS, never its collapsed text: a
+// 34.22 — WHAT IS LEFT OF A SHARED STATEMENT IS READ OFF ITS TOKENS, never its collapsed text: a
 // `//` comment in a multi-line import ran to the end of the one line it was folded into. THE
 // REVERT: rebuild the kept statement from `importStatements`' collapsed text; the server module
 // does not parse.
-test('a comment inside a shared multi-line import leaves a server module that parses — 34.26', async () => {
-    const root = app({
-        'x.ts': 'export const a = 1\nexport const b = 2',
-        'page.abide': `${SERVED(`import {
+test('a comment inside a shared multi-line import leaves a server module that parses — 34.22', async () => {
+    const root = appFixture({
+        'lib/x.ts': 'export const a = 1\nexport const b = 2',
+        'index.abide': `${SERVED(`import {
     a, // note
     b,
-} from './x.ts'
+} from './lib/x.ts'
 
-export const sum = GET(() => a + b)`)}
+const sum = GET(() => a + b)`)}
 <script>
-import { a } from './x.ts'
+import { a } from './lib/x.ts'
 </script>
 
 <p>{a}</p>`,
     })
     const { files } = await compileApp(root)
-    const server = files['page.abide']?.server ?? ''
+    const server = files['index.abide']?.server ?? ''
     expect(() =>
         new Bun.Transpiler({ loader: 'ts' }).scan(server),
     ).not.toThrow()
-    expect(server).toMatch(/import \{ b \} from '\.\/x\.ts'/)
+    expect(server).toMatch(/import \{ b \} from '\.\/lib\/x\.ts'/)
 })
 
-// 34.26 — A DEFAULT IS ONE BINDING LIKE ANY OTHER, merged where a statement also names more. THE
+// 34.22 — A DEFAULT IS ONE BINDING LIKE ANY OTHER, merged where a statement also names more. THE
 // REVERT: compare a statement holding a default by its whole text; the check reports `X` a
 // duplicate identifier.
-test('a default import both blocks make merges beside the names only one makes — 34.26', async () => {
-    const root = app({
-        'x.ts': 'export default 1\nexport const y = 2',
-        'page.abide': `${SERVED("import X, { y } from './x.ts'\n\nexport const total = GET(() => X + y)")}
+test('a default import both blocks make merges beside the names only one makes — 34.22', async () => {
+    const root = appFixture({
+        'lib/x.ts': 'export default 1\nexport const y = 2',
+        'index.abide': `${SERVED("import X, { y } from './lib/x.ts'\n\nconst total = GET(() => X + y)")}
 <script>
-import X from './x.ts'
+import X from './lib/x.ts'
 </script>
 
 <p>{X}</p>`,
@@ -490,43 +524,41 @@ import X from './x.ts'
     const found = await checkApp(root)
     expect(found.filter((one) => one.category === 'error')).toEqual([])
     const { files } = await compileApp(root)
-    const server = files['page.abide']?.server ?? ''
-    expect(server.split("import X from './x.ts'").length).toBe(2)
-    expect(server).toMatch(/import \{ y \} from '\.\/x\.ts'/)
+    const server = files['index.abide']?.server ?? ''
+    expect(server.split("import X from './lib/x.ts'").length).toBe(2)
+    expect(server).toMatch(/import \{ y \} from '\.\/lib\/x\.ts'/)
 })
 
-// 34.17 — A `<script module>` EXPORTS TO THE BROWSER whether or not the file has anything live: a
-// store built over the handlers beside it is imported for that alone. THE REVERT: return early from
-// `emitClient` on nothing live, as before; the browser's module carries no `settingsStore`.
-test('a static file still exports its module block to the browser — 34.17', async () => {
-    const { files } = await compileApp(
-        app({
-            'page.abide': `<script>\nimport { settingsStore } from './settings.abide'\n\nsettingsStore('volume')\n</script>\n\n<p>home</p>`,
-            'settings.abide': `${SERVED('export const readSetting = GET(({ name }: { name: string }) => name)')}
-<script module>
+// 34.17 — A `<script module>` EXPORTS NOTHING EITHER: a value two files share is a module under
+// `lib`. THE REVERT: skip the `<script module>` in `projectShadow`'s `refuseExport`; the build
+// succeeds and `settingsStore` is exported beside the component.
+test('a <script module> export is refused — 34.17', async () => {
+    const refused = await refusal(
+        compileApp(
+            appFixture({
+                'index.abide': `<script module>
 export function settingsStore(name: string) {
-    return () => readSetting({ name })
+    return () => name
 }
 </script>
-`,
-        }),
+
+<p>home</p>`,
+            }),
+        ),
     )
-    const client = files['settings.abide']?.client ?? ''
-    expect(client).toContain('export function settingsStore')
-    expect(client).toContain('export const readSetting = __wire("GET"')
+    expect(refused).toContain('34.17')
 })
 
-// 34.23 — A HANDLER IMPORTED FROM A `.abide` IS TYPED, so what its call answers reads by name as a
-// `.ts` module's would. THE REVERT: drop the `.abide.d.ts` branch from `TypeSession.standIn`; the
-// import reaches the wildcard declaration, which carries the default alone, and the read is refused.
-test("a page reads a sibling file's handler by name, typed — 34.23", async () => {
+// 16.74 — A HANDLER IMPORTED FROM A HANDLER FILE IS TYPED, so what its call answers reads by name as
+// any `.ts` module's would. THE REVERT: type a handler file's import through the wildcard
+// declaration rather than the file itself; the read is refused.
+test("a page reads a handler file's answer by name, typed — 16.74", async () => {
     const found = await checkApp(
-        app({
-            'policy.abide': SERVED(
-                'export const getPolicy = GET(() => ({ retries: 3 }))',
-            ),
-            'page.abide': `<script>
-import { getPolicy } from './policy.abide'
+        appFixture({
+            'getPolicy.ts':
+                "import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ retries: 3 }))\n",
+            'index.abide': `<script>
+import getPolicy from './getPolicy.ts'
 
 const policy = getPolicy()
 const retries: number = policy.retries
@@ -560,7 +592,7 @@ test('a call writes its route parameters into the path — 16.9', () => {
 })
 
 // THE SERVED APP, for what only answers over the wire: a parameter reaching a handler (16.65), one
-// sent twice (16.66), the most specific route answering the method (19.21), a 405 naming what is
+// sent twice (16.66), the most specific route answering the method (19.20), a 405 naming what is
 // answered (15.17), a public directory mounted by the path above it (36.11), and the hooks a route
 // files (37.2, 37.5).
 let base = ''
@@ -568,20 +600,17 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     const fixture = appFixture({
-        'page.abide': '<p>home</p>',
-        'media/[id]/page.abide': '<p id="page">a film</p>',
-        'media/new/page.abide': SERVED(
-            'export const made = POST(({ title }: { title: string }) => ({ made: title }))',
-        ),
-        'media/[id]/notes.abide': SERVED(
-            'export const note = POST(({ id, note }: { id: number; note: string }) => ({ id, note }))\nexport const read = GET(({ id }: { id: number }) => ({ id, type: typeof id }))',
-        ),
+        'index.abide': '<p>home</p>',
+        'media/[id]/index.abide': '<p id="page">a film</p>',
+        'media/new.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ title }: { title: string }) => ({ made: title }))\n`,
+        'media/[id]/note.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ id, note }: { id: number; note: string }) => ({ id, note }))\n`,
+        'media/[id]/read.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(({ id }: { id: number }) => ({ id, type: typeof id }))\n`,
         'media/public/poster.txt': 'a poster',
         // 35.2 — an error page answers for its own route and what lies below it.
         'shelf/error.abide': '<p id="error">the shelf</p>',
         'shelf/[id]/error.abide': '<p id="error">one book</p>',
-        'shelf/[id]/page.abide': '<p>a book</p>',
-        'shelf/new/page.abide':
+        'shelf/[id]/index.abide': '<p>a book</p>',
+        'shelf/new.abide':
             "<script>\nthrow new Error('no new books')\n</script>\n\n<p>new</p>",
         // 37.2, 37.5 — a guard over `/vault` and what is below it, and the errors there.
         'vault/layout.abide': `<script server>
@@ -594,35 +623,31 @@ middleware((next, { request }) =>
 onError((error) => void seen.push(\`vault: \${(error as Error).message}\`))
 </script>
 `,
-        'vault/page.abide': `<script server>
-import { GET } from '@abide/abide/server'
-
-export const gold = GET(() => 'gold')
-export const blowUp = GET(() => {
+        'vault/index.abide': '<p>vault</p>',
+        'vault/gold.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'gold')\n`,
+        'vault/blowUp.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => {
     throw new Error('the vault blew up')
 })
-</script>
-
-<p>vault</p>`,
+`,
         'vault/server/seen.ts': 'export const seen: string[] = []\n',
         // 30.3, 15.8 — a render calling a handler with a path parameter no address carries, and
         // painting its refusal, beside a count of the handler's runs.
-        'comments/[id]/thread.abide': `<script server>
-import { GET } from '@abide/abide/server'
+        'comments/[id]/getComments.ts': `import { GET } from '@abide/abide/server'
 import { runs } from '../../server/runs.ts'
 
-export const getComments = GET(({ id }: { id: string }) => {
+export default GET(({ id }: { id: string }) => {
     runs.count += 1
     return [id]
 })
-</script>
 `,
         'server/runs.ts': 'export const runs = { count: 0 }\n',
-        'commentRuns.abide': SERVED(
-            "import { runs } from './server/runs.ts'\n\nexport const commentRuns = POST(() => runs.count)",
-        ),
-        'uncommented/page.abide': `<script>
-import { getComments } from '../comments/[id]/thread.abide'
+        'commentRuns.ts': `import { POST } from '@abide/abide/server'
+import { runs } from './server/runs.ts'
+
+export default POST(() => runs.count)
+`,
+        'uncommented/index.abide': `<script>
+import getComments from '../comments/[id]/getComments.ts'
 
 const blank = getComments({ id: '' })
 </script>
@@ -640,34 +665,57 @@ middleware((next, { request }) => {
 })
 </script>
 `,
-        'lobby/page.abide': `<script server>
-import { cookies, GET, request } from '@abide/abide/server'
+        'lobby/index.abide': '<p>lobby</p>',
+        'lobby/badge.ts': `import { cookies, GET, request } from '@abide/abide/server'
 
-export const badge = GET(() => ({
+export default GET(() => ({
     header: request().headers.get('x-badge'),
     cookie: cookies().get('pass') ?? null,
 }))
-</script>
-
-<p>lobby</p>`,
-        // 16.69 — two handlers under a rest, each answering at its own name.
-        'docs/[...path]/actions.abide': `<script server>
-import { POST } from '@abide/abide/server'
-
-export const save = POST(({ path }: { path: string[] }) => ({ saved: path }))
-export const remove = POST(({ path }: { path: string[] }) => ({ removed: path }))
-</script>
 `,
-        'seen.abide': `<script server>
-import { GET } from '@abide/abide/server'
+        // 16.69 — two handlers under a rest, each answering at its own name.
+        'docs/[...path]/save.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ path }: { path: string[] }) => ({ saved: path }))\n`,
+        'docs/[...path]/remove.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ path }: { path: string[] }) => ({ removed: path }))\n`,
+        'errors.ts': `import { GET } from '@abide/abide/server'
 import { seen } from './vault/server/seen.ts'
 
-export const errors = GET(() => [...seen])
-export const boom = GET(() => {
+export default GET(() => [...seen])
+`,
+        'boom.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => {
     throw new Error('the root blew up')
 })
+`,
+        // 16.72 — a component's private handler under `admin/lib`, run under the rung `admin`'s
+        // layout files, and a sibling route's rung that must not reach it.
+        'admin/layout.abide': `<script server>
+import { middleware } from '@abide/abide/server'
+
+middleware((next, { request }) =>
+    request.headers.get('x-staff') === 'yes' ? next() : new Response('staff only', { status: 403 }),
+)
 </script>
 `,
+        'admin/index.abide': `<script>\nimport Panel from './lib/Panel.abide'\n</script>\n\n<Panel/>`,
+        'admin/lib/Panel.abide': `<script server>
+import { POST } from '@abide/abide/server'
+
+const save = POST(() => 'saved')
+</script>
+
+<button onclick={() => save()}>save</button>`,
+        'reports/layout.abide': `<script server>
+import { middleware } from '@abide/abide/server'
+
+middleware(() => new Response('reports only', { status: 418 }))
+</script>
+`,
+        'reports/lib/Chart.abide': `<script server>
+import { POST } from '@abide/abide/server'
+
+const draw = POST(() => 'drawn')
+</script>
+
+<button onclick={() => draw()}>draw</button>`,
     })
     const built = await buildApp(fixture)
     if (built.exitCode !== 0) throw new Error(built.stderr)
@@ -696,14 +744,14 @@ test('a parameter in the path and the query as well is refused 400 — 16.66', a
     expect(answer.status).toBe(400)
 })
 
-// 19.21 — A STATIC ROUTE THAT DOES NOT ANSWER THE METHOD LEAVES IT TO ONE THAT DOES: `GET /media/new`
-// is the page at `/media/[id]`, and `POST /media/new/made` the handler. THE REVERT: stop the walk at
+// 19.20 — A STATIC ROUTE THAT DOES NOT ANSWER THE METHOD LEAVES IT TO ONE THAT DOES: `GET /media/new`
+// is the page at `/media/[id]`, and `POST /media/new` the handler file `media/new.ts`. THE REVERT: stop the walk at
 // the first route that matches; the GET is a 405.
-test('a request reaches the most specific route answering its method — 19.21', async () => {
+test('a request reaches the most specific route answering its method — 19.20', async () => {
     const page = await Bun.fetch(`${base}/media/new`)
     expect(page.status).toBe(200)
     expect(await page.text()).toContain('a film')
-    const made = await Bun.fetch(`${base}/media/new/made`, {
+    const made = await Bun.fetch(`${base}/media/new`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{"title":"Alien"}',
@@ -783,4 +831,63 @@ test("an unexpected error reaches the onError its route filed, and no other rout
     expect((await Bun.fetch(`${base}/boom`)).status).toBe(500)
     const seen = await (await Bun.fetch(`${base}/errors`)).json()
     expect(seen).toEqual(['vault: the vault blew up'])
+})
+
+// 16.72 — A PRIVATE HANDLER RUNS UNDER THE RUNGS ITS FILE'S HOOKS ARE FILED AT: `admin/lib/Panel.abide`
+// is filed at `/admin` (37.1), so `admin/layout.abide`'s guard refuses it and admits it, and the
+// sibling `/reports` rung, which refuses everything it covers, never sees it — though it does see
+// `reports/lib/Chart.abide`'s. THE REVERT: mount a private handler at its address's own scope in
+// `handlersUnder` (`scope: address`); no layout's rung covers `/__abide/handlers/…`, and the
+// unbadged save answers 200 where 403 is due, the chart 200 where 418 is.
+test('a private handler runs under the middleware its file is filed at, and no sibling route’s — 16.72', async () => {
+    const save = (headers: Record<string, string>) =>
+        Bun.fetch(`${base}/__abide/handlers/admin/lib/Panel/save`, {
+            method: 'POST',
+            headers: { origin: base, ...headers },
+        })
+    const refused = await save({})
+    const admitted = await save({ 'x-staff': 'yes' })
+    const chart = await Bun.fetch(
+        `${base}/__abide/handlers/reports/lib/Chart/draw`,
+        {
+            method: 'POST',
+            headers: { origin: base },
+        },
+    )
+    expect({
+        refused: refused.status,
+        admitted: [admitted.status, await admitted.json()],
+        chart: chart.status,
+    }).toEqual({ refused: 403, admitted: [200, 'saved'], chart: 418 })
+})
+
+// 16.71 — A PRIVATE HANDLER IS LISTED NOWHERE: not on OpenAPI, not on MCP, though it answers at its
+// address (16.72 above), while a handler file is listed on both. THE REVERT: drop the
+// `mount.private` return from `surfaceOf`; both private handlers are OpenAPI paths and MCP tools,
+// four entries where none is due.
+test('a private handler is on neither the OpenAPI document nor the MCP listing — 16.71', async () => {
+    const openapi = (await (
+        await Bun.fetch(`${base}/__abide/openapi.json`)
+    ).json()) as { paths: Record<string, unknown> }
+    const paths = Object.keys(openapi.paths)
+    const listed = (await (
+        await Bun.fetch(`${base}/__abide/mcp`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'tools/list',
+            }),
+        })
+    ).json()) as { result: { tools: { name: string }[] } }
+    const tools = listed.result.tools.map((tool) => tool.name)
+    expect(paths).toContain('/media/new')
+    expect(tools).toContain('post_media_new')
+    expect(paths.filter((path) => path.includes('handlers'))).toEqual([])
+    expect(
+        tools.filter(
+            (tool) => tool.includes('handlers') || tool.includes('Panel'),
+        ),
+    ).toEqual([])
 })

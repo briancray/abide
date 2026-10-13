@@ -361,9 +361,9 @@ const boom = (): string => {
 <p id="out">{boom()}{count}</p>`
 
     const file = parseAbide(source)
-    const names = await session.reads(`${TYPED_ROOT}src/page.abide`, file)
+    const names = await session.reads(`${TYPED_ROOT}src/index.abide`, file)
     const { server, client } = emitSource(
-        'page.abide',
+        'index.abide',
         file,
         names,
         false,

@@ -31,7 +31,7 @@ async function manifestNamesExist(out: string): Promise<boolean> {
 // THE REVERT: empty `client/` before the bundle, as the build did; `concurrent-1.js` is gone. Drop
 // `pruneStale` and `stale-1.js` stands.
 test('a build removes the stale chunks and keeps a concurrent build’s — 38.66', async () => {
-    const app = appFixture({ 'page.abide': PAGE })
+    const app = appFixture({ 'index.abide': PAGE })
     const out = `${app}/.abide`
     expect((await buildApp(app)).exitCode).toBe(0)
     const now = Date.now() / 1000
@@ -55,7 +55,7 @@ test('a build removes the stale chunks and keeps a concurrent build’s — 38.6
 // A SMOKE TEST, NOT A GATE: the emptying revert above passes it too, both builds landing the same
 // bytes last. It is here for the staging — two builds' directories and partial names never collide.
 test('two builds of one tree into one out both finish, and what the manifest names is there — 38.66', async () => {
-    const app = appFixture({ 'page.abide': PAGE })
+    const app = appFixture({ 'index.abide': PAGE })
     const out = `${app}/.abide`
     const both = await Promise.all([buildApp(app), buildApp(app)])
     expect(both.map((build) => build.exitCode)).toEqual([0, 0])
@@ -66,7 +66,7 @@ test('two builds of one tree into one out both finish, and what the manifest nam
 // `abide start` answers it after the app removed it.
 test('a public file the app removed leaves the output with it — 38.66', async () => {
     const app = appFixture({
-        'page.abide': PAGE,
+        'index.abide': PAGE,
         'public/kept.txt': 'kept',
         'public/gone.txt': 'gone',
     })

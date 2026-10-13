@@ -11,16 +11,20 @@ let app = ''
 
 beforeAll(async () => {
     app = appFixture({
-        'page.abide': '<main>home</main>',
-        'greetings/greetings.abide': `<script server>
-import { GET, POST } from '@abide/abide/server'
+        'index.abide': '<main>home</main>',
+        'greetings/hello.ts': `import { GET } from '@abide/abide/server'
 
-export const hello = GET(() => 'hello')
-export const remember = POST((args: { name: string }) => args.name)
-export const add = POST((args: { a: number; b: number }) => args.a + args.b, {
+export default GET(() => 'hello')
+`,
+        'greetings/remember.ts': `import { POST } from '@abide/abide/server'
+
+export default POST((args: { name: string }) => args.name)
+`,
+        'greetings/add.ts': `import { POST } from '@abide/abide/server'
+
+export default POST((args: { a: number; b: number }) => args.a + args.b, {
     description: 'Adds two numbers.',
 })
-</script>
 `,
     })
     const built = await buildApp(app)

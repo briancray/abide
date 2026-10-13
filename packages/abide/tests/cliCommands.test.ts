@@ -3,7 +3,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { spawned } from 'harness/gate'
-import { serveApp } from './builtApp.ts'
+import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
@@ -33,10 +33,8 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': '<main>home</main>',
-        'things/things.abide': `<script server>
-${HANDLERS}</script>
-`,
+        'index.abide': '<main>home</main>',
+        ...handlerFiles('things', HANDLERS),
     }))
 }, 30_000)
 
@@ -55,13 +53,16 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
     expect(first.exitCode).toBe(0)
     const app = `${into}/ledger`
     for (const path of [
-        'src/page.abide',
+        'src/index.abide',
         'src/layout.abide',
         'package.json',
         'tsconfig.json',
         'biome.json',
         'AGENTS.md',
         'CLAUDE.md',
+        // Written rather than copied: a packer drops both from the tarball.
+        'bunfig.toml',
+        '.gitignore',
     ])
         expect(`${path} ${Bun.file(`${app}/${path}`).size > 0}`).toBe(
             `${path} true`,
@@ -86,17 +87,17 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
         (await Bun.file(`${app}/tsconfig.json`).json()).compilerOptions.types,
     ).toEqual(['bun'])
 
-    const scaffolded = await Bun.file(`${app}/src/page.abide`).text()
+    const scaffolded = await Bun.file(`${app}/src/index.abide`).text()
     const edited = 'edited by the author\n'
-    await Bun.write(`${app}/src/page.abide`, edited)
+    await Bun.write(`${app}/src/index.abide`, edited)
     const again = await spawned(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
     })
     expect(again.exitCode).toBe(0)
-    expect(again.stdout).toContain('kept    src/page.abide')
-    expect(await Bun.file(`${app}/src/page.abide`).text()).toBe(edited)
+    expect(again.stdout).toContain('kept    src/index.abide')
+    expect(await Bun.file(`${app}/src/index.abide`).text()).toBe(edited)
 
-    await Bun.write(`${app}/src/page.abide`, scaffolded)
+    await Bun.write(`${app}/src/index.abide`, scaffolded)
     const built = await spawned(['bun', BIN, 'build'], { cwd: app })
     expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
@@ -139,9 +140,9 @@ test('build runs the plugins bunfig.toml declares over the client — 38.43', as
     },
 }
 `,
-        'src/ui/app.css': 'main { color: blue }',
-        'src/page.abide':
-            "<script>\nimport '#src/ui/app.css'\n</script>\n<main>hi</main>",
+        'src/lib/app.css': 'main { color: blue }',
+        'src/index.abide':
+            "<script>\nimport '#src/lib/app.css'\n</script>\n<main>hi</main>",
     })
     const built = await spawned(['bun', BIN, 'build'], { cwd: app })
     expect(built.stderr).toBe('')
@@ -231,7 +232,7 @@ test('call coerces a word against the schema the app holds the call to — 38.61
 test('a call to --url builds nothing where it is run — 38.7, 38.8', async () => {
     const here = temporaryModule({
         'package.json': '{"name":"elsewhere"}',
-        'src/page.abide': '<script>await Promise.resolve()</script><p>x</p>',
+        'src/index.abide': '<script>await Promise.resolve()</script><p>x</p>',
     })
     const answered = await spawned(
         ['bun', BIN, 'call', '--url', base, 'things/add', 'a=2', 'b=3'],

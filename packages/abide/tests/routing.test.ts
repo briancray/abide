@@ -543,17 +543,21 @@ test("a pointer over a routed link loads the route's chunk, and does not navigat
 })
 
 test('a route literal is matched in the spelling its directory is filed under — 30.3, 30.5, 23.14', () => {
-    expect(routeOf('invoices/[id]/page.abide')).toBe('/invoices/[id]')
-    expect(routeOf('page.abide')).toBe('/')
-    // 23.14 — the directories above `routes` are the route's front, and every file in a directory
-    // answers at the directory's route, whatever its name. THE REVERT: drop the directories above
-    // `routes` in `routeOf`; the first reports `/[id]`.
-    expect(routeOf('media/[id]/page.abide')).toBe('/media/[id]')
-    expect(routeOf('media/[id]/comments.abide')).toBe('/media/[id]')
+    expect(routeOf('invoices/[id]/index.abide')).toBe('/invoices/[id]')
+    expect(routeOf('index.abide')).toBe('/')
+    // 23.14 — a file's route is its path without its extension, and an `index`, a `layout` and an
+    // `error` take their directory's. THE REVERT: push every stem in `routeOf`; the first reports
+    // `/invoices/[id]/index`.
+    expect(routeOf('media/[id].abide')).toBe('/media/[id]')
+    expect(routeOf('media/[id]/comments.abide')).toBe('/media/[id]/comments')
+    expect(routeOf('media/getGrid.ts')).toBe('/media/getGrid')
+    // Only the three `.abide` names are their directory's: a handler file is its own name.
+    expect(routeOf('media/index.ts')).toBe('/media/index')
     expect(routeOf('admin/media/layout.abide')).toBe('/admin/media')
+    expect(routeOf('admin/media/error.abide')).toBe('/admin/media')
     // A section named `pages` keeps its name.
-    expect(routeOf('pages/add-a-page/page.abide')).toBe('/pages/add-a-page')
-    expect(routeOf('pages/page.abide')).toBe('/pages')
+    expect(routeOf('pages/add-a-page/index.abide')).toBe('/pages/add-a-page')
+    expect(routeOf('pages/index.abide')).toBe('/pages')
     expect(
         matchRoute(parseRoutePattern('/invoices/[id]'), '/invoices/42'),
     ).toEqual({ id: '42' })
@@ -1427,8 +1431,8 @@ test('a view transition a later navigation overtook writes nothing — 39.9', as
 // 30.23, 30.24, 30.25 — THE ROUTE STANDING, AT ANOTHER QUERY: a filter written to the address. The page
 // reads the address through `route`, so it follows rather than being rebuilt — the count the reader
 // bumped, and the focus a search box would hold, stay — nothing is asked, and the scroll stays put.
-// THE REVERT: drop the `unmoved` branch from `go`; this reports `asked` as ['/'], a new scope, the
-// count back at 0 and the page scrolled to the top.
+// THE REVERT: drop the same-route, same-path `follow` branch from `go`; this reports `asked` as
+// ['/'], a new scope, the count back at 0 and the page scrolled to the top.
 test('a navigation that moves only the query keeps the page — 30.23, 30.24, 30.25', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())

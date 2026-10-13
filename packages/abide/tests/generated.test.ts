@@ -2,7 +2,7 @@
 // for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { serveApp } from './builtApp.ts'
+import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, jsonSchema, log, POST, reactive, refuse } from '@abide/abide/server'
@@ -44,17 +44,13 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': '<main>home</main>',
-        'invoices/invoices.abide': `<script server>
-${HANDLERS}</script>
-`,
-        'files/[[folder]]/files.abide': `<script server>
-import { GET } from '@abide/abide/server'
+        'index.abide': '<main>home</main>',
+        ...handlerFiles('invoices', HANDLERS),
+        'files/[[folder]]/listFiles.ts': `import { GET } from '@abide/abide/server'
 
-export const listFiles = GET(({ folder }: { folder?: string }) => [folder ?? '/'], {
+export default GET(({ folder }: { folder?: string }) => [folder ?? '/'], {
     clients: { mcp: false },
 })
-</script>
 `,
     }))
 }, 30_000)

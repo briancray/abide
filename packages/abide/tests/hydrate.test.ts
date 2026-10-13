@@ -101,7 +101,7 @@ const label = 'clicks'
 <p id="live">{count}</p>`
 
     const file = parseAbide(source)
-    const names = await session.reads(`${TYPED_ROOT}src/page.abide`, file)
+    const names = await session.reads(`${TYPED_ROOT}src/index.abide`, file)
     const client = emitClient(file, names)
 
     // The live run is the only one bound, found through the `<p>` it stands in.
@@ -615,22 +615,37 @@ const rows = await Promise.resolve(1)
     }
 })
 
-// 34.18 — A `<script>` CANNOT EXPORT. It runs once per instance and an export is the module's, so
-// there is no one instance an importer could read. THE REVERT: drop `refuseInstanceExport` in
-// `projectShadow`; the compile succeeds and the import reports `Unexpected export` from the bundler,
-// naming neither the page nor the fix.
-test('a script block cannot export — 34.18', async () => {
-    let thrown = ''
-    try {
-        await renderPage(`<script>
-export const rows = 1
+// 34.17 — A `.abide` CANNOT EXPORT, IN ANY BLOCK: its component is its one export. A `<script>` runs
+// once per instance, so no one instance is there for an importer to read; a `<script module>`'s or
+// a `<script server>`'s export would be a second public face beside the handler files and lib
+// modules that already are one. Every spelling, `export default` and a re-export among them.
+//
+// THE REVERT: drop the three `refuseExport` calls in `projectShadow`; each row then compiles, or
+// fails in the bundler or at the missing `./elsewhere.ts`, naming neither the page nor the clause —
+// 0 of the 12 citing 34.17, against 12.
+test('an export in any script block is a compile error — 34.17', async () => {
+    const cited: string[] = []
+    for (const block of ['<script>', '<script module>', '<script server>'])
+        for (const spelled of [
+            'export const rows = 1',
+            'const rows = 1\nexport { rows }',
+            'export default 1',
+            "export * from './elsewhere.ts'",
+        ]) {
+            let thrown = ''
+            try {
+                await renderPage(`${block}
+${spelled}
 </script>
 
-<p id="out">{rows}</p>`)
-    } catch (error) {
-        thrown = String(error)
-    }
-    expect(thrown).toContain('a <script> cannot export')
+<p id="out">one</p>`)
+            } catch (error) {
+                thrown = String(error)
+            }
+            if (thrown.includes('RULEBOOK 34.17'))
+                cited.push(`${block} ${spelled}`)
+        }
+    expect(cited).toHaveLength(12)
 })
 
 // 32.57 — A TEMPLATE EXPRESSION CANNOT AWAIT EITHER, and for its own reason: each is lowered into

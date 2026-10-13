@@ -158,7 +158,8 @@ export async function clientOf(
     names: Iterable<string> = [],
 ): Promise<string> {
     const { file, answer } = await typed(source, names)
-    return emitSource('typed.abide', file, answer, false).client
+    // 23.21 — a fixture's component stands under a lib directory, where a file is no page.
+    return emitSource('lib/typed.abide', file, answer, false).client
 }
 
 export async function serverOf(
@@ -166,7 +167,8 @@ export async function serverOf(
     names: Iterable<string> = [],
 ): Promise<string> {
     const { file, answer } = await typed(source, names)
-    return emitSource('typed.abide', file, answer, false).server
+    // 23.21 — a fixture's component stands under a lib directory, where a file is no page.
+    return emitSource('lib/typed.abide', file, answer, false).server
 }
 
 // A page, and any component file it invokes, compiled as the build compiles them, rendered by the
@@ -190,8 +192,9 @@ export async function renderPage(
             `${TYPED_ROOT}src/${name}.abide`,
             file,
         )
+        // 23.21 — a component stands under a lib directory, where a file is no page.
         const { server, client } = emitSource(
-            isPage ? 'page.abide' : `${name}.abide`,
+            isPage ? 'index.abide' : `lib/${name}.abide`,
             file,
             reads,
             !isPage,

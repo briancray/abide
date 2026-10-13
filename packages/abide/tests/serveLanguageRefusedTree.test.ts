@@ -20,8 +20,8 @@ afterAll(() => {
 
 test('a refused tree neither reopens the checker nor silences the page — 38.34, 23.18', async () => {
     const app = appFixture({
-        'page.abide': PAGE,
-        'media/server/page.abide': '<p>stray</p>',
+        'index.abide': PAGE,
+        'media/server/index.abide': '<p>stray</p>',
     })
     const opened = spyOn(TypeSession, 'open')
     const received: {
@@ -69,7 +69,7 @@ test('a refused tree neither reopens the checker nor silences the page — 38.34
         }
         throw new Error(`no such message in ${JSON.stringify(received)}`)
     }
-    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
+    const uri = Bun.pathToFileURL(`${app}/index.abide`).href
     send({
         method: 'textDocument/didOpen',
         params: {

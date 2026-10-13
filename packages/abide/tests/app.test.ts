@@ -18,9 +18,11 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAGE = `<main><h1>home</h1></main>`
 
-const HANDLERS = `import { config, cookies, GET, POST, request, response, trace } from '@abide/abide/server'
+// One handler file a handler (16.73), each answered at its own path below `probe`.
+const IMPORTS = `import { config, cookies, GET, POST, request, response, trace } from '@abide/abide/server'\n\n`
 
-export const settings = GET(() => {
+const HANDLERS: Record<string, string> = {
+    'probe/settings.ts': `${IMPORTS}export default GET(() => {
     const resolved = config()
     return {
         limit: resolved.LIMIT,
@@ -30,26 +32,27 @@ export const settings = GET(() => {
         dataDir: String(resolved.APP_DATA_DIR).endsWith('/fixture'),
     }
 })
-
-export const remember = POST(() => {
+`,
+    'probe/remember.ts': `${IMPORTS}export default POST(() => {
     const theme = cookies().get('theme')
     cookies().set('seen', '1')
     cookies().set('session', 'abc', { httpOnly: true })
     return theme
 })
-
-export const seen = GET(() => response().headers.get('x-rung') ?? 'none')
-
-export const rewritten = GET(() => request().headers.get('x-rewritten') ?? 'the original')
-
-export const traced = GET(() =>
+`,
+    'probe/seen.ts': `${IMPORTS}export default GET(() => response().headers.get('x-rung') ?? 'none')
+`,
+    'probe/rewritten.ts': `${IMPORTS}export default GET(() => request().headers.get('x-rewritten') ?? 'the original')
+`,
+    'probe/traced.ts': `${IMPORTS}export default GET(() =>
     trace.span('lookup', () => ({
         id: trace(),
         sampled: trace.sampled(),
         parent: trace.headers().traceparent,
     })),
 )
-`
+`,
+}
 
 // Every hook, each leaving a mark a request or a script can read back.
 const APP = `import { cookies, middleware, onConfig, onError, onHealth, onStart, onStop, redirect, request, response } from '@abide/abide/server'
@@ -129,15 +132,13 @@ let app = ''
 beforeAll(async () => {
     ;({ app, base, stop } = await serveApp(
         {
-            'page.abide': PAGE,
-            'probe/probe.abide': `<script server>
-${HANDLERS}</script>
-`,
+            'index.abide': PAGE,
+            ...HANDLERS,
             'layout.abide': `<script server>
 ${APP}</script>
 `,
             'server/marks.ts': 'export const marks: string[] = []\n',
-            'invoices/[id]/page.abide': WHERE,
+            'invoices/[id]/index.abide': WHERE,
         },
         // 27.8 — read by the spawned server: one that coerces, and one that will not.
         { ...process.env, LIMIT: '9', FEATURE: 'maybe' },
@@ -218,7 +219,7 @@ test('createApp under bun test boots the sources as they stand, not a build left
             type: 'module',
             imports: { '#src/*': './src/*' },
         }),
-        'src/page.abide': '<main><p id="fresh">before</p></main>',
+        'src/index.abide': '<main><p id="fresh">before</p></main>',
         'host.test.ts': `import { expect, test } from 'bun:test'
 import { createApp } from '@abide/abide/server'
 
@@ -233,7 +234,7 @@ test('boots', async () => {
     const built = await spawned(['bun', BIN, 'build', '--root', `${fresh}/src`])
     expect(built.exitCode).toBe(0)
     await Bun.write(
-        `${fresh}/src/page.abide`,
+        `${fresh}/src/index.abide`,
         '<main><p id="fresh">after</p></main>',
     )
     const ran = await spawned(['bun', 'test', './host.test.ts'], { cwd: fresh })
@@ -250,7 +251,7 @@ test('abide start and createApp build an app nobody built — 38.100', async () 
             type: 'module',
             imports: { '#src/*': './src/*' },
         }),
-        'src/page.abide': '<main><p id="unbuilt">never built</p></main>',
+        'src/index.abide': '<main><p id="unbuilt">never built</p></main>',
         'host.ts': `import { createApp } from '@abide/abide/server'
 
 const app = await createApp()
@@ -286,7 +287,7 @@ console.log(JSON.stringify(page.includes('never built')))
 // `releaseScope` in `App.fetch` — the write wakes the dead renders, `runs` 3 where 2 are due.
 test("a page's watch stops when the request that rendered it is answered — 12.5", async () => {
     const fresh = appFixture({
-        'page.abide': `<script module>
+        'index.abide': `<script module>
 import { reactive } from '@abide/abide'
 
 const level = reactive(0, { global: true })
@@ -307,7 +308,7 @@ watch(() => {
 </script>
 
 <main>page</main>`,
-        'host.test.ts': `import { expect, test } from 'bun:test'
+        'tests/host.test.ts': `import { expect, test } from 'bun:test'
 import { flushSync } from '@abide/abide'
 import { createApp } from '@abide/abide/server'
 
@@ -321,7 +322,9 @@ test('renders twice', async () => {
 }, 60_000)
 `,
     })
-    const ran = await spawned(['bun', 'test', './host.test.ts'], { cwd: fresh })
+    const ran = await spawned(['bun', 'test', './tests/host.test.ts'], {
+        cwd: fresh,
+    })
     expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
         '0 true',
     )
@@ -334,9 +337,9 @@ test('renders twice', async () => {
 // REVERT: drop the `statusText` default from `stamp`; `exploded` reads '500 '.
 test('createApp boots inside onStart, answers with no socket, and stops inside onStop — 42, 37.4, 17.8', async () => {
     await Bun.write(
-        `${app}/host.ts`,
+        `${app}/tests/host.ts`,
         `import { createApp, request } from '@abide/abide/server'
-import { marks } from './server/marks.ts'
+import { marks } from '../server/marks.ts'
 
 const app = await createApp()
 const own = await app.fetch(new Request('http://app.test/own', { method: 'POST' }))
@@ -354,7 +357,7 @@ console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.stat
     )
     expect(
         await lastLinePrinted<Record<string, unknown>>(
-            ['bun', `${app}/host.ts`],
+            ['bun', `${app}/tests/host.ts`],
             { cwd: app },
         ),
     ).toEqual({
@@ -376,9 +379,9 @@ console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.stat
 // the declaration and the script exits non-zero.
 test('an App held by await using stops when its block ends — 42.14', async () => {
     await Bun.write(
-        `${app}/disposed.ts`,
+        `${app}/tests/disposed.ts`,
         `import { createApp } from '@abide/abide/server'
-import { marks } from './server/marks.ts'
+import { marks } from '../server/marks.ts'
 
 {
     await using held = await createApp()
@@ -388,7 +391,7 @@ console.log(JSON.stringify(marks))
 `,
     )
     expect(
-        await lastLinePrinted<string[]>(['bun', `${app}/disposed.ts`], {
+        await lastLinePrinted<string[]>(['bun', `${app}/tests/disposed.ts`], {
             cwd: app,
         }),
     ).toEqual(['before start', 'after start', 'held', 'stopped'])
@@ -398,7 +401,7 @@ console.log(JSON.stringify(marks))
 // around `compose(HOOKS.starts, …)` in `bootApp`; the command prints an address and serves.
 test('a throwing onStart stops the server starting — 37.6', async () => {
     const broken = appFixture({
-        'page.abide': PAGE,
+        'index.abide': PAGE,
         'layout.abide': `<script server>
 import { onStart } from '@abide/abide/server'\n\nonStart(async () => {\n    throw new Error('no database')\n})\n</script>
 `,

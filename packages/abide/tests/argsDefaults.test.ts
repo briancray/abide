@@ -59,8 +59,8 @@ beforeAll(async () => {
             type: 'module',
             imports: { '#src/*': './*' },
         }),
-        'page.abide': PAGE,
-        'shared/queries.ts': QUERIES,
+        'index.abide': PAGE,
+        'shared/lib/queries.ts': QUERIES,
     })
     found = (await checkApp(app)).filter((diagnosis) =>
         diagnosis.message.includes('11.30'),
@@ -92,22 +92,22 @@ test('an args default the parameter does not write is warned on at the args — 
         })),
     ).toEqual([
         {
-            file: 'page.abide',
+            file: 'index.abide',
             ...place(PAGE, 'jsonSchema({'),
             category: 'warning',
         },
         {
-            file: 'shared/queries.ts',
+            file: 'shared/lib/queries.ts',
             ...place(QUERIES, 'jsonSchema({'),
             category: 'warning',
         },
         {
-            file: 'shared/queries.ts',
+            file: 'shared/lib/queries.ts',
             ...place(QUERIES, 'sized,'),
             category: 'warning',
         },
         {
-            file: 'shared/queries.ts',
+            file: 'shared/lib/queries.ts',
             ...place(QUERIES, "jsonSchema({ type: 'object', properties: { per"),
             category: 'warning',
         },
@@ -127,9 +127,9 @@ test('a build warns on an args default the parameter does not write, and compile
         if (warning.message.includes('11.30'))
             warned.push(warning.path.slice(app.length + 1))
     expect(warned).toEqual([
-        'page.abide',
-        'shared/queries.ts',
-        'shared/queries.ts',
-        'shared/queries.ts',
+        'index.abide',
+        'shared/lib/queries.ts',
+        'shared/lib/queries.ts',
+        'shared/lib/queries.ts',
     ])
 }, 60_000)

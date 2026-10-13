@@ -11,7 +11,7 @@ const PAGES = `import { GET } from '@abide/abide/server'
 
 let runs = 0
 
-export const list = GET(async ({ page = 1 }: { page?: number }) => {
+export default GET(async ({ page = 1 }: { page?: number }) => {
     runs += 1
     const run = runs
     await new Promise((done) => setTimeout(done, 150))
@@ -22,7 +22,7 @@ export const list = GET(async ({ page = 1 }: { page?: number }) => {
 // One page leaves the member to the default and the other writes it.
 const pageCalling = (args: string): string => `<script>
 import { reactive } from '@abide/abide'
-import { list } from '#src/pages/pages.abide'
+import list from '#src/pages/list.ts'
 
 const shown = reactive(() => list(${args}))
 </script>
@@ -34,11 +34,9 @@ let base = ''
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': pageCalling('{}'),
-        'written/page.abide': pageCalling('{ page: 1 }'),
-        'pages/pages.abide': `<script server>
-${PAGES}</script>
-`,
+        'index.abide': pageCalling('{}'),
+        'written/index.abide': pageCalling('{ page: 1 }'),
+        'pages/list.ts': PAGES,
     }))
 }, 30_000)
 

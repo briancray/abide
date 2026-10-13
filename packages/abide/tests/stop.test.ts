@@ -26,9 +26,9 @@ onStop(async (stop) => {
 
 // KEYED BY ITS ARGS, so the rejection happens when it is called: a handler of none is one value, and
 // its body runs where it is declared — at boot.
-const HANDLERS = `import { POST } from '@abide/abide/server'
+const FAULT = `import { POST } from '@abide/abide/server'
 
-export const fault = POST((args: { reason: string }) => {
+export default POST((args: { reason: string }) => {
     void Promise.reject(new Error(args.reason))
     return 'answered'
 })
@@ -38,13 +38,11 @@ let app = ''
 
 beforeAll(async () => {
     app = appFixture({
-        'page.abide': '<main>home</main>',
+        'index.abide': '<main>home</main>',
         'layout.abide': `<script server>
 ${HOOKS}</script>
 `,
-        'probe/probe.abide': `<script server>
-${HANDLERS}</script>
-`,
+        'probe/fault.ts': FAULT,
     })
     const built = await buildApp(app)
     if (built.exitCode !== 0)
@@ -140,7 +138,7 @@ test('a second signal while stopping ends the process at once — 37.12', async 
 test('App.stop asked twice runs onStop once — 42.15', async () => {
     const mark = `${app}/twice.txt`
     await Bun.write(
-        `${app}/twice.ts`,
+        `${app}/tests/twice.ts`,
         `import { createApp } from '@abide/abide/server'
 
 const app = await createApp()
@@ -150,7 +148,7 @@ await Promise.all([first, second])
 console.log(first === second)
 `,
     )
-    const ran = await spawned(['bun', `${app}/twice.ts`], {
+    const ran = await spawned(['bun', `${app}/tests/twice.ts`], {
         cwd: app,
         env: { ...process.env, MARK: mark },
     })
@@ -165,8 +163,8 @@ console.log(first === second)
 // runs out.
 test('App.stop ends a stream it is still writing — 42.11', async () => {
     const app = await inMemoryApp({
-        'feed/feed.abide': {
-            ticks: GET(async function* () {
+        'feed/ticks.ts': {
+            default: GET(async function* () {
                 let tick = 0
                 while (true) {
                     yield tick
@@ -224,7 +222,9 @@ test('a raw call outside every request after App.stop does not reach the stopped
         answered += 1
         return 'hello'
     })
-    const app = await inMemoryApp({ 'stopped/stopped.abide': { greeting } })
+    const app = await inMemoryApp({
+        'stopped/greeting.ts': { default: greeting },
+    })
     expect(await (await greeting.raw()).json()).toBe('hello')
     expect(answered).toBe(1)
     await app.stop()

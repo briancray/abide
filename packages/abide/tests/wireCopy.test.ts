@@ -7,7 +7,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { flushSync, invalidate, watch } from '#shared'
 import { rowKeyOf } from '#ui/rowKeyOf.ts'
 import { wire } from '#ui/wire.ts'
-import { appFixture, buildApp, builtFiles } from './builtApp.ts'
+import { appFixture, buildApp, builtCompilation } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 // Reaching a copy starts its load and its follow: answered here, and a socket that never opens, for
@@ -53,21 +53,21 @@ const shelf = reactive([{ id: 'a' }], {
     identity: structural,
 })
 
-export const bound = GET(shelf)
-export const inline = GET(reactive(() => [{ isbn: '1' }], { by: 'isbn' }))
-export const computed = GET(
+const bound = GET(shelf)
+const inline = GET(reactive(() => [{ isbn: '1' }], { by: 'isbn' }))
+const computed = GET(
     reactive(({ id }: { id: string }) => [{ id }], {
         by: (row) => row.id,
         tags: ({ id }) => [id],
         identity: (next, previous) => next === previous,
     }),
 )
-export const plain = GET(() => [1])
-export const optioned = GET(() => [{ isbn: '1' }], {
+const plain = GET(() => [1])
+const optioned = GET(() => [{ isbn: '1' }], {
     by: 'isbn',
     description: 'Books.',
 })
-export const change = POST(() => undefined)
+const change = POST(() => undefined)
 `
 
 // THE REVERTS: hand back `undefined` from `declaredCopy`; every wrapper is written without a record,
@@ -75,15 +75,16 @@ export const change = POST(() => undefined)
 // `optioned` loses its — the plain handler's are the `GET`'s own (16.6).
 test('the build writes what a GET declares for its copy into the wrapper, and no more', async () => {
     const app = appFixture({
-        'page.abide': '<main>home</main>',
-        'library/library.abide': `<script server>
+        'index.abide': '<main>home</main>',
+        'library/lib/Handlers.abide': `<script server>
 ${LIBRARY}</script>
 `,
     })
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
     const wrapper =
-        (await builtFiles(app))['library/library.abide']?.client ?? ''
+        (await builtCompilation(app)).files['library/lib/Handlers.abide']
+            ?.client ?? ''
     const line = (name: string): string =>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
         ''
@@ -103,8 +104,8 @@ ${LIBRARY}</script>
 // `named` and `handed` are written without a record, and nothing warns on `grown`.
 test('an option bound to a const carries its literal, and one the build cannot read is warned on', async () => {
     const app = appFixture({
-        'page.abide': '<main>home</main>',
-        'named/named.abide': `<script server>
+        'index.abide': '<main>home</main>',
+        'named/lib/Handlers.abide': `<script server>
 import { GET, reactive } from '@abide/abide/server'
 
 const KEY = 'isbn'
@@ -113,17 +114,19 @@ const OPTIONS = { by: KEY, tags: TAGS }
 let grown = 'is'
 grown += 'bn'
 
-export const named = GET(
+const named = GET(
     reactive(() => [{ isbn: '1' }], { by: KEY, tags: TAGS }),
 )
-export const handed = GET(reactive(() => [{ isbn: '1' }], OPTIONS))
-export const unread = GET(reactive(() => [{ isbn: '1' }], { by: grown }))
+const handed = GET(reactive(() => [{ isbn: '1' }], OPTIONS))
+const unread = GET(reactive(() => [{ isbn: '1' }], { by: grown }))
 </script>
 `,
     })
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
-    const wrapper = (await builtFiles(app))['named/named.abide']?.client ?? ''
+    const wrapper =
+        (await builtCompilation(app)).files['named/lib/Handlers.abide']
+            ?.client ?? ''
     const line = (name: string): string =>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
         ''
@@ -228,24 +231,26 @@ test('a copy asks past the HTTP cache', async () => {
 
 // 11.29 — THE DEFAULTS A HANDLER'S PARAMETER WRITES REACH ITS COPY, read by the reader the server keys
 // by, so a mutation's too; a handler with none writes none, and one the key cannot read stops the
-// build rather than the server's import. THE REVERT: leave `defaults` out of `wrappersOf`; no
+// build rather than the server's import. THE REVERT: leave `defaults` out of `wireLine`; no
 // wrapper line carries `"names"`.
 test("the build writes a handler's parameter defaults into its wrapper, and refuses one it cannot read", async () => {
     const app = appFixture({
-        'page.abide': '<main>home</main>',
-        'paged/paged.abide': `<script server>
+        'index.abide': '<main>home</main>',
+        'paged/lib/Handlers.abide': `<script server>
 import { GET, POST, reactive } from '@abide/abide/server'
 
-export const list = GET(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
-export const kept = GET(reactive(({ size = 20 }: { size?: number }) => size, { by: 'id' }))
-export const save = POST(async ({ draft = true }: { draft?: boolean }) => draft)
-export const plain = GET(async ({ id }: { id: string }) => id)
+const list = GET(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
+const kept = GET(reactive(({ size = 20 }: { size?: number }) => size, { by: 'id' }))
+const save = POST(async ({ draft = true }: { draft?: boolean }) => draft)
+const plain = GET(async ({ id }: { id: string }) => id)
 </script>
 `,
     })
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
-    const wrapper = (await builtFiles(app))['paged/paged.abide']?.client ?? ''
+    const wrapper =
+        (await builtCompilation(app)).files['paged/lib/Handlers.abide']
+            ?.client ?? ''
     const line = (name: string): string =>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
         ''
@@ -259,12 +264,12 @@ export const plain = GET(async ({ id }: { id: string }) => id)
     expect(line('plain')).not.toContain('"names"')
 
     const refused = appFixture({
-        'page.abide': '<main>home</main>',
-        'paged/paged.abide': `<script server>
+        'index.abide': '<main>home</main>',
+        'paged/lib/Handlers.abide': `<script server>
 import { GET } from '@abide/abide/server'
 
 const PAGE_SIZE = 20
-export const list = GET(async ({ size = PAGE_SIZE }: { size?: number }) => size)
+const list = GET(async ({ size = PAGE_SIZE }: { size?: number }) => size)
 </script>
 `,
     })

@@ -35,7 +35,7 @@ function guarded(middleware: Middleware<never, unknown>[]): Mux {
         new Map([
             [
                 `GET ${ADDRESS}`,
-                { handler, ui: true, route: '/', rungs: [] } as never,
+                { handler, ui: true, scope: '/', rungs: [] } as never,
             ],
         ]),
         undefined,

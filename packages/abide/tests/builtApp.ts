@@ -97,13 +97,13 @@ export async function serveApp(
     return { app, ...(await startApp(app, env)) }
 }
 
-// WHAT A BUILD KEPT, read as `abide start` reads it: each `.abide` compiled, by its path below the app.
-export async function builtFiles(
+// WHAT A BUILD KEPT, read as `abide start` reads it: each `.abide` compiled and each handler file's
+// face, by its path below the app.
+export async function builtCompilation(
     app: string,
     out = `${app}/.abide`,
-): Promise<Compilation['files']> {
-    return ((await Bun.file(`${out}/${COMPILATION}`).json()) as Compilation)
-        .files
+): Promise<Compilation> {
+    return (await Bun.file(`${out}/${COMPILATION}`).json()) as Compilation
 }
 
 // The handler table a build wrote, served to this process as `abide start` serves it.
@@ -113,4 +113,20 @@ export async function builtHandlers(
 ): Promise<Awaited<ReturnType<typeof servedTable>>['handlers']> {
     await serveBuild(app, out)
     return (await servedTable(app)).handlers
+}
+
+// 16.2 — a module of handlers sharing state, as handler files: the module under the directory's
+// `lib`, and one file per `export const` re-exporting that binding as its default, so the values the
+// handlers share stay one module's.
+export function handlerFiles(
+    directory: string,
+    module: string,
+): Record<string, string> {
+    // `''` is the app's root.
+    const at = directory === '' ? '' : `${directory}/`
+    const files: Record<string, string> = { [`${at}lib/handlers.ts`]: module }
+    for (const [, name] of module.matchAll(/^export const (\w+)/gm))
+        files[`${at}${name}.ts`] =
+            `import { ${name} } from './lib/handlers.ts'\n\nexport default ${name}\n`
+    return files
 }

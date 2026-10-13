@@ -6,7 +6,7 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from 'bun:test'
 import { onConfig } from '#server/hooks.ts'
 import { seedFor, takeSeed } from '#server/seedBuffer.ts'
 import { reactive } from '#shared/reactive/index.ts'
-import { serveApp } from './builtApp.ts'
+import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 // SLOW ON PURPOSE. The render does not wait for it (41.4), so the call below arrives while the
@@ -25,7 +25,7 @@ export const getInvoice = GET(async ({ id }: { id: string }) => {
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import { getInvoice } from '#src/invoices/invoices.abide'
+import getInvoice from '#src/invoices/getInvoice.ts'
 
 const invoice = reactive(() => getInvoice({ id: '4021' }))
 </script>
@@ -56,7 +56,9 @@ export const getLines = GET(async function* ({ id }: { id: string }) {
 
 const PAINTED = `<script>
 import { reactive } from '@abide/abide'
-import { getLines, getMissing, getTotal } from '#src/totals/totals.abide'
+import getLines from '#src/totals/getLines.ts'
+import getMissing from '#src/totals/getMissing.ts'
+import getTotal from '#src/totals/getTotal.ts'
 
 const total = reactive(() => getTotal({ id: 't' }))
 const missing = reactive(() => getMissing({ id: 'm' }))
@@ -87,7 +89,7 @@ export const art = GET(cover)
 
 const SHELF_PAGE = `<script>
 import { reactive } from '@abide/abide'
-import { books } from '#src/shelf/shelf.abide'
+import books from '#src/shelf/books.ts'
 
 const shelved = reactive(() => books())
 </script>
@@ -99,21 +101,13 @@ let base = ''
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': PAGE,
-        'painted/page.abide': PAINTED,
-        'shelf/page.abide': SHELF_PAGE,
-        'shelf/shelf.abide': `<script server>
-${SHELF}</script>
-`,
-        'covers/covers.abide': `<script server>
-${COVERS}</script>
-`,
-        'totals/totals.abide': `<script server>
-${TOTALS}</script>
-`,
-        'invoices/invoices.abide': `<script server>
-${INVOICES}</script>
-`,
+        'index.abide': PAGE,
+        'painted/index.abide': PAINTED,
+        'shelf/index.abide': SHELF_PAGE,
+        ...handlerFiles('shelf', SHELF),
+        ...handlerFiles('covers', COVERS),
+        ...handlerFiles('totals', TOTALS),
+        ...handlerFiles('invoices', INVOICES),
         'layout.abide': `<script server>
 ${SIGN_OUT}</script>
 `,

@@ -1348,7 +1348,7 @@ test('a {#for} over a followed GET adopts the rows the server painted, over the 
         new Map([
             [
                 `GET ${handler.address}`,
-                { handler, ui: true, route: '/', rungs: [] } as never,
+                { handler, ui: true, scope: '/', rungs: [] } as never,
             ],
         ]),
         undefined,

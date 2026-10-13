@@ -336,10 +336,10 @@ const { 'data-note': note } = props<{ 'data-note': string }>()
 // no-op again, and the second row below comes out `<!--[--><!--]-->`.
 test('an invoked static component still gets a client module — 32.17', async () => {
     const source = temporaryModule({
-        'Static.abide': '<strong>nothing moves here</strong>',
-        'page.abide': `<script>
+        'lib/Static.abide': '<strong>nothing moves here</strong>',
+        'index.abide': `<script>
 import { reactive } from '@abide/abide'
-import Static from './Static.abide'
+import Static from './lib/Static.abide'
 
 let count = reactive(0)
 </script>
@@ -360,11 +360,11 @@ let count = reactive(0)
     const { files } = (await Bun.file(`${out}/compilation.json`).json()) as {
         files: Record<string, { client: string }>
     }
-    const client = files['Static.abide']?.client ?? ''
+    const client = files['lib/Static.abide']?.client ?? ''
     expect(client).not.toBe('export default () => {}\n')
     expect(client).toContain('nothing moves here')
-    expect(files['page.abide']?.client).toContain(
-        "from './Static.abide?component'",
+    expect(files['index.abide']?.client).toContain(
+        "from './lib/Static.abide?component'",
     )
 })
 
@@ -479,7 +479,7 @@ const key = 'volume'
 let volume = reactive.share(key, () => reactive(4))
 </script>
 <p>{volume}</p>`)
-    const reads = await session.reads(`${TYPED_ROOT}src/page.abide`, file)
+    const reads = await session.reads(`${TYPED_ROOT}src/index.abide`, file)
     let refused = ''
     try {
         emitComponent(file, reads)

@@ -21,6 +21,9 @@ function row(path: string, rest: Partial<Mount> = {}): Mount {
         method: 'GET',
         source: `${path.split('/')[0]}.ts`,
         name: path.split('/').at(-1) as string,
+        export: 'default',
+        scope: `/${path}`,
+        private: false,
         ui: true,
         cli: true,
         mcp: true,
@@ -80,7 +83,6 @@ test('a mounted handler is projected off the handler, a row off the build — 20
     const mounted: Mounted = {
         ...row('invoices/hidden', { description: 'Read by the build.' }),
         method: 'GET',
-        route: '/invoices',
         handler: hidden as Mounted['handler'],
         rungs: [],
         argsDocument: { type: 'object' },
@@ -109,7 +111,6 @@ test("a Response handler's row keeps it off MCP unless its clients puts it back 
     const mountedAs = (clients: { mcp?: boolean }): Mounted => ({
         ...row('media/playlist', { mcp: false }),
         method: 'GET',
-        route: '/media',
         handler: GET(() => new Response(''), { clients }) as Mounted['handler'],
         rungs: [],
         argsDocument: undefined,

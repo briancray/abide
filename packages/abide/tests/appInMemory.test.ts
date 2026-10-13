@@ -11,19 +11,25 @@ import { inMemoryApp } from './inMemoryApp.ts'
 
 const RPC = '/invoices'
 
+// Each a handler file's module, by its path (`inMemoryApp.ts`).
 const INVOICES = {
-    getInvoice: GET(
-        reactive(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
-            args: jsonSchema<{ id: number }>({
-                type: 'object',
-                properties: { id: { type: 'integer' } },
-                required: ['id'],
-            }),
-        }),
-    ),
-    untimed: GET(() => 1),
-    slow: GET(() => 1, { timeout: 40_000 }),
-    endless: GET(() => 1, { timeout: Infinity }),
+    'invoices/getInvoice.ts': {
+        default: GET(
+            reactive(
+                async ({ id }: { id: number }) => ({ id, total: id * 10 }),
+                {
+                    args: jsonSchema<{ id: number }>({
+                        type: 'object',
+                        properties: { id: { type: 'integer' } },
+                        required: ['id'],
+                    }),
+                },
+            ),
+        ),
+    },
+    'invoices/untimed.ts': { default: GET(() => 1) },
+    'invoices/slow.ts': { default: GET(() => 1, { timeout: 40_000 }) },
+    'invoices/endless.ts': { default: GET(() => 1, { timeout: Infinity }) },
 }
 
 afterAll(() => {
@@ -44,7 +50,7 @@ test('a call raises the idle timeout only as far as its timeout says — 16.56, 
         timeout: (_request: Request, seconds: number) =>
             raised[calling]?.push(seconds),
     } as never
-    await using app = await inMemoryApp({ 'invoices/invoices.abide': INVOICES })
+    await using app = await inMemoryApp(INVOICES)
     for (const name of ['untimed', 'slow', 'endless']) {
         calling = name
         raised[name] = []
@@ -64,7 +70,7 @@ test('a call raises the idle timeout only as far as its timeout says — 16.56, 
 // and set that to `fetch` alone; the stopped app answers the call, and its text reads "the app is
 // stopping".
 test('an MCP call is answered by its own App, not the last one built — 20.10, 42.12', async () => {
-    const modules = { 'invoices/invoices.abide': INVOICES }
+    const modules = INVOICES
     await using first = await inMemoryApp(modules)
     const second = await inMemoryApp(modules)
     await second.stop()
@@ -105,9 +111,7 @@ test('a call under a mount raises the idle timeout on the request the listener r
     } as never
     process.env.APP_URL = 'http://app.test/app'
     try {
-        await using app = await inMemoryApp({
-            'invoices/invoices.abide': INVOICES,
-        })
+        await using app = await inMemoryApp(INVOICES)
         const status = (await app.fetch(received)).status
         expect({ raised, status }).toEqual({
             raised: [[true, 44]],
@@ -120,13 +124,20 @@ test('a call under a mount raises the idle timeout on the request the listener r
 })
 
 const ASKED = {
-    whoami: POST(() => request().headers.get('authorization') ?? 'nobody', {
-        description: 'Who is asking.',
-    }),
-    guarded: POST(() => 'never', {
-        description: 'Refused by its rung.',
-        middleware: [async () => refuse(401, 'no')],
-    }),
+    'asked/whoami.ts': {
+        default: POST(
+            () => request().headers.get('authorization') ?? 'nobody',
+            {
+                description: 'Who is asking.',
+            },
+        ),
+    },
+    'asked/guarded.ts': {
+        default: POST(() => 'never', {
+            description: 'Refused by its rung.',
+            middleware: [async () => refuse(401, 'no')],
+        }),
+    },
 }
 
 // 20.9, 20.10, 45.7 — THE MCP SURFACE IN PROCESS, as a `Toolbox` holds it, with no JSON-RPC between: it
@@ -135,7 +146,7 @@ const ASKED = {
 // `callOf`'s headers empty rather than from the asker's, and `whoami` reads "nobody"; answer a call
 // off the handler's own function rather than through the app, and `guarded` is not refused.
 test('the MCP surface lists and calls in process, as the asker — 20.9, 20.10, 45.7', async () => {
-    await using app = await inMemoryApp({ 'asked/asked.abide': ASKED })
+    await using app = await inMemoryApp(ASKED)
     const surface = await app.run(
         () => currentRequestScope()?.app?.mcp as McpSurface,
     )
@@ -163,8 +174,8 @@ test('the MCP surface lists and calls in process, as the asker — 20.9, 20.10, 
 // REVERT: drop the catch around `callOf` in `McpSurface.#called`; the call answers 500.
 test('an MCP tool call missing a path parameter is a ValidationError tool result — 30.3, 15.8', async () => {
     await using app = await inMemoryApp({
-        'comments/[id]/comments.abide': {
-            thread: GET(({ id }: { id: string }) => [id]),
+        'comments/[id]/thread.ts': {
+            default: GET(({ id }: { id: string }) => [id]),
         },
     })
     const ask = async (method: string, params: unknown): Promise<Response> =>

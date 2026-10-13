@@ -8,10 +8,9 @@
 // the dev case answers `null` too — the command set it, and the worker never saw it.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { appFixture, buildApp, startApp } from './builtApp.ts'
+import { addressOf, appFixture, BIN, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 const ADDRESS = '/environment/name'
 
 let app = ''
@@ -19,12 +18,10 @@ const stops: (() => void)[] = []
 
 beforeAll(async () => {
     app = appFixture({
-        'page.abide': '<main>home</main>',
-        'environment/environment.abide': `<script server>
-import { GET } from '@abide/abide/server'
+        'index.abide': '<main>home</main>',
+        'environment/name.ts': `import { GET } from '@abide/abide/server'
 
-export const name = GET(() => process.env.NODE_ENV ?? null)
-</script>
+export default GET(() => process.env.NODE_ENV ?? null)
 `,
     })
     const built = await buildApp(app)
@@ -71,16 +68,5 @@ test('abide dev names the environment development where none was given — 36.3'
         },
     )
     stops.push(() => server.kill())
-    let seen = ''
-    let base = ''
-    for await (const chunk of server.stdout as ReadableStream<Uint8Array>) {
-        seen += new TextDecoder().decode(chunk)
-        const found = /http:\/\/[^\s]+/.exec(seen)
-        if (found) {
-            base = new URL(found[0]).origin
-            break
-        }
-    }
-    expect(base).not.toBe('')
-    expect(await nameFrom(base)).toBe('development')
+    expect(await nameFrom(await addressOf(server))).toBe('development')
 }, 30_000)

@@ -1,9 +1,9 @@
-// 34.25 — A `.abide` IMPORTED `with { type: 'text' }` IS ITS TEXT, as any other file imported so is
+// 34.21 — A `.abide` IMPORTED `with { type: 'text' }` IS ITS TEXT, as any other file imported so is
 // in bun: on the server, in the browser's bundle, and to the checker, which types it a `string`.
 
 import { afterAll, expect, test } from 'bun:test'
 import { checkApp } from '#compiler/checkApp.ts'
-import { compileApp } from '#compiler/compileApp.ts'
+import { compilationOf, compileApp } from '#compiler/compileApp.ts'
 import { serveCompilation } from '#server/abideModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -21,12 +21,12 @@ let count = reactive(1)
 function app(use: string): string {
     return `${temporaryModule({
         'app/package.json': JSON.stringify({ name: 'texts', type: 'module' }),
-        'app/src/demo/Counter.abide': COUNTER,
-        'app/src/demo/data.ts': 'export const rows = [1, 2]\n',
-        'app/src/demo/page.abide': `<script>
-import Counter from './Counter.abide'
-import source from './Counter.abide' with { type: 'text' }
-import data from './data.ts' with { type: 'text' }
+        'app/src/demo/lib/Counter.abide': COUNTER,
+        'app/src/demo/lib/data.ts': 'export const rows = [1, 2]\n',
+        'app/src/demo/index.abide': `<script>
+import Counter from './lib/Counter.abide'
+import source from './lib/Counter.abide' with { type: 'text' }
+import data from './lib/data.ts' with { type: 'text' }
 ${use}
 </script>
 
@@ -38,23 +38,26 @@ ${use}
 // THE REVERT: write the block as it stands in `projectShadow`'s `script`; both modules import the
 // compiled component, and `source` is a function — and `data` the module, through the fence. Served,
 // `?text` is the file's text (`abideModules`), and the module and the text are two modules.
-test('a .abide imported as text is its text on both sides — 34.25', async () => {
+test('a .abide imported as text is its text on both sides — 34.21', async () => {
     const root = app('')
-    const { files, tables } = await compileApp(root)
-    const page = files['demo/page.abide']
+    const compiled = await compileApp(root)
+    const { files } = compiled
+    const page = files['demo/index.abide']
     for (const lane of [page?.server, page?.client]) {
-        expect(lane).toContain("import source from './Counter.abide?text'\n")
+        expect(lane).toContain(
+            "import source from './lib/Counter.abide?text'\n",
+        )
         // Any other file too: the plugin answers the text, so the browser's fence never sees it.
-        expect(lane).toContain("import data from './data.ts?text'\n")
+        expect(lane).toContain("import data from './lib/data.ts?text'\n")
     }
-    serveCompilation(root, { files, tables })
-    const served = await import(`${root}/demo/Counter.abide?text`)
+    serveCompilation(root, compilationOf(compiled))
+    const served = await import(`${root}/demo/lib/Counter.abide?text`)
     expect(served.default).toBe(COUNTER)
-    const component = await import(`${root}/demo/Counter.abide?component`)
+    const component = await import(`${root}/demo/lib/Counter.abide?component`)
     expect(typeof component.default).toBe('function')
 }, 30_000)
 
-test('the checker types a .abide imported as text a string — 34.25', async () => {
+test('the checker types a .abide imported as text a string — 34.21', async () => {
     const typed = await checkApp(app('const length: number = source.length'))
     expect(typed.filter((found) => found.category === 'error')).toEqual([])
     const mistyped = await checkApp(app('const wrong: number = data'))

@@ -84,7 +84,7 @@ const { title } = props<{ title: string }>()
 </style>`
 
 const PAGE = `<script>
-import Card from '#src/ui/components/Card.abide'
+import Card from '#src/lib/Card.abide'
 </script>
 
 <main><Card title="first"><p id="passed">from the page</p></Card></main>
@@ -98,8 +98,8 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': PAGE,
-        'ui/components/Card.abide': CARD,
+        'index.abide': PAGE,
+        'lib/Card.abide': CARD,
     }))
 }, 30_000)
 
@@ -165,15 +165,13 @@ test('the build turns view transitions on from the compiled styles — 39.8', as
             type: 'module',
             imports: { '#src/*': './*' },
         }),
-        'page.abide': `<main><p class="total">1</p></main>\n\n<style>\n${style}\n</style>`,
+        'index.abide': `<main><p class="total">1</p></main>\n\n<style>\n${style}\n</style>`,
     })
     const on = await compileApp(
         temporaryModule(app('.total { view-transition-name: total }')),
     )
     const off = await compileApp(temporaryModule(app('.total { color: red }')))
-    expect(on.tables['routes.ts']).toContain(
-        'startRouter(routes, host, true)',
-    )
+    expect(on.tables['routes.ts']).toContain('startRouter(routes, host, true)')
     expect(off.tables['routes.ts']).toContain(
         'startRouter(routes, host, false)',
     )

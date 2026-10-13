@@ -15,7 +15,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { brotliDecompressSync } from 'node:zlib' // bun decompresses gzip and zstd of its own, and no brotli
-import { buildApp, startApp } from './builtApp.ts'
+import { buildApp, serveApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 // 34.6 and 38.23: the stylesheet is a dependency of the page, and the document links what the
@@ -25,9 +25,9 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 // resolved from the `.abide` that wrote it — the compiled module is served at the file's own path.
 const HOME = `<script>
 import { reactive } from '@abide/abide'
-import Badge from '#src/ui/components/Badge.abide'
-import './ui/home.css'
-import { greeting } from './ui/greeting.ts'
+import Badge from '#src/lib/components/Badge.abide'
+import './lib/home.css'
+import { greeting } from './lib/greeting.ts'
 
 let count = reactive(0)
 </script>
@@ -37,7 +37,7 @@ let count = reactive(0)
 
 // 32.17 THROUGH A BUILD, which is the one arm that can say a component import RESOLVES. Left as
 // written with its extension swapped, the specifier the emitted page carries is
-// `#src/ui/components/Badge.ts` — a file that exists in the output tree and nowhere in the source tree
+// `#src/lib/components/Badge.ts` — a file that exists in the output tree and nowhere in the source tree
 // the import map points at. `componentGraph` resolves it to a path inside the build; without that
 // the bundle cannot resolve the client half and the build fails.
 const BADGE = `<script>
@@ -65,25 +65,28 @@ const { params } = props<{ params: { id: string } }>()
 const SLOW_MS = 400
 
 const SLOW = `<script>
-import '#src/ui/slow.ts'
+import '#src/lib/slow.ts'
 </script>
 
 <main id="slow"><h1>Slow</h1></main>`
 
 // 41.1 — a page that fails as it is imported, before anything has gone out.
 const BROKEN = `<script>
-import '#src/ui/broken.ts'
+import '#src/lib/broken.ts'
 </script>
 
 <main id="broken"><h1>Broken</h1></main>`
 
-const LEDGER = `import { GET } from '@abide/abide/server'
+const LIST_ROWS = `import { GET } from '@abide/abide/server'
 
-export const listRows = GET(() =>
+export default GET(() =>
     Array.from({ length: 120 }, (_, at) => ({ id: \`row_\${at}\`, status: at % 2 === 0 ? 'open' : 'paid' })),
 )
+`
 
-export const oneRow = GET(() => ({ id: 'row_0', status: 'open' }))
+const ONE_ROW = `import { GET } from '@abide/abide/server'
+
+export default GET(() => ({ id: 'row_0', status: 'open' }))
 `
 
 let stop: (() => void) | undefined
@@ -91,30 +94,29 @@ let base = ''
 
 beforeAll(async () => {
     const app = temporaryModule({
-        'page.abide': HOME,
-        'ui/greeting.ts': `export const greeting = 'beside the page'\n`,
-        'ui/components/Badge.abide': BADGE,
+        'index.abide': HOME,
+        'lib/greeting.ts': `export const greeting = 'beside the page'\n`,
+        'lib/components/Badge.abide': BADGE,
         // A SELECTOR RATHER THAN A DECLARATION, as the thing asserted on: the bundler normalizes
         // a color (`rgb(1, 2, 3)` came back `#010203`) and a class name it cannot touch.
         // 36.15 — AND ONE URL NAMING A PUBLIC FILE, which is the address below rather than a path
         // on this disk: read as a path, it fails the build this whole file is served from.
-        'ui/home.css':
+        'lib/home.css':
             ".fixture-sheet-was-imported { color: red }\n.fixture-uses-public { background: url('/img/dot.svg') }",
         'package.json': JSON.stringify({
             name: 'serve-fixture',
             type: 'module',
             imports: { '#src/*': './*' },
         }),
-        'invoices/[id]/page.abide': INVOICE,
-        'slow/page.abide': SLOW,
-        'ui/slow.ts': `await new Promise((settle) => setTimeout(settle, ${SLOW_MS}))\nexport {}\n`,
-        'broken/page.abide': BROKEN,
+        'invoices/[id]/index.abide': INVOICE,
+        'slow/index.abide': SLOW,
+        'lib/slow.ts': `await new Promise((settle) => setTimeout(settle, ${SLOW_MS}))\nexport {}\n`,
+        'broken/index.abide': BROKEN,
         // 38.29, 38.68 — one answer over the floor and one under it.
-        'ledger/ledger.abide': `<script server>
-${LEDGER}</script>
-`,
+        'ledger/listRows.ts': LIST_ROWS,
+        'ledger/oneRow.ts': ONE_ROW,
         // ON THE SERVER ONLY, so the build still bundles it: the browser never evaluates it here.
-        'ui/broken.ts': `if (typeof window === 'undefined') throw new Error('broken on purpose')\nexport {}\n`,
+        'lib/broken.ts': `if (typeof window === 'undefined') throw new Error('broken on purpose')\nexport {}\n`,
         // 36.11 — TWO DEPTHS, because "its path below that directory" is the clause and a flat
         // directory cannot tell a path from a name.
         'public/robots.txt': 'User-agent: *\nAllow: /\n',
@@ -172,10 +174,10 @@ test('an address a page matches is painted into the shell — 38.6', async () =>
 // `answerRequest` and this reports `params is not a function` instead of the id — which is the same
 // break `Router.ts`'s `routeProps` carries on the client side of the same contract.
 // THE REVERT: hand the emitters no `componentGraph` imports in `compileApp` and the build this
-// file serves fails before any address answers — `Could not resolve: "#src/ui/components/Badge.client.ts"`,
+// file serves fails before any address answers — `Could not resolve: "#src/lib/components/Badge.client.ts"`,
 // the module the page imports being in the source tree, where the compiler wrote nothing.
 // THE REVERT: leave `splitImports` to rewrite `.abide` specifiers alone and the build this file
-// serves fails before any address answers — `Could not resolve: "../ui/greeting.ts"`, beside the output.
+// serves fails before any address answers — `Could not resolve: "../lib/greeting.ts"`, beside the output.
 test('a relative import in a page resolves from the page — 34.14', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     expect(html).toContain('<p id="greeting">beside the page</p>')
@@ -618,19 +620,15 @@ let stopBare: (() => void) | undefined
 let bareBase = ''
 
 beforeAll(async () => {
-    const app = temporaryModule({
-        'page.abide':
+    ;({ base: bareBase, stop: stopBare } = await serveApp({
+        'index.abide':
             '<head><title>Bare</title></head>\n<main id="bare">Bare</main>',
+        // 23.22 — a package's directory, where its tsconfig stands beside the pages.
         'tsconfig.json': JSON.stringify({
             compilerOptions: { strict: true, target: 'esnext', types: [] },
             include: ['**/*'],
         }),
-    })
-    const built = await buildApp(app)
-    if (built.exitCode !== 0)
-        throw new Error(`abide build failed: ${built.stderr}`)
-
-    ;({ base: bareBase, stop: stopBare } = await startApp(app))
+    }))
 }, 30_000)
 
 afterAll(() => {
@@ -681,7 +679,7 @@ test('an app with no public directory still boots and serves — 38.18', async (
 // one of the two lanes that serve.
 test('a public file claiming a page address is a build error naming both — 36.13', async () => {
     const app = temporaryModule({
-        'about/page.abide': '<main>About</main>',
+        'about/index.abide': '<main>About</main>',
         'public/about': 'the file that shadows the page',
     })
     const built = await buildApp(app)
@@ -699,7 +697,7 @@ test('a public file claiming a page address is a build error naming both — 36.
 // of 36.13's check; the second build fails with the first one's marker still there, and `start`
 // boots it.
 test('a build that fails leaves no build for start to boot — 38.100', async () => {
-    const app = temporaryModule({ 'about/page.abide': '<main>About</main>' })
+    const app = temporaryModule({ 'about/index.abide': '<main>About</main>' })
     expect((await buildApp(app)).exitCode).toBe(0)
     await Bun.write(`${app}/public/about`, 'the file that shadows the page')
     expect((await buildApp(app)).exitCode).not.toBe(0)

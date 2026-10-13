@@ -29,7 +29,7 @@ let base = ''
 let stop = (): void => {}
 
 beforeAll(async () => {
-    ;({ base, stop } = await serveApp({ 'page.abide': PAGE }))
+    ;({ base, stop } = await serveApp({ 'index.abide': PAGE }))
 }, 30_000)
 
 afterAll(() => {

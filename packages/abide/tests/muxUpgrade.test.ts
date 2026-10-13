@@ -4,7 +4,7 @@
 // process, and its `WebSocket` is not bun's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { BIN, lastLinePrinted, serveApp } from './builtApp.ts'
+import { BIN, handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 // A `GET` over a `global` value, so the app has a handler for the mux to carry (37.3).
@@ -31,10 +31,8 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ app, base, stop } = await serveApp({
-        'page.abide': '<main>home</main>',
-        'library/library.abide': `<script server>
-${HANDLERS}</script>
-`,
+        'index.abide': '<main>home</main>',
+        ...handlerFiles('library', HANDLERS),
         'layout.abide': `<script server>
 ${APP}</script>
 `,

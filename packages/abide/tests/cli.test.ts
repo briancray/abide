@@ -22,7 +22,7 @@ const PAGE = `<head><title>Home</title></head>
 // An app laid out the way a scaffold leaves one: the package at the top, the source under `src`.
 function scaffolded(): string {
     return temporaryModule({
-        'src/page.abide': PAGE,
+        'src/index.abide': PAGE,
         'package.json': JSON.stringify({
             name: 'cli-fixture',
             type: 'module',

@@ -33,7 +33,7 @@ test('a change is serialized once for every follower of a value, and each is sen
         new Map([
             [
                 `GET ${rpc.address}`,
-                { handler: rpc, ui: true, route: '/', rungs: [] } as never,
+                { handler: rpc, ui: true, scope: '/', rungs: [] } as never,
             ],
         ]),
         undefined,
@@ -108,7 +108,7 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
         new Map([
             [
                 `GET ${rpc.address}`,
-                { handler: rpc, ui: true, route: '/', rungs: [] } as never,
+                { handler: rpc, ui: true, scope: '/', rungs: [] } as never,
             ],
         ]),
         undefined,
@@ -156,7 +156,7 @@ test('an entry answered looks up the followers of its own key alone — 18.8', a
         new Map([
             [
                 `GET ${rpc.address}`,
-                { handler: rpc, ui: true, route: '/', rungs: [] } as never,
+                { handler: rpc, ui: true, scope: '/', rungs: [] } as never,
             ],
         ]),
         undefined,
@@ -222,7 +222,7 @@ test('a write reaches every event stream following a value with one serializatio
     const value = reactive({ titles: ['dune'] }, { global: true })
     const rpc = GET(value as never) as unknown as { address: string }
     rpc.address = '/events'
-    const mounted = { handler: rpc, ui: true, route: '/', rungs: [] } as never
+    const mounted = { handler: rpc, ui: true, scope: '/', rungs: [] } as never
     const readers: ReadableStreamDefaultReader<Uint8Array>[] = []
     for (let at = 0; at < STREAMS; at++)
         readers.push(followAsEvents(mounted, undefined, undefined).getReader())

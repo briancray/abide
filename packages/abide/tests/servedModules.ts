@@ -21,7 +21,9 @@ export function servedModules(
     const dir = temporaryModule(written)
     const compilation: Parameters<typeof serveCompilation>[1] = {
         files: {},
+        handlers: {},
         tables: {},
+        mounted: {},
     }
     for (const [name, compiled] of Object.entries(files))
         compilation.files[name] = {

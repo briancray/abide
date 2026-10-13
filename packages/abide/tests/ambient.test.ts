@@ -40,8 +40,8 @@ beforeAll(async () => {
             type: 'module',
             imports: { '#src/*': './*' },
         }),
-        'page.abide': PAGE,
-        'shared/session.ts': SESSION,
+        'index.abide': PAGE,
+        'lib/session.ts': SESSION,
     })
     found = (await checkApp(app)).filter((diagnosis) =>
         diagnosis.message.includes('11.37'),
@@ -71,11 +71,11 @@ test('a global body reading an ambient is found at the read — 11.37', () => {
             column,
         })),
     ).toEqual([
-        { file: 'shared/session.ts', ...place(SESSION, 'principal, {') },
-        { file: 'shared/session.ts', ...place(SESSION, 'jar()') },
-        { file: 'shared/session.ts', ...place(SESSION, 'csp.nonce') },
+        { file: 'lib/session.ts', ...place(SESSION, 'principal, {') },
+        { file: 'lib/session.ts', ...place(SESSION, 'jar()') },
+        { file: 'lib/session.ts', ...place(SESSION, 'csp.nonce') },
         {
-            file: 'shared/session.ts',
+            file: 'lib/session.ts',
             ...place(SESSION, 'principal.authenticated'),
         },
     ])

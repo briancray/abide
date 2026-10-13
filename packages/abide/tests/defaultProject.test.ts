@@ -21,7 +21,7 @@ afterAll(removeTemporaryModules)
 // emits `count` unlowered and unguarded, and the client module binds nothing.
 test('an app with no tsconfig.json is typed against a default project — 38.30', async () => {
     const app = temporaryModule({
-        'page.abide': `<script>\nimport { reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n\n<main><p>{count}</p><button onclick={() => { count = count + 1 }}>+</button></main>`,
+        'index.abide': `<script>\nimport { reactive } from '@abide/abide'\n\nlet count = reactive(0)\n</script>\n\n<main><p>{count}</p><button onclick={() => { count = count + 1 }}>+</button></main>`,
         'package.json': JSON.stringify({
             name: 'untyped-fixture',
             type: 'module',
@@ -43,8 +43,8 @@ test('an app with no tsconfig.json is typed against a default project — 38.30'
     const { files } = (await Bun.file(
         `${app}/.abide/compilation.json`,
     ).json()) as { files: Record<string, { server: string; client: string }> }
-    const server = files['page.abide']?.server ?? ''
-    const client = files['page.abide']?.client ?? ''
+    const server = files['index.abide']?.server ?? ''
+    const client = files['index.abide']?.client ?? ''
     expect(server).toContain('slotValue(() => count())')
     expect(client).toContain('count.set(count() + 1)')
 })

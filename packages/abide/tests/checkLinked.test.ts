@@ -20,7 +20,7 @@ const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 afterAll(() => removeTemporaryModules())
 
 const PAGE = `<script>
-import Card from './ui/components/Card.abide'
+import Card from './lib/Card.abide'
 </script>
 <Card title={1}/>`
 
@@ -29,8 +29,8 @@ import Card from './ui/components/Card.abide'
 // (`spelled` returning what it is given); the jump names a file the editor does not hold open.
 test('a page opened through a symlinked root is held to its component props', async () => {
     const app = appFixture({
-        'page.abide': PAGE,
-        'ui/components/Card.abide': `<script>
+        'index.abide': PAGE,
+        'lib/Card.abide': `<script>
 import { props } from '@abide/abide'
 const { title } = props<{ title: string }>()
 </script>
@@ -40,7 +40,7 @@ const { title } = props<{ title: string }>()
     symlinkSync(app, linked)
     const server = languageServer()
     try {
-        const uri = Bun.pathToFileURL(`${linked}/page.abide`).href
+        const uri = Bun.pathToFileURL(`${linked}/index.abide`).href
         server.send({
             id: 1,
             method: 'initialize',
@@ -75,8 +75,7 @@ const { title } = props<{ title: string }>()
         expect(await server.next((message) => message.id === 2)).toMatchObject({
             result: [
                 {
-                    uri: Bun.pathToFileURL(`${linked}/ui/components/Card.abide`)
-                        .href,
+                    uri: Bun.pathToFileURL(`${linked}/lib/Card.abide`).href,
                 },
             ],
         })
@@ -151,8 +150,8 @@ const wrong: string = config().RETRIES
 // `unknown`, and 2 findings where 1 is due.
 test('a page checked alone is typed by an onConfig it does not import — 27.13', async () => {
     const app = appFixture({
-        'page.abide': READER,
-        'settings/page.abide': `<script server>
+        'index.abide': READER,
+        'settings/index.abide': `<script server>
 import { onConfig } from '@abide/abide/server'
 
 onConfig(() => ({ RETRIES: 3 }))
@@ -160,7 +159,7 @@ onConfig(() => ({ RETRIES: 3 }))
     })
     const checker = await openChecker(app)
     try {
-        const found = await checkSource(checker, `${app}/page.abide`, READER)
+        const found = await checkSource(checker, `${app}/index.abide`, READER)
         expect(found.map(({ line, code }) => ({ line, code }))).toEqual([
             { line: 5, code: 2322 },
         ])
@@ -175,15 +174,15 @@ onConfig(() => ({ RETRIES: 3 }))
 // `sourcesUnder` in `checkSource` again, as it did; the second check finds the new file, 1 finding
 // where 2 are due.
 test('a kept checker re-reads the app only once a move is heard — 38.11', async () => {
-    const app = appFixture({ 'page.abide': READER })
+    const app = appFixture({ 'index.abide': READER })
     const checker = await openChecker(app)
     const codes = async (): Promise<number[]> =>
-        (await checkSource(checker, `${app}/page.abide`, READER)).map(
+        (await checkSource(checker, `${app}/index.abide`, READER)).map(
             (diagnosis) => diagnosis.code,
         )
     try {
         expect(await codes()).toHaveLength(2)
-        const settings = `${app}/settings/page.abide`
+        const settings = `${app}/settings/index.abide`
         await Bun.write(
             settings,
             `<script server>
@@ -204,7 +203,7 @@ onConfig(() => ({ RETRIES: 3 }))
 // 30.26 — THE ROUTE TABLE `url` IS HELD TO IS KEPT ON THE CHECKER until its watcher hears a move, so
 // a check asked on every keystroke walks and reads nothing on disk again. Asserted on the WORK: a
 // page written with no move heard is not seen, and seen once `saw` is told. THE REVERT: declare
-// `routesDeclaration(within)` afresh in `diagnose`; the second check sees the new page, 0 findings
+// `routesDeclaration` off a fresh walk in `diagnose`; the second check sees the new page, 0 findings
 // where 1 is due.
 test('a kept checker re-walks the route table only once a move is heard — 30.26', async () => {
     const LINKER = `<script>
@@ -212,15 +211,15 @@ import { url } from '@abide/abide'
 
 const later = url('/later')
 </script>`
-    const app = appFixture({ 'page.abide': LINKER })
+    const app = appFixture({ 'index.abide': LINKER })
     const checker = await openChecker(app)
     const codes = async (): Promise<number[]> =>
-        (await checkSource(checker, `${app}/page.abide`, LINKER)).map(
+        (await checkSource(checker, `${app}/index.abide`, LINKER)).map(
             (diagnosis) => diagnosis.code,
         )
     try {
         expect(await codes()).toEqual([2345])
-        const later = `${app}/later/page.abide`
+        const later = `${app}/later/index.abide`
         await Bun.write(later, '<p>later</p>')
         expect(await codes()).toEqual([2345])
         checker.saw(later)

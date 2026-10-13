@@ -7,7 +7,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import { getTotal } from '#src/totals/totals.abide'
+import getTotal from '#src/totals/getTotal.ts'
 
 const total = reactive(() => getTotal())
 </script>
@@ -32,11 +32,9 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': PAGE,
-        'inline/page.abide': INLINE,
-        'totals/totals.abide': `<script server>
-import { GET } from '@abide/abide/server'\n\nexport const getTotal = GET(() => 1240)\n</script>
-`,
+        'index.abide': PAGE,
+        'inline/index.abide': INLINE,
+        'totals/getTotal.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1240)\n`,
         'layout.abide': `<script server>
 import { csp, middleware } from '@abide/abide/server'
 

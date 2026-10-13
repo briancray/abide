@@ -17,8 +17,8 @@ const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const CLEAN = `<script>
 import { reactive } from '@abide/abide'
-import Card from '#src/ui/components/Card.abide'
-import '#src/ui/app.css'
+import Card from '#src/lib/Card.abide'
+import '#src/lib/app.css'
 
 let count = reactive(0)
 let thread = reactive<{ text: string } | undefined>(undefined)
@@ -69,7 +69,7 @@ const face = url('/fonts/face.woff2')
 
 <a href={good}>{home}</a><a href={stale}>stale</a><a href={face}>face</a>`
 
-// 34.19 — a plain `let` the setup writes, beside one only a handler writes and one that is a
+// 34.18 — a plain `let` the setup writes, beside one only a handler writes and one that is a
 // `reactive`: the first is the leak, and the other two are not.
 const SHARED = `<script module>
 import { reactive } from '@abide/abide'
@@ -141,9 +141,9 @@ const { title } = props<{ title: string }>()
 // is wrong in a different way.
 const PROPS = `<script>
 import { reactive } from '@abide/abide'
-import Card from '#src/ui/components/Card.abide'
-import Bare from '#src/ui/components/Bare.abide'
-import Held from '#src/ui/components/Held.abide'
+import Card from '#src/lib/Card.abide'
+import Bare from '#src/lib/Bare.abide'
+import Held from '#src/lib/Held.abide'
 
 let count = reactive(0)
 let name = reactive('ada')
@@ -164,7 +164,7 @@ let name = reactive('ada')
 // 32.34 — a tag choosing by a value is held to the props of what it may hold, and may hold nothing.
 const CHOSEN = `<script>
 import { reactive } from '@abide/abide'
-import Card from '#src/ui/components/Card.abide'
+import Card from '#src/lib/Card.abide'
 
 let open = reactive(true)
 let Shown = reactive(() => (open ? Card : undefined))
@@ -252,31 +252,24 @@ let found: Diagnosis[] = []
 
 beforeAll(async () => {
     app = appFixture({
-        'package.json': JSON.stringify({
-            name: 'check-fixture',
-            type: 'module',
-            imports: {
-                '#src/*': './*',
-            },
-        }),
-        'page.abide': CLEAN,
-        'broken/page.abide': BROKEN,
-        'warned/page.abide': WARNED,
-        'shared/page.abide': SHARED,
-        'echoed/page.abide': ECHOED,
-        'ui/components/Card.abide': CARD,
-        'props/page.abide': PROPS,
-        'chosen/page.abide': CHOSEN,
-        'narrowed/page.abide': NARROWED,
-        'after-await/page.abide': AFTER_AWAIT,
-        'ui/components/Bare.abide': '<p>bare</p>',
-        'ui/components/Held.abide': HELD,
-        'ui/components/Optional.abide': OPTIONAL,
-        'routed/[id]/[...rest]/page.abide': ROUTED,
-        'linked/page.abide': LINKED,
+        'index.abide': CLEAN,
+        'broken/index.abide': BROKEN,
+        'warned/index.abide': WARNED,
+        'shared/index.abide': SHARED,
+        'echoed/index.abide': ECHOED,
+        'lib/Card.abide': CARD,
+        'props/index.abide': PROPS,
+        'chosen/index.abide': CHOSEN,
+        'narrowed/index.abide': NARROWED,
+        'after-await/index.abide': AFTER_AWAIT,
+        'lib/Bare.abide': '<p>bare</p>',
+        'lib/Held.abide': HELD,
+        'lib/Optional.abide': OPTIONAL,
+        'routed/[id]/[...rest]/index.abide': ROUTED,
+        'linked/index.abide': LINKED,
         'public/fonts/face.woff2': 'a face',
-        'configured/page.abide': CONFIGURED,
-        'configured/elsewhere/page.abide': `<script server>
+        'configured/index.abide': CONFIGURED,
+        'configured/elsewhere/index.abide': `<script server>
 import { config } from '@abide/abide/server'
 
 const label: string = config().LABEL
@@ -287,15 +280,15 @@ import { route } from '@abide/abide'
 const section: string | string[] | undefined = route.params().section
 </script>
 <slot/>`,
-        'ui/components/Defaulted.abide': `<script>
+        'lib/Defaulted.abide': `<script>
 import { props } from '@abide/abide'
 
 const { start = 0 } = props<{ start?: number }>()
 </script>
 
 <p>{start.toFixed(1)}</p>`,
-        'ui/app.css': 'p { color: red }',
-        'shared/sum.ts': "export const sum: number = 'x'\n",
+        'lib/app.css': 'p { color: red }',
+        'lib/sum.ts': "export const sum: number = 'x'\n",
     })
     found = await checkApp(app)
 }, 60_000)
@@ -325,21 +318,21 @@ function inFile(below: string): Diagnosis[] {
 // page reports `count + event.clientX` as an operator on a `Reactive` (TS2365), `thread.text` as a
 // member of one, and the component import as a module that does not exist.
 test('a page read and written by name checks clean — 38.3', () => {
-    expect(inFile('page.abide')).toEqual([])
-    expect(inFile('ui/components/Card.abide')).toEqual([])
+    expect(inFile('index.abide')).toEqual([])
+    expect(inFile('lib/Card.abide')).toEqual([])
 })
 
 // THE REVERT: project a component's attributes as statements of their own (`__any(value)`), as
 // before a tag was a call; nothing is reported here at all. Or type every checked module's default
 // export as taking `any` (`componentModule('any')`); the same.
 test('an optional prop reads as its value or undefined — 33.4', () => {
-    expect(inFile('ui/components/Optional.abide')).toEqual([])
+    expect(inFile('lib/Optional.abide')).toEqual([])
 })
 
 test('a tag is held to the props its component declares, on the attribute — 38.40', () => {
     const at = (needle: string, skip: number) => place(PROPS, needle, skip)
     const reported: { line: number; column: number; code: number }[] = []
-    for (const { line, column, code } of inFile('props/page.abide'))
+    for (const { line, column, code } of inFile('props/index.abide'))
         reported.push({ line, column, code })
     expect(reported).toEqual([
         // Nothing on the `{ get, set }` pair: `set`'s parameter is typed by what `get` answers
@@ -354,15 +347,15 @@ test('a tag is held to the props its component declares, on the attribute — 38
         // 32.6 — a `bind:` is held to the prop as the value its `Reactive` holds.
         { ...at('<Held bind:value={count}', 18), code: 2322 },
     ])
-    expect(inFile('ui/components/Bare.abide')).toEqual([])
-    expect(inFile('ui/components/Held.abide')).toEqual([])
+    expect(inFile('lib/Bare.abide')).toEqual([])
+    expect(inFile('lib/Held.abide')).toEqual([])
 })
 
 // THE REVERT: drop the tag spans from `checkedShadow`'s units; the tag is checked as a call on the
 // `Reactive` itself, and both tags report its arity (TS2554) in place of the one wrong prop.
 test('a tag choosing by a value is held to the props of what it holds — 32.34, 38.40', () => {
     const reported: { line: number; column: number; code: number }[] = []
-    for (const { line, column, code } of inFile('chosen/page.abide'))
+    for (const { line, column, code } of inFile('chosen/index.abide'))
         reported.push({ line, column, code })
     expect(reported).toEqual([
         { ...place(CHOSEN, '<Shown title={1}', 14), code: 2322 },
@@ -373,7 +366,7 @@ test('a tag choosing by a value is held to the props of what it holds — 32.34,
 // through the checked text alone, skipping the projection's origins; every line reads as an offset
 // into the shadow, past the end of the file.
 test('an error in a script, a slot or a write lands on its own line — 38.3', () => {
-    const errors = inFile('broken/page.abide')
+    const errors = inFile('broken/index.abide')
     const at = (code: number) =>
         errors
             .filter((diagnosis) => diagnosis.code === code)
@@ -389,7 +382,7 @@ test('an error in a script, a slot or a write lands on its own line — 38.3', (
 // the earlier echo — the keyword or the attribute's name — rather than on what was typed.
 test('an error lands on the name, not on an earlier echo of it — 38.3', () => {
     expect(
-        inFile('echoed/page.abide')
+        inFile('echoed/index.abide')
             .filter((diagnosis) => diagnosis.code === 2304)
             .map(({ line, column }) => ({ line, column })),
     ).toEqual([
@@ -404,7 +397,7 @@ test('an error lands on the name, not on an earlier echo of it — 38.3', () => 
 // from `checkedWriteParts`, so a write is `x.set(3)` — a call, which undoes nothing — and each
 // `x.toFixed()` after one reports `x` as possibly null (TS18047).
 test('a write after a line with no semicolon checks as its own statement — 38.3', () => {
-    expect(inFile('after-await/page.abide')).toEqual([])
+    expect(inFile('after-await/index.abide')).toEqual([])
 })
 
 // 23.9 — A PAGE READS WHAT ITS OWN ROUTE PROMISES: `id` is text, a rest is a list, and nothing else
@@ -413,7 +406,7 @@ test('a write after a line with no semicolon checks as its own statement — 38.
 // three findings where the one is due.
 test('route.params in a page is typed by its own route — 23.9', () => {
     expect(
-        inFile('routed/[id]/[...rest]/page.abide').map(
+        inFile('routed/[id]/[...rest]/index.abide').map(
             ({ line, column, code }) => ({ line, column, code }),
         ),
     ).toEqual([{ ...place(ROUTED, 'wrong'), code: 2322 }])
@@ -427,7 +420,7 @@ test('route.params in a page is typed by its own route — 23.9', () => {
 // from `routesDeclaration`; `/fonts/face.woff2` is refused too, 2 where 1 is due.
 test('url refuses a literal no page or public file is at — 30.26', () => {
     expect(
-        inFile('linked/page.abide').map(({ line, column, code }) => ({
+        inFile('linked/index.abide').map(({ line, column, code }) => ({
             line,
             column,
             code,
@@ -441,30 +434,30 @@ test('url refuses a literal no page or public file is at — 30.26', () => {
 // `configReads`; `middleware` is captured as defaults, and the page reports 3.
 test('config() is typed by what onConfig defaults — 27.13', () => {
     expect(
-        inFile('configured/page.abide').map(({ line, column, code }) => ({
+        inFile('configured/index.abide').map(({ line, column, code }) => ({
             line,
             column,
             code,
         })),
     ).toEqual([{ ...place(CONFIGURED, 'wrong'), code: 2322 }])
-    expect(inFile('configured/elsewhere/page.abide')).toEqual([])
+    expect(inFile('configured/elsewhere/index.abide')).toEqual([])
 })
 
 // 33.20 — A DEFAULTED PROP IS NEVER UNDEFINED, so its binding is typed without it. THE REVERT: hand
 // `__accessors` no `defaulted` keys; `start.toFixed` reports `start` as possibly undefined (TS18048).
 test('a defaulted prop is typed without undefined — 33.20', () => {
-    expect(inFile('ui/components/Defaulted.abide')).toEqual([])
+    expect(inFile('lib/Defaulted.abide')).toEqual([])
 })
 
 test('a write narrows the name it writes — 38.3', () => {
-    expect(inFile('narrowed/page.abide')).toEqual([])
+    expect(inFile('narrowed/index.abide')).toEqual([])
 })
 
 // 31.11 — A BUILD REFUSAL, REPORTED AS A FINDING, and the rest of the file still checked around
 // it. THE REVERT: throw in `Lowering` whatever the mode; the check ends at this page with nothing
 // said about its other lines.
 test('a read given an argument is a finding at the read — 31.11', () => {
-    const refused = inFile('broken/page.abide').filter(
+    const refused = inFile('broken/index.abide').filter(
         (diagnosis) => diagnosis.code === 0,
     )
     expect(refused.length).toBe(1)
@@ -484,7 +477,7 @@ test('a read given an argument is reported once for the whole app — 31.11', ()
 
 test('a .ts file beside the pages is checked as it stands — 38.3', () => {
     expect(
-        inFile('shared/sum.ts').map(({ line, column, code }) => ({
+        inFile('lib/sum.ts').map(({ line, column, code }) => ({
             line,
             column,
             code,
@@ -503,7 +496,7 @@ test('a .ts file beside the pages is checked as it stands — 38.3', () => {
 // goes unwarned (0 against 1); scan the union whole rather than per member and `optional?.refresh`
 // goes unwarned (1 against 2), because `undefined` shares no property with anything.
 test('each tracking warning lands on its read and on no near miss — 14.14, 14.15, 14.16, 14.17, 31.13', () => {
-    const warnings = inFile('warned/page.abide').filter(
+    const warnings = inFile('warned/index.abide').filter(
         (diagnosis) => diagnosis.category === 'warning',
     )
     const by = (clause: string) =>
@@ -524,9 +517,9 @@ test('each tracking warning lands on its read and on no near miss — 14.14, 14.
 // THE REVERT: drop the `sharedModuleWrites` call in `readsIn`; nothing lands (0 against 1). Drop
 // `insideFunction` and the handler's `clicks += 1` warns too (2 against 1); drop the `reactive`
 // test and `counted += 1` does (2 against 1).
-test('a plain let the setup writes in a script module is warned on — 34.19', () => {
-    const warned = inFile('shared/page.abide')
-        .filter((diagnosis) => diagnosis.message.includes('34.19'))
+test('a plain let the setup writes in a script module is warned on — 34.18', () => {
+    const warned = inFile('shared/index.abide')
+        .filter((diagnosis) => diagnosis.message.includes('34.18'))
         .map(({ line, column }) => ({ line, column }))
     expect(warned).toEqual([place(SHARED, 'opened += 1')])
 })
@@ -537,7 +530,7 @@ test('a plain let the setup writes in a script module is warned on — 34.19', (
 // Drop `canChange` and the constant list warns (3 against 2). Drop `keyedByValue` and `keyed` warns
 // (3 against 2).
 test('an unkeyed loop over a body holding state warns at its subject — 32.14', () => {
-    const loops = inFile('warned/page.abide').filter((diagnosis) =>
+    const loops = inFile('warned/index.abide').filter((diagnosis) =>
         diagnosis.message.includes('32.14'),
     )
     expect(loops.map(({ line, column }) => ({ line, column }))).toEqual([
@@ -566,7 +559,7 @@ test('an index signature beside typed props leaves them typed — 33.11', async 
             },
             include: ['.'],
         }),
-        'ui/components/Button.abide': `<script>
+        'lib/Button.abide': `<script>
 import { props } from '@abide/abide'
 
 const SIZES = { sm: 'p-1', md: 'p-2' }
@@ -585,8 +578,8 @@ const { size, color, ...attributes } = props<{
 {:else}
     <button class="{color ? COLORS[color] : ''} {size ? SIZES[size] : ''}" {...attributes}><slot/></button>
 {/if}`,
-        'page.abide': `<script>
-import Button from '#src/ui/components/Button.abide'
+        'index.abide': `<script>
+import Button from '#src/lib/Button.abide'
 </script>
 <Button size="sm" color="lime" onclick={(event) => console.log(event.clientX)}>go</Button>`,
     })
@@ -611,7 +604,7 @@ test('a value opening at undefined is a value with strict off — 4.15', async (
             },
             include: ['.'],
         }),
-        'page.abide': `<script>
+        'index.abide': `<script>
 import { reactive } from '@abide/abide'
 
 type Thing = { go: () => void }
@@ -629,7 +622,7 @@ const run = () => thing?.go()
 // `Attributes`; `tabindex="-1"` is text where a number is due and is refused beside `type="banana"`.
 test('a component typed by Attributes holds its callers to the element — 33.23', async () => {
     const attributed = appFixture({
-        'ui/components/Button.abide': `<script>
+        'lib/Button.abide': `<script>
 import { props, type Attributes } from '@abide/abide'
 
 const SIZES = { sm: 'p-1', md: 'p-2' }
@@ -638,8 +631,8 @@ const { size = 'md', ...attributes } = props<{ size?: keyof typeof SIZES } & Att
 </script>
 
 <button class={SIZES[size]} {...attributes}><slot/></button>`,
-        'page.abide': `<script>
-import Button from '#src/ui/components/Button.abide'
+        'index.abide': `<script>
+import Button from '#src/lib/Button.abide'
 </script>
 <Button size="sm" type="submit" tabindex="-1" disabled itemprop="action" aria-disabled={true} data-id="7" onclick={(event) => console.log(event.currentTarget.form, event.clientX)}>go</Button>
 <Button type="banana">no</Button>`,
@@ -650,7 +643,7 @@ import Button from '#src/ui/components/Button.abide'
             line,
             code,
         })),
-    ).toEqual([{ file: 'page.abide', line: 5, code: 2322 }])
+    ).toEqual([{ file: 'index.abide', line: 5, code: 2322 }])
 }, 60_000)
 
 // 33.26 THROUGH `abide check` — an icon typed `Attributes<'svg'>`: `viewBox` keeps its case on the
@@ -658,15 +651,15 @@ import Button from '#src/ui/components/Button.abide'
 // tag by the HTML derivation; the first icon's `viewBox` is refused beside the second's `radius`.
 test('a component typed by Attributes over an SVG element holds its callers to it — 33.26', async () => {
     const icon = appFixture({
-        'ui/components/Icon.abide': `<script>
+        'lib/Icon.abide': `<script>
 import { props, type Attributes } from '@abide/abide'
 
 const { class: className = '', ...attributes } = props<Attributes<'svg'>>()
 </script>
 
 <svg class="size-6 {className}" fill="none" stroke="currentColor" {...attributes}><slot/></svg>`,
-        'page.abide': `<script>
-import Icon from '#src/ui/components/Icon.abide'
+        'index.abide': `<script>
+import Icon from '#src/lib/Icon.abide'
 </script>
 <Icon viewBox="0 0 24 24" stroke-width={1.5} aria-hidden="true"><path d="M0 0"/></Icon>
 <Icon radius="4"/>`,
@@ -677,7 +670,7 @@ import Icon from '#src/ui/components/Icon.abide'
             line,
             code,
         })),
-    ).toEqual([{ file: 'page.abide', line: 5, code: 2353 }])
+    ).toEqual([{ file: 'index.abide', line: 5, code: 2353 }])
 }, 60_000)
 
 // 34.13 — A GENERIC COMPONENT: its body is checked for every `Item` at once, and a caller's
@@ -687,14 +680,14 @@ import Icon from '#src/ui/components/Icon.abide'
 // component's own lines are refused (TS2304) beside the two callers.
 test('a generic component is checked in its body and inferred at its callers — 34.13', async () => {
     const generic = appFixture({
-        'ui/components/Select.abide': `<script generics="Item extends { id: string; label: string }">
+        'lib/Select.abide': `<script generics="Item extends { id: string; label: string }">
 import { props } from '@abide/abide'
 const { items, onpick } = props<{ items: Item[]; onpick: (item: Item) => void }>()
 const label: string = items[0]?.label ?? ''
 </script>
 <ul>{#for item of items by item.id}<li onclick={() => onpick(item)}>{item.label}</li>{/for}</ul><p>{label}</p>`,
-        'page.abide': `<script>
-import Select from '#src/ui/components/Select.abide'
+        'index.abide': `<script>
+import Select from '#src/lib/Select.abide'
 type Film = { id: string; label: string; year: number }
 const films: Film[] = [{ id: 'a', label: 'Alien', year: 1979 }]
 function picked(film: Film) { const year: number = film.year; void year }
@@ -712,8 +705,8 @@ function other(film: { id: string; label: string; year: string }) { void film }
             code,
         })),
     ).toEqual([
-        { file: 'page.abide', line: 9, code: 2322 },
-        { file: 'page.abide', line: 10, code: 2322 },
+        { file: 'index.abide', line: 9, code: 2322 },
+        { file: 'index.abide', line: 10, code: 2322 },
     ])
 }, 60_000)
 
@@ -722,13 +715,13 @@ function other(film: { id: string; label: string; year: string }) { void film }
 // declaration; both imported loops warn (3 against 1).
 test('an unkeyed loop over an imported value that declares `by` does not warn — 32.32', async () => {
     const imported = appFixture({
-        'ui/rows.ts': `import { reactive } from '@abide/abide'
+        'lib/rows.ts': `import { reactive } from '@abide/abide'
 export const shared = reactive([{ id: 1 }], { by: 'id' })
 export const plain = reactive([{ id: 1 }])
 `,
-        'page.abide': `<script>
-import { plain, shared } from '#src/ui/rows.ts'
-import { shared as renamed } from '#src/ui/rows.ts'
+        'index.abide': `<script>
+import { plain, shared } from '#src/lib/rows.ts'
+import { shared as renamed } from '#src/lib/rows.ts'
 </script>
 {#for row of shared}<input />{/for}
 {#for row of renamed}<input />{/for}
@@ -741,17 +734,16 @@ import { shared as renamed } from '#src/ui/rows.ts'
     expect(loops.map(({ line }) => line)).toEqual([7])
 }, 60_000)
 
-// A REFUSAL ONLY THE WHOLE APP CAN SEE is a finding too: a `<script server>` exporting what no
-// handler declares type-checks, and only the emit refuses it. THE REVERT: skip `emitApp` in
-// `checkApp`; the check reads 0 refusals where 1 is due.
-test('a check reports what only building the whole app refuses — 19.15', async () => {
+// A REFUSAL ONLY THE WHOLE APP CAN SEE is a finding too: a handler file whose default no handler
+// declares type-checks, and only the emit refuses it. THE REVERT: skip `emitApp` in `checkApp`; the
+// check reads 0 refusals where 1 is due.
+test('a check reports what only building the whole app refuses — 16.73', async () => {
     const stray = appFixture({
-        'page.abide': '<p>hello</p>',
-        'things/things.abide':
-            '<script server>\nexport const answer = 42\n</script>\n',
+        'index.abide': '<p>hello</p>',
+        'things/answer.ts': 'export default 42\n',
     })
     const refused = (await checkApp(stray)).filter((diagnosis) =>
-        diagnosis.message.includes('19.15'),
+        diagnosis.message.includes('16.73'),
     )
     expect(refused.length).toBe(1)
 }, 60_000)
@@ -761,37 +753,136 @@ test('a check reports what only building the whole app refuses — 19.15', async
 // sink; the check throws the 23.18 refusal and reports nothing else.
 test('a check reports a tree refusal at its file beside the type errors — 38.33, 23.18', async () => {
     const stray = appFixture({
-        'page.abide': '<script>\nconst label: string = 5\n</script>\n',
-        'media/server/page.abide': '<p>stray</p>',
+        'index.abide': '<script>\nconst label: string = 5\n</script>\n',
+        'media/server/index.abide': '<p>stray</p>',
     })
     const found = await checkApp(stray)
     const tree = found.filter((diagnosis) =>
         diagnosis.message.includes('23.18'),
     )
     expect(tree.length).toBe(1)
-    expect(tree[0]?.path).toEndWith('media/server/page.abide')
+    expect(tree[0]?.path).toEndWith('media/server/index.abide')
+    expect(found.some((diagnosis) => diagnosis.code === 2322)).toBe(true)
+}, 60_000)
+
+// 38.33, 34.17 — AN EXPORT IN A `.abide` IS A FINDING AT ITS FILE, not the end of the check: the
+// rest of the app is checked around it, as a parse refusal is. THE REVERT: let `session.lints`
+// project the files `readSources` already refused; the check throws the 34.17 refusal and reports
+// nothing else.
+test('a check reports an export in a .abide at its file beside the type errors — 38.33, 34.17', async () => {
+    const exporting = appFixture({
+        'index.abide': '<script>\nconst label: string = 5\n</script>\n',
+        'media/index.abide':
+            '<script>\nexport const answer = 42\n</script>\n<p>x</p>',
+    })
+    let found: Diagnosis[] = []
+    let thrown = ''
+    try {
+        found = await checkApp(exporting)
+    } catch (error) {
+        thrown = String(error)
+    }
+    expect(thrown).toBe('')
+    const exported = found.filter((diagnosis) =>
+        diagnosis.message.includes('34.17'),
+    )
+    expect(exported.length).toBe(1)
+    expect(exported[0]?.path).toEndWith('media/index.abide')
+    expect(found.some((diagnosis) => diagnosis.code === 2322)).toBe(true)
+}, 60_000)
+
+// 38.33, 34.17 — AND ONE ANOTHER FILE IMPORTS: the import brings the refused component back into the
+// app, and it is still the one finding at its file. THE REVERT: project only the app's own files
+// before `withDependencies`; it re-adds the import, `session.lints` projects it, and the check
+// throws the 34.17 refusal instead of answering.
+test('a check reports an export in an imported .abide at its file — 38.33, 34.17', async () => {
+    const imported = appFixture({
+        'index.abide':
+            "<script>\nimport Card from '#src/lib/Card.abide'\nconst label: string = 5\n</script>\n<Card/>",
+        'lib/Card.abide':
+            '<script>\nexport const answer = 42\n</script>\n<p>card</p>',
+    })
+    let found: Diagnosis[] = []
+    let thrown = ''
+    try {
+        found = await checkApp(imported)
+    } catch (error) {
+        thrown = String(error)
+    }
+    expect(thrown).toBe('')
+    const exported = found.filter((diagnosis) =>
+        diagnosis.message.includes('34.17'),
+    )
+    expect(exported.length).toBe(1)
+    expect(exported[0]?.path).toEndWith('lib/Card.abide')
+    expect(found.some((diagnosis) => diagnosis.code === 2322)).toBe(true)
+}, 60_000)
+
+// 38.33 — WHAT THE WHOLE APP REFUSES IS FOUND AT EACH FILE, every one of them, as a file's own
+// refusals are: two handler files that each export a second name are two findings, one at each.
+// THE REVERT: hand `emitApp` no `refuse` in `checkApp`; the first refusal throws, and the check
+// reports 1 finding at the app's root where 2 are due at the files.
+test('a check reports every handler file refusal at its own file — 38.33, 16.73', async () => {
+    const twice = appFixture({
+        'index.abide': '<p>home</p>',
+        'media/getOne.ts':
+            "import { GET } from '@abide/abide/server'\n\nexport const extra = 1\nexport default GET(() => 1)\n",
+        'media/getTwo.ts':
+            "import { GET } from '@abide/abide/server'\n\nexport const more = 2\nexport default GET(() => 2)\n",
+    })
+    const at: string[] = []
+    for (const diagnosis of await checkApp(twice))
+        if (diagnosis.message.includes('16.73'))
+            at.push(relative(realpathSync(twice), diagnosis.path))
+    expect(at.sort()).toEqual(['media/getOne.ts', 'media/getTwo.ts'])
+}, 60_000)
+
+// 38.33, 23.22 — A STRAY IN AN ADDRESS DIRECTORY is reported where it stands, by the same walk the
+// build refuses it with, and the rest of the app is still checked. THE REVERT: drop the `appFiles`
+// call collecting refusals in `checkApp`; the check reports the type error alone and the stray
+// goes unfound, 0 findings at `media/notes.md` where 1 is due.
+test('a check reports a stray file in an address directory at the file — 38.33, 23.22', async () => {
+    const stray = appFixture({
+        'index.abide': '<script>\nconst label: string = 5\n</script>\n',
+        'media/notes.md': '# notes\n',
+    })
+    const found = await checkApp(stray)
+    const tree = found.filter((diagnosis) =>
+        diagnosis.message.includes('23.22'),
+    )
+    expect(tree.length).toBe(1)
+    expect(tree[0]?.path).toEndWith('media/notes.md')
+    expect(tree[0]?.message).toContain('lib directory')
     expect(found.some((diagnosis) => diagnosis.code === 2322)).toBe(true)
 }, 60_000)
 
 // 16.39 —A `Reactive` NESTED IN WHAT A HANDLER RETURNS is refused, by the handler and the path to
-// it; one returned whole is adopted (11.12) and is not — `getUser` is declared first, so a refusal
+// it; one returned whole is adopted (11.12) and is not — `getUser` is listed first, so a refusal
 // of it would be the one read. THE REVERT: skip `nestedReactiveIn` in `declaredExports`; the check reads
 // 0 refusals where 1 is due, in each app.
 test('a handler returning a Reactive nested in its value is refused by path — 16.39', async () => {
-    const refusals = async (handlers: string) => {
+    const refusals = async (name: string, handler: string) => {
         const said: string[] = []
         const app = appFixture({
-            'page.abide': '<p>hello</p>',
-            'people/people.abide': `<script server>
-import { reactive } from '@abide/abide'
-import { GET } from '@abide/abide/server'
+            'index.abide': '<p>hello</p>',
+            'lib/user.ts': `import { reactive } from '@abide/abide'
 
-const user = reactive({ name: 'Ada' })
-
-export const getUser = GET(() => user)
-${handlers}
-</script>
+export const user = reactive({ name: 'Ada' })
 `,
+            'people/getUser.ts': `import { GET } from '@abide/abide/server'
+import { user } from '../lib/user.ts'
+
+export default GET(() => user)
+`,
+            ...(name === ''
+                ? {}
+                : {
+                      [`people/${name}.ts`]: `import { GET } from '@abide/abide/server'
+import { user } from '../lib/user.ts'
+
+export default ${handler}
+`,
+                  }),
         })
         for (const diagnosis of await checkApp(app))
             if (diagnosis.message.includes('16.39'))
@@ -799,28 +890,34 @@ ${handlers}
         return said
     }
     const member = await refusals(
-        'export const getProfile = GET(() => ({ user, since: 1815 }))\n',
+        'getProfile',
+        'GET(() => ({ user, since: 1815 }))',
     )
     expect(member.length).toBe(1)
-    expect(member[0]).toContain('`getProfile` returns a `Reactive` at `.user`')
+    expect(member[0]).toContain('people/getProfile.ts')
+    expect(member[0]).toContain('`default` returns a `Reactive` at `.user`')
     const item = await refusals(
-        'export const getRows = GET(async () => [{ owner: { held: user } }])\n',
+        'getRows',
+        'GET(async () => [{ owner: { held: user } }])',
     )
     expect(item.length).toBe(1)
+    expect(item[0]).toContain('people/getRows.ts')
     expect(item[0]).toContain(
-        '`getRows` returns a `Reactive` at `[].owner.held`',
+        '`default` returns a `Reactive` at `[].owner.held`',
     )
-    expect(await refusals('')).toEqual([])
+    expect(await refusals('', '')).toEqual([])
     // As deep as `argsSchemaOf` walks and no deeper: seven members down is read, eight is past
     // `DEEPEST`. THE REVERT: `walk.depth > DEEPEST` in `nestedReactiveIn` refuses the eighth, 1
     // where 0 is due.
     const deepest = await refusals(
-        'export const getDeep = GET(() => ({ a: { b: { c: { d: { e: { f: { g: user } } } } } } }))\n',
+        'getDeep',
+        'GET(() => ({ a: { b: { c: { d: { e: { f: { g: user } } } } } } }))',
     )
     expect(deepest.length).toBe(1)
     expect(deepest[0]).toContain('at `.a.b.c.d.e.f.g`')
     const past = await refusals(
-        'export const getPast = GET(() => ({ a: { b: { c: { d: { e: { f: { g: { h: user } } } } } } } }))\n',
+        'getPast',
+        'GET(() => ({ a: { b: { c: { d: { e: { f: { g: { h: user } } } } } } } }))',
     )
     expect(past).toEqual([])
 }, 60_000)
@@ -830,16 +927,11 @@ ${handlers}
 // then holds `""` to `Reactive<string>` (TS2322) beside the build's refusal, two answers to one tag.
 test('a bind: with nothing bound is refused, and is no prop to the checker — 32.6', async () => {
     const unbound = appFixture({
-        'package.json': JSON.stringify({
-            name: 'unbound-fixture',
-            type: 'module',
-            imports: { '#src/*': './*' },
-        }),
-        'page.abide': `<script>
-import Held from '#src/ui/components/Held.abide'
+        'index.abide': `<script>
+import Held from '#src/lib/Held.abide'
 </script>
 <Held bind:value/>`,
-        'ui/components/Held.abide': HELD,
+        'lib/Held.abide': HELD,
     })
     const codes: number[] = []
     for (const diagnosis of await checkApp(unbound)) codes.push(diagnosis.code)
@@ -850,10 +942,10 @@ import Held from '#src/ui/components/Held.abide'
 // THE SAME WARNINGS FROM THE BUILD, which is what `abide build` and `abide dev` print. THE REVERT:
 // hand back `[]` for `warnings` in `compileApp`; this reads 0 where 8 are due.
 test('a compile carries the warnings a check reports — 14.14, 32.14', async () => {
-    const warnedOnly = appFixture({ 'page.abide': WARNED })
+    const warnedOnly = appFixture({ 'index.abide': WARNED })
     const compiled = await compileApp(warnedOnly)
     expect(compiled.warnings.length).toBe(8)
-    expect(compiled.warnings[0]?.path).toEndWith('page.abide')
+    expect(compiled.warnings[0]?.path).toEndWith('index.abide')
 }, 60_000)
 
 // A FAILURE WHERE ANY FINDING IS AN ERROR, and a success where they are warnings alone — which is
@@ -866,7 +958,7 @@ test('abide check fails on an error and passes on warnings alone — 38.3', asyn
     expect(all.exitCode).toBe(1)
     const said = all.stdout
     expect(said).toContain(
-        `broken/page.abide:${place(BROKEN, 'toUpperCase').line}:`,
+        `broken/index.abide:${place(BROKEN, 'toUpperCase').line}:`,
     )
     const warned = await spawned(
         ['bun', BIN, 'check', '--root', app, 'warned'],

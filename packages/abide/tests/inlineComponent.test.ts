@@ -302,7 +302,7 @@ let app = ''
 
 beforeAll(async () => {
     app = appFixture({
-        'page.abide': `<script>
+        'index.abide': `<script>
 import { reactive } from '@abide/abide'
 
 let count = reactive(0)
@@ -317,9 +317,9 @@ let count = reactive(0)
 <style>
 .row { color: red }
 </style>`,
-        'ui/components/Outer.abide': OUTER,
-        'passed/page.abide': `<script>
-import Outer from '../ui/components/Outer.abide'
+        'lib/Outer.abide': OUTER,
+        'passed/index.abide': `<script>
+import Outer from '../lib/Outer.abide'
 </script>
 
 <Outer title="t">{#component Item({ n }: { n: string })}<li>{n}</li>{/component}</Outer>
@@ -345,14 +345,14 @@ test('abide check holds an inline component to its props and a passed one to its
     for (const { path, line, column, code } of found)
         reported.push({ path: path.slice(app.length), line, column, code })
     expect(reported).toEqual([
-        { path: '/page.abide', line: 11, column: 17, code: 2322 },
+        { path: '/index.abide', line: 11, column: 17, code: 2322 },
         {
-            path: '/passed/page.abide',
+            path: '/passed/index.abide',
             line: 5,
             column: 30,
             code: 2322,
         },
-        { path: '/passed/page.abide', line: 7, column: 2, code: 2304 },
+        { path: '/passed/index.abide', line: 7, column: 2, code: 2304 },
     ])
 })
 
@@ -361,11 +361,11 @@ test('abide check holds an inline component to its props and a passed one to its
 // the file's components in `emitApp` — the `<li>` carries no token, and `.row` matches nothing.
 test('an inline component is scoped by its file and by its own style — 32.45, 32.47', async () => {
     const compiled = await compileApp(app)
-    const server = compiled.files['page.abide']?.server ?? ''
+    const server = compiled.files['index.abide']?.server ?? ''
     const token = /li class=\\"row\\" (a-[\w]+) (a-[\w]+-0)/.exec(server)
     expect(token).not.toBeNull()
     const [, file, own] = token as RegExpExecArray
-    const sheet = compiled.files['page.abide']?.sheet
+    const sheet = compiled.files['index.abide']?.sheet
     expect(sheet).toContain(`.row[${file}]`)
     expect(sheet).toContain(`li[${own}]`)
 })

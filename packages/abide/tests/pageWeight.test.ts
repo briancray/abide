@@ -38,14 +38,14 @@ async function closureText(out: string, page: string): Promise<string> {
 // schema validator — and the rest of the barrel with it, 20.2 KB brotli become 25.8.
 test('a page loads the modules it uses and not the barrel’s rest — 38.94', async () => {
     const app = appFixture({
-        'page.abide': `<script>
+        'index.abide': `<script>
 import { reactive } from '@abide/abide'
 
 let count = reactive(0)
 </script>
 
 <button onclick={() => { count = count + 1 }}>{count}</button>`,
-        'schema/page.abide': `<script>
+        'schema/index.abide': `<script>
 import { reactive, validateJson } from '@abide/abide'
 
 let count = reactive(0)
@@ -58,13 +58,11 @@ let count = reactive(0)
     expect(built.exitCode, built.stderr).toBe(0)
     // The positive case first: the validator is in the build, so its absence below is the split.
     expect(
-        (await closureText(out, 'schema/page.abide')).includes(
+        (await closureText(out, 'schema/index.abide')).includes(
             SCHEMA_VALIDATOR,
         ),
     ).toBe(true)
     expect(
-        (await closureText(out, 'page.abide')).includes(
-            SCHEMA_VALIDATOR,
-        ),
+        (await closureText(out, 'index.abide')).includes(SCHEMA_VALIDATOR),
     ).toBe(false)
 }, 60_000)

@@ -292,9 +292,9 @@ test('a position declared as a Reactive holds the Reactive — 31.3', async () =
     expect(await lower(`${watching}watch(n, () => {})`, NM)).toBe(
         `${watching}watch(n, () => {})`,
     )
-    expect(await lower("const r: import('@abide/abide').Reactive<any> = n", NM)).toBe(
-        "const r: import('@abide/abide').Reactive<any> = n",
-    )
+    expect(
+        await lower("const r: import('@abide/abide').Reactive<any> = n", NM),
+    ).toBe("const r: import('@abide/abide').Reactive<any> = n")
     expect(
         await lower(
             "function f(): import('@abide/abide').Reactive<any> { return n }",
@@ -311,7 +311,8 @@ test('a position declared as a Reactive holds the Reactive — 31.3', async () =
 // THE REVERT: drop the `isSelection` call in `isReactiveType`; all four lower to a read, and `refresh(n())` hands `refresh` the number.
 test('a position typed as a Selection holds the Reactive — 31.14', async () => {
     const NM = new Set(['n', 'm'])
-    const free = "import { busy, invalidate, ready, refresh } from '@abide/abide'\n"
+    const free =
+        "import { busy, invalidate, ready, refresh } from '@abide/abide'\n"
     for (const call of ['refresh(n)', 'invalidate(n)', 'busy(n)', 'ready(n)'])
         expect(await lower(`${free}${call}`, NM)).toBe(`${free}${call}`)
     // Beside a plain value's parameter, the same name still reads.
@@ -956,10 +957,6 @@ test('an enum body names its members', async () => {
     // An enum member is a name, not a read.
     expect(await lower('enum E { n }', N)).toBe('enum E { n }')
     expect(await lower('enum E { a, n, b }', N)).toBe('enum E { a, n, b }')
-    // 34.18 — an export is a `<script module>`'s.
-    expect(
-        await lower('export enum E { n = 1 }', N, new Set(), 'script module'),
-    ).toBe('export enum E { n = 1 }')
 })
 
 test('a comma inside a type annotation is not a declarator separator', async () => {

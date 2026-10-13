@@ -78,7 +78,7 @@ test('a document written by any file but the root layout is refused — 35.16', 
                     '<html><head></head><body><slot/></body></html>',
                 'media/layout.abide':
                     '<html><head></head><body><slot/></body></html>',
-                'media/page.abide': '<p>media</p>',
+                'media/index.abide': '<p>media</p>',
             }),
         ),
     )
@@ -106,7 +106,7 @@ test('a component rendered on its own writes the document — 35.6, 35.15', asyn
         `${TYPED_ROOT}src/Invoice.abide`,
         file,
     )
-    const emitted = emitSource('Invoice.abide', file, reads, true)
+    const emitted = emitSource('lib/Invoice.abide', file, reads, true)
     const dir = servedModules({
         'Invoice.abide': {
             server: emitted.server,

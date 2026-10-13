@@ -29,16 +29,16 @@ let base = ''
 beforeAll(async () => {
     const app = temporaryModule({
         'layout.abide': ROOT_LAYOUT,
-        'page.abide': `<head><title>Home</title><meta name="description" content="home"></head>
+        'index.abide': `<head><title>Home</title><meta name="description" content="home"></head>
 
 <p id="home">home</p>`,
         // No level below the root layout keys a `<title>`, so the root layout's is the one it reads.
-        'about/page.abide': `<p id="about">about</p>`,
+        'about/index.abide': `<p id="about">about</p>`,
         'invoices/layout.abide': SECTION_LAYOUT,
-        'invoices/page.abide': `<head><title>Invoices</title></head>
+        'invoices/index.abide': `<head><title>Invoices</title></head>
 
 <p id="list">two invoices</p>`,
-        'invoices/[id]/page.abide': `<script>
+        'invoices/[id]/index.abide': `<script>
 import { props } from '@abide/abide'
 
 const { params } = props<{ params: { id: string } }>()
@@ -171,7 +171,9 @@ test("a level's keyed head contributions replace the one above — 39.4", async 
     expect(head.match(/<meta name="theme-color"[^>]*>/g)).toEqual([
         '<meta name="theme-color" content="shell">',
     ])
-    expect(head.match(/<meta charset[^>]*>/g)).toEqual(['<meta charset="utf-8">'])
+    expect(head.match(/<meta charset[^>]*>/g)).toEqual([
+        '<meta charset="utf-8">',
+    ])
     const about = await (await Bun.fetch(`${base}/about`)).text()
     expect(titles(about)).toEqual(['<title>Shell</title>'])
 })

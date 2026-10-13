@@ -7,42 +7,68 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { addressOf, BIN, lastLinePrinted } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, POST, reactive, request } from '@abide/abide/server'
+// ONE HANDLER FILE A HANDLER (16.73), and what two of them share in a module under `lib` beside them.
+const HANDLERS: Record<string, string> = {
+    'library/lib/state.ts': `import { reactive } from '@abide/abide/server'
 
-const shelf = reactive<string[]>(['dune'], { global: true })
-
-export const books = GET(shelf)
-
-export const shelve = POST(({ title }: { title: string }) => {
-    shelf.set([...shelf(), title])
-})
+export const shelf = reactive<string[]>(['dune'], { global: true })
 
 // Held after its first line until \`release\` is called, so a client that reads the first line before
 // releasing it proves the line was sent before the body was done.
 let open = (): void => {}
-export const held = GET(async function* () {
-    yield 'first'
-    await new Promise<void>((done) => {
+export function held(): Promise<void> {
+    return new Promise<void>((done) => {
         open = done
     })
+}
+export function release(): void {
+    open()
+}
+
+export const pulled = { count: 0 }
+`,
+    'library/books.ts': `import { GET } from '@abide/abide/server'
+import { shelf } from './lib/state.ts'
+
+export default GET(shelf)
+`,
+    'library/shelve.ts': `import { POST } from '@abide/abide/server'
+import { shelf } from './lib/state.ts'
+
+export default POST(({ title }: { title: string }) => {
+    shelf.set([...shelf(), title])
+})
+`,
+    'library/held.ts': `import { GET } from '@abide/abide/server'
+import { held } from './lib/state.ts'
+
+export default GET(async function* () {
+    yield 'first'
+    await held()
     yield 'second'
 })
+`,
+    'library/release.ts': `import { POST } from '@abide/abide/server'
+import { release } from './lib/state.ts'
 
-export const release = POST(() => {
-    open()
+export default POST(() => {
+    release()
 })
+`,
+    // Counts a 64 KB chunk per pull, forever — large, so the socket's own buffer fills in a few — and
+    // \`howFar\` says how far it got. A \`Response\` of its own (16.36) rather than a generator: a
+    // streaming \`reactive\` pumps its body to accumulate it (9.1) whoever reads it, and what 38.36 is
+    // about is the body the connection pulls.
+    'library/count.ts': `import { GET } from '@abide/abide/server'
+import { pulled } from './lib/state.ts'
 
-// Counts a 64 KB chunk per pull, forever — large, so the socket's own buffer fills in a few — and says how far it got. A \`Response\` of its own (16.36) rather
-// than a generator: a streaming \`reactive\` pumps its body to accumulate it (9.1) whoever reads it,
-// and what 38.36 is about is the body the connection pulls.
-let counted = 0
-export const count = GET(
+export default GET(
     () =>
         new Response(
             new ReadableStream(
                 {
                     pull(controller) {
-                        counted += 1
+                        pulled.count += 1
                         controller.enqueue(new Uint8Array(65_536))
                     },
                 },
@@ -50,21 +76,31 @@ export const count = GET(
             ),
         ),
 )
+`,
+    'library/howFar.ts': `import { GET } from '@abide/abide/server'
+import { pulled } from './lib/state.ts'
 
-export const howFar = GET(() => counted)
+export default GET(() => pulled.count)
+`,
+    'library/patient.ts': `import { GET } from '@abide/abide/server'
 
-export const patient = GET(() => 1, { timeout: 40_000 })
+export default GET(() => 1, { timeout: 40_000 })
+`,
+    // A child under the request's signal, named by its pid, and an answer that never ends on its own.
+    'library/spawns.ts': `import { GET, request } from '@abide/abide/server'
 
-// A child under the request's signal, named by its pid, and an answer that never ends on its own.
-export const spawns = GET(async function* () {
+export default GET(async function* () {
     const child = Bun.spawn(['sleep', '60'], { signal: request().signal })
     yield String(child.pid)
     await new Promise(() => {})
 })
+`,
+    // Answers anything, an upgrade included, with the status the lane admits the mux with.
+    'library/nothing.ts': `import { GET } from '@abide/abide/server'
 
-// Answers anything, an upgrade included, with the status the lane admits the mux with.
-export const nothing = GET(() => new Response(null, { status: 204 }))
-`
+export default GET(() => new Response(null, { status: 204 }))
+`,
+}
 
 let server: Bun.Subprocess | undefined
 let mountedServer: Bun.Subprocess | undefined
@@ -73,10 +109,8 @@ let app = ''
 
 beforeAll(async () => {
     app = temporaryModule({
-        'page.abide': '<main>home</main>',
-        'library/library.abide': `<script server>
-${HANDLERS}</script>
-`,
+        'index.abide': '<main>home</main>',
+        ...HANDLERS,
         'package.json': JSON.stringify({
             name: 'dev-follow-fixture',
             type: 'module',
@@ -135,7 +169,7 @@ test('an upgrade some other address answers 204 opens nothing under abide dev �
 // 204 at the mux's own address opens a mux over nothing, and this reads ['open'].
 test('a rung answering 204 opens no mux where the app carries nothing under abide dev — 37.3', async () => {
     const bare = temporaryModule({
-        'page.abide': '<main>home</main>',
+        'index.abide': '<main>home</main>',
         'layout.abide': `<script server>
 import { middleware } from '@abide/abide/server'
 
@@ -302,7 +336,7 @@ say(\`child gone: \${await gone()}\`)
 // the worker replaced on a reload, and the child it spawned left running.
 test('a reload aborts the requests the replaced worker was answering — 38.96', async () => {
     const said = await run(`${SPAWNED}
-const library = ${JSON.stringify(`${app}/library/library.abide`)}
+const library = ${JSON.stringify(`${app}/library/spawns.ts`)}
 await Bun.write(library, await Bun.file(library).text())
 say(\`child gone: \${await gone()}\`)
 reader.cancel().catch(() => {})

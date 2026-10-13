@@ -4,7 +4,6 @@
 // disk's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { basename, dirname } from 'node:path' // bun exposes no path helpers of its own
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -12,7 +11,7 @@ const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
 const SAVED = `<script>
 import { reactive } from '@abide/abide'
-import Card from './ui/components/Card.abide'
+import Card from './lib/Card.abide'
 
 let count = reactive(0)
 </script>
@@ -23,7 +22,7 @@ let count = reactive(0)
 // Never written to disk — only the editor holds it.
 const EDITED = `<script>
 import { reactive } from '@abide/abide'
-import Card from './ui/components/Card.abide'
+import Card from './lib/Card.abide'
 
 let count = reactive(0)
 </script>
@@ -41,7 +40,7 @@ const { title } = props<{ title: string }>()
 
 // Reads a name its neighbor does not export until the test saves it.
 const LATER = `<script>
-import { later } from '../ui/extra.ts'
+import { later } from '../lib/extra.ts'
 </script>
 
 <p>{later}</p>`
@@ -102,13 +101,13 @@ async function next(
 
 beforeAll(() => {
     app = appFixture({
-        'page.abide': SAVED,
-        'ui/components/Card.abide': CARD,
-        'ui/extra.ts': 'export const extra = 1\n',
-        'more/page.abide': LATER,
-        'reading/page.abide': READING,
-        'rows/page.abide': ROWS,
-        'settings/page.abide': `<script server>
+        'index.abide': SAVED,
+        'lib/Card.abide': CARD,
+        'lib/extra.ts': 'export const extra = 1\n',
+        'more/index.abide': LATER,
+        'reading/index.abide': READING,
+        'rows/index.abide': ROWS,
+        'settings/index.abide': `<script server>
 import { onConfig } from '@abide/abide/server'
 
 onConfig(() => ({ RETRIES: 3 }))
@@ -139,7 +138,7 @@ test('an open document is checked as the editor holds it, and cleared when fixed
     expect(initialized).toMatchObject({
         result: { capabilities: { textDocumentSync: 1 } },
     })
-    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
+    const uri = Bun.pathToFileURL(`${app}/index.abide`).href
     send({
         method: 'textDocument/didOpen',
         params: {
@@ -188,7 +187,7 @@ test('an open document is checked as the editor holds it, and cleared when fixed
 // name read by name is a rewrite there and nothing is found at `count`. Or map the position through
 // the projection only; `toFixed` is then asked of the `Reactive`, which has no such member.
 test('a hover and a jump answer about the document as the editor holds it — 38.39', async () => {
-    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
+    const uri = Bun.pathToFileURL(`${app}/index.abide`).href
     const line = SAVED.split('\n').findIndex((text) => text.includes('toFixed'))
     const character = (name: string): number =>
         (SAVED.split('\n')[line] as string).indexOf(name) + 1
@@ -285,7 +284,7 @@ test('a hover and a jump answer about the document as the editor holds it — 38
     expect(await next((message) => message.id === 8)).toMatchObject({
         result: [
             {
-                uri: Bun.pathToFileURL(`${app}/ui/components/Card.abide`).href,
+                uri: Bun.pathToFileURL(`${app}/lib/Card.abide`).href,
                 range: { start: { line: 0, character: 0 } },
             },
         ],
@@ -341,7 +340,7 @@ test('a hover and a jump answer about the document as the editor holds it — 38
     // stand-in is scaffolding after the author's last line. THE REVERT: map a span of it back as a
     // copied one (`ShadowMap.spanToSource` skipping its `copiedFrom`); the jump lands at the end of
     // `Card`'s markup.
-    const card = Bun.pathToFileURL(`${app}/ui/components/Card.abide`).href
+    const card = Bun.pathToFileURL(`${app}/lib/Card.abide`).href
     send({
         method: 'textDocument/didOpen',
         params: {
@@ -376,7 +375,7 @@ test('a hover and a jump answer about the document as the editor holds it — 38
 // so nothing but the watcher can say the finding is gone. THE REVERT: drop the `session.edited(…)`
 // call in `AppChecker.current`; the page reports "has no exported member" for as long as it is open.
 test('a save to a plain .ts beside an open page reaches its findings — 38.11', async () => {
-    const uri = Bun.pathToFileURL(`${app}/more/page.abide`).href
+    const uri = Bun.pathToFileURL(`${app}/more/index.abide`).href
     send({
         method: 'textDocument/didOpen',
         params: {
@@ -400,7 +399,7 @@ test('a save to a plain .ts beside an open page reaches its findings — 38.11',
     ).toEqual([2305])
 
     await Bun.write(
-        `${app}/ui/extra.ts`,
+        `${app}/lib/extra.ts`,
         'export const extra = 1\nexport const later = 2\n',
     )
     const after = await next(
@@ -426,7 +425,7 @@ test('an untitled document leaves every other one checked — 38.11', async () =
             },
         },
     })
-    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
+    const uri = Bun.pathToFileURL(`${app}/index.abide`).href
     send({
         method: 'textDocument/didChange',
         params: {
@@ -449,8 +448,8 @@ test('an untitled document leaves every other one checked — 38.11', async () =
 // `TypeSession.edited`; the page goes on checking `<Card title="x"/>` against the props the deleted
 // file declared, and reports nothing.
 test('a page importing a deleted component says it cannot find it — 38.11', async () => {
-    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
-    await Bun.file(`${app}/ui/components/Card.abide`).delete()
+    const uri = Bun.pathToFileURL(`${app}/index.abide`).href
+    await Bun.file(`${app}/lib/Card.abide`).delete()
     send({
         method: 'textDocument/didChange',
         params: {
@@ -469,40 +468,10 @@ test('a page importing a deleted component says it cannot find it — 38.11', as
     expect(published.params).toMatchObject({ uri })
 }, 60_000)
 
-// 34.24 — WHAT A PLAIN `.ts` READS AN OPEN FILE BY FOLLOWS THE EDITOR'S TEXT, never saved: the
-// language server writes the file's types beside the build as it checks it. THE REVERT: drop
-// `typesFor` from `run` in `serveLanguage.ts`; nothing is written, and this waits out its poll.
-test("an edited file's types follow the editor's text — 34.24", async () => {
-    const uri = Bun.pathToFileURL(`${app}/page.abide`).href
-    send({
-        method: 'textDocument/didChange',
-        params: {
-            textDocument: { uri, version: 40 },
-            contentChanges: [
-                {
-                    text: `<script module>\nexport const editedOnly = 1\n</script>\n\n${SAVED}`,
-                },
-            ],
-        },
-    })
-    await next(
-        (message) => message.method === 'textDocument/publishDiagnostics',
-    )
-    const types = Bun.file(
-        `${dirname(app)}/.abide/types/${basename(app)}/page.abide.ts`,
-    )
-    let text = ''
-    for (let turn = 0; turn < 100 && !text.includes('editedOnly'); turn += 1) {
-        await Bun.sleep(50)
-        text = (await types.exists()) ? await types.text() : ''
-    }
-    expect(text).toContain('export const editedOnly = 1')
-}, 60_000)
-
 // 38.98, 27.13 — `config().` OFFERS WHAT AN `onConfig` IT NEVER IMPORTED DEFAULTS, beside what abide
 // derives. THE REVERT: drop the `textDocument/completion` case; the request is refused (-32601).
 test('a completion offers the fields onConfig declared — 38.98', async () => {
-    const uri = Bun.pathToFileURL(`${app}/reading/page.abide`).href
+    const uri = Bun.pathToFileURL(`${app}/reading/index.abide`).href
     send({
         method: 'textDocument/didOpen',
         params: {
@@ -550,7 +519,7 @@ test('a completion offers the fields onConfig declared — 38.98', async () => {
 // THE REVERT: write them into the projection as scaffolding (`for (const ${node.item} of …`); both
 // hovers are null.
 test("a {#for}'s item and index hover in its head — 38.39", async () => {
-    const uri = Bun.pathToFileURL(`${app}/rows/page.abide`).href
+    const uri = Bun.pathToFileURL(`${app}/rows/index.abide`).href
     send({
         method: 'textDocument/didOpen',
         params: {

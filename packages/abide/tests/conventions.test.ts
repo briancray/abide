@@ -190,7 +190,7 @@ test('a constants leaf has no imports of its own', async () => {
 // CLAUDE.md, "writing code": a file is named after what it EXPORTS when it exports one thing, so a
 // reader holding the import line knows which of the three it is without opening it. The framework's
 // own addresses are the stated exception and are listed rather than inferred: a file the framework
-// finds BY NAME (`layout`, `error`, `preload`, `app`), a barrel (`index`), and the CLI's own entry
+// finds BY NAME (`layout`, `error`, `preload`), a barrel (`index`), and the CLI's own entry
 // (`bin/abide.ts`).
 // EVERY EXPORT SPELLING COUNTS, `export function*`, `enum`, `let`, `default` and `export { … }`
 // among them: a reading blind to one sees a file exporting two things as exporting the other one.
@@ -239,23 +239,21 @@ test('a file exporting one thing is named after what it exports', async () => {
     expect(misnamed).toEqual([])
 })
 
-// The same rule for a component: a `.abide` file's one export is its default, the component, and
-// it is TitleCase. A `page`, `layout` or `error` is an address rather than a name (23.14,
-// `routePattern.ts`'s `FileKind`), a `launcher` is a name the framework finds (38.82), and so is a
-// file of handlers alone — what it exports is the verb
-// the client calls, at its directory's route (16.2).
-// THE REVERT: a `lowerCase.abide` with a template anywhere is named here.
-const ROUTED = new Set(['page', 'layout', 'error', 'launcher'])
+// The same rule for a component: a `.abide` file's one export is its default, the component (34.17),
+// and it is TitleCase. A `.abide` directly in an address directory is a page, named for its address
+// (23.14, 23.21) — `index`, `[id]`, `getting-started` — and a component is one under a `lib` or a
+// `tests` directory, or a package's outside every app's `src`.
+// THE REVERT: a `lowerCase.abide` under a lib directory is named here.
+const ROUTED = new Set(['layout', 'error', 'launcher'])
 
 test('a component file is named in TitleCase', async () => {
     const misnamed: string[] = []
-    for (const { path, text } of await authored('abide')) {
+    for (const { path } of await authored('abide')) {
         const name = path.slice(path.lastIndexOf('/') + 1, -'.abide'.length)
         if (ROUTED.has(name)) continue
-        const handlersAlone =
-            text.includes('<script server>') &&
-            text.replace(/<script[^>]*>[\s\S]*?<\/script>/g, '').trim() === ''
-        if (handlersAlone) continue
+        const component =
+            /\/(?:lib|tests)\//.test(path) || !/\/src\//.test(path)
+        if (!component) continue
         if (!/^[A-Z][a-zA-Z0-9]*$/.test(name)) misnamed.push(path)
     }
     expect(misnamed).toEqual([])

@@ -4,7 +4,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { trace } from '#server/trace.ts'
-import { serveApp } from './builtApp.ts'
+import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const APP = `import { middleware } from '@abide/abide/server'
@@ -61,13 +61,11 @@ const RPC = '/timed'
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': '<main>home</main>',
+        'index.abide': '<main>home</main>',
         'layout.abide': `<script server>
 ${APP}</script>
 `,
-        'timed/timed.abide': `<script server>
-${HANDLERS}</script>
-`,
+        ...handlerFiles('timed', HANDLERS),
     }))
 }, 30_000)
 

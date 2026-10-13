@@ -3,7 +3,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { rpcRequest } from '#shared/rpcRequest.ts'
-import { serveApp } from './builtApp.ts'
+import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, jsonSchema, POST, reactive, refuse } from '@abide/abide/server'
@@ -141,10 +141,8 @@ const RPC = '/options'
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': '<main>home</main>',
-        'options/options.abide': `<script server>
-${HANDLERS}</script>
-`,
+        'index.abide': '<main>home</main>',
+        ...handlerFiles('options', HANDLERS),
         // 16.55 — the environment's ceiling, for a handler that names none of its own.
         'layout.abide': `<script server>
 import { onConfig } from '@abide/abide/server'
@@ -184,9 +182,9 @@ test('a GET arg is coerced from the type its JSON Schema declares — 19.7, 19.8
 // handler defaults is not required, whatever the annotation says. THE REVERT: drop `args` from the
 // mount row in `handlersUnder`; `id` arrives the string `'42'`, and `id=abc` and `kind=film` both
 // reach the handler and answer 200. Drop `defaulted` from `argsSchemaOf` and the first call is 422.
-// 19.19 — and a member the annotation does not declare is refused: drop `additionalProperties`
+// 19.18 — and a member the annotation does not declare is refused: drop `additionalProperties`
 // from `objectOf` and `extra=1` reaches the handler and answers 200.
-test('a GET typed only by its annotation is coerced and held to it — 19.9, 19.10, 19.19', async () => {
+test('a GET typed only by its annotation is coerced and held to it — 19.9, 19.10, 19.18', async () => {
     const answer = await Bun.fetch(
         `${base}${RPC}/annotated?id=42&kind=movie&tags=a`,
     )

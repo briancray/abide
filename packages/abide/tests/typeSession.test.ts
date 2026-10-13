@@ -9,7 +9,7 @@ import { namesRead } from './typed.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname
 const TSCONFIG = `${ROOT}tsconfig.json`
-const PAGE = `${ROOT}src/page.abide`
+const PAGE = `${ROOT}src/index.abide`
 
 const session = await TypeSession.open(TSCONFIG)
 afterAll(() => session.close())
@@ -209,7 +209,7 @@ let rows = reactive([1])
 <p>{rows}</p>`
 
 // A DANGLING SYMLINK IS NOT A CRASH. The listing was walked with a `statSync` per entry, which
-// FOLLOWS a symlink — so an Emacs `.#page.abide` lock file beside a page threw ENOENT out of a
+// FOLLOWS a symlink — so an Emacs `.#index.abide` lock file beside a page threw ENOENT out of a
 // directory listing and took the whole build down with it, from a name the compiler was only
 // counting. THE REVERT: `statSync(join(directory, entry)).isDirectory()` over a plain
 // `readdirSync(directory)`; this test then reports `ENOENT` where 1 typed name is due, and it is
@@ -228,15 +228,15 @@ test('a dangling symlink beside a page does not take the build down', async () =
             include: ['.'],
         }),
     })
-    symlinkSync(`${dir}/nothing-is-here.ts`, `${dir}/.#page.abide`)
+    symlinkSync(`${dir}/nothing-is-here.ts`, `${dir}/.#index.abide`)
     const local = await TypeSession.open(`${dir}/tsconfig.json`)
     try {
         const probe = parseAbide(PROBE)
-        const names = await local.reads(`${dir}/page.abide`, probe)
+        const names = await local.reads(`${dir}/index.abide`, probe)
         expect(namesRead(probe, names)).toEqual(['rows'])
     } finally {
         await local.close()
-        rmSync(`${dir}/.#page.abide`, { force: true })
+        rmSync(`${dir}/.#index.abide`, { force: true })
     }
 })
 

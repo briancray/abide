@@ -14,7 +14,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HOME = `<script>
 import { reactive } from '@abide/abide'
-import '#src/ui/home.css'
+import '#src/lib/home.css'
 
 let count = reactive(0)
 </script>
@@ -33,7 +33,7 @@ const PACKAGE = JSON.stringify({
 // A SEAM WRITTEN THE WAY AN APP WRITES IT: extensionless, which is the spelling only the second
 // target of the manifest's `imports` answers.
 const SEAM_PAGE = `<script>
-import { greeting } from '#src/shared/greeting'
+import { greeting } from '#src/lib/greeting'
 </script>
 
 <main id="seam">{greeting()}</main>`
@@ -58,44 +58,45 @@ let app = ''
 
 beforeAll(async () => {
     app = temporaryModule({
-        'page.abide': HOME,
-        'seam/page.abide': SEAM_PAGE,
-        'shared/greeting.ts':
+        'index.abide': HOME,
+        'seam/index.abide': SEAM_PAGE,
+        'lib/greeting.ts':
             "export function greeting(): string {\n    return 'from the shared seam'\n}\n",
         // 36.15 — a URL naming a public file, left as its address rather than resolved on disk.
-        'ui/home.css':
+        'lib/home.css':
             ".fixture-sheet-was-imported { color: red }\n.fixture-uses-public { background: url('/robots.txt') }",
         // 38.19 — IN THE SOURCE TREE AND NOWHERE ELSE. Nothing copies this anywhere, because
         // nothing builds: an address answering it is the clause and a stale copy cannot pass it.
         'public/robots.txt': 'User-agent: *\nAllow: /\n',
         // A COUNT A RESTART WOULD RESET, so surviving is told apart from being replaced (37.9, 38.41).
-        'shared/served.ts':
+        'lib/served.ts':
             'let served = 0\nexport function serve(): number {\n    served += 1\n    return served\n}\n',
-        'served/page.abide': `<script>
-import { serve } from '#src/shared/served'
+        'served/index.abide': `<script>
+import { serve } from '#src/lib/served'
 
 const served = serve()
 </script>
 
 <main id="served">{served}</main>`,
-        'orphan/page.abide': `<script>
+        'orphan/index.abide': `<script>
 Promise.reject(new Error('nobody awaited this'))
 </script>
 
 <main id="orphan">orphaned</main>`,
         // A HANDLER TREE FROM THE START, so a handler saved later lands in a directory the checker
         // already knows.
-        'present/present.abide':
-            "<script server>\nimport { GET } from '@abide/abide/server'\n\nexport const present = GET(() => 'here')\n</script>\n",
+        'present/present.ts':
+            "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'here')\n",
         // 38.4 — an extensionless RELATIVE import out of a server block, which the runtime takes
-        // itself rather than through dev's plugin.
-        'relative/relative.abide':
-            "<script server>\nimport { GET } from '@abide/abide/server'\nimport { greeting } from '../shared/greeting'\n\nexport const hello = GET(() => greeting())\n</script>\n",
+        // itself rather than through dev's plugin. A private handler (16.70), so the module that
+        // imports is the compiled `.abide`'s.
+        'relative/index.abide':
+            "<script server>\nimport { GET } from '@abide/abide/server'\nimport { greeting } from '../lib/greeting'\n\nconst hello = GET(() => greeting())\n</script>\n",
         // 38.97 — a stack read on the server, and a line the browser's map places.
-        'mapped/page.abide': `<script server>
+        'mapped/index.abide': `<script server>
 import { GET } from '@abide/abide/server'
 
-export const where = GET(() => new Error('placed').stack ?? '')
+const where = GET(() => new Error('placed').stack ?? '')
 </script>
 
 <script>
@@ -103,7 +104,7 @@ const marker = 'mapped-marker'
 </script>
 
 <main id="mapped">{marker}</main>`,
-        'exit/page.abide': `<script>
+        'exit/index.abide': `<script>
 process.exit(3)
 </script>
 
@@ -185,7 +186,7 @@ async function waitUntil(
 // than by the entry's first loader, which is whichever page the bundler listed first.
 async function pageChunk(): Promise<string> {
     const home = await (await Bun.fetch(`${base}/`)).text()
-    const found = /\/(page\.client-[^"]+\.js)"/.exec(home)
+    const found = /\/(index\.client-[^"]+\.js)"/.exec(home)
     if (found === null) return home
     return await (
         await Bun.fetch(`${base}/__abide/client/${found[1] as string}`)
@@ -222,7 +223,7 @@ test('a page arrives with its length rather than chunked — 41.1', async () => 
 })
 
 // AN EXTENSIONLESS SEAM IMPORT RESOLVES UNDER DEV AS IT DOES IN A BUILD. The runtime takes a `#`
-// specifier from a compiled module as an exact file, so `#src/shared/greeting` found nothing and the
+// specifier from a compiled module as an exact file, so `#src/lib/greeting` found nothing and the
 // page was the error document — while `abide build`, whose bundler probes, served it.
 //
 // THE REVERT: drop `withSeamsResolved` from the dev plugin's `onLoad`; the page answers the error
@@ -236,20 +237,24 @@ test('a page importing an extensionless seam is painted — 38.4', async () => {
 // own path (`abideModules`). THE REVERT: serve a component module at a path of its own below
 // `__abide`; the relative import resolves from there, and the whole app answers dev's failure page.
 test('a server block importing an extensionless relative module answers — 38.4', async () => {
-    const answer = await Bun.fetch(`${base}/relative/hello`)
+    const answer = await Bun.fetch(
+        `${base}/__abide/handlers/relative/index/hello`,
+    )
     expect(await answer.text()).toContain('from the shared seam')
 })
 
 // 38.97 — A FRAME IN A COMPILED MODULE NAMES THE `.abide`, at the line the `new Error` is written on.
-// THE REVERT: `installSourceMaps` out of `originUnder`; the frame names `__abide/mapped/page.ts`.
+// THE REVERT: `installSourceMaps` out of `originUnder`; the frame names `__abide/mapped/index.ts`.
 test('a stack read on the server names the .abide line — 38.97', async () => {
-    const stack = await (await Bun.fetch(`${base}/mapped/where`)).text()
-    expect(stack).toContain('mapped/page.abide:4:')
+    const stack = await (
+        await Bun.fetch(`${base}/__abide/handlers/mapped/index/where`)
+    ).text()
+    expect(stack).toContain('mapped/index.abide:4:')
 })
 
 // 38.97 — THE BROWSER'S MAP READS THE `.abide`: the chunk's position of the script's own line is
 // placed on it. THE REVERT: drop `withAbideSources` from `bundleInMemory`; the map places it in
-// the compiled `page.client.ts`.
+// the compiled `index.client.ts`.
 test("a client chunk's source map places a script line in the .abide — 38.97", async () => {
     const html = await (await Bun.fetch(`${base}/mapped`)).text()
     let placed = ''
@@ -265,12 +270,12 @@ test("a client chunk's source map places a script line in the .abide — 38.97",
         if (segment !== undefined)
             placed = `${map.sources[segment[1]]}:${segment[2] + 1}`
     }
-    expect(placed).toEndWith('mapped/page.abide:8')
+    expect(placed).toEndWith('mapped/index.abide:8')
 })
 
-// 16.28, 34.20 — THE MAP CARRIES THE `.abide` WITHOUT ITS SERVER BLOCK: it is served to a browser.
+// 16.28, 34.19 — THE MAP CARRIES THE `.abide` WITHOUT ITS SERVER BLOCK: it is served to a browser.
 // THE REVERT: list the `.abide`'s text whole in `withAbideSources`; the handler's body is in it.
-test("a client chunk's source map carries none of a server block — 16.28, 34.20", async () => {
+test("a client chunk's source map carries none of a server block — 16.28, 34.19", async () => {
     const html = await (await Bun.fetch(`${base}/mapped`)).text()
     let listed = ''
     for (const chunk of new Set(html.match(/\/__abide\/client\/[^"]+\.js/g))) {
@@ -361,7 +366,7 @@ test('the document loads a reload client the worker serves — 38.17', async () 
 
 // THE CLAUSE ITSELF. Everything above holds for a server that read the project once.
 test('a save reaches the next request — 38.4, 38.15', async () => {
-    await save('page.abide', HOME.replace('<h1>Home</h1>', '<h1>Saved</h1>'))
+    await save('index.abide', HOME.replace('<h1>Home</h1>', '<h1>Saved</h1>'))
     expect(
         await waitFor(`${base}/`, (body) => body.includes('Saved')),
     ).toContain('<h1>Saved</h1>')
@@ -370,7 +375,7 @@ test('a save reaches the next request — 38.4, 38.15', async () => {
     // worker, so a reload that served new markup against a stale bundle is a hydration mismatch
     // on every page — and the markup arm alone cannot see it.
     await waitUntil(pageChunk, (body) => body.includes('Saved'), 'the bundle')
-    await save('page.abide', HOME)
+    await save('index.abide', HOME)
     await waitFor(`${base}/`, (body) => body.includes('Home'))
 }, 30_000)
 
@@ -384,14 +389,14 @@ test('a save reaches the next request — 38.4, 38.15', async () => {
 test('an edit to a plain .ts reaches the types the next compile reads — 31.3, 38.4', async () => {
     const reading = HOME.replace(
         'let count = reactive(0)',
-        "import { total } from '#src/ui/total.ts'\nlet count = reactive(0)\nlet shown = total",
+        "import { total } from '#src/lib/total.ts'\nlet count = reactive(0)\nlet shown = total",
     ).replace('<h1>Home</h1>', '<h1>Home</h1><p id="total">{shown}</p>')
-    await save('ui/total.ts', 'export const total = 7\n')
-    await save('page.abide', reading)
+    await save('lib/total.ts', 'export const total = 7\n')
+    await save('index.abide', reading)
     await waitFor(`${base}/`, (body) => body.includes('<p id="total">7</p>'))
 
     await save(
-        'ui/total.ts',
+        'lib/total.ts',
         "import { reactive } from '@abide/abide'\nexport const total = reactive(8)\n",
     )
     expect(
@@ -402,7 +407,7 @@ test('an edit to a plain .ts reaches the types the next compile reads — 31.3, 
 
     // ONE SAVE TO PUT IT BACK, and `total.ts` left where it is: a second event here can land after
     // the wait below is satisfied, and the reload it starts is the next test's socket refused.
-    await save('page.abide', HOME)
+    await save('index.abide', HOME)
     await waitFor(`${base}/`, (body) => !body.includes('id="total"'))
 }, 45_000)
 
@@ -425,20 +430,20 @@ test('a live socket is force-closed when the worker is replaced — 38.15', asyn
             resolve()
         })
     })
-    await save('page.abide', HOME)
+    await save('index.abide', HOME)
     await closed
 }, 30_000)
 
 // 38.4 — KEEP THE APP UP. A source that does not compile is the common case in a dev loop, and a
 // command that exits on one is a command an author restarts by hand every time they typo.
 test('a source that does not compile keeps the server up — 38.4', async () => {
-    await save('page.abide', '<script>\nlet x = (\n</script>\n<main/>')
+    await save('index.abide', '<script>\nlet x = (\n</script>\n<main/>')
     const failed = await waitFor(`${base}/`, (body) =>
         body.includes('abide dev'),
     )
     expect(failed).toContain('abide dev')
 
-    await save('page.abide', HOME)
+    await save('index.abide', HOME)
     expect(
         await waitFor(`${base}/`, (body) => body.includes('Home')),
     ).toContain('<h1>Home</h1>')
@@ -452,17 +457,17 @@ test('an import saved before its module exists recovers when the module is writt
     // A HANDLER, which the app imports at boot and bun resolves itself — the shape that met it: a
     // compiled page's imports go through abide's plugin, which asks the disk every time.
     await save(
-        'late/late.abide',
-        "<script server>\nimport { GET } from '@abide/abide/server'\nimport { late } from '#src/shared/late'\n\nexport const readLate = GET(() => late)\n</script>\n",
+        'present/readLate.ts',
+        "import { GET } from '@abide/abide/server'\nimport { late } from '#src/lib/late'\n\nexport default GET(() => late)\n",
     )
     expect(
-        await waitFor(`${base}/late/readLate`, (body) =>
+        await waitFor(`${base}/present/readLate`, (body) =>
             body.includes('Cannot find'),
         ),
     ).toContain('Cannot find')
-    await save('shared/late.ts', "export const late = 'arrived'\n")
+    await save('lib/late.ts', "export const late = 'arrived'\n")
     expect(
-        await waitFor(`${base}/late/readLate`, (body) =>
+        await waitFor(`${base}/present/readLate`, (body) =>
             body.includes('arrived'),
         ),
     ).toBe('"arrived"')
@@ -476,19 +481,19 @@ let brokenBase = ''
 
 beforeAll(async () => {
     const dir = temporaryModule({
-        'page.abide': HOME,
-        'seam/page.abide': SEAM_PAGE,
-        'shared/greeting.ts':
+        'index.abide': HOME,
+        'seam/index.abide': SEAM_PAGE,
+        'lib/greeting.ts':
             "export function greeting(): string {\n    return 'from the shared seam'\n}\n",
         // THE BROWSER GRAPH ALONE. A route's module is imported lazily on the server, so this
         // page is never loaded by the arm below — and the bundler follows every dynamic import
         // in the table, so the bundle it builds is the thing that fails.
-        'broken/page.abide': `<script>
-import '#src/ui/nothing-is-here.css'
+        'broken/index.abide': `<script>
+import '#src/lib/nothing-is-here.css'
 </script>
 
 <main id="broken"/>`,
-        'ui/home.css': '.fixture-sheet-was-imported { color: red }',
+        'lib/home.css': '.fixture-sheet-was-imported { color: red }',
         'package.json': PACKAGE,
         'tsconfig.json': TSCONFIG,
     })
@@ -567,11 +572,11 @@ let collidingBase = ''
 
 beforeAll(async () => {
     const dir = temporaryModule({
-        'page.abide': HOME,
-        'seam/page.abide': SEAM_PAGE,
-        'shared/greeting.ts':
+        'index.abide': HOME,
+        'seam/index.abide': SEAM_PAGE,
+        'lib/greeting.ts':
             "export function greeting(): string {\n    return 'from the shared seam'\n}\n",
-        'about/page.abide': '<main id="about">About</main>',
+        'about/index.abide': '<main id="about">About</main>',
         // The file that shadows the page. `abide build` has refused this since the clause was
         // written; `abide dev` served it.
         'public/about': 'the file that shadows the page',

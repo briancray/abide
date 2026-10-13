@@ -15,11 +15,14 @@ import { spawned } from 'harness/gate'
 import { addressOf, appFixture, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { config, GET } from '@abide/abide/server'
+const NAME = `import { config, GET } from '@abide/abide/server'
 
-export const name = GET(() => config().APP_NAME)
+export default GET(() => config().APP_NAME)
+`
 
-export const fail = GET(() => {
+const FAIL = `import { GET } from '@abide/abide/server'
+
+export default GET(() => {
     throw new Error('failed in the handler')
 })
 `
@@ -28,7 +31,7 @@ export const fail = GET(() => {
 const UNTOUCHED = `import { GET } from '@abide/abide/server'
 
 console.error('untouched handler module ran')
-export const untouched = GET(() => 'untouched')
+export default GET(() => 'untouched')
 `
 
 const HOOKS = `import { middleware, onStart } from '@abide/abide/server'
@@ -57,10 +60,11 @@ beforeAll(async () => {
             type: 'module',
             imports: { '#src/*': './src/*' },
         }),
-        'src/page.abide': '<main><h1>compiled</h1></main>',
+        'src/index.abide': '<main><h1>compiled</h1></main>',
         'src/public/robots.txt': 'User-agent: *\n',
-        'src/identity/identity.abide': `<script server>\n${HANDLERS}</script>\n`,
-        'src/untouched/untouched.abide': `<script server>\n${UNTOUCHED}</script>\n`,
+        'src/identity/name.ts': NAME,
+        'src/identity/fail.ts': FAIL,
+        'src/untouched/untouched.ts': UNTOUCHED,
         'src/layout.abide': `<script server>\n${HOOKS}</script>\n`,
     })
     where = temporaryModule({})
@@ -213,7 +217,7 @@ test('run takes abide and the handlers from the executable, under its identity �
     await Bun.write(
         `${where}/script.ts`,
         `import { config } from '@abide/abide/server'
-import { name } from '#src/identity/identity.abide'
+import name from '#src/identity/name.ts'
 console.log(JSON.stringify({ configured: config().APP_NAME, handler: await name(), args: process.argv.slice(2) }))
 `,
     )
@@ -228,15 +232,13 @@ console.log(JSON.stringify({ configured: config().APP_NAME, handler: await name(
     })
 })
 
-// 38.93, 38.97 — BYTECODE KEEPS THE SOURCE LINE: the executable carries its code compiled, and an
-// error thrown in a handler still names the `.abide` it was written in, at its line. TWO REVERTS:
-// `sourcemap: 'none'` in `compileExecutable`, and the frame reads `/$bunfs/root/ledger:10603`;
-// `installSourceMaps` out of the compiled entry, and it reads the compiled module's
-// `identity.ts:11` instead.
+// 38.93 — BYTECODE KEEPS THE SOURCE LINE: the executable carries its code compiled, and an error
+// thrown in a handler still names the handler file it was written in, at its line. THE REVERT:
+// `sourcemap: 'none'` in `compileExecutable`, and the frame reads `/$bunfs/root/ledger:10603`.
 test('an error thrown in the executable reports its source line — 38.93', async () => {
     await Bun.write(
         `${where}/failing.ts`,
-        `import { fail } from '#src/identity/identity.abide'
+        `import fail from '#src/identity/fail.ts'
 try {
     await fail()
 } catch (error) {
@@ -248,6 +250,7 @@ try {
         cwd: where,
     })
     expect(ran.stdout).toContain('failed in the handler')
-    // 38.97 — and the line is the `.abide`'s, where the `throw` is written.
-    expect(ran.stdout).toMatch(/identity\/identity\.abide:7:/)
+    // The line the `throw` is written on, in the file it is written in — the frame may carry the
+    // suffix of the namespace the file was loaded through.
+    expect(ran.stdout).toMatch(/identity\/fail\.ts:4:/)
 })

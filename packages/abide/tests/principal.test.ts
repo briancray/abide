@@ -1,7 +1,7 @@
 // SECTION 26 — THE PRINCIPAL, over a served app (spawned, for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { serveApp } from './builtApp.ts'
+import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, POST, principal } from '@abide/abide/server'
@@ -43,10 +43,8 @@ const RPC = '/session'
 beforeAll(async () => {
     process.env.ABIDE_PRINCIPAL_SECRET = 'new-secret,old-secret'
     ;({ base, stop } = await serveApp({
-        'page.abide': PAGE,
-        'session/session.abide': `<script server>
-${HANDLERS}</script>
-`,
+        'index.abide': PAGE,
+        ...handlerFiles('session', HANDLERS),
         'server/RESOLVED.ts': RESOLVED,
         // 26.4 — an app answer that tries to claim the baseline's fields.
         'layout.abide': `<script server>

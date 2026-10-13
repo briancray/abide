@@ -1,5 +1,6 @@
 import { afterAll, expect, spyOn, test } from 'bun:test'
 import { emitClient, parseAbide } from '#compiler'
+import { HOOK_NAMES } from '#compiler/hooksCalled.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'
 import { attributeText, escapeStyleValue, escapeText } from '#server'
@@ -133,7 +134,7 @@ test('the compiler is not reachable from the server seam', async () => {
     // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
     // owns: `listOf` is 32.15's — the emitted `{#for}` and the client's `updateList` ask the one
     // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's,
-    // `request`, `response` and `server` are 22.1's, `createApp` is 42's, the seven hooks and the
+    // `request`, `response` and `server` are 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the seven hooks and the
     // `fileRoute` a compiled server block files them under are 37's,
     // `trace` is 24's and `config` is 27's; the six response helpers are 17's, `reachable` is
     // 23's, and `assistant`, `claudeApi` and `claudeCode` are 45's.
@@ -159,6 +160,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'onConfig',
             'onError',
             'onHealth',
+            'onLauncher',
             'onPrincipal',
             'onStart',
             'onStop',
@@ -176,6 +178,15 @@ test('the compiler is not reachable from the server seam', async () => {
     )
 })
 
+// 38.107, 38.108 — WHAT THE BUILD READS AS A HOOK CALL IS EVERY HOOK abide exports: `abide routes`
+// lists them and the build refuses a stray `onLauncher` off `hooksCalled`'s names. THE REVERT: drop
+// `onHealth` from `HOOK_NAMES`; the list no longer matches what an app can call.
+test('hooksCalled reads every hook the server exports — 38.108', async () => {
+    const exported: string[] = []
+    for (const name of Object.keys(await import('#server')))
+        if (/^(?:on[A-Z]|middleware$)/.test(name)) exported.push(name)
+    expect([...HOOK_NAMES].sort()).toEqual(exported.sort())
+})
 afterAll(removeTemporaryModules)
 
 test('a compiled page renders as bytes into a shell', async () => {
@@ -827,20 +838,6 @@ test('a script module is a block of its own on each side', async () => {
     )
 })
 
-// 34.17 — AN EXPORT FROM A `<script module>` IS THE MODULE'S, ON BOTH SIDES. A layout or a page
-// exports `menu` there (38.88), and another file imports a helper from it. THE REVERT: emit the
-// module body inside `Component` again; the server module then fails to load with `Unexpected
-// export`, and the page renders nothing at all.
-test('a script module export is exported from the module on both sides', async () => {
-    const source =
-        "<script module>export const label = 'Export…'</script><script>let n = reactive(0)</script><p>{label}{n}</p>"
-    const client = await clientOf(source, ['n'])
-    expect(client).toContain("export const label = 'Export…'")
-    const server = await serverOf(source, ['n'])
-    expect(server).toContain("export const label = 'Export…'")
-    expect(await renderPage(source)).toContain('Export…')
-})
-
 // 34.1 AND 34.2 ARE THE TWO FORMS, AND EVERY OTHER `<script>` IS MARKUP. THE REVERT: have
 // `scriptBlock` hand back `scripts` whatever the attributes are; the two tags below are then
 // lifted into component setup with their attributes thrown away — the document loses both, and
@@ -873,10 +870,10 @@ test('a script the author wrote for the document stays in the markup', async () 
     )
 })
 
-// 34.33 — A `server` ATTRIBUTE NEVER LEAVES A `<script>` IN THE MARKUP. THE REVERT: drop the
+// 34.28 — A `server` ATTRIBUTE NEVER LEAVES A `<script>` IN THE MARKUP. THE REVERT: drop the
 // refusal in `scriptBlock`; every tag below is then a markup `<script>`, its server source is
 // rendered into the document and shipped in the browser's module, and the build exits 0.
-test('a <script> carrying server beside anything 34.20 does not read is refused — 34.33', () => {
+test('a <script> carrying server beside anything 34.19 does not read is refused — 34.28', () => {
     for (const tag of [
         '<script server nonce="abc">',
         '<script server="true">',
@@ -884,11 +881,11 @@ test('a <script> carrying server beside anything 34.20 does not read is refused 
         '<SCRIPT SERVER defer>',
     ])
         expect(() =>
-            parseAbide(`${tag}export const secret = 1</script><p>x</p>`),
-        ).toThrow('RULEBOOK 34.33')
-    expect(
-        parseAbide('<script server>export const a = 1</script>').servers,
-    ).toEqual(['export const a = 1'])
+            parseAbide(`${tag}const secret = 1</script><p>x</p>`),
+        ).toThrow('RULEBOOK 34.28')
+    expect(parseAbide('<script server>const a = 1</script>').servers).toEqual([
+        'const a = 1',
+    ])
 })
 
 // 34.12 — EVERY BLOCK IS TYPESCRIPT, so `lang` says nothing, and refused it cannot demote a block to
@@ -907,24 +904,24 @@ test('a <script> carrying lang is refused, whatever its block — 34.12', () => 
         )
 })
 
-// 34.34 — A `</script>` THE TEMPLATE MEETS CLOSES NOTHING, so one there is a block that ended
+// 34.29 — A `</script>` THE TEMPLATE MEETS CLOSES NOTHING, so one there is a block that ended
 // early. THE REVERT: drop the refusal in the close-tag branch of `parseAbide`; the comment below
 // then ends the markup block at `// `, and `send(token)` is rendered as page text.
-test('a </script> closing no <script> is refused, so a block cannot end early into markup — 34.34', () => {
+test('a </script> closing no <script> is refused, so a block cannot end early into markup — 34.29', () => {
     expect(() =>
         parseAbide(
             '<script src="/a.js">// a note: </script>\nsend(token)\n</script><p>x</p>',
         ),
-    ).toThrow('RULEBOOK 34.34')
-    expect(() => parseAbide('<p>a</p></SCRIPT >')).toThrow('RULEBOOK 34.34')
+    ).toThrow('RULEBOOK 34.29')
+    expect(() => parseAbide('<p>a</p></SCRIPT >')).toThrow('RULEBOOK 34.29')
 })
 
-// 34.35 — 34.34 ALONE MISSES A BLOCK WHOSE LEFTOVER OPENS A `<script>` OF ITS OWN: that tag takes
-// the real `</script>`, so nothing is left over to refuse. THE REVERT: drop the 34.35 refusal in
-// `rawBody`; the first case below parses, and `export const secret = 1` is rendered as page text.
-test('a </script> in a block comment, string or regex is refused, wherever the rest of the file goes — 34.35', () => {
+// 34.30 — 34.29 ALONE MISSES A BLOCK WHOSE LEFTOVER OPENS A `<script>` OF ITS OWN: that tag takes
+// the real `</script>`, so nothing is left over to refuse. THE REVERT: drop the 34.30 refusal in
+// `rawBody`; the first case below parses, and `const secret = 1` is rendered as page text.
+test('a </script> in a block comment, string or regex is refused, wherever the rest of the file goes — 34.30', () => {
     for (const body of [
-        "// drops </script> tags\nexport const secret = 1\nconst s = '<script>'\n",
+        "// drops </script> tags\nconst secret = 1\nconst s = '<script>'\n",
         "const s = '</script>'",
         'const s = `a ${b} </script>`',
         '/* </script> */',
@@ -932,7 +929,7 @@ test('a </script> in a block comment, string or regex is refused, wherever the r
     ])
         for (const open of ['<script server>', '<script>', '<script module>'])
             expect(() => parseAbide(`${open}${body}</script><p>x</p>`)).toThrow(
-                'RULEBOOK 34.35',
+                'RULEBOOK 34.30',
             )
     // In code position it is the block's end, and the escape a browser needs stays the block's.
     expect(
@@ -943,7 +940,7 @@ test('a </script> in a block comment, string or regex is refused, wherever the r
     // A markup `<script>` ends where a browser ends it — its body is the document's.
     expect(() =>
         parseAbide('<script src="/a.js">\'</script>\'</script>'),
-    ).toThrow('RULEBOOK 34.34')
+    ).toThrow('RULEBOOK 34.29')
 })
 
 // One document out of one page, for the three gates below — typed, because 32.25's lowering is

@@ -34,9 +34,7 @@ const looped = reactive(async () => {
 afterAll(removeTemporaryModules)
 
 test('a read inside what is awaited tracks, and one after it warns — 14.14', async () => {
-    const compiled = await compileApp(
-        appFixture({ 'page.abide': PAGE }),
-    )
+    const compiled = await compileApp(appFixture({ 'index.abide': PAGE }))
     const warned: string[] = []
     for (const warning of compiled.warnings) {
         if (!warning.message.includes('14.14')) continue

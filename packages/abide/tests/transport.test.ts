@@ -5,12 +5,12 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { gate, spawned } from 'harness/gate'
 import { reactive } from '#shared'
 import { chunksOfStream } from '#shared/reactive/index.ts'
-import { serveApp } from './builtApp.ts'
+import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HANDLERS = `import { reactive, refuse } from '@abide/abide'
 import { GET, json, page, POST, redirect, request, response, sse } from '@abide/abide/server'
-import { reported } from '../server/reported.ts'
+import { reported } from '../../server/reported.ts'
 
 export const shared = GET(reactive(() => ({ n: 1 }), { global: true, ttl: 90_500 }))
 
@@ -105,10 +105,8 @@ const RPC = '/answers'
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': '<main>home</main>',
-        'answers/answers.abide': `<script server>
-${HANDLERS}</script>
-`,
+        'index.abide': '<main>home</main>',
+        ...handlerFiles('answers', HANDLERS),
         'server/reported.ts': 'export const reported = { count: 0 }\n',
         'layout.abide': `<script server>
 import { onError } from '@abide/abide/server'

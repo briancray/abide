@@ -4,7 +4,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { spawned } from 'harness/gate'
-import { BIN, lastLinePrinted, serveApp } from './builtApp.ts'
+import { BIN, handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, invalidate, POST, reactive, refresh, refuse } from '@abide/abide/server'
@@ -89,10 +89,8 @@ let stop = (): void => {}
 
 beforeAll(async () => {
     ;({ base, stop } = await serveApp({
-        'page.abide': '<main>home</main>',
-        'library/library.abide': `<script server>
-${HANDLERS}</script>
-`,
+        'index.abide': '<main>home</main>',
+        ...handlerFiles('library', HANDLERS),
     }))
 }, 30_000)
 

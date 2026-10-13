@@ -1,6 +1,6 @@
 // 23.19, 23.20 — A PACKAGE'S DIRECTORY, MOUNTED WHERE THE APP SAYS. `import 'admin-kit/admin' with
-// { type: 'routes' }` in the app's `tools/layout.abide` puts the package's pages, layouts and handlers
-// below `/tools`: the app decides the address, and moving the line moves the package.
+// { type: 'routes' }` in the app's `tools/layout.abide` puts the package's pages, layouts and handler
+// files below `/tools`: the app decides the address, and moving the line moves the package.
 //
 // THE REVERT: in `appGraph`, read `relative` where it reads `position`; the package's pages are
 // components again, `/tools` and `/tools/users/[id]` leave the route table, and the served page is a
@@ -19,22 +19,20 @@ const KIT = {
         name: 'admin-kit',
         type: 'module',
     }),
-    'node_modules/admin-kit/admin/page.abide': '<p>admin home</p>',
+    'node_modules/admin-kit/admin/index.abide': '<p>admin home</p>',
     'node_modules/admin-kit/admin/users/layout.abide':
         '<div class="users"><slot/></div>',
-    'node_modules/admin-kit/admin/users/[id]/page.abide':
+    'node_modules/admin-kit/admin/users/[id]/index.abide':
         '<p>one admin user</p>',
-    'node_modules/admin-kit/admin/users/page.abide': `<script server>
-import { GET } from '@abide/abide/server'
+    'node_modules/admin-kit/admin/users/list.ts': `import { GET } from '@abide/abide/server'
 
-export const list = GET(() => ['ada', 'grace'])
-</script>
+export default GET(() => ['ada', 'grace'])
 `,
 }
 
 const APP = {
     'layout.abide': '<html><head></head><body><slot/></body></html>',
-    'page.abide': '<p>home</p>',
+    'index.abide': '<p>home</p>',
     'tools/layout.abide': `<script module>
 import 'admin-kit/admin' with { type: 'routes' }
 </script>
@@ -148,7 +146,7 @@ import 'admin-kit/nowhere' with { type: 'routes' }
         compileApp(
             appFixture({
                 ...APP,
-                'elsewhere/page.abide': '<p>own</p>',
+                'elsewhere/index.abide': '<p>own</p>',
                 'tools/layout.abide': `<script module>
 import '../elsewhere' with { type: 'routes' }
 </script>
@@ -158,3 +156,26 @@ import '../elsewhere' with { type: 'routes' }
     )
     expect(own).toContain('23.20')
 })
+
+// 16.29, 23.19 — A MOUNTED PACKAGE'S `server` DIRECTORY IS FENCED FROM THE BROWSER, as the app's own
+// is: its files take the position the mount gives them, and the fence reads a file's place there,
+// wherever the package lies. THE REVERT: read `placeOf` off the path below the root in
+// `fenceServer`; the module lies under `node_modules`, reads as a dependency's, and its secret is
+// bundled — the build exits 0.
+test("a mounted package's server directory is fenced from the browser — 16.29, 23.19", async () => {
+    const app = appFixture({
+        ...APP,
+        ...KIT,
+        'node_modules/admin-kit/admin/server/secret.ts':
+            "export const SECRET = 'mounted-secret'\n",
+        'node_modules/admin-kit/admin/index.abide': `<script>
+import { SECRET } from './server/secret.ts'
+</script>
+
+<p>{SECRET}</p>`,
+    })
+    const built = await buildApp(app)
+    expect(built.exitCode).not.toBe(0)
+    expect(built.stderr).toContain('tools/server/secret.ts')
+    expect(built.stderr).toContain('RULEBOOK 16.29')
+}, 30_000)

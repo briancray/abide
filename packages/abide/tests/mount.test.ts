@@ -7,8 +7,8 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAGE = `<script>
 import { reactive, url } from '@abide/abide'
-import { getInvoice } from '#src/invoices/invoices.abide'
-import '#src/ui/face.css'
+import getInvoice from '#src/invoices/getInvoice.ts'
+import '#src/lib/face.css'
 
 const invoice = reactive(() => getInvoice({ id: '4' }))
 </script>
@@ -21,8 +21,8 @@ let stop = (): void => {}
 beforeAll(async () => {
     ;({ base, stop } = await serveApp(
         {
-            'page.abide': PAGE,
-            'invoices/[id]/page.abide': `<script>
+            'index.abide': PAGE,
+            'invoices/[id]/index.abide': `<script>
 import { route } from '@abide/abide'
 </script>
 
@@ -32,12 +32,11 @@ import { url } from '@abide/abide'
 </script>
 
 <html><head><link rel="preload" href={url('/fonts/face.woff2')} as="font"><link rel="preconnect" href="//cdn.example.test"></head><body><slot/></body></html>`,
-            'ui/face.css': `@font-face { font-family: Face; src: url('/fonts/face.woff2'); }\n`,
+            'lib/face.css': `@font-face { font-family: Face; src: url('/fonts/face.woff2'); }\n`,
             'public/fonts/face.woff2': 'a face',
             'public/robots.txt': 'User-agent: *\n',
-            'invoices/invoices.abide': `<script server>
-import { GET, reactive } from '@abide/abide/server'\n\nexport const getInvoice = GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n\nexport const count = GET(reactive({ open: 3 }, { global: true }))\n</script>
-`,
+            'invoices/getInvoice.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n`,
+            'invoices/count.ts': `import { GET, reactive } from '@abide/abide/server'\n\nexport default GET(reactive({ open: 3 }, { global: true }))\n`,
         },
         { ...process.env, APP_URL: 'http://example.test/docs/' },
     ))
@@ -74,9 +73,7 @@ test('routes, handlers and public files answer under the mount — 36.11', async
         'an invoice',
     )
     expect(
-        await (
-            await Bun.fetch(`${base}/docs/invoices/getInvoice?id=4`)
-        ).json(),
+        await (await Bun.fetch(`${base}/docs/invoices/getInvoice?id=4`)).json(),
     ).toEqual({
         id: '4',
         total: 99,
