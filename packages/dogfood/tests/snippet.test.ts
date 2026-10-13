@@ -4,7 +4,7 @@
 // more than the happy path.
 
 import { expect, test } from 'bun:test'
-import { slice } from '../src/docs/slice.ts'
+import { slice } from '../src/lib/slice.ts'
 
 const SOURCE = `<script>
 import { state } from '@abide/abide'
@@ -76,7 +76,7 @@ test('an anchor ignores indentation, and the slice drops its margin', () => {
 // in the slot inside the card.
 test('the card puts its component above its files', async () => {
     const card = await Bun.file(
-        new URL('../src/docs/Example.abide', import.meta.url),
+        new URL('../src/lib/Example.abide', import.meta.url),
     ).text()
     const render = card.indexOf('<div class="ex-render"><slot/></div>')
     expect(render).toBeGreaterThan(-1)
@@ -114,14 +114,14 @@ test('several anchors join into one slice, and a gap is shown', () => {
 // reading as a stray paragraph under the frame.
 test('every example class the build emits resolves in the stylesheet', async () => {
     const css = await Bun.file(
-        new URL('../src/app.css', import.meta.url),
+        new URL('../src/lib/app.css', import.meta.url),
     ).text()
     const emitted = new Set<string>()
     for (const file of new Bun.Glob('*.abide').scanSync({
-        cwd: new URL('../src/docs/', import.meta.url).pathname,
+        cwd: new URL('../src/lib/', import.meta.url).pathname,
     })) {
         const source = await Bun.file(
-            new URL(`../src/docs/${file}`, import.meta.url),
+            new URL(`../src/lib/${file}`, import.meta.url),
         ).text()
         for (const match of source.matchAll(/class="(ex-[a-z-]+)"/g))
             emitted.add(match[1] ?? '')

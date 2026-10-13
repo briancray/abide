@@ -1,17 +1,20 @@
 // THE DOCS AGAINST THE REGISTRY, AND AGAINST THEIR OWN RULES (RULEBOOK 40): every capability claimed
 // by one written page, every example card on exactly one teaching page, and the words held to what
 // docs/BRAND.md asks of a heading, a label and a code sample. The pages are read three ways —
-// `SITE.ts` for what a page claims, its `page.abide` for what it embeds, and the markdown the built
+// `SITE.ts` for what a page claims, its `index.abide` for what it embeds, and the markdown the built
 // app serves for what a reader reads (`docsPages.ts`).
 
 import { expect, test } from 'bun:test'
-import { SITE } from '../src/docs/SITE.ts'
+import { dirname } from 'node:path' // bun exposes no path helpers of its own
+import { SITE } from '../src/lib/SITE.ts'
+import { sidebarGroupsOf } from '../src/lib/siteSections.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
 import {
     allCards,
     cardsOf,
     DOGFOOD,
     docsPages,
+    pageFileOf,
     renderedMarkdown,
 } from './docsPages.ts'
 
@@ -174,10 +177,16 @@ test('every docs page is in SITE, and every SITE entry has its page', async () =
     const listed = new Set<string>()
     for (const page of await docsPages()) listed.add(page.file)
     const orphans: string[] = []
-    for (const path of new Bun.Glob('src/**/page.abide').scanSync({
+    for (const path of new Bun.Glob('src/**/index.abide').scanSync({
         cwd: DOGFOOD,
     }))
-        if (!listed.has(path) && !/^src\/(bench|tests)\//.test(path))
+        if (
+            !listed.has(path) &&
+            // An instrument is a page with no siblings to list it beside.
+            sidebarGroupsOf(
+                path.slice('src'.length, -'/index.abide'.length) || '/',
+            ).length !== 0
+        )
             orphans.push(path)
     const missing: string[] = []
     for (const page of await docsPages())
@@ -199,6 +208,20 @@ test('every file a card renders or shows is on disk', async () => {
                 missing.push(`${card.id}: shows ${shown}`)
     }
     expect(missing).toEqual([])
+})
+
+// 40.34 — A CARD RENDERS A COMPONENT FROM THE `lib` BESIDE ITS PAGE, so the example a reader finds
+// beside a page is the one that page teaches, and a `.abide` directly beside it would be a page of
+// its own (23.21).
+// THE REVERT: import `ContactCard` from another page's `lib`, and `package-component` is named.
+test('every card renders a component in the lib beside its page', async () => {
+    const strays: string[] = []
+    for (const card of await allCards()) {
+        const lib = `${dirname(pageFileOf(card.route))}/lib/`
+        if (!card.component.startsWith(lib))
+            strays.push(`${card.id}: ${card.component}`)
+    }
+    expect(strays).toEqual([])
 })
 
 // 40.4 — A CARD SHOWS THE FILE IT RENDERS: the component is what the example IS, and a card whose

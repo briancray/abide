@@ -1,0 +1,215 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+import Chat from './lib/Chat.abide'
+import ApiRequest from './lib/ApiRequest.abide'
+import Bridge from './lib/Bridge.abide'
+import chatSource from './lib/Chat.abide' with { type: 'text' }
+import invoiceStatusSource from './invoiceStatus.ts' with { type: 'text' }
+import apiRequestSource from './lib/ApiRequest.abide' with { type: 'text' }
+import messagesSource from './v1/messages.ts' with { type: 'text' }
+import bridgeSource from './lib/Bridge.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="`assistant`: the call and its providers">
+        <Code language="ts" caption="server" code={`yield* assistant(messages, provider, { mcp, maxTurns })`} />
+
+        <table>
+            <thead><tr><th>Argument</th><th>What it is</th></tr></thead>
+            <tbody>
+                <tr><td><code>messages</code></td><td>the transcript, an array of <code>AssistantMessage</code> — <code>{'{ role, content }'}</code> — ending on the user's turn</td></tr>
+                <tr><td><code>provider</code></td><td><code>claudeApi(config)</code> or <code>claudeCode(config)</code>, each configured the way its own product documents</td></tr>
+                <tr><td><code>mcp</code></td><td><code>true</code> to offer your MCP tools</td></tr>
+                <tr><td><code>maxTurns</code></td><td>the most model turns one call runs, 10 by default</td></tr>
+            </tbody>
+        </table>
+
+        <p>A <code>Provider</code> is one method, <code>run</code>, handed the transcript and a
+        <code>Toolbox</code> of your tools. Write one for another model and <code>assistant</code>
+        treats it the same.</p>
+    </Section>
+
+    <Section title="A handler you write">
+        <p><code>assistant</code> has no address of its own. You yield it from a streaming handler,
+        so the address, the middleware and the surfaces are yours to set, as they are for any other
+        handler.</p>
+
+        <Code language="ts" caption="src/support/ask.ts — excerpt" code={`import {
+    assistant,
+    type AssistantMessage,
+    claudeApi,
+    config,
+    POST,
+} from '@abide/abide/server'
+import { onlyStaff } from '#src/server/onlyStaff'
+
+export default POST(
+    async function* ({ messages }: { messages: AssistantMessage[] }) {
+        yield* assistant(
+            messages,
+            claudeApi({
+                apiKey: config().ANTHROPIC_API_KEY,
+                model: 'claude-opus-5',
+                max_tokens: 16000,
+                system: 'Answer questions about invoices.',
+            }),
+            { mcp: true },
+        )
+    },
+    { middleware: [onlyStaff], clients: { mcp: false } },
+)`} />
+
+        <p><code>{'clients: { mcp: false }'}</code> keeps the assistant out of its own tool list.
+        The page reads <code>ask</code> like any stream: each event arrives as a production of the
+        value it hands back.</p>
+
+        <p>Read on: <a href={url('/data/send-data-as-it-arrives')}>Streaming data</a> ·
+        <a href={url('/data/decide-who-may-call-what')}>Authorization</a></p>
+    </Section>
+
+    <Section title="One event stream from every provider">
+        <table>
+            <thead><tr><th><code>type</code></th><th>Carries</th></tr></thead>
+            <tbody>
+                <tr><td><code>text</code></td><td><code>text</code>, the next piece of the reply</td></tr>
+                <tr><td><code>tool</code></td><td><code>id</code>, <code>name</code> and <code>input</code> of a tool the model called</td></tr>
+                <tr><td><code>result</code></td><td><code>id</code>, the <code>text</code> the tool answered, and whether it <code>failed</code></td></tr>
+                <tr><td><code>done</code></td><td><code>stop</code> — <code>end_turn</code>, <code>max_tokens</code>, <code>max_turns</code>, <code>refusal</code> — and <code>usage</code> in tokens</td></tr>
+            </tbody>
+        </table>
+
+        <p>Changing the provider changes nothing downstream of the handler. A page written against
+        the API renders a visitor's Claude Code unchanged.</p>
+    </Section>
+
+    <Section title="The tools are your MCP surface">
+        <Example
+            id="assistant-tools"
+            title={'`assistant(messages, provider, { mcp: true })` — your handlers as its tools'}
+            summary="The support assistant, asked about one invoice. The model here is a recording and its lines are fixed; the tool call it makes runs this site's own handler, as you."
+            files={{
+                'lib/Chat.abide': chatSource,
+                'invoiceStatus.ts': invoiceStatusSource,
+            }}
+        >
+            <Chat />
+        </Example>
+
+        <p><em>1 option, 0 tool definitions</em> — against the arm's tool table, which spells each
+        tool's name, description and input schema a second time and dispatches the call by name.</p>
+
+        <p><code>mcp: true</code> offers the model the tools <code>/__abide/mcp</code> lists, so
+        which handlers it may call is decided where it already is —
+        <code>{'clients: { mcp: false }'}</code> withholds one from the assistant as it does from
+        every other model. Asking for tools in an app that lists no handler for MCP throws and says
+        so.</p>
+
+        <p>Every tool call is a request through your middleware carrying the asking request's
+        <code>cookie</code> and <code>authorization</code> headers. A tool does what the person
+        asking could do, and a rung that refuses them refuses the model on their behalf.</p>
+
+        <p>Read on: <a href={url('/machines/let-a-model-call-your-handlers')}>MCP</a> ·
+        <a href={url('/machines/keep-a-handler-off-a-surface')}>Withholding a surface</a></p>
+    </Section>
+
+    <Section title="The transcript travels with every call">
+        <p><code>assistant</code> keeps nothing between calls. The page holds the conversation and
+        sends all of it each time, so a reload, a second tab or a second server answers the next
+        turn the same way.</p>
+
+        <p>The cost is the resend: every call carries the whole transcript, and the API bills its
+        input tokens again. Claude Code takes it as one message, the earlier turns folded above the
+        last.</p>
+    </Section>
+
+    <Section title="`claudeApi` takes the Messages API's own fields">
+        <Example
+            id="claude-api"
+            title="`claudeApi(config)` — the request body you wrote, sent as written"
+            summary="The support assistant on claudeApi, its baseURL pointed at a stand-in on this site that answers with the body it was sent. Ask, and read the request."
+            files={{
+                'lib/ApiRequest.abide': apiRequestSource,
+                'v1/messages.ts': messagesSource,
+            }}
+        >
+            <ApiRequest />
+        </Example>
+
+        <p><code>claudeApi</code> takes a Messages API request body as Anthropic documents it,
+        snake_case, with the client's <code>apiKey</code> and <code>baseURL</code> beside it. abide
+        writes <code>messages</code> and <code>stream</code>; every other field goes on the body as
+        you wrote it, and the <code>tools</code> you list — a server tool like web search — are sent
+        beside your own.</p>
+
+        <p><code>baseURL</code> is the client's own option, and pointing it at a stand-in is how the
+        card above shows the request without a key. Point it nowhere and the request goes to
+        <code>https://api.anthropic.com</code>.</p>
+
+        <p>It reads no key from the environment. Pass <code>apiKey</code> from wherever your app
+        keeps secrets.</p>
+
+        <p>Read on: <a href={url('/app/configure-the-app')}>Config</a></p>
+    </Section>
+
+    <Section title="`claudeCode` runs on the visitor's own Claude Code">
+        <Example
+            id="claude-code"
+            title="`claudeCode(config)` — a turn on the reader's own Claude Code"
+            summary="The support assistant on whatever Claude Code is paired with this browser. Ask first and it is refused; connect, run the command in a terminal, and ask again."
+            files={{
+                'lib/Bridge.abide': bridgeSource,
+            }}
+        >
+            <Bridge />
+        </Example>
+
+        <p><code>claudeCode</code> sends the conversation to Claude Code on the machine of the
+        person asking, on their own sign-in and their own plan. Its config is Claude Code's own
+        option names — <code>model</code>, <code>fallbackModel</code>, <code>systemPrompt</code>,
+        <code>appendSystemPrompt</code>, <code>effort</code> — and only those: its tools, its
+        permissions and its directory are not the site's to set.</p>
+
+        <p>The visitor connects their Claude Code once per visit by running a command in a terminal.
+        It dials out to your site — a page cannot reach a program on its own machine from https —
+        and Claude Code runs there with its own tools off, no settings read, and no MCP server but
+        yours.</p>
+
+        <p>The relay at <code>/__abide/bridge</code> opens the first time <code>claudeCode</code>
+        hands out a command, so an app that never calls it has no relay to find.</p>
+    </Section>
+
+    <Section title="`claudeCode.bridge`: showing the command until it connects">
+        <p><code>claudeCode.bridge()</code> streams this browser's pairing: unpaired with the
+        command to run, then paired the moment the visitor's bridge connects.</p>
+
+        <Snippet source={bridgeSource} path="lib/Bridge.abide" from={['const bridge']} />
+
+        <p>The card above reads it as <code>pairing</code>, which holds every status the stream has
+        sent, and the last is the one that stands.</p>
+
+        <p>The command reads <code>bunx @abide/bridge@&lt;version&gt; &lt;your site&gt;
+        &lt;code&gt;</code>. The code pairs once, with this browser, and expires unused after ten
+        minutes; <code>claudeCode.bridgeCommand()</code> mints one on its own where a page wants the
+        line alone. Asking with nothing paired refuses 409.</p>
+
+        <p>The bridge ends itself 30 seconds after the last page watching it closes. The pairing
+        lives in the server process it dialed, so an app spread over several needs a visitor's
+        requests to reach that one.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/machines/let-a-model-call-your-handlers')}>MCP</a> — the tools the
+            assistant is offered</li>
+            <li><a href={url('/data/send-data-as-it-arrives')}>Streaming data</a> — reading the
+            events on the page</li>
+            <li><a href={url('/data/decide-who-may-call-what')}>Authorization</a> — deciding who
+            may ask</li>
+        </ul>
+    </Section>
+</Doc>

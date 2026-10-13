@@ -1,5 +1,5 @@
-<script module>
-import type { LauncherOptions } from '@abide/abide/server'
+<script server>
+import { onLauncher } from '@abide/abide/server'
 
-export const launcher: LauncherOptions = { width: 1200, height: 820 }
+onLauncher(() => ({ width: 1200, height: 820 }))
 </script>

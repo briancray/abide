@@ -1,0 +1,32 @@
+<script server>
+import { refuse } from '@abide/abide'
+import { GET } from '@abide/abide/server'
+
+const CONTACTS: Record<string, { name: string; role: string }> = {
+    '42': { name: 'Ada Lovelace', role: 'Engineer' },
+}
+
+const getContact = GET(
+    async (args: { id: string }) => {
+        // A slow service, so the wait is on screen.
+        await Bun.sleep(900)
+        return CONTACTS[args.id] ?? refuse(404, 'No such contact.')
+    },
+    { description: 'A contact, by id.' },
+)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const contact = reactive(getContact({ id: '42' }))
+</script>
+
+<ul class="fields">
+    <li><span>name</span>
+        <strong>{contact.ready() ? contact.name : '—'}</strong></li>
+    <li><span>role</span>
+        <strong>{contact.ready() ? contact.role : '—'}</strong></li>
+</ul>
+
+<p class="status">{contact.busy() ? 'loading…' : ''}</p>

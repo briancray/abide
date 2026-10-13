@@ -50,7 +50,7 @@ const TERMS = (() => {
     )
     const terms: string[] = []
     for (const row of table.split('\n')) {
-        const term = /^\| ([a-z]+) \| \S/.exec(row)
+        const term = /^\| ([a-z]+(?: [a-z]+)*) \| \S/.exec(row)
         if (term?.[1]) terms.push(term[1])
     }
     return terms

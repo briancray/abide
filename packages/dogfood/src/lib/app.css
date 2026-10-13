@@ -1,0 +1,852 @@
+/* TAILWIND, wired the way `/templates/scope-styles-to-a-component` teaches an app to wire
+   it: `bun-plugin-tailwind` in this package's `bunfig.toml`, and this file opening with the import.
+   `source("..")` scans `src/`, the directory above this one's `lib`, whatever directory the build
+   was started from — the plugin's default is the working directory, and from the repo root that is
+   every package. */
+@import "tailwindcss" source("..");
+
+/* THE TOKENS, as the theme every utility reads. The defaults a token replaces are cleared rather
+   than left beside it, so `text-red-500` or `text-sm` is a build that emits nothing rather than a
+   color or a size off the brand. Light here, dark in the base layer below.
+
+   THE GRID IS .25rem, and that is Tailwind's own `--spacing`, so `p-4` is 1rem and every numeric
+   utility lands on it. The exceptions are the three things that draw a LINE rather than occupy
+   space — a border, an outline and a shadow — which are 1px and 2px at any type size.
+   THE NAMED STEPS say what a distance SEPARATES rather than how big it is, each about 1.6x the
+   last, so a rule picks its step from what two things are to each other: `gap-hair` rows of one
+   strip, `gap-tight` a mark and its word, `gap-snug` a name and the thing it names, `gap-flow` one
+   block of prose to the next, `gap-section` one section to the next, `gap-page` one region of the
+   page to the next. Vertical rhythm is a container's `gap` throughout, so a distance is owned by
+   the ONE box that contains both sides of it.
+   THE TYPE lands on BRAND's steps: micro labels, chrome/code/captions, prose, then titles, stat
+   values and the page heading. No step carries a line height of its own — `text-chrome/4` says
+   one where it matters, and the rest inherit the body's. */
+@theme {
+    --color-*: initial;
+    --color-paper: #F3F5F4;
+    --color-raised: #FFFFFF;
+    --color-ink: #131E1A;
+    --color-muted: #5D6C66;
+    --color-rule: #DBE2DF;
+    --color-signal: #0A6B62;
+    --color-warm: #9A5A22;
+    --color-cool: #2C5C8F;
+    --color-heading: #8E4426;
+    --color-good: #2F6B44;
+    --color-bad: #A33A3A;
+    --color-syn-comment: #7A8781;
+    --color-syn-string: #2F6B44;
+    --color-syn-key: #0A6B62;
+    --color-syn-tag: #2C5C8F;
+    --color-syn-num: #6B4A8F;
+
+    --font-*: initial;
+    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Space Grotesk', var(--font-sans);
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+
+    --spacing-hair: .25rem;
+    --spacing-tight: .5rem;
+    --spacing-snug: .75rem;
+    --spacing-flow: 1.25rem;
+    --spacing-section: 2.25rem;
+    --spacing-page: 3.5rem;
+    /* the site bar's height, and so where everything sticky below it stops */
+    --spacing-bar: 3.5rem;
+
+    --text-*: initial;
+    --text-micro: .5rem;
+    --text-chrome: .75rem;
+    --text-prose: 1rem;
+    --text-title: 1.25rem;
+    --text-stat: 1.5rem;
+    --text-heading: 2.25rem;
+
+    /* Tracking is a ratio of the type it tracks, so it is em, off the grid by design. */
+    --tracking-display: -.03em;
+    --tracking-heading: -.018em;
+    --tracking-label: .09em;
+    --tracking-caps: .14em;
+    --tracking-brand: .16em;
+
+    --radius-*: initial;
+    --radius-xs: 4px;
+    --radius-sm: 5px;
+    --radius-md: 6px;
+    --radius-lg: 7px;
+    --radius-xl: 8px;
+    --radius-2xl: 10px;
+
+    /* where the rail beside a page stops fitting, and goes */
+    --breakpoint-rail: 82rem;
+
+    /* a run in progress: the row's state word breathing until its reading lands */
+    --animate-board-pulse: board-pulse 1.2s ease-in-out infinite;
+
+    @keyframes board-pulse {
+        50% {
+            opacity: .4;
+        }
+    }
+}
+
+/* THE THREE FAMILIES BRAND NAMES, served at `/fonts` — written in `assets/fonts`, which the pages
+   script copies into `public`, beside their OFL licenses. The LATIN subset only: every character
+   the site's pages carry is in it apart from `≡`, which no subset Google serves covers either.
+   Sans and Grotesk are VARIABLE — one file each answers both weights — so the range is declared
+   rather than a face per weight. */
+@font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: normal;
+    font-weight: 400 600;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-sans.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Space Grotesk';
+    font-style: normal;
+    font-weight: 600 700;
+    font-display: swap;
+    src: url('/fonts/space-grotesk.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-mono-400.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('/fonts/ibm-plex-mono-500.woff2') format('woff2');
+}
+
+/* WHAT IS GLOBAL BECAUSE NOTHING CAN CARRY A CLASS: element defaults, and the docs content the
+   pages script renders from markdown. In `base`, so any utility on an element outranks them. */
+@layer base {
+    :root {
+        color-scheme: light dark;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --color-paper: #172320;
+            --color-raised: #1F2D28;
+            --color-ink: #E3EBE7;
+            --color-muted: #98A8A1;
+            --color-rule: #2C3B35;
+            --color-signal: #6FDDCC;
+            --color-warm: #E0A468;
+            --color-cool: #8CBCEC;
+            --color-heading: #EFA684;
+            --color-good: #9AD1A8;
+            --color-bad: #E89A9A;
+            --color-syn-comment: #86978F;
+            --color-syn-string: #A5DAB2;
+            --color-syn-key: #7BE0D0;
+            --color-syn-tag: #92BEEE;
+            --color-syn-num: #CFAFE8;
+        }
+    }
+
+    /* What Tailwind's preflight takes from the UA that this site's prose still uses: a list's
+       marker and a link's underline. */
+    ul {
+        list-style-type: disc;
+    }
+
+    ol {
+        list-style-type: decimal;
+    }
+
+    a {
+        color: var(--color-signal);
+        text-decoration-line: underline;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 2px;
+    }
+
+    /* WHERE YOU ARE, as an element default rather than nav chrome — an example's own links
+       need it too. */
+    a[aria-current] {
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--color-signal);
+        outline-offset: 2px;
+        border-radius: 4px;
+    }
+
+    /* THREE GAPS, and that is the whole of the page's vertical rhythm. `main` separates REGIONS —
+       the opening, the body, the footer. A `.flow` is prose, one block to the next, and a
+       `Section` stands in its parent's flow, so it takes the region's gap (a top-level section) or
+       the section's (a subsection) over the flow's. */
+    main {
+        max-width: 44rem;
+        padding: 3.25rem 2.5rem 7rem;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-page);
+
+        @variant max-lg {
+            padding: 2rem 1.25rem 5rem;
+        }
+    }
+
+    main>header {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-snug);
+    }
+
+    main section {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-section);
+    }
+
+    main>.flow>section {
+        margin-top: calc(var(--spacing-page) - var(--spacing-flow));
+    }
+
+    main section .flow>section {
+        margin-top: calc(var(--spacing-section) - var(--spacing-flow));
+    }
+
+    main h2,
+    main h3 {
+        scroll-margin-top: calc(var(--spacing-bar) + 1.5rem);
+    }
+
+    h1 {
+        font: 600 var(--text-heading)/2.5rem var(--font-display);
+        letter-spacing: var(--tracking-display);
+        color: var(--color-heading);
+
+        @variant max-lg {
+            font-size: 2rem;
+        }
+    }
+
+    main h2 {
+        font: 600 var(--text-title)/1.5rem var(--font-display);
+        letter-spacing: var(--tracking-heading);
+        color: var(--color-heading);
+    }
+
+    /* h3 is minor structure, so it only leans toward the accent rather than taking it. */
+    main h3 {
+        font: 600 1rem/1.25rem var(--font-display);
+        color: color-mix(in srgb, var(--color-ink) 72%, var(--color-heading));
+    }
+
+    ul,
+    ol {
+        padding-left: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-tight);
+    }
+
+    pre {
+        overflow-x: auto;
+        padding: 1rem;
+        background: var(--color-raised);
+        border: 1px solid var(--color-rule);
+        border-radius: 7px;
+        font: 400 .75rem/1.25rem var(--font-mono);
+    }
+
+    code {
+        font-family: var(--font-mono);
+    }
+
+    :not(pre)>code {
+        font-size: .75rem;
+        padding: .25rem;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+    }
+
+    /* CODE IN A HEADING IS THE SUBJECT, not a mention, so it takes the size of what it sits in
+       rather than the caption step above — a signature set a register below its own gloss reads
+       as a footnote to it. `inherit` rather than a length: the three contexts are already on the
+       grid, and a fourth number here is one more thing to keep in step with them. */
+    h1 code,
+    main h2 code,
+    main h3 code,
+    .ex-title code,
+    .toc code {
+        font-size: inherit;
+    }
+
+    /* FORM DEFAULTS, which an example's own controls render with — the example runs inline in
+       this app, so it is styled the way an abide page is. */
+    /* EVERY CONTROL IS THE SAME BOX, stated once: one line, one block padding, one 1px edge — so
+       a button and the field it acts on are the same height, and neither of them names a height.
+       The line is a LENGTH rather than a ratio because the button sets a smaller type than the
+       field, and a ratio resolves against that to a shorter line. The button's edge is TRANSPARENT
+       rather than absent for the same reason: a border it does not draw is still 2px of box, and
+       `border:0` is what made it the shorter of the two. */
+    input,
+    textarea,
+    select,
+    button {
+        font: 400 1rem/1.25rem var(--font-sans);
+        border: 1px solid var(--color-rule);
+        border-radius: 6px;
+        padding: .5rem .75rem;
+    }
+
+    input,
+    textarea,
+    select {
+        color: var(--color-ink);
+        background: var(--color-raised);
+    }
+
+    /* A NATIVE SELECT IS SIZED BY THE ENGINE, not by the rule above: WebKit drops the padding and
+       the line-height on a `menulist` control and renders it at its own intrinsic height, well short
+       of the input beside it. Turning the appearance off is what hands the box back to the values
+       above, and the caret it takes with it is drawn here — two half-squares, so it needs no asset,
+       follows the token in either scheme, and sits on the grid like everything else. */
+    select {
+        appearance: none;
+        padding-right: 1.5rem;
+        background-image: linear-gradient(45deg, transparent 50%, var(--color-muted) 50%),
+            linear-gradient(135deg, var(--color-muted) 50%, transparent 50%);
+        background-size: .25rem .25rem;
+        background-repeat: no-repeat;
+        background-position: right .75rem center, right .5rem center;
+    }
+
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible {
+        outline: none;
+        border-color: var(--color-signal);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-signal) 20%, transparent);
+    }
+
+    /* A control is as wide as it needs to be, not as wide as the column it stands in — the
+       page is a flex column, and stretch is that column's default rather than a decision. Said as
+       a WIDTH, because `align-self:start` only MEANS a width while the flow is a column: in a row
+       the same declaration is a vertical position, and being on the element it outranked every
+       container's `align-items` — which sat the button in a labeled `.row` against the caption
+       rather than against the field, and needed undoing a container at a time. A definite width
+       makes stretch inert wherever it lands, and says nothing about the cross axis. */
+    button,
+    label {
+        width: fit-content;
+    }
+
+    button {
+        font-weight: 500;
+        font-size: .75rem;
+        color: var(--color-paper);
+        background: var(--color-signal);
+        border-color: transparent;
+        padding-inline: 1rem;
+        cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--color-signal) 86%, var(--color-ink));
+    }
+
+    /* A CONTROL A READER MAY NOT USE HAS TO LOOK LIKE ONE. Four arms already drove `disabled`
+       and nothing styled it, so a locked Save was pixel-identical to a live one — a card whose
+       whole subject is which arm got taken, rendering the same either way. */
+    button:disabled {
+        opacity: .42;
+        cursor: not-allowed;
+    }
+
+
+    /* The label WRAPS its control in both arms of every example, and is set like a nav section
+       header: same size, case and tracking, because it is the same job — naming the thing under
+       it. It is a column of two, so the distance between them is the label's gap. */
+    label {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-snug);
+        font: 500 .5rem/.5rem var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: .14em;
+        color: var(--color-muted);
+    }
+
+    label input,
+    label select,
+    label textarea {
+        text-transform: none;
+        letter-spacing: normal;
+    }
+
+    /* A box and its own label share a line, so those two go back to being a ROW — and the
+       label goes back to being a SENTENCE. The uppercase tracking above names a field sitting
+       under it; beside a checkbox it is just shouting. */
+    label:has(> input[type=checkbox]),
+    label:has(> input[type=radio]) {
+        flex-direction: row;
+        align-items: center;
+        gap: var(--spacing-tight);
+        font: 400 1rem/1.5rem var(--font-sans);
+        text-transform: none;
+        letter-spacing: normal;
+        color: var(--color-ink);
+    }
+
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 1rem;
+    }
+
+    th {
+        font: 500 .5rem/.5rem var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: .11em;
+        color: var(--color-muted);
+        text-align: left;
+        padding: 0 1rem .5rem 0;
+        border-bottom: 1px solid var(--color-rule);
+    }
+
+    td {
+        padding: .75rem 1rem .75rem 0;
+        border-bottom: 1px solid var(--color-rule);
+        vertical-align: top;
+    }
+
+    tr:last-child td {
+        border-bottom: 0;
+    }
+
+    blockquote {
+        padding: 1rem;
+        border-left: 2px solid var(--color-rule);
+        background: var(--color-raised);
+        border-radius: 0 6px 6px 0;
+        color: var(--color-muted);
+        font-size: 1rem;
+    }
+
+    footer {
+        display: flex;
+        gap: var(--spacing-flow);
+        font-size: 1rem;
+    }
+
+    footer .next {
+        margin-left: auto;
+        text-align: right;
+    }
+    @media (prefers-reduced-motion:reduce) {
+        * {
+            transition: none !important;
+            animation: none !important;
+        }
+    }
+}
+
+/* THE EXAMPLE VOCABULARY. An example's source is what a reader reads in the card's Files tab, so
+   it writes one short name per job and the name is defined here, once, from the same utilities
+   the rest of the site is written in. Utilities rather than a component layer, so a utility on
+   the element beside the name still overrides it — Tailwind orders a single-property utility after
+   a many-property one. */
+
+/* Two controls that belong together, on one line. In a column flow they are two rows unless
+   something says otherwise, and this is what a page says it with. A CONTROL AND ITS ACTION SIT ON
+   ONE LINE, and a stacked label in the row is what decides the alignment: `center` would set the
+   button against the middle of a two-part column, so it lands level with the caption rather than
+   with the field it acts on. */
+@utility row {
+    @apply flex flex-wrap items-center gap-snug;
+
+    &:has(> label) {
+        @apply items-end;
+    }
+}
+
+/* A DEMO CARD'S READOUTS ARE A STAT ROW, not sentences with numbers in them. A card claims a
+   number the reader has to find before they can check it, so the label is a small uppercase mono
+   tag and the value is display-sized under it — eyes land on the value, and the label is there
+   when they need it. Auto-fit, so three tiles are a row on a page and a column in a narrow frame
+   without either arm saying which. Not `grid`, which is Tailwind's display utility. */
+@utility tiles {
+    @apply grid list-none grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))] gap-x-flow gap-y-snug p-0;
+
+    & li {
+        @apply flex flex-col gap-1;
+    }
+
+    & li span {
+        @apply font-mono text-micro/2 font-medium tracking-label text-muted uppercase;
+    }
+
+    & li strong {
+        @apply font-display text-stat/6 font-semibold text-ink;
+    }
+}
+
+/* A VALUE THAT IS NOT A SHORT NUMBER. A stat tile sets its value in display type and gives it a
+   column of its own, which is right for `4` and `$100` and wrong for everything else: a phone
+   number broke across two lines at that size and read as two values. A field is a ROW — the label
+   keeps the tile's register, the value is set in the body face — so length is ordinary rather
+   than a layout problem. Tiles for short numbers and labels, fields for the rest. */
+@utility fields {
+    @apply flex list-none flex-col gap-tight p-0;
+
+    & li {
+        @apply flex flex-wrap items-baseline gap-tight;
+    }
+
+    /* The label's LINE matches the value's rather than its own type, which is what puts the two
+       on a baseline: `align-items:baseline` on a row of two different sizes lines the glyphs up
+       only while the line boxes agree. */
+    & li span {
+        @apply flex-[0_0_6.5rem] font-mono text-micro/6 font-medium tracking-label text-muted uppercase;
+    }
+
+    & li strong {
+        @apply font-sans text-prose/6 font-semibold text-ink;
+    }
+
+    /* STACKED WHERE THE LABEL DOES NOT FIT THE COLUMN. Aligning labels buys a reader something
+       only while they are short enough to sit on one line: `PERSON THE SERVER SENT` broke over
+       two, and its value then hung to the right of a two-line label with nothing tying them
+       together. Above it, the label is read once and the value is where the eye already is.
+       A STACKED FIELD IS A GROUP, and a group is only read as one while the distance INSIDE it is
+       clearly shorter than the distance to the next: `gap-snug` between fields against `gap-1`
+       inside one is 2x once both line boxes are counted, the smallest ratio that groups without
+       looking like a paragraph break (1.4x read as equal). The leading goes with the baseline it
+       was for — there is no shared row baseline stacked, so the label's is its glyph plus one
+       grid step and the value's is its own. */
+    &.stacked {
+        @apply gap-snug;
+
+        & li {
+            @apply flex-col items-stretch gap-1;
+        }
+
+        & li span {
+            @apply flex-none leading-3;
+        }
+
+        & li strong {
+            @apply leading-5;
+        }
+    }
+}
+
+/* A TRANSCRIPT IS NOT A LIST. A bulleted `<ul>` sets turns as an enumeration of items where a
+   conversation is an exchange between two parties. WHO SPOKE IS CARRIED BY THE SIDE, which is what
+   lets the speaker label shrink to a tag instead of competing with what was said; the bubble is
+   what makes the side legible at all. The app's own side is the only asymmetry. */
+@utility chat {
+    @apply flex list-none flex-col gap-snug p-0;
+
+    & li {
+        @apply flex max-w-88 flex-col gap-1;
+    }
+
+    & li span {
+        @apply font-mono text-micro/6 font-medium tracking-label text-muted uppercase;
+    }
+
+    & li p {
+        @apply rounded-2xl border border-rule bg-raised px-3 py-2;
+    }
+
+    & li[data-speaker=you] {
+        @apply items-end self-end;
+    }
+
+    & li[data-speaker=you] p {
+        @apply bg-signal/10;
+    }
+
+    /* A mix of two tokens, which no color utility spells. Its own rule, because Tailwind gives
+       each token mix an `@supports` fallback and bun's bundler keeps only the first of two in one
+       rule — the dark scheme then got the light mix. */
+    & li[data-speaker=you] p {
+        border-color: color-mix(in srgb, var(--color-signal) 28%, var(--color-rule));
+    }
+}
+
+/* A CONTROL BELONGS WITH THE VALUE IT CHANGES. Sat inside the tile, `+` and `−` need no subject:
+   the label above the value is already it, and the relationship is the layout rather than
+   something to work out. */
+@utility stepper {
+    @apply flex items-center gap-tight;
+
+    & button {
+        @apply px-2 py-1 font-mono text-prose/5 font-semibold;
+    }
+}
+
+/* A STATUS THAT RESERVES ITS OWN LINE. A probe an example renders is on screen for as long as a
+   load takes and gone the rest of the time, so showing it by ADDING a node reflows everything
+   under it twice per press — and the frame reports its height to the page, so the shift reaches
+   past the example. The row is here whether or not there is anything to say. */
+@utility status {
+    @apply min-h-6 text-chrome text-muted;
+}
+
+@utility tabs {
+    @apply flex flex-wrap gap-hair;
+
+    & button {
+        @apply rounded-full border border-transparent bg-transparent px-3 py-1 font-sans text-chrome/3 font-medium text-muted;
+
+        &:hover {
+            @apply border-rule text-ink;
+        }
+
+        &[aria-selected=true] {
+            @apply border-signal bg-signal text-paper;
+        }
+    }
+}
+
+/* THE GENERATED DOCS MARKUP — what the pages script writes from markdown and example JSON, which
+   carries a class because nothing can carry a utility: `.flow`, `.toc`, `.snippet`, `.tip`,
+   `.example` and the rest. Each name is also a hook (`installDocs.ts`, the e2e specs), so it stays
+   a name. Pseudo-elements, a mix of two tokens and a transition on one property stay declarations:
+   no utility says them more shortly. */
+@layer components {
+    .flow {
+        @apply flex flex-col gap-flow;
+    }
+
+    .toc {
+        @apply sticky top-bar flex max-h-[calc(100vh_-_var(--spacing-bar))] flex-col gap-section self-start overflow-y-auto px-6 pt-14 pb-16 max-rail:hidden;
+    }
+
+    .toc section {
+        @apply flex flex-col gap-snug;
+    }
+
+    .toc h2 {
+        @apply font-mono text-micro/2 font-medium tracking-caps text-muted uppercase;
+    }
+
+    /* The heading list is a spine a reader's eye tracks down, so the rows are flush and the
+       distance between them is the link's own padding — a gap here would break the spine. */
+    .toc ul {
+        @apply list-none gap-0 border-l border-rule p-0;
+    }
+
+    .toc a {
+        @apply -ml-px block border-l border-transparent py-1 pr-0 pl-3 text-chrome/4 text-muted no-underline;
+        transition: color .12s ease;
+    }
+
+    .toc a:hover {
+        @apply text-ink;
+    }
+
+    .toc a[aria-current] {
+        @apply border-signal text-signal;
+    }
+
+    .toc .lvl-3 a {
+        @apply pl-6;
+    }
+
+    /* The downloads are two links at the end of the rail, so they take its type and drop the
+       spine — same box as the heading list, one section along. */
+    .toc .downloads {
+        @apply border-l-0;
+    }
+
+    .toc .downloads a {
+        @apply pl-0;
+    }
+
+    .toc code {
+        @apply bg-transparent p-0;
+    }
+
+    .intent {
+        @apply max-w-170 text-title/8 text-muted;
+    }
+
+    .notice {
+        @apply rounded-md border border-dashed border-rule px-4 py-3 text-chrome text-muted;
+    }
+
+    /* The signature: a snippet's spine names the side it runs on. */
+    .snippet {
+        @apply overflow-hidden rounded-lg border border-l-2 border-rule border-l-(--side) bg-raised;
+    }
+
+    .snippet[data-side=server] {
+        --side: var(--color-warm);
+    }
+
+    .snippet[data-side=browser] {
+        --side: var(--color-cool);
+    }
+
+    .snippet[data-side=abide] {
+        --side: var(--color-signal);
+    }
+
+    .snippet figcaption {
+        @apply flex items-center gap-tight border-b border-rule px-4 py-3 font-mono text-chrome/3 font-medium text-muted;
+    }
+
+    .snippet figcaption::before {
+        content: '';
+        @apply size-2 flex-none rounded-full bg-(--side);
+    }
+
+    .snippet pre {
+        @apply rounded-none border-0 bg-transparent;
+    }
+
+    .t-comment {
+        @apply text-syn-comment italic;
+    }
+
+    .t-string {
+        @apply text-syn-string;
+    }
+
+    .t-key {
+        @apply text-syn-key;
+    }
+
+    .t-tag {
+        @apply text-syn-tag;
+    }
+
+    .t-block {
+        @apply font-medium text-syn-key;
+    }
+
+    .t-num {
+        @apply text-syn-num;
+    }
+
+    /* A TIP is the DOCUMENTATION SPEAKING, and it means that wherever it appears: annotating
+       a render inside the result frame, or standing on its own in prose. One rule for both,
+       so an aside cannot come to mean one thing in the page and another in an example. */
+    .tip {
+        @apply relative rounded-md border bg-signal/7 py-3 pr-4 pl-10 font-sans text-chrome/5 font-normal text-muted;
+    }
+
+    /* its own rule for the reason the chat bubble's is */
+    .tip {
+        border-color: color-mix(in srgb, var(--color-signal) 28%, var(--color-rule));
+    }
+
+    /* THE MARK IS INSIDE THE TEXT, not beside it, so it is placed rather than gapped: a flex
+       row would put it at the top of the BOX, and it belongs on the first LINE. It IS that line —
+       the mark is one line box tall, so its inset is the padding and there is no half-difference
+       to center it by, and a tip grown to three lines keeps its mark on the sentence it belongs
+       to. The glyph is 800 because an `i` at this size is two strokes and loses one. */
+    .tip::before {
+        content: 'i';
+        @apply absolute top-3 left-3 size-5 rounded-full bg-signal text-center font-sans text-chrome/5 font-extrabold tracking-normal text-paper;
+    }
+
+    /* A control the DOCUMENTATION offers, not one the app renders — anything the example's
+       own files do not produce belongs in here, where it is already marked as us talking.
+       Outlined rather than filled, so it never reads as the page's own button. */
+    .tip button {
+        @apply cursor-pointer appearance-none rounded-sm border border-signal bg-transparent px-2 py-1 font-mono text-chrome/4 font-medium text-signal;
+    }
+
+    .tip button:hover {
+        @apply bg-signal/12;
+    }
+
+    .tip code {
+        @apply rounded-xs bg-ink/8 p-1 font-mono text-chrome/3 font-normal text-ink;
+    }
+
+    /* An example is a whole artifact, so it reads as one object rather than as several code
+       blocks that happen to be adjacent. */
+    .example {
+        @apply overflow-hidden rounded-xl border border-rule bg-raised;
+    }
+
+    .example figcaption {
+        @apply flex flex-col gap-hair px-4 py-3;
+    }
+
+    .ex-title {
+        @apply font-display text-prose/5 font-semibold text-ink;
+    }
+
+    .ex-summary {
+        @apply text-chrome text-muted;
+    }
+
+    /* WRAPS rather than scrolls. One example per page means four to six files is the normal
+       case, and a hidden scrollbar put the last of them off the edge with nothing to say so. */
+    .ex-files {
+        @apply flex flex-wrap gap-hair border-y border-rule p-2;
+    }
+
+    .ex-files button {
+        @apply flex flex-none cursor-pointer appearance-none items-center gap-tight rounded-sm border-0 bg-transparent px-2 py-1 font-mono text-chrome/3 font-normal text-muted;
+    }
+
+    .ex-files button::before {
+        content: '';
+        @apply size-1 flex-none rounded-full bg-(--side);
+    }
+
+    .ex-files button[data-side=server] {
+        --side: var(--color-warm);
+    }
+
+    .ex-files button[data-side=browser] {
+        --side: var(--color-cool);
+    }
+
+    .ex-files button[data-side=abide] {
+        --side: var(--color-signal);
+    }
+
+    .ex-files button:hover {
+        @apply text-ink;
+    }
+
+    .ex-files button[aria-selected=true] {
+        @apply bg-ink/7 text-ink;
+    }
+
+    .example pre {
+        @apply rounded-none border-0 bg-transparent;
+    }
+
+    /* THE RUNNING COMPONENT, on the page rather than in a frame: the docs app is the app it runs in.
+       The paper and the column are what a page of the app would give it, so the render reads as a
+       page and not as more of the card's chrome. */
+    .ex-render {
+        @apply flex flex-col gap-flow border-t border-rule bg-paper p-[1.4rem];
+    }
+
+    /* A verdict cell: the answer carries the color, the reason recedes behind it. */
+    .verdict-yes {
+        @apply font-semibold text-good;
+    }
+
+    .verdict-no {
+        @apply font-semibold text-bad;
+    }
+
+    .verdict-why {
+        @apply text-chrome text-muted;
+    }
+}

@@ -1,0 +1,259 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+import Contact from './lib/Contact.abide'
+import Counts from './lib/Counts.abide'
+import Deal from './lib/Deal.abide'
+import Draft from './lib/Draft.abide'
+import Profile from './lib/Profile.abide'
+import Search from './lib/Search.abide'
+import contactSource from './lib/Contact.abide' with { type: 'text' }
+import countsSource from './lib/Counts.abide' with { type: 'text' }
+import dealSource from './lib/Deal.abide' with { type: 'text' }
+import draftSource from './lib/Draft.abide' with { type: 'text' }
+import profileSource from './lib/Profile.abide' with { type: 'text' }
+import searchSource from './lib/Search.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="The two body forms of `reactive`">
+        <p>A body comes in two forms, and its parameter picks between them.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>You get</th></tr></thead>
+            <tbody>
+                <tr><td><code>reactive(() =&gt; …)</code></td><td>a <code>Reactive</code> — <strong>tracked</strong>, recomputing when what it read changes</td></tr>
+                <tr><td><code>reactive((args) =&gt; …)</code></td><td>a <code>Keyed</code> — a factory, <strong>untracked</strong>, one entry per args key</td></tr>
+            </tbody>
+        </table>
+
+        <p>Both take <code>schema</code>, <code>transform</code>, <code>store</code>,
+        <code>global</code>, <code>tags</code>, <code>throttle</code> and <code>debounce</code>, and
+        both hand back something a page reads by name. Every signature and every member is in the
+        <a href={url('/reference/reactive')}><code>reactive</code> reference</a>.</p>
+    </Section>
+
+    <Section title="A derived value reruns when what its body read changes">
+        <Example
+            id="memo-tracked"
+            title="`reactive(() => …)` — an auto-tracked derivation"
+            summary="A deal, and the total that follows its seats. Step the seats."
+            files={{
+                'lib/Deal.abide': dealSource,
+            }}
+        >
+            <Deal />
+        </Example>
+
+        <p><em>1 line, 0 dependency lists</em> — against the two variables the hand-written arm
+        keeps to recompute no more often than this does.</p>
+
+        <p>Whatever the body <strong>read</strong> on its last run is the whole dependency graph.
+        Reading subscribes, so the graph is discovered rather than declared, and it can change from
+        one run to the next without anything being kept in step.</p>
+    </Section>
+
+    <Section title="A derived value is a `Reactive`, not a wrapper">
+        <p>A derived value has no members of its own, so every spelling on it is the one a value you
+        write gets:</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>On a value you write</th><th>On a derived value</th></tr></thead>
+            <tbody>
+                <tr><td>a read</td><td><code>{'{total}'}</code></td><td><code>{'{total}'}</code></td></tr>
+                <tr><td>a probe</td><td><code>contact.busy()</code></td><td><code>contact.busy()</code></td></tr>
+                <tr><td>a write</td><td><code>total = 0</code></td><td><code>total = 0</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>There is one <code>set</code> in the design and it is <code>Reactive</code>'s, so writing
+        to a derived value is the member the type already declares.</p>
+    </Section>
+
+    <Section title="Make a call rerun when its arguments change">
+        <Example
+            id="memo-adoption"
+            title="`reactive(() => call(args))` — a load the value adopts"
+            summary="A profile panel behind two tabs. Open the other person, then come back to the first."
+            files={{
+                'lib/Profile.abide': profileSource,
+            }}
+        >
+            <Profile />
+        </Example>
+
+        <p>A <code>&lt;script&gt;</code> setup body is untracked, so the call written bare registers
+        nothing and never follows <code>id</code>. Wrapping it in a body is the only spelling that
+        does, and that wrapper is compulsory rather than a matter of taste.</p>
+
+        <p>It costs nothing, and that is <strong>adoption</strong>. A body returning another
+        <code>Reactive</code> is adopted rather than stored: the outer subscribes to the inner and
+        mirrors its productions as its own. Every probe forwards from the adopted value,
+        <code>error()</code> included (11.50), and a trigger on the outer reaches the adopted one
+        (11.51). So the reads reach the record rather than a box to be opened first, and
+        <code>busy</code> belongs to the load. A wrapper that stored the call would settle the
+        moment its body returned, and its <code>busy</code> would read false for the whole of the
+        load it wraps.</p>
+
+        <p><code>transform</code> runs after that adoption rather than instead of it, on the settled
+        payload (11.14). A write does not stop at the outer value, though: it reaches the one
+        adopted (11.59), so a reshape you mean to patch reads the load rather than adopting it — see
+        <a href={url('/values/patch-a-list-from-a-live-feed')}>Patching a list</a>.</p>
+
+        <p>Adoption is an identity cutoff too: an args key that hits a live entry adopts
+        synchronously. Reopening a tab already held is the body running again over a request that
+        never happens, and the record's own count says so. <code>opened</code> is kept by the
+        handler, which runs once per request that reaches it, so it counts loads. A count taken in
+        the browser would count runs of the body, and those do go up.</p>
+
+        <p>Read on: <a href={url('/data/read-data-without-writing-an-api')}>Reading data</a> ·
+        <a href={url('/values/load-once-per-set-of-arguments')}>Caching</a></p>
+    </Section>
+
+    <Section title="A write to a derived value stands until the next recompute">
+        <Example
+            id="memo-write"
+            title="A write to a derived value stands until the next recompute"
+            summary="An edit box seeded from a person the server sent. Type into it, then reload."
+            files={{
+                'lib/Draft.abide': draftSource,
+            }}
+        >
+            <Draft />
+        </Example>
+
+        <p>A derived value is writable, and a write stands until the next recompute clobbers it.
+        That means it survives until something the body read moves — one primitive rather than a
+        second value beside it and an effect keeping the two in step.</p>
+
+        <p>That is also the trade. The reload is a new answer even where the fields are identical,
+        because the cutoff compares identity, and the handler builds a record per call.</p>
+
+        <p>That is a body computing its value. One handing back a <code>Reactive</code> passes the
+        write through to the value it adopted instead (11.59).</p>
+
+        <p>There is no warning on that write, and there could not be a useful one: <code>reactive(()
+        =&gt; structuredClone(upstream))</code> and <code>reactive(() =&gt; a + b)</code> are
+        indistinguishable to a compiler, so a warning would fire hardest on the good pattern.</p>
+
+        <p>A write of a settled value is not a load — <code>ready()</code> stays true and
+        <code>busy()</code> never moves. A write of an unsettled one <strong>is</strong> a load and
+        moves the probes the way any load does.</p>
+    </Section>
+
+    <Section title="A keyed value holds one entry per set of arguments">
+        <Example
+            id="memo-keyed"
+            title="`reactive((args) => …)` — a factory, one entry per key"
+            summary="The contact search, filtering as you type. Type toward Ada, then backspace over what you typed."
+            files={{
+                'lib/Search.abide': searchSource,
+            }}
+        >
+            <Search />
+        </Example>
+
+        <p>Every keystroke is a key, so backspacing lands on an entry already held: nothing is asked
+        for and <code>busy</code> never gets a moment to be true. The factory does not cap the load.
+        Every word not typed before is a request of its own, and <code>throttle</code> caps them. A
+        <code>Keyed</code> is <code>(args) =&gt; Reactive</code> with <code>busy</code>,
+        <code>ready</code>, <code>invalidate</code> and <code>refresh</code> on it as well — the
+        factory holds every key, and so it is the only thing with an args space to narrow.
+        <code>{'searchContacts({ query }).busy()'}</code> asks about one entry, and
+        <code>searchContacts.busy()</code> about every entry or those a partial args matches
+        (13.2).</p>
+
+        <p>An entry does not recompute when something its body read moves (11.6, 14.4).</p>
+
+        <p>Read on: <a href={url('/values/load-once-per-set-of-arguments')}>Caching</a> ·
+        <a href={url('/values/slow-down-a-value-that-changes-too-fast')}>Throttle &amp; debounce</a>
+        · <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a></p>
+    </Section>
+
+    <Section title="A value read after an `await` stops following">
+        <Example
+            id="memo-await"
+            title="A read after an `await` registers nothing"
+            summary="Two counts under one contact filter, differing in one line. Change the filter."
+            files={{
+                'lib/Counts.abide': countsSource,
+            }}
+        >
+            <Counts />
+        </Example>
+
+        <p>Tracking is synchronous. A body suspends at its first <code>await</code> and the
+        subscriber is restored, so a reactive read in the continuation subscribes to nothing —
+        reliably nothing. The compiler <strong>warns</strong> and names the read, rather than
+        leaving you a label that is correct once and stale forever.</p>
+
+        <p>Two repairs, and hoisting the read is also the faster shape: move it above the
+        <code>await</code>, or say <code>peek()</code> where the read was meant to be untracked.</p>
+
+        <p>Read on: <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a></p>
+    </Section>
+
+    <Section title="A branch on a value that has not landed paints nothing yet">
+        <Example
+            id="memo-provisional"
+            title="`reactive(() => gate ? … : …)` — a branch on a gate that has not landed"
+            summary="A contact an auditor may read and not edit. Watch the top Save button, and reload the page to see it again."
+            files={{
+                'lib/Contact.abide': contactSource,
+            }}
+        >
+            <Contact />
+        </Example>
+
+        <p>The body never takes the wrong arm. Reading <code>viewer</code> before it lands throws
+        <code>NotLanded</code>, which abandons the run (2.12), and the body runs again when the gate
+        lands (2.13). The abandoned run is <strong>provisional</strong> and mints no production
+        (11.52): nothing is stored, no <code>transform</code> sees it, no <code>store</code> is
+        written, and no reader is served. You write no <code>?.</code>, because nothing past the
+        read runs.</p>
+
+        <p>The hole is where the wait shows. <code>mode === 'locked'</code> throws the same way, and
+        an abandoned expression leaves what it last rendered in place (32.23). On the first frame
+        that is no <code>disabled</code> at all, so the top <code>Save</code> is live until the
+        answer arrives.</p>
+
+        <p>Only you know which answer is safe before there is one, so say it with the probe:</p>
+
+        <Snippet source={contactSource} path="lib/Contact.abide" from={['<button disabled={!mode']} />
+
+        <p>Locked is the answer until the gate says otherwise, so the second <code>Save</code> is
+        dead on the first frame rather than live for one.</p>
+
+        <p>Read on: <a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a></p>
+    </Section>
+
+    <Section title="A read in a condition makes the body re-subscribe">
+        <p>A body is tracked by the ORDER of the reads it makes, which is what keeps a recompute to
+        a pointer compare per source. <code>flag() ? one() : two()</code> reads a different second
+        source every time the flag moves, so the match fails at the flag, everything after it is
+        detached, and both sources are subscribed again — per recompute, for as long as the value
+        lives.</p>
+
+        <p>The compiler <strong>warns</strong> and names the read (14.15). Two repairs, and both are
+        the same move: read the values above the branch so the order is fixed, or give each arm its
+        own value and branch over the two. A <code>{'{#if}'}</code> in markup is untouched — a block
+        binds each read in its subject once for the body, so the order there cannot alternate.</p>
+
+        <p>Read on: <a href={url('/values/do-something-when-a-value-changes')}>Watching
+        values</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/values/load-once-per-set-of-arguments')}>Caching</a> — one entry per
+            set of arguments</li>
+            <li><a href={url('/values/slow-down-a-value-that-changes-too-fast')}>Throttle &amp;
+            debounce</a> — when the inputs move too fast</li>
+            <li><a href={url('/values/do-something-when-a-value-changes')}>Watching values</a> — for
+            effects, where a body is for values</li>
+        </ul>
+    </Section>
+</Doc>

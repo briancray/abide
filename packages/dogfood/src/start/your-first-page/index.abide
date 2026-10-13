@@ -1,0 +1,188 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <Code language="abide" caption="src/index.abide" code={`<script server>
+import { GET } from '@abide/abide/server'
+
+const getGreeting = GET(() => \`Hello from Bun \${Bun.version}\`)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const greeting = reactive(() => getGreeting())
+let count = reactive(0)
+</script>
+
+<h1>{greeting}</h1>
+<button onclick={() => count += 1}>Clicked {count} times</button>`} />
+
+    <p><em>1 file, 15 lines</em> — and the app serves <code>/</code>, with
+    <code>getGreeting</code> a handler only this page calls.</p>
+
+    <p>One file holds a function that runs on the server, the values, the markup that shows them,
+    and the click that changes one. There is no API between the two halves, no store to declare,
+    no component to register, and no re-render to ask for.</p>
+
+    <Section title="A file's path is the address it answers">
+        <p>A file's path below <code>src</code> is its address. Nothing else names a route.</p>
+
+        <table>
+            <thead><tr><th>File</th><th>Answers on</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/index.abide</code></td><td><code>/</code></td></tr>
+                <tr><td><code>src/about.abide</code></td><td><code>/about</code></td></tr>
+                <tr><td><code>src/invoices/index.abide</code></td><td><code>/invoices</code></td></tr>
+                <tr><td><code>src/invoices/[id].abide</code></td><td><code>/invoices/42</code>, with <code>42</code> readable as <code>route.params.id</code></td></tr>
+                <tr><td><code>src/invoices/getInvoice.ts</code></td><td><code>GET /invoices/getInvoice</code>, the handler its default export declares</td></tr>
+                <tr><td><code>src/invoices/lib/Row.abide</code></td><td>no address: a component the pages import</td></tr>
+            </tbody>
+        </table>
+
+        <p>An <code>index.abide</code> answers its directory's own address, and any other
+        <code>.abide</code> adds its name. A <code>.ts</code> beside the pages is a handler file,
+        and its name is its last segment.</p>
+
+        <p>Code that is not an address goes in one of four directories that never are:
+        <code>lib</code> for components and modules, <code>tests</code>, <code>server</code> and
+        <code>public</code>. Anything else beside the pages fails the build, so listing a directory
+        lists its routes. Group an app by subject, and the addresses follow.</p>
+
+        <p>Read on: <a href={url('/pages/add-a-page')}>Routes</a> ·
+        <a href={url('/pages/serve-the-app-under-a-sub-path')}>Sub-path mounting</a></p>
+    </Section>
+
+    <Section title="`<script server>` runs on the server, `<script>` sets up the page">
+        <p><code>&lt;script server&gt;</code> runs on the server alone, once. What it declares with
+        <code>GET</code> is a handler, and the rest of the file calls it by the name it was declared
+        with. The browser is never sent the block: the build generates a call under
+        the same name in its place, so <code>Bun.version</code> is read where Bun is.</p>
+
+        <p>No block of a <code>.abide</code> exports anything. The component is the file's one
+        export, and a handler its <code>&lt;script server&gt;</code> declares is called by that file
+        alone.</p>
+
+        <p>The <code>&lt;script&gt;</code> block is the page's setup: ordinary imports, ordinary
+        TypeScript, run once for this instance of the page. Everything after it is the markup, and
+        the file shares one scope — the template resolves names against its two scripts and
+        nothing else.</p>
+
+        <p><code>{'import { reactive } from \'@abide/abide\''}</code> is a real import. Nothing in a
+        <code>.abide</code> file is ambient, so a name in the markup is a name you can follow back
+        to where it came from.</p>
+    </Section>
+
+    <Section title="`count` is read by name, and written by name">
+        <p>Inside a <code>.abide</code> file, a reactive value is read and written under its own
+        name.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>It means</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'{count}'}</code> in the markup</td><td>read the current value, and follow it from here on</td></tr>
+                <tr><td><code>count += 1</code> in a handler</td><td>write, and wake everything that read it</td></tr>
+                <tr><td><code>count.busy()</code></td><td>a probe — the <code>Reactive</code> API, on a member call</td></tr>
+            </tbody>
+        </table>
+
+        <p>Naming <code>count</code> in an expression <strong>reads</strong> it; the explicit
+        <code>count()</code> and <code>count.set(v)</code> keep compiling everywhere the sugar does,
+        because the sugar is over those forms rather than instead of them. A <code>.ts</code> file —
+        which has no template around it — writes them out:</p>
+
+        <Code language="ts" caption="src/lib/counters.ts" code={`import { reactive } from '@abide/abide'
+
+export const count = reactive(0)
+count.set(count() + 1)`} />
+
+        <p>Reading <code>count</code> in the markup is also the whole subscription. There is nothing
+        to register and no dependency array to keep honest: the heading reads it, so the heading
+        follows it.</p>
+
+        <p>Read on: <a href={url('/values/show-a-value-that-changes')}>Local state</a> ·
+        <a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a> ·
+        <a href={url('/templates/respond-to-a-click')}>Events</a></p>
+    </Section>
+
+    <Section title="A page reaches your database from its own server block">
+        <p>The same page reaches your database through a handler its own
+        <code>&lt;script server&gt;</code> declares, and reads it like any other value.</p>
+
+        <Code language="abide" caption="src/invoices/[id].abide — excerpt" code={`<script server>
+import { GET } from '@abide/abide/server'
+import { database } from '#src/server/database'
+
+const getInvoice = GET(
+    ({ id }: { id: string }) => database.invoice.find(id),
+    { description: 'One invoice, by id.' },
+)
+</script>
+
+<script>
+import { reactive, route } from '@abide/abide'
+
+const invoice = reactive(() => getInvoice({ id: route.params.id }))
+</script>
+
+<h1>Invoice {invoice.number}</h1>
+<p>{invoice.total} due {invoice.dueOn}</p>`} />
+
+        <p>No <code>fetch</code>, no client module, and no second copy of the invoice type. The
+        browser is never sent the server block — the build generates a client from the handler in
+        its place, so the database import above was never in anything the page downloaded.</p>
+
+        <p>Reading <code>invoice</code> starts the load, and the document goes out before the row
+        lands: the two values are holes that fill when it does. That is the default, and it is why
+        neither line above has a loading branch in it.</p>
+
+        <p>That handler is this page's alone, and no other file can import it. One a second file
+        calls goes in a handler file: <code>src/invoices/getInvoice.ts</code>, holding
+        <code>export default GET(…)</code>, answers at <code>/invoices/getInvoice</code>, and a page
+        imports it like any other module. It is the app's public surface, so the command line and
+        MCP list it too.</p>
+
+        <p>Read on: <a href={url('/data/read-data-without-writing-an-api')}>Reading data</a> ·
+        <a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a></p>
+    </Section>
+
+    <Section title="The `<script>` setup runs on both sides">
+        <p>The cost of one file per page is that its setup is not browser-only. abide renders the
+        page on the server and the client runs the same setup again, so a
+        <code>&lt;script&gt;</code> block that reaches for <code>document</code> at the top level
+        fails on the first render rather than on the second.</p>
+
+        <p>Work that belongs to a real browser goes where there is one: an event handler, or a
+        component's own load hook.</p>
+
+        <p>Read on: <a href={url('/start/how-a-page-becomes-html')}>Request to paint</a> ·
+        <a href={url('/templates/run-code-when-a-component-loads')}>Scripts</a></p>
+    </Section>
+
+    <Section title="`abide dev` keeps the app up while you edit">
+        <p><code>abide scaffold my-app</code> writes a project with this page already in it, and
+        <code>abide dev</code> keeps the app up while you edit — one process, restarted on every
+        change, with the browser reloading behind it.</p>
+
+        <Code code={`abide scaffold my-app
+abide dev`} />
+
+        <p>Read on: <a href={url('/ship/start-a-new-app')}>Scaffold</a> ·
+        <a href={url('/ship/run-the-app-while-you-work')}>Dev server</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/start/how-a-page-becomes-html')}>Request to paint</a> — what happened
+            between the request and the pixels</li>
+            <li><a href={url('/data/read-data-without-writing-an-api')}>Reading data</a> — the
+            handler side, properly</li>
+            <li><a href={url('/templates')}>Templates</a> — conditionals, lists, components and
+            forms</li>
+        </ul>
+    </Section>
+</Doc>

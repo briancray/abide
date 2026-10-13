@@ -1,0 +1,150 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import SignIn from './lib/SignIn.abide'
+import Badge from './lib/Badge.abide'
+import Density from './lib/Density.abide'
+import signInSource from './lib/SignIn.abide' with { type: 'text' }
+import headerSource from './lib/Header.abide' with { type: 'text' }
+import badgeSource from './lib/Badge.abide' with { type: 'text' }
+import densitySource from './lib/Density.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="One seal, read everywhere">
+        <Example
+            id="principal-session"
+            title="`principal.set` — one seal, read everywhere"
+            summary="A sign-in on a CRM, and the header above it. Sign in, then sign out, and watch a component the form never names."
+            files={{
+                'lib/SignIn.abide': signInSource,
+                'lib/Header.abide': headerSource,
+            }}
+        >
+            <SignIn />
+        </Example>
+
+        <p><em>1 ambient read, 0 wires</em> — the arm holds the seal and the resolved claims as two
+        variables and a reader list, because the header the form never names has to be told.</p>
+
+        <p><code>principal.set(claims)</code> authenticates this caller: the claims are sealed with
+        <code>ABIDE_PRINCIPAL_SECRET</code> into an <code>HttpOnly</code> cookie living
+        <code>ABIDE_PRINCIPAL_TTL</code>, and <code>principal.clear()</code> signs them out. What
+        you put in is yours — an id, a tenant, a role — and abide's part is that it comes back
+        unforged.</p>
+
+        <p>The seal is an ordinary JWT, signed HS256 (26.11): the claims are its payload's own
+        members beside <code>exp</code> and <code>iat</code>, which are abide's. So another service
+        holding the same secret verifies the cookie with any JWT library, and a token that names
+        another algorithm is no seal at all.</p>
+
+        <p>Both run in a handler, because the cookie is written on the answer. The answer also tells
+        the browser the principal moved, and the browser loads the document again under the new
+        cookie — so the header above the form reads the new name when <code>signIn</code> returns,
+        with nothing passed to it. The tab that signed in tells the browser's other tabs over a
+        <code>BroadcastChannel</code>, and each reloads from the cookie they share (26.24), so
+        signing out in one signs out the page in all of them.</p>
+    </Section>
+
+    <Section title="The five reads">
+        <table>
+            <thead><tr><th></th><th></th></tr></thead>
+            <tbody>
+                <tr><td><code>principal.authenticated</code></td><td>whether this caller presented something the server accepted</td></tr>
+                <tr><td><code>principal.resolved</code></td><td>what <code>onPrincipal</code> returned, merged over the baseline</td></tr>
+                <tr><td><code>principal.expiresAt</code></td><td>when the seal lapses</td></tr>
+                <tr><td><code>principal.error</code></td><td>the app's resolver having failed</td></tr>
+                <tr><td><code>principal.caller</code></td><td><strong>which browser</strong>, as against who they are</td></tr>
+            </tbody>
+        </table>
+
+        <p>Each is a <code>Reactive</code>, so reading one in a template subscribes and a sign-out
+        moves every place that reads it. Each is request-local on a server, so a handler reads the
+        principal of the request that reached it.</p>
+
+        <p><code>principal.caller</code> is the one worth pausing on. It identifies a
+        <strong>browser</strong>, not a person, and it is there whether or not anybody has signed in
+        — which is what a rate limiter, a per-device preference and a cache key want. Reaching for
+        it as an identity is the mistake it is named to prevent.</p>
+    </Section>
+
+    <Section title="`onPrincipal` turns claims into your app's user">
+        <Example
+            id="principal-resolve"
+            title="`onPrincipal(fn)` — an id in the cookie, a user on the page"
+            summary="A CRM that seals nothing but an account id. Sign in as either account and the name and role arrive anyway, looked up on the server."
+            files={{
+                'lib/Badge.abide': badgeSource,
+            }}
+        >
+            <Badge />
+        </Example>
+
+        <p>What it returns is merged under the baseline and read as <code>principal.resolved</code>.
+        So the cookie stays small — an id — and the page still reads a name, because the resolution
+        happens on the server where the record is. The baseline's <code>authenticated</code>,
+        <code>expiresAt</code> and <code>error</code> win a collision, so a resolver cannot sign a
+        caller in by returning <code>authenticated: true</code>.</p>
+
+        <p>A resolver that fails fills <code>principal.error</code> rather than throwing out of
+        every read. A caller whose seal is valid and whose <em>record</em> could not be loaded is a
+        distinguishable state, and it is one an app usually wants to render rather than
+        escalate.</p>
+
+        <p>Read on: <a href={url('/data/refuse-a-request-and-say-why')}>Failures</a> ·
+        <a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a></p>
+    </Section>
+
+    <Section title="`Principal` is the wire document">
+        <Code language="ts" caption="shared" code={`type Principal = { authenticated, expiresAt?, error?, …claims }`} />
+
+        <p><code>authenticated</code>, <code>expiresAt</code> and <code>error</code> are abide's
+        three fields, and everything else in the document is yours. It is what the browser is
+        served, which is what makes the same reads work there — a page rendered on the server and
+        hydrated in a browser reads <code>principal.resolved.name</code> in both, and neither
+        branches on where it is.</p>
+    </Section>
+
+    <Section title="`cookies` is the seam underneath">
+        <Example
+            id="cookies-density"
+            title="`cookies()` — one jar, read on both sides"
+            summary="The contact list's density, kept in a cookie. Pick one and reload the page — the server paints the one you picked."
+            files={{
+                'lib/Density.abide': densitySource,
+            }}
+        >
+            <Density />
+        </Example>
+
+        <p><code>cookies()</code> reads and writes the request's cookies on a server and the
+        document's in a browser — one jar, the shape of Bun's <code>CookieMap</code>, under one
+        name. A read by name tracks that name (22.4), so the tab follows the write, and the server
+        render reads the same cookie off the request, so a reload paints the density you picked
+        rather than flashing the default first.</p>
+
+        <p>The principal cookie is one it manages. Reaching for it directly is for the cookies that
+        are yours — a theme, a consent flag, a last-viewed id.</p>
+
+        <p>The principal cookie is <code>HttpOnly</code>, so script cannot read it. That is the
+        point: the claims reach the page through the <code>Principal</code> document the server
+        rendered, and the <em>seal</em> never leaves the header.</p>
+
+        <p>Read on: <a href={url('/data/decide-who-may-call-what')}>Authorization</a> ·
+        <a href={url('/app/configure-the-app')}>Config</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/data/decide-who-may-call-what')}>Authorization</a> — deciding what
+            a caller may do</li>
+            <li><a href={url('/app/configure-the-app')}>Config</a> — where the secret and the TTL
+            are read</li>
+            <li><a href={url('/reference/ambient-values')}>Ambient values</a> —
+            <code>principal</code> beside the rest</li>
+        </ul>
+    </Section>
+</Doc>

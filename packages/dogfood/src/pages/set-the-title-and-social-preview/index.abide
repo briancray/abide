@@ -1,0 +1,77 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <Code language="abide" caption="src/invoices/[id]/index.abide — excerpt" code={`<head>
+    <title>Invoice {route.params.id}</title>
+    <meta name="description" content={invoice.summary}/>
+</head>`} />
+
+    <Section title="Where it may go, and how two of them merge">
+        <p>A <code>&lt;head&gt;</code> element is <strong>top level</strong> in the file and never
+        inside a control block. Contributions are hoisted at compile time, so what the head can
+        contain is decided by the build rather than discovered by running the page — which is what
+        makes the head knowable before any value has landed.</p>
+
+        <table>
+            <thead><tr><th></th><th></th></tr></thead>
+            <tbody>
+                <tr><td>two contributions with the same key</td><td>the <strong>deepest</strong> one wins</td></tr>
+                <tr><td>a contribution with no merge key</td><td>appended, in tree order</td></tr>
+            </tbody>
+        </table>
+
+        <p>So a layout's <code>&lt;title&gt;</code> is the app's default and a page's replaces it,
+        with neither knowing about the other. A <code>&lt;link&gt;</code> or a
+        <code>&lt;script&gt;</code> with nothing to key on appends instead, because two of those are
+        usually both wanted.</p>
+
+        <p>Read on: <a href={url('/pages/give-pages-the-same-chrome')}>Layouts</a></p>
+    </Section>
+
+    <Section title="Nothing in the head holds the flush by default">
+        <p>The head goes out with the page once it is built, and a value still in flight does
+        <strong>not</strong> delay it. That is the whole reason a title can be wrong for a moment:
+        the alternative is a blank tab while the invoice loads, and a blank tab is worse.</p>
+
+        <p>Nothing is opt-in here either: a <code>&lt;title&gt;</code> is a sink like any other, and
+        it fills when the value lands. Metadata a crawler reads — which does not come back for the
+        second version — is the one case that wants the value before the first flush, and that is
+        the server's business rather than the head's.</p>
+
+        <Code language="abide" caption="src/invoices/[id]/index.abide — excerpt" code={`<head>
+    <title>Invoice {invoice.number}</title>
+</head>`} />
+
+        <p>Read on: <a href={url('/pages/send-the-page-before-the-data-lands')}>Streaming HTML</a> ·
+        <a href={url('/start/how-a-page-becomes-html')}>Request to paint</a></p>
+    </Section>
+
+    <Section title="On a client navigation, keys replace and a layout does not move">
+        <p>The incoming page's keyed contributions replace the outgoing page's <strong>by
+        key</strong>. A layout's contributions do not move at all, the layout not having been
+        rebuilt — so the app's icon and its font preloads are declared once and never touched
+        again.</p>
+
+        <p>A key only the outgoing page set goes back to the layout's value, and is removed where
+        no layout has one. The tab ends on the title a fresh load of that address
+        shows.</p>
+
+        <p>Read on: <a href={url('/pages/link-to-another-page')}>Links &amp; navigation</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/pages/send-the-page-before-the-data-lands')}>Streaming HTML</a> —
+            what else the flush does not wait for</li>
+            <li><a href={url('/pages/give-pages-the-same-chrome')}>Layouts</a> — where an app-wide
+            default belongs</li>
+            <li><a href={url('/pages/render-a-document-yourself')}>Manual rendering</a> — the
+            document a head is merged into</li>
+        </ul>
+    </Section>
+</Doc>

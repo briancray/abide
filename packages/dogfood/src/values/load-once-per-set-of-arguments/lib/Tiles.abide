@@ -1,0 +1,7 @@
+<script>
+import Average from './Average.abide'
+import Total from './Total.abide'
+</script>
+
+<Total/>
+<Average/>

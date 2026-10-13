@@ -1,0 +1,118 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import OfflineBanner from './lib/OfflineBanner.abide'
+import offlineBannerSource from './lib/OfflineBanner.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>You need two things: a way to tell them, and a way to catch up when the connection
+    returns.</p>
+
+    <Section title="The forms of `online`">
+        <table>
+            <thead><tr><th>You write</th><th>What you get</th></tr></thead>
+            <tbody>
+                <tr><td><code>online</code></td><td>a <code>Reactive&lt;boolean&gt;</code> — whether the caller can reach the app</td></tr>
+                <tr><td><code>online()</code></td><td>the same value, spelled explicitly</td></tr>
+            </tbody>
+        </table>
+
+        <p>There is one form and no options, <code>online</code> being ambient rather than declared:
+        it is not constructed, has no producer to reload and takes nothing to key on. What it is on
+        each side is <a href={url('/reference/ambient-values')}>Ambient values</a>.</p>
+    </Section>
+
+    <Section title="`online` is a reactive value">
+        <Example
+            id="online-banner"
+            title="`online` — the connection, read by name"
+            summary="An order form with unsaved changes. Take the browser offline — DevTools' Network panel, or the Wi-Fi — and watch the line."
+            files={{
+                'lib/OfflineBanner.abide': offlineBannerSource,
+            }}
+        >
+            <OfflineBanner />
+        </Example>
+
+        <p><em>1 name, 0 listeners</em> — against <code>online</code> and <code>offline</code>
+        handlers and a flag kept in step between them.</p>
+
+        <p>Read it by name, like any other. There is no listener to attach and no cleanup to
+        remember. Reading it subscribes, and the paragraph mounts and unmounts as the answer
+        moves.</p>
+    </Section>
+
+    <Section title="`online` answers whether the caller can reach the app">
+        <p>One question, asked the same way on both sides and answered from what each side has.</p>
+
+        <table>
+            <thead><tr><th>Side</th><th>Answered from</th></tr></thead>
+            <tbody>
+                <tr><td>browser</td><td><code>navigator.onLine</code> and its events</td></tr>
+                <tr><td>server</td><td>the request that arrived — a caller being served has reached the app</td></tr>
+            </tbody>
+        </table>
+
+        <p>So a document rendered for a client that dropped in the meantime says <code>true</code>,
+        and the client's own first read corrects it. That correction is an ordinary value change,
+        not a hydration mismatch: nothing is rebuilt, the text updates where it stands.</p>
+    </Section>
+
+    <Section title="Catch up by refreshing, not invalidating">
+        <p>When the connection comes back, what you want reloaded is whatever the reader is actually
+        looking at — not every value the scope is holding.</p>
+
+        <Code language="abide" caption="src/layout.abide — excerpt" code={`<script>
+import { online, refresh, watch } from '@abide/abide'
+
+watch(() => { if (online) refresh() })
+</script>`} />
+
+        <p><code>refresh()</code> is bounded by what is <strong>subscribed</strong> rather than by
+        the scope: it reloads the entries something is reading and degenerates to a mark for the
+        rest. So a scope holding two hundred catches up the handful a reader is holding and marks
+        the other hundred and ninety-odd, which is exactly the line above and makes it the reconnect
+        default. The watch also runs once as the layout mounts, with <code>online</code> already
+        true, so what is subscribed then reloads once as well.</p>
+
+        <p><code>invalidate()</code> is the other choice, for where the values on screen must stay:
+        it runs nothing, sends nothing and wakes nobody (7.3, 7.14), and leaves every value standing
+        until the next read or probe of it runs its producer (7.17). It is not a cheaper
+        <code>refresh()</code> to reach for first — the read or the <code>refresh()</code> that
+        follows one loads over a value marked wrong, which reports <code>ready()</code> false (7.8),
+        and every reader guarding on it drops to its pending branch.</p>
+
+        <p>See <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a> for the two in
+        full.</p>
+    </Section>
+
+    <Section title="`navigator.onLine` is a weak signal, and only in one direction">
+        <p><code>false</code> is trustworthy: the interface is down, and nothing is going anywhere.
+        <code>true</code> is a guess — it says the interface is up, not that your server answers, so
+        a captive portal, a DNS failure and a dead backend all read as online.</p>
+
+        <p>That shapes what <code>online</code> is good for. It is right for telling a reader what
+        to expect and wrong as the gate on a write: the load that failed is the honest signal, and
+        <code>online</code> explains it. Read the failure, then read <code>online</code> to say
+        why.</p>
+
+        <Code language="abide" caption="src/orders/index.abide — excerpt" code={`{#if orders.error()}
+    <p>{online ? 'Could not load orders.' : 'You are offline.'}</p>
+{/if}`} />
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a> — what
+            a page shows before a value lands</li>
+            <li><a href={url('/values/decide-when-a-value-reloads')}>Reloading</a> —
+            <code>invalidate</code> against <code>refresh</code>, over one value or a selection</li>
+            <li><a href={url('/values/do-something-when-a-value-changes')}>Watching values</a> —
+            what <code>watch</code> runs, and when it stops</li>
+        </ul>
+    </Section>
+</Doc>

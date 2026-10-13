@@ -1,0 +1,54 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <table>
+        <thead><tr><th>The caller</th><th>What it reads</th></tr></thead>
+        <tbody>
+            <tr><td>your page</td><td>the generated client — same name, same types</td></tr>
+            <tr><td>another service</td><td>an OpenAPI operation</td></tr>
+            <tr><td>a model</td><td>a tool definition</td></tr>
+            <tr><td>a script, a CI job, or you</td><td>a command — JSON down a pipe, human-readable at a prompt</td></tr>
+        </tbody>
+    </table>
+
+    <p>Every one of those is derived from the handler. There is no second place to update when an
+    argument changes, and no way for one surface to describe a handler differently from the
+    rest.</p>
+
+    <Section title="What the handler already carries">
+        <p>Nothing here asks you to annotate a handler for machines specifically. The pieces a tool
+        definition and an OpenAPI operation need are the pieces <code>GET</code> and
+        <code>POST</code> already derive.</p>
+
+        <table>
+            <thead><tr><th>Piece</th><th>Where it comes from</th></tr></thead>
+            <tbody>
+                <tr><td>address</td><td>the handler file's path</td></tr>
+                <tr><td>method</td><td>which handler gave it an address</td></tr>
+                <tr><td>argument schema</td><td>the annotations you already wrote, or the schema you named</td></tr>
+                <tr><td>result schema</td><td>the handler's return type</td></tr>
+                <tr><td>description</td><td><code>description</code>, the one thing worth writing by hand</td></tr>
+            </tbody>
+        </table>
+
+        <p>Fill in <code>description</code>. It is the sentence a model reads to decide whether this
+        is the call it wants, and it rides onto every surface.</p>
+    </Section>
+
+    <Section title="The surfaces">
+        <p>Two of the four are here. The CLI is the third framing of the same client, and it serves
+        machines as readily: a script, a CI job, an agent that can run a command but not open an MCP
+        session. abide's commands belong in one place, so it is written with the rest of them.</p>
+
+        <p>Read on: <a href={url('/machines/describe-your-api-without-writing-a-spec')}>OpenAPI</a>
+        · <a href={url('/machines/let-a-model-call-your-handlers')}>MCP</a> ·
+        <a href={url('/machines/put-a-claude-assistant-on-your-site')}>Assistant</a> ·
+        <a href={url('/machines/keep-a-handler-off-a-surface')}>Withholding a surface</a> ·
+        <a href={url('/ship/call-a-handler-from-the-terminal')}>Call a handler</a> ·
+        <a href={url('/ship/watch-a-room-from-the-terminal')}>Watch a channel</a></p>
+    </Section>
+</Doc>

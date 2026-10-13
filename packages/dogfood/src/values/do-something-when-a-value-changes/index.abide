@@ -1,0 +1,243 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import Assignment from './lib/Assignment.abide'
+import Autosave from './lib/Autosave.abide'
+import Notes from './lib/Notes.abide'
+import TabTitle from './lib/TabTitle.abide'
+import assignmentSource from './lib/Assignment.abide' with { type: 'text' }
+import autosaveSource from './lib/Autosave.abide' with { type: 'text' }
+import notesSource from './lib/Notes.abide' with { type: 'text' }
+import tabTitleSource from './lib/TabTitle.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="The forms of `watch`">
+        <p><code>watch</code> is two overloads discriminated by the first argument, so nothing has
+        to be spelled to get the ordinary form.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>What wakes it</th></tr></thead>
+            <tbody>
+                <tr><td><code>watch(effect)</code></td><td>anything the effect <strong>read</strong> on its last run</td></tr>
+                <tr><td><code>watch(sources, effect)</code></td><td>only the values in <code>sources</code></td></tr>
+                <tr><td><code>s.watch(effect)</code></td><td>that one value, handed to the effect</td></tr>
+            </tbody>
+        </table>
+
+        <p>The effect is an <code>Effect</code>, and what it may return is a <code>Disposer</code>.
+        Both calls hand back a function that stops the watch. Every signature is in the
+        <a href={url('/reference/watch')}><code>watch</code> reference</a>.</p>
+    </Section>
+
+    <Section title="An effect runs again when what it read changes">
+        <Example
+            id="watch-tracked"
+            title="`watch(effect)` — run something outside the page on change"
+            summary="A contact's handle, and the browser tab that names what you are editing. Type into the field, then press Reset."
+            files={{
+                'lib/TabTitle.abide': tabTitleSource,
+            }}
+        >
+            <TabTitle />
+        </Example>
+
+        <p><em>5 lines, 0 listeners</em> — against a call the arm has to make from every place that
+        writes.</p>
+
+        <p><code>watch(effect)</code> runs the effect immediately and again whenever anything it
+        <strong>read</strong> changes — the same tracking an unkeyed <code>reactive</code> body
+        gets, and the same absence of a dependency list.</p>
+
+        <p>The Reset button is the difference on screen. It writes the value and never touches the
+        title, so anything keeping the two in step is keeping up with the <strong>value</strong>
+        rather than with the field. In the hand-written arm that is a <code>persist()</code> call at
+        each writer — one line per writer, and one line for a third writer to forget.</p>
+
+        <p>It hands back the way to stop it, and that matters where the watch has no owner. A watch
+        registered inside a component is owned by the component and torn down with it. One
+        registered from a plain <code>.ts</code> module has nobody to tear it down, so you stop it
+        with the returned disposer. <code>s.watch(effect)</code> is the same thing scoped to one
+        value, handing the value to the effect.</p>
+
+        <p>Read on: <a href={url('/values/derive-a-value-from-other-values')}>Derived values</a> ·
+        <a href={url('/templates/run-code-when-a-component-loads')}>Scripts</a></p>
+    </Section>
+
+    <Section title="Each rerun tears down the previous run">
+        <Example
+            id="watch-disposer"
+            title="`() => Disposer` — each rerun tears down the one before it"
+            summary="Notes on a contact, saved a beat after you stop typing. Type a few characters quickly and watch the saved line."
+            files={{
+                'lib/Autosave.abide': autosaveSource,
+            }}
+        >
+            <Autosave />
+        </Example>
+
+        <p>An effect may return a <code>Disposer</code>, and abide runs it in two places:</p>
+
+        <table>
+            <thead><tr><th>When</th><th>What runs</th></tr></thead>
+            <tbody>
+                <tr><td>before each rerun</td><td>the previous run's disposer</td></tr>
+                <tr><td>once at teardown</td><td>the last run's disposer</td></tr>
+            </tbody>
+        </table>
+
+        <p>Teardown means what the watch was registered in: component unmount for a
+        <code>&lt;script&gt;</code> watch, item removal for one in a <code>{'{#for}'}</code> body,
+        process end for a <code>&lt;script module&gt;</code> one.</p>
+
+        <p>That is why the timer is correct with no guard around it. Every rerun cancels the timer
+        the previous run started, and the unmount cancels the last one — six keystrokes start six
+        timers and leave one standing. <strong>Nothing on screen would show you the other
+        five</strong>, because the last one to land holds the newest draft either way, which is why
+        that count is asserted in the card's spec rather than rendered.</p>
+
+        <p>The other half is where the value is read. The draft is read in the effect body and not
+        inside the <code>setTimeout</code> callback, because the callback runs a beat after the
+        tracking pass has finished: a read from in there subscribes to nothing, and the watch never
+        runs again.</p>
+
+        <p>Read on: <a href={url('/values/slow-down-a-value-that-changes-too-fast')}>Throttle &amp;
+        debounce</a></p>
+    </Section>
+
+    <Section title="A `sources` list narrows what wakes an effect">
+        <Example
+            id="watch-sources"
+            title="`watch(sources, effect)` — reads both, wakes on one"
+            summary="An audit line that should follow a reassignment and not every keystroke. Type into the notes, then change the owner."
+            files={{
+                'lib/Assignment.abide': assignmentSource,
+            }}
+        >
+            <Assignment />
+        </Example>
+
+        <p>The tracked form subscribes to everything the body read, which is usually what you want
+        and occasionally more than you want — a body that reads five values to build one log line
+        wakes on all five. With <code>sources</code> as the first argument it runs only when those
+        change, and the effect above reads the notes plainly and still wakes only on the owner.</p>
+
+        <p><code>peek()</code> is the other way to the same place, and the two differ in what they
+        do to the tracking: <code>sources</code> <strong>replaces</strong> it with a list you write,
+        and <code>peek</code> leaves it on and takes <strong>one read</strong> out of it. So they
+        are alternatives rather than partners — inside a <code>sources</code> list there is no
+        tracking left for a <code>peek</code> to opt out of.</p>
+
+        <p>Read on: <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a></p>
+    </Section>
+
+    <Section title="Tracking stops outside the render flow">
+        <p>A value is tracked only where it is part of the <strong>render flow</strong> — where
+        something downstream will be rebuilt from it. An event handler falls out of that rather than
+        being excepted: it runs in response to a person, after the output exists, so a subscription
+        taken there has no consumer.</p>
+
+        <table>
+            <thead><tr><th>Context</th><th>Tracks</th></tr></thead>
+            <tbody>
+                <tr><td>template expression</td><td><b class="verdict-yes">yes</b></td></tr>
+                <tr><td>unkeyed <code>reactive</code> body</td><td><b class="verdict-yes">yes</b></td></tr>
+                <tr><td><code>watch</code> effect</td><td><b class="verdict-yes">yes</b><span class="verdict-why">, unless <code>sources</code> narrows it</span></td></tr>
+                <tr><td>component <code>&lt;script&gt;</code> setup</td><td><b class="verdict-no">no</b><span class="verdict-why"> — runs once, there is no rerun to feed</span></td></tr>
+                <tr><td>event handler, <code>bind:</code> write-back</td><td><b class="verdict-no">no</b></td></tr>
+                <tr><td><code>Transformer</code>, <code>Disposer</code>, middleware, lifecycle hooks</td><td><b class="verdict-no">no</b></td></tr>
+            </tbody>
+        </table>
+
+        <p>The last row is one rule seen four ways. A transform normalizes a value on the way in; a
+        disposer tears a run down; middleware and <code>onStart</code> / <code>onStop</code> /
+        <code>onConfig</code> run around the app rather than in it. None of them is a thing that
+        gets rebuilt, so a read inside one takes no subscription — and that is a guarantee rather
+        than an accident, because a transform that subscribed would rerun on a value it is in the
+        middle of producing.</p>
+
+        <p>Read on: <a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a> ·
+        <a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a></p>
+    </Section>
+
+    <Section title="A watch reruns on a server too">
+        <p>A server watch is the same watch. A write in a handler wakes it at the end of that turn,
+        and it reruns under the request it was opened in, never under another request's turn
+        (11.32). The disposer runs when that request's scope ends, so a watch opened per request
+        lives exactly as long as the request.</p>
+
+        <p>A read that has not landed ends the run early rather than counting as one. The watch runs
+        again, in its own request, in the turn the value lands.</p>
+    </Section>
+
+    <Section title="Effects run at the end of the turn">
+        <p>A handler that writes the same value ten times reaches the page <strong>once</strong>.
+        Effects are batched to the end of the turn that woke them, so the nine values in between — a
+        loop, a reducer applying ten actions, three fields of a form set together — never reach a
+        node.</p>
+
+        <p>A write still takes effect immediately. What waits is the running, not the writing:</p>
+
+        <Code language="ts" caption="browser" code={`count.set(2)
+count() // 2, now — the read does not wait for the turn to end`} />
+
+        <p>That is worth being precise about, because it is the part that decides whether batching
+        is safe. A write marks the graph; a read walks it and computes what it finds marked. So a
+        read taken between two writes is already the new answer, and only the effects — the part
+        that touches the page — are held.</p>
+
+        <p>Read on: <a href={url('/values/derive-a-value-from-other-values')}>Derived values</a></p>
+    </Section>
+
+    <Section title="`flushSync()` ends the turn at the call">
+        <Example
+            id="flush-sync-scroll"
+            title="`flushSync()` — measure the page the write left"
+            summary="A contact's notes in a box that scrolls. Add a note — the handler measures the list straight after the write, and lands on the note it just added."
+            files={{
+                'lib/Notes.abide': notesSource,
+            }}
+        >
+            <Notes />
+        </Example>
+
+        <p>The write to <code>notes</code> is held like any other, so the list on screen is still
+        the old one when the handler's next line runs. <code>flushSync()</code> runs every effect
+        the write woke before it returns, and the measurement after it reads the page as the write
+        left it — the two tiles agree.</p>
+
+        <p>Take it out and they part: the handler measures one row short and scrolls to the note
+        before the one it just added. Reach for it where something has to see the page now — a
+        measurement, a scroll, a test asserting on a node — and nowhere else, since every call ends
+        a batch early.</p>
+    </Section>
+
+    <Section title="An effect that throws stops its watch">
+        <p>An error in an effect is never silent. A throwing effect, a throwing disposer, and a read
+        of a <strong>failed</strong> value inside one — which throws where nothing has landed (2.2)
+        — all reach <code>onError</code> with the trace attached and warn on
+        <code>abide:watch</code>. In a browser a throw from the effect is additionally re-thrown,
+        and surfaces as an uncaught error an error reporter sees.</p>
+
+        <p>Then the watch stops. An effect that throws once usually throws every run, and a watch
+        that reruns into the same throw is a loop with a log line per iteration. The warning names
+        the watch, and re-establishing it is the app's call if the failure was transient.</p>
+
+        <p>Read on: <a href={url('/app/record-what-happened')}>Logging</a> ·
+        <a href={url('/data/refuse-a-request-and-say-why')}>Failures</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/values/derive-a-value-from-other-values')}>Derived values</a> — for
+            the effects that are really values</li>
+            <li><a href={url('/values/decide-when-a-value-reloads')}>Reloading</a> — the reconnect
+            watch, and <code>peek</code></li>
+            <li><a href={url('/templates/run-code-when-a-component-loads')}>Scripts</a> — where a
+            component's setup runs</li>
+        </ul>
+    </Section>
+</Doc>

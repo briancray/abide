@@ -1,0 +1,91 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import ContactsExport from './lib/ContactsExport.abide'
+import contactsExportSource from './lib/ContactsExport.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Code language="abide" caption="src/error.abide — excerpt" code={`<script>
+import { notFound, props } from '@abide/abide'
+
+const { failure } = props<{ failure: Failed }>()
+</script>
+
+{#if notFound.is(failure)}
+    <h1>No such page</h1>
+    <p>Nothing answers {failure.data.method} {failure.data.path}.</p>
+{:else}
+    <h1>Something went wrong</h1>
+    <p>{failure.message}</p>
+{/if}`} />
+
+    <p>The failure arrives as a <strong>bare value</strong>, not as a <code>Reactive</code>, so
+    there is no <code>s.isError</code> to hang a narrowing off. Every refusal factory carries its
+    own <code>is</code> for exactly this, and it carries the type with it — so an error page narrows
+    by name without a registry and without a cast.</p>
+
+    <p>Read on: <a href={url('/data/refuse-a-request-and-say-why')}>Failures</a></p>
+
+    <Section title="404 is a refusal like any other">
+        <p>There is no separate not-found page and no special-casing of a status. An address nothing
+        answers is <code>notFound</code>, which is a refusal built with <code>refuse.named</code>
+        like the ones your app declares, carrying <code>{'{ path, method }'}</code> so the page can
+        say which address.</p>
+
+        <p>That is why the error page's shape is a narrowing rather than a status switch: the page
+        asks which failure this is, and "no route matched" is one of the answers rather than a
+        different mechanism arriving at the same file.</p>
+
+        <p>A page asked by any method but <code>GET</code> or <code>HEAD</code> is the same shape: a
+        refusal at 405, painted by the same error page, carrying <code>allow: GET, HEAD</code> for
+        whoever sent the <code>POST</code>.</p>
+    </Section>
+
+    <Section title="An error page that fails escalates past the boundary">
+        <p>An <code>error.abide</code> that itself throws does not recurse and does not render half
+        of itself. It <strong>escalates past</strong> its own boundary — the next ancestor answers —
+        and warns on <code>abide:render</code> so the failure is not swallowed by the machinery
+        meant to report failures.</p>
+
+        <p>That is the one case where a quiet fallback would be the wrong kindness: an error page
+        that silently renders nothing is an app that looks fine and shows nobody anything.</p>
+    </Section>
+
+    <Section title="`onError` is a server hook, not a page">
+        <Example
+            id="error-report"
+            title="`onError(fn)` — the tracker hears what the caller is not told"
+            summary="A contacts export whose worker has stopped answering. Run it: the page gets a bare 500, and the hook beside it gets the reason."
+            files={{
+                'lib/ContactsExport.abide': contactsExportSource,
+            }}
+        >
+            <ContactsExport />
+        </Example>
+
+        <p><code>onError</code> runs on an unexpected error in a request its route answers — the
+        route of the <code>&lt;script server&gt;</code> that called it, and every route below. It is
+        where reporting goes — a log line, a call to whatever watches the app — and it is not where rendering goes:
+        the page is markup, and the hook is a function. A throw that is not a refusal answers the
+        caller with a bare 500 and nothing about itself, so the reason reaches the hook and never
+        the browser.</p>
+
+        <p>Read on: <a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a> ·
+        <a href={url('/app/record-what-happened')}>Logging</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/data/refuse-a-request-and-say-why')}>Failures</a> — declaring the
+            refusals this narrows</li>
+            <li><a href={url('/pages/give-pages-the-same-chrome')}>Layouts</a> — resolved the same
+            nearest-ancestor way</li>
+            <li><a href={url('/templates/show-markup-conditionally')}>Conditionals</a> —
+            <code>{'{#try}'}</code>, the boundary inside a page</li>
+        </ul>
+    </Section>
+</Doc>

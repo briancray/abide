@@ -1,0 +1,195 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import Ping from './lib/Ping.abide'
+import Recent from './lib/Recent.abide'
+import pingSource from './lib/Ping.abide' with { type: 'text' }
+import recentSource from './lib/Recent.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>A rung sits in front of the operation, decides, and either calls the next one or does not. It
+    is declared on the handler it guards, so neither can be moved without the other, and there is no
+    route table to keep in step with either.</p>
+
+    <Section title="`Middleware` is one type, in two lanes">
+        <Code language="ts" caption="shared" code={`type Middleware<Ctx, Result> = (
+    next: (ctx?: Ctx) => Promise<Result>,
+    ctx: Ctx,
+) => Result | Promise<Result>`} />
+
+        <p><code>next</code> is the <strong>next rung</strong>, and hands back whatever that rung
+        returns. Where there is no next rung, <code>next</code> runs the operation itself.</p>
+
+        <table>
+            <thead><tr><th>Lane</th><th><code>Ctx</code></th><th>Result</th><th>Runs</th></tr></thead>
+            <tbody>
+                <tr><td>app</td><td><code>{'{ request }'}</code></td><td><code>Response</code></td><td>over every request its file's route answers, before routing at the root</td></tr>
+                <tr><td>rpc</td><td><code>{'{ request, args }'}</code></td><td><code>Value | Failures</code></td><td>on every call to that handler</td></tr>
+            </tbody>
+        </table>
+
+        <p>Two lanes, one type. <code>Ctx</code> is a record naming what that lane actually
+        <strong>has</strong> — the app lane runs around a whole route rather than one handler, so it
+        has a request and no arguments; the rpc lane is typed to one handler's own arguments.</p>
+
+        <p>The <strong>Result</strong> column is the difference that matters. The rpc lane hands
+        back what the handler would have handed back, not a <code>Response</code>, and that lets the
+        same rungs run on an <strong>in-process</strong> call. A page rendering on the server reads
+        through the handler, so a rung that authorizes on an id in the arguments cannot be reachable
+        by a browser and missed by the render. The app lane stays <code>Response</code>-shaped
+        because what it wraps is a whole answer rather than a value, which also makes it the lane where a rung that
+        must set a header belongs.</p>
+
+        <p>A rung's refusals join the handler's own in what the caller can narrow, so
+        <code>rpc.isError(error, 'NotYours')</code> reaches a name the rung declared and never the
+        handler.</p>
+
+        <p>A page following a <code>GET</code> is a call too. The <code>GET</code>'s rungs run once
+        as the subscription opens, and a subscription they did not admit is sent no productions
+        (18.8), so the rung that guards the read guards the follow.</p>
+
+        <p>Read on: <a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a></p>
+    </Section>
+
+    <Section title="Refusing is returning without calling `next`">
+        <Code language="ts" caption="server" code={`async (next, ctx) =>
+    (await signedIn(ctx.request)) ? next(ctx) : notSignedIn()`} />
+
+        <p>One spelling covers all three shapes, because a rung returns what the handler returns:
+        <code>return notSignedIn()</code> refuses, <code>return cached</code> answers without
+        running the handler, and <code>return next(ctx)</code> goes on. <code>return
+        refuse(401)</code> refuses the same way, <code>refuse</code> handing back its
+        <code>Failed</code> like any other refusal (17.4).</p>
+
+        <p>Two ways out, and they are not the same:</p>
+
+        <table>
+            <thead><tr><th></th><th>Effect</th></tr></thead>
+            <tbody>
+                <tr><td>return without calling <code>next</code></td><td>short-circuits — no inner rung runs, no handler runs</td></tr>
+                <tr><td>throw</td><td>escapes the <strong>whole</strong> onion rather than unwinding through it</td></tr>
+            </tbody>
+        </table>
+
+        <p>A rung that wants to observe both — a timer, a log line — calls <code>next</code> inside
+        a <code>try</code>.</p>
+    </Section>
+
+    <Section title="A rung runs over the route of its file">
+        <Example
+            id="middleware-stamp"
+            title="`middleware(rung)` — one rung in front of a route's answers"
+            summary="A CRM behind a load balancer, and the question of which instance answered. Ask, and read a header the handler never wrote."
+            files={{
+                'lib/Ping.abide': pingSource,
+            }}
+        >
+            <Ping />
+        </Example>
+
+        <p><code>middleware(...)</code> is a hook you <strong>call</strong> from a <code>&lt;script
+        server&gt;</code> or a handler file, and it runs over the route of the file that called it
+        and every route below. The root layout's rungs run before routing, over every request. A
+        section's <code>layout.abide</code> files rungs that run after routing, over that section's
+        pages and handlers alone — which is where a guard on <code>/admin</code> goes.</p>
+
+        <p>The card's file sits in this page's <code>lib</code>, so its rung is filed at this
+        page's route (37.1). <code>ping</code> is the card's private handler, and its address,
+        <code>/__abide/handlers/data/decide-who-may-call-what/lib/Ping/ping</code>, is below no route
+        of this page's. The rung runs over it anyway, because a private handler runs under the
+        middleware filed where its file's hooks are (16.72). No handler wrote the header.</p>
+
+        <p>So a guard on a section covers every private handler its files declare, wherever their
+        addresses point. Filed in the root layout, the same rung would stamp every answer the app
+        gives — a page, a built asset, the health check. <code>abide routes</code> lists each hook
+        with the route it is filed at.</p>
+
+        <p>Rungs compose in registration order. The call hands back the way off again, so a module
+        that is torn down can remove its own.</p>
+
+        <p>Around a route this lane has a request and nothing else. Anything resource-aware —
+        authorizing by an id in the arguments — is necessarily a handler's own rung, which is where
+        <code>ctx.args()</code> exists.</p>
+
+        <p>Read on: <a href={url('/app/run-code-at-start-and-stop')}>Lifecycle</a> ·
+        <a href={url('/app/lock-down-what-the-page-may-load')}>CSP</a></p>
+    </Section>
+
+    <Section title="`ctx.args()` parses lazily, and that orders the checks">
+        <Example
+            id="rung-order"
+            title="`middleware: [rung]` — a check that runs before the parse"
+            summary="The recent invoices. Ask for nine while signed out, then sign in and ask again."
+            files={{
+                'lib/Recent.abide': recentSource,
+            }}
+        >
+            <Recent />
+        </Example>
+
+        <p>A rung that never asks for the arguments pays nothing. The first one that asks triggers
+        the parse, and it comes back <strong>parsed, coerced and validated</strong>:</p>
+
+        <ul>
+            <li>An unauthenticated caller gets <code>401</code> from a rung that never looked at the
+            body — so they never read your schema back out of a <code>422</code>.</li>
+            <li>A rung authorizing on a resource id compares a number against a number, whichever
+            method carried it. The string/number split by method is the silent one, and an
+            authorization check passing on a type mismatch is the failure it causes.</li>
+            <li>A malformed body is <code>400</code> and a schema refusal is <code>422</code>, both
+            raised where that first rung asked.</li>
+        </ul>
+
+        <p>The result is cached for the request, so asking twice parses once.</p>
+
+        <p>Read on: <a href={url('/data/check-what-callers-send-you')}>Schemas</a></p>
+    </Section>
+
+    <Section title="On an rpc route the body belongs to `ctx.args()`">
+        <p>A body reads once. <code>request().json()</code> in a rung takes it, and every rung after
+        that one — and the handler — gets nothing. There is no second way in on this lane, and that
+        is the whole reason <code>ctx.args()</code> exists rather than being a convenience over the
+        request.</p>
+
+        <p>Read on: <a href={url('/app/read-the-incoming-request')}>Request</a></p>
+    </Section>
+
+    <Section title="Rungs run from the outside in">
+        <Code code={`app middleware -> routing -> rpc middleware -> args parse -> handler`} />
+
+        <p>Two things sit <strong>outside</strong> middleware on purpose: a <code>CORS</code>
+        preflight, which carries no credentials and so has nothing for a rung to authorize, and
+        <code>/__abide/health</code>, for the same reason.</p>
+
+        <p>Read on: <a href={url('/data/let-another-origin-call-you')}>CORS</a> ·
+        <a href={url('/app/tell-a-load-balancer-you-are-healthy')}>Health</a></p>
+    </Section>
+
+    <Section title="`clients` withholds a surface, never access">
+        <p><code>clients</code> withholds a handler from a <strong>surface</strong> — an OpenAPI
+        listing, an MCP tool list. It is not access control: the http address answers exactly as it
+        did. This rung decides who <strong>may</strong> call, the same one that decides it for a
+        browser.</p>
+
+        <p>A private handler is the same. It is listed nowhere and still answers http at its
+        address, so the rungs over its file are what guard it.</p>
+
+        <p>Read on: <a href={url('/machines/keep-a-handler-off-a-surface')}>Withholding a
+        surface</a> · <a href={url('/app/know-who-is-calling')}>Auth &amp; principal</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/app/know-who-is-calling')}>Auth &amp; principal</a> — where
+            <code>principal</code> comes from</li>
+            <li><a href={url('/data/refuse-a-request-and-say-why')}>Failures</a> — refusing with a
+            name and data instead of a status</li>
+            <li><a href={url('/data/check-what-callers-send-you')}>Schemas</a> — what
+            <code>ctx.args()</code> hands a rung</li>
+        </ul>
+    </Section>
+</Doc>

@@ -1,0 +1,32 @@
+<script server>
+import { GET, middleware } from '@abide/abide/server'
+
+const INSTANCE = crypto.randomUUID().slice(0, 8)
+
+// Every answer this route gives carries the instance that gave it.
+middleware(async (next) => {
+    const answer = await next()
+    answer.headers.set('x-served-by', INSTANCE)
+    return answer
+})
+
+/** Writes no header of its own. */
+const ping = GET(() => 'pong', { description: 'Answers pong.' })
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+let servedBy = reactive('—')
+</script>
+
+<div class="row">
+    <button onclick={async () => {
+        const answer = await ping.raw()
+        servedBy = answer.headers.get('x-served-by') ?? 'no header'
+    }}>Ask the app</button>
+</div>
+
+<ul class="fields">
+    <li><span>served by</span><strong>{servedBy}</strong></li>
+</ul>

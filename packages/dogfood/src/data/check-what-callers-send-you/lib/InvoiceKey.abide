@@ -1,0 +1,49 @@
+<script server>
+import { reactive } from '@abide/abide'
+import { GET } from '@abide/abide/server'
+import { z } from 'zod'
+
+// Keyed on the lowercased id, which is what the schema coerces `ABC-123` to.
+const INVOICES: Record<string, { ref: string }> = {
+    'abc-123': { ref: 'ABC-123' },
+}
+
+/** `ABC-123` and `abc-123` are TWO entries and two loads. */
+const invoiceById = reactive(
+    async (args: { id: string }) => {
+        await Bun.sleep(900) // a slow database, so the wait is on screen
+        const row = INVOICES[args.id]
+        if (row === undefined) throw new Error(`no row ${args.id}`)
+        return row
+    },
+    { args: z.object({ id: z.string().toLowerCase() }) },
+)
+
+const getInvoice = GET(invoiceById, {
+    description: 'An invoice, by id.',
+})
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const SPELLINGS = ['ABC-123', 'abc-123']
+
+let id = reactive('ABC-123')
+
+const invoice = reactive(() => getInvoice({ id }))
+</script>
+
+<div class="tabs">
+{#for one of SPELLINGS}
+    <button aria-selected={id === one}
+        onclick={() => { id = one }}>{one}</button>
+{/for}
+</div>
+
+<p class="status">{invoice.busy() ? 'loading…' : ''}</p>
+
+<ul class="fields">
+    <li><span>invoice</span>
+        <strong>{invoice.ready() ? invoice.ref : '—'}</strong></li>
+</ul>

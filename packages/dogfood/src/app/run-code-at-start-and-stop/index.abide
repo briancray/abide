@@ -1,0 +1,101 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+import Pool from './lib/Pool.abide'
+import poolSource from './lib/Pool.abide' with { type: 'text' }
+import downloadsSource from '../../lib/downloads.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="`onStart` runs before the first request">
+        <Example
+            id="start-hook"
+            title="`onStart(fn)` — work the first request cannot race"
+            summary="A CRM's database pool, connected before the app answers anything. Reload the page and both times stay where the boot put them."
+            files={{
+                'lib/Pool.abide': poolSource,
+            }}
+        >
+            <Pool />
+        </Example>
+
+        <p><code>onStart</code> takes the <strong>next step</strong> as an argument rather than
+        being notified that a step happened. That is the whole difference: work before <code>await
+        start()</code> is work the first request cannot race, and work after it is work that knows
+        the app is up.</p>
+
+        <p>A listener cannot promise either. It fires alongside the thing it is about, and every
+        ordering question it raises has to be answered by a second mechanism.</p>
+
+        <table>
+            <thead><tr><th></th><th></th></tr></thead>
+            <tbody>
+                <tr><td>before <code>await start()</code></td><td>the app cannot answer yet</td></tr>
+                <tr><td>after <code>await start()</code></td><td>it can, and this knows it</td></tr>
+                <tr><td>a wrap that <strong>throws</strong></td><td>fails hard; the server does not come up</td></tr>
+            </tbody>
+        </table>
+
+        <p>Failing hard is the only useful answer to a failed migration. An app that starts anyway
+        is an app serving requests against a schema it did not get.</p>
+    </Section>
+
+    <Section title="`onStop` closes what `onStart` opened, after the last request">
+        <Snippet source={poolSource} path="lib/Pool.abide" from={['onStop(']} />
+
+        <p><code>onStop</code> mirrors it. <code>await stop()</code> first, then tear down what you
+        opened — so a connection is closed after the last request that could have used it, not
+        during. A running page cannot show you that, and a test can: the one on
+        <a href={url('/ship/call-your-app-from-a-test')}>Tests</a> stops the app and finds the pool
+        closed.</p>
+
+        <p>A served app runs it however the process is told to end: <code>exit</code> in its shell,
+        a <code>SIGTERM</code> from <code>docker stop</code> or a deploy, <code>Ctrl-C</code>. A
+        rejection nobody awaited or a throw nothing caught reaches <code>onError</code> first and
+        then stops the app the same way, exiting with 1 so a supervisor restarts a clean process. A
+        second signal while it is stopping ends it at once.</p>
+    </Section>
+
+    <Section title="Every hook hands back the way off">
+        <Code language="ts" caption="server" code={`const off = onStart(warmCaches)
+off()`} />
+
+        <p>That is what makes these registrable from whatever server block owns the thing they are
+        about. A hook belongs to the route of the file that called it: <code>onStart</code> and
+        <code>onStop</code> wrap the whole process wherever they are written, and a section's
+        <code>layout.abide</code> filing <code>middleware</code> or <code>onError</code> guards that
+        section alone. The root layout is the right home for the app-wide ones because its route is
+        every route.</p>
+
+        <p>Read on: <a href={url('/app/configure-the-app')}>Config</a> ·
+        <a href={url('/data/decide-who-may-call-what')}>Authorization</a></p>
+    </Section>
+
+    <Section title="A root rung answers what no route does">
+        <p><code>middleware</code> filed at the root route runs before routing, so a rung there can
+        answer an address no page or handler claims, and hand everything else on with
+        <code>next()</code>. These docs serve every page as markdown that way:</p>
+
+        <Snippet source={downloadsSource} path="src/lib/downloads.ts" from={['middleware(async (next']} />
+
+        <p>It uses the same response helpers everything else does, there being no second set.</p>
+
+        <p>Read on: <a href={url('/data/answer-with-something-other-than-json')}>Response
+        types</a> · <a href={url('/data/decide-who-may-call-what')}>Authorization</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/app/configure-the-app')}>Config</a> — <code>onConfig</code>,
+            registered the same way</li>
+            <li><a href={url('/app/tell-a-load-balancer-you-are-healthy')}>Health</a> —
+            <code>onHealth</code>, registered the same way</li>
+            <li><a href={url('/reference/configuration')}>Configuration</a> — every hook in one
+            table</li>
+        </ul>
+    </Section>
+</Doc>

@@ -1,0 +1,198 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import Profiles from './lib/Profiles.abide'
+import Volume from './lib/Volume.abide'
+import profilesSource from './lib/Profiles.abide' with { type: 'text' }
+import volumeSource from './lib/Volume.abide' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="A store is two halves and your app writes both">
+        <Example
+            id="store-restore"
+            title={'`{ store }` — where the value lives when the process does not'}
+            summary="A volume the player keeps between visits. Step it up, then reload the page."
+            files={{
+                'lib/Volume.abide': volumeSource,
+            }}
+        >
+            <Volume />
+        </Example>
+
+        <p><em>1 option, 0 markup changed</em> — the read and the write are the page's own,
+        untouched. Step the volume and reload the page: that builds the component from nothing,
+        which is the restart a store exists for.</p>
+
+        <p><code>Store</code> is <code>{'{ get, set }'}</code>, and there is no way to spell either
+        alone. A persister with no restore is a <code>watch</code> under a longer name; a restore
+        with no persister is the initial value <code>reactive</code> already takes. Together they
+        are one option, and the two cannot disagree about where the value is.</p>
+
+        <p>abide ships none of these. A store is where your own dependency goes, which is why it is
+        an interface and not a registry of backends.</p>
+
+        <p>A store runs where the <code>Reactive</code> is <strong>constructed</strong>, and in a
+        <code>.abide</code> file that is both sides. A store reaching something only one side has —
+        <code>localStorage</code>, a database driver — is guarded there, and it costs a first paint
+        from the other side's answer and a correction at hydration. A store both sides address
+        renders right the first time, which is why the card's goes over an rpc rather than to a
+        browser API.</p>
+    </Section>
+
+    <Section title="`get` is a producer, so the triggers stop being inert">
+        <p><code>s.refresh()</code> and <code>s.invalidate()</code> do nothing on a value you put a
+        value into, there being nothing to fetch. A store is the second way to give one a producer,
+        and with one they mean what they mean everywhere else:</p>
+
+        <Code language="ts" caption="browser" code={`theme.refresh()      // re-reads the store — another tab may have written it`} />
+
+        <p><code>ttl</code> reaches it for the same reason. On a plain owned value <code>ttl</code>
+        is inert (6.2), because dropping the value would lose something nothing can rebuild; with a
+        store there is somewhere to get it back from (8.2).</p>
+
+        <p>An unsettled <code>get</code> is a load like any other — busy with nothing to serve, a
+        sink opened, the value served when it lands, which is what the card's store does. A
+        <strong>synchronous</strong> <code>get</code>, which <code>localStorage</code> and a cookie
+        allow, is not a load at all: the value is there at construction, so nothing is pending and
+        there is no first paint of the fallback.</p>
+
+        <p>Read on: <a href={url('/values/decide-when-a-value-reloads')}>Reloading</a></p>
+    </Section>
+
+    <Section title="A store answers before the initial value">
+        <p><code>{'reactive(\'light\', { store })'}</code> serves what the store had, and a
+        <strong>miss</strong> falls back to <code>'light'</code>. Any other order and the line would
+        not mean what it reads as.</p>
+
+        <p>A <code>get</code> answering <code>undefined</code> is a miss (8.17), and so is a
+        <code>get</code> that throws (8.15). <code>null</code> is a value, so the card's
+        <code>get</code> turns the <code>null</code> its rpc answers for an unwritten setting into
+        <code>undefined</code>.</p>
+    </Section>
+
+    <Section title="`set` runs per production">
+        <p>Not per write, per production — so a write <code>identity</code> collapsed is never
+        persisted, and per the unit rule a stream is written <strong>once at close</strong>, with
+        the accumulation and never a partial.</p>
+
+        <p>Writes <strong>coalesce latest-wins</strong>: one in flight, one pending, and a third
+        replaces the pending one. A store handed an intermediate you have already superseded is
+        doing work nobody can observe, and a queue is how a slow store grows without bound behind a
+        fast writer. It never blocks a reader — the value is already held, and <code>set</code> is
+        only how it leaves.</p>
+
+        <p>A <code>set</code> that fails does not tear the store off, unlike a <code>watch</code>
+        effect that throws. A persister that silently stopped is worse than none, so the failure
+        reaches <code>onError</code>, warns on <code>abide:reactive</code>, and the store stays
+        attached — the next production is written like any other (8.12).</p>
+
+        <p><code>set</code> is handed the <code>Reactive</code>'s own <code>ttl</code>, in ms, so
+        the number lives once on the value and the store converts it (8.13).</p>
+    </Section>
+
+    <Section title="A store in front of a body is a cache that survives a restart">
+        <p>Where the <code>Reactive</code> also has a body, the store sits in front of it:
+        <code>get</code> on a cold entry, the body on a miss, <code>set</code> on every production.
+        That is the persistent form of the cache <code>ttl</code> already bounds. A
+        <code>refresh()</code> or an <code>invalidate()</code> on it runs the body rather than
+        re-reading the store (8.16), so a reload reaches the source instead of the copy.</p>
+
+        <p>A deploy that restarts every instance no longer stampedes the thing behind it.</p>
+    </Section>
+
+    <Section title="One store per args key">
+        <Example
+            id="store-keyed"
+            title="One store per args key, derived from the key"
+            summary="Two profiles whose settings live at two addresses. Both are read at once, and neither reads back the other's."
+            files={{
+                'lib/Profiles.abide': profilesSource,
+            }}
+        >
+            <Profiles />
+        </Example>
+
+        <p>A keyed value builds one <code>Reactive</code> per args key, so a store keyed on anything
+        has to be derived <strong>from</strong> that key rather than closed over where the keyed
+        value was declared. That is the function form, and it is the one <code>tags</code> already
+        uses.</p>
+
+        <p>Closing over one key instead gives every entry the same store, and they clobber each
+        other silently.</p>
+
+        <p>Read on: <a href={url('/values/load-once-per-set-of-arguments')}>Caching</a></p>
+    </Section>
+
+    <Section title="A restore is not a write">
+        <p>A store is over <code>Stored</code> — what a read returns — not over
+        <code>Accepted</code>. So <code>get</code> answers with the value itself, and it mints a
+        production without passing <code>schema</code> or <code>transform</code>. Those two gate
+        what goes <strong>in</strong>, and a restore is not something going in: a
+        <code>transform</code> that stamps a received-at would restamp on every restore, and a lossy
+        one has nothing left to re-derive from.</p>
+
+        <p>That puts the check where the knowledge already is. <code>get</code> is your function,
+        and it was parsing whatever the store handed back anyway — a string out of
+        <code>localStorage</code>, bytes out of redis. So a shape an older deploy wrote is one
+        <code>if</code> away from being a <strong>miss</strong>, and a miss falls back to the
+        initial value. No refusal for the value to carry, and no second gate to declare.</p>
+
+        <p>A streaming producer is the arm this was written for. It has no <code>Accepted</code> at
+        all — nothing was ever written in — and it holds the accumulation at close, which
+        <code>set</code> is handed and a restore seeds:</p>
+
+        <Code language="abide" caption="abide" code={`{answer({ messageId })}`} />
+
+        <p>A restored stream <strong>finished</strong>: <code>ready()</code> is true and
+        <code>busy()</code> is false (8.7). It is a value that has arrived rather than one arriving,
+        so it is read as one — a <code>{'{#for}'}</code> over it paints every token at once, there
+        being none still to come.</p>
+
+        <p>Read on: <a href={url('/data/send-data-as-it-arrives')}>Streaming data</a></p>
+    </Section>
+
+    <Section title="Two processes, one cache — and what does not cross">
+        <p>A <code>store</code> on a <code>global</code> keyed value is a cache two processes share,
+        and it is the one place anything in this design crosses a process boundary. It is your
+        dependency doing that, not abide.</p>
+
+        <p>A <strong>settled value</strong> crosses and never a production. An answer one instance
+        finished is served to one that never computed it; an in-flight stream's chunks do not reach
+        it at all, <code>set</code> running once at close. So it removes the duplicate work, not the
+        duplicate connection.</p>
+    </Section>
+
+    <Section title="A channel's store is the array it holds">
+        <p>A channel is a <code>reactive</code> over an array, so its <code>Stored</code> is the
+        whole array and a store round-trips all of it (9.5). For a roster or a status that is
+        exactly right — a restart restores who was there instead of showing an empty channel until
+        somebody writes.</p>
+
+        <p>A store's <code>set</code> runs once per production (8.8), and a production
+        <code>identity</code> matches mints nothing (5.2), so an identical roster <code>set</code>
+        again is not written. Every append is a change, so it is.</p>
+
+        <p>A long transcript is the case to think twice about: every write hands the store the whole
+        array, and the store holds whatever the trim left. Messages older than the window are app
+        data behind an ordinary rpc, read once, rather than a growing value written on every
+        message.</p>
+
+        <p>Read on: <a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a> ·
+        <a href={url('/values/keep-the-last-few-values')}>Recent values</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/values/decide-when-a-value-reloads')}>Reloading</a> — the triggers a
+            store makes live</li>
+            <li><a href={url('/values/load-once-per-set-of-arguments')}>Caching</a> — the entries a
+            store sits in front of</li>
+            <li><a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a> — the
+            array a channel's store round-trips</li>
+        </ul>
+    </Section>
+</Doc>

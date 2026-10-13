@@ -1,0 +1,248 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <Section title="Syntax">
+        <Code language="abide" caption="abide" code={`<script module>
+// module scope, on both sides
+</script>
+
+<script server>
+// module scope, on the server alone; private handlers, hooks
+</script>
+
+<script>
+// per-instance setup
+</script>
+
+<!-- template -->
+
+<style>
+/* component-scoped CSS */
+</style>`} />
+
+        <p>Every block is optional and order is free. A file with no <code>&lt;script&gt;</code> is
+        markup, which is what a presentational component usually is. A <code>&lt;script
+        server&gt;</code> is written outside a <code>server</code> or <code>public</code>
+        directory, and the browser's copy of the file carries a client per handler it declares in
+        its place. No block exports: the component is the file's one export (34.17).</p>
+    </Section>
+
+    <Section title="Reading and writing by name">
+        <table>
+            <thead><tr><th>Spelling</th><th>Means</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>foo</code> wherever its position is not typed as a <code>Reactive</code></td><td>a live read</td><td>The name in an expression is the read, unless a template-local binding shadows it.</td></tr>
+                <tr><td><code>const x: Reactive&lt;…&gt; = foo</code> / a <code>Reactive&lt;…&gt;</code>-typed parameter, return or <code>bind:</code> operand</td><td>the <code>Reactive</code></td><td>A position whose declared type is a <code>Reactive</code> holds.</td></tr>
+                <tr><td><code>const [a, b] = foo</code> / <code>...foo</code></td><td>one read</td><td>Destructuring and spreading read the value once.</td></tr>
+                <tr><td><code>foo = bar</code></td><td>a write</td><td>Assignment is the write, and the value may be settled, a load, or a <code>Reactive</code> to adopt.</td></tr>
+                <tr><td><code>foo.bar = v</code></td><td>a write through a path</td><td>Copy-on-write down the path, then the write.</td></tr>
+                <tr><td><code>foo.push(v)</code></td><td>the same</td><td>A mutator the type resolves writes through the same path.</td></tr>
+                <tr><td><code>foo.bar</code></td><td>the value's <code>bar</code></td><td>A property access is a read of the value, and throws <code>NotLanded</code> before it lands; a member of the <code>Reactive</code> itself reaches the <code>Reactive</code>, bound.</td></tr>
+                <tr><td><code>foo.bar(…)</code></td><td>the <code>Reactive</code> API where <code>bar</code> is a member</td><td>A call reaches the <code>Reactive</code> where the name is one of its members.</td></tr>
+                <tr><td><code>foo()</code> / <code>foo.set(v)</code></td><td>the explicit forms</td><td>The two members, which keep compiling.</td></tr>
+                <tr><td><code>await foo</code></td><td>the value, settled</td><td>A <code>Reactive</code> is a promise for its own settling, so an <code>await</code> operand holds it rather than reading it.</td></tr>
+                <tr><td><code>refresh(foo)</code></td><td>the <code>Reactive</code></td><td>A <code>Selection</code>-typed parameter holds it: a value is never a selection of itself.</td></tr>
+            </tbody>
+        </table>
+
+        <p>The rule is <strong>position</strong>. An operand, a text hole, an attribute and a
+        value-typed argument are places a value belongs, so the name reads. A position whose
+        declared type is a <code>Reactive</code> is a place the <code>Reactive</code> belongs, so
+        the name holds.</p>
+    </Section>
+
+    <Section title="Templating">
+        <Section title="Expressions" level={3}>
+            <table>
+                <thead><tr><th>Spelling</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><code>{'{expr}'}</code></td><td>Reactive text, escaped.</td></tr>
+                    <tr><td>formatting whitespace</td><td>What a run of whitespace renders as.</td></tr>
+                    <tr><td><code>{'{raw(...)}'}</code></td><td>Raw HTML.</td></tr>
+                    <tr><td><code>{'name={expr}'}</code></td><td>A reactive attribute or property.</td></tr>
+                    <tr><td><code>{'on<event>={fn}'}</code></td><td>A native listener on an element, and an ordinary prop on a component.</td></tr>
+                    <tr><td><code>{'name="…{expr}…"'}</code></td><td>An interpolated quoted value.</td></tr>
+                    <tr><td><code>bind:value</code></td><td>Two-way bind on an element.</td></tr>
+                    <tr><td><code>{'bind:prop={state}'}</code></td><td>Hands a component prop the caller's <code>Reactive</code>, or a <code>{'{get, set}'}</code> pair, to write through.</td></tr>
+                    <tr><td><code>bind:checked</code></td><td>A boolean bind on an input.</td></tr>
+                    <tr><td><code>bind:open</code></td><td>The same, on a <code>&lt;details&gt;</code>.</td></tr>
+                    <tr><td><code>bind:group</code></td><td>Radio or checkbox membership.</td></tr>
+                    <tr><td><code>{'bind:value={{get, set}}'}</code></td><td>Two-way bind over an explicit accessor pair, on an element or a component.</td></tr>
+                    <tr><td><code>{'bind:element={Reactive<Element> | ((element: Element) => void | Disposer)}'}</code></td><td>A node reference.</td></tr>
+                    <tr><td><code>{'class:name={cond}'}</code></td><td>Toggles a class.</td></tr>
+                    <tr><td><code>{'style:prop={value}'}</code></td><td>Sets one style property.</td></tr>
+                    <tr><td><code>{'{...expr}'}</code></td><td>Spreads props or attributes.</td></tr>
+                    <tr><td>static template text</td><td>What an author writes outside a slot, in body text and in an attribute value.</td></tr>
+                </tbody>
+            </table>
+
+            <p>Static text is markup. An author-written <code>&amp;amp;</code> or
+            <code>&amp;copy;</code> renders the same in body text and in an attribute value, and
+            only an interpolated value is escaped — the one exception being a URL-typed attribute,
+            where the encoding is what stops an entity forming a scheme.</p>
+        </Section>
+
+        <Section title="Raw markup" level={3}>
+            <table>
+                <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><code>raw</code></td><td><code>(value: unknown) =&gt; Raw</code></td><td>The branding a value takes to render as markup rather than as text.</td></tr>
+                    <tr><td><code>Raw</code></td><td><code>{'class Raw { html: string }'}</code></td><td>What <code>raw</code> hands back.</td></tr>
+                </tbody>
+            </table>
+        </Section>
+
+        <Section title="Control flow" level={3}>
+            <table>
+                <thead><tr><th>Spelling</th><th>Branches</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><code>{'{#if cond}'}</code></td><td><code>{'{:else if cond}'}</code>, <code>{'{:else}'}</code></td><td>Conditional markup.</td></tr>
+                    <tr><td><code>{'{#for item, index of list by key}'}</code></td><td>—</td><td>Repeats markup over a list, or over an async iterable as it produces.</td></tr>
+                    <tr><td><code>{'{#try}'}</code></td><td><code>{'{:catch e}'}</code>, <code>{'{:finally}'}</code></td><td>A render-time boundary and a region.</td></tr>
+                </tbody>
+            </table>
+        </Section>
+
+        <Section title="Components" level={3}>
+            <table>
+                <thead><tr><th>Spelling</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><code>{'{#component Name(pattern)}'}</code></td><td>An inline component.</td></tr>
+                    <tr><td><code>&lt;Name/&gt;</code></td><td>A component invocation.</td></tr>
+                    <tr><td><code>&lt;slot/&gt;</code></td><td>Renders children.</td></tr>
+                    <tr><td><code>&lt;slot&gt;fallback&lt;/slot&gt;</code></td><td>Renders children, or a fallback.</td></tr>
+                    <tr><td><code>&lt;Tag&gt;…&lt;/Tag&gt;</code></td><td>Children passed to a component's slot.</td></tr>
+                </tbody>
+            </table>
+        </Section>
+    </Section>
+
+    <Section title="Props">
+        <table>
+            <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>props</code></td><td><code>{'<Props>() => { [K in keyof Props]: Props[K] }'}</code></td><td>One live accessor per prop the component declares.</td></tr>
+                <tr><td><code>Attributes&lt;Tag&gt;</code></td><td><code>Attributes&lt;Tag extends keyof HTMLElementTagNameMap | keyof SVGElementTagNameMap&gt;</code></td><td>The attributes an HTML or SVG element takes, typed as a component's props.</td></tr>
+                <tr><td><code>children</code></td><td>always accepted</td><td>What a caller passes between the tags.</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>props()</code> hands back one accessor per key, and a prop declared as a plain type
+        is a <strong>live read</strong> of the caller's expression with no <code>Reactive</code>
+        face at all. Destructuring keeps every binding live, and the pattern is flat: renames,
+        defaults and a rest element.</p>
+    </Section>
+
+    <Section title="Script and style blocks">
+        <table>
+            <thead><tr><th>Spelling</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>&lt;script&gt;</code></td><td>Per-instance component setup.</td></tr>
+                <tr><td><code>&lt;script module&gt;</code></td><td>Module scope.</td></tr>
+                <tr><td><code>&lt;script server&gt;</code></td><td>Module scope on a server alone, declaring its file's private handlers and filing its hooks.</td></tr>
+                <tr><td><code>&lt;style&gt;</code></td><td>Component-scoped styles.</td></tr>
+                <tr><td><code>import './app.css'</code></td><td>A stylesheet the component depends on.</td></tr>
+                <tr><td><code>:global(…)</code></td><td>The per-selector escape from scoping.</td></tr>
+            </tbody>
+        </table>
+
+        <p>An <code>export</code> in any block is a compile error, so what two files share is a
+        module under a <code>lib</code>, and a handler two files call is a handler file of its
+        own — a <code>.ts</code> that TypeScript reads as it reads any other.</p>
+    </Section>
+
+    <Section title="Tracking">
+        <table>
+            <thead><tr><th>Context</th><th>Tracks</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td>template expression</td><td><b class="verdict-yes">yes</b></td><td>The flow itself.</td></tr>
+                <tr><td>branch-local <code>&lt;script&gt;</code></td><td><b class="verdict-no">no</b></td><td>Setup, once per item.</td></tr>
+                <tr><td><code>reactive</code> body, unkeyed</td><td><b class="verdict-yes">yes</b></td><td>Pushes its own subscriber.</td></tr>
+                <tr><td><code>reactive</code> body, keyed</td><td><b class="verdict-no">no</b></td><td>Untracked by handler.</td></tr>
+                <tr><td>block body binding</td><td><b class="verdict-yes">yes</b></td><td>A live read, like a prop.</td></tr>
+                <tr><td><code>watch</code> effect, bare</td><td><b class="verdict-yes">yes</b></td><td>Pushes its own subscriber.</td></tr>
+                <tr><td><code>watch</code> effect, over sources</td><td><b class="verdict-no">no</b></td><td>The sources decide the reruns.</td></tr>
+                <tr><td>component <code>&lt;script&gt;</code> setup</td><td><b class="verdict-no">no</b></td><td>Setup, once per instance.</td></tr>
+                <tr><td>event handler</td><td><b class="verdict-no">no</b></td><td>Not the flow.</td></tr>
+                <tr><td><code>Transformer</code>, <code>Disposer</code>, middleware, lifecycle hooks</td><td><b class="verdict-no">no</b></td><td>Not the flow.</td></tr>
+            </tbody>
+        </table>
+
+        <p>A context that tracks reruns when what it read changes. A context that does not is one
+        where a read is a read — an event handler runs because something happened, and a setup body
+        runs once — so nothing is arranged by accident and the arrangement you want is
+        <code>reactive</code> or <code>watch</code>.</p>
+    </Section>
+
+    <Section title="Description">
+        <Section title="Whitespace" level={3}>
+            <p>A run of whitespace carrying newlines but no space or tab is <strong>dropped wherever
+            it stands</strong>, and a run that renders nothing but carries a newline and indentation
+            is dropped at both ends of every block body and of the top-level template. So
+            indentation in a template is layout for the reader rather than text in the document.</p>
+        </Section>
+
+        <Section title="Where a `.abide` lives" level={3}>
+            <p>A <code>.abide</code> directly in a directory under no fence is a page at its path,
+            save a <code>layout.abide</code>, an <code>error.abide</code> and the root's
+            <code>launcher.abide</code> (23.21). A component is a <code>.abide</code> under a
+            <code>lib</code>, imported by path, and a test under a <code>tests</code> directory
+            imports one the same way once <code>@abide/abide/test</code> is preloaded (38.109).
+            The <a href={url('/reference/routing')}>Routing</a> reference has the whole map.</p>
+        </Section>
+
+        <Section title="What the compiler refuses" level={3}>
+            <ul>
+                <li>An <code>export</code> in any block, however the language spells it.</li>
+                <li>A <code>&lt;script server&gt;</code> in a file under a <code>server</code> or a
+                <code>public</code> directory.</li>
+                <li>A read spelled <code>foo()</code> with an argument.</li>
+                <li><code>props()</code> from a <code>&lt;script module&gt;</code> block.</li>
+                <li>A prop passed to a component that never calls <code>props()</code>.</li>
+                <li>A <code>Failed</code> built and discarded as an expression statement.</li>
+            </ul>
+
+            <p>Each is caught before the code runs, which is why the ergonomic form does not have to
+            be given up to make the strict one safe.</p>
+        </Section>
+    </Section>
+
+    <Section title="Examples">
+        <Section title="A component that owns a value" level={3}>
+            <Code language="abide" caption="src/lib/Handle.abide" code={`<script>
+import { reactive } from '@abide/abide'
+
+let handle = reactive('ada')
+</script>
+
+<h1>@{handle}</h1>
+<input bind:value={handle}>`} />
+        </Section>
+
+        <Section title="A component with props and children" level={3}>
+            <Code language="abide" caption="src/lib/Panel.abide" code={`<script>
+import { props } from '@abide/abide'
+
+const { title } = props<{ title: string }>()
+</script>
+
+<li><span>{title}</span><strong><slot>none yet</slot></strong></li>`} />
+        </Section>
+    </Section>
+
+    <Section title="See also">
+        <ul>
+            <li><a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a> — the
+            guide to the sugar</li>
+            <li><a href={url('/templates/put-a-value-in-the-markup')}>Expressions</a> — the guide to
+            the holes</li>
+            <li><a href={url('/templates/reuse-a-piece-of-markup')}>Components</a> — the guide to
+            <code>props</code> and slots</li>
+        </ul>
+    </Section>
+</Doc>

@@ -1,0 +1,70 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <Section title="A layout is a component with a slot">
+        <Code language="abide" caption="src/layout.abide — excerpt" code={`<script>
+import { principal } from '@abide/abide'
+</script>
+
+<header>
+    <a href="/">Ledger</a>
+    <span>{principal.resolved.name}</span>
+</header>
+
+<main><slot/></main>`} />
+
+        <p><code>&lt;slot/&gt;</code> is where the child page renders, and it is the same
+        <code>&lt;slot/&gt;</code> any component has. There is no layout API and no second kind of
+        component: a layout is the component the router puts a page inside.</p>
+
+        <p>Layouts <strong>nest</strong> by route. A <code>layout.abide</code> at
+        <code>src/</code> and another at <code>src/invoices/</code> means an invoice page renders
+        inside both, outermost first, which is how a section gets its own sidebar without the app's
+        header being mentioned twice.</p>
+
+        <p>A layout's <code>&lt;script server&gt;</code> files hooks over the same routes, so
+        <code>middleware</code> in <code>src/admin/layout.abide</code> guards every admin page
+        and handler. One with no markup wraps nothing and is that section's hooks alone.</p>
+
+        <p>Read on: <a href={url('/templates/reuse-a-piece-of-markup')}>Components</a></p>
+    </Section>
+
+    <Section title="What a layout buys is what it does not rebuild">
+        <p>The reason to put chrome in a layout rather than in each page is not that it saves
+        typing. It is that a shared layout is <strong>not rebuilt</strong> across a navigation: the
+        header keeps its scroll position, an open menu stays open, and a component in the sidebar
+        that was mid-load is still mid-load.</p>
+
+        <p>A page that renders its own header gets none of that, and the symptom is subtle —
+        everything looks right, and a menu closes itself every time somebody follows a link.</p>
+
+        <p>Read on: <a href={url('/pages/link-to-another-page')}>Links &amp; navigation</a> ·
+        <a href={url('/pages/animate-from-one-page-to-the-next')}>View transitions</a></p>
+    </Section>
+
+    <Section title="A layout reads the route it wraps">
+        <p><code>route.params</code> and <code>route.name</code> are ambient, so a layout reads them
+        without a page passing anything down. That is what a breadcrumb wants, and what a sidebar
+        highlighting the current section wants.</p>
+
+        <p>Read on: <a href={url('/pages/add-a-page')}>Routes</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/data/decide-who-may-call-what')}>Authorization</a> — a section's
+            rungs, in its layout</li>
+            <li><a href={url('/pages/add-a-page')}>Routes</a> — the file that becomes the page in
+            the slot</li>
+            <li><a href={url('/pages/set-the-title-and-social-preview')}>Head &amp; metadata</a> —
+            what a layout contributes to the head</li>
+            <li><a href={url('/pages/show-a-page-when-something-fails')}>Error pages</a> — resolved
+            the same nearest-ancestor way</li>
+        </ul>
+    </Section>
+</Doc>

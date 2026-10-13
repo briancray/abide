@@ -6,7 +6,7 @@
 
 import { request } from '@abide/abide/server'
 import type { RowItem, RunnerFailure } from 'harness/rows'
-import { linesOf } from '../linesOf.ts'
+import { linesOf } from '../lib/linesOf.ts'
 
 let repo: Promise<string> | undefined
 

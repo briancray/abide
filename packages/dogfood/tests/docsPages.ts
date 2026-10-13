@@ -1,17 +1,17 @@
-// THE DOCS AS THE GATES READ THEM: every page `SITE` lists, its `page.abide`, the example cards it
+// THE DOCS AS THE GATES READ THEM: every page `SITE` lists, its `index.abide`, the example cards it
 // embeds, and the markdown the built app serves for it — what a reader with no browser reads, and so
 // what the voice and coverage gates hold the words to.
 
-import { dirname } from 'node:path' // bun exposes no path helpers of its own
 import { addressOf, BIN } from '../../abide/tests/builtApp.ts'
-import { SITE, type SitePage } from '../src/docs/SITE.ts'
+import { SITE, type SitePage } from '../src/lib/SITE.ts'
+import { markdownAddressOf } from '../src/lib/sitePages.ts'
 
 /** The docs app's root, with a trailing slash. */
 export const DOGFOOD = new URL('../', import.meta.url).pathname
 
 export type DocsPage = SitePage & {
     section: string
-    /** The `page.abide`, from the docs app's root. */
+    /** The `index.abide`, from the docs app's root. */
     file: string
     /** Its text. */
     source: string
@@ -28,9 +28,9 @@ export type Card = {
     files: Map<string, string>
 }
 
-/** A page's `page.abide`, from the docs app's root. */
+/** A page's `index.abide`, from the docs app's root. */
 export function pageFileOf(route: string): string {
-    return `src${route === '/' ? '' : route}/page.abide`
+    return `src${route === '/' ? '' : route}/index.abide`
 }
 
 let pages: Promise<DocsPage[]> | undefined
@@ -100,11 +100,6 @@ export async function allCards(): Promise<Card[]> {
     return cards
 }
 
-/** The directory a page's own files sit in, from the docs app's root. */
-export function pageDirectoryOf(page: DocsPage): string {
-    return dirname(page.file)
-}
-
 let served: Promise<{ base: string; stop: () => void }> | undefined
 
 const WHILE_OPEN = new URL('./whileOpen.ts', import.meta.url).pathname
@@ -152,8 +147,7 @@ export function renderedMarkdown(): Promise<Map<string, string>> {
         const { base } = await servedDocs()
         const bodies = new Map<string, string>()
         for (const page of await docsPages()) {
-            const address =
-                page.route === '/' ? '/index.md' : `${page.route}.md`
+            const address = markdownAddressOf(page.route)
             const answer = await Bun.fetch(`${base}${address}`)
             if (!answer.ok)
                 throw new Error(`docs: ${address} answered ${answer.status}`)

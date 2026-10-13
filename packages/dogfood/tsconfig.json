@@ -1,9 +1,8 @@
 {
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
-        "rootDirs": [".", ".abide/types"],
         "paths": {
-            "#src/*": ["./src/*", "./src/*.ts", "./.abide/types/src/*"]
+            "#src/*": ["./src/*", "./src/*.ts"]
         }
     },
     "include": ["src", "e2e", "tests"]

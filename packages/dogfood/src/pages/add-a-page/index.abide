@@ -1,0 +1,167 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <Section title="A file's path is its address">
+        <table>
+            <thead><tr><th>File</th><th>Answers on</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/index.abide</code></td><td><code>/</code></td></tr>
+                <tr><td><code>src/invoices/index.abide</code></td><td><code>/invoices</code></td></tr>
+                <tr><td><code>src/invoices/new.abide</code></td><td><code>/invoices/new</code></td></tr>
+                <tr><td><code>src/invoices/[id].abide</code></td><td><code>/invoices/4310</code></td></tr>
+                <tr><td><code>src/invoices/[id]/index.abide</code></td><td><code>/invoices/4310</code>, the same route</td></tr>
+                <tr><td><code>src/docs/[...path].abide</code></td><td><code>/docs/start/install</code></td></tr>
+                <tr><td><code>src/invoices/listInvoices.ts</code></td><td><code>GET /invoices/listInvoices</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>An <code>index.abide</code> answers its directory's own address, and any other
+        <code>.abide</code> adds its name. A <code>layout.abide</code> and an
+        <code>error.abide</code> are not pages: they take their directory's route, and wrap or catch
+        what is below it.</p>
+
+        <p><code>[id].abide</code> and <code>[id]/index.abide</code> are two spellings of one route,
+        so writing both fails the build, naming the two files. The directory is the one with room.
+        A handler file inside <code>[id]/</code> answers below the invoice, at
+        <code>/invoices/[id]/markPaid</code>, and <code>id</code> reaches its arguments from the
+        path. One beside <code>[id].abide</code> answers for the whole subject. Start with the file,
+        and move it into a directory once the invoice has files of its own.</p>
+
+        <p>A <code>.ts</code> beside the pages is a handler file. Its default export is the
+        <code>GET</code> or the <code>POST</code> it declares, it exports nothing else, and its name
+        is its last segment.</p>
+
+        <p>Read on: <a href={url('/data/read-data-without-writing-an-api')}>Reading data</a></p>
+    </Section>
+
+    <Section title="A directory lists its routes">
+        <p>Four directory names are never a segment: <code>lib</code> for components and modules,
+        <code>tests</code> for tests, <code>server</code> for code the browser never loads, and
+        <code>public</code> for files served as they are. Nothing under one has an address. Every
+        other file directly in a directory is a page, a layout, an error page or a handler file.</p>
+
+        <Code code={`src/
+├── index.abide               /
+├── layout.abide              wraps every page
+└── invoices/
+    ├── index.abide           /invoices
+    ├── [id].abide            /invoices/[id]
+    ├── layout.abide          wraps both
+    ├── listInvoices.ts       GET /invoices/listInvoices
+    ├── lib/Row.abide         a component, no address
+    └── tests/Row.test.ts     a test, no address`} />
+
+        <p>So the component a page places goes in a <code>lib</code> beside it, and is imported as
+        <code>./lib/Row.abide</code>. A stylesheet, a helper or a test written straight beside the
+        pages fails the build, naming the file and the <code>lib</code> to move it into. That
+        refusal is what keeps a listing honest: what a directory holds is what it answers.</p>
+    </Section>
+
+    <Section title="`abide routes` prints every address and its file">
+        <p>Run in the app above, it prints each route with the method it answers and the file
+        answering it, then the file filing each hook and the route it covers:</p>
+
+        <Code code={`$ abide routes
+GET   /                                       index.abide
+POST  /__abide/handlers/invoices/id/markPaid  invoices/[id].abide  (private)
+GET   /invoices                               invoices/index.abide
+GET   /invoices/[id]                          invoices/[id].abide
+GET   /invoices/listInvoices                  invoices/listInvoices.ts
+
+hooks
+  middleware  /invoices  invoices/layout.abide
+  onStart     /          layout.abide`} />
+
+        <p>The <code>(private)</code> line is the <code>markPaid</code> that
+        <code>[id].abide</code>'s own <code>&lt;script server&gt;</code> declares: it is that file's
+        alone, so it answers below <code>/__abide/handlers/</code> rather than at an address of the
+        app's. <code>--json</code> prints the same map as one document.</p>
+
+        <p>Read on: <a href={url('/data/find-the-url-a-handler-answers-on')}>Handler URLs</a></p>
+    </Section>
+
+    <Section title="The three dynamic segments">
+        <table>
+            <thead><tr><th>The file or directory is named</th><th>It matches</th><th>In <code>route.params</code></th></tr></thead>
+            <tbody>
+                <tr><td><code>[id]</code></td><td>exactly one segment, required</td><td>a required key</td></tr>
+                <tr><td><code>[[tab]]</code></td><td>one segment or none</td><td>an optional key, absent when it did not match</td></tr>
+                <tr><td><code>[...rest]</code></td><td>the remaining segments, terminal</td><td>a list, empty when it matched nothing</td></tr>
+            </tbody>
+        </table>
+
+        <p>A rest segment is terminal because there is nothing a segment after it could match
+        against. The other two compose freely, so <code>invoices/[id]/[[tab]].abide</code> is one
+        route answering two addresses rather than two routes agreeing about an invoice.</p>
+
+        <p>An optional segment that did not match is <strong>absent</strong> rather than empty. That
+        is the difference between <code>{'const { tab = \'summary\' } = route.params'}</code>
+        working and a default that never fires, which is a distinction an empty string would quietly
+        lose.</p>
+    </Section>
+
+    <Section title="`route.params` and `route.name` follow the address">
+        <p><code>route.url</code> comes from the file path and <code>route.name</code> is the
+        <strong>resolution path</strong> — the pattern that matched, not the address that arrived.
+        So a log line, a metric and an <code>{'{#if}'}</code> over the current route all key on
+        <code>invoices/[id]</code> for every invoice rather than on one address each.</p>
+
+        <Code language="abide" caption="src/invoices/[id].abide — excerpt" code={`<script>
+import { reactive, route } from '@abide/abide'
+
+const invoice = reactive(() => getInvoice({ id: route.params.id }))
+</script>
+
+<h1>Invoice {invoice.number}</h1>
+<p>{invoice.total} due {invoice.dueOn}</p>`} />
+
+        <p>Reading <code>route.params</code> is a live read like any other, so a navigation from one
+        invoice to another moves the value rather than rebuilding the page.</p>
+
+        <p>Read on: <a href={url('/pages/link-to-another-page')}>Links &amp; navigation</a></p>
+    </Section>
+
+    <Section title="`Params` is what the segments matched">
+        <p><code>Params</code> carries what <code>[param]</code>, <code>[[optional]]</code> and
+        <code>[...rest]</code> matched: text, or a list for a rest. In a page it is typed from the
+        page's own route rather than declared beside it — <code>abide check</code> reads
+        <code>route.params()</code> in <code>invoices/[id].abide</code> as
+        <code>RouteParams&lt;'/invoices/[id]'&gt;</code>, so <code>id</code> is text and a key the
+        route does not have is an error (23.9). A layout gets its own segments, and whatever a page
+        below it adds.</p>
+
+        <p>Nothing else is in it. A query string is not a param — it is not part of what resolved
+        the route, and treating it as one is how a route starts depending on something that never
+        selected it.</p>
+
+        <p>Read on: <a href={url('/pages/link-to-another-page')}>Links &amp; navigation</a></p>
+    </Section>
+
+    <Section title="A package's pages answer below the file importing the package">
+        <p>A package can ship pages, layouts, error pages and handler files as source, and the
+        address they answer at is yours to choose. Written in <code>src/tools/layout.abide</code>,
+        <code>{"import 'admin-kit/admin' with { type: 'routes' }"}</code> puts all of them below that
+        layout: <code>admin-kit/admin/users/[id].abide</code> answers at
+        <code>/tools/users/[id]</code>, inside it.</p>
+
+        <p>Moving the line moves the package. Its files route by their path below the directory
+        named, as yours do, and compile with your app on its abide. A directory mounts once, and
+        naming one of your own directories, or one that is not there, fails the build.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/pages/give-pages-the-same-chrome')}>Layouts</a> — the chrome a page
+            renders inside</li>
+            <li><a href={url('/pages/link-to-another-page')}>Links &amp; navigation</a> — building
+            an address for one of these</li>
+            <li><a href={url('/pages/show-a-page-when-something-fails')}>Error pages</a> — what
+            renders when a page cannot</li>
+        </ul>
+    </Section>
+</Doc>

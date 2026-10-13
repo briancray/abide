@@ -1,0 +1,48 @@
+<script server>
+import { refuse } from '@abide/abide'
+import { GET } from '@abide/abide/server'
+import { z } from 'zod'
+
+const notReachable = refuse.named(
+    'NotReachable',
+    503,
+    'The billing service did not answer.',
+    {
+        schema: z.object({ id: z.string() }),
+    },
+)
+
+// `4021` is absent on purpose: the page asks for it, and is refused.
+const INVOICES: Record<string, { total: string }> = {
+    '4020': { total: '$980.00' },
+}
+
+const getBilledInvoice = GET(
+    async ({ id }: { id: string }) => {
+        // A slow billing service, so the wait is on screen.
+        await Bun.sleep(600)
+        const found = INVOICES[id]
+        if (found === undefined) return notReachable({ id })
+        return found
+    },
+    { description: 'An invoice, by id, from the billing service.' },
+)
+</script>
+
+<script>
+import { reactive, refresh } from '@abide/abide'
+
+const invoice = reactive(() => getBilledInvoice({ id: '4021' }))
+</script>
+
+<div class="row">
+    <button onclick={() => refresh(invoice)}>Retry</button>
+</div>
+
+<p class="status">{invoice.error()?.message ?? ''}</p>
+
+<ul class="fields stacked">
+    <li><span>total</span>
+        <strong>{invoice.error() ? 'unavailable' : invoice.total}</strong>
+    </li>
+</ul>

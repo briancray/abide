@@ -1,0 +1,64 @@
+<script server>
+import { reactive } from '@abide/abide'
+import { GET } from '@abide/abide/server'
+import { z } from 'zod'
+
+// Matched on the id: `inv` finds rows, and a shorter query never gets here.
+const INVOICES = [
+    { id: 'inv-4021', total: '$1,240.00' },
+    { id: 'inv-4022', total: '$310.00' },
+    { id: 'inv-4023', total: '$76.50' },
+]
+
+const matching = reactive(
+    async ({ query, limit }: { query: string; limit: number }) => {
+        await Bun.sleep(450) // a slow database, so the wait is on screen
+        const matches: typeof INVOICES = []
+        for (const invoice of INVOICES)
+            if (invoice.id.includes(query.toLowerCase())) matches.push(invoice)
+        return matches.slice(0, limit)
+    },
+    {
+        args: z.object({
+            query: z.string().min(2, 'Type at least two characters.'),
+            limit: z.number().int().min(1).max(3, 'Between 1 and 3.'),
+        }),
+    },
+)
+
+const searchInvoices = GET(matching, {
+    description: 'Invoices matching a query.',
+})
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+let query = reactive('inv')
+let limit = reactive('2')
+
+const found = reactive(() => searchInvoices({ query, limit: Number(limit) }))
+
+// The key is the field's own path, so a lookup is what a message costs.
+const issues = reactive(() => {
+    const failed = found.error()
+    return found.isError(failed, 'ValidationError') ? failed.data : {}
+})
+</script>
+
+<label>query
+    <input bind:value={query}>
+</label>
+<p class="status">{issues.query?.[0] ?? ''}</p>
+
+<label>limit
+    <input bind:value={limit}>
+</label>
+<p class="status">{issues.limit?.[0] ?? ''}</p>
+
+<ul class="fields">
+    <li><span>matches</span>
+        <strong>
+            {found.ready() && !found.error() ? found.length : '—'}
+        </strong></li>
+</ul>

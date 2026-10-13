@@ -1,6 +1,7 @@
 <script server>
 // The docs app's own hooks; each example files its own in its own file.
 import { csp, middleware, onConfig } from '@abide/abide/server'
+import '#src/lib/downloads.ts'
 
 // The sign-in examples need a secret: one per process, or the deployment's.
 const PRINCIPAL_SECRET = crypto.randomUUID()
@@ -12,10 +13,10 @@ middleware(csp({ 'frame-ancestors': ["'self'"] }))
 </script>
 
 <script>
-import DocsNav from '#src/docs/DocsNav.abide'
-import SiteBar from '#src/docs/SiteBar.abide'
+import DocsNav from '#src/lib/DocsNav.abide'
+import SiteBar from '#src/lib/SiteBar.abide'
 import { url } from '@abide/abide'
-import '#src/app.css'
+import '#src/lib/app.css'
 </script>
 
 <html lang="en">

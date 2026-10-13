@@ -1,0 +1,63 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <Code code={`abide
+> watch chat/room id=onboarding`} />
+
+    <p>The address is the handler's route without its leading <code>/</code> — its file's path
+    under <code>src</code> — and the args are <code>name=value</code> words or one JSON
+    object, as <code>call</code> takes them. Against a deployed app it is a command of its own:
+    <code>abide watch chat/room id=onboarding --url https://app.example</code>.</p>
+
+    <Section title="The channel is the same channel">
+        <p>There is nothing terminal-shaped about this. <code>watch</code> asks the <code>GET</code>
+        for the event stream any client may ask for (18.20), and that stream carries what the page's
+        mux carries, frame for frame. So the array is the same array and the messages are the same
+        messages. What you see in the shell is what the page sees, and a discrepancy is a real one
+        rather than a difference between two clients.</p>
+
+        <p>That is the payoff of one follow for every client. A debugging tool that speaks a
+        different protocol is a tool whose agreement with the app has to be believed.</p>
+
+        <p>A <code>GET</code> not answered from a <code>global</code> value has nothing to follow,
+        so it answers once and <code>watch</code> prints it once.</p>
+
+        <p>Read on: <a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a> ·
+        <a href={url('/values/let-anything-publish-and-anything-read')}>Channels</a></p>
+    </Section>
+
+    <Section title="The value first, then its patches">
+        <p>A follow is sent the value with its version, then what each patch wrote as JSON Patch
+        (18.6, 18.11), which is why joining midway through a conversation shows you the
+        conversation. It is one mechanism for three handoffs — seeding a first render, a connection
+        that dropped and reopened, and a shell that just connected.</p>
+
+        <p>A reconnect names the version it last held (18.9). Where that is still the value's
+        version nothing is resent; anywhere else, a restarted process included, the value is sent
+        whole, because a version names one production or patch in no other process (18.7).</p>
+    </Section>
+
+    <Section title="The shell watches, and does not write">
+        <p><code>watch</code> only reads. The way into a channel from outside the process is a
+        <code>POST</code> whose handler patches it, so to change a room from a terminal,
+        <code>call</code> that handler as a page would. Its rungs decide whether the shell may, the
+        same as for any caller (16.11).</p>
+
+        <p>Read on: <a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a> ·
+        <a href={url('/data/decide-who-may-call-what')}>Authorization</a></p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/ship/call-a-handler-from-the-terminal')}>Call a handler</a> — the
+            same shell, for an rpc</li>
+            <li><a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a> — the
+            <code>GET</code> this follows</li>
+        </ul>
+    </Section>
+</Doc>

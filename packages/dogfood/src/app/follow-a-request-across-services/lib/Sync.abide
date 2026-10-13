@@ -1,0 +1,42 @@
+<script server>
+import { log, POST, trace } from '@abide/abide/server'
+import { billing } from './billing'
+
+const syncContact = POST(
+    async ({ id }: { id: string }) => {
+        log(`contact ${id} loaded`)
+        await billing.notify(id)
+        const lines: string[] = []
+        for (const record of log.records().slice(-50))
+            if (record.trace === trace()) lines.push(record.message)
+        return { trace: trace(), lines }
+    },
+    {
+        description:
+            'Syncs a contact, and answers the log lines its trace wrote.',
+    },
+)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+let synced = reactive<{ trace: string; lines: string[] }>()
+
+async function sync() {
+    synced = await syncContact({ id: '4021' })
+}
+</script>
+
+<div class="row">
+    <button onclick={sync}>Sync contact 4021</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>trace</span>
+        <strong>{synced.ready() ? synced.trace : '—'}</strong></li>
+    <li><span>its lines</span>
+        <strong>
+            {synced.ready() ? synced.lines.join(' · ') : '—'}
+        </strong></li>
+</ul>

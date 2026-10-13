@@ -25,10 +25,13 @@ import {
     resolverIn,
     withDependencies,
 } from '../../abide/src/compiler/compileApp.ts'
+import { privateAddress } from '../../abide/src/compiler/handlersUnder.ts'
+import { PRIVATE_EXPORT } from '../../abide/src/compiler/projectShadow.ts'
+import { appFiles } from '../../abide/src/server/appTree.ts'
 import { inScope } from '../../abide/src/server/requestScope.ts'
 import { browserCookies, COOKIES } from '../../abide/src/shared/cookies.ts'
 import { RPC_SERVER } from '../../abide/src/shared/RPC_SERVER.ts'
-import { placeOf, routeOf } from '../../abide/src/shared/routePattern.ts'
+import { routeOf, scopeOf } from '../../abide/src/shared/routePattern.ts'
 import {
     removeTemporaryModules,
     temporaryModule,
@@ -38,14 +41,22 @@ import { allCards } from './docsPages.ts'
 const APP = new URL('../', import.meta.url).pathname
 const TSCONFIG = `${APP}tsconfig.json`
 
-// A file that is the site rather than an example: the docs' own components, and the route files.
+// A file that is the site rather than an example: the docs' own chrome — the root `lib` but for
+// the files a card shows — and the route files.
+const SHOWN = new Set<string>()
+for (const card of await allCards())
+    for (const path of card.files.values()) SHOWN.add(path)
+
 function isSite(path: string): boolean {
     return (
-        path.startsWith('src/docs/') ||
-        /\/(page|layout|error)\.abide$/.test(path) ||
-        path === 'src/downloads.abide'
+        (path.startsWith('src/lib/') && !SHOWN.has(path)) ||
+        /(^|\/)(index|layout|error|launcher)\.abide$/.test(path)
     )
 }
+
+// The handlers a `<script server>` declares, by the call that declares them — what the build's
+// handler table keeps of the bindings the server module hands out (16.70).
+const HANDLER = /^const (\w+) = (?:GET|POST|PUT|PATCH|DELETE)\(/gm
 
 // THE DOCS APP, COMPILED WHOLE: its `package.json`, every `.ts` and `.abide` under `src/`, and every
 // component compiled to the pair it becomes, served at its own path as a build serves it
@@ -70,10 +81,10 @@ async function appTree(
         tree[path] = text
         files.push({ path: `${APP}${path}`, file: parseAbide(text) })
     }
-    // 34.27 — and every `.abide` a dependency ships that one of them imports, copied in beside its
+    // 34.23 — and every `.abide` a dependency ships that one of them imports, copied in beside its
     // package's manifest, so the copy resolves it where the docs app does.
     const own = files.length
-    for (const dependency of await withDependencies(
+    const { sources } = await withDependencies(
         realpathSync(`${APP}src`),
         files.map(({ path, file }) => ({
             path,
@@ -82,8 +93,10 @@ async function appTree(
             quiet: false,
             position: undefined,
         })),
+        [],
         resolverIn(),
-    )) {
+    )
+    for (const dependency of sources) {
         if (files.some((one) => one.path === dependency.path)) continue
         const text = await Bun.file(dependency.path).text()
         const below = relative(APP, dependency.path)
@@ -98,20 +111,23 @@ async function appTree(
     // the directory read as a file — `InvoiceDocument.abide` is then looked for one level up.
     const graph = componentGraph(files, resolverIn())
     const { answers } = await session.readsFor(files)
-    const compilation: Compilation = { files: {}, tables: {} }
+    const compilation: Compilation = {
+        files: {},
+        handlers: {},
+        tables: {},
+        mounted: {},
+    }
     for (let at = 0; at < files.length; at += 1) {
         const { path: absolute, file } = files[at] as (typeof files)[number]
         const names = answers[at]
         const stem = absolute.slice(APP.length, -'.abide'.length)
         const belowRoot = absolute.slice(`${APP}src/`.length)
-        // 37.1 — a server block files its hooks at its route.
+        // 37.1 — a server block files its hooks at its route, or under a `lib` at its directory's.
         const server = emitComponent(
             file,
             names,
             false,
-            at < own && placeOf(belowRoot) === 'address'
-                ? routeOf(belowRoot)
-                : undefined,
+            at < own ? scopeOf(belowRoot) : undefined,
         )
         // A CHILD WITH NOTHING TO HYDRATE STILL NEEDS A MODULE, because its caller imports one.
         // `emitClient` answers '' for a static file — that is what makes a static page ship no
@@ -125,23 +141,21 @@ async function appTree(
                 graph.invoked.has(absolute) ? 'invoked' : 'none',
             ) || 'export default () => {}'
         const name = stem.slice(stem.lastIndexOf('/') + 1)
-        // Bound by name, as a build's stand-ins are: the file's own `<script>` calls them.
-        const handlers =
-            file.servers.length > 0
-                ? new Bun.Transpiler({ loader: 'ts' }).scan(
-                      file.servers.join('\n'),
-                  ).exports
-                : []
+        // Bound by name, as a build's stand-ins are: the file's own `<script>` calls them, and the
+        // server's module hands each out as `__handler_<name>` (16.70).
+        const handlers: string[] = []
+        for (const [, declared] of file.servers.join('\n').matchAll(HANDLER))
+            handlers.push(declared as string)
         // Through a module of the app's own, which reaches the server's module where the
         // browser's, importing it directly, would reach its own.
         if (handlers.length > 0)
             tree[`${stem}.handlers.ts`] =
-                `export { ${handlers.join(', ')} } from './${name}.abide?component'\n`
+                `export { ${handlers.map((one) => `${PRIVATE_EXPORT}${one} as ${one}`).join(', ')} } from './${name}.abide?component'\n`
         compilation.files[`${stem}.abide`] = {
             server,
             client:
                 handlers.length > 0
-                    ? `${client}\nimport { ${handlers.join(', ')} } from './${name}.handlers.ts'\nexport { ${handlers.join(', ')} }\n`
+                    ? `${client}\nimport { ${handlers.join(', ')} } from './${name}.handlers.ts'\n`
                     : client,
             sheet: undefined,
             serverMappings: undefined,
@@ -200,21 +214,28 @@ test('every example renders on the server and mounts on the client', async () =>
         const dir = temporaryModule(tree)
         serveCompilation(dir, compilation)
         // 16.9 — A HANDLER HAS ITS ADDRESS FROM BOOT, so a card reading `rpc.url` or `rpc.raw` has
-        // one before anything is called; the copy is given the address `mountHandlers` would give.
+        // one before anything is called; the copy is given the address `mountHandlers` would give:
+        // a private handler's below `/__abide/handlers` (16.70), a handler file's at its path.
         for (const path of new Bun.Glob('src/**/*.abide').scanSync({
             cwd: APP,
         })) {
-            if (
-                isSite(path) ||
-                placeOf(path.slice('src/'.length)) !== 'address'
-            )
-                continue
+            if (isSite(path)) continue
             const module = await import(`${dir}/${path}?component`)
-            const route = routeOf(path.slice('src/'.length))
-            for (const [name, handler] of Object.entries(module))
-                if (typeof handler === 'function' && 'method' in handler)
-                    (handler as { address?: string }).address =
-                        `${route}/${name}`
+            for (const [bound, handler] of Object.entries(module))
+                if (
+                    bound.startsWith(PRIVATE_EXPORT) &&
+                    typeof handler === 'function' &&
+                    'method' in handler
+                )
+                    (handler as { address?: string }).address = privateAddress(
+                        path.slice('src/'.length),
+                        bound.slice(PRIVATE_EXPORT.length),
+                    )
+        }
+        for (const belowRoot of appFiles(`${APP}src`, () => {}).handlers) {
+            const { default: handler } = await import(`${dir}/src/${belowRoot}`)
+            if (typeof handler === 'function' && 'method' in handler)
+                (handler as { address?: string }).address = routeOf(belowRoot)
         }
         // A `raw` CALL GOES OVER THE WIRE, and there is no server here: it is answered `null`, which
         // is what is under test — the card paints and adopts — and not what the handler says.

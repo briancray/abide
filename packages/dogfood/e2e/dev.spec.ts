@@ -21,9 +21,9 @@ const BIN = `${REPO}packages/abide/bin/abide.ts`
 const APP = `${REPO}packages/dogfood`
 const COPY = `${REPO}.test-modules/dogfood-dev`
 const ROOT = `${COPY}/src`
-// A file an author WROTE rather than one the generator owns, and one every page carries: a
-// marker in the nav is visible from whatever address the browser is standing on.
-const BAR = `${ROOT}/docs/SiteBar.abide`
+// A file every page carries: a marker in the nav is visible from whatever address the browser is
+// standing on.
+const BAR = `${ROOT}/lib/SiteBar.abide`
 
 let dev: ChildProcess | undefined
 let base = ''
@@ -48,7 +48,7 @@ test.beforeAll(async ({}, testInfo) => {
         'bunfig.toml',
         '.env',
         'src',
-        // 34.27 — the package a card imports a component from, as installed and as its source.
+        // 34.23 — the package a card imports a component from, as installed and as its source.
         'crm-ui',
         'node_modules/crm-ui',
     ])

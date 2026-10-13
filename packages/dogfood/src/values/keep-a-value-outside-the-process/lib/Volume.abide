@@ -1,0 +1,56 @@
+<script server>
+import { GET, POST } from '@abide/abide/server'
+
+// A setting never written answers `null`, the miss.
+const SETTINGS: Record<string, string> = {}
+
+const readSetting = GET(
+    async ({ name }: { name: string }) => {
+        // A slow database, so the wait is on screen.
+        await Bun.sleep(450)
+        return SETTINGS[name] ?? null
+    },
+    { description: 'A setting, by name.' },
+)
+
+const writeSetting = POST(
+    (args: { name: string; value: string }) => {
+        SETTINGS[args.name] = args.value
+    },
+    { description: 'Writes a setting.' },
+)
+</script>
+
+<script module>
+import type { Store } from '@abide/abide'
+
+/** Both halves or neither: `Store` has no spelling for one alone. */
+function settingsStore<T>(name: string): Store<T> {
+    return {
+        // Stored as JSON; a setting never written answers `null`, the miss.
+        get: async () => {
+            const stored = await readSetting({ name })
+            return stored == null ? undefined : (JSON.parse(stored) as T)
+        },
+        set: async (value) => {
+            await writeSetting({ name, value: JSON.stringify(value) })
+        },
+    }
+}
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+// One option. The read and the write below are untouched.
+let volume = reactive(4, { store: settingsStore<number>('volume') })
+</script>
+
+<ul class="tiles">
+    <li><span>volume</span>
+        <div class="stepper">
+            <button onclick={() => (volume -= 1)}>−</button>
+            <strong>{volume}</strong>
+            <button onclick={() => (volume += 1)}>+</button>
+        </div></li>
+</ul>

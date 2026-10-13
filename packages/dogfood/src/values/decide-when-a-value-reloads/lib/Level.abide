@@ -1,0 +1,40 @@
+<script server>
+import { reactive } from '@abide/abide'
+import { GET } from '@abide/abide/server'
+
+type Shelf = { warehouse: string; sku: string }
+
+// Counts the walks: marking stale and reloading now read the same otherwise.
+let counted = 0
+
+const levelOfShelf = reactive(async (_shelf: Shelf) => {
+    // A slow database, so the wait is on screen.
+    await Bun.sleep(600)
+    counted += 1
+    return { onHand: 12, counted }
+})
+
+const getLevel = GET(levelOfShelf, {
+    description: 'Stock on a shelf, by warehouse and sku.',
+})
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const level = reactive(() => getLevel({ warehouse: 'east', sku: 'A-70' }))
+</script>
+
+{#if level.busy() && !level.ready()}
+    <p>Counting the shelf…</p>
+{:else}
+    <ul class="fields stacked">
+        <li><span>on hand</span><strong>{level.onHand}</strong></li>
+        <li><span>counted</span><strong>{level.counted}</strong></li>
+    </ul>
+{/if}
+
+<div class="row">
+    <button onclick={() => level.invalidate()}>Mark stale</button>
+    <button onclick={() => level.refresh()}>Reload now</button>
+</div>

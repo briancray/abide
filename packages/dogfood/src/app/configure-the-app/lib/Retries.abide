@@ -1,0 +1,18 @@
+<script server>
+import { config, GET, onConfig } from '@abide/abide/server'
+
+onConfig(() => ({ RETRIES: 3 }))
+
+const retryPolicy = GET(() => ({ retries: config().RETRIES }), {
+    description: 'How many times a call is retried.',
+})
+</script>
+
+<script>
+const policy = retryPolicy()
+</script>
+
+<ul class="tiles">
+    <li><span>retries</span><strong>{policy.retries}</strong></li>
+    <li><span>attempts</span><strong>{policy.retries + 1}</strong></li>
+</ul>

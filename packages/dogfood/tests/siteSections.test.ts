@@ -3,7 +3,7 @@
 // page still renders.
 
 import { expect, test } from 'bun:test'
-import { sidebarGroupsOf, tabOf } from '../src/docs/siteSections.ts'
+import { sidebarGroupsOf, tabOf } from '../src/lib/siteSections.ts'
 
 test('an address is in the tab its first segment names, and the guides otherwise', () => {
     expect(tabOf('/')).toBe('/')
@@ -11,7 +11,7 @@ test('an address is in the tab its first segment names, and the guides otherwise
     expect(tabOf('/reference')).toBe('/reference')
     expect(tabOf('/reference/transports')).toBe('/reference')
     expect(tabOf('/bench')).toBe('/bench')
-    expect(tabOf('/tests')).toBe('/tests')
+    expect(tabOf('/gate')).toBe('/gate')
     // A prefix is not a segment.
     expect(tabOf('/referencex')).toBe('/')
 })
@@ -24,5 +24,5 @@ test('the sidebar lists the reference apart from the guides, and nothing beside 
         sidebarGroupsOf('/reference/cli').map((group) => group.section),
     ).toEqual(['Reference'])
     expect(sidebarGroupsOf('/bench')).toEqual([])
-    expect(sidebarGroupsOf('/tests')).toEqual([])
+    expect(sidebarGroupsOf('/gate')).toEqual([])
 })

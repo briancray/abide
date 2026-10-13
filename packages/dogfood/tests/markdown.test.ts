@@ -1,10 +1,10 @@
 // WHAT THE DOCS APP SERVES, read off the app itself: each page's document and its markdown twin, and
-// the bundle of all of them. A page is written once, as `page.abide`, and everything here is derived
+// the bundle of all of them. A page is written once, as `index.abide`, and everything here is derived
 // from it at run time — so what is gated is the derivation, which fails silently: the page still
 // renders and the twin still reads.
 
 import { expect, test } from 'bun:test'
-import { SITE } from '../src/docs/SITE.ts'
+import { SITE } from '../src/lib/SITE.ts'
 import {
     allCards,
     cardsOf,

@@ -1,0 +1,63 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <table>
+        <thead><tr><th>In markup</th><th>In .ts</th><th>Gives you</th></tr></thead>
+        <tbody>
+            <tr><td><code>{'{invoice}'}</code></td><td><code>invoice()</code></td><td>the value</td></tr>
+            <tr><td><code>{'{#for item of items}'}</code></td><td><code>for (… of items())</code></td><td>each item, kept in step with the list</td></tr>
+            <tr><td><code>{'{#if !invoice.ready()}'}</code></td><td><code>invoice.ready()</code></td><td>whether there is a value to show yet</td></tr>
+        </tbody>
+    </table>
+
+    <Code language="abide" caption="abide" code={`<h1>{invoice.number}</h1>
+{#if !invoice.ready()}
+    <p>Loading…</p>
+{/if}`} />
+
+    <p>Those four rows are the part you write every day, not the whole grammar.</p>
+
+    <Section title="Putting a value into markup">
+        <p>A name in text is a live read, not a snapshot taken when the component mounted. The same
+        name works in text, in an attribute, in a class and in an inline style.</p>
+
+        <p>Read on: <a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a> ·
+        <a href={url('/templates/put-a-value-in-the-markup')}>Expressions</a></p>
+    </Section>
+
+    <Section title="Choosing what to render">
+        <p>Branch on a value, on a case, on whether something has landed, or on whether it failed —
+        the last two being why a template rarely needs a loading flag of its own.</p>
+
+        <p>Read on: <a href={url('/templates/show-markup-conditionally')}>Conditionals</a></p>
+    </Section>
+
+    <Section title="Keyed lists that move nodes">
+        <p>A keyed list reorders by moving nodes rather than rebuilding them, which is the
+        difference the benchmark cases here are chosen to show.</p>
+
+        <p>Read on: <a href={url('/templates/repeat-markup-over-a-list')}>Lists</a></p>
+    </Section>
+
+    <Section title="Events and two-way form binding">
+        <p>An event handler is an attribute, and a form binding is two-way without a handler in
+        between.</p>
+
+        <p>Read on: <a href={url('/templates/respond-to-a-click')}>Events</a> ·
+        <a href={url('/templates/bind-a-form-to-state')}>Form binding</a></p>
+    </Section>
+
+    <Section title="Splitting markup into components">
+        <p>A component can live in the same file or its own. Its script decides what runs per
+        instance and what runs once, and its styles apply there and nowhere else.</p>
+
+        <p>Read on: <a href={url('/templates/reuse-a-piece-of-markup')}>Components</a> ·
+        <a href={url('/templates/run-code-when-a-component-loads')}>Scripts</a> ·
+        <a href={url('/templates/scope-styles-to-a-component')}>Styles</a></p>
+    </Section>
+</Doc>

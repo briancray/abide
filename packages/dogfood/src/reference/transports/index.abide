@@ -1,0 +1,248 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <Section title="`rpc` — `reactive` + transport">
+        <Section title="The call" level={3}>
+            <table>
+                <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><code>Rpc</code></td><td><code>{'<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures | Failed<\'HttpError\', undefined>, Produced>'}</code></td><td>A handler reached over http, or in process on a server.</td></tr>
+                    <tr><td><code>Value</code></td><td><code>unknown</code></td><td>What the addressed <code>Reactive</code> holds.</td></tr>
+                    <tr><td><code>Produced</code></td><td><code>unknown</code></td><td>What it yields, per the unit rule.</td></tr>
+                    <tr><td><code>Middleware</code></td><td><code>&lt;Ctx, Result&gt;(next: (ctx?: Ctx) =&gt; Promise&lt;Result&gt;, ctx: Ctx) =&gt; Result | Promise&lt;Result&gt;</code></td><td>One rung of <code>middleware</code>.</td></tr>
+                    <tr><td><code>GET</code></td><td><code>&lt;Value, Args, Failures, RungFailures, Produced = Value&gt;(handler: Reactive&lt;Value, Value, Failures, Produced&gt; | Keyed&lt;Value, Args, Value, Failures, Produced&gt;, options?: RpcOptions&lt;Args, RungFailures&gt;) =&gt; Rpc&lt;Value, Args, Failures | RungFailures, Produced&gt;</code></td><td>Declares a read any surface may call.</td></tr>
+                    <tr><td><code>GET</code></td><td><code>&lt;Value, Args, Failures, RungFailures, Produced = Value&gt;(handler: (args?: Args) =&gt; Value, options?: RpcOptions&lt;Args, RungFailures&gt; &amp; ReactiveOptions&lt;Value, Value, Failures, Args&gt;) =&gt; Rpc&lt;Value, Args, Failures | RungFailures, Produced&gt;</code></td><td>The plain-function overload, whose options build the value it becomes beside its address.</td></tr>
+                    <tr><td><code>POST</code> / <code>PUT</code> / <code>PATCH</code> / <code>DELETE</code></td><td>same as <code>GET</code></td><td>Declares a mutation.</td></tr>
+                    <tr><td><code>rpc.busy</code></td><td><code>(pattern?: Partial&lt;Args&gt;) =&gt; boolean</code></td><td><code>busy</code> narrowed to the handler's matching entries.</td></tr>
+                    <tr><td><code>rpc.ready</code></td><td><code>(pattern?: Partial&lt;Args&gt;) =&gt; boolean</code></td><td><code>ready</code> narrowed to the handler's matching entries.</td></tr>
+                    <tr><td><code>rpc.invalidate</code></td><td><code>(pattern?: Partial&lt;Args&gt;) =&gt; void</code></td><td><code>invalidate</code> narrowed to the handler's matching entries.</td></tr>
+                    <tr><td><code>rpc.refresh</code></td><td><code>(pattern?: Partial&lt;Args&gt;) =&gt; void</code></td><td><code>refresh</code> narrowed to the handler's matching entries.</td></tr>
+                    <tr><td><code>rpc.isError</code></td><td><code>{'<Name extends Failures[\'name\']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>'}</code></td><td>Whether a caught failure is the one named.</td></tr>
+                    <tr><td><code>rpc.raw</code></td><td><code>(args: Args, init?: RequestInit) =&gt; Promise&lt;Response&gt;</code></td><td>The same call handed back as the raw response.</td></tr>
+                    <tr><td><code>rpc.method</code></td><td><code>string</code></td><td>The HTTP method.</td></tr>
+                    <tr><td><code>rpc.url</code></td><td><code>(args?: Args) =&gt; string</code></td><td>The address, resolved against the mount.</td></tr>
+                    <tr><td><code>rpc.description</code></td><td><code>string | undefined</code></td><td>The human description.</td></tr>
+                    <tr><td><code>PatchOp</code></td><td><code>{'{ op: \'add\' | \'replace\' | \'test\'; path: string; value: unknown } | { op: \'remove\'; path: string } | { op: \'move\' | \'copy\'; from: string; path: string }'}</code></td><td>One JSON Patch operation (RFC 6902), its paths JSON Pointers — what a follower is sent for an <code>s.patch</code>.</td></tr>
+                </tbody>
+            </table>
+        </Section>
+
+        <Section title="`RpcOptions`" level={3}>
+            <table>
+                <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><code>description</code></td><td><code>string</code></td><td>The human description carried onto every generated surface.</td></tr>
+                    <tr><td><code>timeout</code></td><td><code>number</code></td><td>How long the call may stay open, and the floor under the request's idle timeout.</td></tr>
+                    <tr><td><code>maxBodySize</code></td><td><code>number</code></td><td>The largest request body a mutation will accept, in bytes.</td></tr>
+                </tbody>
+            </table>
+        </Section>
+
+        <Section title="Stream framings" level={3}>
+            <ul>
+                <li><code>jsonl</code> — <code>application/jsonl</code>, one JSON value per line;
+                <code>application/x-ndjson</code> where the reader asks for NDJSON (16.44).</li>
+                <li><code>sse</code> — <code>text/event-stream</code>, the same transcript with
+                <code>data: </code> per line.</li>
+                <li><code>octet-stream</code> — <code>application/octet-stream</code>, chunks of
+                <code>Uint8Array</code> or a <code>Blob</code>.</li>
+            </ul>
+        </Section>
+
+        <Section title="Response helpers" level={3}>
+            <table>
+                <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+                <tbody>
+                    <tr><td><code>Values&lt;T&gt;</code></td><td><code>Iterable&lt;T&gt; | AsyncIterable&lt;T&gt; | ReadableStream&lt;T&gt;</code></td><td>What every body helper takes.</td></tr>
+                    <tr><td><code>page</code></td><td><code>&lt;Body extends string | Uint8Array | Values&lt;Uint8Array | string&gt;&gt;(body: Body) =&gt; Body</code></td><td>A rendered document as <code>text/html</code>.</td></tr>
+                    <tr><td><code>json</code></td><td><code>&lt;T&gt;(value: T) =&gt; T</code></td><td>A value as JSON, fixed, with <code>undefined</code> sent as <code>null</code>.</td></tr>
+                    <tr><td><code>redirect</code></td><td><code>(to: string, status?: RedirectStatus) =&gt; undefined</code></td><td>A navigation.</td></tr>
+                    <tr><td><code>jsonl</code></td><td><code>&lt;T&gt;(values: Values&lt;T&gt;) =&gt; Values&lt;T&gt;</code></td><td>One JSON value per line, fixed.</td></tr>
+                    <tr><td><code>sse</code></td><td><code>&lt;T&gt;(values: Values&lt;T&gt;) =&gt; Values&lt;T&gt;</code></td><td>The same machine framed as server-sent events, fixed.</td></tr>
+                    <tr><td><code>bytes</code></td><td><code>(values: Values&lt;Uint8Array&gt;) =&gt; Values&lt;Uint8Array&gt;</code></td><td>A stream of binary chunks, fixed.</td></tr>
+                    <tr><td><code>RedirectStatus</code></td><td><code>301 | 302 | 303 | 307 | 308</code></td><td>The statuses a <code>redirect</code> may carry.</td></tr>
+                    <tr><td><code>refuse</code></td><td><code>(status: number, message?: string) =&gt; Failed&lt;'HttpError', undefined&gt;</code></td><td>An undeclared refusal at a status.</td></tr>
+                </tbody>
+            </table>
+        </Section>
+
+        <Section title="The options every handler takes" level={3}>
+            <ul>
+                <li><code>Args</code> — <code>Record&lt;string, JsonValue&gt; \| undefined</code>.
+                The arguments, in the body on a mutation and in the URL on a <code>GET</code> or
+                <code>DELETE</code>.</li>
+                <li><code>middleware</code> —
+                <code>{'Middleware<{ request: Request; args: () => Args }, Value \\| Failures>[]'}</code>.
+                The rungs run per call.</li>
+                <li><code>clients</code> — <code>Clients</code>. Which surfaces carry this
+                handler.</li>
+                <li><code>crossOrigin</code> — <code>boolean \| string[]</code>. Whether other
+                origins may call it.</li>
+            </ul>
+
+            <p>A handler is a <code>reactive</code> value, a <code>Keyed</code>, or a plain function
+            that becomes one — <code>GET(fn, options)</code> is <code>GET(reactive(fn,
+            options))</code>, the value's options and the address's in one object.
+            <code>RpcOptions</code> describes the <strong>address</strong>; a value handed in has
+            decided its own shape, so it takes <code>RpcOptions</code> alone. Calling an
+            <code>Rpc</code> hands back the same <code>Reactive</code> shape the handler had,
+            <code>Produced</code> included, and a client reading a <code>GET</code> is subscribed
+            over the socket mux to what that handler produces for those args (18.3).</p>
+        </Section>
+
+        <Section title="The follow" level={3}>
+            <p>Every <code>GET</code> a page follows is carried over <strong>one</strong> web socket
+            mux at <code>/__abide/socket</code>, so a page following four values holds one
+            connection (18.1). A subscription from another origin is refused unless the handler's
+            <code>crossOrigin</code> admits it (18.2), and a <code>GET</code> declaring
+            <code>middleware</code> runs it once as the subscription opens and feeds only a
+            subscription it admitted (18.8).</p>
+
+            <p>A <code>GET</code> answered from a <code>global</code> value carries the version of
+            what it answered as its <code>etag</code> (18.5). A subscriber names that version, and
+            is sent the value only where it has moved (18.6, 18.9). After that each
+            <code>s.patch</code> is sent as what it wrote, as a list of <code>PatchOp</code>, rather
+            than as the value (18.11). A patch whose writes cannot be sent as data is sent as the
+            value (18.13).</p>
+
+            <p>The same <code>GET</code> answers any http reader the same way.
+            <code>If-None-Match</code> naming the standing version is answered <code>304 Not
+            Modified</code> with no body (18.19). A reader preferring <code>text/event-stream</code>
+            is sent the follow as server-sent events: each frame's op its <code>event</code>, its
+            version the <code>id</code>, and the value or the JSON Patch its <code>data</code>, from
+            the version <code>Last-Event-ID</code> names (18.20).</p>
+        </Section>
+    </Section>
+
+    <Section title="Schemas">
+        <table>
+            <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>Schema&lt;T&gt;</code></td><td><code>((value: unknown) =&gt; T) | StandardSchemaV1&lt;T&gt;</code></td><td>The two forms a shape may be declared in.</td></tr>
+                <tr><td><code>JsonValue</code></td><td><code>{'null | boolean | number | string | JsonValue[] | { [k: string]: JsonValue }'}</code></td><td>What an <code>Args</code> may hold.</td></tr>
+                <tr><td><code>Issues&lt;T&gt;</code></td><td><code>T extends object ? Partial&lt;Record&lt;Paths&lt;T&gt; | '', string[]&gt;&gt; : string[]</code></td><td>What was wrong, keyed by where.</td></tr>
+                <tr><td><code>Paths&lt;T&gt;</code></td><td><code>string</code></td><td>The dot-joined leaf paths of a type.</td></tr>
+                <tr><td><code>JsonSchema</code></td><td><code>JsonValue</code></td><td>A JSON Schema document, the native form.</td></tr>
+                <tr><td><code>jsonSchema</code></td><td><code>&lt;T&gt;(document: JsonSchema) =&gt; StandardSchemaV1&lt;T&gt;</code></td><td>A JSON Schema document as a <code>Schema</code>, carrying its validator.</td></tr>
+                <tr><td><code>validateJson</code></td><td><code>&lt;T&gt;(schema: JsonSchema, value: unknown) =&gt; Issues&lt;T&gt; | null</code></td><td>The native validator.</td></tr>
+            </tbody>
+        </table>
+
+        <p>A <code>Schema&lt;T&gt;</code> <strong>returns what it accepts</strong>, so it normalizes
+        as well as refuses — which is why the function form is <code>=&gt; T</code> rather than a
+        predicate. <code>JsonSchema</code> is the native form and the only one publishable to a tool
+        definition or an OpenAPI operation. A document is data, so it becomes a <code>Schema</code>
+        through <code>jsonSchema</code>, which brings the validator with it — and a page that never
+        calls <code>jsonSchema</code> never carries one (19.13).</p>
+    </Section>
+
+    <Section title="Headers abide generates">
+        <table>
+            <thead><tr><th>Header</th><th>On</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>x-content-type-options: nosniff</code></td><td>everything</td><td>Refuses a browser's guess at a type the response already declared.</td></tr>
+                <tr><td><code>traceresponse</code></td><td>everything</td><td>Correlates the answer, a failure included.</td></tr>
+                <tr><td><code>cache-control: private, no-store</code></td><td>a page, an rpc answer, any refusal</td><td>The default a write through <code>response()</code> overrides.</td></tr>
+                <tr><td><code>cache-control: private, max-age=&lt;ttl&gt;</code></td><td>a <code>GET</code> over a <code>global</code> <code>reactive</code> value</td><td>The value's own duration, answered rather than restated in a <code>ResponseInit</code>.</td></tr>
+                <tr><td><code>cache-control: no-store</code></td><td><code>/__abide/health</code>, <code>/__abide/principal</code></td><td>Refuses caching for an answer about this process or this caller.</td></tr>
+                <tr><td><code>cache-control: public, max-age=31536000, immutable</code></td><td>the built bundle</td><td>A chunk addressed by its own content hash.</td></tr>
+                <tr><td><code>cache-control: public, max-age=0, must-revalidate</code></td><td>a file under a <code>public</code> directory</td><td>A file at an address the build never chose.</td></tr>
+                <tr><td><code>etag</code></td><td>a file under a <code>public</code> directory</td><td>The answered bytes, addressed by their content.</td></tr>
+                <tr><td><code>referrer-policy: strict-origin-when-cross-origin</code></td><td>a page</td><td>The browsers' own default, written down.</td></tr>
+                <tr><td><code>content-security-policy: frame-ancestors 'none'</code></td><td>a page</td><td>The default a write through <code>response()</code> or <code>csp()</code> overrides.</td></tr>
+                <tr><td><code>access-control-allow-origin</code></td><td>an rpc answer to another origin</td><td>The origin a handler admitted through <code>crossOrigin</code>, and never one it did not.</td></tr>
+                <tr><td><code>allow: GET, HEAD</code></td><td>a page, a public file or the bundle, asked by another method</td><td>The methods the address answers, on the 405.</td></tr>
+                <tr><td><code>vary</code></td><td>wherever an answer depends on a request header</td><td>Names the header the answer varied on.</td></tr>
+                <tr><td><code>etag</code></td><td>a <code>GET</code> answered from a <code>global</code> value</td><td>The version of the production answered, which the browser names when it follows the handler over the mux, so it is sent a later value only.</td></tr>
+                <tr><td><code>server-timing</code></td><td>an rpc answer; <code>Middleware</code> and a <code>timing</code> span on any answer</td><td>The handler's duration, named <code>Direct</code>, <code>Seeded</code> from the render's run, <code>Cached</code> from a held <code>global</code> production, or <code>Started</code> to a stream's first chunk; the rungs' time; and each <code>timing</code> span.</td></tr>
+            </tbody>
+        </table>
+
+        <p>Every response declares its own content type and carries <code>x-content-type-options:
+        nosniff</code> unconditionally, a browser guessing a different type being only ever the
+        vulnerability. A <code>cache-control</code> default is the handler's to override through
+        <code>response()</code>; the method decides the ceiling on that override.</p>
+    </Section>
+
+    <Section title="OpenAPI">
+        <table>
+            <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>/__abide/openapi.json</code></td><td><code>GET</code></td><td>The generated OpenAPI document.</td></tr>
+                <tr><td><code>OpenApiDocument</code></td><td><code>JsonValue</code></td><td>OpenAPI 3.1, whose schema dialect is <code>JsonSchema</code>.</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="MCP">
+        <table>
+            <thead><tr><th>Name</th><th>Signature</th><th>Meaning</th></tr></thead>
+            <tbody>
+                <tr><td><code>/__abide/mcp</code></td><td><code>POST</code></td><td>The streamable-http MCP endpoint.</td></tr>
+            </tbody>
+        </table>
+
+        <p>OpenAPI and MCP are each open wherever a handler is listed for them. Both are generated
+        from the same handler declarations rather than from a document you maintain beside them. A
+        handler withheld from a surface by <code>clients</code> is absent from that surface's
+        listing and answers on its http address exactly as it did.</p>
+    </Section>
+
+    <Section title="Description">
+        <Section title="One declaration, four surfaces" level={3}>
+            <p>A handler is reached in process, over http, from the CLI and by a model, and it is
+            declared once. That is what makes <code>rpc.isError</code> narrowable on every one of
+            them: the <code>Failures</code> union is the handler's own, not a transport's
+            approximation of it.</p>
+        </Section>
+
+        <Section title="The transport is not where a shape goes" level={3}>
+            <p>There is no <code>schemas</code> option on <code>GET</code> or <code>POST</code>. A
+            shape is a fact about the value, so it rides in on the value, and an in-process caller
+            gets the check a wire caller gets. Where <code>GET</code> is handed a plain function,
+            <code>args</code> and <code>schema</code> sit beside <code>description</code> because
+            they build that value — not the address. A schema declared at the transport would skip
+            itself every other way the handler is reached.</p>
+        </Section>
+    </Section>
+
+    <Section title="Examples">
+        <Section title="A read any surface may call" level={3}>
+            <Code language="ts" caption="src/invoices/getInvoice.ts — excerpt" code={`export default GET(
+    ({ id }: { id: string }) => database.invoice.find(id),
+    { description: 'One invoice, by id.' },
+)`} />
+        </Section>
+
+        <Section title="A value every caller follows" level={3}>
+            <Code language="ts" caption="server" code={`const rooms = reactive((_room: { id: string }): Turn[] => [], {
+    global: true,
+    by: 'id',
+})
+
+const room = GET(rooms)
+
+const say = POST(({ id, text }: { id: string; text: string }) => {
+    rooms({ id }).patch((turns) => {
+        turns.push({ id: crypto.randomUUID(), text })
+    })
+})`} />
+        </Section>
+    </Section>
+
+    <Section title="See also">
+        <ul>
+            <li><a href={url('/data/read-data-without-writing-an-api')}>Reading data</a> —
+            <code>GET</code> in use</li>
+            <li><a href={url('/data/change-something-on-the-server')}>Mutations</a> — the four
+            write methods</li>
+            <li><a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a> — a
+            <code>GET</code> every caller follows, and a <code>POST</code> that patches it</li>
+        </ul>
+    </Section>
+</Doc>

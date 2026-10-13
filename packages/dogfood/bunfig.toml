@@ -2,3 +2,8 @@
 # setup `/templates/scope-styles-to-a-component` teaches, dogfooded.
 [serve.static]
 plugins = ["bun-plugin-tailwind"]
+
+# A test imports the docs app's `.abide` files as the components they compile to (RULEBOOK 38.109) —
+# the setup `/ship/call-your-app-from-a-test` teaches. Read only by `bun test` run from this directory.
+[test]
+preload = ["@abide/abide/test"]

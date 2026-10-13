@@ -1,0 +1,54 @@
+<script server>
+import { GET, onError, POST } from '@abide/abide/server'
+
+// What `onError` reports to: the last few messages a tracker was sent.
+const tracker = {
+    captured: [] as string[],
+    capture(error: unknown): void {
+        const message = error instanceof Error ? error.message : String(error)
+        tracker.captured = [message, ...tracker.captured].slice(0, 3)
+    },
+}
+
+// An export worker that has stopped answering.
+const exportWorker = {
+    async run(): Promise<string> {
+        await Bun.sleep(300)
+        throw new Error('the export worker reset the connection')
+    },
+}
+
+onError((error) => tracker.capture(error))
+
+const exportContacts = POST(() => exportWorker.run(), {
+    description: 'Exports every contact.',
+})
+
+/** What the tracker was sent, which the caller of the export never is. */
+const capturedErrors = GET(() => tracker.captured, {
+    description: 'The errors the tracker was sent.',
+})
+</script>
+
+<script>
+import { isFailed, reactive, refresh } from '@abide/abide'
+
+let told = reactive('—')
+const captured = capturedErrors()
+</script>
+
+<div class="row">
+    <button onclick={async () => {
+        try {
+            await exportContacts()
+        } catch (failed) {
+            if (isFailed(failed)) told = `${failed.status} ${failed.message}`
+        }
+        refresh(captured)
+    }}>Export contacts</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>the caller got</span><strong>{told}</strong></li>
+    <li><span>onError got</span><strong>{captured[0] ?? '—'}</strong></li>
+</ul>

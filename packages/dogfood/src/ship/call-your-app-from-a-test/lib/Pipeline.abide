@@ -1,0 +1,29 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let deals = reactive([
+    { name: 'Analytical Engines', amount: 8000, won: false },
+    { name: 'Hopper & Co', amount: 4400, won: false },
+])
+const open = reactive(() => deals.filter((deal) => !deal.won))
+const total = reactive(() => open.reduce((sum, deal) => sum + deal.amount, 0))
+
+const usd = (amount: number) => `$${amount.toLocaleString('en-US')}`
+
+function win(name: string) {
+    deals = deals.map((deal) =>
+        deal.name === name ? { ...deal, won: true } : deal,
+    )
+}
+</script>
+
+<ul class="fields">
+    {#for deal of open by deal.name}
+        <li><span>{deal.name}</span><strong>{usd(deal.amount)}</strong>
+            <button onclick={() => win(deal.name)}>Won</button></li>
+    {/for}
+</ul>
+
+<ul class="tiles">
+    <li><span>open pipeline</span><strong>{usd(total)}</strong></li>
+</ul>

@@ -1,0 +1,65 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc>
+    <table>
+        <thead><tr><th>Command</th><th>Does</th></tr></thead>
+        <tbody>
+            <tr><td><code>abide scaffold &lt;name&gt;</code></td><td>a new app</td></tr>
+            <tr><td><code>abide dev</code></td><td>the dev loop</td></tr>
+            <tr><td><code>abide check</code></td><td>type-checks the templates as well as the TypeScript</td></tr>
+            <tr><td><code>abide build</code> then <code>abide start</code></td><td>what you deploy</td></tr>
+            <tr><td><code>abide compile</code></td><td>one binary with the app inside it</td></tr>
+            <tr><td><code>abide bundle</code></td><td>the app as a desktop app</td></tr>
+        </tbody>
+    </table>
+
+    <Code code={`abide scaffold my-app        # starter project, then install and abide dev
+abide check                  # the templates as well as the TypeScript
+abide build && abide start   # what you deploy`} />
+
+    <Section title="Getting an app running">
+        <p>Scaffold writes a starter project and can take you straight into the dev loop, which
+        keeps the app up while you work.</p>
+
+        <p>Read on: <a href={url('/ship/start-a-new-app')}>Scaffold</a> ·
+        <a href={url('/ship/run-the-app-while-you-work')}>Dev server</a></p>
+    </Section>
+
+    <Section title="Catching mistakes before you ship">
+        <p><code>abide check</code> type-checks the templates as well as the TypeScript, and reports
+        each diagnostic on the <code>.abide</code> line rather than on generated output.</p>
+
+        <p>Read on: <a href={url('/ship/catch-mistakes-before-you-ship')}>Checks</a></p>
+    </Section>
+
+    <Section title="Builds, and a single binary">
+        <p>A build produces content-hashed chunks and a manifest, and <code>abide start</code>
+        serves them. <code>abide compile</code> puts the whole app inside one executable instead,
+        and <code>abide bundle</code> puts that executable in a window.</p>
+
+        <p>Read on: <a href={url('/ship/build-and-serve-the-app')}>Build &amp; start</a> ·
+        <a href={url('/ship/ship-a-single-binary')}>Compile</a> ·
+        <a href={url('/ship/ship-a-desktop-app')}>Desktop</a></p>
+    </Section>
+
+    <Section title="Calling the app from your terminal">
+        <p><code>abide</code> alone opens an interactive shell where a person is watching, and
+        <code>abide call</code> is one handler called once — the same route table your pages read,
+        framed for a terminal.</p>
+
+        <p>Read on: <a href={url('/ship/call-a-handler-from-the-terminal')}>Call a handler</a> ·
+        <a href={url('/ship/watch-a-room-from-the-terminal')}>Watch a channel</a></p>
+    </Section>
+
+    <Section title="Calling the app from a test">
+        <p><code>createApp</code> hands back the app itself, tables and hooks and all, with no
+        socket bound. A test holds what <code>abide start</code> holds and asks it the same way.</p>
+
+        <p>Read on: <a href={url('/ship/call-your-app-from-a-test')}>Tests</a></p>
+    </Section>
+</Doc>
