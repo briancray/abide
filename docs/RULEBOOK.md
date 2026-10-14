@@ -582,6 +582,9 @@ start again when the load ends.
 
 11.70 `s.set` MUST take only a `Reactive` whose `Failures` are this value's.
 
+11.71 An unkeyed `reactive` with a `store`, built on a server outside every request, MUST NOT run
+the `store`'s `get` before it is reached.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.
@@ -899,7 +902,7 @@ such a call MUST NOT reach it.
 the reader asks for that type and `application/jsonl` otherwise.
 
 16.45 An sse answer MUST frame each value as `data: <json>` followed by a blank line, with
-`text/event-stream`, `no-cache` and `X-Accel-Buffering: no`.
+`text/event-stream` and `cache-control: private, no-store`.
 
 16.46 A stream of value chunks MUST admit jsonl and then sse, and a stream of binary chunks MUST
 admit `application/octet-stream` alone.
@@ -983,6 +986,15 @@ naming it.
 
 16.74 A module of the client graph importing a handler file MUST receive the wrapper 16.28 states as
 that file's default.
+
+16.75 A streamed answer — jsonl, sse, bytes, or a document `page` hands a stream — MUST carry
+`X-Accel-Buffering: no`.
+
+16.76 An `Rpc` streaming under 16.32 MUST end its answer where the run it sends ends: at that run's
+close, where a new run replaces it, and with the failure that run ended on.
+
+16.77 A `timeout` MUST NOT end a `throttle` or `debounce` window holding a production back, and the
+call MUST wait on that window as 5.15 has it.
 
 # 17. Response helpers
 
@@ -1085,6 +1097,10 @@ value again rather than apply what a patch wrote, as 18.12 has it for a version 
 
 18.26 A subscription to a `GET` MUST pass the `middleware` 37.2 runs at the route of the file that
 declared it, as it opens, and MUST NOT be fed where a rung answered in the handler's place.
+
+18.27 A reader of a `text/event-stream` answer — an `Rpc`'s copy and `abide watch` alike — MUST read
+it by the format's fields: a comment skipped, the space after a field's colon optional, `data` lines
+joined, and an event ended by a blank line.
 
 # 19. Mount paths and schemas
 
@@ -1566,11 +1582,15 @@ the page shown, and MUST NOT where only its query or fragment does.
 30.25 A `navigate` that does not remount the page MUST NOT move the scroll, except to the element a
 fragment it carries names.
 
-30.26 `abide check` MUST refuse a `url` literal that no page of the app is filed under and no public
-file of the app is served at.
+30.26 `abide check` MUST refuse a `url` literal that no page route of the app (23.3) is filed under
+and no public file of the app is served at.
 
 30.27 A `navigate` whose request fails, or whose route's chunks fail to load, MUST leave the address
 to the document.
+
+30.28 A `Query` record and the args an `Rpc` carries in its URL MUST be written in one spelling: a
+member left `undefined` omitted, a list its member repeated, an empty list its name with no `=`, and
+anything else its text.
 
 # 31. Reading and writing by name
 
@@ -2045,7 +2065,8 @@ answered per 41.12.
 
 37.1 A lifecycle hook MUST be filed at the route of the `.abide` or the handler file that called it,
 one under a `lib` or a `tests` directory at the route of the directory holding that one, and at the
-root route where neither did.
+root route where neither did; a call MUST be read as a hook only where it names a hook the module
+imports from abide, under any name, or a member of a namespace it imports from abide.
 
 37.2 `middleware` filed below the root route MUST run after routing, over a request its route or a
 route below it answers, outermost route first.
@@ -2145,7 +2166,8 @@ link none where the build bundled none.
 by the replacement.
 
 38.25 `--root` MUST default to `src` where the working directory holds one, and to the working
-directory otherwise.
+directory otherwise; and the app it finds MUST be the one the whole command means — what it builds,
+boots, serves and announces.
 
 38.26 A command that finds no app at its `--root` MUST fail, naming where it looked.
 
@@ -2169,7 +2191,7 @@ warnings alone.
 every file that refusal does not stop.
 
 38.34 `abide lsp` MUST report what 38.3 reports, over the text the editor holds rather than the
-text on disk.
+text on disk, and every refusal the app's tree makes of the file, as the tree was last saved.
 
 38.35 `abide dev` MUST send a response body as the app produces it.
 
@@ -2391,6 +2413,11 @@ with `--json` it MUST print the same as one JSON document.
 38.109 Under `bun test` with `@abide/abide/test` preloaded, a test MUST import a `.abide` of the app as
 the module it compiles to, whether or not `createApp` has run.
 
+38.110 A build `abide start`, `abide call`, `abide openapi` or `abide mcp` makes first (38.100) MUST
+be reported on stderr, leaving the command's stdout to its own output.
+
+38.111 `abide openapi` MUST print the OpenAPI document on stdout.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -2402,7 +2429,8 @@ the module it compiles to, whether or not `createApp` has run.
 39.4 `<head>` contributions MUST be merged by key, and the deepest contributor MUST win. The shell's
 `<head>` MUST be the outermost contributor.
 
-39.5 A `<head>` contribution with no merge key MUST append in tree order.
+39.5 A `<head>` contribution with no merge key MUST append — in tree order among the contributions
+its level mounts with, and when it mounts for a component mounted after its level.
 
 39.6 On a client navigation the incoming page's keyed `<head>` contributions MUST replace the
 outgoing page's by key, and a layout's MUST NOT move.
@@ -2424,12 +2452,19 @@ app MUST NOT be required to feature-detect.
 
 39.12 The last `<head>` contribution for a key within one file MUST win.
 
-39.13 In a browser, a `<head>` contribution that reads a value MUST follow it for as long as its page
-or layout is mounted.
+39.13 In a browser, a `<head>` contribution that reads a value MUST follow it for as long as the
+page, layout or component that made it is mounted.
 
-39.14 On a client navigation, a keyed `<head>` contribution that a leaving page or layout made and
-no arriving one makes MUST return to the nearest kept layout's value for its key, and MUST be removed
-where no kept layout has that key.
+39.14 When a page, layout or component leaves — on a client navigation, or with its region — a keyed
+`<head>` contribution it made and no deeper contributor still makes MUST return to the nearest
+remaining outer contributor's value for its key, and MUST be removed where no remaining outer
+contributor has that key.
+
+39.15 A `<head>` contribution with no merge key that its page, layout or component writes again
+MUST replace, in place, the one that same contributor wrote before.
+
+39.16 A `<head>` contribution with no merge key MUST be removed when the page, layout or component
+that made it leaves.
 
 # 40. Documentation
 
@@ -2600,6 +2635,9 @@ has answered or failed.
 
 41.27 An `Rpc` call `render` built the page's markup from in flight MUST be in flight as hydration
 adopts the page, however early its answer arrived.
+
+41.28 A `render` MUST let the turn's queued microtasks run between setting up a `<Name/>` whose setup
+made an `Rpc` call and building that component's markup.
 
 # 42. The app object
 
