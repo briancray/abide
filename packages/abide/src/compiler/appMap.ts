@@ -2,15 +2,11 @@
 // filed. What `abide routes` prints, off the build's own reading of the tree — the routes and the
 // handler mounts `compileApp` answers with — so the map and what the server answers are one walk.
 //
-// THE HOOKS ARE READ, NOT RUN, as the handlers are: a call of one of abide's hook names in a server
-// block, a `<script>` or a handler file, at the route 37.1 files it at.
+// THE HOOKS ARE READ, NOT RUN, as the handlers are: a call of one of abide's hooks in a `.abide`'s
+// scripts or a handler file — its own or a mounted package's — at the route 37.1 files it at, off the
+// same layout the build compiled (`hookCalls`).
 
-import { readFileSync } from 'node:fs' // bun exposes no sync read of its own
-import { appFiles } from '#server/appTree.ts'
-import { scopeOf } from '#shared/routePattern.ts'
-import { compileApp } from './compileApp.ts'
-import { hooksCalled } from './hooksCalled.ts'
-import { parseAbide } from './parseAbide.ts'
+import { compileApp, openChecker } from './compileApp.ts'
 
 /** One address the app answers, and the file answering it. */
 type MappedRoute = {
@@ -27,7 +23,15 @@ type MappedHook = { hook: string; route: string; file: string }
 export async function appMap(
     root: string,
 ): Promise<{ routes: MappedRoute[]; hooks: MappedHook[] }> {
-    const app = await compileApp(root)
+    const checker = await openChecker(root)
+    let app: Awaited<ReturnType<typeof compileApp>>
+    let layout: Awaited<ReturnType<typeof checker.layout>>
+    try {
+        app = await compileApp(root, checker)
+        layout = await checker.layout()
+    } finally {
+        await checker.close()
+    }
     const routes: MappedRoute[] = []
     for (const route of app.routes)
         routes.push({
@@ -53,17 +57,14 @@ export async function appMap(
               : 1,
     )
     const hooks: MappedHook[] = []
-    const { abide, handlers } = appFiles(root, () => {})
-    for (const file of abide) {
-        const parsed = parseAbide(readFileSync(`${root}/${file}`, 'utf8'))
-        // Block by block: one block's last token would decide how the next one's first reads.
-        for (const script of [...parsed.servers, ...parsed.scripts])
-            for (const hook of hooksCalled(script))
-                hooks.push({ hook, route: scopeOf(file), file })
-    }
-    for (const file of handlers)
-        for (const hook of hooksCalled(readFileSync(`${root}/${file}`, 'utf8')))
-            hooks.push({ hook, route: scopeOf(file), file })
+    // A package's component the app imports, mounted nowhere, is the package's own to map.
+    for (const source of layout.sources)
+        if (source.place !== 'dependency')
+            for (const hook of source.hooks)
+                hooks.push({ hook, route: source.scope, file: source.relative })
+    for (const file of layout.handlers)
+        for (const hook of file.hooks)
+            hooks.push({ hook, route: file.scope, file: file.relative })
     return { routes, hooks }
 }
 

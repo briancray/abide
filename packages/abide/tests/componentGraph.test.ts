@@ -2,7 +2,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs' // bun has no sync mkdtemp/symlink/rm of its own
 import { tmpdir } from 'node:os' // bun exposes no temp-directory helper of its own
 import { compileApp } from '#compiler/compileApp.ts'
-import { fileKind, placeOf } from '#shared/routePattern.ts'
+import { placement, placeOf } from '#server/placement.ts'
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'
@@ -58,7 +58,7 @@ test('an app compiled through a symlinked root links its components — 32.17', 
 // `sidebarlayout.abide` is a page at its own name like any other `.abide` in an address directory,
 // and read as a layout it would wrap every page below it.
 //
-// THE REVERT: test `name.endsWith('layout.abide')` in `fileKind`; `/blog/sidebarlayout` is no
+// THE REVERT: test `name.endsWith('layout.abide')` in `placement`; `/blog/sidebarlayout` is no
 // route and `/blog` is wrapped in 1 layout, against 0.
 test('a file whose name only ends with layout.abide is a page — 23.14, 23.21', async () => {
     const { routes } = await compileApp(
@@ -144,14 +144,14 @@ async function compiledTree(
 // `Card.abide` beside a page answers at `/media/Card`, and the same file under `lib/` answers at
 // nothing. Where it sits decides, so no name an author picks can be read as a component's.
 //
-// THE REVERT: have `fileKind` answer `page` for an `index.abide` alone, as it once did for a
+// THE REVERT: have `placement` answer `page` for an `index.abide` alone, as it once did for a
 // `page.abide`; `media/Card.abide` is then no route — 1 route where 2 are due. Or compare
 // `LAUNCHER_PAGE` with the name rather than the path; `media/launcher.abide` reads as a component.
 test('a .abide directly in an address directory is a page, and one under lib is not — 23.21', async () => {
-    expect(fileKind('media/Card.abide')).toBe('page')
-    expect(fileKind('media/lib/Card.abide')).toBe('component')
-    expect(fileKind('launcher.abide')).toBe('component')
-    expect(fileKind('media/launcher.abide')).toBe('page')
+    expect(placement('media/Card.abide').kind).toBe('page')
+    expect(placement('media/lib/Card.abide').kind).toBe('component')
+    expect(placement('launcher.abide').kind).toBe('component')
+    expect(placement('media/launcher.abide').kind).toBe('page')
     const beside = await compiledTree({ 'media/Card.abide': '<p>card</p>' })
     expect(beside.routes).toEqual(['/', '/media/Card'])
     const fenced = await compiledTree({ 'media/lib/Card.abide': '<p>card</p>' })
@@ -265,7 +265,7 @@ test('a hook called in a module that is no .abide nor handler file is a build er
 //
 // THE REVERT: drop the `refuseStrayLauncher` call in `compileApp`; the page's call builds, and
 // its options are filed where the launcher never reads them. Or skip a name after a `.` in
-// `hooksCalled`; the handler file's `server.onLauncher(…)` builds.
+// `hookCalls`; the handler file's `server.onLauncher(…)` builds.
 test('onLauncher called in a page is a build error, and in the root launcher.abide is not — 38.107', async () => {
     const LAUNCHES = `<script server>
 import { onLauncher } from '@abide/abide/server'

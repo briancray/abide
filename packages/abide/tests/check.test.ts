@@ -735,8 +735,8 @@ import { shared as renamed } from '#src/lib/rows.ts'
 }, 60_000)
 
 // A REFUSAL ONLY THE WHOLE APP CAN SEE is a finding too: a handler file whose default no handler
-// declares type-checks, and only the emit refuses it. THE REVERT: skip `emitApp` in `checkApp`; the
-// check reads 0 refusals where 1 is due.
+// declares type-checks, and only the emit refuses it. THE REVERT: skip `emitApp` in `compiled` when
+// checking; the check reads 0 refusals where 1 is due.
 test('a check reports what only building the whole app refuses — 16.73', async () => {
     const stray = appFixture({
         'index.abide': '<p>hello</p>',
@@ -748,9 +748,57 @@ test('a check reports what only building the whole app refuses — 16.73', async
     expect(refused.length).toBe(1)
 }, 60_000)
 
+// 38.33, 34.20 — A REFUSAL OF WHERE A FILE SITS IS A FINDING AT THAT FILE, beside every other the app
+// has: a server block under a `server` directory, and a page that does not parse. THE REVERT: refuse
+// 34.20 at the app's root (`refusals.at(root, …)` in `appLayout`'s `refusePlace`), as the emit once
+// threw it; the finding names the root, not `server/Widget.abide`.
+test('a check reports a 34.20 refusal at its file beside a parse refusal — 38.33, 34.20', async () => {
+    const found = await checkApp(
+        appFixture({
+            'index.abide': '<p>home</p>',
+            'broken/index.abide':
+                '{#component row({ label })}<li>{label}</li>{/component}',
+            'server/Widget.abide': `<script server>
+const answer = 42
+</script>
+
+<p>widget</p>`,
+        }),
+    )
+    const placed = found.filter((diagnosis) =>
+        diagnosis.message.includes('34.20'),
+    )
+    expect(placed.length).toBe(1)
+    expect(placed[0]?.path).toEndWith('/server/Widget.abide')
+    expect(found.some((diagnosis) => diagnosis.message.includes('32.39'))).toBe(
+        true,
+    )
+}, 60_000)
+
+// 38.33 — WHAT ONLY THE WHOLE APP CAN REFUSE IS FOUND BESIDE A FILE THAT DID NOT PARSE: the emit runs
+// over every file that got that far, so one broken page does not hide a handler file the emit refuses.
+// THE REVERT: skip `emitApp` in `compiled` when a refusal was already kept; 16.73 goes unreported, 0
+// findings where 1 is due.
+test('a check reports an emit refusal beside a parse refusal — 38.33, 16.73', async () => {
+    const found = await checkApp(
+        appFixture({
+            'index.abide': '<p>home</p>',
+            'broken/index.abide':
+                '{#component row({ label })}<li>{label}</li>{/component}',
+            'things/answer.ts': 'export default 42\n',
+        }),
+    )
+    expect(
+        found.filter((diagnosis) => diagnosis.message.includes('16.73')).length,
+    ).toBe(1)
+    expect(found.some((diagnosis) => diagnosis.message.includes('32.39'))).toBe(
+        true,
+    )
+}, 60_000)
+
 // 38.33 — A TREE THE BUILD'S WALK REFUSES (23.18) is a finding at the file, beside every type error
-// the rest of the app has. THE REVERT: let `routesDeclaration` call `appFiles(root)` with no refusal
-// sink; the check throws the 23.18 refusal and reports nothing else.
+// the rest of the app has. THE REVERT: hand `appFiles` a throwing `Refusals` in `appLayout`; the
+// check throws the 23.18 refusal and reports nothing else.
 test('a check reports a tree refusal at its file beside the type errors — 38.33, 23.18', async () => {
     const stray = appFixture({
         'index.abide': '<script>\nconst label: string = 5\n</script>\n',
@@ -793,8 +841,8 @@ test('a check reports an export in a .abide at its file beside the type errors �
 
 // 38.33, 34.17 — AND ONE ANOTHER FILE IMPORTS: the import brings the refused component back into the
 // app, and it is still the one finding at its file. THE REVERT: project only the app's own files
-// before `withDependencies`; it re-adds the import, `session.lints` projects it, and the check
-// throws the 34.17 refusal instead of answering.
+// (`layout.own`) in `compiled`; the import is read unprojected, `session.lints` projects it, and the
+// check throws the 34.17 refusal instead of answering.
 test('a check reports an export in an imported .abide at its file — 38.33, 34.17', async () => {
     const imported = appFixture({
         'index.abide':
@@ -835,6 +883,46 @@ test('a check reports every handler file refusal at its own file — 38.33, 16.7
         if (diagnosis.message.includes('16.73'))
             at.push(relative(realpathSync(twice), diagnosis.path))
     expect(at.sort()).toEqual(['media/getOne.ts', 'media/getTwo.ts'])
+}, 60_000)
+
+// 38.33, 16.39 — WHAT THE CHECKER'S READ OF A HANDLER REFUSES is a finding at the handler's file,
+// each one, beside a refusal of another file: two handlers nesting a `Reactive` and a handler file
+// exporting a second name are three findings at three files. THE REVERT: let `declaredExports`
+// throw what it refuses; the check reads 1 finding at the app's root where 3 are due at the files.
+test("a check reports each 16.39 refusal at its file beside another file's — 38.33, 16.39", async () => {
+    const nesting = appFixture({
+        'index.abide': '<p>home</p>',
+        'lib/user.ts': `import { reactive } from '@abide/abide'
+
+export const user = reactive({ name: 'Ada' })
+`,
+        'people/getProfile.ts': `import { GET } from '@abide/abide/server'
+import { user } from '../lib/user.ts'
+
+export default GET(() => ({ user }))
+`,
+        'people/getRows.ts': `import { GET } from '@abide/abide/server'
+import { user } from '../lib/user.ts'
+
+export default GET(() => [{ user }])
+`,
+        'media/getTwo.ts':
+            "import { GET } from '@abide/abide/server'\n\nexport const more = 2\nexport default GET(() => 2)\n",
+    })
+    const at: string[] = []
+    for (const diagnosis of await checkApp(nesting))
+        if (
+            diagnosis.category === 'error' &&
+            /16\.(39|73)/.test(diagnosis.message)
+        )
+            at.push(
+                `${relative(realpathSync(nesting), diagnosis.path)} ${diagnosis.message.includes('16.39') ? '16.39' : '16.73'}`,
+            )
+    expect(at.sort()).toEqual([
+        'media/getTwo.ts 16.73',
+        'people/getProfile.ts 16.39',
+        'people/getRows.ts 16.39',
+    ])
 }, 60_000)
 
 // 38.33, 23.22 — A STRAY IN AN ADDRESS DIRECTORY is reported where it stands, by the same walk the

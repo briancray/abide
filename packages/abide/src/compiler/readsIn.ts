@@ -30,7 +30,6 @@ import {
     type Type,
     TypeFlags,
 } from 'typescript/unstable/async'
-import { fileKind, routeOf } from '#shared/routePattern.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { CheckerAnswer } from './CheckerAnswer.ts'
 import {
@@ -125,8 +124,6 @@ export async function readsIn(
     sourceFile: SourceFile,
     shadowPath: string,
     spans: ShadowSpans,
-    // The file below the app's root, which its route is read off (23.14).
-    routedPath: string,
     file: AbideFile,
 ): Promise<{ answer: CheckerAnswer; warnings: Finding[] }> {
     // A destructuring pattern binds names this does not see, and that is 31.12's case.
@@ -188,7 +185,7 @@ export async function readsIn(
     // Awaited after the round trips below, so a 33.14 refusal would reject with nothing
     // listening and be reported unhandled; `await props` still throws it.
     props.catch(() => {})
-    const params = routeReads(checker, abide, sourceFile, routedPath, reads)
+    const params = routeReads(checker, abide, sourceFile, reads)
     const configs = configReads(
         checker,
         abide,
@@ -693,21 +690,17 @@ const ROUTE_MEMBERS = new Set(['url', 'params', 'name', 'navigating'])
  * READ AS A CALL RATHER THAN THROUGH THE CHECKER'S VALUES RECORD (`local`): the record is keyed by
  * a name, and this read is spelled as a member.
  *
- * 23.9 — AND `route.params` IN A PAGE OR A LAYOUT IS WHAT THAT FILE'S OWN ROUTE PROMISES. The file
- * is the route: `media/[id].abide` only ever renders where `id` matched, so its
- * `route.params` has an `id`, and a layout's has its own segments and whatever a page below adds.
- * Only the checker reads that — the running module reads the one `route` every page shares.
+ * 23.9 — AND `route.params` IS MARKED, for a checked lowering of a page or a layout to type by what
+ * the file's own route promises (`Lowering`): the file is the route, and the running module reads
+ * the one `route` every page shares.
  */
 async function routeReads(
     checker: Checker,
     abide: Abide,
     sourceFile: Node,
-    routedPath: string,
     reads: Read[],
 ): Promise<void> {
     if (abide.route === undefined) return
-    const routed = fileKind(routedPath)
-    const kind = routed === 'page' || routed === 'layout' ? routed : undefined
     const accesses: Node[] = []
     const owners: Node[] = []
     const visit = (node: Node): void => {
@@ -725,7 +718,6 @@ async function routeReads(
     sourceFile.forEachChild(visit)
     if (owners.length === 0) return
     const symbols = await checker.getSymbolAtLocation(owners)
-    const pattern = routeOf(routedPath)
     for (let at = 0; at < accesses.length; at += 1) {
         const symbol = symbols[at]
         if (symbol === undefined) continue
@@ -735,11 +727,8 @@ async function routeReads(
         const read = classifyRead(access)
         if (read === undefined) continue
         read.local = true
-        if (
-            kind !== undefined &&
+        read.routeParams =
             (access as { name?: { text: string } }).name?.text === 'params'
-        )
-            read.routeParams = [pattern, kind]
         reads.push(read)
     }
 }

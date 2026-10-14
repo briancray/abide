@@ -1,23 +1,11 @@
 import { relative } from 'node:path' // bun exposes no path helpers of its own
-import { appFiles } from '#server/appTree.ts'
-import { placeOf } from '#shared/routePattern.ts'
-import {
-    type AppChecker,
-    emitApp,
-    refuseModuleHooks,
-    resolverIn,
-    sourcesUnder,
-    withChecker,
-    withDependencies,
-} from './compileApp.ts'
+import { type Placement, placement } from '#server/placement.ts'
+import { type AppChecker, compiled } from './compileApp.ts'
 import { abideImportsOf } from './componentGraph.ts'
-import { projectShadow } from './projectShadow.ts'
-import {
-    parseSources,
-    type ReadSource,
-    readSources,
-    refusal,
-} from './readSources.ts'
+import { hooksIn } from './hookCalls.ts'
+import { parseAbide, scriptBodies } from './parseAbide.ts'
+import { Refusals } from './Refusals.ts'
+import { parseSources, readSources } from './readSources.ts'
 import type { Diagnosis } from './TypeSession.ts'
 
 /**
@@ -31,81 +19,21 @@ import type { Diagnosis } from './TypeSession.ts'
  * which is right for a build and wrong for a check: a file the parser or the read classifier
  * refuses is reported at its first line, and the rest of the app is checked around it. A refusal
  * only the whole app can see — two handlers at one address — comes from emitting it over the reads
- * already taken, which is asked only once every file has got that far on its own.
+ * of every file that got that far (`compiled`).
  */
 export async function checkApp(
     appRoot: string,
     kept?: AppChecker,
 ): Promise<Diagnosis[]> {
-    const { root, sources } = await sourcesUnder(appRoot)
-    return withChecker(root, kept, async (session) => {
-        const refused: Diagnosis[] = []
-        const own = parseSources(sources, refused)
-        // 23.16-23.18 and 37.13 — what the build's walk would refuse of the tree, at each file it names.
-        // 38.33 — each at its file, and every one rather than the first.
-        const atFile = (relative: string, thrown: unknown): void => {
-            refused.push(refusal(`${root}/${relative}`, thrown))
-        }
-        const { handlers, modules } = appFiles(root, atFile)
-        refuseModuleHooks(root, modules, atFile)
-        const resolve = resolverIn()
-        const { sources: everyParsed, handlers: handlerFiles } =
-            await withDependencies(root, own, handlers, resolve, refused)
-        // 38.33 — A FILE WHOSE PROJECTION IS REFUSED (34.3, 34.17) is a finding at its file, found
-        // here because every later step projects it and would throw the refusal for the whole app.
-        // AFTER THE IMPORTS ARE FOLLOWED, so a refused file another one imports is found too.
-        const parsed: typeof everyParsed = []
-        for (const source of everyParsed)
-            try {
-                projectShadow(source.file)
-                parsed.push(source)
-            } catch (thrown) {
-                refused.push(refusal(source.path, thrown))
-            }
-        const { read, warnings } = await readSources(session, parsed, refused)
-        // THE APP'S OWN FILES ARE REPORTED ON: a dependency's is compiled with them (34.23), and
-        // what is wrong inside a package is the package's to report.
-        const reported: ReadSource[] = []
-        for (const source of read)
-            if (placeOf(relative(root, source.path)) !== 'dependency')
-                reported.push(source)
-        const { diagnoses: found, refused: loweringRefused } =
-            await session.diagnose(reported, root)
-        const { ambient, unkeyed } = await session.lints(root, parsed)
-        // A FILE WHOSE LOWERING REFUSED is `found` already, at its line — emitted too, it throws the
-        // same refusal at the root and takes the rest of the app's findings with it.
-        const emittable: ReadSource[] = []
-        for (const source of read)
-            if (!loweringRefused.has(source.path)) emittable.push(source)
-        if (refused.length === 0 && ambient.length === 0)
-            try {
-                warnings.push(
-                    ...(
-                        await emitApp(
-                            root,
-                            session,
-                            emittable,
-                            resolve,
-                            handlerFiles,
-                            atFile,
-                        )
-                    ).warnings,
-                )
-            } catch (thrown) {
-                refused.push(refusal(root, thrown))
-            }
-        return [...refused, ...ambient, ...unkeyed, ...warnings, ...found]
-    })
+    return (await compiled(appRoot, kept, true)).findings
 }
-
-const FILES_CONFIG = /^\s*onConfig\s*\(/m
 
 /**
  * The findings for one file as an editor holds it, saved or not.
  *
  * 38.11 — ONE FILE AS AN EDITOR HOLDS IT, saved or not: the same findings `checkApp` has for it, for
  * `abide lsp` to publish. The rest of the app is read from disk, as it stands — save a file `held`
- * has, which is one the editor holds too.
+ * has, which is one the editor holds too — and so is what the tree refuses of this one (38.34).
  *
  * 33.4 — THE COMPONENTS IT IMPORTS ARE LOWERED BESIDE IT, quietly, so a tag is held to the props its
  * component declares rather than to a stand-in that takes anything. One level: what a component
@@ -118,14 +46,24 @@ export async function checkSource(
     held: (path: string) => string | undefined = () => undefined,
 ): Promise<Diagnosis[]> {
     const { session, root } = checker
-    const refused: Diagnosis[] = []
-    const [page] = parseSources([{ path, text }], refused)
-    if (page === undefined) return refused
+    const layout = await checker.layout()
+    // 38.33 — WHAT THE TREE REFUSES OF IT, off the layout the checker keeps until a move is heard.
+    const tree: Diagnosis[] = []
+    for (const refused of layout.refused)
+        if (refused.path === path) tree.push(refused)
+    const refusals = new Refusals(root, true)
+    const [page] = parseSources([{ path, text }], refusals)
+    if (page === undefined) return [...tree, ...refusals.found]
+    // 23.19 — WHERE THE APP PLACES IT, so a mounted page's `route.params` is typed by the route its
+    // mount gives it, as `checkApp` types it; a file the layout has not seen is placed at its path.
+    const placed: Pick<Placement, 'kind' | 'route'> =
+        layout.sources.find((source) => source.path === path) ??
+        placement(relative(root, path))
     const imports: { path: string; text: string; quiet: boolean }[] = []
     for (const imported of abideImportsOf(
         path,
         page.file,
-        resolverIn(),
+        layout.resolve,
     ).values())
         try {
             imports.push({
@@ -137,26 +75,52 @@ export async function checkSource(
             // A component that cannot be read takes anything here.
         }
     // 27.13 — AND EVERY FILE FILING `onConfig`, quietly, so a page that only reads `config()` is
-    // typed by defaults it never imported — as `checkApp`'s whole-app program types it. The scan
-    // only names candidates (a statement opening on the call); the checker decides which file.
+    // typed by defaults it never imported — as `checkApp`'s whole-app program types it. The calls
+    // only name candidates; the checker decides which file.
     const lowered = new Set(imports.map((one) => one.path))
-    const { sources } = await checker.sources()
-    for (const other of sources) {
+    for (const other of layout.sources) {
         if (other.path === path || lowered.has(other.path)) continue
-        const text = held(other.path) ?? other.text
-        if (text.includes('onConfig') && FILES_CONFIG.test(text))
-            imports.push({ path: other.path, text, quiet: true })
+        const editing = held(other.path)
+        if (
+            editing === undefined || editing === other.text
+                ? other.hooks.includes('onConfig')
+                : filesConfig(editing)
+        )
+            imports.push({
+                path: other.path,
+                text: editing ?? other.text,
+                quiet: true,
+            })
     }
     // A component that does not parse, or that the checker refuses, is its own file's finding and
     // takes anything here: a quiet source's refusal is reported by nobody.
     const { read, warnings } = await readSources(
         session,
-        [page, ...parseSources(imports, refused)],
-        refused,
+        [page, ...parseSources(imports, refusals)],
+        refusals,
     )
-    if (refused.length > 0) return refused
+    if (refusals.found.length > 0) return [...tree, ...refusals.found]
     const own: Diagnosis[] = []
     for (const warning of warnings) if (warning.path === path) own.push(warning)
-    const { diagnoses } = await session.diagnose(read, root, false)
-    return [...own, ...diagnoses]
+    const [checked, ...beside] = read
+    const { diagnoses } = await session.diagnose(
+        checked === undefined
+            ? beside
+            : [
+                  { ...checked, kind: placed.kind, route: placed.route },
+                  ...beside,
+              ],
+        layout,
+        false,
+    )
+    return [...tree, ...own, ...diagnoses]
+}
+
+/** Whether a `.abide` an editor holds calls `onConfig`, where its text parses. */
+function filesConfig(text: string): boolean {
+    try {
+        return hooksIn(scriptBodies(parseAbide(text))).includes('onConfig')
+    } catch {
+        return false
+    }
 }

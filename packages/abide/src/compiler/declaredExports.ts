@@ -44,6 +44,7 @@ import {
     isReactiveMember,
     valueTypeOf,
 } from './reactiveTypes.ts'
+import type { Refusals } from './Refusals.ts'
 import type { Diagnosis } from './TypeSession.ts'
 
 /**
@@ -57,12 +58,16 @@ import type { Diagnosis } from './TypeSession.ts'
  * export here: it is erased, and has no address to answer at.
  *
  * `projectName` is the tsconfig the project was opened on, which a module outside it is refused by.
+ * 38.33 — WHAT IS REFUSED OF A MODULE IS REFUSED AT ITS FILE, `named[at]` for `paths[at]`, every
+ * export read either way: a module with a refusal is `undefined`, so nothing refuses it twice.
  */
 export async function declaredExports(
     project: Project,
     projectName: string,
     paths: readonly string[],
-): Promise<DeclaredExport[][]> {
+    named: readonly string[],
+    refusals: Refusals,
+): Promise<(DeclaredExport[] | undefined)[]> {
     const checker = project.checker
     // ABIDE'S FILE AS THE CHECKER NAMES IT, not as this module does: it canonicalizes a path to
     // the disk's case rules, so on a case-insensitive disk `/Users/…/Code` comes back
@@ -71,79 +76,93 @@ export async function declaredExports(
         ?.path
     const abide = await abideIn(project)
     return allSettled(
-        paths.map(async (path) => {
+        paths.map(async (path, at) => {
+            const file = named[at] as string
             const sourceFile = await project.program.getSourceFile(path)
-            if (sourceFile === undefined)
-                throw new Error(
-                    `abide: ${path} is not inside the project ${projectName}, so what it exports cannot be read (16.73). Give the app a tsconfig whose include reaches it.`,
+            if (sourceFile === undefined) {
+                refusals.at(
+                    file,
+                    new Error(
+                        `abide: ${path} is not inside the project ${projectName}, so what it exports cannot be read (16.73). Give the app a tsconfig whose include reaches it.`,
+                    ),
                 )
+                return undefined
+            }
             const module = await checker.getSymbolAtLocation(sourceFile)
             if (module === undefined) return []
             const exports = await checker.getExportsOfModule(module)
+            let refused = false
             const found = await allSettled(
                 exports.map(async (exported) => {
-                    const target = await aliasedSymbol(checker, exported)
-                    if ((target.flags & SymbolFlags.Value) === 0)
-                        return undefined
-                    const declared = await declaringMethod(
-                        checker,
-                        target,
-                        methodsPath,
-                    )
-                    const unread: Diagnosis[] = []
-                    for (const value of declared?.unread ?? []) {
-                        const file = value.getSourceFile()
-                        unread.push(
-                            diagnosisAt(
-                                file.fileName === sourceFile.fileName
-                                    ? path
-                                    : file.fileName,
-                                file.text,
-                                value.getStart(),
-                                'warning',
-                                `abide: \`${value.parent.getText()}\` is not a value the build can read, so \`${exported.name}\`'s browser copy is built without it. Write it as a literal, or as a \`const\` whose type is one. RULEBOOK 18.15.`,
-                            ),
-                        )
-                    }
-                    // 19.9 — a handler's args, as its annotation types them.
-                    const handlerType =
-                        declared === undefined
-                            ? undefined
-                            : await checker.getTypeOfSymbol(target)
-                    if (handlerType !== undefined && abide.reactive) {
-                        const at = await nestedReactiveIn(
+                    try {
+                        const target = await aliasedSymbol(checker, exported)
+                        if ((target.flags & SymbolFlags.Value) === 0)
+                            return undefined
+                        const declared = await declaringMethod(
                             checker,
-                            abide.reactive,
-                            await valueOfRpc(checker, handlerType),
-                            '',
-                            { seen: new Set(), depth: 0 },
+                            target,
+                            methodsPath,
                         )
-                        if (at !== undefined)
-                            throw new Error(
-                                `abide: ${path} — \`${exported.name}\` returns a \`Reactive\` at \`${at}\`, which the wire would carry as the function it is rather than the value it holds. Read it there, or return the \`Reactive\` itself to have it adopted (11.12). RULEBOOK 16.39.`,
+                        const unread: Diagnosis[] = []
+                        for (const value of declared?.unread ?? []) {
+                            const file = value.getSourceFile()
+                            unread.push(
+                                diagnosisAt(
+                                    file.fileName === sourceFile.fileName
+                                        ? path
+                                        : file.fileName,
+                                    file.text,
+                                    value.getStart(),
+                                    'warning',
+                                    `abide: \`${value.parent.getText()}\` is not a value the build can read, so \`${exported.name}\`'s browser copy is built without it. Write it as a literal, or as a \`const\` whose type is one. RULEBOOK 18.15.`,
+                                ),
                             )
-                    }
-                    return {
-                        name: exported.name,
-                        method: declared?.method,
-                        ui: declared?.ui ?? true,
-                        cli: declared?.cli ?? true,
-                        mcp: declared?.mcp ?? true,
-                        description: declared?.description,
-                        copy: declared?.copy,
-                        defaults: declared?.defaults,
-                        args:
-                            handlerType === undefined
+                        }
+                        // 19.9 — a handler's args, as its annotation types them.
+                        const handlerType =
+                            declared === undefined
                                 ? undefined
-                                : await argsSchemaOf(
-                                      checker,
-                                      handlerType,
-                                      declared?.defaulted ?? [],
-                                  ),
-                        unread,
+                                : await checker.getTypeOfSymbol(target)
+                        if (handlerType !== undefined && abide.reactive) {
+                            const at = await nestedReactiveIn(
+                                checker,
+                                abide.reactive,
+                                await valueOfRpc(checker, handlerType),
+                                '',
+                                { seen: new Set(), depth: 0 },
+                            )
+                            if (at !== undefined)
+                                throw new Error(
+                                    `abide: ${path} — \`${exported.name}\` returns a \`Reactive\` at \`${at}\`, which the wire would carry as the function it is rather than the value it holds. Read it there, or return the \`Reactive\` itself to have it adopted (11.12). RULEBOOK 16.39.`,
+                                )
+                        }
+                        return {
+                            name: exported.name,
+                            method: declared?.method,
+                            ui: declared?.ui ?? true,
+                            cli: declared?.cli ?? true,
+                            mcp: declared?.mcp ?? true,
+                            description: declared?.description,
+                            copy: declared?.copy,
+                            defaults: declared?.defaults,
+                            args:
+                                handlerType === undefined
+                                    ? undefined
+                                    : await argsSchemaOf(
+                                          checker,
+                                          handlerType,
+                                          declared?.defaulted ?? [],
+                                      ),
+                            unread,
+                        }
+                    } catch (thrown) {
+                        refused = true
+                        refusals.at(file, thrown)
+                        return undefined
                     }
                 }),
             )
+            if (refused) return undefined
             const handlers: DeclaredExport[] = []
             for (const entry of found)
                 if (entry !== undefined) handlers.push(entry)

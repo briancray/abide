@@ -21,17 +21,16 @@ import {
     TypeSession,
 } from '@abide/abide/compiler'
 import { render } from '@abide/abide/server'
-import {
-    resolverIn,
-    withDependencies,
-} from '../../abide/src/compiler/compileApp.ts'
+import { withDependencies } from '../../abide/src/compiler/appLayout.ts'
 import { privateAddress } from '../../abide/src/compiler/handlersUnder.ts'
 import { PRIVATE_EXPORT } from '../../abide/src/compiler/projectShadow.ts'
+import { Refusals } from '../../abide/src/compiler/Refusals.ts'
+import { resolverIn } from '../../abide/src/compiler/resolverIn.ts'
 import { appFiles } from '../../abide/src/server/appTree.ts'
+import { placement, routeOf } from '../../abide/src/server/placement.ts'
 import { inScope } from '../../abide/src/server/requestScope.ts'
 import { browserCookies, COOKIES } from '../../abide/src/shared/cookies.ts'
 import { RPC_SERVER } from '../../abide/src/shared/RPC_SERVER.ts'
-import { routeOf, scopeOf } from '../../abide/src/shared/routePattern.ts'
 import {
     removeTemporaryModules,
     temporaryModule,
@@ -95,6 +94,7 @@ async function appTree(
         })),
         [],
         resolverIn(),
+        new Refusals(APP, false),
     )
     for (const dependency of sources) {
         if (files.some((one) => one.path === dependency.path)) continue
@@ -127,7 +127,7 @@ async function appTree(
             file,
             names,
             false,
-            at < own ? scopeOf(belowRoot) : undefined,
+            at < own ? placement(belowRoot).scope : undefined,
         )
         // A CHILD WITH NOTHING TO HYDRATE STILL NEEDS A MODULE, because its caller imports one.
         // `emitClient` answers '' for a static file — that is what makes a static page ship no
@@ -232,7 +232,8 @@ test('every example renders on the server and mounts on the client', async () =>
                         bound.slice(PRIVATE_EXPORT.length),
                     )
         }
-        for (const belowRoot of appFiles(`${APP}src`, () => {}).handlers) {
+        for (const belowRoot of appFiles(`${APP}src`, new Refusals(APP, true))
+            .handlers) {
             const { default: handler } = await import(`${dir}/src/${belowRoot}`)
             if (typeof handler === 'function' && 'method' in handler)
                 (handler as { address?: string }).address = routeOf(belowRoot)

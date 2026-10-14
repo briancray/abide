@@ -11,10 +11,10 @@ import {
     SignatureKind,
     SymbolFlags,
 } from 'typescript/unstable/async'
-import { appFiles } from '#server/appTree.ts'
-import { fileKind, placeOf, routeOf } from '#shared/routePattern.ts'
+import { placeOf } from '#server/placement.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReadsIn.ts'
+import type { AppLayout, PlacedSource } from './appLayout.ts'
 import { argsDefaultsIn } from './argsDefaultsIn.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import {
@@ -26,7 +26,6 @@ import {
 import type { Finding } from './Finding.ts'
 import { CHECKED_VALUES } from './Lowering.ts'
 import { diagnosisAt, lineOf } from './lineOf.ts'
-import { mountedUnder } from './mountsOf.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { projectShadow } from './projectShadow.ts'
 import { abideIn } from './reactiveTypes.ts'
@@ -65,18 +64,6 @@ export class TypeSession {
      * text's offsets.
      */
     private shadows = new Map<string, { path: string; text: string }>()
-    /**
-     * What `diagnose` last read off one walk of the root: the route table it declared (30.26) and the
-     * modules it read for their `onConfig` (27.13). Kept until `edited` hears anything move, so a
-     * check asked again and again while an editor types walks and reads nothing on disk.
-     */
-    private walked:
-        | {
-              within: string
-              routes: string
-              configModules: Promise<[string, string][]>
-          }
-        | undefined = undefined
     /** The checker's own key for a path: resolved, and case-folded where its host folds case. */
     private keyOf: (path: string) => string
     /**
@@ -358,7 +345,6 @@ export class TypeSession {
      * checker is not told what was under it.
      */
     edited(paths: string[] | undefined): void {
-        this.walked = undefined
         if (paths === undefined) {
             this.everything = true
             return
@@ -447,10 +433,12 @@ export class TypeSession {
     }
 
     /**
-     * 34.25, 23.19 — makes `path`, a dependency's file, a root of the opened config, telling
-     * `changed` the config moved where it was not one already.
+     * 34.25, 23.19 — where `source` is a dependency's file, makes `path` — it, or what it lowers to
+     * — a root of the opened config, telling `changed` the config moved where it was not one
+     * already. The app's own is a root already: telling the config it moved reloads the project.
      */
-    private openOutside(path: string, changed: string[]): void {
+    private openOutside(source: string, path: string, changed: string[]): void {
+        if (placeOf(this.belowRoot(source)) !== 'dependency') return
         if (this.outside.has(path)) return
         this.outside.add(path)
         if (!changed.includes(this.opened)) changed.push(this.opened)
@@ -472,9 +460,7 @@ export class TypeSession {
         const changed: string[] = []
         for (const path of modules) {
             const canonical = this.canonical(path)
-            // The app's own is a root already: telling the config it moved reloads the project.
-            if (placeOf(this.belowRoot(canonical)) === 'dependency')
-                this.openOutside(canonical, changed)
+            this.openOutside(canonical, canonical, changed)
         }
         const project = await this.currentProject([], changed)
         if (project === undefined) return project
@@ -574,7 +560,6 @@ export class TypeSession {
     async readsFor(
         sources: readonly (Pick<ParsedSource, 'path' | 'file'> & {
             text?: string
-            position?: string | undefined
         })[],
     ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
         const answered = await this.classify(sources)
@@ -597,7 +582,6 @@ export class TypeSession {
     private async classify(
         sources: readonly (Pick<ParsedSource, 'path' | 'file'> & {
             text?: string
-            position?: string | undefined
         })[],
     ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
         const warnings: Diagnosis[] = []
@@ -646,8 +630,7 @@ export class TypeSession {
             // AN UNCHANGED SHADOW IS NOT REPORTED, which is what a kept session saves on a save:
             // the one page that moved is re-read rather than all of them.
             this.register(map.shadowPath, projection.text, created, changed)
-            if (placeOf(this.belowRoot(source.path)) === 'dependency')
-                this.openOutside(map.shadowPath, changed)
+            this.openOutside(source.path, map.shadowPath, changed)
             queries.push({
                 map,
                 spans: {
@@ -690,8 +673,6 @@ export class TypeSession {
                     sourceFile,
                     query.map.shadowPath,
                     query.spans,
-                    // 23.19 — a mounted page's route is its position's.
-                    source.position ?? this.belowRoot(source.path),
                     source.file,
                 )
                 answers[at] = read.answer
@@ -812,22 +793,27 @@ export class TypeSession {
      * 38.3 — WHAT THE CHECKER SAYS ABOUT EACH FILE AS IT RUNS, placed on the `.abide` line. Each
      * source is checked as its lowered program (`checkedShadow`), which is registered for the life
      * of the session beside its shadow for the reason a shadow is; and every `.ts` root of the
-     * project under `within` is checked as it stands, where `scripts` asks for them — an editor
+     * project under the app's root is checked as it stands, where `scripts` asks for them — an editor
      * asking about one page does not want the whole app. `sources` carry their text, which is what
      * a position is a line of. A `quiet` source is lowered and not reported on: a component an
      * editor's page imports, which is there for the props the page is held to (33.4).
+     *
+     * `app` is the app the sources are checked in (`appLayout`): its route table, which `url`'s
+     * literal is held to (30.26), and its handler files, which type `Config` (27.13). A source placed
+     * as a page or a layout carries its `kind` and `route`, which its `route.params` is typed by (23.9).
      *
      * `refused` is the path of every source whose checked lowering refused, which `diagnoses` has
      * reported at its line — `abide check` emits the rest of the app without them.
      */
     async diagnose(
-        sources: (Omit<ReadSource, 'quiet' | 'position'> & {
-            quiet?: boolean
-            position?: string | undefined
-        })[],
-        within: string,
+        sources: (Omit<ReadSource, 'quiet'> &
+            Partial<Pick<PlacedSource, 'kind' | 'route'>> & {
+                quiet?: boolean
+            })[],
+        app: Pick<AppLayout, 'root' | 'addresses' | 'handlers'>,
         scripts = true,
     ): Promise<{ diagnoses: Diagnosis[]; refused: Set<string> }> {
+        const within = app.root
         const created: string[] = []
         const changed: string[] = []
         const checked: {
@@ -836,13 +822,24 @@ export class TypeSession {
             refusals: readonly Finding[]
         }[] = []
         for (const source of sources) {
-            const shadow = checkedShadow(source.file, source.answer)
+            const shadow = checkedShadow(
+                source.file,
+                source.answer,
+                (source.kind === 'page' || source.kind === 'layout') &&
+                    source.route !== undefined
+                    ? { route: source.route, kind: source.kind }
+                    : undefined,
+            )
             const map = new ShadowMap(
                 this.canonical(source.path),
                 projectShadow(source.file).origins,
                 shadow.origins,
             )
             this.register(map.checkedPath, shadow.text, created, changed)
+            // 23.19 — a package's page an editor opens is reported on, so its checked module is a
+            // root of the project as its shadow is (`classify`).
+            if (!source.quiet)
+                this.openOutside(source.path, map.checkedPath, changed)
             checked.push({ source, map, refusals: shadow.refusals })
         }
         // 34.6 — WHAT THE BUNDLER RESOLVES AND THE CHECKER CANNOT: a stylesheet imported for its
@@ -854,30 +851,23 @@ export class TypeSession {
             created,
             changed,
         )
-        if (this.walked?.within !== within) {
-            // A refused tree is `checkApp`'s finding (38.33), never the checker's crash.
-            const files = appFiles(within, () => {})
-            this.walked = {
-                within,
-                routes: routesDeclaration(within, files),
-                configModules: configModulesUnder(within, files),
-            }
-        }
         // 27.13 — what a handler file defaults, beside it.
-        for (const [path, text] of await this.walked.configModules) {
-            const shadow = moduleConfigShadow(text)
-            const at = `${this.canonical(path)}${CONFIG_SUFFIX}`
+        for (const handler of app.handlers) {
+            const at = `${this.canonical(handler.path)}${CONFIG_SUFFIX}`
+            const shadow = handler.hooks.includes('onConfig')
+                ? moduleConfigShadow(handler.text)
+                : undefined
             // One that stops filing keeps its place and declares nothing, so the next snapshot is
             // told it moved.
             if (shadow !== undefined || this.shadows.has(this.keyOf(at)))
                 this.register(at, shadow ?? 'export {}\n', created, changed)
         }
-        // 30.26 — THE APP'S ROUTE TABLE, which `url`'s literal is held to: every page under the
-        // root, declared into abide's own `Routes`. A module rather than a script, since only a
+        // 30.26 — THE APP'S ROUTE TABLE, which `url`'s literal is held to: every page the build
+        // routes, declared into abide's own `Routes`. A module rather than a script, since only a
         // module augments one.
         this.register(
             `${this.canonical(within)}/${ROUTES_DECLARATION}`,
-            this.walked.routes,
+            routesDeclaration(app.addresses),
             created,
             changed,
         )
@@ -1056,7 +1046,7 @@ export class TypeSession {
             const named = (node as { name?: Node }).name ?? node
             const file = node.getSourceFile()
             definitions.push(
-                this.placeOf(
+                this.spanInSource(
                     file.fileName,
                     file.text,
                     named.getStart(file),
@@ -1078,7 +1068,7 @@ export class TypeSession {
      * back through both of its maps, and one this session has not lowered — or a span of the
      * scaffolding a lowering adds, which the author never wrote — placed at its top.
      */
-    private placeOf(
+    private spanInSource(
         fileName: string,
         text: string,
         start: number,
@@ -1153,23 +1143,10 @@ function isFile(path: string): boolean {
 const ROUTES_DECLARATION = 'abide-routes.d.ts'
 const URL_SOURCE = Bun.fileURLToPath(new URL('../shared/url', import.meta.url))
 
-/**
- * 30.26 — every page under `root`, and every public file's address, as a key of abide's `Routes`, or
- * nothing where it has neither.
- */
-function routesDeclaration(
-    root: string,
-    { abide, published }: ReturnType<typeof appFiles>,
-): string {
-    const routes = new Set<string>()
-    for (const path of abide)
-        if (fileKind(path) === 'page') routes.add(routeOf(path))
-    // 23.19 — and every page a mount places in the app, at its position.
-    for (const { position } of mountedUnder(root, abide))
-        if (fileKind(position) === 'page') routes.add(routeOf(position))
-    for (const address of published.values()) routes.add(address)
+/** 30.26 — each of `addresses` as a key of abide's `Routes`. */
+function routesDeclaration(addresses: readonly string[]): string {
     let keys = ''
-    for (const route of [...routes].sort())
+    for (const route of addresses)
         keys += `        ${JSON.stringify(route)}: true\n`
     return `export {}\ndeclare module ${JSON.stringify(URL_SOURCE)} {\n    interface Routes {\n${keys}    }\n}\n`
 }
@@ -1327,21 +1304,3 @@ function flatten(diagnostic: {
 
 /** What a module that is no `.abide` is checked beside as, for the `Config` it files (27.13). */
 const CONFIG_SUFFIX = '.config-shadow.ts'
-
-/**
- * Every handler file below `within` that names `onConfig`, with its text — the modules a server
- * runs that 27.13 types `Config` off, since 37.13 refuses a hook anywhere else that is no `.abide`.
- */
-async function configModulesUnder(
-    within: string,
-    { handlers }: ReturnType<typeof appFiles>,
-): Promise<[string, string][]> {
-    const paths: string[] = []
-    for (const name of handlers) paths.push(`${within}/${name}`)
-    const texts = await Promise.all(paths.map((path) => Bun.file(path).text()))
-    const found: [string, string][] = []
-    for (let at = 0; at < paths.length; at += 1)
-        if ((texts[at] as string).includes('onConfig'))
-            found.push([paths[at] as string, texts[at] as string])
-    return found
-}

@@ -2,7 +2,7 @@
 // and may call a hook (37.13): each is typed beside the file (`moduleConfigShadow`), and a page that
 // only reads `config()` is held to what they default.
 //
-// THE REVERT: drop the `configModulesUnder` loop from `TypeSession.diagnose`; nothing declares the
+// THE REVERT: drop the handler-file loop from `TypeSession.diagnose`; nothing declares the
 // two keys, every `config()` member reads the index's `unknown`, and the findings are 5 where 2 are
 // due — the two assignments to a `string`, and three `unknown` assigned to typed bindings beside them.
 

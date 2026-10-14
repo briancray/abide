@@ -1,5 +1,5 @@
 import { STYLE_QUERY } from '#server/MODULE_QUERIES.ts'
-import { fileKind, scopeOf } from '#shared/routePattern.ts'
+import type { Placement } from '#server/placement.ts'
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import { emitClient } from './emitClient.ts'
 import { emitComponent } from './emitComponent.ts'
@@ -18,34 +18,34 @@ import { sourceMapOf } from './sourceMapOf.ts'
  * One `.abide`'s modules, in the mode the build compiles it in: its server module, its client
  * module (`''` where it has none) and its scoped stylesheet.
  *
- * Everything that mode depends on is the path below the app root and whether another file invokes
- * it (`componentGraph`), so a test handing over the same two facts compiles what the build would.
+ * Everything that mode depends on is where the file is placed (`placement`) and whether another
+ * file invokes it (`componentGraph`), so a test handing over the same facts compiles what the build
+ * would.
  */
 export function emitSource(
-    relative: string,
-    file: AbideFile,
-    answer: CheckerAnswer,
-    invoked: boolean,
+    source: Pick<Placement, 'relative' | 'kind' | 'scope'> & {
+        file: AbideFile
+        answer: CheckerAnswer
+        invoked: boolean
+    },
     /**
      * 16.28 — what the browser's module binds in place of the server block: the wrapper of each
      * private handler it declares, under the handler's name (`standInsOf`).
      */
     standIns = '',
     /** 38.97 — the `.abide`'s text, where the build wants each module's source map. */
-    source?: string,
-    /** 23.19 — the path it answers by, where a mount gives it one other than `relative`. */
-    position = relative,
+    text?: string,
 ): {
     server: string
     client: string
-    /** 38.97 — each module's `mappings` into the `.abide`, where `source` was given. */
+    /** 38.97 — each module's `mappings` into the `.abide`, where `text` was given. */
     serverMappings: string | undefined
     clientMappings: string | undefined
     sheet: string | undefined
     /** 39.8 — whether a `<style>` names a view transition, read here rather than at run time. */
     transitions: boolean
 } {
-    const kind = fileKind(position)
+    const { relative, kind, file, answer, invoked } = source
     // 34.4 — A COMPONENT WITH STYLES: its elements carry its token, and the styles, scoped,
     // are a stylesheet its client module imports — which the bundle collects into the
     // stylesheet the document links (38.23).
@@ -87,9 +87,9 @@ export function emitSource(
     // has no `.client.ts`, so a file shipping no runtime is a fact about the build rather than a
     // claim about the bundler.
     const serverChunks: LoweredChunk[] | undefined =
-        source === undefined ? undefined : []
+        text === undefined ? undefined : []
     const clientChunks: LoweredChunk[] | undefined =
-        source === undefined ? undefined : []
+        text === undefined ? undefined : []
     const client = emitClient(
         file,
         answer,
@@ -107,7 +107,7 @@ export function emitSource(
         file,
         answer,
         kind !== 'component',
-        scopeOf(position),
+        source.scope,
         serverChunks,
     )
     const name = relative.slice(relative.lastIndexOf('/') + 1)
@@ -118,24 +118,24 @@ export function emitSource(
         standIns,
     )
     let mapped: Mapped | undefined
-    if (source !== undefined) {
+    if (text !== undefined) {
         mapped = MAPPED.get(relative)
         if (
             mapped === undefined ||
-            mapped.source !== source ||
+            mapped.source !== text ||
             mapped.server !== server ||
             mapped.client !== browser
         ) {
             const projected = projectShadow(file).origins
             mapped = {
-                source,
+                source: text,
                 server,
                 client: browser,
                 serverMappings: sourceMapOf(
                     server,
                     serverChunks ?? [],
                     projected,
-                    source,
+                    text,
                 ),
                 clientMappings:
                     browser === ''
@@ -144,7 +144,7 @@ export function emitSource(
                               browser,
                               clientChunks ?? [],
                               projected,
-                              source,
+                              text,
                           ),
             }
             MAPPED.set(relative, mapped)

@@ -5,23 +5,23 @@
 // So listing a directory lists its routes.
 //
 // ONE WALK for the sources, the handler files, the server and lib modules, and the public files
-// `abide build` copies and `abide dev` answers, and the refusals (23.16, 23.17, 23.18, 23.22) — and
-// ONE SKIP RULE, `skipped`, for every walk of the tree, beside `placeOf`, which answers the same
-// question of one path.
+// `abide build` copies and `abide dev` answers, and the refusals (23.16, 23.17, 23.18, 23.22) — each
+// file what `placeOf` says of its path, so the walk and every reader of one path agree, and ONE SKIP
+// RULE, `skipped`, for every walk of the tree.
 //
 // A WALK RATHER THAN A GLOB: a glob descends `node_modules` and the build output before a filter
 // can drop them.
 
 import { type Dirent, existsSync, readdirSync } from 'node:fs' // bun has no directory listing or sync existence check of its own
+import type { Refusals } from '#compiler/Refusals.ts'
 import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
 import {
     HOLDS_SERVER,
-    LIB_DIRECTORY,
     PUBLIC_DIRECTORY,
     RESERVED_DIRECTORIES,
     SERVER_DIRECTORY,
 } from '#shared/RESERVED_DIRECTORIES.ts'
-import { DIRECTORY_FILES, routeOf, skipped } from '#shared/routePattern.ts'
+import { DIRECTORY_FILES, placeOf, routeOf, skipped } from './placement.ts'
 
 /** What one walk of the app finds, every path relative to the root. */
 type AppFiles = {
@@ -35,23 +35,13 @@ type AppFiles = {
     published: Map<string, string>
 }
 
-/** Told of each thing the tree refuses, at the path relative to the root. */
-type Refuse = (path: string, message: string) => void
-
-const THROW: Refuse = (_path, message) => {
-    throw new Error(message)
-}
-
 /**
  * The app's `.abide` sources, handler files, server and lib modules and public files, refusing a
- * tree 23.16, 23.17, 23.18 or 23.22 forbids.
- *
- * `refuse` throws by default, which is the build's answer; `abide check` collects instead (38.33),
- * and the checker's route table ignores them, since a refused tree is the build's to report.
+ * tree 23.16, 23.17, 23.18 or 23.22 forbids into `refusals`, each at its path below the root.
  *
  * A missing root is an app with nothing in it, not a fault.
  */
-export function appFiles(root: string, refuse: Refuse = THROW): AppFiles {
+export function appFiles(root: string, refusals: Refusals): AppFiles {
     const files: AppFiles = {
         abide: [],
         handlers: [],
@@ -61,7 +51,7 @@ export function appFiles(root: string, refuse: Refuse = THROW): AppFiles {
     // 23.22, 38.25 — a root that is its package's directory holds the package's own files beside its
     // pages.
     const packaged = existsSync(`${root}/package.json`)
-    walk(root, '', undefined, files, refuse, packaged)
+    walk(root, '', undefined, files, refusals, packaged)
     files.abide.sort()
     files.handlers.sort()
     files.modules.sort()
@@ -69,13 +59,14 @@ export function appFiles(root: string, refuse: Refuse = THROW): AppFiles {
 }
 
 // `reserved` is the nearest reserved directory above `relative` — its path and its name — or
-// `undefined` where none is.
+// `undefined` where none is: what 23.16 refuses is the nesting of two, which is a directory's shape
+// rather than a file's place.
 function walk(
     directory: string,
     relative: string,
     reserved: { path: string; name: string } | undefined,
     files: AppFiles,
-    refuse: Refuse,
+    refusals: Refusals,
     packaged = false,
 ): void {
     let entries: Dirent[]
@@ -99,9 +90,11 @@ function walk(
                         HOLDS_SERVER.has(reserved.name)
                     )
                 )
-                    refuse(
+                    refusals.at(
                         path,
-                        `abide: ${path} is a ${entry.name} directory under the ${reserved.name} directory ${reserved.path}. RULEBOOK 23.16.`,
+                        new Error(
+                            `abide: ${path} is a ${entry.name} directory under the ${reserved.name} directory ${reserved.path}. RULEBOOK 23.16.`,
+                        ),
                     )
                 within = { path, name: entry.name }
             }
@@ -110,37 +103,43 @@ function walk(
                 `${path}/`,
                 within,
                 files,
-                refuse,
+                refusals,
             )
             continue
         }
         const abide = path.endsWith('.abide')
         if (abide) files.abide.push(path)
-        if (reserved === undefined) {
+        const place = placeOf(path)
+        if (place === 'address') {
             if (!abide && !isModule(path)) {
                 if (packaged && relative === '' && !path.endsWith('.ts'))
                     continue
-                refuse(
+                refusals.at(
                     path,
-                    `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages and handler files alone. Move it into a lib directory beside it. RULEBOOK 23.22.`,
+                    new Error(
+                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages and handler files alone. Move it into a lib directory beside it. RULEBOOK 23.22.`,
+                    ),
                 )
                 continue
             }
             if (!abide) files.handlers.push(path)
             // 23.17 — anything that could answer here would answer in abide's own namespace.
-            refuseFrameworkRoute(routeOf(path), path, refuse)
-        } else if (DIRECTORY_FILES.has(entry.name))
-            refuse(
+            const framework = frameworkRouteRefusal(routeOf(path), path)
+            if (framework !== undefined) refusals.at(path, framework)
+            continue
+        }
+        // Any other place is a fence's, and the walk passed through it.
+        const fence = reserved as { path: string; name: string }
+        if (DIRECTORY_FILES.has(entry.name))
+            refusals.at(
                 path,
-                `abide: ${path} is under the ${reserved.name} directory ${reserved.path}, where nothing has an address, and ${entry.name} is a route's name. RULEBOOK 23.18.`,
+                new Error(
+                    `abide: ${path} is under the ${fence.name} directory ${fence.path}, where nothing has an address, and ${entry.name} is a route's name. RULEBOOK 23.18.`,
+                ),
             )
-        else if (reserved.name === PUBLIC_DIRECTORY)
-            files.published.set(path, publicAddress(path, reserved.path))
-        else if (
-            (reserved.name === SERVER_DIRECTORY ||
-                reserved.name === LIB_DIRECTORY) &&
-            isModule(path)
-        )
+        else if (place === 'public')
+            files.published.set(path, publicAddress(path, fence.path))
+        else if ((place === 'server' || place === 'lib') && isModule(path))
             files.modules.push(path)
     }
 }
@@ -157,17 +156,16 @@ function isModule(path: string): boolean {
     )
 }
 
-/** Refuses `source` where `route` lies in the framework's own namespace. 23.17. */
-export function refuseFrameworkRoute(
+/** The refusal of `source` where `route` lies in the framework's own namespace, or `undefined`. 23.17. */
+export function frameworkRouteRefusal(
     route: string,
     source: string,
-    refuse: Refuse = THROW,
-): void {
-    if (route === ABIDE_ADDRESS || route.startsWith(`${ABIDE_ADDRESS}/`))
-        refuse(
-            source,
-            `abide: ${source} answers at ${route}, which is under ${ABIDE_ADDRESS}, where abide's own addresses are. RULEBOOK 23.17.`,
-        )
+): Error | undefined {
+    return route === ABIDE_ADDRESS || route.startsWith(`${ABIDE_ADDRESS}/`)
+        ? new Error(
+              `abide: ${source} answers at ${route}, which is under ${ABIDE_ADDRESS}, where abide's own addresses are. RULEBOOK 23.17.`,
+          )
+        : undefined
 }
 
 // 36.11 — the directories above `public`, then the file's own path below it.
@@ -192,34 +190,19 @@ export function publishedUnder(
 }
 
 /**
- * Every `.abide` under `root`, relative to it, in path order — the app's own, and none a
- * dependency ships.
- *
- * Refuses nothing: the language server lists them on every check, and a tree 23.16 forbids is the
- * build's to refuse (`appFiles`).
- */
-export function abideUnder(root: string): string[] {
-    const found: string[] = []
-    for (const path of abideFilesUnder(root, '')) found.push(path)
-    return found.sort()
-}
-
-/**
  * Whether an app lies under `root`: a `.abide` anywhere or a handler file, stopping at the first.
  *
  * 38.26's question, asked of a root before anything is built from it, so asking it of a large tree
  * is as cheap as the tree allows.
  */
 export function holdsApp(root: string): boolean {
-    return !abideFilesUnder(root, '', true).next().done
+    return !appSourcesUnder(root, '').next().done
 }
 
-// Every `.abide` under `directory` — and, where `handlers`, every handler file outside a fence.
-function* abideFilesUnder(
+// Every `.abide` under `directory`, and every handler file — a module whose place is an address.
+function* appSourcesUnder(
     directory: string,
     relative: string,
-    handlers = false,
-    fenced = false,
 ): Generator<string> {
     let entries: Dirent[]
     try {
@@ -231,15 +214,10 @@ function* abideFilesUnder(
         if (skipped(entry.name)) continue
         const path = `${relative}${entry.name}`
         if (entry.isDirectory())
-            yield* abideFilesUnder(
-                `${directory}/${entry.name}`,
-                `${path}/`,
-                handlers,
-                fenced || RESERVED_DIRECTORIES.has(entry.name),
-            )
+            yield* appSourcesUnder(`${directory}/${entry.name}`, `${path}/`)
         else if (
             path.endsWith('.abide') ||
-            (handlers && !fenced && isModule(path))
+            (isModule(path) && placeOf(path) === 'address')
         )
             yield path
     }

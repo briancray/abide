@@ -1,12 +1,14 @@
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Finding } from './Finding.ts'
+import { hookCalls } from './hookCalls.ts'
 import {
     CHECKED_CONFIG,
     CHECKED_CONFIG_OF,
     CHECKED_VALUES,
     CHECKED_WRITE,
     Lowering,
+    type Routed,
 } from './Lowering.ts'
 import { holdsReactive } from './PositionTable.ts'
 import type { AbideFile } from './parseAbide.ts'
@@ -64,8 +66,10 @@ export const COMPONENT_MODULE = componentModule('any')
 export function checkedShadow(
     file: AbideFile,
     answer: CheckerAnswer,
+    /** 23.9 — a page's or a layout's route, which its `route.params` is typed by. */
+    routed?: Routed,
 ): CheckedShadow {
-    const lowering = new Lowering(file, answer, true)
+    const lowering = new Lowering(file, answer, true, undefined, routed)
     const projection = lowering.projection
     // Every span the emitters lower, with whether it holds the `Reactive` rather than reading it.
     const units: { span: Span; holds: boolean }[] = [
@@ -165,13 +169,10 @@ ${aliases}declare module '${SERVER_SPECIFIER}' {
 `
 }
 
-// A call standing as a statement at a module's top level, as a formatted module writes one.
-const TOP_LEVEL_CONFIG = /^onConfig\s*\(/gm
-
 /**
  * 27.13 FOR A HANDLER FILE, the one module that is no `.abide` and may call a hook (37.13): its
- * text with each `onConfig(…)` at its top level bound as the lowering binds a server block's, and
- * `Config` extended by each, or `undefined` where it files none.
+ * text with each `onConfig(…)` standing as a statement at its top level bound as the lowering binds
+ * a server block's, and `Config` extended by each, or `undefined` where it files none.
  *
  * A MODULE OF ITS OWN BESIDE THE FILE, which the checker reads and nothing reports on: the file's own
  * text is the one its diagnostics are placed in, and binding a call shifts every column after it.
@@ -180,11 +181,12 @@ export function moduleConfigShadow(text: string): string | undefined {
     const bound: string[] = []
     let out = ''
     let from = 0
-    for (const found of text.matchAll(TOP_LEVEL_CONFIG)) {
+    for (const call of hookCalls(text)) {
+        if (call.hook !== 'onConfig' || !call.topLevel) continue
         const name = `${CHECKED_CONFIG}${bound.length}`
         bound.push(name)
-        out += `${text.slice(from, found.index)}const ${name} = ${CHECKED_CONFIG_OF}(onConfig)(`
-        from = found.index + found[0].length
+        out += `${text.slice(from, call.at)}const ${name} = ${CHECKED_CONFIG_OF}(${text.slice(call.at, call.end)})`
+        from = call.end
     }
     if (bound.length === 0) return undefined
     return `${out}${text.slice(from)}\n${configInterface(bound)}`

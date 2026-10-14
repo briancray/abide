@@ -6,15 +6,16 @@
 //
 // A FILE KEEPS ITS PATH AND GAINS A POSITION. It is compiled, served and keyed by where it lies, as
 // any dependency's is (34.23); its POSITION — the path it would have below the root — is what
-// `placeOf`, `fileKind` and `routeOf` read, so a mounted page is a page by the same test as the app's.
+// `placement` reads, so a mounted page is a page by the same test as the app's.
 
-import { readFileSync, realpathSync, statSync } from 'node:fs' // bun exposes no sync read, stat or realpath of its own
+import { realpathSync, statSync } from 'node:fs' // bun exposes no sync stat or realpath of its own
 import { dirname, relative, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { appFiles } from '#server/appTree.ts'
-import { placeOf } from '#shared/routePattern.ts'
+import { placeOf } from '#server/placement.ts'
 import { nearest } from './nearest.ts'
-import { type AbideFile, parseAbide, scriptBodies } from './parseAbide.ts'
-import { attributedImports, IMPORT_ATTRIBUTES } from './splitImports.ts'
+import { type AbideFile, scriptBodies } from './parseAbide.ts'
+import { Refusals } from './Refusals.ts'
+import { attributedImports } from './splitImports.ts'
 
 /** A `.abide` on disk, and the position it takes in the app. */
 type Placed = { path: string; position: string }
@@ -33,8 +34,8 @@ type DirectoryMount = {
 }
 
 /**
- * Every directory the file at `path` mounts, its position in the app being `position` — or the
- * refusal naming what one of them cannot be.
+ * Every directory the file at `path` mounts, its position in the app being `position` — or none,
+ * where one of them cannot be mounted and `refusals` is told what.
  *
  * `root` is the app's, real: a directory under it is the app's own already, with a position of its
  * own, and mounting it would give its files a second (23.20).
@@ -44,7 +45,8 @@ export function mountsOf(
     path: string,
     position: string,
     file: AbideFile,
-): DirectoryMount[] | string {
+    refusals: Refusals,
+): DirectoryMount[] {
     const mounts: DirectoryMount[] = []
     const at = position.includes('/')
         ? `${position.slice(0, position.lastIndexOf('/'))}/`
@@ -52,12 +54,27 @@ export function mountsOf(
     for (const script of scriptBodies(file))
         for (const { specifier } of attributedImports(script, 'routes')) {
             const directory = mountedDirectory(specifier, dirname(path))
-            if (directory === undefined)
-                return `abide: ${position} mounts ${specifier}, and no directory answers to it. RULEBOOK 23.19.`
-            if (ownDirectory(root, directory))
-                return `abide: ${position} mounts ${specifier}, which is the app's own directory already. RULEBOOK 23.20.`
+            // A file that mounts what it may not mounts nothing.
+            if (directory === undefined) {
+                refusals.at(
+                    path,
+                    new Error(
+                        `abide: ${position} mounts ${specifier}, and no directory answers to it. RULEBOOK 23.19.`,
+                    ),
+                )
+                return []
+            }
+            if (ownDirectory(root, directory)) {
+                refusals.at(
+                    path,
+                    new Error(
+                        `abide: ${position} mounts ${specifier}, which is the app's own directory already. RULEBOOK 23.20.`,
+                    ),
+                )
+                return []
+            }
             // The package's tree is the package's to refuse; a mount places what it finds.
-            const found = appFiles(directory, () => {})
+            const found = appFiles(directory, new Refusals(directory, true))
             const placed = (below: string): Placed => ({
                 path: `${directory}/${below}`,
                 position: `${at}${below}`,
@@ -73,51 +90,11 @@ export function mountsOf(
     return mounts
 }
 
-/**
- * Every file mounted under the app at `root` whose own `.abide` are `relatives`, and every one those
- * mount in turn, at its position — read for nothing but its mounts, and refusing nothing: the
- * build is what refuses a mount (`withDependencies`).
- *
- * THE CHECKER'S `Routes` (30.26) asks this on every check, so a file is parsed only where its text
- * names a mount at all.
- */
-export function mountedUnder(
-    root: string,
-    relatives: readonly string[],
-): Placed[] {
-    const queue: Placed[] = []
-    for (const relative of relatives)
-        queue.push({ path: `${root}/${relative}`, position: relative })
-    const found: Placed[] = []
-    const seen = new Set<string>()
-    for (let at = 0; at < queue.length; at += 1) {
-        const { path, position } = queue[at] as Placed
-        const text = readFileSync(path, 'utf8')
-        if (!IMPORT_ATTRIBUTES.routes.test(text)) continue
-        let file: AbideFile
-        try {
-            file = parseAbide(text)
-        } catch {
-            continue
-        }
-        const mounts = mountsOf(root, path, position, file)
-        if (typeof mounts === 'string') continue
-        for (const mount of mounts)
-            for (const placed of mount.files) {
-                if (seen.has(placed.path)) continue
-                seen.add(placed.path)
-                found.push(placed)
-                queue.push(placed)
-            }
-    }
-    return found
-}
-
 // Under the root and not a dependency's there: one of the app's own, with positions of its own.
 function ownDirectory(root: string, directory: string): boolean {
     if (directory === root) return true
     const below = relative(root, directory)
-    return !below.startsWith('..') && placeOf(`${below}/-`) !== 'dependency'
+    return !below.startsWith('..') && placeOf(`${below}/`) !== 'dependency'
 }
 
 /**

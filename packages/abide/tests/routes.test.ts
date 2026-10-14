@@ -20,7 +20,7 @@ const { params } = props<{ params: { id: string } }>()
 
 <main>{params.id}</main>`,
         // 37.1 — a hook a handler file calls is filed at that handler's own route, a member call
-        // of abide's as much as a bare one. THE REVERT: skip a name after a `.` in `hooksCalled`;
+        // of abide's as much as a bare one. THE REVERT: skip a name after a `.` in `hookCalls`;
         // the middleware leaves the map.
         'media/getGrid.ts': `import * as server from '@abide/abide/server'
 

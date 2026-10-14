@@ -1,5 +1,6 @@
 import { relative, resolve } from 'node:path' // bun exposes no path helpers of its own
-import { COMPONENT_NAMESPACE, type Compilation } from './abideModules.ts'
+import type { Compilation } from './abideModules.ts'
+import { COMPONENT_NAMESPACE } from './faceOf.ts'
 import { COMPONENT_QUERY } from './MODULE_QUERIES.ts'
 import {
     decodeMappings,

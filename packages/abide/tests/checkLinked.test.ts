@@ -170,9 +170,9 @@ onConfig(() => ({ RETRIES: 3 }))
 
 // 38.11 — THE SCAN FOR FILES FILING `onConfig` IS KEPT ON THE CHECKER until its watcher hears a move,
 // so a check asked on every keystroke reads nothing on disk again. Asserted on the WORK: a file
-// written with no move heard is not seen, and seen once `saw` is told. THE REVERT: read
-// `sourcesUnder` in `checkSource` again, as it did; the second check finds the new file, 1 finding
-// where 2 are due.
+// written with no move heard is not seen, and seen once `saw` is told. THE REVERT: lay the app out
+// afresh in `checkSource` (`appLayout(root)` for `checker.layout()`); the second check finds the new
+// file, 1 finding where 2 are due.
 test('a kept checker re-reads the app only once a move is heard — 38.11', async () => {
     const app = appFixture({ 'index.abide': READER })
     const checker = await openChecker(app)
@@ -202,15 +202,17 @@ onConfig(() => ({ RETRIES: 3 }))
 
 // 30.26 — THE ROUTE TABLE `url` IS HELD TO IS KEPT ON THE CHECKER until its watcher hears a move, so
 // a check asked on every keystroke walks and reads nothing on disk again. Asserted on the WORK: a
-// page written with no move heard is not seen, and seen once `saw` is told. THE REVERT: declare
-// `routesDeclaration` off a fresh walk in `diagnose`; the second check sees the new page, 0 findings
-// where 1 is due.
+// page written with no move heard is not seen, and seen once `saw` is told. THE REVERT: lay the app
+// out afresh in `checkSource` (`appLayout(root)` for `checker.layout()`); the second check sees the
+// new page, 0 findings where 1 is due.
 test('a kept checker re-walks the route table only once a move is heard — 30.26', async () => {
     const LINKER = `<script>
 import { url } from '@abide/abide'
 
 const later = url('/later')
-</script>`
+</script>
+
+<a href={later}>later</a>`
     const app = appFixture({ 'index.abide': LINKER })
     const checker = await openChecker(app)
     const codes = async (): Promise<number[]> =>
@@ -225,6 +227,40 @@ const later = url('/later')
         checker.saw(later)
         expect(checker.current()).toBe(true)
         expect(await codes()).toEqual([])
+    } finally {
+        await checker.close()
+    }
+}, 60_000)
+
+// 38.34, 34.20 — WHAT THE TREE REFUSES OF AN OPEN FILE is published for it, as `abide check` reports
+// it (38.33), off the layout the checker keeps — so it goes once the file is saved without what was
+// refused and the move is heard. THE REVERT: leave `layout.refused` out of `checkSource`; the open
+// file reads 0 refusals where 1 is due.
+test('a tree refusal is a finding for the file it names, until a save clears it — 38.34, 34.20', async () => {
+    const WIDGET = `<script server>
+const answer = 42
+</script>
+
+<p>widget</p>`
+    const app = appFixture({
+        'index.abide': '<p>home</p>',
+        'server/Widget.abide': WIDGET,
+    })
+    const checker = await openChecker(app)
+    const widget = `${app}/server/Widget.abide`
+    const refused = async (path: string, text: string): Promise<string[]> => {
+        const said: string[] = []
+        for (const diagnosis of await checkSource(checker, path, text))
+            if (diagnosis.message.includes('34.20')) said.push(diagnosis.path)
+        return said
+    }
+    try {
+        expect(await refused(widget, WIDGET)).toEqual([widget])
+        expect(await refused(`${app}/index.abide`, '<p>home</p>')).toEqual([])
+        await Bun.write(widget, '<p>widget</p>')
+        checker.saw(widget)
+        expect(checker.current()).toBe(true)
+        expect(await refused(widget, '<p>widget</p>')).toEqual([])
     } finally {
         await checker.close()
     }

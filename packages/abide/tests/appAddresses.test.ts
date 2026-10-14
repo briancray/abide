@@ -217,7 +217,7 @@ test('export * is refused from a server block and from a handler file — 34.17,
 
 // 34.20, 34.17 — a server block under a `server` or `public` directory has no route to be filed at,
 // and a server block exports nothing, `default` included.
-// THE REVERTS: drop the throw in `appGraph`; skip `export` in `projectShadow`'s `refuseExport`.
+// THE REVERTS: drop the 34.20 refusal in `appLayout`'s `refusePlace`; skip `export` in `projectShadow`'s `refuseExport`.
 test('a server block under a server directory, and one exporting default, are refused — 34.20, 34.17', async () => {
     const outside = await refusal(
         compileApp(
@@ -243,8 +243,8 @@ test('a server block under a server directory, and one exporting default, are re
 
 // 23.16, 23.17, 23.18, 23.22 — what the tree may not hold: a fence under another, a route in abide's
 // own namespace, a page where nothing has an address, and a file directly in an address directory
-// that is neither a `.abide` nor a handler file. THE REVERTS: drop each throw in `appFiles`'s `walk`
-// (or `refuseFrameworkRoute`); its build succeeds.
+// that is neither a `.abide` nor a handler file. THE REVERTS: drop each `refusals.at` in `appFiles`'s
+// `walk` (or `frameworkRouteRefusal`'s refusal); its build succeeds.
 test('a fence under another, a page under one, an __abide route and a stray file are refused — 23.16, 23.17, 23.18, 23.22', async () => {
     const nested = await refusal(
         compileApp(

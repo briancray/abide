@@ -2,7 +2,7 @@
 // { type: 'routes' }` in the app's `tools/layout.abide` puts the package's pages, layouts and handler
 // files below `/tools`: the app decides the address, and moving the line moves the package.
 //
-// THE REVERT: in `appGraph`, read `relative` where it reads `position`; the package's pages are
+// THE REVERT: in `appLayout`, place a source at `relative` where it reads `position`; the package's pages are
 // components again, `/tools` and `/tools/users/[id]` leave the route table, and the served page is a
 // 404.
 
@@ -178,4 +178,37 @@ import { SECRET } from './server/secret.ts'
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain('tools/server/secret.ts')
     expect(built.stderr).toContain('RULEBOOK 16.29')
+}, 30_000)
+
+// 16.74, 23.19 — A MOUNTED PAGE IMPORTING ITS OWN HANDLER FILE IS HANDED THE WRAPPER, as an app's own
+// page is: the handler file is the app's at its mount, wherever the package lies, so the browser's
+// bundle holds the call over the wire and never the file. THE REVERT: pass over an importer under
+// `node_modules` in `abideModules`' handler hook, as it once did; the browser's bundle takes the
+// handler file raw, abide's server barrel with it, and the build exits 1 where 0 is due.
+test("a mounted page's import of its own handler file is the browser's wrapper — 16.74, 23.19", async () => {
+    const app = appFixture({
+        ...APP,
+        ...KIT,
+        'node_modules/admin-kit/admin/users/list.ts': `import { GET } from '@abide/abide/server'
+
+export default GET(() => ['handler-body-marker'])
+`,
+        'node_modules/admin-kit/admin/index.abide': `<script>
+import list from './users/list.ts'
+
+const names = list()
+</script>
+
+<p>{names}</p>`,
+    })
+    const built = await buildApp(app)
+    expect(built.stderr).not.toContain('RULEBOOK')
+    expect(built.exitCode, built.stderr).toBe(0)
+    let bundle = ''
+    for (const chunk of new Bun.Glob('**/*.js').scanSync({
+        cwd: `${app}/.abide/client`,
+    }))
+        bundle += await Bun.file(`${app}/.abide/client/${chunk}`).text()
+    expect(bundle).toContain('tools/users/list')
+    expect(bundle.split('handler-body-marker').length - 1).toBe(0)
 }, 30_000)

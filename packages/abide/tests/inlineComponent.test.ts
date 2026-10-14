@@ -224,7 +224,7 @@ test('a hover inside an inline component is answered — 38.39', async () => {
     const { answers } = await session.readsFor([{ path, text: page, file }])
     const { diagnoses } = await session.diagnose(
         [{ path, text: page, file, answer: answers[0] ?? UNCHECKED }],
-        TYPED_ROOT,
+        { root: TYPED_ROOT, addresses: [], handlers: [] },
         false,
     )
     expect(diagnoses).toEqual([])

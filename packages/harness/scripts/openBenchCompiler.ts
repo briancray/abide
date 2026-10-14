@@ -40,7 +40,12 @@ export async function openBenchCompiler(): Promise<{
                 `${REPO}packages/abide/tests/fixtures/typed/src/${name}.abide`,
                 file,
             )
-            const module = emitComponent(file, reads)
+            // A component import is emitted as the file's `?component` face, which only abide's
+            // module loader resolves; here the sibling is the emitted module written `beside`.
+            const module = emitComponent(file, reads).replace(
+                /\.abide\?component'/g,
+                ".ts'",
+            )
             const dir = mkdtempSync(`${REPO}.test-modules/bench-`)
             made.push(dir)
             for (const [at, text] of Object.entries(beside))

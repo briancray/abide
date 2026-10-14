@@ -9,6 +9,7 @@
 import { afterAll, afterEach, expect, test } from 'bun:test'
 import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
+import { routeOf } from '#server/placement.ts'
 import { composePage, renderDocument } from '#server/render.ts'
 import { flushSync, navigate, route } from '#shared'
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
@@ -22,7 +23,6 @@ import {
 import {
     compareRoutes,
     parseRoutePattern,
-    routeOf,
     type Segment,
 } from '#shared/routePattern.ts'
 import { applyHead } from '#ui/applyHead.ts'

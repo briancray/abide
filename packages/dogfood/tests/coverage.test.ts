@@ -93,7 +93,7 @@ async function registryRows(): Promise<RegistryRow[]> {
 const RESTATED = new Set([
     '`onConfig`',
     '`onHealth`',
-    '`abide openapi [--out <file>] [--url <origin>]`',
+    '`abide openapi [--url <origin>]`',
     '`abide mcp [--url <origin>]`',
     // The reactive primitives carry `Produced` as one of the four type parameters, and `Rpc`
     // carries it again as what a handler yields. One name, one meaning, written where each is read.

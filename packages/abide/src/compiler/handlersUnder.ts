@@ -10,18 +10,14 @@
 // that is not a handler a refusal here rather than an address that silently never answers.
 
 import type { Mount } from '#server/answerRpc.ts'
-import { refuseFrameworkRoute } from '#server/appTree.ts'
+import { frameworkRouteRefusal } from '#server/appTree.ts'
 import { surfaceName } from '#server/surfaceOf.ts'
 import { PRIVATE_HANDLERS_ADDRESS } from '#shared/ADDRESSES.ts'
-import {
-    parseRoutePattern,
-    placeOf,
-    routeOf,
-    scopeOf,
-} from '#shared/routePattern.ts'
+import { parseRoutePattern } from '#shared/routePattern.ts'
+import type { PlacedHandler, PlacedSource } from './appLayout.ts'
 import { declaredExports } from './declaredExports.ts'
-import type { AbideFile } from './parseAbide.ts'
 import { PRIVATE_EXPORT } from './projectShadow.ts'
+import type { Refusals } from './Refusals.ts'
 import type { Diagnosis, TypeSession } from './TypeSession.ts'
 
 /** A handler file, by its path and its path below the app's root. */
@@ -32,19 +28,11 @@ export type HandlerFile = {
     position: string
 }
 
-/** A `.abide` the build read. */
-type Source = HandlerFile & { file: AbideFile }
-
-/**
- * Told of each thing the emit refuses, at the file below the root it names. The build's throws;
- * `abide check` collects every one at its file (38.33).
- */
-export type Refuse = (relative: string, thrown: unknown) => void
-
-/** The build's answer to a refusal: the first one stops it. */
-export const THROW: Refuse = (_relative, thrown) => {
-    throw thrown
-}
+/** A `.abide` the build read, placed. */
+type Source = Pick<
+    PlacedSource,
+    'path' | 'relative' | 'position' | 'place' | 'scope' | 'file'
+>
 
 /**
  * The app's handler mounts, with the warnings the build raised reading them.
@@ -55,28 +43,49 @@ export const THROW: Refuse = (_relative, thrown) => {
 export async function handlersUnder(
     session: TypeSession,
     sources: readonly Source[],
-    files: readonly HandlerFile[],
-    refuse: Refuse = THROW,
+    files: readonly Pick<
+        PlacedHandler,
+        'path' | 'relative' | 'route' | 'scope'
+    >[],
+    refusals: Refusals,
 ): Promise<{ mounts: Mount[]; warnings: Diagnosis[] }> {
     const serving: Source[] = []
     for (const source of sources)
         if (source.file.servers.length > 0) serving.push(source)
     const paths: string[] = []
-    for (const file of files) paths.push(file.path)
+    const named: string[] = []
+    for (const file of files) {
+        paths.push(file.path)
+        named.push(file.relative)
+    }
     const project = await session.projectWith(paths)
-    for (const source of serving) paths.push(session.projectionOf(source.path))
+    for (const source of serving) {
+        paths.push(session.projectionOf(source.path))
+        named.push(source.path)
+    }
+    // A module whose read was refused is `undefined`, refused at its file already.
     const declared =
         project === undefined || paths.length === 0
-            ? []
-            : await declaredExports(project, session.tsconfig, paths)
+            ? paths.map(() => [])
+            : await declaredExports(
+                  project,
+                  session.tsconfig,
+                  paths,
+                  named,
+                  refusals,
+              )
     const mounts: Mount[] = []
     const warnings: Diagnosis[] = []
     const names = new Map<string, string>()
     for (let at = 0; at < files.length; at += 1) {
-        const { relative, position } = files[at] as HandlerFile
+        const {
+            relative,
+            route: address,
+            scope,
+        } = files[at] as (typeof files)[number]
+        const exported = declared[at]
+        if (exported === undefined) continue
         try {
-            const address = routeOf(position)
-            const exported = declared[at] ?? []
             const handler = exported.find((each) => each.name === 'default')
             // 16.73 — the default and nothing else, declared by one of the five methods.
             for (const each of exported)
@@ -90,7 +99,8 @@ export async function handlersUnder(
                 throw new Error(
                     `abide: ${relative} is a handler file — a .ts directly in an address directory — and exports no handler as its default. Export one (\`export default GET(…)\`), or move the file into a lib directory. RULEBOOK 16.73, 23.22.`,
                 )
-            refuseFrameworkRoute(address, relative)
+            const framework = frameworkRouteRefusal(address, relative)
+            if (framework !== undefined) throw framework
             refuseUndeclaredParameters(address, handler.args, relative)
             // 20.13 — one name per handler on every generated surface.
             const surface = surfaceName(handler.method, address)
@@ -106,7 +116,7 @@ export async function handlersUnder(
                 source: relative,
                 name: address.slice(address.lastIndexOf('/') + 1),
                 export: 'default',
-                scope: scopeOf(position),
+                scope,
                 private: false,
                 ui: handler.ui,
                 cli: handler.cli,
@@ -118,14 +128,14 @@ export async function handlersUnder(
             })
             warnings.push(...handler.unread)
         } catch (thrown) {
-            refuse(relative, thrown)
+            refusals.at(relative, thrown)
         }
     }
     for (let at = 0; at < serving.length; at += 1) {
-        const { relative, position } = serving[at] as Source
+        const { relative, position, place, scope } = serving[at] as Source
         // 34.24 — a dependency's file answers where a mount places it, and its handlers below the
         // path it has there.
-        const below = placeOf(position) === 'dependency' ? relative : position
+        const below = place === 'dependency' ? relative : position
         for (const each of declared[files.length + at] ?? []) {
             if (each.method === undefined) continue
             if (!each.name.startsWith(PRIVATE_EXPORT)) continue
@@ -136,7 +146,7 @@ export async function handlersUnder(
                 source: relative,
                 name,
                 export: each.name,
-                scope: scopeOf(position),
+                scope,
                 private: true,
                 ui: each.ui,
                 cli: false,

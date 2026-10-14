@@ -14,15 +14,15 @@
 // BY POSITION, NOT BY PATH (23.19): a directory a file mounts places its files where the app says,
 // so a `server` directory inside it is fenced as the app's own would be, wherever the package lies.
 
-import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { SERVER_DIRECTORY } from '#shared/RESERVED_DIRECTORIES.ts'
-import { placeOf } from '#shared/routePattern.ts'
+import type { Compilation } from './abideModules.ts'
 import {
     COMPONENT_NAMESPACE,
-    type Compilation,
+    realFileOf,
     STYLE_NAMESPACE,
     TEXT_NAMESPACE,
-} from './abideModules.ts'
+} from './faceOf.ts'
+import { placeOf, positionOf } from './placement.ts'
 
 // Every namespace a browser bundle loads a file of the app's in: its modules, its components, a
 // file's text and a component's stylesheet.
@@ -38,18 +38,6 @@ export function fenceServer(
     root: string,
     mounted: Compilation['mounted'],
 ): Bun.BunPlugin {
-    // Mounted directories first: one under the root's `node_modules` is the app's at its position.
-    const directories: [string, string][] = []
-    for (const [directory, at] of Object.entries(mounted))
-        directories.push([`${resolve(root, directory)}/`, at])
-    const positionOf = (path: string): string | undefined => {
-        for (const [directory, at] of directories)
-            if (path.startsWith(directory))
-                return `${at}${path.slice(directory.length)}`
-        return path.startsWith(`${root}/`)
-            ? path.slice(root.length + 1)
-            : undefined
-    }
     // Anything with a `server` directory in its path, and `placeOf` decides by its position — a
     // load it passes on falls through to the next plugin's, or the bundler's own.
     const filter = new RegExp(`/${SERVER_DIRECTORY}/`)
@@ -58,14 +46,18 @@ export function fenceServer(
         setup(build) {
             for (const namespace of FENCED)
                 build.onLoad({ filter, namespace }, (args) => {
-                    const position = positionOf(args.path)
+                    const position = positionOf(
+                        root,
+                        mounted,
+                        realFileOf(args.path),
+                    )
                     if (
                         position === undefined ||
                         placeOf(position) !== 'server'
                     )
                         return undefined
                     throw new Error(
-                        `abide: ${position.replace(/::\w+$/, '')} is under a server directory, and the browser's bundle imports it. RULEBOOK 16.29.`,
+                        `abide: ${position} is under a server directory, and the browser's bundle imports it. RULEBOOK 16.29.`,
                     )
                 })
         },

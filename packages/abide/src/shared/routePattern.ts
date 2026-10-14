@@ -10,13 +10,6 @@
 // A LEAF: nothing imported but another leaf, because the compiler, the client router and a server
 // router all read it and a constant crossing a seam lives where nothing pulls a graph in behind it.
 
-import { LAUNCHER_PAGE } from './LAUNCHER_FILES.ts'
-import {
-    HOLDS_SERVER,
-    RESERVED_DIRECTORIES,
-    SERVER_DIRECTORY,
-} from './RESERVED_DIRECTORIES.ts'
-
 type SegmentKind = 'static' | 'required' | 'optional' | 'rest'
 
 /** One `/`-separated piece of a route literal, classified by kind. */
@@ -45,122 +38,6 @@ export function parseRoutePattern(pattern: string): Segment[] {
         else out.push({ kind: 'static', name: raw })
     }
     return out
-}
-
-/** Whether a source is a page, a layout, an error page or a component. */
-export type FileKind = 'page' | 'layout' | 'error' | 'component'
-
-/**
- * Whether the `.abide` at `path` is a page, a layout, an error page or a component.
- *
- * 23.21 — WHERE IT SITS, THEN ITS NAME. Every `.abide` directly in an address directory is a page
- * but a `layout.abide`, an `error.abide` and the root's `launcher.abide`; one under a fence is a
- * component whatever it is called.
- * One test for every reader: the build's routes, the checker's `Routes` and the `route.params` a
- * page is typed by.
- *
- * `path` is RELATIVE TO THE APP'S ROOT: its directories are its route, so an absolute path would
- * read the machine's directories as the app's.
- */
-export function fileKind(path: string): FileKind {
-    if (placeOf(path) !== 'address' || path === LAUNCHER_PAGE)
-        return 'component'
-    const name = path.slice(path.lastIndexOf('/') + 1)
-    if (name === 'layout.abide') return 'layout'
-    if (name === 'error.abide') return 'error'
-    return 'page'
-}
-
-/** Where a file sits in an app, which is what it is to every reader (`placeOf`). */
-export type Place =
-    | 'address'
-    | 'server'
-    | 'public'
-    | 'lib'
-    | 'tests'
-    | 'dependency'
-    | 'skipped'
-
-/**
- * Where the file at `path`, relative to the app's root, sits — THE ONE ANSWER every walk, fence and
- * emit reads, so no two of them disagree about a path.
- *
- * - `dependency` — 34.24: a package's, outside the root or under `node_modules`, whose directories
- *   are its package's layout and none of the app's;
- * - `skipped` — under a dot directory, which no walk of the app enters;
- * - `server`, `public`, `lib` or `tests` — 23.15: under that fence, the nearest to the root deciding,
- *   save a `server` under a `lib` or a `tests`, which is `server` — the fence the browser's bundle
- *   is checked against (16.29) is never hidden by one above it (23.16);
- * - `address` — 23.14: everywhere else, its directories the segments of its route.
- */
-export function placeOf(path: string): Place {
-    if (path.startsWith('../') || path.startsWith('/')) return 'dependency'
-    const parts = path.split('/')
-    // A `lib` or a `tests` met first, which a `server` below it still overrides.
-    let fence: Place | undefined
-    // The last part is the file itself, which is never a directory.
-    for (let index = 0; index < parts.length - 1; index += 1) {
-        const part = parts[index] as string
-        if (skipped(part))
-            return (
-                fence ?? (part === 'node_modules' ? 'dependency' : 'skipped')
-            )
-        if (fence !== undefined) {
-            if (part === SERVER_DIRECTORY) return 'server'
-        } else if (RESERVED_DIRECTORIES.has(part)) {
-            if (!HOLDS_SERVER.has(part)) return part as Place
-            fence = part as Place
-        }
-    }
-    return fence ?? 'address'
-}
-
-/** Whether a walk of the app passes over the entry `name`: a dot file or directory, or `node_modules`. */
-export function skipped(name: string): boolean {
-    return name.startsWith('.') || name === 'node_modules'
-}
-
-/**
- * The route a file answers at — its path below the root without its extension.
- *
- * 23.14 — `media/[id].abide` and `media/getGrid.ts` are `/media/[id]` and `/media/getGrid`; an
- * `index.abide`, a `layout.abide` and an `error.abide` are their directory's. `path` is relative to
- * the app's root, as `fileKind`'s is.
- */
-export function routeOf(path: string): string {
-    const parts = path.split('/')
-    const file = parts.pop() as string
-    // The extension alone: `[...rest].abide` carries dots of its own.
-    if (!DIRECTORY_FILES.has(file)) parts.push(file.replace(EXTENSION, ''))
-    return `/${parts.filter((part) => part !== '').join('/')}`
-}
-
-const EXTENSION = /\.(?:abide|ts)$/
-
-/** 23.14, 23.18 — the names whose route is their directory's, and so a route's wherever they stand. */
-export const DIRECTORY_FILES = new Set([
-    'index.abide',
-    'layout.abide',
-    'error.abide',
-])
-
-/**
- * The route the hooks and private handlers of the file at `path` are filed at.
- *
- * 37.1 — an address's own route; under a `lib` or a `tests` directory, the route of the directory
- * holding it, so a component an admin page renders runs under the admin route's rungs; under a
- * `server` or a `public` directory, and for a dependency's file, the root's.
- */
-export function scopeOf(path: string): string {
-    // 38.82 — the launcher answers at no route, and files what it calls at the root's.
-    if (path === LAUNCHER_PAGE) return '/'
-    const place = placeOf(path)
-    if (place === 'address') return routeOf(path)
-    if (place !== 'lib' && place !== 'tests') return '/'
-    const parts = path.split('/')
-    // The fence `placeOf` named is the first one, and its name is its place.
-    const fence = parts.indexOf(place)
-    return `/${parts.slice(0, fence).join('/')}`
 }
 
 /**

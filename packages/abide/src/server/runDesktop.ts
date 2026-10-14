@@ -22,12 +22,11 @@ import {
     sendTyped,
     stringOf,
 } from './appKit.ts'
-import { APP_PACKAGE, configuredMount, dataDirectory } from './config.ts'
+import { configuredMount, dataDirectory } from './config.ts'
 import { configFields } from './configFields.ts'
-import { type App, type AppOrigin, bootApp } from './createApp.ts'
+import { type App, type AppOrigin, bootEntered, enterApp } from './createApp.ts'
 import { executableName } from './executableName.ts'
 import { HOOKS, inOrder, reportUnexpected } from './hooks.ts'
-import { installServer } from './installServer.ts'
 import { launcherOf } from './launcherOptions.ts'
 import { type Launch, launcherPage } from './launcherPage.ts'
 import { installMenu, menuBar, type NativeItem } from './nativeMenu.ts'
@@ -84,11 +83,9 @@ async function launch(
     load: () => ReturnType<typeof builtSources>,
     { launch: launchModule, document, icon, accent }: Desktop,
 ): Promise<void> {
-    installServer()
-    APP_PACKAGE.current = origin.package
-    // 37.1 — imported for what it files, so the start form reads `onConfig` and the launcher's
-    // `onLauncher` is filed.
-    await origin.hooks?.()
+    // 37.1 — ENTERED ONCE, before the window: the start form reads `onConfig` and the launcher's
+    // `onLauncher` is filed. Every start after it boots in what this entered (`bootEntered`).
+    await enterApp(origin)
     // 38.85 — a launcher page that fails to load leaves the built-in page, with its defaults.
     const launchPage = await launchModule?.().catch((thrown: unknown) => {
         reportUnexpected(thrown)
@@ -228,7 +225,7 @@ async function launch(
             else process.env[name] = value
         let app: App
         try {
-            app = await bootApp(origin, load)
+            app = await bootEntered(load)
         } catch (thrown) {
             failure = refused('start', thrown)
             return failure

@@ -33,6 +33,12 @@ import { nesting, type Token, tokenize } from './tokenize.ts'
 // no parentheses to survive one.
 const SHORT_CIRCUIT: ReadonlySet<string> = new Set(['||', '&&', '??'])
 
+/** 23.9 — a page's or a layout's route, which its `route.params` promises. */
+export type Routed = { route: string; kind: 'page' | 'layout' }
+
+/** A run of emitted code a `Lowering` wrote, and where each of its runs stood in the projection. */
+export type LoweredChunk = { text: string; origins: Origin[] }
+
 /**
  * One file's lowering: each piece the emitters ask for, with its reactive reads rewritten.
  *
@@ -42,9 +48,6 @@ const SHORT_CIRCUIT: ReadonlySet<string> = new Set(['||', '&&', '??'])
  * so the import goes with the call; left to the callers it is one `used.add` per call site and a
  * missed one emits a module calling a name it never imported.
  */
-/** A run of emitted code a `Lowering` wrote, and where each of its runs stood in the projection. */
-export type LoweredChunk = { text: string; origins: Origin[] }
-
 export class Lowering {
     readonly projection: Projection
     readonly used = new Set<string>()
@@ -85,18 +88,25 @@ export class Lowering {
      * the projection: what `sourceMapOf` finds in the module the emitter writes.
      */
     private readonly chunks: LoweredChunk[] | undefined
+    /**
+     * 23.9 — for a checked lowering of a page or a layout, its route and which of the two it is:
+     * what its `route.params` is typed by.
+     */
+    private readonly routed: Routed | undefined
 
     constructor(
         file: AbideFile,
         answer: CheckerAnswer,
         checking = false,
         chunks?: LoweredChunk[],
+        routed?: Routed,
     ) {
         this.projection = projectShadow(file)
         this.answer = answer
         this.holdsSlot = holdsSlot(file.template)
         this.checking = checking
         this.chunks = chunks
+        this.routed = routed
     }
 
     /**
@@ -441,8 +451,8 @@ export class Lowering {
         const spelled = this.projection.text.slice(read.start, read.end)
         // 23.9 — WHAT THIS PAGE'S OWN ROUTE PROMISES, for the checker alone: the running module
         // reads the one `route` every page shares.
-        if (this.checking && read.routeParams !== undefined)
-            return `(${spelled} as unknown as () => __RouteParams<${JSON.stringify(read.routeParams[0])}, ${JSON.stringify(read.routeParams[1])}>)`
+        if (this.routed !== undefined && read.routeParams)
+            return `(${spelled} as unknown as () => __RouteParams<${JSON.stringify(this.routed.route)}, ${JSON.stringify(this.routed.kind)}>)`
         return read.through ? `${spelled}()` : spelled
     }
 

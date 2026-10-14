@@ -21,6 +21,19 @@ import { basename, dirname, resolve } from 'node:path' // bun exposes no path he
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import type { ServerTable } from './answerRequest.ts'
 import type { MountRow } from './answerRpc.ts'
+import {
+    type Asked,
+    BOUND_NAMESPACE,
+    CLIENT_NAMESPACE,
+    componentNamespaceOf,
+    type Face,
+    faceOf,
+    type HandlerFace,
+    type Lane,
+    realFileOf,
+    STYLE_NAMESPACE,
+    TEXT_NAMESPACE,
+} from './faceOf.ts'
 import { installSourceMaps, type SourceMaps } from './installSourceMaps.ts'
 import {
     CLIENT_QUERY,
@@ -68,23 +81,7 @@ export type Compilation = {
     mounted: Record<string, string>
 }
 
-// A VIRTUAL FACE'S PATH: its file's, with a suffix that is not a query. Both registries key a module
-// by its path whatever its namespace, and the runtime's drops a query from it — so a file's text, its
-// stylesheet or its bound face under `?…` took the place of the module the file compiles to.
-const BOUND = '::bound'
-const CLIENT = '::client'
-const TEXT = '::text'
-const STYLE = '::style'
-
-/** The namespace a bundle's component module is answered in, at its file's own path. */
-export const COMPONENT_NAMESPACE = 'abide-component'
-/** The namespaces a file's text and a component's stylesheet are loaded in. */
-export const TEXT_NAMESPACE = 'abide-text'
-export const STYLE_NAMESPACE = 'abide-style'
 const RELATIVE_OR_SUBPATH = /^(?:\.\.?\/|#)/
-
-/** One handler file, as `Compilation.handlers` holds it. */
-type HandlerFace = { scope: string; client: string }
 
 /** The plugin serving `compilation`'s files and tables, for one bundle. */
 export function abideModules(
@@ -235,79 +232,59 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
         name: 'abide-modules',
         setup(build) {
             // THE LANE IS THE BUILD'S TARGET: a browser bundle gets each file's browser module, and
-            // the runtime — which has no config — and a server bundle get its server module. A
-            // browser module the runtime was asked for (`CLIENT_QUERY`) is the one exception, and
-            // what it imports is in its lane.
+            // the runtime — which has no config — and a server bundle get its server module.
             const bundling: boolean = 'config' in build
-            const browser = bundling && build.config.target === 'browser'
-            const inBrowser = (importer: string): boolean =>
-                browser || pathOf(importer).endsWith(CLIENT)
-            // A BUNDLE'S COMPONENT MODULE IS IN A NAMESPACE OF ITS OWN: the bundler refuses a
-            // `file` path a plugin answers with `..` anywhere in it, which a `[...rest]` directory
-            // writes (23.5). The runtime has no such check, and its stack frames name the path.
-            const componentNamespace = bundling ? COMPONENT_NAMESPACE : 'file'
-            // The module `path` compiles to, in the lane its importer is in.
-            const componentFor = (path: string, importer: string) =>
-                inBrowser(importer) && !browser
-                    ? { path: `${path}${CLIENT}`, namespace: 'abide-client' }
-                    : { path, namespace: componentNamespace }
+            const lane: Lane = {
+                bundling,
+                browser: bundling && build.config.target === 'browser',
+            }
             const resolved = (specifier: string, importer: string): string =>
                 resolvedFile(specifier, dirname(pathOf(importer)))
+            // Each hook below only adapts bun's ask to `faceOf`'s: the file the specifier resolved to,
+            // its query taken off, and the answer handed back — a refusal thrown.
+            const answer = (
+                asked: Asked,
+                file: string,
+                importer: string,
+            ): Face | undefined => {
+                const face = faceOf(
+                    asked,
+                    file,
+                    pathOf(importer),
+                    lane,
+                    served.handlers,
+                )
+                if (face instanceof Error) throw face
+                return face
+            }
             // A filter off the query's own constant, so renaming one cannot silently stop a match.
+            const asking = (asked: Asked, query: string, filter: RegExp) =>
+                build.onResolve({ filter }, (args) =>
+                    resolving
+                        ? undefined
+                        : answer(
+                              asked,
+                              resolved(
+                                  args.path.slice(
+                                      0,
+                                      args.path.length - query.length,
+                                  ),
+                                  args.importer,
+                              ),
+                              args.importer,
+                          ),
+                )
             const abideWith = (query: string) =>
                 new RegExp(`\\.abide${RegExp.escape(query)}$`)
-
-            build.onResolve(
-                { filter: new RegExp(`${RegExp.escape(TEXT_QUERY)}$`) },
-                (args) => {
-                    if (resolving) return undefined
-                    const specifier = args.path.slice(0, -TEXT_QUERY.length)
-                    // A path of its own (`TEXT`): a file is often imported as code and as text at once
-                    // — an example's Files tab.
-                    return {
-                        path: `${resolved(specifier, args.importer)}${TEXT}`,
-                        namespace: TEXT_NAMESPACE,
-                    }
-                },
+            asking(
+                'text',
+                TEXT_QUERY,
+                new RegExp(`${RegExp.escape(TEXT_QUERY)}$`),
             )
-            build.onResolve({ filter: abideWith(STYLE_QUERY) }, (args) => {
-                if (resolving) return undefined
-                const specifier = args.path.slice(0, -STYLE_QUERY.length)
-                return {
-                    path: `${resolved(specifier, args.importer)}${STYLE}`,
-                    namespace: STYLE_NAMESPACE,
-                }
-            })
-            build.onResolve({ filter: abideWith(COMPONENT_QUERY) }, (args) => {
-                if (resolving) return undefined
-                const specifier = args.path.slice(0, -COMPONENT_QUERY.length)
-                return componentFor(
-                    resolved(specifier, args.importer),
-                    args.importer,
-                )
-            })
-            build.onResolve({ filter: abideWith(CLIENT_QUERY) }, (args) => {
-                if (resolving) return undefined
-                const path = resolved(
-                    args.path.slice(0, -CLIENT_QUERY.length),
-                    args.importer,
-                )
-                return browser
-                    ? { path, namespace: componentNamespace }
-                    : { path: `${path}${CLIENT}`, namespace: 'abide-client' }
-            })
-            build.onResolve({ filter: /\.abide$/ }, (args) => {
-                if (resolving) return undefined
-                const path = resolved(args.path, args.importer)
-                // A bound face's own import of its component, and every browser import, is the
-                // component module.
-                if (
-                    inBrowser(args.importer) ||
-                    pathOf(args.importer) === `${path}${BOUND}`
-                )
-                    return componentFor(path, args.importer)
-                return { path: `${path}${BOUND}`, namespace: 'abide-bound' }
-            })
+            asking('style', STYLE_QUERY, abideWith(STYLE_QUERY))
+            asking('component', COMPONENT_QUERY, abideWith(COMPONENT_QUERY))
+            asking('client', CLIENT_QUERY, abideWith(CLIENT_QUERY))
+            asking('abide', '', /\.abide$/)
             build.onResolve(
                 { filter: new RegExp(`/${VIRTUAL_DIRECTORY}/[^/]+\\.ts$`) },
                 (args) => {
@@ -322,13 +299,15 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
                 },
             )
 
-            // A HANDLER FILE IS FOUND BY WHERE ITS IMPORT RESOLVES, however the import spells it, and
-            // only from the app's own modules: a package's never names one, and asking bun again for
-            // each of a package's relative imports is a resolve per module of the bundle. THE FILTER
-            // IS THE HANDLER FILES' NAMES: a hook matching every relative import costs the bundle
-            // abide's own `sideEffects`, and the barrel's rest — the validator, the csp — moved into
-            // the chunk every page loads (38.94). ONLY IN A BUNDLE: the runtime finds a handler file
-            // by the path it loads at (`handlerFilesPlugin`), which costs no resolve per import.
+            // A HANDLER FILE IS FOUND BY WHERE ITS IMPORT RESOLVES, however the import spells it — the
+            // app's own, or a mounted package's own page importing a handler file of its (23.19).
+            // THE FILTER IS THE HANDLER FILES' NAMES: a hook matching every relative import costs the
+            // bundle abide's own `sideEffects`, and the barrel's rest — the validator, the csp — moved
+            // into the chunk every page loads (38.94); and since only an import ending in one of those
+            // names is resolved again, a package's other imports cost nothing, so a package's are not
+            // passed over by where they lie. ONLY IN A BUNDLE: the runtime finds a handler file by the
+            // path it loads at (`handlerFilesPlugin`), and asks no `onResolve` of an extensionless
+            // specifier at all.
             // Each handler file's name without `.ts` — what an import of one ends in.
             const stems = new Set<string>()
             if (bundling)
@@ -344,23 +323,13 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
                     (args) => {
                         if (resolving || !RELATIVE_OR_SUBPATH.test(args.path))
                             return undefined
-                        const importer = pathOf(args.importer)
-                        if (importer.includes('/node_modules/'))
-                            return undefined
-                        let path: string
+                        let file: string
                         try {
-                            path = resolved(args.path, args.importer)
+                            file = resolved(args.path, args.importer)
                         } catch {
                             return undefined
                         }
-                        const face = served.handlers.get(path)
-                        if (face === undefined) return undefined
-                        // 20.4 — a handler the browser is handed no wrapper for is no import of its.
-                        if (inBrowser(args.importer) && face.client === '')
-                            throw new Error(
-                                `abide: ${pathOf(args.importer)} imports ${args.path}, whose handler withholds itself from the browser (\`clients: { ui: false }\`). Call it from a <script server>, or let the browser have it. RULEBOOK 20.4.`,
-                            )
-                        return { path: `${path}${HANDLER_SUFFIX}` }
+                        return answer('handler', file, args.importer)
                     },
                 )
 
@@ -385,11 +354,13 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
             }
 
             build.onLoad(
-                { filter: /\.abide$/, namespace: componentNamespace },
+                { filter: /\.abide$/, namespace: componentNamespaceOf(lane) },
                 (args) => {
                     const compiled = compiledAt(served, args.path)
                     return {
-                        contents: browser ? compiled.client : compiled.server,
+                        contents: lane.browser
+                            ? compiled.client
+                            : compiled.server,
                         loader: 'ts',
                     }
                 },
@@ -401,9 +372,9 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
             // resolves from its directory as the file's own imports do. A namespace of abide's own
             // had bun resolve a bare one from the working directory: a second abide, run from `/`.
             build.onLoad({ filter: HANDLER_FACE }, async (args) => {
-                const path = args.path.slice(0, -HANDLER_SUFFIX.length)
+                const path = realFileOf(args.path)
                 const face = served.handlers.get(path) as HandlerFace
-                if (browser) return { contents: face.client, loader: 'js' }
+                if (lane.browser) return { contents: face.client, loader: 'js' }
                 const text = await Bun.file(path).text()
                 return {
                     contents: `import { fileRoute as __fileRoute } from '${SERVER_SPECIFIER}';__fileRoute(${JSON.stringify(face.scope)});${text}\n;__fileRoute(undefined)\n`,
@@ -411,22 +382,22 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
                 }
             })
             build.onLoad(
-                { filter: /.*/, namespace: 'abide-client' },
+                { filter: /.*/, namespace: CLIENT_NAMESPACE },
                 (args) => ({
-                    contents: compiledAt(
-                        served,
-                        args.path.slice(0, -CLIENT.length),
-                    ).client,
+                    contents: compiledAt(served, realFileOf(args.path)).client,
                     loader: 'ts',
                 }),
             )
-            build.onLoad({ filter: /.*/, namespace: 'abide-bound' }, (args) => {
-                const path = args.path.slice(0, -BOUND.length)
-                return {
-                    contents: boundModule(path),
-                    loader: 'js',
-                }
-            })
+            build.onLoad(
+                { filter: /.*/, namespace: BOUND_NAMESPACE },
+                (args) => {
+                    const path = realFileOf(args.path)
+                    return {
+                        contents: boundModule(path),
+                        loader: 'js',
+                    }
+                },
+            )
             // A stylesheet is the bundle's; outside one there is no document to apply it to.
             build.onLoad(
                 { filter: /.*/, namespace: STYLE_NAMESPACE },
@@ -434,10 +405,8 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
                     bundling
                         ? {
                               contents:
-                                  compiledAt(
-                                      served,
-                                      args.path.slice(0, -STYLE.length),
-                                  ).sheet ?? '',
+                                  compiledAt(served, realFileOf(args.path))
+                                      .sheet ?? '',
                               loader: 'css',
                           }
                         : { contents: '', loader: 'js' },
@@ -445,7 +414,7 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
             build.onLoad(
                 { filter: /.*/, namespace: TEXT_NAMESPACE },
                 async (args) => ({
-                    contents: `export default ${JSON.stringify(await Bun.file(args.path.slice(0, -TEXT.length)).text())}\n`,
+                    contents: `export default ${JSON.stringify(await Bun.file(realFileOf(args.path)).text())}\n`,
                     loader: 'js',
                 }),
             )
