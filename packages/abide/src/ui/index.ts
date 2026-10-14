@@ -39,15 +39,16 @@ export {
 } from './adoptWalk.ts'
 // 39.6 — a module mounted into an empty region applies its own head, from inside its instance
 // (`emitClient`); only a module that carries its own markup and a `<head>` imports it.
-export { applyHead, contributeHead, liveHead } from './applyHead.ts'
+export { applyHead } from './applyHead.ts'
 export { bindElement } from './bindElement.ts'
 export { bindProperty } from './bindProperty.ts'
 export { bindSpread } from './bindSpread.ts'
 export { escapeless } from './escapeless.ts'
+// 39.1 — a component's `<head>`, joined to the routed level mounting it.
+export { contributeHead } from './Level.ts'
 export { listAt, updateList } from './List.ts'
 export { warnMismatch } from './Mismatch.ts'
 export { markupNodes } from './parseMarkup.ts'
-export { replaceRow } from './reconcile.ts'
 export {
     fillEmpty,
     fillRegion,
@@ -55,6 +56,7 @@ export {
     type Region,
 } from './regions.ts'
 export { rowKeyOf } from './rowKeyOf.ts'
+export { replaceRow } from './rows.ts'
 export { EMPTY_SCOPE, Scope } from './Scope.ts'
 export { setAttribute } from './setAttribute.ts'
 export { setClass } from './setClass.ts'

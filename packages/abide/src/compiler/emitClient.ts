@@ -7,6 +7,7 @@ import {
 } from '#shared/ANCHORS.ts'
 import { anchorMarkup } from '#shared/anchorMarkup.ts'
 import { CHILDREN } from '#shared/CHILDREN.ts'
+import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import {
     Cursor,
@@ -39,7 +40,6 @@ import {
     type ValueRender,
 } from './renderMarkup.ts'
 import { SHARED_NAMES } from './SHARED_NAMES.ts'
-import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import {
     insideShare,
     resumedShare,
@@ -213,19 +213,18 @@ export function emitClient(
     // to read when this level leaves or a level under it does. One thunk, which the apply below
     // reads too, so the markup expression is emitted once.
     const registered = heads
-        ? `if (${ROUTED}) ${ROUTED}.head = () => ${headMarkup}\n`
+        ? `if (${ROUTED}) ${ROUTED}.setHead(() => ${headMarkup})\n`
         : ''
     const applied = heads
-        ? `if (${ROUTED}) ${lowering.use('applyHead')}(${ROUTED}.head()); `
+        ? `if (${ROUTED}) ${lowering.use('applyHead')}(${ROUTED}.headMarkup()); `
         : ''
     // Applied with the fill either way, so the watch's first run only subscribes: what it would
     // write is already there, from the server or from the line above.
-    if (liveHeads)
-        lines.push(
-            `if (${ROUTED}) ${lowering.use('liveHead')}(${SCOPE}, ${ROUTED}.head)`,
-        )
+    if (liveHeads) lines.push(`if (${ROUTED}) ${ROUTED}.followHead(${SCOPE})`)
     // 39.1, 39.6 — A COMPONENT'S HEAD IS ITS PAGE'S, on a navigation as on the server: added to the
-    // level the router is mounting (`contributeHead`), which a row grown later is not.
+    // level it stands in (`contributeHead`), a row grown later included. Asked of the
+    // region before the fill makes it look painted; owned by the component's scope as its first
+    // unit, so the head leaves with the region — and, 39.13, follows its value until then.
     const ownHead = routed ? undefined : headSink(file)
     const ownMarkup =
         ownHead === undefined
@@ -234,7 +233,8 @@ export function emitClient(
     const contributed =
         ownMarkup === "''"
             ? ''
-            : `${lowering.use('contributeHead')}(${REGION_ROOT}, () => ${ownMarkup})\n`
+            : `const __headed = ${lowering.use('contributeHead')}(${REGION_ROOT}, () => ${ownMarkup})\n`
+    if (contributed !== '') lines.unshift(`${SCOPE}.own(__headed)`)
     const builds = carriesOwnMarkup && page.positions.length > 0
     let fills = contributed
     if (applied !== '' || builds) {
@@ -406,7 +406,7 @@ function deferredMarkup(
 function __markup(${REGION_ROOT}) {
 ${insideShare(lowering, SETTLED_AT, markup)}
 }
-if (${ROUTED}) { ${ROUTED}.markup = __markup; ${ROUTED}.share = ${SETTLED_AT}; return${declared ? ` ${SCOPE}` : ''} }
+if (${ROUTED}) { ${ROUTED}.leaveMarkup(__markup, ${SETTLED_AT}); return${declared ? ` ${SCOPE}` : ''} }
 return __markup(${REGION_ROOT})`
 }
 
@@ -738,9 +738,7 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
         }
     }
     if (writes.length > 0)
-        attributes.push(
-            `const __a${slot} = ${element}\n${writes.join('\n')}`,
-        )
+        attributes.push(`const __a${slot} = ${element}\n${writes.join('\n')}`)
     for (const unit of binds) attributes.push(unit)
     for (const unit of spreads) attributes.push(unit)
     return { handlers, attributes, elements }

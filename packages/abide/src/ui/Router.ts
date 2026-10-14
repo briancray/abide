@@ -8,9 +8,9 @@ import { arrive, route } from '#shared/route.ts'
 import { rankRoutes, type Segment } from '#shared/routePattern.ts'
 import { setUpLevels } from '#shared/setUpLevels.ts'
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
-import { applyHead, withdrawHead } from './applyHead.ts'
+import { withdrawHead } from './applyHead.ts'
 import { LAYER_MOUNT, LAYER_NAVIGATE } from './LAYER_NAMES.ts'
-import { MOUNTING_LEVEL } from './MOUNTING_LEVEL.ts'
+import { Level } from './Level.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
 import { fillRegion, pageRegion, type Region } from './regions.ts'
 import type { Scope, Stoppable } from './Scope.ts'
@@ -50,43 +50,6 @@ export type Route = {
 type Compiled = Route & { segments: Segment[] }
 
 type Found = { route: Compiled; params: Params }
-
-// 41.11 — ONE LEVEL OF WHAT IS MOUNTED: the scope that stops it and the region its child
-// occupies. The module standing there is `chain`'s at the same index. The router holds these
-// rather than letting each level own the one below it, which is what makes a shared layout
-// something it can KEEP: a scope stopped from above takes its children with it, and a layout that
-// survives a navigation must not take the page it was holding a moment ago.
-type Level = {
-    scope: Scope | undefined
-    /**
-     * Where this level's `<slot/>` is, learned when the level below it mounted there, and
-     * `undefined` again once that region leaves — a `<slot/>` inside a closed `{#if}` is nowhere.
-     */
-    slot: Region | undefined
-    /**
-     * This level's head markup as it reads now, left by its mount (`emitClient`); `undefined` for
-     * a level with no `<head>`.
-     *
-     * 39.14 — READ WHEN THE LEVEL LEAVES OR STAYS ABOVE ONE THAT DOES, which is why it is the
-     * markup's thunk and not the markup: a layout's `<title>{name}</title>` puts back the name it
-     * reads at that moment. Left painted or not, since a painted level's head is the one the server
-     * wrote and the first navigation away from it withdraws that head like any other.
-     */
-    head: (() => string) | undefined
-    /** The heads of the components mounted in this level, joined to `head` (`contributeHead`). */
-    contributed: (() => string)[] | undefined
-    /**
-     * 41.19 — this level's markup, left by its mount once its setup has run, for the router to run
-     * once every level below has been set up too; `undefined` once it has run, or where the module
-     * has none.
-     */
-    markup: ((region: Region) => Scope | undefined) | undefined
-    /**
-     * 10.5 — the share scope this level's setup ran in, left by its mount, for `setUpLevels` to
-     * set the level below up inside. `null` where the module left none.
-     */
-    share: ShareScope | null
-}
 
 /**
  * The client router: matches addresses, and mounts and replaces the page chain.
@@ -354,7 +317,11 @@ export class Router {
             // exports is the same function either way.
             const shared = this.sharedLevels(arriving)
             // READ BEFORE THE STOP, while the leaving levels' heads read what they read on screen.
-            const leaving = this.heads(shared, this.levels.length)
+            const leaving = Level.headsOf(
+                this.levels,
+                shared,
+                this.levels.length,
+            )
             this.stopFrom(shared)
             // The region the arriving part goes into: the page region where nothing is kept, and
             // the deepest kept layout's own slot where something is.
@@ -375,9 +342,10 @@ export class Router {
             this.mountChain(target, found, arriving, shared, into)
             // 39.14 — what the leaving levels keyed and the arriving ones did not goes back to the
             // nearest kept layout's, else leaves.
-            withdrawHead(leaving, this.heads(shared, this.levels.length), () =>
-                this.heads(0, shared),
-            )
+            withdrawHead(leaving, () => [
+                Level.headsOf(this.levels, 0, shared),
+                Level.headsOf(this.levels, shared, this.levels.length),
+            ])
             // The top of the page, or — as the browser does on a load — the fragment's element.
             if (options.keepScroll !== true) scrollToFragment(target.hash)
         } finally {
@@ -407,14 +375,6 @@ export class Router {
         return shared
     }
 
-    /** The heads of the standing levels from `from` to `to`, outermost first. */
-    private heads(from: number, to: number): string {
-        let markup = ''
-        for (let level = from; level < to; level += 1)
-            markup += (this.levels[level] as Level).head?.() ?? ''
-        return markup
-    }
-
     /**
      * Stops every level from `at` down, inside out, and drops them.
      *
@@ -423,8 +383,12 @@ export class Router {
      * two files would expect.
      */
     private stopFrom(at: number): void {
-        for (let level = this.levels.length - 1; level >= at; level -= 1)
-            (this.levels[level] as Level).scope?.stop()
+        for (let index = this.levels.length - 1; index >= at; index -= 1) {
+            const level = this.levels[index] as Level
+            // The level's head leaves whole, so none of its components withdraws its own.
+            level.contributed.clear()
+            level.scope?.stop()
+        }
         this.levels.length = at
     }
 
@@ -463,14 +427,7 @@ export class Router {
         props: Record<string, (() => unknown) | undefined>,
     ): ShareScope | null {
         const module = this.chain[at] as PageModule
-        const level: Level = {
-            scope: undefined,
-            slot: undefined,
-            head: undefined,
-            contributed: undefined,
-            markup: undefined,
-            share: null,
-        }
+        const level = new Level(this.levels, at)
         this.levels[at] = level
         if (at < this.chain.length - 1)
             props.children = () => ({
@@ -493,9 +450,7 @@ export class Router {
         // runs; a module mounted by the router leaves its markup rather than using this one.
         // A deferred level answers the scope its setup made, so the watches that setup opened are
         // stopped with the level even where its markup never runs — a slot that never opens.
-        level.scope = mounting(level, () =>
-            module.default(region, props, level),
-        )
+        level.scope = level.mount(() => module.default(region, props, level))
         return level.share
     }
 
@@ -505,7 +460,7 @@ export class Router {
         const markup = level.markup
         if (markup === undefined) return
         level.markup = undefined
-        level.scope = mounting(level, () => markup(region))
+        level.scope = level.mount(() => markup(region))
     }
 
     /**
@@ -674,26 +629,4 @@ export function startRouter(
     const router = new Router(pageRegion(host), rankRoutes(routes), transitions)
     CURRENT_ROUTER.current = router
     return router
-}
-
-/**
- * `run`, with `level` the one its components add their `<head>` to (39.1) — and what those built on
- * the client contributed applied once it returns, rather than once a component.
- */
-function mounting<Result>(level: Level, run: () => Result): Result {
-    const back = MOUNTING_LEVEL.current
-    const backUnapplied = MOUNTING_LEVEL.unapplied
-    MOUNTING_LEVEL.current = level
-    MOUNTING_LEVEL.unapplied = ''
-    let unapplied: string
-    let result: Result
-    try {
-        result = run()
-    } finally {
-        unapplied = MOUNTING_LEVEL.unapplied
-        MOUNTING_LEVEL.current = back
-        MOUNTING_LEVEL.unapplied = backUnapplied
-    }
-    applyHead(unapplied)
-    return result
 }

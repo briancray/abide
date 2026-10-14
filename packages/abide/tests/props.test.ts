@@ -540,8 +540,8 @@ let titles = reactive(['one', 'two'])
 })
 
 // 39.6 — A COMPONENT'S HEAD IS NOT APPLIED BY THE ROWS IT FILLS. Only a route level applies its
-// head from its mount; an invoked child fills an empty region once per row the list grew by, and
-// its head there would be a parse and a walk of `document.head` a row. A keyless `<meta charset>`
+// head from its own mount; an invoked child's goes through the routed level it stands in
+// (`contributeHead`, 39.13), and a page no router mounted has none. A keyless `<meta charset>`
 // appends on every application (39.5), so the count is the number of times the head was applied.
 //
 // THE REVERT: emit the head application for every `selfFill` but `'none'` (`emitClient`) — three

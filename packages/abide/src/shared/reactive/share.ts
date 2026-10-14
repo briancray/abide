@@ -16,6 +16,12 @@ import type { Reactive } from './Reactive.ts'
 export type ShareScope = {
     parent: ShareScope | null
     values: Map<string, unknown>
+    /**
+     * 39.1 — the routed level the instance stands in, opaque here (`Level`). Carried down the chain
+     * so a component mounted after its level — an arm opening, a row grown — finds the level its
+     * `<head>` joins through the scope it resumes, as it finds a shared key.
+     */
+    level: unknown
 }
 
 // The instance being rendered or mounted, or `null` outside one. A dynamic scope like
@@ -62,7 +68,11 @@ export function share<Key extends string, Value>(
  */
 export function enterShare(): ShareScope | null {
     const previous = CURRENT
-    CURRENT = { parent: previous, values: new Map() }
+    CURRENT = {
+        parent: previous,
+        values: new Map(),
+        level: previous === null ? undefined : previous.level,
+    }
     return previous
 }
 

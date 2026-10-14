@@ -58,8 +58,8 @@ import Section from '#src/lib/Section.abide'
         again.</p>
 
         <p>A key only the outgoing page set goes back to the layout's value, and is removed where
-        no layout has one. The tab ends on the title a fresh load of that address
-        shows.</p>
+        no layout has one, and what it appended with no key leaves with it. The tab ends on the
+        title a fresh load of that address shows.</p>
 
         <p>Read on: <a href={url('/pages/link-to-another-page')}>Links &amp; navigation</a></p>
     </Section>
