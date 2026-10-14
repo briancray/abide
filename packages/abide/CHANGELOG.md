@@ -1,5 +1,21 @@
 # @abide/abide
 
+## 0.105.0
+
+### Minor Changes
+
+- 98e55a3: the app is laid out once per compile, hooks are read by what a module imports, and abide lsp reports the tree's refusals (37.1, 38.34) ([`3b3c6c2`](https://github.com/briancray/abide/commit/3b3c6c277f9cc65a9b08a0d3b4115e7ff8e7c3c5))
+- 98e55a3: a child whose setup made a call is built after the turn, as a page is (41.28) ([`6ae9acd`](https://github.com/briancray/abide/commit/6ae9acd75855b446de1680e4413deb47e0a223d9))
+- 98e55a3: a component's <head> follows the component, and an unkeyed contribution replaces in place and leaves with it (39.13-39.16) ([`8dc5e9e`](https://github.com/briancray/abide/commit/8dc5e9e22054a13bb7fa648ef7df11a243f19639))
+
+### Patch Changes
+
+- 98e55a3: streamed answers end with their run, carry X-Accel-Buffering, and sse is read by its fields (16.75, 16.76, 16.77, 18.27) ([`696c5cb`](https://github.com/briancray/abide/commit/696c5cb61cbeb0d83382d742924ff8a35cd14339))
+- 98e55a3: a command means one app, reports its first build on stderr, and abide openapi prints to stdout (38.25, 38.110, 38.111) ([`7ca9f4b`](https://github.com/briancray/abide/commit/7ca9f4b90294ca34f55c0ce3a725a336f8c1f11b))
+- 98e55a3: an unkeyed reactive with a store built outside a request reads it lazily (11.71) ([`acf9440`](https://github.com/briancray/abide/commit/acf94407f779617d63cdc7ed5f371870d58e151e))
+- 98e55a3: a query record and an rpc's URL args share one spelling (30.28) ([`b8c3c48`](https://github.com/briancray/abide/commit/b8c3c48b1c3b056d7172f7aad4b2f1a184b39689))
+- 98e55a3: a keyed list's row record lives with its nodes in rows.ts ([`e37bbb1`](https://github.com/briancray/abide/commit/e37bbb170685cb2714584287d22946c229050781))
+
 ## 0.104.0
 
 ### Minor Changes
