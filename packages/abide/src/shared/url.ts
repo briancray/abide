@@ -89,7 +89,7 @@ export function url<P extends RouteLiteral>(
     const address = mounted(
         filledPath(pattern ?? '/', params, `url('${pattern}')`),
     )
-    // 30.6 — the query half, last, in the spelling `rpcRequest` writes.
+    // 30.6 — the query half, last; 30.28 — in the spelling an `Rpc`'s args are written in.
     const search =
         query === undefined
             ? ''

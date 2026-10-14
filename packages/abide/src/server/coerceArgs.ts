@@ -7,8 +7,8 @@
 // has declared no types, and its args stay the text they arrived as.
 
 import { numberFromText } from '#shared/numberFromText.ts'
+import { bareName } from '#shared/queryText.ts'
 import { type Gated, gateOf } from '#shared/reactive/argsContract.ts'
-import { bareName } from '#shared/rpcRequest.ts'
 
 export type Document = {
     type?: string | string[]

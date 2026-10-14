@@ -4,7 +4,8 @@
 // sent (36.6), and neither variable is read anywhere else.
 
 import { applyPatch } from '#shared/applyPatch.ts'
-import { filledPath, parametersOf } from '#shared/filledPath.ts'
+import { eventsOf } from '#shared/framing.ts'
+import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import { firstMatch, partsOf } from '#shared/matchRoute.ts'
 import type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
 import { rankRoutes } from '#shared/routePattern.ts'
@@ -59,13 +60,14 @@ export async function callHandler(
     const asked = method?.toUpperCase()
     const handler = handlerAt(handlers, address, asked)
     const args = callArgs(given)
+    const route = new HandlerRoute(address)
     const chosen = (asked ??
         (handler?.method as Method | undefined) ??
         (args === undefined ? 'GET' : 'POST')) as Method
     const request =
         args instanceof URLSearchParams
-            ? textRequest(chosen, address, args)
-            : rpcRequest(chosen, address, args)
+            ? textRequest(chosen, route, args)
+            : rpcRequest(chosen, route, args)
     const answer = await fetch(`${url}${request.url}`, {
         ...request.init,
         headers: { ...remoteHeaders(), ...request.init.headers },
@@ -129,19 +131,19 @@ function handlerAt(
  */
 function textRequest(
     method: Method,
-    route: string,
+    route: HandlerRoute,
     given: URLSearchParams,
 ): { url: string; init: RequestInit } {
-    let address = route
+    let address = route.address
     let pairs = given
-    if (route.includes('[')) {
+    if (route.segments !== undefined) {
         const params: Record<string, string> = {}
         pairs = new URLSearchParams()
-        const named = parametersOf(route)
         for (const [name, value] of given)
-            if (named.has(name)) params[name] = value
+            if (route.names.has(name)) params[name] = value
             else pairs.append(name, value)
-        address = filledPath(route, params, route)
+        // Thrown as the message it is, which the command line prints.
+        address = route.path(params, (_name, message) => new Error(message))
     }
     if (argsInURL(method))
         return { url: `${address}?${pairs}`, init: { method } }
@@ -169,12 +171,12 @@ export async function watch(
     given: string[],
     signal?: AbortSignal,
 ): Promise<number> {
-    const path = `/${address.replace(/^\//, '')}`
+    const route = new HandlerRoute(`/${address.replace(/^\//, '')}`)
     const args = callArgs(given)
     const request =
         args instanceof URLSearchParams
-            ? textRequest('GET', path, args)
-            : rpcRequest('GET', path, args)
+            ? textRequest('GET', route, args)
+            : rpcRequest('GET', route, args)
     const answer = await fetch(`${url}${request.url}`, {
         ...request.init,
         headers: {
@@ -206,34 +208,4 @@ export async function watch(
         console.log(JSON.stringify(held))
     }
     return 0
-}
-
-/** Each event of an event stream: its `event` name, `message` where it named none, and its `data`. */
-async function* eventsOf(
-    body: ReadableStream<Uint8Array>,
-): AsyncIterable<{ name: string; data: string }> {
-    const decoder = new TextDecoder()
-    let buffered = ''
-    for await (const chunk of body) {
-        buffered += decoder.decode(chunk, { stream: true })
-        for (
-            let end = buffered.indexOf('\n\n');
-            end !== -1;
-            end = buffered.indexOf('\n\n')
-        ) {
-            const block = buffered.slice(0, end)
-            buffered = buffered.slice(end + 2)
-            let name = 'message'
-            let data: string | undefined
-            for (const line of block.split('\n')) {
-                if (line.startsWith('event:')) name = line.slice(6).trim()
-                else if (line.startsWith('data:')) {
-                    const field = line.slice(5).replace(/^ /, '')
-                    data = data === undefined ? field : `${data}\n${field}`
-                }
-            }
-            // A comment alone — the stream's opener — is no event.
-            if (data !== undefined) yield { name, data }
-        }
-    }
 }

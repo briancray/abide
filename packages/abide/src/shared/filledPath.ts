@@ -18,7 +18,7 @@ export function filledPath(
     return filledSegments(parseRoutePattern(pattern), params, spelled, refused)
 }
 
-/** `filledPath` over a route already parsed, for a caller that fills the same route per call. */
+/** `filledPath` over a route already parsed: a handler's, compiled once (`HandlerRoute`). */
 export function filledSegments(
     segments: Segment[],
     params: Record<string, unknown>,
@@ -48,14 +48,6 @@ export function filledSegments(
         address += `/${encodedSegment(spelled, segment.name, value, refused)}`
     }
     return address === '' ? '/' : address
-}
-
-/** The names of `pattern`'s parameters — what a call takes out of its args and into the path (16.66). */
-export function parametersOf(pattern: string): Set<string> {
-    const names = new Set<string>()
-    for (const segment of parseRoutePattern(pattern))
-        if (segment.kind !== 'static') names.add(segment.name)
-    return names
 }
 
 /**

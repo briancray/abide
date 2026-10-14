@@ -14,8 +14,8 @@
 // handler's own.
 
 import { type Failed, isFailedNamed } from './Failed.ts'
-import { filledSegments } from './filledPath.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
+import { HandlerRoute } from './HandlerRoute.ts'
 import { compose, type Middleware } from './Middleware.ts'
 import { principalRotated } from './principalRotated.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
@@ -49,8 +49,7 @@ import { MUTATION } from './reactive/MUTATION.ts'
 import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { isForwarder } from './reactive/scoped.ts'
 import { checkArgs } from './refuse.ts'
-import { parseRoutePattern, type Segment } from './routePattern.ts'
-import { pathRefusal, rpcRequest } from './rpcRequest.ts'
+import { rpcRequest } from './rpcRequest.ts'
 import type { Schema } from './Schema.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -374,28 +373,22 @@ export function declare(method: Method): Declare {
         //
         // 15.8 — AND REFUSED AHEAD OF THE HANDLER where the args leave a parameter of its route no
         // spelling (30.3, 30.19), as the wire refuses them: a render and the browser's call then
-        // reach the same refusal, and there is no request for the render to report. The route is
-        // parsed once per address, which is stamped after the declaration (16.10).
-        let routed: string | undefined
-        let routeSegments: Segment[] | null = null
+        // reach the same refusal, and there is no request for the render to report.
+        //
+        // THE ROUTE IS COMPILED ONCE PER ADDRESS, which is stamped after the declaration (16.10),
+        // and every call, `rpc.url` and `rpc.raw` read it.
+        let route: HandlerRoute | undefined
+        const routeAt = (address: string): HandlerRoute => {
+            if (route?.address !== address) route = new HandlerRoute(address)
+            return route
+        }
         const call = (given?: unknown, options?: CallOptions): unknown => {
             const args = normalized(contract, given)
-            const address = rpc.address
-            if (address !== routed) {
-                routed = address
-                routeSegments =
-                    address?.includes('[') === true
-                        ? parseRoutePattern(address)
-                        : null
-            }
-            if (routeSegments !== null) {
+            const route =
+                rpc.address === undefined ? undefined : routeAt(rpc.address)
+            if (route?.segments !== undefined) {
                 try {
-                    filledSegments(
-                        routeSegments,
-                        (args ?? {}) as Record<string, unknown>,
-                        routed as string,
-                        pathRefusal,
-                    )
+                    route.path(args as Record<string, unknown> | undefined)
                 } catch (refused) {
                     return reactive(() => refused)
                 }
@@ -428,13 +421,13 @@ export function declare(method: Method): Declare {
             guarded: rungs.length > 0,
             isError: isFailedNamed,
             url(args?: Record<string, unknown>): string {
-                return rpcRequest(method, addressOf(rpc), args).url
+                return rpcRequest(method, routeAt(addressOf(rpc)), args).url
             },
             raw(
                 args?: Record<string, unknown>,
                 init?: RequestInit,
             ): Promise<Response> {
-                const asked = rpcRequest(method, addressOf(rpc), args)
+                const asked = rpcRequest(method, routeAt(addressOf(rpc)), args)
                 // `Headers`, not a spread — the caller's may be a `Headers` itself, which spreads empty.
                 const headers = new Headers(asked.init.headers)
                 for (const [name, value] of new Headers(init?.headers))

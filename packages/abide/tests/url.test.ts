@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { clientTags } from '#server/answerRequest.ts'
 import { type HasParams, type HasSegments, url } from '#shared'
+import { GET } from '#shared/rpc.ts'
 
 // 30.1, 30.3 — A REQUIRED SEGMENT IS FILLED, and encoded as a segment: a slash in a value is data,
 // not another directory.
@@ -36,6 +37,20 @@ test('the query argument is last — 30.6', () => {
     // `null` is text here as it is in an rpc's args, where 19.7 reads it back.
     expect(url('/search', {}, { q: null })).toBe('/search?q=null')
     expect(url()).toBe('/')
+})
+
+// 30.28 — `url`'S QUERY IS SPELLED AS AN `Rpc`'S ARGS ARE: an empty list its bare name, after the
+// rest, which 19.7 reads back as `[]` — and `['']` the one-member list. Asked of both, since the two
+// once kept the rule apart. THE REVERT: drop the empty-list arm from `queryText` (as `url`'s spelling
+// was); `url` writes no `tags` at all, and `rpc.url` neither.
+test("url's query spells an empty list as an rpc's args do — 30.28", () => {
+    expect(url('/search', {}, { tags: [], q: 'ink' })).toBe(
+        '/search?q=ink&tags',
+    )
+    expect(url('/search', {}, { tags: [''] })).toBe('/search?tags=')
+    const search = GET(({ tags }: { tags: string[]; q?: string }) => tags)
+    ;(search as { address?: string }).address = '/search'
+    expect(search.url({ tags: [], q: 'ink' })).toBe('/search?q=ink&tags')
 })
 
 // 30.2 — THE LITERAL DECIDES THE ARITY, at compile time. The `@ts-expect-error` lines are the gate:

@@ -243,12 +243,12 @@ test('a mutation body is held to its annotation — 19.9', async () => {
     expect(refused.status).toBe(422)
 })
 
-// 16.18 — AN EMPTY LIST CROSSES THE URL AS ONE, spelled by the browser's own `rpcRequest` and read
+// 30.28 — AN EMPTY LIST CROSSES THE URL AS ONE, spelled by the browser's own `rpcRequest` and read
 // back by the server: alone, where the query would otherwise be empty and the args `undefined`, and
 // beside other members, where it would otherwise be missing. `['']` stays the one-member list it is.
-// THE REVERT: skip an empty list in `rpcRequest` as before; the lone one is refused 422 and the
+// THE REVERT: skip an empty list in `queryText` as before; the lone one is refused 422 and the
 // other arrives without its member.
-test('an empty list arg reaches the handler as an empty list — 16.18, 19.7', async () => {
+test('an empty list arg reaches the handler as an empty list — 30.28, 19.7', async () => {
     const called = async (
         name: string,
         args: Record<string, unknown>,
