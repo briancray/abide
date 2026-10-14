@@ -6,7 +6,7 @@
 // Every block of an assistant turn goes back as it came — a `thinking` block with its signature
 // included, which a turn continuing after a tool call is refused without.
 
-import { framedStream, framingPrefix } from '#shared/framing.ts'
+import { framedStream } from '#shared/framing.ts'
 import { refuse } from '#shared/refuse.ts'
 import type { AssistantEvent, Provider } from './assistant.ts'
 
@@ -112,10 +112,7 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                 const partials: string[] = []
                 const called: Block[] = []
                 let stop = 'end_turn'
-                for await (const chunk of framedStream(
-                    answered.body,
-                    framingPrefix('text/event-stream') as string,
-                )) {
+                for await (const chunk of framedStream(answered.body, 'sse')) {
                     const event = chunk as ApiEvent
                     switch (event.type) {
                         case 'message_start':

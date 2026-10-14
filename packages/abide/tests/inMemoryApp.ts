@@ -12,7 +12,7 @@ import { appSources } from '#server/answerRequest.ts'
 import type { Mount, MountRow } from '#server/answerRpc.ts'
 import { type App, bootApp } from '#server/createApp.ts'
 import { NO_MANIFEST } from '#server/manifestOf.ts'
-import { routeOf } from '#shared/routePattern.ts'
+import { routeOf } from '#server/placement.ts'
 import type { Method } from '#shared/rpc.ts'
 
 /**

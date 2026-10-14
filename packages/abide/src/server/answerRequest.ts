@@ -20,6 +20,7 @@ import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
+import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import { health } from '#shared/health.ts'
 import { appName } from '#shared/log.ts'
 import { compose } from '#shared/Middleware.ts'
@@ -50,6 +51,7 @@ import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import { callerOrMint } from './callerOf.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
+import { noteCallInRender } from './deferredBuilds.ts'
 import { answerMcp, openApi } from './generatedSurfaces.ts'
 import { type AppRung, failureOf, rungsOver } from './hooks.ts'
 import { chunksOf, type Manifest } from './manifestOf.ts'
@@ -208,8 +210,8 @@ export async function answerRequest(
     }
 
     // 36.11 — A PUBLIC FILE IS ITS PATH BELOW THE DIRECTORY, so `/favicon.ico` is answered
-    // before any route is tried. The order is not load-bearing: `abide build` and `abide dev`
-    // run `refuseAddressCollision` (36.13) over the same two trees before anything is served,
+    // before any route is tried. The order is not load-bearing: the compile `abide build` and
+    // `abide dev` share refuses a collision (36.13) over the same two trees before anything is served,
     // so at run time there can never be a collision to resolve. 36.11 — keyed by its name on disk
     // and asked for percent-encoded: `my photo.jpg` is `/my%20photo.jpg`.
     const file = app.published.get(decodedOrKept(asked))
@@ -383,6 +385,10 @@ const SURFACES = new Map<
     [BRIDGE_ADDRESS, (_app, request) => answerBridge(request)],
 ])
 
+// Each handler's route, compiled once rather than per render that calls it — as its `Rpc` keeps its
+// own; compiled again only where it was mounted at another address since.
+const ROUTE_OF = new WeakMap<object, HandlerRoute>()
+
 // What a call made in a page's render reports into: the seed buffer (41.13), and — where the handler
 // is mounted — the request the browser will make for it, for the early-call script (41.20). Once per
 // render, as the browser's `Rpc` makes it once, and the seed buffer is what says which is the once.
@@ -392,18 +398,26 @@ export function reachedInRender(
     reached: unknown,
 ): void {
     const page = currentRequestScope()?.page
-    if (page === undefined || !page.seed(rpc, args, reached)) return
+    if (page === undefined) return
+    noteCallInRender()
+    if (!page.seed(rpc, args, reached)) return
     // 16.10 — the address the browser's own call is made at, stamped under the mount by
     // `mountHandlers` — and `undefined` on a handler nothing mounted.
     const { address, method } = rpc as Rpc<unknown, unknown>
     if (address === undefined) return
+    let route = ROUTE_OF.get(rpc)
+    if (route?.address !== address) {
+        route = new HandlerRoute(address)
+        ROUTE_OF.set(rpc, route)
+    }
     page.calls.push({
         request: rpcRequest(
             method,
-            address,
+            route,
             args as Record<string, unknown> | undefined,
         ),
         reached,
+        painted: undefined,
     })
 }
 

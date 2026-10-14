@@ -6,7 +6,6 @@
 // what it found, so the addresses the server answers and the addresses the client router knows
 // are two readings of one walk rather than two walks that have to agree (30.8).
 
-import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
 import {
     type Compilation,
     serveCompilation,
@@ -24,15 +23,10 @@ import {
     MANIFEST,
     PUBLIC_DIRECTORY,
 } from './CLIENT_BUILD.ts'
-import { type App, type AppOrigin, bootApp } from './createApp.ts'
-import { stopOnSignalOrFault } from './faultPolicy.ts'
+import { bundleServer, type ServedFile } from './clientBundle.ts'
 import type { Manifest } from './manifestOf.ts'
 import { namesUnder } from './namesUnder.ts'
-import {
-    ENCODINGS,
-    type Encoding,
-    negotiateEncoding,
-} from './negotiateEncoding.ts'
+import { ENCODINGS } from './negotiateEncoding.ts'
 import { runBuild } from './runBuild.ts'
 
 /**
@@ -47,23 +41,6 @@ export type BuildParts = Omit<SourceParts, 'client' | 'explained'> & {
     manifest: Manifest
     /** Every file under `client/`, the precompressed copies among them, by name to its path. */
     client: Map<string, string>
-}
-
-/**
- * The app booted (`bootApp`) and listening, stopped on a signal or an unawaited fault.
- *
- * Listening on `LISTENING.server`, for the caller to say where.
- */
-export async function serveApp(
-    origin: AppOrigin,
-    load: () => Promise<AppSources>,
-    port: number | undefined,
-): Promise<App> {
-    const app = await bootApp(origin, load)
-    await app.listen(port === undefined ? {} : { port })
-    // ONCE SERVING, and not before: a boot that fails is 37.6's to fail hard.
-    stopOnSignalOrFault(app)
-    return app
 }
 
 /**
@@ -128,62 +105,38 @@ export function pathsUnder(directory: string): Map<string, string> {
 
 /** The sources an `App` is booted over, out of the parts `abide build` produced. */
 export function builtSources(parts: BuildParts): Promise<AppSources> {
-    // THE BUNDLE, ENUMERATED RATHER THAN RESOLVED. A request names a file in this set or it names
-    // nothing — there is no path to normalize, so `..` is not a case that has to be got right,
-    // and what is servable is exactly what the build produced.
-    //
     // THE PRECOMPRESSED COPIES ARE NOT ADDRESSES OF THEIR OWN. They are the same file in another
     // encoding (38.5), so they are found under the name they encode and served as that name.
     const suffixes = Object.values(ENCODING_SUFFIX) as string[]
-    const assets = new Map<string, Encoding[]>()
-    for (const name of parts.client.keys()) {
+    const files = new Map<string, ServedFile>()
+    for (const [name, path] of parts.client) {
         if (suffixes.some((suffix) => name.endsWith(suffix))) continue
-        const encodings: Encoding[] = []
-        for (const encoding of ENCODINGS)
-            if (parts.client.has(name + ENCODING_SUFFIX[encoding]))
-                encodings.push(encoding)
-        assets.set(name, encodings)
-    }
-
-    const framework = (
-        pathname: string,
-        request: Request,
-    ): Response | undefined => {
-        if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return undefined
-        const name = pathname.slice(CLIENT_ADDRESS.length + 1)
-        const encodings = assets.get(name)
-        if (encodings === undefined) return undefined
-        // THE TYPE IS THE NAME'S, not the path's: a compiled app's path carries a hash the
-        // bundler put before the extension, and a `.br`'s extension names nothing.
-        const type = Bun.file(name).type
-        // 21.5 — EVERY NAME IN THE BUNDLE CARRIES A HASH OF ITS BYTES, the entry's too (38.5),
-        // so a name never answers two different files and a year is safe for all of them. A
-        // deploy is new names in a new document, never new bytes at an old address.
-        const headers: Record<string, string> = {
-            'cache-control': 'public, max-age=31536000, immutable',
-            'content-type': type,
-            vary: 'accept-encoding',
+        const encoded: ServedFile['encoded'] = {}
+        for (const encoding of ENCODINGS) {
+            const copy = parts.client.get(name + ENCODING_SUFFIX[encoding])
+            if (copy !== undefined) encoded[encoding] = () => Bun.file(copy)
         }
-        // 38.29 — the precompressed copy where the request takes its encoding.
-        const encoding = negotiateEncoding(
-            request.headers.get('accept-encoding'),
-            encodings,
-        )
-        if (encoding === undefined)
-            return new Response(Bun.file(parts.client.get(name) as string), {
-                headers,
-            })
-        headers['content-encoding'] = encoding
-        return new Response(
-            Bun.file(
-                parts.client.get(name + ENCODING_SUFFIX[encoding]) as string,
-            ),
-            { headers },
-        )
+        files.set(name, {
+            // THE TYPE IS THE NAME'S, not the path's: a compiled app's path carries a hash the
+            // bundler put before the extension, and a `.br`'s extension names nothing.
+            type: Bun.file(name).type,
+            body: () => Bun.file(path),
+            encoded,
+        })
     }
     return appSources({
         ...parts,
         explained: undefined,
-        client: { manifest: parts.manifest, head: '', framework },
+        client: {
+            manifest: parts.manifest,
+            head: '',
+            // 21.5 — EVERY NAME IN THE BUNDLE CARRIES A HASH OF ITS BYTES, the entry's too (38.5), so
+            // a name never answers two different files and a year is safe for all of them. A deploy
+            // is new names in a new document, never new bytes at an old address.
+            framework: bundleServer(
+                files,
+                'public, max-age=31536000, immutable',
+            ),
+        },
     })
 }

@@ -6,11 +6,9 @@
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 import { MCP_ADDRESS, OPENAPI_ADDRESS } from '#shared/ADDRESSES.ts'
-import type { Mount } from './answerRpc.ts'
 import { banner } from './banner.ts'
-import { APP_PACKAGE, type AppPackage, config } from './config.ts'
-import type { App } from './createApp.ts'
-import { installServer } from './installServer.ts'
+import { type App, type AppHandle, enterApp } from './createApp.ts'
+import { stopOnSignalOrFault } from './faultPolicy.ts'
 import {
     appUrl,
     callHandler,
@@ -45,17 +43,10 @@ export type Host = {
     /** What usage and every message speak as: `abide`, or the name the executable was run by. */
     name: string
     /**
-     * The handler table the shell lists and a call reads a handler's method off — so a call is
-     * spelled the same whatever the handler's method, and `--method` is only for an app nobody here
-     * knows the table of. Empty where there is none to read, and never built to be read.
+     * The app the invocation means, found once off its flags (38.25): every command that serves,
+     * boots, lists or announces it derives from this one handle.
      */
-    handlers: (given: Given) => Promise<Mount[]>
-    /** The identity a script `run` resolves its configuration with. 27.3. */
-    appPackage: () => AppPackage
-    /** The app booted in this process: `openapi` and `mcp`'s answer where no `--url` is given. */
-    boot: () => Promise<App>
-    /** The app served, or the exit code of a refusal to. 38.6. */
-    serve: (given: Given) => Promise<App | number>
+    app: (given: Given) => AppHandle
     source: SourceCommands | undefined
 }
 
@@ -79,7 +70,8 @@ export async function runCommands(
         console.log(usage(host, commands))
         return 0
     }
-    if (command === undefined) return await shellOn(host, given)
+    if (command === undefined)
+        return await shellOn(host, host.app(given), given)
     for (const [name, , body] of commands)
         if (name.split(' ')[0] === command) return await body(given)
     console.error(
@@ -111,7 +103,7 @@ function commandsOf(host: Host): Row[] {
         [
             'run <file> [args…]',
             'run a script under the abide runtime',
-            (given) => run(host, given),
+            (given) => run(host, host.app(given), given),
             false,
         ],
         fromSource('dev', 'serve with the compiler in the loop', 'dev'),
@@ -120,23 +112,28 @@ function commandsOf(host: Host): Row[] {
             'compile every .abide under the app into .abide/',
             'build',
         ),
-        ['start', 'serve the app', (given) => start(host, given), false],
+        [
+            'start',
+            'serve the app',
+            (given) => start(host, host.app(given), given),
+            false,
+        ],
         [
             'call <address> [args]',
             'one call to one handler',
-            (given) => call(host, given),
+            (given) => call(host, host.app(given), given),
             false,
         ],
         [
             'openapi',
             'the OpenAPI document, written rather than served',
-            (given) => openapi(host, given),
+            (given) => openapi(host, host.app(given), given),
             false,
         ],
         [
             'mcp',
             "the app's MCP server over stdio",
-            (given) => mcp(host, given),
+            (given) => mcp(host, host.app(given), given),
             false,
         ],
         [
@@ -195,13 +192,12 @@ function usage(host: Host, commands: Row[]): string {
         return `${text}
   --port  the listen port the app is served on
   --url   the running app the shell, call, watch, openapi and mcp talk to
-  --out   the file openapi writes
 `
     text += `
   --root       the app's source directory, where its pages sit —
                src/ where you stand, or where you stand, whichever has one
-  --out        where the build goes, beside the app by default; the file openapi,
-               compile and bundle write — named after the app, where you stand
+  --out        where the build goes, beside the app by default; the file compile and
+               bundle write — named after the app, where you stand
   --port       the listen port for dev, start and the shell's app
   --url        the running app the shell, call, watch, openapi and mcp talk to
   --target     the platform compile builds for — linux-x64, darwin-arm64, windows-x64…
@@ -234,22 +230,49 @@ function parsed(argv: string[]) {
     })
 }
 
-/** The app served, with the address it answers at and the banner it is announced by. 38.6. */
+/**
+ * The app served and listening, with the address it answers at and the banner it is announced by —
+ * or the exit code of a refusal to. 38.6.
+ *
+ * Stopped on a signal or an unawaited fault ONCE SERVING, and not before: a boot that fails is
+ * 37.6's to fail hard.
+ */
 async function served(
     host: Host,
+    app: AppHandle,
     given: Given,
 ): Promise<{ app: App; url: string; heading: string } | number> {
     // 36.3 — `dev`, `build` and `start` each name the environment where the process was started with
     // none, and leave one it was started with exactly as given.
     process.env.NODE_ENV ??= 'production'
-    const app = await host.serve(given)
-    if (typeof app === 'number') return app
+    const booted = await booting(host, app, given)
+    if (typeof booted === 'number') return booted
+    const port = given.values.port
+    await booted.listen(port === undefined ? {} : { port: Number(port) })
+    stopOnSignalOrFault(booted)
     const server = LISTENING.server as Bun.Server<unknown>
     return {
-        app,
+        app: booted,
         url: withoutTrailingSlash(server.url.href),
-        heading: banner(host.name, 'start', host.appPackage(), server),
+        heading: banner(host.name, 'start', app.package, server),
     }
+}
+
+/** The app booted in this process, or the exit code of a refusal naming why there is none. */
+async function booting(
+    host: Host,
+    app: AppHandle,
+    given: Given,
+): Promise<App | number> {
+    const booted = await app.boot()
+    if (typeof booted === 'string') {
+        const command = given.positionals[0]
+        console.error(
+            `${command === undefined ? host.name : `${host.name} ${command}`}: ${booted}`,
+        )
+        return 1
+    }
+    return booted
 }
 
 /**
@@ -258,8 +281,12 @@ async function served(
  * 38.67 — READS NO INPUT, and hands back no code for the process to exit on: the process is the
  * server, for a container or a supervisor to stop.
  */
-async function start(host: Host, given: Given): Promise<number | undefined> {
-    const serving = await served(host, given)
+async function start(
+    host: Host,
+    app: AppHandle,
+    given: Given,
+): Promise<number | undefined> {
+    const serving = await served(host, app, given)
     if (typeof serving === 'number') return serving
     console.log(serving.heading)
     return undefined
@@ -273,24 +300,28 @@ async function start(host: Host, given: Given): Promise<number | undefined> {
  * as a remote one's is. 38.54 — `exit` stops the app. 38.55 — input that ends leaves it serving, and
  * hands back no code for the process to exit on.
  */
-async function shellOn(host: Host, given: Given): Promise<number | undefined> {
+async function shellOn(
+    host: Host,
+    app: AppHandle,
+    given: Given,
+): Promise<number | undefined> {
     const remote = remoteUrl(given.values.url)
     if (remote !== undefined) {
         const url = appUrl(remote)
         await shell({
             url,
-            handlers: await host.handlers(given),
+            handlers: await app.handlers(),
             heading: `${host.name}: ${url}`,
             local: false,
         })
         return 0
     }
-    const serving = await served(host, given)
+    const serving = await served(host, app, given)
     if (typeof serving === 'number') return serving
     // After the serve, which built the app where nothing had.
     const ended = await shell({
         url: serving.url,
-        handlers: await host.handlers(given),
+        handlers: await app.handlers(),
         heading: serving.heading,
         local: true,
     })
@@ -312,6 +343,7 @@ async function shellOn(host: Host, given: Given): Promise<number | undefined> {
  */
 async function run(
     host: Host,
+    app: AppHandle,
     { positionals: [, file, ...rest] }: Given,
 ): Promise<number | undefined> {
     if (file === undefined) {
@@ -322,11 +354,9 @@ async function run(
     }
     const path = resolve(file)
     process.argv = [process.argv[0] as string, path, ...rest]
-    // 38.57 — RE-RESOLVED, as `bootApp` does: a module this process loaded before the script may already have
-    // read the configuration, under no identity.
-    installServer()
-    APP_PACKAGE.current = host.appPackage()
-    config.invalidate()
+    // 38.57 — entered as `bootApp` enters it, its server blocks aside: a script is run against the
+    // app's source, which nothing built.
+    await enterApp({ hooks: undefined, package: app.package })
     await inScope(undefined, () => import(Bun.pathToFileURL(path).href))
     return undefined
 }
@@ -350,7 +380,7 @@ async function watch(host: Host, given: Given): Promise<number> {
     })
 }
 
-async function call(host: Host, given: Given): Promise<number> {
+async function call(host: Host, app: AppHandle, given: Given): Promise<number> {
     const {
         positionals: [, address, ...args],
         values: { url, method },
@@ -366,7 +396,7 @@ async function call(host: Host, given: Given): Promise<number> {
         address,
         args,
         method,
-        await host.handlers(given),
+        await app.handlers(),
     ).catch((thrown: Error) => ({ code: 1, text: thrown.message }))
     if (answered.text !== '')
         (answered.code === 0 ? console.log : console.error)(answered.text)
@@ -374,50 +404,55 @@ async function call(host: Host, given: Given): Promise<number> {
 }
 
 /**
- * A fetch against a generated surface, on the app `--url` names or on one booted here.
+ * A fetch against a generated surface, on the app `--url` names or on one booted here — or the exit
+ * code of a refusal to boot one.
  *
  * 38.9 — the app booted in this process derives it from the same route table the served one does.
  */
 async function surfaceAt(
     host: Host,
-    url: string | undefined,
+    app: AppHandle,
+    given: Given,
     address: string,
 ): Promise<
-    (
-        init?: RequestInit & { headers?: Record<string, string> },
-    ) => Promise<Response>
+    | ((
+          init?: RequestInit & { headers?: Record<string, string> },
+      ) => Promise<Response>)
+    | number
 > {
-    const remote = remoteUrl(url)
+    const remote = remoteUrl(given.values.url)
     if (remote !== undefined)
         return (init) =>
             fetch(`${appUrl(remote)}${address}`, {
                 ...init,
                 headers: { ...init?.headers, ...remoteHeaders() },
             })
-    const app = await host.boot()
+    const booted = await booting(host, app, given)
+    if (typeof booted === 'number') return booted
     return (init) =>
-        app.fetch(new Request(`http://abide.local${address}`, init))
+        booted.fetch(new Request(`http://abide.local${address}`, init))
 }
 
 /**
- * `openapi`: writes the OpenAPI document.
+ * `openapi`: prints the OpenAPI document — redirected to a file, where one is wanted.
  *
  * 38.9 — from `--url` where one is given and from the app in this process where not.
  */
 async function openapi(
     host: Host,
-    { values: { url, out } }: Given,
+    app: AppHandle,
+    given: Given,
 ): Promise<number> {
-    const answer = await (await surfaceAt(host, url, OPENAPI_ADDRESS))()
+    const ask = await surfaceAt(host, app, given, OPENAPI_ADDRESS)
+    if (typeof ask === 'number') return ask
+    const answer = await ask()
     if (!answer.ok) {
         console.error(
             `${host.name} openapi: the app answered ${answer.status}. The document lists every handler with openapi in its clients; none is.`,
         )
         return 1
     }
-    const text = JSON.stringify(await answer.json(), null, 4)
-    if (out === undefined) console.log(text)
-    else await Bun.write(resolve(out), `${text}\n`)
+    console.log(JSON.stringify(await answer.json(), null, 4))
     return 0
 }
 
@@ -427,8 +462,9 @@ async function openapi(
  * 38.9, 38.13 — a bridge a model client spawns and kills: each line in is a JSON-RPC message for
  * `/__abide/mcp`, and each answer is a line out.
  */
-async function mcp(host: Host, { values: { url } }: Given): Promise<number> {
-    const ask = await surfaceAt(host, url, MCP_ADDRESS)
+async function mcp(host: Host, app: AppHandle, given: Given): Promise<number> {
+    const ask = await surfaceAt(host, app, given, MCP_ADDRESS)
+    if (typeof ask === 'number') return ask
     for await (const line of console) {
         if (line.trim() === '') continue
         const answer = await ask({

@@ -867,7 +867,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`/__abide/openapi.json`',
                         '`abide:openapi`',
                         '`OpenApiDocument`',
-                        '`abide openapi [--out <file>] [--url <origin>]`',
+                        '`abide openapi [--url <origin>]`',
                     ],
                 },
                 {

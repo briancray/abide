@@ -12,6 +12,7 @@ import { MOUNT, unmounted } from '#shared/mount.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { servedTable } from './abideModules.ts'
 import { type AppSources, answerRequest } from './answerRequest.ts'
+import type { Mount } from './answerRpc.ts'
 import { Mux, type MuxConnection } from './answerSocket.ts'
 import { appDirectories } from './appDirectories.ts'
 import { holdsApp } from './appTree.ts'
@@ -61,17 +62,69 @@ export interface App {
  */
 export async function createApp(): Promise<App> {
     const root = appRoot(undefined)
-    if (root === undefined)
-        throw new Error(
-            `abide: createApp found no app. Looked for a .abide under ${resolve('src')}, or under ${process.cwd()} where it has no src.`,
-        )
-    const out = await servedBuild(root)
-    if (out === undefined)
-        throw new Error(
-            `abide: createApp found nothing under ${root} to build.`,
-        )
-    const { loadBuild } = await import('./serveBuild.ts')
-    return bootApp(originUnder(root), () => loadBuild({ root, out }))
+    const app = await appOnDisk(
+        root === undefined ? undefined : { root, out: buildDirectory(root) },
+        (root) => servedBuild(root),
+    ).boot()
+    if (typeof app === 'string')
+        throw new Error(`abide: createApp found ${app}`)
+    return app
+}
+
+/**
+ * One app, as one invocation means it: FOUND ONCE, and everything a command derives — the banner's
+ * identity, the shell's handler table, the boot — read off this rather than found again from where
+ * the process happens to stand. An app on disk (`appOnDisk`), or the one an executable holds.
+ */
+export type AppHandle = {
+    /** 27.3's name and version: the banner's, and what a script `run` resolves its configuration with. */
+    package: AppPackage
+    /**
+     * The handler table of a build already there, NEVER ONE MADE FOR THE ASKING: `call` and the
+     * shell are aimed at a running app (38.7), which this tree may not even be. Empty where none.
+     */
+    handlers: () => Promise<Mount[]>
+    /** The app's build made this process's, and booted — or why there is nothing to boot. */
+    boot: () => Promise<App | string>
+}
+
+/** Why there is no app where none was named: where 38.25 looked. 38.26. */
+export function noAppHere(): string {
+    return `no app here. Looked for a .abide under ${resolve('src')}, or under ${process.cwd()} where it has no src.`
+}
+
+/**
+ * The app on disk at `found` — its source root and build directory, both absolute — or the
+ * refusal where nothing was found. `built` makes its build this process's (`serveBuild`, which
+ * builds one nobody built — 38.100) and answers the directory it is in, or `undefined` where
+ * nothing under the root builds.
+ */
+export function appOnDisk(
+    found: { root: string; out: string } | undefined,
+    built: (root: string, out: string) => Promise<string | undefined>,
+): AppHandle {
+    if (found === undefined)
+        return {
+            package: packageUnder(process.cwd()),
+            handlers: async () => [],
+            boot: async () => noAppHere(),
+        }
+    const { root, out } = found
+    const origin = originUnder(root)
+    return {
+        package: origin.package,
+        handlers: async () => {
+            const { serveBuild } = await import('./serveBuild.ts')
+            if (!(await serveBuild(root, out, async () => undefined))) return []
+            return (await servedTable(root)).handlers
+        },
+        boot: async () => {
+            const served = await built(root, out)
+            if (served === undefined) return `nothing under ${root} to build.`
+            const { loadBuild } = await import('./serveBuild.ts')
+            return bootApp(origin, () => loadBuild({ root, out: served }))
+        },
+    }
 }
 
 /**
@@ -152,22 +205,43 @@ export function originUnder(root: string): AppOrigin {
  */
 export type BootedApp = App & { openMux(): Mux }
 
+/**
+ * Enters the app as this process's server — every slot `#shared` leaves for one filled, the app's
+ * identity set, every server block imported — and re-resolves the configuration: the one preamble
+ * `bootApp`, a script `run` and the desktop launcher each start with.
+ *
+ * 37.1 — EVERY SERVER BLOCK, imported for what it CALLS: every hook it runs is filed by the time the
+ * import settles, which is before `onStart` is composed around a boot. 38.57 — RE-RESOLVED: a module
+ * this process loaded first may already have read the configuration, under no identity.
+ */
+export async function enterApp(origin: AppOrigin): Promise<void> {
+    installServer()
+    APP_PACKAGE.current = origin.package
+    if (origin.hooks !== undefined) await origin.hooks()
+    config.invalidate()
+}
+
 /** An `App` booted over the sources `load` supplies, inside the app's `onStart` hooks. */
 export async function bootApp(
     origin: AppOrigin,
     load: () => Promise<AppSources>,
 ): Promise<BootedApp> {
-    installServer()
-    // 37.1 — EVERY SERVER BLOCK, imported for what it CALLS: every hook it runs is filed by the
-    // time the import settles, which is before `onStart` is composed around the boot.
-    if (origin.hooks !== undefined) await origin.hooks()
+    await enterApp(origin)
+    return bootEntered(load)
+}
 
+/**
+ * `bootApp` in a process `enterApp` already entered the app in: the desktop launcher's, which enters
+ * once for the hooks its own page reads and boots again on every start.
+ */
+export async function bootEntered(
+    load: () => Promise<AppSources>,
+): Promise<BootedApp> {
     // 37.4 — THE BOOT, INSIDE `onStart`. 37.6 — a throw out of a hook or out of the boot rejects
     // `createApp`, and nothing is served.
     //
     // 42.2 — THE CONFIGURATION IS READ AS PART OF THE BOOT, so a configuration that does not resolve
     // is a boot that fails rather than a first request that does.
-    APP_PACKAGE.current = origin.package
     let sources: AppSources | undefined
     await compose(inOrder(HOOKS.starts), async () => {
         config.invalidate()

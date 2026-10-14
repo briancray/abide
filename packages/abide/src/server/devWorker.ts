@@ -12,54 +12,43 @@
 // module's imports resolve from the source that wrote them in either.
 //
 // A REQUEST ARRIVES AS A MESSAGE, and its answer leaves as a head and then a chunk per pull (38.35,
-// 38.36): the listener asks for the next chunk when its connection has taken the last, so a stream
-// is read no faster than the browser reads it. A request BODY is still collected, which is what
-// lets the listener re-ask a request of the replacement (38.24).
+// 38.36) — `responseRelay`'s worker half, `serveOver`.
 //
 // 18.1, 18.3 — AND SO DOES A SOCKET. The listener holds the browser's web socket, which has to
 // outlive this worker; what crosses is each frame, tagged with the connection it came over, and
 // what goes back is each frame this worker's mux sends. The mux is the one `abide start` runs.
 
-import { CLIENT_ADDRESS, DEV_ADDRESS } from '#shared/ADDRESSES.ts'
+import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import {
-    abideModules,
     type Compilation,
     serveCompilation,
     servedTable,
 } from './abideModules.ts'
 import { type AppSources, appSources } from './answerRequest.ts'
 import type { Mux, MuxConnection } from './answerSocket.ts'
-import { appPlugins } from './appPlugins.ts'
 import { publishedUnder } from './appTree.ts'
-import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import {
-    clientBuildOptions,
-    stylesheetUnderMount,
-} from './clientBuildOptions.ts'
+    bundleServer,
+    type ClientBundle,
+    clientBundle,
+    type ServedFile,
+} from './clientBundle.ts'
 import { type BootedApp, bootApp, originUnder } from './createApp.ts'
 import { keepServing } from './faultPolicy.ts'
-import { fenceServer } from './fenceServer.ts'
-import { type Manifest, manifestOf, NO_MANIFEST } from './manifestOf.ts'
+import { type Manifest, NO_MANIFEST } from './manifestOf.ts'
 import { admitsMux } from './muxUpgrade.ts'
-import { refuseAddressCollision } from './refuseAddressCollision.ts'
 import { LISTENING } from './requestScope.ts'
+import {
+    describe,
+    type FromRelay,
+    serveOver,
+    type ToRelay,
+} from './responseRelay.ts'
 import { withAbideSources } from './withAbideSources.ts'
 
 // The reload client, which the worker serves and every document it answers loads.
 const RELOAD_CLIENT_ADDRESS = `${DEV_ADDRESS}/client.js`
-
-// The bundle this worker answers `/__abide/client/…` out of, the type each name is served as, and
-// the chunks each route module needs (38.28).
-type Bundle = {
-    // A stylesheet is held as its text, rewritten (`stylesheetUnderMount`); a source map as the
-    // rewrite of it, taken on the first ask (`withAbideSources`); the rest as built.
-    files: Map<
-        string,
-        { bytes: ArrayBuffer | string | (() => Promise<string>); type: string }
-    >
-    manifest: Manifest
-}
 
 /**
  * A message from the listener to this worker.
@@ -77,9 +66,7 @@ export type ToWorker =
           published: Map<string, string>
           failure: string
       }
-    | ({ kind: 'request' } & Ask)
-    | { kind: 'pull'; id: number }
-    | { kind: 'cancel'; id: number }
+    | ToRelay
     | {
           kind: 'socket-open'
           connection: number
@@ -92,37 +79,12 @@ export type ToWorker =
 /**
  * A message from this worker to the listener.
  *
- * Out: ready, a frame the mux sends a browser, a request's idle timeout raised, and its head, each
- * chunk, and its end.
+ * Out: ready, a frame the mux sends a browser, and what answers a request (`FromRelay`).
  */
 export type FromWorker =
     | { kind: 'ready' }
     | { kind: 'socket-send'; connection: number; text: string }
-    | { kind: 'timeout'; id: number; seconds: number }
-    | {
-          kind: 'head'
-          id: number
-          status: number
-          statusText: string
-          headers: [string, string][]
-          empty: boolean
-          /** 37.3 — whether the listener upgrades this request to the mux (`admitsMux`). */
-          admitted: boolean
-          /** A body whose length the answer declared, sent with its head rather than pulled. */
-          whole: ArrayBuffer | undefined
-      }
-    | { kind: 'chunk'; id: number; bytes: ArrayBuffer }
-    | { kind: 'end'; id: number }
-    | { kind: 'fail'; id: number; message: string }
-
-/** A request as it crosses to the worker: its id, and what the worker rebuilds it from. */
-export type Ask = {
-    id: number
-    method: string
-    url: string
-    headers: [string, string][]
-    body: ArrayBuffer | null
-}
+    | FromRelay
 
 /**
  * Sends a message to the listener.
@@ -132,27 +94,6 @@ export type Ask = {
 function toListener(message: FromWorker): void {
     process.send?.(message)
 }
-// 38.96 — EACH REQUEST'S SIGNAL, by request id, until its answer ends: the listener holds the
-// connection, so a hang-up reaches this worker as a `cancel` rather than through bun.
-const HANG_UPS = new Map<number, AbortController>()
-
-/** Files away the hang-up of the request `id`, whose answer has ended, and hands it back. */
-function answered(id: number): AbortController | undefined {
-    const hangUp = HANG_UPS.get(id)
-    HANG_UPS.delete(id)
-    return hangUp
-}
-
-// EVERY REQUEST IN FLIGHT HANGS UP WITH THIS WORKER, as each would with `abide start`'s process: a
-// handler that spawned under `request().signal` takes its child down, where an exit alone left it
-// running under launchd. The listener ends this worker on every reload, and its own end — killed
-// rather than ended — is a disconnect.
-function hangUpAndExit(): void {
-    for (const hangUp of HANG_UPS.values()) hangUp.abort()
-    process.exit(0)
-}
-process.on('disconnect', hangUpAndExit)
-process.on('SIGTERM', hangUpAndExit)
 
 // THE COMPILE, AS SOMETHING TO WAIT ON. A request that arrives while the worker is still
 // compiling has to wait for the app rather than be told there is none: the listener forwards
@@ -170,6 +111,38 @@ const connections = new Map<number, MuxConnection>()
 // keeps it up through a bundle that failed, so the failure is something to SERVE.
 let failure = ''
 
+// Each request the listener sends, answered by the app this worker booted.
+const relay = serveOver(
+    { postMessage: toListener },
+    {
+        async fetch(request) {
+            await opening
+            return app === undefined
+                ? failedDocument(failure)
+                : await app.fetch(request)
+        },
+        admits: (request, response) =>
+            carried !== undefined && admitsMux(request, response, carried),
+        failed: failedDocument,
+        failureMarkup,
+    },
+)
+
+// 16.22 — THE LISTENER HOLDS THE CONNECTION, so the idle timeout a call raises is raised there, on
+// the request bun handed it.
+LISTENING.timeout = relay.timeout
+
+// EVERY REQUEST IN FLIGHT HANGS UP WITH THIS WORKER, as each would with `abide start`'s process: a
+// handler that spawned under `request().signal` takes its child down, where an exit alone left it
+// running under launchd. The listener ends this worker on every reload, and its own end — killed
+// rather than ended — is a disconnect.
+function hangUpAndExit(): void {
+    relay.hangUpAll()
+    process.exit(0)
+}
+process.on('disconnect', hangUpAndExit)
+process.on('SIGTERM', hangUpAndExit)
+
 keepServing()
 
 process.on('message', (message: ToWorker) => void receive(message))
@@ -181,15 +154,13 @@ async function receive(message: ToWorker): Promise<void> {
         toListener({ kind: 'ready' })
         return
     }
-    if (message.kind === 'pull') return pull(message.id)
-    if (message.kind === 'cancel') {
-        const reading = bodies.get(message.id)
-        bodies.delete(message.id)
-        answered(message.id)?.abort()
-        return reading?.reader.cancel()
-    }
+    if (
+        message.kind === 'request' ||
+        message.kind === 'pull' ||
+        message.kind === 'cancel'
+    )
+        return relay.take(message)
     await opening
-    if (message.kind === 'request') return answerAsk(message)
     if (message.kind === 'socket-open') {
         const numbered = message.connection
         const connection = mux?.connect(
@@ -218,123 +189,6 @@ async function receive(message: ToWorker): Promise<void> {
     connection.close()
 }
 
-// Each answer whose head has gone out, by request id: what its chunks are read from, and whether a
-// failure in the middle can still be shown as markup.
-const bodies = new Map<
-    number,
-    { reader: ReadableStreamDefaultReader<Uint8Array>; html: boolean }
->()
-
-// 16.22 — THE LISTENER HOLDS THE CONNECTION, so the idle timeout a call raises is raised there, on
-// the request bun handed it: each request built here is known by the ask it was built from.
-const ASKS = new WeakMap<Request, number>()
-LISTENING.timeout = (received, seconds) => {
-    const id = ASKS.get(received)
-    if (id !== undefined) toListener({ kind: 'timeout', id, seconds })
-}
-
-// A status whose response has no body to send, which `Response` refuses to be built with one.
-const BODILESS = new Set([101, 204, 205, 304])
-
-/**
- * Answers one request the listener sent, sending back its head and holding its body for pulls.
- *
- * A THROW BEFORE THE HEAD IS AN ANSWER, not a dropped message. The listener is waiting on a head
- * for this id and nothing else will send one, so an escape left the reader's tab hanging until
- * they gave up.
- */
-async function answerAsk(ask: Ask): Promise<void> {
-    const hangUp = new AbortController()
-    HANG_UPS.set(ask.id, hangUp)
-    const request = new Request(ask.url, {
-        method: ask.method,
-        headers: ask.headers,
-        body: ask.body,
-        signal: hangUp.signal,
-    })
-    ASKS.set(request, ask.id)
-    let response: Response
-    try {
-        response =
-            app === undefined
-                ? failedDocument(failure)
-                : await app.fetch(request)
-    } catch (thrown) {
-        response = failedDocument(describe(thrown))
-    }
-    const body = BODILESS.has(response.status) ? null : response.body
-    // A DECLARED LENGTH IS A BODY ALREADY WHOLE, and it crosses with its head: re-streamed through the
-    // listener, bun meets a first read that has to wait on this worker and answers it chunked,
-    // dropping the length the app declared.
-    const whole =
-        body !== null && response.headers.has('content-length')
-            ? await response.arrayBuffer()
-            : undefined
-    toListener({
-        kind: 'head',
-        id: ask.id,
-        status: response.status,
-        statusText: response.statusText,
-        headers: [...response.headers.entries()],
-        empty: body === null,
-        admitted:
-            carried !== undefined && admitsMux(request, response, carried),
-        whole,
-    })
-    if (body === null || whole !== undefined) {
-        answered(ask.id)
-        return
-    }
-    bodies.set(ask.id, {
-        reader: body.getReader(),
-        html: (response.headers.get('content-type') ?? '').startsWith(
-            'text/html',
-        ),
-    })
-}
-
-/**
- * Sends the listener the next chunk of an answer's body, or its end.
- *
- * ONE CHUNK PER ASK. A throw in the middle ends the stream in an error, as `abide start` does —
- * and where the answer is html a handler streams, what broke goes out as markup first, a reader
- * shown a blank tab otherwise being told nothing. A page is never here: it is built whole (41.1).
- */
-async function pull(id: number): Promise<void> {
-    const reading = bodies.get(id)
-    if (reading === undefined) return
-    try {
-        const { done, value } = await reading.reader.read()
-        if (done) {
-            bodies.delete(id)
-            answered(id)
-            toListener({ kind: 'end', id })
-            return
-        }
-        // THE VIEW'S OWN BYTES. A chunk may be a view on a buffer its producer still owns — a
-        // compressor's `Buffer` is a slice of a shared pool, and `Buffer#slice` copies nothing — so
-        // sending `value.buffer` sent the whole pool.
-        const bytes = new Uint8Array(value).buffer as ArrayBuffer
-        toListener({ kind: 'chunk', id, bytes })
-    } catch (thrown) {
-        bodies.delete(id)
-        answered(id)
-        const why = describe(thrown)
-        if (reading.html) {
-            const shown = new TextEncoder().encode(failureMarkup(why))
-                .buffer as ArrayBuffer
-            toListener({ kind: 'chunk', id, bytes: shown })
-        }
-        toListener({ kind: 'fail', id, message: why })
-    }
-}
-
-function describe(thrown: unknown): string {
-    return thrown instanceof Error
-        ? (thrown.stack ?? thrown.message)
-        : String(thrown)
-}
-
 /**
  * Boots the app over the modules the listener sent, or records why it could not.
  *
@@ -352,10 +206,6 @@ async function open(
     const root = start.root
     const compilation = start.compilation
     try {
-        // A page among what compiled — an app of handlers alone has the tables and no client to
-        // bundle.
-        const paged = compilation.tables[`${CLIENT_ENTRY}.ts`] !== undefined
-
         // ONE PLUGIN, TWO CALLERS: the runtime resolves this worker's `import()` through it and
         // the bundler resolves the browser's graph through it, so the two lanes cannot disagree
         // about what a specifier means. Registering it is process-wide — which is a worker rather
@@ -370,36 +220,10 @@ async function open(
         // ONE LISTING of the public directories — the compile's — for the bundle's externals and for
         // what is served. 38.19 — OUT OF THE SOURCE TREE. `abide build` copies these into its output
         // and dev has no output, so the address answers where the author's file actually is.
-        const publicSources = start.published
-        const published = publishedUnder(root, publicSources)
-        const publicAddresses = [...publicSources.values()]
-        // 38.43 — the app's own plugins, imported beside the reads below rather than ahead of them.
-        const bundling = appPlugins(root).then((own) =>
-            bundleInMemory(
-                root,
-                // 16.28, 16.29 — the browser's view of the server, as `abide build` gives it.
-                [
-                    fenceServer(root, compilation.mounted),
-                    abideModules(root, compilation),
-                    ...own,
-                ],
-                paged,
-                publicAddresses,
-                compilation,
-            ),
-        )
+        const published = publishedUnder(root, start.published)
+        const bundling = bundleInMemory(root, compilation, start.published)
         const table = await servedTable(root)
         const handlers = table.handlers
-        // 36.13, IN THIS LANE TOO. A throw here lands in `failure`, which is what 38.4 asks
-        // for: the command keeps answering and what it answers names both halves. Without it
-        // `answerRequest` below would silently prefer the file — its public-before-routes
-        // order rests on this collision being impossible.
-        refuseAddressCollision(
-            table.routes,
-            handlers,
-            publicSources,
-            'abide dev',
-        )
 
         // THE SAME `App` `abide start` boots, so an app's hooks and middleware run in dev too — and its
         // sources are read INSIDE the boot, as `abide start` reads them: a document's head carries
@@ -415,7 +239,16 @@ async function open(
                 client: bundling.then((bundle) => ({
                     manifest: bundle.manifest,
                     head: `<script type="module" src="${RELOAD_CLIENT_ADDRESS}"></script>`,
-                    framework: (pathname) => served(bundle, pathname),
+                    framework: (pathname, request) =>
+                        pathname === RELOAD_CLIENT_ADDRESS
+                            ? new Response(RELOAD_CLIENT, {
+                                  headers: {
+                                      'content-type':
+                                          'text/javascript; charset=utf-8',
+                                      'cache-control': 'no-store',
+                                  },
+                              })
+                            : bundle.framework(pathname, request),
                 })),
                 explained: (thrown) => failedDocument(describe(thrown)),
             })
@@ -430,103 +263,58 @@ async function open(
     }
 }
 
-function served(bundle: Bundle, pathname: string): Response | undefined {
-    if (pathname === RELOAD_CLIENT_ADDRESS)
-        return new Response(RELOAD_CLIENT, {
-            headers: {
-                'content-type': 'text/javascript; charset=utf-8',
-                'cache-control': 'no-store',
-            },
-        })
-    if (!pathname.startsWith(`${CLIENT_ADDRESS}/`)) return undefined
-    const found = bundle.files.get(pathname.slice(CLIENT_ADDRESS.length + 1))
-    if (found === undefined) return undefined
-    const { bytes } = found
-    const body =
-        typeof bytes === 'function'
-            ? new ReadableStream({
-                  async start(controller) {
-                      controller.enqueue(
-                          new TextEncoder().encode(await bytes()),
-                      )
-                      controller.close()
-                  },
-              })
-            : bytes
-    // NO CACHING AT ALL, which is where dev parts company with 21.5: the names are stable across
-    // rebuilds, so a browser told to keep `entry.js` for a year keeps the app it had at boot.
-    return new Response(body, {
-        headers: { 'content-type': found.type, 'cache-control': 'no-store' },
-    })
-}
-
 /**
- * The client bundle, built into memory.
+ * The client bundle (`clientBundle`), built into memory, and what answers it.
  *
- * 38.16 — Unminified, and the entry named by its source rather than content-hashed, so what a
- * browser loads and what a stack trace names are the module the author wrote. 38.5's hashes and
- * manifest are the BUILD's, and the difference is deliberate: a dev chunk that changed has to be
- * fetched again, and a name that changes with it is a cache the reload cannot clear.
- *
- * A FAILURE IS AN EMPTY BUNDLE AND NOT A THROW (38.17). The pages still render, the document
- * still loads the reload client, and the next save is what fixes it.
+ * A FAILURE IS AN EMPTY BUNDLE AND NOT A THROW (38.17). The pages still render, the document still
+ * loads the reload client, and the next save is what fixes it — the error goes to THE TERMINAL
+ * RATHER THAN THE DOCUMENT, where the author started the command.
  */
 async function bundleInMemory(
     root: string,
-    plugins: Bun.BunPlugin[],
-    paged: boolean,
-    publicAddresses: string[],
     compilation: Compilation,
-): Promise<Bundle> {
-    const bundle: Bundle = { files: new Map(), manifest: NO_MANIFEST }
-    if (!paged) return bundle
-    const built = await Bun.build({
-        // 36.15's addresses off the source tree this lane answers them out of (38.19).
-        ...clientBuildOptions(root, plugins, publicAddresses),
-        // 38.97 — a debugger in the browser reads the `.abide` (`withAbideSources`).
-        sourcemap: 'linked',
-        naming: {
-            entry: '[name].[ext]',
-            chunk: '[name]-[hash].[ext]',
-            asset: '[name]-[hash].[ext]',
-        },
-        throw: false,
-    })
-    // THE TERMINAL RATHER THAN THE DOCUMENT. 38.17 keeps the server up, and a page that still
-    // paints is what it keeps up — so the pages stay served, unhydrated, and the author reads the
-    // build error where they started the command.
-    if (!built.success) {
+    published: Map<string, string>,
+): Promise<{ manifest: Manifest; framework: AppSources['framework'] }> {
+    let bundle: ClientBundle
+    try {
+        bundle = await clientBundle(root, compilation, published, 'dev')
+    } catch (thrown) {
+        const logs = thrown instanceof AggregateError ? thrown.errors : []
         console.error(
-            `abide dev: the client bundle failed\n${built.logs.map((log) => String(log)).join('\n')}`,
+            `${(thrown as Error).message}\n${logs.map((log) => String(log)).join('\n')}`,
         )
-        return bundle
+        bundle = { files: new Map(), manifest: NO_MANIFEST }
     }
-    // The chunks are independent, so they are read at once rather than one after another.
-    const read = await Promise.all(
-        built.outputs.map((output) => output.arrayBuffer()),
-    )
-    for (let index = 0; index < built.outputs.length; index += 1) {
-        const output = built.outputs[index] as Bun.BuildArtifact
-        const name = output.path.slice(output.path.lastIndexOf('/') + 1)
-        const bytes = read[index] as ArrayBuffer
-        let served: ArrayBuffer | string | (() => Promise<string>) = bytes
-        if (name.endsWith('.css'))
-            served = stylesheetUnderMount(new TextDecoder().decode(bytes))
-        // 38.97 — PLACED ON THE FIRST ASK: only a debugger reads a map, and placing every chunk's
-        // up front was ~45 ms of each reload on the docs app, whether or not one was open.
-        else if (output.kind === 'sourcemap') {
+    const files = new Map<string, ServedFile>()
+    for (const [name, { bytes, type, kind }] of bundle.files) {
+        let body: () => BodyInit = () => bytes
+        // 38.97 — PLACED ON THE FIRST ASK: only a debugger reads a map, and placing every chunk's up
+        // front was ~45 ms of each reload on the docs app, whether or not one was open.
+        if (kind === 'sourcemap') {
             let placed: Promise<string> | undefined
-            served = () =>
-                (placed ??= withAbideSources(
-                    new TextDecoder().decode(bytes),
-                    compilation,
-                    root,
-                ))
+            body = () =>
+                new ReadableStream({
+                    async start(controller) {
+                        placed ??= withAbideSources(
+                            new TextDecoder().decode(bytes),
+                            compilation,
+                            root,
+                        )
+                        controller.enqueue(
+                            new TextEncoder().encode(await placed),
+                        )
+                        controller.close()
+                    },
+                })
         }
-        bundle.files.set(name, { bytes: served, type: output.type })
+        files.set(name, { type, body, encoded: {} })
     }
-    bundle.manifest = manifestOf(built.metafile as Bun.BuildMetafile, root)
-    return bundle
+    // NO CACHING AT ALL, which is where dev parts company with 21.5: the names are stable across
+    // rebuilds, so a browser told to keep `entry.js` for a year keeps the app it had at boot.
+    return {
+        manifest: bundle.manifest,
+        framework: bundleServer(files, 'no-store'),
+    }
 }
 
 /**

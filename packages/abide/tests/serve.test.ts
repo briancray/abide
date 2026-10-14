@@ -221,7 +221,7 @@ test('the document loads the client entry — 38.22', async () => {
 // 38.5 — HASHED AND MINIFIED. The name is the half that is correctness: every file under the
 // client address is served for a year, so an entry under a fixed name is the old app for every
 // returning reader after a deploy, pointing at chunks the new build deleted.
-// THE REVERT: drop `naming` from `bundleClient` and the entry is `entry.js`; drop `minify` and the
+// THE REVERT: drop `naming` from `clientBundle` and the entry is `entry.js`; drop `minify` and the
 // comment the bundler heads each module with — its source path — is still in it.
 test('the entry is content-hashed and minified — 38.5', async () => {
     const entry = await entryOf()
@@ -477,7 +477,7 @@ test('the document links the stylesheet the build bundled — 34.6, 38.23', asyn
     expect(await sheet.text()).toContain('.fixture-sheet-was-imported')
 })
 
-// 36.15. THE REVERT: drop `external` from `bundleClient` and the build fails on
+// 36.15. THE REVERT: drop `external` from `clientBundle` and the build fails on
 // `Could not resolve: "/img/dot.svg"` — every test in this file with it.
 //
 // 16.10 — WRITTEN RELATIVE TO THE SHEET, so it is the public file's address below any mount; read

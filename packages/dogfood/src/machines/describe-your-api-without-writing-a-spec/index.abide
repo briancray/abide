@@ -42,9 +42,9 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section title="Written rather than served">
-        <Code code={`abide openapi --out dist/openapi.json`} />
+        <Code code={`abide openapi > dist/openapi.json`} />
 
-        <p>The same document, produced from the source rather than asked of a server. That is what a
+        <p>The same document, printed from the source rather than asked of a server. That is what a
         build step wants — a spec committed beside the code, or handed to a client generator — and
         it does not require the app to be running or the address to be on.</p>
 

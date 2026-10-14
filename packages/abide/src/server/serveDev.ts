@@ -28,12 +28,13 @@ import {
 } from '#compiler/compileApp.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
-import { placeOf } from '#shared/routePattern.ts'
 import type { Compilation } from './abideModules.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
-import type { Ask, FromWorker, ToWorker } from './devWorker.ts'
+import type { FromWorker, ToWorker } from './devWorker.ts'
 import { upgraded } from './muxUpgrade.ts'
+import { placeOf } from './placement.ts'
 import { plainAnswer } from './plainAnswer.ts'
+import { askOver } from './responseRelay.ts'
 import { SETTLE_MILLISECONDS } from './SETTLE_MILLISECONDS.ts'
 
 /** What `abide dev` serves, and where. */
@@ -44,20 +45,6 @@ export type DevOptions = {
      */
     root: string
     port?: number | undefined
-}
-
-// A request in flight: the request itself — because a worker replaced before it answered answers
-// nothing, and the ask has to be put to the app that exists (38.24) — and, once its head has come
-// back, the stream the body is fed into and the pull waiting on the worker's next chunk (38.35).
-type InFlight = Omit<Ask, 'id' | 'method' | 'url'> & {
-    // 16.22 — the request bun handed the listener, which is the one its idle timeout is raised on.
-    request: Request
-    settle: (response: Response) => void
-    stream: ReadableStreamDefaultController<Uint8Array> | null
-    pulled: (() => void) | null
-    // A failure the worker sent behind a chunk still queued, raised on the pull after it — raising it
-    // at once would discard the chunk, which is the markup saying what broke.
-    failed: string | null
 }
 
 // The app's process, spoken to in its own protocol.
@@ -75,9 +62,6 @@ type Compiled = {
 
 const LAST_DEV_PORT = 3099
 
-// 37.3 — the answers the worker said `admitsMux`, which the listener upgrades on.
-const ADMITTED = new WeakSet<Response>()
-
 // An app-mux socket's data: the id the worker knows its connection by, and what `Mux.connect` reads
 // off the upgrade. `undefined` on the reload client's.
 type Carried =
@@ -92,7 +76,11 @@ type Carried =
 export async function serveDev(
     options: DevOptions,
 ): Promise<Bun.Server<undefined>> {
-    const inFlight = new Map<number, InFlight>()
+    // 38.24, 38.35 — every request, asked of the worker there is and streamed back a chunk per read.
+    // 16.22 — a call's idle timeout raised on the request bun handed this listener.
+    const relay = askOver((request, seconds) =>
+        server.timeout(request, seconds),
+    )
     // Every socket this listener holds: the reload client's, with no data, and the app mux's, carrying
     // the connection id the worker knows it by.
     const sockets = new Set<Bun.ServerWebSocket<Carried>>()
@@ -100,12 +88,6 @@ export async function serveDev(
     let nextConnection = 0
     let worker: DevWorker | undefined
     let ready = false
-    let nextId = 0
-    // ASKED BEFORE THERE IS ANYONE TO ASK. A replacement terminates the worker and the next one
-    // does not exist until its compile finishes, so a request arriving in that window has
-    // nowhere to go — posted to the terminated worker it is never answered, and the reader's
-    // tab hangs until they give up. It waits here instead.
-    const queued: InFlight[] = []
 
     // ONE COMPILE AT A TIME, and the worker is started from the LAST one. A save landing while a
     // compile runs marks it stale rather than starting a second: two in flight each started a
@@ -222,11 +204,7 @@ export async function serveDev(
                     if (message.kind === 'ready') ready = true
                     else if (message.kind === 'socket-send')
                         muxed.get(message.connection)?.send(message.text)
-                    else if (message.kind === 'timeout') {
-                        const asked = inFlight.get(message.id)?.request
-                        if (asked !== undefined)
-                            server.timeout(asked, message.seconds)
-                    } else answer(started, message)
+                    else relay.take(message)
                 },
                 // 38.41 — AN APP THAT EXITS ON ITS OWN is replaced, and says so: a listener still
                 // forwarding to it leaves every tab hanging.
@@ -235,7 +213,8 @@ export async function serveDev(
                     console.error(
                         'abide dev: the app exited, so it was restarted',
                     )
-                    endInFlight(false, 'abide dev: the app exited')
+                    // 38.41 — the request in hand may be what ended it, so none is asked again.
+                    relay.endAll('abide dev: the app exited', false)
                     replace()
                 },
             },
@@ -261,25 +240,9 @@ export async function serveDev(
             published,
             failure,
         })
-        // The worker holds every request behind its own compile, so what waited here only had
-        // to wait for one to EXIST.
-        const waiting = queued.splice(0)
-        for (const again of waiting) forward(again)
-    }
-
-    // WHAT AN APP THAT IS GONE WAS HOLDING. A request whose head has not gone out is re-asked of the
-    // replacement (38.24), or answered where the app ended itself — the request in hand may be what
-    // ended it (38.41). 38.37 — one whose head has gone out cannot be answered again, and ends as
-    // `abide start`'s does.
-    function endInFlight(reask: boolean, why: string): void {
-        for (const held of inFlight.values()) {
-            if (held.stream !== null) {
-                held.stream.error(new Error(why))
-                held.pulled?.()
-            } else if (reask) queued.push(held)
-            else held.settle(plainAnswer(why, 500))
-        }
-        inFlight.clear()
+        // The worker holds every request behind its own compile, so what waited for one only had
+        // to wait for it to EXIST.
+        relay.replace(started)
     }
 
     // 38.15 — THE REPLACEMENT. The old worker is terminated, every socket it could still be
@@ -293,10 +256,11 @@ export async function serveDev(
         ready = false
         worker?.terminate()
         worker = undefined
+        relay.replace(undefined)
         for (const socket of sockets) socket.terminate()
         sockets.clear()
         muxed.clear()
-        endInFlight(true, 'abide dev replaced the app mid-response')
+        relay.endAll('abide dev replaced the app mid-response', true)
         if (compiling !== undefined) stale = true
         else compiling = reopen()
     }
@@ -314,127 +278,6 @@ export async function serveDev(
     watch(options.root, { recursive: true }, (_event, filename) =>
         moved(filename === null ? undefined : `${options.root}/${filename}`),
     )
-
-    // A REQUEST AS A MESSAGE. `Request` does not survive a structured clone, so what crosses is
-    // the four things the worker rebuilds one from — and the request's body is collected here, which
-    // is what lets it be asked again of a replacement (38.24). The answer's body streams (38.35).
-    //
-    // COLLECTED ONCE, HERE, rather than inside `forward`: a body can only be read off a
-    // `Request` once, and a re-asked request is the second read that is not there.
-    async function ask(request: Request): Promise<Response> {
-        const body = request.body === null ? null : await request.arrayBuffer()
-        return await new Promise<Response>((resolve) => {
-            forward({
-                request,
-                headers: identityOnly(request.headers),
-                body,
-                settle: resolve,
-                stream: null,
-                pulled: null,
-                failed: null,
-            })
-        })
-    }
-
-    // 38.38 — ASKED WITHOUT `accept-encoding`, so the app answers uncompressed. A failure after the
-    // head is shown as markup appended to the stream (`pull` in the worker), and markup appended to a
-    // compressed stream is a stream no browser can decode. Localhost buys nothing from the bytes saved.
-    function identityOnly(headers: Headers): [string, string][] {
-        const kept: [string, string][] = []
-        for (const [name, value] of headers)
-            if (name !== 'accept-encoding') kept.push([name, value])
-        return kept
-    }
-
-    // 38.35, 38.36 — THE HEAD SETTLES THE RESPONSE, and its body pulls one chunk from the worker per
-    // read the connection makes: a high-water mark of 0 asks for nothing ahead of the reader.
-    function answer(
-        from: DevWorker,
-        message: Exclude<
-            FromWorker,
-            { kind: 'ready' | 'socket-send' | 'timeout' }
-        >,
-    ): void {
-        const waiting = inFlight.get(message.id)
-        if (waiting === undefined) return
-        const { id } = message
-        if (message.kind === 'head') {
-            if (message.empty || message.whole !== undefined) {
-                inFlight.delete(id)
-                const answered = new Response(message.whole ?? null, {
-                    status: message.status,
-                    statusText: message.statusText,
-                    headers: message.headers,
-                })
-                // The admission has no body, so an admitted answer is always settled here.
-                if (message.admitted) ADMITTED.add(answered)
-                waiting.settle(answered)
-                return
-            }
-            const body = new ReadableStream<Uint8Array>(
-                {
-                    start(controller) {
-                        waiting.stream = controller
-                    },
-                    pull(controller) {
-                        if (waiting.failed !== null) {
-                            inFlight.delete(id)
-                            controller.error(new Error(waiting.failed))
-                            return
-                        }
-                        return new Promise<void>((done) => {
-                            waiting.pulled = done
-                            from.postMessage({ kind: 'pull', id })
-                        })
-                    },
-                    cancel() {
-                        inFlight.delete(id)
-                        from.postMessage({ kind: 'cancel', id })
-                    },
-                },
-                { highWaterMark: 0 },
-            )
-            waiting.settle(
-                new Response(body, {
-                    status: message.status,
-                    statusText: message.statusText,
-                    headers: message.headers,
-                }),
-            )
-            return
-        }
-        const stream = waiting.stream
-        const pulled = waiting.pulled
-        waiting.pulled = null
-        if (stream === null) return
-        if (message.kind === 'chunk')
-            stream.enqueue(new Uint8Array(message.bytes))
-        else if (message.kind === 'end') {
-            inFlight.delete(id)
-            stream.close()
-        } else waiting.failed = message.message
-        pulled?.()
-    }
-
-    // NOT TRANSFERRED. Handing the buffer over detaches it here, and a request re-asked of the
-    // replacement worker would post a body that is no longer there.
-    function forward(waiting: InFlight): void {
-        if (worker === undefined) {
-            queued.push(waiting)
-            return
-        }
-        nextId += 1
-        const id = nextId
-        inFlight.set(id, waiting)
-        worker.postMessage({
-            kind: 'request',
-            id,
-            method: waiting.request.method,
-            url: waiting.request.url,
-            headers: waiting.headers,
-            body: waiting.body,
-        })
-    }
 
     // THE CHECKER AND THE WORKER GO WITH THE COMMAND. Each is a process of its own, and an app with
     // no tsconfig holds a temporary project on disk for as long as the checker is open. The worker
@@ -461,11 +304,11 @@ export async function serveDev(
                 const mux =
                     asked !== DEV_ADDRESS &&
                     request.headers.get('upgrade') === 'websocket'
-                if (!mux && asked !== DEV_ADDRESS) return ask(request)
+                if (!mux && asked !== DEV_ADDRESS) return relay.ask(request)
                 // 37.3 — THE MUX'S UPGRADE IS ASKED OF THE APP FIRST, whose lane runs in the worker.
                 if (mux && ready) {
-                    const answered = await ask(request)
-                    if (!ADMITTED.has(answered)) return answered
+                    const answered = await relay.ask(request)
+                    if (!relay.admitted(answered)) return answered
                 }
                 // NOT WHILE THE APP IS COMPILING. The reload client and the browser's mux both read a
                 // refusal as "still rebuilding" and retry, which is what keeps a reload from racing

@@ -600,7 +600,7 @@ afterAll(() => {
 // breaks: the same address resolved to the PAGE under `abide start` and to the FILE under
 // `abide dev`.
 //
-// THE REVERT: drop the `refuseAddressCollision` call in `devWorker.open` and this boots clean,
+// THE REVERT: drop the `refuseAddressCollision` call in `compileApp`'s `emitApp` and this boots clean,
 // after which `/about` answers 200 with `the file that shadows the page` — the page unreachable,
 // in one lane only, and nothing said so.
 test('a public file claiming a page address is refused by dev too — 36.13', async () => {

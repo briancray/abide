@@ -3,8 +3,8 @@
 // is `ledger-linux-x64`, and that is what a reader types.
 
 import { type Host, runCommands } from './commands.ts'
-import { type AppOrigin, bootApp } from './createApp.ts'
-import { type BuildParts, builtSources, serveApp } from './serveBuild.ts'
+import { type AppHandle, type AppOrigin, bootApp } from './createApp.ts'
+import { type BuildParts, builtSources } from './serveBuild.ts'
 
 export async function runCompiled(
     origin: AppOrigin,
@@ -25,18 +25,15 @@ export async function runCompiled(
                 }))
         },
     })
+    // 38.49 — THE APP IT HOLDS, whatever the flags say.
+    const app: AppHandle = {
+        package: origin.package,
+        handlers: async () => parts.handlers,
+        boot: async () => bootApp(origin, () => builtSources(parts)),
+    }
     const host: Host = {
         name: process.execPath.slice(process.execPath.lastIndexOf('/') + 1),
-        handlers: async () => parts.handlers,
-        appPackage: () => origin.package,
-        boot: () => bootApp(origin, () => builtSources(parts)),
-        // 38.49.
-        serve: ({ values: { port } }) =>
-            serveApp(
-                origin,
-                () => builtSources(parts),
-                port === undefined ? undefined : Number(port),
-            ),
+        app: () => app,
         source: undefined,
     }
     const code = await runCommands(host, Bun.argv.slice(2))

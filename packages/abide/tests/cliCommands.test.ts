@@ -38,6 +38,19 @@ beforeAll(async () => {
     }))
 }, 30_000)
 
+// THE APP `--root` NAMES, UNDER `src/`, so the build it gets with no `--out` lands beside that `src/`
+// in this fixture's own directory (38.25). `serveApp`'s fixture sits directly under `.test-modules/`, where every
+// test file's fixture would build into the one `.test-modules/.abide` under `--parallel`.
+function rootedApp(): string {
+    const files: Record<string, string> = {
+        'package.json': JSON.stringify({ name: 'fixture', type: 'module' }),
+        'src/index.abide': '<main>home</main>',
+    }
+    for (const [name, text] of Object.entries(handlerFiles('things', HANDLERS)))
+        files[`src/${name}`] = text
+    return `${temporaryModule(files)}/src`
+}
+
 afterAll(() => {
     stop()
     removeTemporaryModules()
@@ -121,7 +134,7 @@ test('the published package carries the docs and the rulebook — 38.105, 38.106
 
 // 38.43 — THE APP'S BUNDLER PLUGINS, where bun has an app declare them. A local plugin stands in for
 // `bun-plugin-tailwind`, which is the same shape and a network install. THE REVERT: drop
-// `appPlugins` from `bundleClient`; the stylesheet is built without the stamp.
+// `appPlugins` from `clientBundle`; the stylesheet is built without the stamp.
 test('build runs the plugins bunfig.toml declares over the client — 38.43', async () => {
     const app = temporaryModule({
         'package.json': JSON.stringify({
@@ -245,20 +258,50 @@ test('a call to --url builds nothing where it is run — 38.7, 38.8', async () =
     )
 })
 
-// 38.9 — the document from the running app, written rather than served.
-test('openapi writes the document the app serves — 38.9', async () => {
-    const out = `${temporaryModule({ 'keep.txt': '' })}/openapi.json`
-    const written = await spawned([
-        'bun',
-        BIN,
-        'openapi',
-        '--url',
-        base,
-        '--out',
-        out,
-    ])
-    expect(written.exitCode).toBe(0)
-    const document = (await Bun.file(out).json()) as {
+// 38.9, 38.111 — the document from the running app, printed rather than served.
+test('openapi prints the document the app serves — 38.9, 38.111', async () => {
+    const printed = await spawned(['bun', BIN, 'openapi', '--url', base])
+    expect(printed.exitCode).toBe(0)
+    const document = JSON.parse(printed.stdout) as {
+        paths: Record<string, unknown>
+    }
+    expect(Object.keys(document.paths)).toContain('/things/echo')
+})
+
+// 38.25 — `--root` IS THE APP FOR EVERY PART OF A COMMAND, run from inside another package. THE
+// REVERT: announce the package found under the working directory rather than the one `--root`
+// found; the banner names `elsewhere`, the package the shell stood in.
+test('start --root announces the app it serves, wherever it is run — 38.25, 38.6', async () => {
+    const here = temporaryModule({ 'package.json': '{"name":"elsewhere"}' })
+    const server = Bun.spawn(
+        ['bun', BIN, 'start', '--root', rootedApp(), '--port', '0'],
+        { cwd: here, stdout: 'pipe', stderr: 'pipe' },
+    )
+    let printed = ''
+    try {
+        for await (const chunk of server.stdout) {
+            printed += new TextDecoder().decode(chunk)
+            if (printed.includes('http://')) break
+        }
+    } finally {
+        server.kill('SIGKILL')
+    }
+    expect(printed).toContain('fixture')
+    expect(printed).not.toContain('elsewhere')
+})
+
+// 38.9, 38.25 — WITH NO `--url`, THE APP `--root` NAMES is booted here, not the one the shell
+// stands in. THE REVERT: boot what `createApp` finds under the working directory; there is none,
+// and the command exits 1 with "createApp found no app". 38.110, 38.111 — the app is unbuilt, so
+// it is built first. THE REVERT: say the build's summary on stdout; the document no longer parses.
+test('openapi --root boots the app it names and prints its document — 38.9, 38.25, 38.110, 38.111', async () => {
+    const here = temporaryModule({ 'package.json': '{"name":"elsewhere"}' })
+    const printed = await spawned(
+        ['bun', BIN, 'openapi', '--root', rootedApp()],
+        { cwd: here },
+    )
+    expect(printed.exitCode).toBe(0)
+    const document = JSON.parse(printed.stdout) as {
         paths: Record<string, unknown>
     }
     expect(Object.keys(document.paths)).toContain('/things/echo')

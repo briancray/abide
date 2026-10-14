@@ -6,13 +6,13 @@ import { existsSync, realpathSync } from 'node:fs' // bun exposes no sync existe
 import { mkdir, rename, rm } from 'node:fs/promises' // bun exposes no directory creation, rename or recursive directory removal of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { brotliCompress, constants } from 'node:zlib' // bun's brotli is `CompressionStream`, which compresses on the main thread — 1390 ms against this pool's 300 ms over the docs bundle
+import { paints } from '#compiler/appLayout.ts'
 import { appMap, mapText } from '#compiler/appMap.ts'
 import { checkApp } from '#compiler/checkApp.ts'
 import {
     type CompiledApp,
     compilationOf,
     compileApp,
-    paints,
 } from '#compiler/compileApp.ts'
 import { compiledEntry } from '#compiler/compiledEntry.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
@@ -22,10 +22,8 @@ import { serveLanguage } from '#compiler/serveLanguage.ts'
 import {
     abideModules,
     type Compilation,
-    servedTable,
     serverMapsOf,
 } from '#server/abideModules.ts'
-import { appPlugins } from '#server/appPlugins.ts'
 import { banner } from '#server/banner.ts'
 import { buildDirectory } from '#server/buildDirectory.ts'
 import {
@@ -35,26 +33,15 @@ import {
     MANIFEST,
     PUBLIC_DIRECTORY,
 } from '#server/CLIENT_BUILD.ts'
-import {
-    clientBuildOptions,
-    stylesheetUnderMount,
-} from '#server/clientBuildOptions.ts'
+import { type ClientBundle, clientBundle } from '#server/clientBundle.ts'
 import { type Given, type Host, runCommands } from '#server/commands.ts'
 import { type AppPackage, packageUnder } from '#server/config.ts'
-import { appRoot, createApp, originUnder } from '#server/createApp.ts'
+import { appOnDisk, appRoot, noAppHere } from '#server/createApp.ts'
 import { executableName } from '#server/executableName.ts'
-import { fenceServer } from '#server/fenceServer.ts'
 import { iconAccent } from '#server/iconAccent.ts'
-import { manifestOf, NO_MANIFEST } from '#server/manifestOf.ts'
 import { namesUnder } from '#server/namesUnder.ts'
-import { refuseAddressCollision } from '#server/refuseAddressCollision.ts'
 import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
-import {
-    loadBuild,
-    pathsUnder,
-    serveApp,
-    serveBuild,
-} from '#server/serveBuild.ts'
+import { pathsUnder, serveBuild } from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
@@ -68,30 +55,16 @@ type AppDirectories = { root: string; out: string }
  */
 const DISK: Host = {
     name: 'abide',
-    // A BUILD ALREADY THERE, NEVER ONE MADE FOR THE ASKING: `call` and the shell are aimed at a
-    // running app (38.7), which this tree may not even be.
-    handlers: async ({ values }) => {
-        const app = directoriesOf(values)
-        if (
-            app === undefined ||
-            !(await serveBuild(app.root, app.out, async () => undefined))
-        )
-            return []
-        return (await servedTable(app.root)).handlers
-    },
-    appPackage: () => packageUnder(appRoot(undefined) ?? process.cwd()),
-    boot: createApp,
-    serve: inApp(async ({ root, out }, { values: { port } }) => {
-        if (!(await serveBuild(root, out, buildInProcess))) {
-            console.error(`abide start: nothing under ${root} to serve.`)
-            return 1
-        }
-        return serveApp(
-            originUnder(root),
-            () => loadBuild({ root, out }),
-            port === undefined ? undefined : Number(port),
-        )
-    }),
+    // 38.100 — built in this process rather than a child, where nobody built it, and said on
+    // stderr: the command's stdout is its own — `openapi`'s document, `mcp`'s messages.
+    app: ({ values }) =>
+        appOnDisk(directoriesOf(values), async (root, out) =>
+            (await serveBuild(root, out, (root, out) =>
+                writeBuild({ root, out }, console.error),
+            ))
+                ? out
+                : undefined,
+        ),
     source: {
         scaffold: scaffoldCommand,
         dev: inApp(dev),
@@ -104,22 +77,20 @@ const DISK: Host = {
     },
 }
 
-// 38.100 — what `serveBuild` builds an app nobody built with, in this process rather than a child.
-function buildInProcess(root: string, out: string): Promise<unknown> {
-    return writeBuild({ root, out })
-}
-
 /** `abide build`: compiles the app, bundles its client and copies its public files into `out`. */
 async function build(directories: AppDirectories): Promise<number> {
     await writeBuild(directories)
     return 0
 }
 
-/** `build`'s work; answers the app it built, or `undefined` where there was nothing under `root`. */
-async function writeBuild({
-    root,
-    out,
-}: AppDirectories): Promise<CompiledApp | undefined> {
+/**
+ * `build`'s work; answers the app it built, or `undefined` where there was nothing under `root`.
+ * `say` is where its summary goes.
+ */
+async function writeBuild(
+    { root, out }: AppDirectories,
+    say: (line: string) => void = console.log,
+): Promise<CompiledApp | undefined> {
     process.env.NODE_ENV ??= 'production'
     // 38.66 — what this build may remove is only what was written before it began.
     const began = Date.now()
@@ -136,7 +107,7 @@ async function writeBuild({
         Object.keys(app.files).length === 0 &&
         Object.keys(app.handlers).length === 0
     ) {
-        console.log(`abide build: no .abide sources or handlers under ${root}`)
+        say(`abide build: no .abide sources or handlers under ${root}`)
         return undefined
     }
     // 38.6 — THE COMPILATION, KEPT WHOLE: `abide start` serves every `.abide` out of it at the
@@ -144,28 +115,16 @@ async function writeBuild({
     const compilation = compilationOf(app)
     // 36.11 — the directories above `public` and the path below it ARE the address.
     // `src/public/favicon.ico` answers at `/favicon.ico`, and nothing declares that anywhere.
-    const publicAddresses = [...app.published.values()]
-    // 36.13 IS CHECKED BEFORE A BYTE IS BUNDLED OR COPIED, through `refuseAddressCollision` — which
-    // `abide dev` runs too. Checking it mid-copy left a partial output behind on the throw, and it
-    // left the dev lane unchecked entirely.
-    refuseAddressCollision(app.routes, app.mounts, app.published, 'abide build')
-    await bundleClient(
-        root,
+    await writeClient(
         out,
-        [
-            fenceServer(root, compilation.mounted),
-            abideModules(root, compilation),
-            ...(await appPlugins(root)),
-        ],
-        publicAddresses,
-        app.routes.length > 0,
+        await clientBundle(root, compilation, app.published, 'build'),
         began,
     )
     // An app's static files are its own whether or not it has a page yet.
     const copied = await copyPublic(root, out, app.published, began)
     // LAST, because its presence is what `serveBuild` reads as a finished build (38.100).
     await writeWhole(marker, JSON.stringify(compilation))
-    console.log(
+    say(
         `abide build: ${app.sources} source(s), ${copied} public file(s) -> ${out}`,
     )
     return app
@@ -559,69 +518,28 @@ async function copyPublic(
 }
 
 /**
- * Bundles the client into `out`, with its manifest and precompressed copies.
+ * Writes the client bundle (`clientBundle`) into `out`, with its manifest and precompressed copies.
  *
- * THE BUNDLE. Which module boots the client is the compiler's knowledge — it writes the entry
- * into the output tree beside the route table — and this is where that entry becomes a browser
- * bundle.
- *
- * `--splitting`, so a destination's markup and bindings stay in the chunk its own route loads
- * (30.11) rather than landing in the entry every page pays for. 38.5 IS THIS FUNCTION: hashed and
- * minified by the bundler, the manifest off its metafile (the entry's name, and the chunks each
- * route module needs for 38.28), and the precompressed copies (`precompressOne`). What the manifest
- * does NOT carry yet is 38.18's list of public files.
+ * 38.5 — the manifest beside the bundle, and every file in each encoding (`precompressed`). AN APP
+ * OF HANDLERS ALONE is written no client, and its manifest anyway, so `abide start` reads one shape
+ * whatever the app holds.
  */
-async function bundleClient(
-    root: string,
+async function writeClient(
     out: string,
-    plugins: Bun.BunPlugin[],
-    publicAddresses: string[],
-    paged: boolean,
+    bundle: ClientBundle,
     began: number,
 ): Promise<void> {
     const client = `${out}/${CLIENT_DIRECTORY}`
-    // AN APP OF HANDLERS ALONE has no page to boot, and is served with no client — the manifest
-    // written anyway, so `abide start` reads one shape whatever the app holds.
-    if (!paged) {
-        await pruneStale(client, new Set(), began)
-        await writeWhole(`${out}/${MANIFEST}`, JSON.stringify(NO_MANIFEST))
-        return
-    }
-    // 38.66 — STAGED, THEN MOVED IN FILE BY FILE. `Bun.build` writes in place, so a second build
-    // into the same `out` — or `abide start` serving it — read a chunk half written, and emptying
-    // `client/` first took the one it was serving away. Every name but the manifest's is a hash of
-    // what it holds, so two builds of one tree move in the same bytes under the same names.
+    // 38.66 — STAGED, THEN MOVED IN FILE BY FILE. A second build into the same `out` — or `abide
+    // start` serving it — read a chunk half written, and emptying `client/` first took the one it
+    // was serving away. Every name but the manifest's is a hash of what it holds, so two builds of
+    // one tree move in the same bytes under the same names.
     const staging = `${out}/.staging-${crypto.randomUUID()}`
     try {
-        const built = await Bun.build({
-            ...clientBuildOptions(root, plugins, publicAddresses),
-            outdir: staging,
-            // 38.5 — MINIFIED, and EVERY NAME HASHED, the entry's included: chunks and assets are
-            // already `[name]-[hash]` by default and the entry is not, which left the one file every
-            // page loads served for a year under a name the next deploy writes different bytes to.
-            // The manifest is how the document learns what the entry was called this time.
-            //
-            // NAMES KEPT, because a class's name is what an error reads to say what it was handed
-            // (`canonicalKey`), and a production error naming `a e` is one nobody can act on. It is
-            // free where it is paid: the JS the docs app's `/values` sends is 25.6 KB brotli with
-            // the names and without, against 31.9 unminified.
-            minify: {
-                whitespace: true,
-                syntax: true,
-                identifiers: true,
-                keepNames: true,
-            },
-            naming: { entry: '[name]-[hash].[ext]' },
-        })
-        // THROWN RATHER THAN LOGGED. A build that emitted server modules and no bundle is an app that
-        // serves every page dead — the markup is right and nothing is wired — which is the one failure
-        // a reader cannot see, so it stops the command instead.
-        if (!built.success)
-            throw new AggregateError(
-                built.logs,
-                'abide build: the client bundle failed',
-            )
-        await Promise.all(built.outputs.map(precompressOne))
+        const written: Promise<void>[] = []
+        for (const [name, { bytes }] of bundle.files)
+            written.push(precompressed(`${staging}/${name}`, bytes))
+        await Promise.all(written)
         const produced = new Set<string>()
         const moves: Promise<void>[] = []
         for (const name of namesUnder(staging)) {
@@ -634,15 +552,48 @@ async function bundleClient(
         }
         await Promise.all(moves)
         await pruneStale(client, produced, began)
-        await writeWhole(
-            `${out}/${MANIFEST}`,
-            JSON.stringify(
-                manifestOf(built.metafile as Bun.BuildMetafile, root),
-            ),
-        )
+        await writeWhole(`${out}/${MANIFEST}`, JSON.stringify(bundle.manifest))
     } finally {
         await rm(staging, { recursive: true, force: true })
     }
+}
+
+/**
+ * Writes `bytes` to `path`, and brotli and gzip copies of them beside it.
+ *
+ * 38.5 — EVERY FILE THE BUNDLE WROTE, BESIDE ITSELF IN EACH OF `ENCODING_SUFFIX`'s ENCODINGS, at
+ * the highest level each has. The price is paid here once, where a server compressing per request
+ * would pay it on every response or settle for a worse level to keep the response fast.
+ *
+ * ALL AT ONCE. The async brotli runs off the main thread, so the files compress side by side
+ * rather than one after another — brotli at 11 is most of what this step costs.
+ */
+async function precompressed(
+    path: string,
+    bytes: Uint8Array<ArrayBuffer>,
+): Promise<void> {
+    const brotli = await new Promise<Uint8Array>((compressed, failed) =>
+        brotliCompress(
+            bytes,
+            {
+                params: {
+                    [constants.BROTLI_PARAM_QUALITY]:
+                        constants.BROTLI_MAX_QUALITY,
+                    [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+                },
+            },
+            (thrown, result) =>
+                thrown === null ? compressed(result) : failed(thrown),
+        ),
+    )
+    await Promise.all([
+        Bun.write(path, bytes),
+        Bun.write(path + ENCODING_SUFFIX.br, brotli),
+        Bun.write(
+            path + ENCODING_SUFFIX.gzip,
+            Bun.gzipSync(bytes, { level: 9 }),
+        ),
+    ])
 }
 
 /**
@@ -681,50 +632,6 @@ async function writeWhole(path: string, content: string | Blob): Promise<void> {
 }
 
 /**
- * Writes brotli and gzip copies of one bundle output beside it — a stylesheet's addresses written
- * relative to the bundle first (`stylesheetUnderMount`).
- *
- * 38.5 — EVERY FILE THE BUNDLE WROTE, BESIDE ITSELF IN EACH OF `ENCODING_SUFFIX`'s ENCODINGS, at
- * the highest level each has. The price is paid here once, where a server compressing per request
- * would pay it on every response or settle for a worse level to keep the response fast.
- *
- * ALL AT ONCE. The async brotli runs off the main thread, so the files compress side by side
- * rather than one after another — brotli at 11 is most of what this step costs.
- */
-async function precompressOne(output: Bun.BuildArtifact): Promise<void> {
-    // `arrayBuffer` AND NOT `bytes`: the artifact's type declares both and it answers only the one.
-    let bytes = new Uint8Array(await output.arrayBuffer())
-    // A stylesheet is rewritten on disk before it is compressed, so all three copies carry it.
-    if (output.path.endsWith('.css')) {
-        bytes = new TextEncoder().encode(
-            stylesheetUnderMount(new TextDecoder().decode(bytes)),
-        )
-        await Bun.write(output.path, bytes)
-    }
-    const brotli = await new Promise<Uint8Array>((compressed, failed) =>
-        brotliCompress(
-            bytes,
-            {
-                params: {
-                    [constants.BROTLI_PARAM_QUALITY]:
-                        constants.BROTLI_MAX_QUALITY,
-                    [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
-                },
-            },
-            (thrown, result) =>
-                thrown === null ? compressed(result) : failed(thrown),
-        ),
-    )
-    await Promise.all([
-        Bun.write(output.path + ENCODING_SUFFIX.br, brotli),
-        Bun.write(
-            output.path + ENCODING_SUFFIX.gzip,
-            Bun.gzipSync(bytes, { level: 9 }),
-        ),
-    ])
-}
-
-/**
  * Wraps a command body with the app's absolute root and build directory, or fails with no app.
  *
  * The app a command builds or serves, found once and handed over ABSOLUTE. Every consumer below
@@ -739,7 +646,7 @@ function inApp<Answer>(
         const app = directoriesOf(given.values)
         if (app === undefined) {
             console.error(
-                `abide ${given.positionals[0]}: no app here. Looked for a .abide under ${resolve('src')}, or under ${process.cwd()} where it has no src. Point --root at the directory your pages sit under.`,
+                `abide ${given.positionals[0]}: ${noAppHere()} Point --root at the directory your pages sit under.`,
             )
             return 1
         }

@@ -25,8 +25,7 @@ abide --help`} />
                 <li><code>--out &lt;dir&gt;</code> — where <code>build</code> writes, beside the app
                 rather than beside you: building <code>packages/ledger/src</code> from anywhere
                 leaves <code>packages/ledger/.abide</code>, which is where <code>start</code> looks.
-                It is also the file <code>openapi</code> and <code>compile</code> write, rather than
-                standard output.</li>
+                It is also the file <code>compile</code> and <code>bundle</code> write.</li>
                 <li><code>--url &lt;origin&gt;</code> — the running app the shell,
                 <code>openapi</code>, <code>mcp</code>, <code>call</code> and <code>logs</code> talk
                 to. Defaults to <code>ABIDE_APP_URL</code>, then to the local app.</li>
@@ -61,7 +60,7 @@ abide --help`} />
                 <tr><td><code>abide start [--port &lt;n&gt;]</code></td><td>Boots the built app.</td></tr>
                 <tr><td><code>abide [--url &lt;origin&gt;] [--port &lt;n&gt;]</code></td><td>The interactive shell — on the built app it boots, or on the running app <code>--url</code> names.</td></tr>
                 <tr><td><code>abide call &lt;address&gt; [args]</code></td><td>One call to one handler.</td></tr>
-                <tr><td><code>abide openapi [--out &lt;file&gt;] [--url &lt;origin&gt;]</code></td><td>The OpenAPI document written rather than served.</td></tr>
+                <tr><td><code>abide openapi [--url &lt;origin&gt;]</code></td><td>The OpenAPI document printed rather than served.</td></tr>
                 <tr><td><code>abide mcp [--url &lt;origin&gt;]</code></td><td>The app's MCP server over stdio.</td></tr>
                 <tr><td><code>abide watch &lt;address&gt; [args]</code></td><td>A live subscription to one of the app's followed <code>GET</code>s.</td></tr>
                 <tr><td><code>abide compile [--target] [--out] [--platforms]</code></td><td>One standalone executable.</td></tr>
@@ -113,7 +112,7 @@ abide dev`} />
         </Section>
 
         <Section title="Write the OpenAPI document at build time" level={3}>
-            <Code code={`abide openapi --out dist/openapi.json`} />
+            <Code code={`abide openapi > dist/openapi.json`} />
         </Section>
     </Section>
 
