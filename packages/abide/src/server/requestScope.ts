@@ -11,6 +11,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
 import { Cookies } from '#shared/cookies.ts'
+import type { Framed } from '#shared/framing.ts'
 import type { Params } from '#shared/matchRoute.ts'
 import type { Principal } from '#shared/principal.ts'
 import { SCOPING, type Scope } from '#shared/reactive/scoping.ts'
@@ -18,7 +19,7 @@ import type { RpcRequest } from '#shared/rpcRequest.ts'
 import type { McpSurface } from './generatedSurfaces.ts'
 
 /** The three framings a stream is answered in. 17.6. */
-export type Framing = 'jsonl' | 'sse' | 'bytes'
+export type Framing = Framed | 'bytes'
 
 /** What one request, or one `App.run`, carries across every `await` its work makes. */
 export type RequestScope = Scope & {
@@ -123,10 +124,15 @@ export type AnsweringApp = {
 }
 
 /**
- * One call a page's render made: the request the browser will make for it, and what it reached —
- * read once the markup is built, for whether it was painted settled (41.25).
+ * One call a page's render made: the request the browser will make for it, what it reached, and
+ * whether the markup was built from it settled — `undefined` until the pass that built from it
+ * ends (41.25, `markPainted`).
  */
-export type PageCall = { request: RpcRequest; reached: unknown }
+export type PageCall = {
+    request: RpcRequest
+    reached: unknown
+    painted: boolean | undefined
+}
 
 // `undefined` IS A STORE, not the absence of one: a value built outside every request runs its body
 // under it (`Cell.scope`), rather than under whichever request scheduled the drain.

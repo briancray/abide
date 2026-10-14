@@ -1,4 +1,5 @@
 import { regionMarkup } from '#shared/anchorMarkup.ts'
+import { callsMadeSoFar, deferBuild, refuseDocument } from './deferredBuilds.ts'
 import type { Component, Rendered } from './render.ts'
 
 /**
@@ -25,14 +26,17 @@ export function renderComponent(
     heads: string[],
 ): string {
     if (component == null) return regionMarkup('')
+    const callsFrom = callsMadeSoFar()
     const rendered = (
         component as (props: Record<string, () => unknown>) => Rendered
     )(props)
-    // 35.16 — a document is written by the outermost component alone, and this one is placed.
-    if (rendered.document !== undefined)
-        throw new Error(
-            'abide: a component that writes <html> is placed inside another, and only the outermost component writes the document. RULEBOOK 35.16.',
-        )
+    // 41.28 — A CHILD WHOSE SETUP MADE A CALL ANSWERS AS A PAGE DOES, with a `scope` and its build
+    // left for the first read, and is built after the turn where a page is being built.
+    if ('scope' in rendered) {
+        const marker = deferBuild(rendered, heads, callsFrom)
+        if (marker !== undefined) return marker
+    }
+    refuseDocument(rendered)
     if (rendered.head !== '') heads.push(rendered.head)
     return regionMarkup(rendered.body)
 }

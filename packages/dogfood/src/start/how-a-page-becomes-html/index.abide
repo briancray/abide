@@ -100,7 +100,8 @@ middleware((next, { request }) =>
 
         <p>The total time is the slowest one, not the sum — and the first byte does not wait for any
         of them. The markup waits one turn, so a load that answers without waiting on anything is
-        painted rather than left as a hole.</p>
+        painted rather than left as a hole. A component whose setup starts a load gets the same
+        turn before its own markup is built, however deep it sits.</p>
     </Section>
 
     <Section title="4. The first bytes leave">

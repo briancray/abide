@@ -22,6 +22,8 @@ const BODY = '__body'
 // A page's or a layout's deferred build (41.19).
 const BUILT = '__built'
 const BUILD = '__build'
+// The calls renders had made as a component's setup began (41.28).
+const CALLS_BEFORE = '__callsBefore'
 
 /**
  * The server module for a parsed `.abide` file: one ESM module exporting its component.
@@ -37,8 +39,8 @@ const BUILD = '__build'
  *
  * `settles` IS A PAGE OR A LAYOUT, which `render` builds a level at a time (41.19): its setup runs
  * at the call and its markup is built on the first read of `head` or `body`, so the calls the
- * setup started are given the turn to answer that a component built inside its caller's markup is
- * not. Every other component builds where it is called, and pays nothing for the difference.
+ * setup started are given the turn to answer. Every other component answers the same way only where
+ * its setup made a call (41.28), and builds where it is called otherwise.
  */
 export function emitComponent(
     file: AbideFile,
@@ -121,8 +123,8 @@ ${privateExports(file.servers.join('\n'))}`
     // child the markup invokes must not be set up twice. The build resumes the share scope the
     // setup ran in (10.5), since by the time it is read the caller's has long been left — and that
     // scope is `scope` on the answer, so `composePage` sets the level below up inside it too.
-    const level = settles
-        ? `    const ${SETTLED_AT} = ${lowering.use('currentShare')}()
+    const deferred =
+        (): string => `    const ${SETTLED_AT} = ${lowering.use('currentShare')}()
     let ${BUILT}
     const ${BUILD} = () => {
         if (${BUILT} !== undefined) return ${BUILT}
@@ -135,10 +137,23 @@ ${privateExports(file.servers.join('\n'))}`
         get body() { return ${BUILD}().body },
         get document() { return ${BUILD}().document },
     }`
-        : build
+    // 41.28 — EVERY OTHER COMPONENT BUILDS WHERE IT IS CALLED unless its setup
+    // made a call, and then answers as a page does, for `renderComponent` to build after the turn.
+    // THE BUILD IS WRITTEN TWICE rather than always run through `__build`: the closure measured ~4%
+    // a row on `bench:component`'s card under JSC, the second copy nothing but server module bytes.
+    // One with no setup cannot call, and is written once.
+    const waits = !settles && componentBody.trim() !== ''
+    const level = settles
+        ? deferred()
+        : waits
+          ? `    if (${lowering.use('callsInRender')}() !== ${CALLS_BEFORE}) {
+${deferred()}
+    }
+${build}`
+          : build
     return `${moduleImports(lowering, () => SERVER_SPECIFIER, [moduleSetup, serverSetup, setup])}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}${serverBody}export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
-${opened}${componentBody}
+${waits ? `    const ${CALLS_BEFORE} = ${lowering.use('callsInRender')}()\n` : ''}${opened}${componentBody}
 ${level}${closed}
 }
 `

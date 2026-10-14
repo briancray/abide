@@ -3,9 +3,11 @@ import type { CheckerAnswer } from '#compiler/CheckerAnswer.ts'
 import { emitSource } from '#compiler/emitSource.ts'
 import { Lowering } from '#compiler/Lowering.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
+import { Refusals } from '#compiler/Refusals.ts'
 import { parseSources, readSources } from '#compiler/readSources.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { type Token, tokenize } from '#compiler/tokenize.ts'
+import { placement } from '#server/placement.ts'
 import { renderDocument } from '#server/render.ts'
 import { flushSync } from '#shared'
 import { pageRegion } from '#ui/regions.ts'
@@ -98,9 +100,11 @@ export async function typed(
     const declared = declare(source, names)
     const checker = await typedSession()
     // The pipeline a build runs, so a refusal throws here as it stops a build.
+    const refusals = new Refusals(TYPED_ROOT, false)
     const { read } = await readSources(
         checker,
-        parseSources([{ path: PAGE, text: declared.source }]),
+        parseSources([{ path: PAGE, text: declared.source }], refusals),
+        refusals,
     )
     const [page] = read as [(typeof read)[number]]
     return {
@@ -159,7 +163,12 @@ export async function clientOf(
 ): Promise<string> {
     const { file, answer } = await typed(source, names)
     // 23.21 — a fixture's component stands under a lib directory, where a file is no page.
-    return emitSource('lib/typed.abide', file, answer, false).client
+    return emitSource({
+        ...placement('lib/typed.abide'),
+        file,
+        answer,
+        invoked: false,
+    }).client
 }
 
 export async function serverOf(
@@ -168,7 +177,19 @@ export async function serverOf(
 ): Promise<string> {
     const { file, answer } = await typed(source, names)
     // 23.21 — a fixture's component stands under a lib directory, where a file is no page.
-    return emitSource('lib/typed.abide', file, answer, false).server
+    return emitSource({
+        ...placement('lib/typed.abide'),
+        file,
+        answer,
+        invoked: false,
+    }).server
+}
+
+// 41.28 — a component whose setup may make a call is emitted with its build twice, deferred and
+// inline (`emitComponent`); the inline one, for a test counting what one build writes.
+export function inlineBuild(server: string): string {
+    const deferredEnd = server.lastIndexOf('get document()')
+    return deferredEnd === -1 ? server : server.slice(deferredEnd)
 }
 
 // A page, and any component file it invokes, compiled as the build compiles them, rendered by the
@@ -193,12 +214,12 @@ export async function renderPage(
             file,
         )
         // 23.21 — a component stands under a lib directory, where a file is no page.
-        const { server, client } = emitSource(
-            isPage ? 'index.abide' : `lib/${name}.abide`,
+        const { server, client } = emitSource({
+            ...placement(isPage ? 'index.abide' : `lib/${name}.abide`),
             file,
-            reads,
-            !isPage,
-        )
+            answer: reads,
+            invoked: !isPage,
+        })
         modules[`${name}.abide`] = { server, client }
         if (isPage) pageClient = client
     }

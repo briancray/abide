@@ -18,6 +18,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { measure } from 'harness/measure'
 import { parseAbide } from '#compiler'
 import { emitSource } from '#compiler/emitSource.ts'
+import { placement } from '#server/placement.ts'
 import { flushSync } from '#shared'
 import { pageRegion } from '#ui/regions.ts'
 import type { Scope } from '#ui/Scope.ts'
@@ -362,12 +363,12 @@ const boom = (): string => {
 
     const file = parseAbide(source)
     const names = await session.reads(`${TYPED_ROOT}src/index.abide`, file)
-    const { server, client } = emitSource(
-        'index.abide',
+    const { server, client } = emitSource({
+        ...placement('index.abide'),
         file,
-        names,
-        false,
-    )
+        answer: names,
+        invoked: false,
+    })
     const dir = temporaryModule({ 'Page.ts': server, 'Page.client.ts': client })
     document.body.innerHTML = '<!--[--><p id="out">0</p><!--]-->'
     const { default: mount } = await import(`${dir}/Page.client.ts`)

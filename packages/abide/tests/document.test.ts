@@ -8,6 +8,7 @@ import { parseAbide } from '#compiler'
 import { compileApp } from '#compiler/compileApp.ts'
 import { emitSource } from '#compiler/emitSource.ts'
 import { render } from '#server'
+import { placement } from '#server/placement.ts'
 import { flushSync } from '#shared'
 import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
@@ -106,7 +107,12 @@ test('a component rendered on its own writes the document — 35.6, 35.15', asyn
         `${TYPED_ROOT}src/Invoice.abide`,
         file,
     )
-    const emitted = emitSource('lib/Invoice.abide', file, reads, true)
+    const emitted = emitSource({
+        ...placement('lib/Invoice.abide'),
+        file,
+        answer: reads,
+        invoked: true,
+    })
     const dir = servedModules({
         'Invoice.abide': {
             server: emitted.server,

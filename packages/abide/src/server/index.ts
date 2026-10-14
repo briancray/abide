@@ -47,6 +47,9 @@ export { type Config, config } from './config.ts'
 export type { ConfigField } from './configFields.ts'
 // 42 — the app object, and 37's hooks a `<script server>` calls.
 export { type App, createApp } from './createApp.ts'
+// 41.28's run-time half: an emitted component reads it on either side of its setup, and one whose
+// setup made a call answers as a page does. Not an app's name.
+export { callsInRender } from './deferredBuilds.ts'
 // 37.1's run-time half: what a compiled server module calls around its `<script server>`, so the
 // hooks it makes are filed at its route.
 export {

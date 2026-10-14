@@ -1,6 +1,6 @@
 import { afterAll, expect, spyOn, test } from 'bun:test'
 import { emitClient, parseAbide } from '#compiler'
-import { HOOK_NAMES } from '#compiler/hooksCalled.ts'
+import { HOOK_NAMES } from '#compiler/hookCalls.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'
 import { attributeText, escapeStyleValue, escapeText } from '#server'
@@ -10,6 +10,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import {
     clientOf,
     closeTyped,
+    inlineBuild,
     namesRead,
     refusal,
     serverOf,
@@ -136,7 +137,8 @@ test('the compiler is not reachable from the server seam', async () => {
     // function what a subject iterates as — `render` is 35.4's, the five methods are 16.2's,
     // `request`, `response` and `server` are 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the seven hooks and the
     // `fileRoute` a compiled server block files them under are 37's,
-    // `trace` is 24's and `config` is 27's; the six response helpers are 17's, `reachable` is
+    // `trace` is 24's and `config` is 27's; `callsInRender` is what an emitted component reads
+    // around its setup (41.28); the six response helpers are 17's, `reachable` is
     // 23's, and `assistant`, `claudeApi` and `claudeCode` are 45's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
@@ -145,6 +147,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'DELETE',
             'GET',
             'assistant',
+            'callsInRender',
             'claudeApi',
             'claudeCode',
             'PATCH',
@@ -179,9 +182,9 @@ test('the compiler is not reachable from the server seam', async () => {
 })
 
 // 38.107, 38.108 — WHAT THE BUILD READS AS A HOOK CALL IS EVERY HOOK abide exports: `abide routes`
-// lists them and the build refuses a stray `onLauncher` off `hooksCalled`'s names. THE REVERT: drop
+// lists them and the build refuses a stray `onLauncher` off `hookCalls`'s names. THE REVERT: drop
 // `onHealth` from `HOOK_NAMES`; the list no longer matches what an app can call.
-test('hooksCalled reads every hook the server exports — 38.108', async () => {
+test('hookCalls reads every hook the server exports — 38.108', async () => {
     const exported: string[] = []
     for (const name of Object.keys(await import('#server')))
         if (/^(?:on[A-Z]|middleware$)/.test(name)) exported.push(name)
@@ -777,7 +780,7 @@ test('an interpolated style lowers to one attribute per property', async () => {
     expect(emitted).toContain(
         '"<div style=\\"" + "color: " + __escapeStyleValue(__slotValue(() => `${c()}`)) + "; width: " + __escapeStyleValue(__slotValue(() => `${w()}px`))',
     )
-    expect(emitted.match(/style=\\"/g)).toHaveLength(1)
+    expect(inlineBuild(emitted).match(/style=\\"/g)).toHaveLength(1)
 
     // The combined attribute stands where the FIRST style contribution did.
     expect(
@@ -1284,7 +1287,7 @@ test('a class: directive merges into the one class attribute', async () => {
         ['late'],
     )
     expect(server).not.toContain('class:overdue')
-    expect(server.split('class=').length - 1).toBe(1)
+    expect(inlineBuild(server).split('class=').length - 1).toBe(1)
     // THE NAME IS MARKUP AND THE VALUE IS A CONDITION: the name is written where the expression
     // is truthy and nothing is written where it is not, which is what makes a class different
     // from every other attribute value.
@@ -1302,7 +1305,7 @@ test('every class: directive on a tag is one class attribute', async () => {
         'x',
         'y',
     ])
-    expect(server.split('class=').length - 1).toBe(1)
+    expect(inlineBuild(server).split('class=').length - 1).toBe(1)
     expect(server).toContain('" a" : \'\'')
     expect(server).toContain('" b" : \'\'')
 })
@@ -1313,7 +1316,7 @@ test('every class: directive on a tag is one class attribute', async () => {
 // `style:` has.
 test('a class: directive with no condition is a plain class', async () => {
     const always = await serverOf('<p class="a" class:b>t</p>')
-    expect(always.split('class=').length - 1).toBe(1)
+    expect(inlineBuild(always).split('class=').length - 1).toBe(1)
     expect(always).toContain('"a"')
     expect(always).toContain('" b"')
     expect(await serverOf('<p class:>t</p>')).toContain('class:')
