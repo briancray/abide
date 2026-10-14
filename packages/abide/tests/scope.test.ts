@@ -46,6 +46,30 @@ test('a value built outside every request is one value per request — 11.32', a
     expect(visits()).toBe(0)
 })
 
+// 11.71 — A STORE BUILT AT IMPORT ON A SERVER IS NOT READ UNTIL ITS VALUE IS REACHED, so a store
+// reading the request is read first inside one. THE REVERT: have `reactive` pass `lazy` false to
+// `scoped` — the store's `get` runs at import, 1 read where 0 is due, and throws on the `request()`
+// it reads.
+test('a value with a store built outside every request reads it where it is reached — 11.71', async () => {
+    let storeReads = 0
+    const session = reactive<string | undefined>(undefined, {
+        store: {
+            get: () => {
+                storeReads += 1
+                return new URL(request().url).pathname
+            },
+            set: () => {},
+        },
+    })
+    expect(`store reads at import: ${storeReads}`).toBe(
+        'store reads at import: 0',
+    )
+    await inScope(new Request('http://app/a'), async () => {
+        expect(session()).toBe('/a')
+    })
+    expect(storeReads).toBe(1)
+})
+
 // 12.5 — A REQUEST'S WATCHES STOP AT ITS TEARDOWN, AND A STREAMED BODY HOLDS IT OPEN. `App.fetch`
 // releases the scope once it has answered; a body still streaming has taken a hold of its own and
 // the watches it reads through stay up until it closes. THE REVERT: have `releaseScope` tear down

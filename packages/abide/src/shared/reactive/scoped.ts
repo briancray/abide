@@ -24,9 +24,10 @@ const UNBUILT: unique symbol = Symbol('abide.unbuilt')
 /**
  * What a forwarder resolves through: the home, and how to build the same value again in a scope.
  *
- * 16.64 — A HANDLER'S HOME IS BUILT WHERE IT IS FIRST REACHED, and every other value's where it is
- * declared. Building a value with a body starts the body (1.7), and at import that ran the handler
- * — a mutation fired at boot, for a request nobody had made.
+ * 11.71 AND 16.64 — A HANDLER'S HOME, AND AN UNKEYED VALUE'S WITH A `store`, IS BUILT WHERE IT IS
+ * FIRST REACHED, and every other value's where it is declared. Building a value starts its body
+ * (1.7) and reads its store (8.14), and at import that ran a handler for a request nobody had made,
+ * and a store reading `cookies()` where there is no request.
  *
  * A `global` handler (11.34) is filed only to be built late: every request reaches the home, built
  * outside each of them, so it is the one value its option says it is.

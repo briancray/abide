@@ -33,7 +33,6 @@ import {
 import { outsideScope, scoped } from './scoped.ts'
 import { share } from './share.ts'
 
-export { chunksOfStream } from './chunksOfStream.ts'
 export { isReactive } from './isReactive.ts'
 export { isKeyed, type Keyed } from './Keyed.ts'
 export { NotLanded } from './NotLanded.ts'
@@ -42,6 +41,7 @@ export { NotLanded } from './NotLanded.ts'
 // first that imports the core directly meets `MEMBER_KEYS` before it is initialized.
 export {
     abandonLoad,
+    chunksOfStream,
     deadlineOf,
     failedTransiently,
     flushSync,
@@ -368,14 +368,17 @@ export function reactive(
 ): unknown {
     const keyed = isKeyedBody(given[0])
     // 11.32 — ON A SERVER, OUTSIDE A REQUEST, THE VALUE IS FILED: a forwarder to one instance per
-    // request, and to the one built here where there is no request at all. `global` is what keeps
-    // a value process-wide (11.34).
-    if (
-        outsideScope(
-            (given[1] as { global?: boolean } | undefined)?.global === true,
+    // request, and to the one built here where there is no request at all — or, for a value with a
+    // `store`, built where it is first reached (11.71). `global` is what keeps a value process-wide
+    // (11.34).
+    const options = given[1] as
+        | { global?: boolean; store?: unknown }
+        | undefined
+    if (outsideScope(options?.global === true))
+        return scoped(
+            () => build(given, keyed),
+            !keyed && options?.store !== undefined,
         )
-    )
-        return scoped(() => build(given, keyed))
     return build(given, keyed)
 }
 
