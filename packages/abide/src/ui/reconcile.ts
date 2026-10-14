@@ -1,70 +1,18 @@
 import { PATCHES } from '#shared/reactive/PATCHES.ts'
 import { LAYER_RECONCILE } from './LAYER_NAMES.ts'
-import type { List, RowBuilders } from './List.ts'
+import type { List } from './List.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
-import { moveRow, removeRow } from './rows.ts'
-import { EMPTY_SCOPE, type Scope } from './Scope.ts'
+import { dropRow, makeRow, moveRow, type Row } from './rows.ts'
 
 // 41.8 — a KEYED list, reconciled by moving the nodes that are already there rather than by
 // rebuilding them. A rebuild produces the right screen and the wrong document: focus, selection,
 // scroll position and anything a row was in the middle of go with the nodes that were replaced.
 //
-// What a row is in the document — its element, or its anchored range — is `rows.ts`'s. Most lists
+// What a row is — its record and its nodes, an element or an anchored range — is `rows.ts`'s. Most lists
 // carry no per-row marker at all: the nodes between the region's anchors ARE the rows, and only a
 // body with several top-level nodes gets one anchor per ROW. That is ~2.5 bytes gzipped a row, not
 // the per-SLOT marker `benchGrid.ts` measured doubling a page.
-
-export type Row = {
-    key: unknown
-    /**
-     * The value the row was built from.
-     *
-     * A row that survives a reorder keeps its NODES, which is the whole point — but if the value
-     * behind that key is a different object, its content is stale and the row is remade. Identity
-     * is the signal here, the inverse of the case where a freshly built wrapper defeats one.
-     */
-    data: unknown
-    /**
-     * The row's first node: its element, or its `ROW_OPEN` anchor where the body has several —
-     * the start of a range, not the nodes `make` handed back (`rows.ts`).
-     */
-    node: ChildNode
-    /** The row's bindings, stopped when it leaves. */
-    scope: Scope
-    /**
-     * Where this row stood in the list the document currently shows.
-     *
-     * The placement walk needs "already in order" to be a question about POSITIONS rather than
-     * about nodes, and asking the document — `compareDocumentPosition`, or counting siblings — is
-     * the walk this exists to avoid. Written by every reconcile, so it is a fact about the last one
-     * rather than about the caller, and a hydration seed sets it because that IS the order the
-     * server painted.
-     */
-    at: number
-    /**
-     * The patch epoch the row was made at (32.33).
-     *
-     * Its item written past this is content the row never saw, under the same object a kept row is
-     * matched by.
-     */
-    seen: number
-}
-
-/**
- * Rebuilds a row in place from `next`, keeping its record.
- *
- * 41.10 — a row that cannot be hydrated is rebuilt: the fresh nodes go where the row stood and the
- * row's record takes the new first node, so the reconcile still reaches all of it.
- */
-export function replaceRow(row: Row, next: Node[]): void {
-    const first = row.node
-    const parent = first.parentNode
-    if (parent === null) return
-    for (const node of next) parent.insertBefore(node, first)
-    removeRow(first)
-    row.node = next[0] as ChildNode
-}
 
 /**
  * Reconciles a keyed list's rows to `data`, moving survivors rather than remaking them.
@@ -193,7 +141,7 @@ export function reconcile(list: List, data: unknown[]): void {
             const existing = survivor[at]
             if (existing === undefined || existing === null) {
                 const row = makeRow(
-                    list,
+                    list.setUp,
                     parent,
                     anchor,
                     keys[at],
@@ -234,50 +182,6 @@ export function reconcile(list: List, data: unknown[]): void {
     }
 }
 
-/** A new row, built and inserted before `before`. */
-export function makeRow(
-    list: List,
-    parent: Node,
-    before: Node,
-    key: unknown,
-    item: unknown,
-    at: number,
-): Row {
-    // 14.8 — set up ONCE for the row, and the same builders make it and mount it.
-    const builders = list.setUp(item, at)
-    const nodes = builders.make(parent.ownerDocument as Document, item, at)
-    for (const node of nodes) parent.insertBefore(node, before)
-    return rowOf(builders, key, item, nodes[0] as ChildNode, at)
-}
-
-/**
- * A row record over nodes already in the document, mounted.
- *
- * The one place a row's record is written, so its shape is fixed once for every path that makes one
- * — a made row and a hydrated one alike. The mount is handed the RECORD, because a row it rebuilds
- * (41.10) has a new first node to write back.
- */
-export function rowOf(
-    builders: RowBuilders,
-    key: unknown,
-    item: unknown,
-    node: ChildNode,
-    at: number,
-): Row {
-    const row: Row = {
-        key,
-        data: item,
-        node,
-        // A `Scope` rather than `undefined` until the mount returns, so the field holds one class
-        // for the record's whole life.
-        scope: EMPTY_SCOPE,
-        at,
-        seen: PATCHES.epoch,
-    }
-    row.scope = builders.mount(row, item, at)
-    return row
-}
-
 /**
  * Whether a patch wrote to the row's item since the row was made.
  *
@@ -289,16 +193,6 @@ function patchedSince(row: Row): boolean {
     const item = row.data
     if (item === null || typeof item !== 'object') return false
     return (PATCHES.written.get(item) ?? 0) > row.seen
-}
-
-/**
- * Stops a row's bindings, then removes its nodes.
- *
- * Stopped first, so a binding cannot wake over a node that is already gone.
- */
-export function dropRow(row: Row): void {
-    row.scope.stop()
-    removeRow(row.node)
 }
 
 /**

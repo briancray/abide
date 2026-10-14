@@ -1,10 +1,16 @@
 import { listOf } from '#shared/listOf.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
 import { HYDRATE_LOG, Mismatch, warnMismatch } from './Mismatch.ts'
-import { dropRow, makeRow, type Row, reconcile, rowOf } from './reconcile.ts'
+import { reconcile } from './reconcile.ts'
 import { isEmptyRegion, type Region, removeUntil } from './regions.ts'
-import { rowsIn } from './rows.ts'
-import type { Scope } from './Scope.ts'
+import {
+    dropRow,
+    makeRow,
+    type Row,
+    type RowBuilders,
+    rowOf,
+    rowsIn,
+} from './rows.ts'
 
 /**
  * The state of one `{#for}` block, shared by its reconcile and its async append.
@@ -253,21 +259,15 @@ async function pump(list: List, source: AsyncIterable<unknown>): Promise<void> {
         }
         // Appended, so its position IS the index it arrived at.
         list.rows.push(
-            makeRow(list, parent, region.close, list.key(item, at), item, at),
+            makeRow(
+                list.setUp,
+                parent,
+                region.close,
+                list.key(item, at),
+                item,
+                at,
+            ),
         )
         at += 1
     }
-}
-
-export type RowBuilders = {
-    /**
-     * A row's nodes, BUILT in the document the list stands in — handed over by the reconcile
-     * rather than found by the row, which is the one place a row's document is decided.
-     */
-    make: (document: Document, item: unknown, at: number) => Node[]
-    /**
-     * Handed the row's RECORD rather than its nodes: a row it rebuilds (41.10) writes its new
-     * first node back there.
-     */
-    mount: (row: Row, item: unknown, at: number) => Scope
 }
