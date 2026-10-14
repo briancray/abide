@@ -19,13 +19,7 @@ import { type Found, runSchema, type Schema } from '../Schema.ts'
 import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
 import { CELL } from './CELL.ts'
-import {
-    CAUGHT_UP,
-    Cursor,
-    hasCursorBehind,
-    keepPlaces,
-    type Retained,
-} from './Cursor.ts'
+import { CAUGHT_UP, Cursor, hasCursorBehind, keepPlaces } from './Cursor.ts'
 import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
 import { armTimer, type Expiry, expiryFor } from './Expiry.ts'
 import { FOLLOWED } from './FOLLOWED.ts'
@@ -488,6 +482,17 @@ function newStream(source: Cell | null): Stream {
     }
 }
 
+/**
+ * The stream `cell` produces itself, or `null`: it has none, or the one it has is forwarded (11.15).
+ *
+ * THE ONE DISCRIMINATOR between following and forwarding. An own stream's `adoption` is a write it
+ * follows (9.11), and a forwarding value's is the stream it forwards.
+ */
+function ownStream(cell: Cell): Stream | null {
+    const stream = cell.stream
+    return stream !== null && stream.source === null ? stream : null
+}
+
 /** Turns `cell` into a streaming producer, forwarding `source`'s stream when it has one. */
 function becomeStream(cell: Cell, source: Cell | null): Stream {
     const stream = newStream(source)
@@ -495,6 +500,7 @@ function becomeStream(cell: Cell, source: Cell | null): Stream {
     cell.plain = false
     cell.bareWrite = false
     simpleShape(cell)
+    seat(cell)
     cell.direct = false
     return stream
 }
@@ -995,14 +1001,10 @@ function comparatorFor(
 /**
  * Recomputes `simple` and re-seats the callable on the matching prototype.
  *
- * `simple` IN ONE PLACE, and the prototype that goes with it. A second copy of this
- * conjunction is the drift that would let one of the four sites go on reading `true` after
- * the field under it moved — and what the short write would then skip is a cap, a ring or a
- * declared `identity`, silently.
- *
- * THE CALLABLE IS RE-SEATED ONLY WHERE IT IS ON ONE OF THESE TWO. A value that is adopting or
- * forwarding a stream carries a prototype of its own and keeps it; the field is still
- * maintained, so the seat it lands on when the adoption drops is the right one.
+ * `simple` IN ONE PLACE. A second copy of this conjunction is the drift that would let one of the
+ * sites go on reading `true` after the field under it moved — and what the short write would then
+ * skip is a cap, a ring or a declared `identity`, silently. The prototype that goes with it is
+ * `seat`'s, taken where the transition that moved a field under it ends.
  */
 function simpleShape(cell: Cell): void {
     cell.simple =
@@ -1012,14 +1014,38 @@ function simpleShape(cell: Cell): void {
         cell.cap === null &&
         cell.store === null &&
         cell.identityFn === null
+}
+
+/**
+ * The prototype a value's state calls for: its own stream's writes (9.11), an adoption's (11.59),
+ * the short write of a `simple` value, or the members alone.
+ */
+function seatOf(cell: Cell): object {
+    if (ownStream(cell) !== null) return STREAM_PROTOTYPE
+    if (cell.adoption !== null) return ADOPTING_PROTOTYPE
+    return cell.simple ? SIMPLE_PROTOTYPE : MEMBER_PROTOTYPE
+}
+
+/**
+ * Re-seats the callable on the prototype its state calls for, where that moved.
+ *
+ * THE ONE WRITER OF A VALUE'S PROTOTYPE after construction, so the seat is derived rather than
+ * remembered by each transition that moves it. A seat this file did not make — `pairReactive`'s —
+ * is its owner's, and left alone.
+ */
+function seat(cell: Cell): void {
     const callable = cell.callable
     if (callable === null) return
-    const seat = Object.getPrototypeOf(callable)
-    if (seat !== MEMBER_PROTOTYPE && seat !== SIMPLE_PROTOTYPE) return
-    Object.setPrototypeOf(
-        callable as object,
-        cell.simple ? SIMPLE_PROTOTYPE : MEMBER_PROTOTYPE,
+    const now = Object.getPrototypeOf(callable)
+    if (
+        now !== MEMBER_PROTOTYPE &&
+        now !== SIMPLE_PROTOTYPE &&
+        now !== ADOPTING_PROTOTYPE &&
+        now !== STREAM_PROTOTYPE
     )
+        return
+    const next = seatOf(cell)
+    if (next !== now) Object.setPrototypeOf(callable as object, next)
 }
 
 /**
@@ -1502,19 +1528,8 @@ function produce(cell: Cell, produced: unknown): number {
             // collapses was still accepted — it produced nothing because the value was already
             // the one being written, not because it failed. Leaving the failure standing left
             // `s.error()` reporting a load that a later write superseded.
-            const wasServable = cell.servable
             const settling = settleProbes(cell)
-            cell.servable = true
-            setDirect(cell, cell.state === CLEAN)
-            // THE VALUE EDGE MOVED TOO WHERE THERE WAS NOTHING TO SERVE, whatever the gate
-            // says about the payload — the same split `refused` makes, and for the same
-            // reason. A read taken while this was unservable THREW, so a body that reached
-            // it aborted: it is `CLEAN`, holds nothing, and nothing downstream will ever
-            // pull it. Left silent, an `invalidate` whose reload landed the value it already
-            // held stranded every value built from it at `ready()` false for the life of the
-            // page. Over a value still being served nothing a reader can see moved (5.1) and
-            // this stays quiet, which is the arm 5.2 is about.
-            if (!wasServable) cascade(cell)
+            serveAgain(cell)
             if (settling) probesMoved(cell)
             return cell.ordinal
         }
@@ -1539,8 +1554,7 @@ function produce(cell: Cell, produced: unknown): number {
     if (cap !== null && cell.body === null)
         return capped(cell, cap, produced, moved)
     serve(cell, produced)
-    cascade(cell)
-    if (moved) probesMoved(cell)
+    land(cell, moved)
     return cell.ordinal
 }
 
@@ -1557,6 +1571,56 @@ function settleProbes(cell: Cell): boolean {
     cell.loading = false
     cell.failure = undefined
     return moved
+}
+
+// THE LOAD-STATE TRANSITIONS. `loading`, `servable` and `failure` are written by these and by the
+// value's construction, and nowhere else: `beginLoad`, `settleProbes` with `serve` or `landChunks`
+// and then `land`, `serveAgain`, `endLoad`, `refused`, `unserve`, `hold`/`release`/`dropHeld`,
+// `abortRun`, `supersede`, `landOpening` and `dropStanding`.
+// Each owns the probe move it makes, so a site that changes what a probe answers cannot forget to
+// say so. `loading` carries five meanings and they are named here rather than told apart: a load in
+// flight, an open stream run, a window holding a production (5.15), a body aborted on a value that
+// had not landed (2.13), and a keyed entry a window has not started (5.19).
+
+/**
+ * Tells both edges a production landed: the readers through `cascade`, the guards where
+ * `settleProbes` said a probe moved.
+ *
+ * THE OTHER HALF OF `settleProbes`, which has to be read before the landing it describes.
+ */
+function land(cell: Cell, moved: boolean): void {
+    cascade(cell)
+    if (moved) probesMoved(cell)
+}
+
+/**
+ * Serves what is held again, with no production; returns whether there had been nothing to serve.
+ *
+ * THE VALUE EDGE MOVES WHERE THERE WAS NOTHING TO SERVE, whatever the identity gate says about the
+ * payload — the same split `refused` makes, and for the same reason. A read taken while this was
+ * unservable THREW, so a body that reached it aborted: it is `CLEAN`, holds nothing, and nothing
+ * downstream will ever pull it. Left silent, an `invalidate` whose reload landed the value it
+ * already held stranded every value built from it at `ready()` false for the life of the page. Over
+ * a value still being served nothing a reader can see moved (5.1) and this stays quiet, which is the
+ * arm 5.2 is about.
+ */
+function serveAgain(cell: Cell): boolean {
+    const was = cell.servable
+    cell.servable = true
+    setDirect(cell, cell.state === CLEAN)
+    if (!was) cascade(cell)
+    return !was
+}
+
+/**
+ * Ends a load that landed nothing: a stream's close, a deferred entry a window dropped, a store's
+ * miss with nothing to fall back on. `busy` moves where it was loading, or where `moved` says
+ * another probe did.
+ */
+function endLoad(cell: Cell, moved: boolean): void {
+    const was = cell.loading
+    cell.loading = false
+    if (was || moved) probesMoved(cell)
 }
 
 /**
@@ -1653,8 +1717,7 @@ function capped(
     // collapses a RUN of changes and the first landing has nothing to collapse with.
     if (wakes(cell, cap, produced)) {
         serve(cell, produced)
-        cascade(cell)
-        if (moved) probesMoved(cell)
+        land(cell, moved)
     }
     return cell.ordinal
 }
@@ -1686,9 +1749,27 @@ function release(cell: Cell, cap: Cap): void {
     cap.held = undefined
     cell.loading = false
     serve(cell, value)
-    cascade(cell)
     // The close is a `busy` edge (5.15) even though the value's readiness never moved.
-    probesMoved(cell)
+    land(cell, true)
+}
+
+/**
+ * Discards the production a window is holding, where an adoption superseded it; returns whether
+ * `busy` was the hold's.
+ *
+ * An adoption is a later write (11.61), and a later write replaces what a window holds — save that
+ * these two do not reach the window: a stream is forwarded rather than produced (11.15), and a value
+ * with nothing to serve leaves this one nothing (11.16). What the window minted last is then what is
+ * served, which the identity gate compares against (5.9).
+ */
+function dropHeld(cell: Cell): boolean {
+    const cap = cell.cap
+    if (cap === null || !cap.holding || cell.stream !== null) return false
+    cap.holding = false
+    cap.held = undefined
+    cap.minted = cell.value
+    cell.loading = false
+    return true
 }
 
 function releaseHeld(cell: Cell, cap: Cap): void {
@@ -1861,10 +1942,10 @@ function standWrite(cell: Cell, stream: Stream, value: unknown): number {
     cell.value = value
     stream.materializedAt = stream.version
     stream.written = true
+    // `busy` is the run's, which a write stands beside (3.7), so only `ready` and `error` move.
     const moved = !cell.servable || cell.failure !== undefined
     landChunks(cell)
-    cascade(cell)
-    if (moved) probesMoved(cell)
+    land(cell, moved)
     return cell.ordinal
 }
 
@@ -1991,7 +2072,7 @@ function adopt(cell: Cell, inner: Cell): Error | undefined {
     // 11.59: an adopting value's writes are the adopted value's, reached through a prototype of its
     // own rather than a branch on every value's write path — see `acceptIntoStream` for what such a
     // branch costs under V8 even where nothing takes it.
-    Object.setPrototypeOf(cell.callable as object, ADOPTING_PROTOTYPE)
+    seat(cell)
     if (!cell.loading && busyNow(inner) !== wasBusy) probesMoved(cell)
     return undefined
 }
@@ -2090,6 +2171,7 @@ function mirror(cell: Cell, inner: Cell): void {
     if (cell.stream !== null) stopForwarding(cell)
     if (!inner.servable) {
         // 11.16: the newly adopted has nothing to serve, so neither has this.
+        if (dropHeld(cell)) probesMoved(cell)
         unserve(cell)
         return
     }
@@ -2120,20 +2202,16 @@ function mirror(cell: Cell, inner: Cell): void {
 function dropAdoption(cell: Cell): void {
     if (cell.adoption === null) return
     unfollow(cell)
-    const stream = cell.stream
     // 9.11: AN OWN STREAM'S `adoption` IS A WRITE IT FOLLOWS, not a stream it forwards — the
     // discriminator `adoptedCellOf` reads. Letting go of the write is all there is: the stream is
     // its own, so is its prototype, and `follow` never touched `identityFn`. Stopping it as a
     // forward nulled the stream a queued `wakeStreams` was about to read.
-    if (stream !== null && stream.source === null) return
-    if (stream !== null) stopForwarding(cell)
+    if (ownStream(cell) !== null) return
+    if (cell.stream !== null) stopForwarding(cell)
     // 11.17 inherited the identity for the length of the adoption only.
     cell.identityFn = cell.declaredIdentityFn
     simpleShape(cell)
-    Object.setPrototypeOf(
-        cell.callable as object,
-        cell.simple ? SIMPLE_PROTOTYPE : MEMBER_PROTOTYPE,
-    )
+    seat(cell)
 }
 
 /**
@@ -2147,6 +2225,8 @@ function dropAdoption(cell: Cell): void {
 function forwardStream(cell: Cell, inner: Cell, adopted: Stream): void {
     let stream = cell.stream
     if (stream === null) {
+        // The `busy` the hold left is settled below, with the adopter's own load.
+        dropHeld(cell)
         stream = becomeStream(cell, inner)
         stream.ordinalOffset = cell.ordinal - inner.ringBase
     }
@@ -2172,8 +2252,7 @@ function forwardStream(cell: Cell, inner: Cell, adopted: Stream): void {
     // on answering through the adoption (11.19) for as long as the stream is open.
     const moved = settleProbes(cell)
     landChunks(cell)
-    cascade(cell)
-    if (moved) probesMoved(cell)
+    land(cell, moved)
 }
 
 function stopForwarding(cell: Cell): void {
@@ -2234,17 +2313,7 @@ function run(cell: Cell): void {
             truncateProbes(reader)
         cell.running = false
         if (thrown instanceof NotLanded) {
-            cell.loading = true
-            // 2.13: the mark a source's production makes is what finishes this run, and
-            // `markReaders` queues it rather than leaving it for a read that may never come.
-            cell.aborted = true
-            // NOT EVERYTHING IT READS IS READY, so neither is this — 11.58, and the same
-            // sentence 11.16 makes for a re-adoption. It stops serving rather than handing
-            // back a figure it computed from a source that has since gone away, and that
-            // is a move its readers have to hear even though the aborted run minted
-            // nothing for a cascade to carry.
-            if (cell.servable) unserve(cell)
-            else probesMoved(cell)
+            abortRun(cell)
             return
         }
         refused(cell, thrown)
@@ -2326,6 +2395,23 @@ function run(cell: Cell): void {
 }
 
 /**
+ * Leaves a run that read a value which had not landed owing the rest of itself (2.13).
+ *
+ * BUSY, because what it waits on is loading. The mark a source's production makes is what finishes
+ * the run, and `markReaders` queues it rather than leaving it for a read that may never come. And
+ * NOT EVERYTHING IT READS IS READY, so neither is this — 11.58, and the same sentence 11.16 makes
+ * for a re-adoption. It stops serving rather than handing back a figure it computed from a source
+ * that has since gone away, and that is a move its readers have to hear even though the aborted run
+ * minted nothing for a cascade to carry.
+ */
+function abortRun(cell: Cell): void {
+    cell.loading = true
+    cell.aborted = true
+    if (cell.servable) unserve(cell)
+    else probesMoved(cell)
+}
+
+/**
  * Adopts what a body handed back, refusing the body where that would close a cycle.
  *
  * 11.66 — a body's answer that 11.65 refuses is the body's failure.
@@ -2348,8 +2434,7 @@ function landOpening(cell: Cell): void {
     cell.landed = true
     cell.servable = true
     setDirect(cell, cell.state === CLEAN)
-    cascade(cell)
-    if (moved) probesMoved(cell)
+    land(cell, moved)
 }
 
 /**
@@ -2361,9 +2446,21 @@ function landOpening(cell: Cell): void {
  * be marked by (14.13).
  */
 function startProducer(cell: Cell): void {
-    const stream = cell.stream
-    if (stream === null || stream.source !== null) run(cell)
+    const stream = ownStream(cell)
+    if (stream === null) run(cell)
     else startStream(cell, stream)
+}
+
+/**
+ * Supersedes the work in flight: a load's answer lands nowhere once `generation` has moved, and a
+ * stream's own run is stopped outright. `busy` moves silently, and telling the guards is the
+ * caller's — 7.3 has an invalidate tell nobody.
+ */
+function supersede(cell: Cell): void {
+    cell.generation += 1
+    cell.loading = false
+    const stream = ownStream(cell)
+    if (stream !== null) stopStream(stream)
 }
 
 /**
@@ -2399,10 +2496,7 @@ function startStream(cell: Cell, stream: Stream): void {
  */
 function promoteToStream(cell: Cell, generator: AsyncIterable<unknown>): void {
     let stream = cell.stream
-    if (stream === null) {
-        stream = becomeStream(cell, null)
-        Object.setPrototypeOf(cell.callable as object, STREAM_PROTOTYPE)
-    }
+    if (stream === null) stream = becomeStream(cell, null)
     pumpRun(cell, stream, generator[Symbol.asyncIterator]())
 }
 
@@ -2488,7 +2582,6 @@ async function pump(
         cap.holding = false
         releaseChunks(cell, stream)
     }
-    const moved = !begun || cell.loading
     if (!begun) {
         // A stream that closed with nothing in it has finished, and what it accumulated is
         // no chunks — a value, where waiting on would be a load that never ends.
@@ -2496,9 +2589,8 @@ async function pump(
         landChunks(cell)
         cascade(cell)
     }
-    cell.loading = false
     // 3.7: `busy` held until the close, and this is the close.
-    if (moved) probesMoved(cell)
+    endLoad(cell, !begun)
     // 6.10, AFTER THE CASCADE ABOVE: the entry is what a read would answer with, so it is taken
     // once the last chunk has landed and the value is servable.
     closeRun(cell, stream)
@@ -2635,7 +2727,7 @@ function materialize(cell: Cell, stream: Stream): void {
     // 9.11: the accumulation moved past a write following a `Reactive`, which lets go of it here
     // where no chunk's wake did — a patch, or a run that closed empty. Only an own stream follows;
     // a forwarding one's `adoption` is what it forwards.
-    if (cell.adoption !== null && stream.source === null) unfollow(cell)
+    if (cell.adoption !== null && ownStream(cell) !== null) unfollow(cell)
     stream.materializedAt = stream.version
     stream.written = false
     gateInto(cell, stream.chunks.slice(0, stream.visible))
@@ -2683,6 +2775,97 @@ function heldValue(cell: Cell): unknown {
     const stream = cell.stream
     if (stream !== null) materialize(cell, stream)
     return cell.value
+}
+
+/**
+ * The chunks of the run `cell` is serving, from its first to its close (2.6).
+ *
+ * ONE RUN, AND THE READER OWNS ITS BOUNDARY. The run is its ring: a new run's first chunk replaces
+ * the array, where a patch mutates it in place (9.13) and only moves the base — so a ring that moved
+ * ends the walk (9.16), save the `EMPTY_RING` a run with no chunk yet holds. And what the run failed
+ * on is thrown after its chunks (9.15), unless it was standing before the walk began — a
+ * revalidation's (2.4), not this run's. The cursor is the wake and the settling is the end
+ * (`Cursor.closeOn`).
+ *
+ * `gated` IS THE WIRE'S, and the two never share a take. Ungated is the ring by ordinal, every chunk
+ * a window collapsed included (5.10) — `for await`. Gated is what a read would serve, chunk by chunk
+ * (16.32): the accumulation to what the window released (5.18), or the gated accumulation (9.8).
+ */
+async function* runChunks(cell: Cell, gated: boolean): AsyncGenerator<unknown> {
+    let ring = cell.ring
+    const standing = failureOf(cell)
+    // Gated reads by index and holds no place, so it sits past every chunk where no patch keeps it.
+    const cursor = new Cursor(
+        cell,
+        gated ? Number.POSITIVE_INFINITY : cell.ringBase,
+    )
+    cursor.closeOn(settled(cell))
+    let sent = 0
+    try {
+        for (;;) {
+            if (cell.ring !== ring) {
+                if (ring !== EMPTY_RING) return
+                ring = cell.ring
+            }
+            const chunk = gated ? toldAt(cell, sent) : cursor.take()
+            if (chunk !== CAUGHT_UP) {
+                sent += 1
+                yield chunk
+                continue
+            }
+            if (cursor.closed) break
+            await cursor.turn()
+        }
+    } finally {
+        cursor.stop()
+    }
+    if (cursor.failure !== undefined) throw cursor.failure
+    // 9.15 AND 16.59 — a run that failed after its first chunk, or one its timeout ended, settles
+    // with what it had; the refusal stands beside it.
+    const ended = failureOf(cell)
+    if (ended !== undefined && ended !== standing) throw ended
+}
+
+/**
+ * The chunk at `index` of what a read of `cell` would serve, or `CAUGHT_UP`.
+ *
+ * Ungated it is read out of the accumulation in place, to `visible`: a read materializes a copy of
+ * the whole of it (9.1), which for a writer woken per chunk is n²/2 elements copied to send n. A
+ * schema or a transform has to see the whole accumulation (9.8), so a gated value answers from what
+ * a read would.
+ */
+function toldAt(cell: Cell, index: number): unknown {
+    const stream = cell.stream
+    // A forward that ended (11.16) is no stream to send any more of.
+    if (stream === null) return CAUGHT_UP
+    if (cell.schema === null && cell.transform === null)
+        return index < stream.visible ? stream.chunks[index] : CAUGHT_UP
+    const held = MEMBERS.peek.call(cell.callable as unknown as Callable)
+    return Array.isArray(held) && index < held.length ? held[index] : CAUGHT_UP
+}
+
+/**
+ * What one run of `cell` produced, as `for await` walks it.
+ *
+ * 2.5 AND 2.6 — the settling, yielded once, or a stream's chunks from the first to the close. Which
+ * of the two is asked of the settling, since a value may only turn out to stream once its load
+ * resolves (9.6).
+ */
+async function* producedRun(cell: Cell): AsyncGenerator<unknown> {
+    const first = await settled(cell, true)
+    if (first !== STREAMING) {
+        yield first
+        return
+    }
+    yield* runChunks(cell, false)
+}
+
+/**
+ * The chunks of the run `value` is serving, as a streamed answer sends them (16.32), ending with
+ * that run (9.16) and throwing what it failed on (9.15).
+ */
+export function chunksOfStream(value: unknown): AsyncGenerator<unknown> {
+    return runChunks((value as Callable)[CELL], true)
 }
 
 /**
@@ -2839,8 +3022,7 @@ function expire(cell: Cell): void {
  * which is what lets the flag be conservative.
  */
 function readIndirect(cell: Cell): unknown {
-    if (cell.owes !== OWES_NOTHING) settleOwed(cell)
-    if (cell.state !== CLEAN) resolve(cell)
+    bringCurrent(cell)
     // 6.5: THE READ THAT FOLLOWS. Every value carrying an expiry arrives here and no
     // other value does, which is the whole of what `setDirect` buys.
     if (cell.expiry !== null) expire(cell)
@@ -2941,53 +3123,6 @@ function failureOf(cell: Cell): unknown {
 }
 
 /**
- * What one run of `cell` produced, as `for await` walks it.
- *
- * 2.5 AND 2.6 — the settling, yielded once, or a stream's chunks from the first to the close. Which
- * of the two is asked of the settling, since a value may only turn out to stream once its load
- * resolves (9.6).
- *
- * THE CURSOR IS THE WAKE AND THE SETTLING IS THE END (`Cursor.closeOn`).
- */
-async function* producedRun(cell: Cell): AsyncGenerator<unknown> {
-    const first = await settled(cell, true)
-    if (first !== STREAMING) {
-        yield first
-        return
-    }
-    // THE RUN IS ITS RING: a new run's first chunk replaces the array, where a patch mutates it in
-    // place (9.13) and only moves the base. A run with no chunk yet holds `EMPTY_RING`.
-    let ring = cell.ring
-    // 9.15 — a failure already standing is a revalidation's (2.4), and not this run's.
-    const standing = failureOf(cell)
-    const cursor = new Cursor(cell, cell.ringBase)
-    cursor.closeOn(settled(cell))
-    try {
-        for (;;) {
-            if (cell.ring !== ring) {
-                // 9.16.
-                if (ring !== EMPTY_RING) return
-                ring = cell.ring
-            }
-            const chunk = cursor.take()
-            if (chunk !== CAUGHT_UP) {
-                yield chunk
-                continue
-            }
-            if (cursor.closed) break
-            await cursor.turn()
-        }
-    } finally {
-        cursor.stop()
-    }
-    if (cursor.failure !== undefined) throw cursor.failure
-    // 9.15 AND 16.59 — a run that failed after its first chunk, or one its timeout ended, settles
-    // with what it had; the refusal stands beside it.
-    const ended = failureOf(cell)
-    if (ended !== undefined && ended !== standing) throw ended
-}
-
-/**
  * `busy` without subscribing.
  *
  * `busy` WITHOUT SUBSCRIBING, for a caller that is not a reader — `then` asks it and must not
@@ -3042,12 +3177,14 @@ function isReady(cell: Cell): boolean {
 }
 
 /**
- * The body run where it is owed, before a probe answers about it.
+ * Settles what an invalidate left owing and runs the body where it is marked: what a read, a probe,
+ * a `peek` and an await each pull before they answer. Where they part is the deadline — a read and
+ * a `peek` take 6.5's half, an await only a drop the timer made (16.7) — and each says so after.
  *
  * 3.2 — A PROBE ANSWERS ABOUT THE VALUE A READ WOULD SERVE. Under push-pull a write leaves every
  * derived value it reached unrun, so a probe that walked what the last run left answered about a
  * value nothing would serve: `x.ready()` true over a body whose inputs had moved to a load, and the
- * read the guard admitted threw `NotLanded`. `peek` pulls for the same reason.
+ * read the guard admitted threw `NotLanded`.
  */
 function bringCurrent(cell: Cell): void {
     if (cell.owes !== OWES_NOTHING) settleOwed(cell)
@@ -3087,8 +3224,7 @@ function settled(cell: Cell, untilStreaming = false): Promise<unknown> {
     // ONLY ONCE THE TIMER HAS DROPPED IT. The read's half of 6.5 — a production still served past
     // its deadline — is not taken here, because 16.7's `ttl` of 0 makes every mutation's production
     // past its deadline the moment it lands, and the await that answers the call ran it again.
-    if (cell.owes !== OWES_NOTHING) settleOwed(cell)
-    if (cell.state !== CLEAN) resolve(cell)
+    bringCurrent(cell)
     if (cell.expiry?.dropped) expire(cell)
     if (untilStreaming && cell.stream !== null)
         return Promise.resolve(STREAMING)
@@ -3339,12 +3475,9 @@ function invalidateOne(cell: Cell): void {
     if (!reloads(cell)) return
     // Not directly servable, so the next read goes a frame in and settles the debt.
     cell.direct = false
-    // 7.15: work already in flight was started from what this says is wrong. A load's answer
-    // lands nowhere once `generation` has moved; a stream is stopped outright.
-    cell.generation += 1
-    cell.loading = false
-    const stream = cell.stream
-    if (stream !== null && stream.source === null) stopStream(stream)
+    // 7.15: work already in flight was started from what this says is wrong — and 7.3 moves no
+    // probe for it.
+    supersede(cell)
     cell.owes = OWES_RELOAD
     owedBelow(cell)
 }
@@ -3460,10 +3593,7 @@ export function startDeferred(value: unknown): void {
  * and a reader still holding it hears that.
  */
 export function abandonDeferred(value: unknown): void {
-    const cell = (value as Callable)[CELL]
-    if (!cell.loading) return
-    cell.loading = false
-    probesMoved(cell)
+    endLoad((value as Callable)[CELL], false)
 }
 
 // ── `store` ──────────────────────────────────────────────────────────────────────────────
@@ -3516,7 +3646,7 @@ function restoreFirst(
         settleRestore(cell, persisted, answer, initial)
         return
     }
-    cell.loading = true
+    beginLoad(cell)
     const generation = cell.generation
     answer.then(
         (value) => {
@@ -3549,10 +3679,7 @@ function settleRestore(
     if (cell.body !== null) startProducer(cell)
     else if (initial === undefined) landOpening(cell)
     else if (initial !== NO_INITIAL) open(cell, initial)
-    else if (cell.loading) {
-        cell.loading = false
-        probesMoved(cell)
-    }
+    else endLoad(cell, false)
 }
 
 /**
@@ -3589,8 +3716,7 @@ function restoreStream(cell: Cell, stream: Stream, chunks: unknown[]): void {
     stream.version += 1
     const moved = settleProbes(cell)
     landChunks(cell)
-    cascade(cell)
-    if (moved) probesMoved(cell)
+    land(cell, moved)
     // 8.7 SAYS THE BODY NEVER STARTS, AND `pump` IS WHAT REACHES `closeRun` — so the
     // restored accumulation is entered as a closed run here or nothing ever does it.
     // Without this `standingLive` answers false for the life of the value, which takes
@@ -3669,13 +3795,7 @@ function settleMiss(cell: Cell): void {
         )
         return
     }
-    const wasServable = cell.servable
-    const wasLoading = cell.loading
-    cell.servable = true
-    cell.loading = false
-    setDirect(cell, cell.state === CLEAN)
-    if (cell.servable !== wasServable) cascade(cell)
-    if (wasLoading || cell.servable !== wasServable) probesMoved(cell)
+    endLoad(cell, serveAgain(cell))
 }
 
 /**
@@ -4107,12 +4227,13 @@ const MEMBERS = {
 }
 
 /**
- * The cell `value` serves from, through every adoption.
+ * The cell `value` serves from, through every adoption: its identity and its ordinal, and nothing
+ * else of it the server can reach.
  *
  * 11.12: an adopting value serves the adopted value's production, and an adoption of an adoption
  * goes on down — so a follow's version (18.7) and its feed name the cell that actually produced.
  */
-export function servedCellOf(value: unknown): Retained {
+export function servedCellOf(value: unknown): { readonly ordinal: number } {
     return adoptedCellOf(value)
 }
 
@@ -4136,10 +4257,16 @@ export function deadlineOf(value: unknown): number {
  * 16.48 — WHICH LOAD A VALUE HAS IN FLIGHT, as the generation that started it, or `undefined` where
  * none is. Read off the cell rather than through `busy`, which is a probe and would subscribe the
  * caller that asked (3.3).
+ *
+ * A WINDOW HOLDING A PRODUCTION IS BUSY AND IS NO LOAD (5.15): nothing is in flight for a call to end
+ * or time, and the window's close is its own bound. Told apart by the hold, which only a value with
+ * neither body nor stream makes — so a write's load taken in under a hold is not one a call times.
  */
 export function loadOf(value: unknown): number | undefined {
     const cell = (value as Callable)[CELL]
-    return cell.loading ? cell.generation : undefined
+    if (!cell.loading) return undefined
+    if (cell.cap?.holding && cell.stream === null) return undefined
+    return cell.generation
 }
 
 /**
@@ -4176,8 +4303,7 @@ export function failedTransiently(value: unknown): boolean {
 export function abandonLoad(value: unknown, failure: unknown): void {
     const cell = (value as Callable)[CELL]
     if (!cell.loading) return
-    cell.generation += 1
-    if (cell.stream !== null) stopStream(cell.stream)
+    supersede(cell)
     refused(cell, failure)
 }
 
@@ -4204,42 +4330,10 @@ export function isStreaming(value: unknown): boolean {
     return stream !== null && stream !== undefined
 }
 
-/**
- * A cursor over `value` that reads nothing and only wakes when it changes.
- *
- * PLACED PAST EVERY CHUNK, so it holds no place a patch has to keep (5.7) and is never behind.
- */
-export function wakeOf(value: unknown): Cursor {
-    return new Cursor((value as Callable)[CELL], Number.POSITIVE_INFINITY)
-}
-
-/**
- * The chunks a streaming value has told its readers of, from index `from` on.
- *
- * 16.32 — THE CHUNKS A STREAMING VALUE HAS TOLD ITS READERS OF PAST `from`, for a writer sending each
- * once. Ungated they are read out of the accumulation in place, to `visible` rather than its length
- * (5.18): a read materializes a copy of the whole of it (9.1), which for a writer woken per chunk is
- * n²/2 elements copied to send n. A schema or a transform has to see the whole accumulation (9.8),
- * so a gated value answers from what a read would.
- */
-export function* chunksFrom(value: unknown, from: number): Generator<unknown> {
-    const cell = (value as Callable)[CELL]
-    if (cell.schema === null && cell.transform === null) {
-        const stream = cell.stream as Stream
-        for (let index = from; index < stream.visible; index += 1)
-            yield stream.chunks[index]
-        return
-    }
-    const held = MEMBERS.peek.call(value as Callable)
-    if (Array.isArray(held))
-        for (let index = from; index < held.length; index += 1)
-            yield held[index]
-}
-
 function adoptedCellOf(value: unknown): Cell {
     let cell = (value as Callable)[CELL]
     // A stream's own `adoption` is a write it follows (9.11), and its past is its own.
-    while (cell.adoption !== null && cell.stream?.source !== null)
+    while (cell.adoption !== null && ownStream(cell) === null)
         cell = cell.adoption.source
     return cell
 }
@@ -4432,7 +4526,8 @@ function orphan(cell: Cell): void {
 function releaseOrphan(cell: Cell): void {
     cell.orphaned = false
     const stream = cell.stream
-    if (stream !== null && stream.source === null) stopStream(stream)
+    const own = ownStream(cell)
+    if (own !== null) stopStream(own)
     dropAdoption(cell)
     cell.aborted = false
     if (cell.body !== null && stream === null) {
@@ -4512,14 +4607,7 @@ export function createReactive<
     // BEFORE THE FIELD, not after: an engine keys its inline caches on the shape a
     // property was added to, and re-pointing the prototype afterwards invalidates the
     // transition the store just built.
-    Object.setPrototypeOf(
-        self,
-        streaming
-            ? STREAM_PROTOTYPE
-            : cell.simple
-              ? SIMPLE_PROTOTYPE
-              : MEMBER_PROTOTYPE,
-    )
+    Object.setPrototypeOf(self, seatOf(cell))
     self[CELL] = cell
     cell.callable = self as unknown as Reactive<unknown>
     if (cell.tags !== null) tagCell(cell)

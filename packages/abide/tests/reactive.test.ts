@@ -24,7 +24,7 @@ import {
 } from '#shared'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
-import { isKeyed } from '#shared/reactive/index.ts'
+import { chunksOfStream, isKeyed } from '#shared/reactive/index.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
@@ -4289,7 +4289,7 @@ test('a cursor over a stream replays the run in flight from its first chunk', as
     await cursor.return?.()
 })
 
-// 2.6: THE LOOP ENDS WITH ITS RUN. THE REVERT, run: drop the `closed` break from `producedRun`;
+// 2.6: THE LOOP ENDS WITH ITS RUN. THE REVERT, run: drop the `closed` break from `runChunks`;
 // 'still waiting', which is the hang an app looping over a streamed call hit.
 test('for await over a stream ends when its run closes — 2.6', async () => {
     const feed = streamOf<number>()
@@ -4324,7 +4324,7 @@ test('a chunk landing in the same turn as the close is not lost — 2.6', async 
 
 // 9.15: A RUN THAT FAILED AFTER ITS FIRST CHUNK settles with what it had (2.4), so the loop hands
 // that over and then throws. THE REVERT, run: drop the `failureOf` throw at the end of
-// `producedRun`; `1 caught: nothing`.
+// `runChunks`; `1 caught: nothing`.
 test('for await over a stream that fails yields its chunks and then throws — 9.15', async () => {
     const feed = streamOf<number>()
     const rows = reactive(feed.body)
@@ -4385,6 +4385,50 @@ test('for await over a stream ends where a refresh replaces its run — 9.16', a
     rows.refresh()
     ;(feed.runs[1] as Run<number>).push(10)
     expect(await walking).toEqual([1])
+})
+
+// 9.16 OVER THE WIRE: what a streamed answer sends is one run as well, so a refresh mid-stream
+// ends it rather than splicing the new run's chunks on at the old run's index.
+test('a streamed answer ends where a refresh replaces its run — 9.16, 16.76', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const first = feed.runs[0] as Run<number>
+    first.push(1)
+    first.push(2)
+    await turns()
+    const walking = walked(chunksOfStream(rows), 500)
+    await turns()
+    rows.refresh()
+    const second = feed.runs[1] as Run<number>
+    second.push(10)
+    second.push(20)
+    second.push(30)
+    await turns()
+    second.close()
+    expect(await walking).toEqual([1, 2])
+})
+
+// 9.15 OVER THE WIRE: a run that failed after its first chunk is not one that finished, whatever it
+// failed with — a refusal or a throw alike.
+test('a streamed answer throws what its run failed on after its chunks — 9.15, 16.76', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    const seen: number[] = []
+    let caught = 'nothing'
+    const walking = (async () => {
+        try {
+            for await (const chunk of chunksOfStream(rows))
+                seen.push(chunk as number)
+        } catch (thrown) {
+            caught = (thrown as Error).message
+        }
+    })()
+    run.push(1)
+    await turns()
+    run.fail(new Error('cut off'))
+    await walking
+    expect(`${seen.join(',')} caught: ${caught}`).toBe('1 caught: cut off')
 })
 
 // THE QUEUE IS THE ITERATOR'S. A consumer may ask twice before either answer arrives —
@@ -4625,6 +4669,40 @@ test('a value adopting a stream materializes nothing until it is read, through i
     expect(total()).toEqual([6])
     expect(`outer transforms after two reads: ${transforms}`).toBe(
         'outer transforms after two reads: 1',
+    )
+})
+
+// 11.15 UNDER A WINDOW: an adoption supersedes the production a window is holding, as a later write
+// would. Left held, the window's close released it over the adoption — and on a stream the release
+// read as a chunk that ended a followed write, dropping the forward.
+test('a capped value adopting a stream while its window holds a write keeps forwarding — 11.13, 11.19', async () => {
+    const feed = streamOf<number>()
+    const inner = reactive(feed.body)
+    const run = feed.runs[0] as Run<number>
+    run.push(1)
+    await turns()
+    const outer = reactive<unknown>(0, { debounce: WINDOW })
+    outer.set(5)
+    outer.set(inner)
+    await sleep(AFTER_WINDOW)
+    run.push(2)
+    await turns()
+    expect(outer()).toEqual([1, 2])
+    run.close()
+    await turns()
+    expect(`busy: ${outer.busy()}`).toBe('busy: false')
+})
+
+// 11.16 UNDER A WINDOW: adopting a value with nothing to serve leaves nothing to serve, and the
+// window's close does not serve the write the adoption superseded.
+test('a capped value adopting an unlanded value while its window holds a write serves nothing — 11.16', async () => {
+    const outer = reactive<number>(0, { debounce: WINDOW })
+    outer.set(5)
+    const inner = reactive(() => new Promise<number>(() => {}))
+    outer.set(inner)
+    await sleep(AFTER_WINDOW)
+    expect(`ready: ${outer.ready()} peek: ${outer.peek()}`).toBe(
+        'ready: false peek: undefined',
     )
 })
 
@@ -5529,7 +5607,8 @@ test('refresh on a value with a store re-reads the store', () => {
 test('a stream is stored once at close, and a restore is a finished stream', async () => {
     const memory = memoryStore<number[]>({ answer: () => undefined })
     const feed = streamOf<number>()
-    reactive(feed.body, { store: memory.store })
+    // REACHED, since a server files a value with a store unbuilt until it is (11.71).
+    reactive(feed.body, { store: memory.store }).peek()
     const run = feed.runs[0] as Run<number>
     run.push(1)
     run.push(2)

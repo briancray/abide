@@ -5,7 +5,7 @@
 import { expect, test } from 'bun:test'
 import { bodyOf } from '#server/answerValue.ts'
 import { isFailed } from '#shared/Failed.ts'
-import { answerChunks } from '#shared/framing.ts'
+import { answerChunks, framingOf } from '#shared/framing.ts'
 import { refuse } from '#shared/refuse.ts'
 
 async function* stalls(): AsyncGenerator<unknown> {
@@ -19,7 +19,8 @@ async function read(
 ): Promise<{ chunks: unknown[]; refused: unknown }> {
     const chunks: unknown[] = []
     try {
-        for await (const chunk of answerChunks(body, type)) chunks.push(chunk)
+        for await (const chunk of answerChunks(body, framingOf(type)))
+            chunks.push(chunk)
     } catch (thrown) {
         return { chunks, refused: thrown }
     }
@@ -59,4 +60,20 @@ test('a chunk carrying the reserved key and anything else is a chunk — 16.68',
     )
     expect(refused).toBeUndefined()
     expect(chunks).toHaveLength(2)
+})
+
+// 18.27 — AN EVENT STREAM IS READ BY ITS FIELDS, by the one reader behind a copy's chunks and
+// `abide watch` alike: a `data:` with no space after its colon, a value split over two `data`
+// lines, and an event carrying an `id` are each the chunk they carry, and a comment carries none.
+// THE REVERT: read only a line starting `data: `, each alone, as the copy's reader did; the split
+// value fails to parse and the read refuses after `[]`.
+test("an sse answer is read by the format's fields — 18.27", async () => {
+    const events =
+        ':\n\ndata:1\n\nevent: message\nid: 4\ndata: [1,\ndata: 2]\n\n: keep-alive\n\ndata: {"n":3}'
+    const { chunks, refused } = await read(
+        new Response(events).body as ReadableStream<Uint8Array>,
+        'text/event-stream',
+    )
+    expect(refused).toBeUndefined()
+    expect(chunks).toEqual([1, [1, 2], { n: 3 }])
 })

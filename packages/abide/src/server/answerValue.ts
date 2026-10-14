@@ -4,7 +4,6 @@
 // `Values` a handler returned — framed one chunk per pull (16.32, 16.44–16.47).
 
 import { isFailed, problemOf } from '#shared/Failed.ts'
-import { refusalFrame } from '#shared/framing.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { prefers } from './prefers.ts'
 import {
@@ -13,10 +12,13 @@ import {
     heldByApp,
     holdScope,
 } from './requestScope.ts'
+import {
+    EVENT_STREAM_OPENER,
+    refusalFrame,
+    streamEvent,
+} from './streamEvent.ts'
 
 const ENCODER = new TextEncoder()
-// AN EVENT STREAM OPENS ON A COMMENT — `bodyOf` says why.
-const SSE_OPENER = ':\n\n'
 
 function isValues(
     value: unknown,
@@ -70,6 +72,8 @@ export async function answerValue(
         headers.set('content-type', 'text/html; charset=utf-8')
         if (typeof value === 'string' || value instanceof Uint8Array)
             return new Response(value as BodyInit, { status, headers })
+        // 16.75.
+        headers.set('x-accel-buffering', 'no')
         return new Response(bodyOf(chunksOf(value), 'bytes'), {
             status,
             headers,
@@ -96,11 +100,11 @@ function isIterable(value: unknown): value is Iterable<unknown> {
 
 /**
  * The head of an event stream. 16.45 — never stored, whatever the value's own life said (21.8), and
- * never buffered by a proxy in front.
+ * 16.75 — never buffered by a proxy in front.
  */
 export function sseHeaders(headers: Headers): void {
     headers.set('content-type', 'text/event-stream')
-    headers.set('cache-control', 'no-cache')
+    headers.set('cache-control', 'private, no-store')
     headers.set('x-accel-buffering', 'no')
 }
 
@@ -169,10 +173,16 @@ export function framed(
     first?: IteratorResult<unknown>,
     lines = 'application/jsonl',
 ): Response {
-    if (framing === 'bytes')
-        headers.set('content-type', 'application/octet-stream')
-    else if (framing === 'jsonl') headers.set('content-type', lines)
-    else sseHeaders(headers)
+    // 16.75 — whatever the framing: a proxy holding frames back until the end undoes one per pull.
+    // An event stream's head says so itself.
+    if (framing === 'sse') sseHeaders(headers)
+    else {
+        headers.set(
+            'content-type',
+            framing === 'bytes' ? 'application/octet-stream' : lines,
+        )
+        headers.set('x-accel-buffering', 'no')
+    }
     return new Response(bodyOf(chunks, framing, first), {
         status,
         headers,
@@ -214,7 +224,7 @@ export function bodyOf(
     return new ReadableStream<Uint8Array>({
         start(controller) {
             if (framing === 'sse')
-                controller.enqueue(ENCODER.encode(SSE_OPENER))
+                controller.enqueue(ENCODER.encode(EVENT_STREAM_OPENER))
             stopped = () => {
                 if (ended) return
                 release()
@@ -238,10 +248,7 @@ export function bodyOf(
                     if (framing !== 'bytes' && isFailed(thrown)) {
                         controller.enqueue(
                             ENCODER.encode(
-                                refusalFrame(
-                                    problemOf(thrown),
-                                    framing === 'sse' ? 'data: ' : '',
-                                ),
+                                refusalFrame(problemOf(thrown), framing),
                             ),
                         )
                         controller.close()
@@ -267,7 +274,13 @@ export function bodyOf(
                 controller.enqueue(ENCODER.encode(`${JSON.stringify(chunk)}\n`))
             else
                 controller.enqueue(
-                    ENCODER.encode(`data: ${JSON.stringify(chunk)}\n\n`),
+                    ENCODER.encode(
+                        streamEvent(
+                            undefined,
+                            undefined,
+                            JSON.stringify(chunk),
+                        ),
+                    ),
                 )
         },
         cancel() {

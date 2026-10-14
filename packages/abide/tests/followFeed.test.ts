@@ -215,8 +215,8 @@ test('an entry answered looks up the followers of its own key alone — 18.8', a
 
 // 18.6, 18.20 — AN EVENT STREAM IS SENT THE BODY SERIALIZED FOR EVERY FOLLOWER, not one of its own:
 // a write to a value twenty event streams follow serializes it once and parses nothing. THE REVERT:
-// read each frame back with `JSON.parse` in `eventOf` and stringify its body again — 20 parses and
-// 21 stringifies a write, against 0 and 1.
+// have `followAsEvents`'s peer write its event from `frame.body` parsed and stringified again — 20
+// parses and 21 stringifies a write, against 0 and 1.
 test('a write reaches every event stream following a value with one serialization and no parse — 18.6, 18.20', async () => {
     const STREAMS = 20
     const value = reactive({ titles: ['dune'] }, { global: true })

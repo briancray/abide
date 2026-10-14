@@ -1,7 +1,7 @@
 // THE CURSOR. RULEBOOK 2.6: a streaming producer's chunks, read from the chunk buffer by ordinal,
 // so two chunks between two `await`s are two turns of the loop, and a patch or a write over the
 // stream moves no place (5.7, 9.12). Where the run ENDS is the caller's settling, handed to
-// `closeOn`: `for await` over a `Reactive` is `Reactive.ts`'s `producedRun`.
+// `closeOn`: one run's reader is `Reactive.ts`'s `runChunks`.
 //
 // A NARROW FACE rather than the `Cell`, the same way `tracking.ts` takes a `Tracked`: what a
 // cursor reads is a handful of fields, and naming them keeps the cell's internals out of a
@@ -15,7 +15,7 @@ import {
 } from './tracking.ts'
 
 /**
- * What a cursor reads, and all of a cell the server is handed (`servedCellOf`).
+ * What a cursor reads of a cell.
  *
  * `ring[index]` carries ordinal `ringBase + index + 1`, so a cursor holding an ordinal finds its
  * place in a stream's chunk buffer without the buffer having to hold one.
@@ -92,6 +92,8 @@ export class Cursor {
         this.reader = newSubscriber([source], null)
         this.reader.notify = (): void => this.woken()
         source.readers.push(this.reader)
+        // ONE PLACED PAST EVERY CHUNK is a wake and never behind, so no patch has a place to keep.
+        if (from === Number.POSITIVE_INFINITY) return
         let cursors = CURSORS.get(source)
         if (cursors === undefined) {
             cursors = new Set()

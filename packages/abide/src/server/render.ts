@@ -6,11 +6,10 @@
 import { regionMarkup } from '#shared/anchorMarkup.ts'
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import { headKeyOf } from '#shared/headKeyOf.ts'
-import { isReactive, isStreaming, loadOf } from '#shared/reactive/index.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
 import type { ShareScope } from '#shared/reactive/share.ts'
 import { setUpLevels } from '#shared/setUpLevels.ts'
-import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
+import { buildDeferred, markPainted } from './deferredBuilds.ts'
 import { currentRequestScope, type PageCall } from './requestScope.ts'
 
 /**
@@ -90,12 +89,19 @@ export async function composePage(
     })
     await new Promise((settled) => setImmediate(settled))
     const outermost = levels[0] as Rendered
-    // THE OUTERMOST HEAD FIRST: reading it builds the chain, which is what pushes the heads below.
-    // Written end to end rather than merged: `render` merges it with the shell's in one pass (39.4).
-    const head = outermost.head
+    const built = await buildDeferred(
+        currentRequestScope()?.page?.calls ?? [],
+        () => {
+            // THE OUTERMOST HEAD FIRST: reading it builds the chain, which is what pushes the heads
+            // below. Written end to end rather than merged: `render` merges it with the shell's in one
+            // pass (39.4).
+            const head = outermost.head
+            return { head: head + heads.join(''), body: outermost.body }
+        },
+    )
     return {
-        head: head + heads.join(''),
-        body: outermost.body,
+        head: built.head,
+        body: built.body,
         // 35.15 — the document's, which only the root layout writes, and it is outermost.
         document: outermost.document,
     }
@@ -317,6 +323,7 @@ export async function renderDocument(
     // makes is known, and a script in the head starts each one as the request the browser's own
     // `Rpc` would make — while the rest of the document and the bundle are still on their way.
     const calls = currentRequestScope()?.page?.calls
+    if (calls !== undefined) markPainted(calls)
     const early =
         calls !== undefined && calls.length > 0 ? earlyCallScript(calls) : ''
     // 39.4 — THE SHELL IS THE OUTERMOST CONTRIBUTOR, so its head is merged with the page's in the
@@ -335,15 +342,14 @@ export async function renderDocument(
  * The head markup that starts each of the page's calls before the bundle arrives.
  *
  * 41.20 — THE SCRIPT ITSELF: each call started with `fetch`, and its answer left under the call's
- * key in `EARLY_CALLS` for `wire` to take (41.21). A framed answer's body is left UNREAD (16.32),
- * so a streaming handler's copy takes its chunks as they land rather than after the last one.
+ * key in `EARLY_CALLS` for `wire` to take (41.21). An answer's body is left UNREAD (16.32), so a
+ * streaming handler's copy takes its chunks as they land rather than after the last one.
  * Inline because nothing else runs before the bundle has arrived, which is the wait it exists to
  * overlap.
  *
  * 41.25 — A ROW ENDING IN `1` IS A CALL THE MARKUP WAS BUILT FROM SETTLED, a refusal included, and
- * its entry is marked `painted` for hydration to wait on — a body that is not JSON read to its bytes,
- * so the wait covers it too. Read here, where the markup has just been built and only microtasks
- * have run since. 41.26 — A CALL THAT STREAMS IS NEVER MARKED: the
+ * its entry is marked `painted` for hydration to wait on — its body read to its bytes, so the wait
+ * covers it too. Marked as each pass of the markup is built (`markPainted`), not here. 41.26 — A CALL THAT STREAMS IS NEVER MARKED: the
  * browser reads its chunks as they land (16.32), so no wait for its answer makes it settled where
  * the page hydrates, and its region is 41.24's to put right.
  *
@@ -358,18 +364,20 @@ function earlyCallScript(calls: PageCall[]): string {
         | [string, string, RequestInit]
         | [string, string, RequestInit, 1]
     )[] = []
-    for (const { request, reached } of calls)
+    for (const { request, painted } of calls)
         rows.push(
-            isReactive(reached) &&
-                loadOf(reached) === undefined &&
-                !isStreaming(reached)
+            painted === true
                 ? [request.key, request.url, request.init, 1]
                 : [request.key, request.url, request.init],
         )
     return `<script type="application/json">${JSON.stringify(rows).replace(/</g, '\\u003c')}</script><script>${EARLY_CALL_RUNNER}</script>`
 }
 
-const EARLY_CALL_RUNNER = `(function(s,c){for(var i=0;i<c.length;i++)(function(k,u,n,h){var e=s[k]={painted:h,status:void 0,statusText:void 0,type:void 0,version:void 0,life:void 0,text:void 0,bytes:void 0,body:void 0};e.promise=fetch(u,n).then(function(r){e.status=r.status;e.statusText=r.statusText;e.type=r.headers.get("content-type");e.version=r.headers.get("${VERSION_HEADER}");e.life=r.headers.get("cache-control");if(r.ok&&e.type&&!/^application\\/([^;]*\\+)?json\\s*(;|$)/.test(e.type)){if(h)return r.arrayBuffer().then(function(b){e.bytes=new Uint8Array(b)});e.body=r.body;return}return r.text()}).then(function(t){if(t!==void 0)e.text=t},function(){})})(c[i][0],c[i][1],c[i][2],c[i][3])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),JSON.parse(document.currentScript.previousElementSibling.textContent))`
+// THE RUNNER RECORDS, IT NEVER CLASSIFIES: the `Response`, and a painted call's body read to its end
+// — the one decision is `painted`, which the server made. `answerOf` reads the record as it reads an
+// answer it fetched, so no second reading of a content type lives in a string no typecheck reaches.
+// The shape is `EarlyCall`'s.
+export const EARLY_CALL_RUNNER = `(function(s,c){for(var i=0;i<c.length;i++)(function(k,u,n,h){var e=s[k]={painted:h,response:void 0,bytes:void 0};e.promise=fetch(u,n).then(function(r){return h?r.arrayBuffer().then(function(b){e.bytes=b;e.response=r}):e.response=r}).catch(function(){})})(c[i][0],c[i][1],c[i][2],c[i][3])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),JSON.parse(document.currentScript.previousElementSibling.textContent))`
 
 /** The early-call runner's hash, as `script-src` names it. 29.9. */
 export const EARLY_CALL_HASH = `'sha256-${new Bun.CryptoHasher('sha256').update(EARLY_CALL_RUNNER).digest('base64')}'`

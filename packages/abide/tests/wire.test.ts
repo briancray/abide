@@ -504,33 +504,31 @@ test('the wire takes a call the page already started, and fetches after that —
             text: async () => '{"id":"7","fresh":true}',
         }
     }) as unknown
+    const json = (text: string) =>
+        new Response(text, { headers: { 'content-type': 'application/json' } })
     let arrive = (): void => {}
     const later = {
         promise: new Promise<void>((done) => {
             arrive = done
         }),
-        status: undefined as number | undefined,
-        statusText: undefined as string | undefined,
-        text: undefined as string | undefined,
-        failed: false,
+        painted: undefined,
+        response: undefined as Response | undefined,
+        bytes: undefined,
     }
     window.__abideCalls = {
-        // Answered before the bundle ran, and painted settled (41.25).
+        // Answered before the bundle ran, and painted settled (41.25): its body read to the end.
         'GET /rpc/getInvoice?id=7 ': {
             promise: Promise.resolve(),
-            status: 200,
-            statusText: 'OK',
-            text: '{"id":"7"}',
-            failed: false,
             painted: 1,
+            response: json(''),
+            bytes: new TextEncoder().encode('{"id":"7"}').buffer,
         },
         // Answered before the bundle ran, and painted in flight.
         'GET /rpc/getInvoice?id=9 ': {
             promise: Promise.resolve(),
-            status: 200,
-            statusText: 'OK',
-            text: '{"id":"9"}',
-            failed: false,
+            painted: undefined,
+            response: json('{"id":"9"}'),
+            bytes: undefined,
         },
         // Still on its way.
         'GET /rpc/getInvoice?id=8 ': later,
@@ -556,9 +554,7 @@ test('the wire takes a call the page already started, and fetches after that —
 
         // In flight: waited on, not sent twice.
         const waiting = getInvoice({ id: '8' })
-        later.status = 200
-        later.statusText = 'OK'
-        later.text = '{"id":"8"}'
+        later.response = json('{"id":"8"}')
         arrive()
         expect(await waiting).toEqual({ id: '8' })
         expect(fetched).toEqual([])
@@ -777,9 +773,13 @@ test('hydration waits on the calls painted settled, and a failed one ends the wa
     const painted = pending()
     const inFlight = pending()
     window.__abideCalls = {
-        painted: { promise: painted.promise, text: undefined, painted: 1 },
-        'in flight': { promise: inFlight.promise, text: undefined },
-        answered: { promise: Promise.resolve(), text: '{}', painted: 1 },
+        painted: { promise: painted.promise, response: undefined, painted: 1 },
+        'in flight': { promise: inFlight.promise, response: undefined },
+        answered: {
+            promise: Promise.resolve(),
+            response: new Response('{}'),
+            painted: 1,
+        },
     }
     try {
         let ended = false
@@ -788,13 +788,13 @@ test('hydration waits on the calls painted settled, and a failed one ends the wa
         })
         await new Promise((done) => setTimeout(done, 0))
         expect(ended).toBe(false)
-        // The request failed: the promise settles and no text was ever set.
+        // The request failed: the promise settles and no response was ever set.
         painted.settle()
         await new Promise((done) => setTimeout(done, 0))
         expect(ended).toBe(true)
 
         window.__abideCalls = {
-            'in flight': { promise: inFlight.promise, text: undefined },
+            'in flight': { promise: inFlight.promise, response: undefined },
         }
         expect(paintedCallsLanded()).toBeUndefined()
     } finally {

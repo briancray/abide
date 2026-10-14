@@ -10,7 +10,7 @@
 // built per request, since a trigger names args rather than a value. A `global` value is also fed its productions, a guarded one only to a
 // subscription its rungs admitted when it opened (18.8) — they run once, in the connection's request.
 
-import { type Problem, problemOf } from '#shared/Failed.ts'
+import { problemOf } from '#shared/Failed.ts'
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { namedLogger } from '#shared/log.ts'
 import { compose } from '#shared/Middleware.ts'
@@ -34,17 +34,101 @@ import {
     releaseScope,
     scopeFor,
 } from './requestScope.ts'
+import { EVENT_STREAM_OPENER, streamEvent } from './streamEvent.ts'
 import { patchesSince, versionOf } from './versionOf.ts'
 
 /**
- * The far end of one connection to the mux, which its frames are written to.
+ * The far end of one connection to the mux, which its frames are written to as text.
  *
  * Bun's socket under `abide start`, and under `abide dev` a stand-in that posts each frame to the
  * listener holding the real one (38.14).
  */
-export type Peer = {
+export type Socket = {
     send(text: string): unknown
     close(code: number, reason: string): unknown
+}
+
+const ENCODER = new TextEncoder()
+
+/**
+ * One `ServerFrame`, for every follower it is sent to.
+ *
+ * 18.6 — ITS BODY IS SERIALIZED ONCE PER VERSION, and each encoding of it once however many
+ * followers it reaches: a socket is sent the JSON with its follower's id spliced in, and an event
+ * stream the event, which names no follower and is the same text for every stream.
+ */
+class Frame {
+    readonly op: ServerFrame['op']
+    readonly base: number | undefined
+    readonly version: number | undefined
+    // The value, the patch's ops or the refusal, as JSON.
+    readonly body: string | undefined
+    // What follows the id in the JSON, and the event's bytes, each written on first use.
+    private tail: string | undefined = undefined
+    private event: Uint8Array | undefined = undefined
+
+    constructor(
+        op: ServerFrame['op'],
+        base: number | undefined,
+        version: number | undefined,
+        body: string | undefined,
+    ) {
+        this.op = op
+        this.base = base
+        this.version = version
+        this.body = body
+    }
+
+    /** As `ServerFrame` JSON for `id`: `base` and `version` where it has them, then the body under its op's member. */
+    json(id: number): string {
+        if (this.tail === undefined) {
+            let tail = ''
+            if (this.base !== undefined) tail += `,"base":${this.base}`
+            if (this.version !== undefined) tail += `,"version":${this.version}`
+            if (this.body !== undefined)
+                tail += `,"${this.op === 'patch' ? 'ops' : this.op}":${this.body}`
+            this.tail = `${tail}}`
+        }
+        return `{"op":"${this.op}","id":${id}${this.tail}`
+    }
+
+    /** As the SSE event 18.20 makes it, encoded: the op its name, the version its id. */
+    asEvent(): Uint8Array {
+        this.event ??= ENCODER.encode(
+            streamEvent(
+                this.op,
+                this.version,
+                this.body ?? (this.op === 'value' ? 'null' : ''),
+            ),
+        )
+        return this.event
+    }
+}
+
+/** A trigger's frame (7.10, 7.18), the same for every follower and every trigger. */
+const TRIGGERS = {
+    invalidate: new Frame('invalidate', undefined, undefined, undefined),
+    refresh: new Frame('refresh', undefined, undefined, undefined),
+}
+
+/** What a frame is written to, under the follower's id: a socket, or an event stream. */
+type Peer = {
+    send(id: number, frame: Frame): void
+    close(code: number, reason: string): unknown
+}
+
+/** A socket's peer: each frame as the `ServerFrame` JSON a browser parses. */
+class SocketPeer implements Peer {
+    readonly socket: Socket
+    constructor(socket: Socket) {
+        this.socket = socket
+    }
+    send(id: number, frame: Frame): void {
+        this.socket.send(frame.json(id))
+    }
+    close(code: number, reason: string): unknown {
+        return this.socket.close(code, reason)
+    }
 }
 
 const SOCKET_LOG = namedLogger('abide:socket')
@@ -95,7 +179,7 @@ export function broadcast(
         // the cell it is fed from (`FOLLOWED`), whichever trigger reached it — where the entry it is
         // fed from is still the one standing.
         if (attach(rpc as Mounted['handler'], follower) !== undefined) continue
-        send(follower.peer, { op: member, id: follower.id })
+        follower.peer.send(follower.id, TRIGGERS[member])
     }
 }
 
@@ -111,7 +195,7 @@ export function swept(
         for (const follower of followed.all) {
             if (attach(rpc as Mounted['handler'], follower) !== undefined)
                 continue
-            send(follower.peer, { op: member, id: follower.id })
+            follower.peer.send(follower.id, TRIGGERS[member])
         }
     }
 }
@@ -157,12 +241,14 @@ function attach(rpc: Mounted['handler'], follower: Follower): unknown {
     return serving
 }
 
-function send(peer: Peer, frame: ServerFrame): void {
-    peer.send(JSON.stringify(frame))
-}
-
-function failure(error: unknown): Problem {
-    return problemOf(failureOf(error))
+/** A refusal's frame: the failure `error` is, as Problem Details (15.21). */
+function refusal(error: unknown): Frame {
+    return new Frame(
+        'error',
+        undefined,
+        undefined,
+        JSON.stringify(problemOf(failureOf(error))),
+    )
 }
 
 /**
@@ -180,11 +266,15 @@ export class Mux {
         this.app = app
     }
 
-    /** One connection, upgraded from `request`, whose frames go to `peer`. */
-    connect(request: Request, peer: Peer): MuxConnection {
+    /** One connection, upgraded from `request`, whose frames go to `socket`. */
+    connect(request: Request, socket: Socket): MuxConnection {
         if (SOCKET_LOG.enabled())
             SOCKET_LOG.debug('open', new URL(request.url).pathname)
-        const connection = new MuxConnection(this, request, peer)
+        const connection = new MuxConnection(
+            this,
+            request,
+            new SocketPeer(socket),
+        )
         this.connections.add(connection)
         return connection
     }
@@ -267,26 +357,24 @@ export class MuxConnection {
                 : undefined
         const followed = handler?.ui ? handler : undefined
         if (followed === undefined) {
-            send(this.peer, {
-                op: 'error',
+            this.peer.send(
                 id,
-                error: failure(
+                refusal(
                     refuse(
                         404,
                         `No handler a browser follows answers at ${address}.`,
                     ),
                 ),
-            })
+            )
             return
         }
         // 18.2 — ANOTHER ORIGIN IS CLOSED OUT unless the handler declared it: the same gate, and the
         // same own origin, as its http answer's (16.13, 16.24, 36.2).
         if (closedTo(followed.handler.crossOrigin, this.crossing)) {
-            send(this.peer, {
-                op: 'error',
+            this.peer.send(
                 id,
-                error: failure(crossingRefusal(this.crossing, 'subscription')),
-            })
+                refusal(crossingRefusal(this.crossing, 'subscription')),
+            )
             return
         }
         // A SUBSCRIPTION IS HELD FROM THE FRAME ON, not from when its rungs let it through: an
@@ -322,7 +410,7 @@ export class MuxConnection {
             follow(this, id, followed, args, frame.version, admitted)
         } catch (thrown) {
             if (subscriptions.get(id) === pending) subscriptions.delete(id)
-            send(this.peer, { op: 'error', id, error: failure(thrown) })
+            this.peer.send(id, refusal(thrown))
         }
     }
 }
@@ -444,14 +532,12 @@ export function followAsEvents(
     args: unknown,
     held: number | undefined,
 ): ReadableStream<Uint8Array> {
-    const encoder = new TextEncoder()
     let stop = (): void => {}
     let unhold = (): void => {}
     let ended = false
     return new ReadableStream({
         start(controller) {
-            // AN EVENT STREAM OPENS ON A COMMENT, so a proxy has bytes to pass before the first event.
-            controller.enqueue(encoder.encode(':\n\n'))
+            controller.enqueue(ENCODER.encode(EVENT_STREAM_OPENER))
             // Ended by the app's stop as any body it holds open is, or that stop waits on it.
             unhold = heldByApp(() => {
                 if (ended) return
@@ -461,8 +547,10 @@ export function followAsEvents(
             })
             stop = followWith(
                 {
-                    send(text) {
-                        controller.enqueue(encoder.encode(eventOf(text)))
+                    // 18.6 — the event written and encoded once for every stream, from the body
+                    // serialized once for every follower: nothing is parsed back.
+                    send(_id, frame) {
+                        controller.enqueue(frame.asEvent())
                     },
                     close() {
                         if (ended) return
@@ -485,37 +573,6 @@ export function followAsEvents(
             stop()
         },
     })
-}
-
-/**
- * One mux frame as the SSE event it is: `event`, `id` where it names a version, and `data`.
- *
- * 18.6 — READ OFF THE FRAME'S HEAD, never parsed: the body was serialized once for every follower
- * (`sendAll`), and a parse and a stringify per event stream would pay it again per follower. Every
- * frame this module writes is `{"op":…,"id":…`, numbers named `base` or `version`, and at most one
- * body last — so the body is the rest of the text, as it was written.
- */
-function eventOf(text: string): string {
-    const opEnd = text.indexOf('"', 7)
-    const op = text.slice(7, opEnd)
-    let id = ''
-    let data =
-        op === 'value' || op === 'error' ? 'null' : op === 'patch' ? '[]' : ''
-    // Past `,"id":` — a number, so the next comma is the next member's.
-    let at = text.indexOf(',', opEnd + 6)
-    while (at !== -1) {
-        const nameEnd = text.indexOf('"', at + 2)
-        const name = text.slice(at + 2, nameEnd)
-        const from = nameEnd + 2
-        if (name !== 'base' && name !== 'version') {
-            data = text.slice(from, -1)
-            break
-        }
-        at = text.indexOf(',', from)
-        if (name === 'version')
-            id = `id: ${text.slice(from, at === -1 ? -1 : at)}\n`
-    }
-    return `event: ${op}\n${id}data: ${data}\n\n`
 }
 
 // 18.6 — ONE WATCH PER VALUE SERVED, however many follow it, and each frame's body serialized once
@@ -544,7 +601,7 @@ function startFeed(serving: unknown): Feed {
     const fed = new Set<Follower>()
     // 7.10 — an invalidate of the value, however it was spelled, reaches every copy it feeds.
     const invalidated = (): void => {
-        for (const one of fed) send(one.peer, { op: 'invalidate', id: one.id })
+        for (const one of fed) one.peer.send(one.id, TRIGGERS.invalidate)
     }
     let followed = FOLLOWED.get(past)
     if (followed === undefined) {
@@ -577,33 +634,36 @@ function startFeed(serving: unknown): Feed {
 
 function sendAll(serving: unknown, fed: Iterable<Follower>): void {
     const version = versionOf(serving)
-    let valueTail: string | undefined
-    // ONE BODY PER VERSION A FOLLOWER STANDS AT, since followers a burst left at different places
+    let valueFrame: Frame | undefined
+    // ONE FRAME PER VERSION A FOLLOWER STANDS AT, since followers a burst left at different places
     // along the chain are each sent the writes since their own.
-    let patchTails: Map<number, string> | undefined
+    let patchFrames: Map<number, Frame> | undefined
     for (const one of fed) {
         if (one.sent === version) continue
         // 18.11 — the writes, where the follower stands on the chain they were written along.
         const since = one.sent
-        let patchTail = since === undefined ? undefined : patchTails?.get(since)
-        if (patchTail === undefined && since !== undefined) {
+        let frame = since === undefined ? undefined : patchFrames?.get(since)
+        if (frame === undefined && since !== undefined) {
             const ops = patchesSince(serving, since)
             if (ops !== undefined) {
-                patchTail = `,"base":${since},"version":${version},"ops":${JSON.stringify(ops)}}`
-                patchTails ??= new Map()
-                patchTails.set(since, patchTail)
+                frame = new Frame('patch', since, version, JSON.stringify(ops))
+                patchFrames ??= new Map()
+                patchFrames.set(since, frame)
             }
         }
-        if (patchTail === undefined) {
-            if (valueTail === undefined) {
+        if (frame === undefined) {
+            if (valueFrame === undefined) {
                 const held = (serving as { peek(): unknown }).peek()
-                valueTail =
-                    held === undefined
-                        ? `,"version":${version}}`
-                        : `,"version":${version},"value":${JSON.stringify(held)}}`
+                valueFrame = new Frame(
+                    'value',
+                    undefined,
+                    version,
+                    held === undefined ? undefined : JSON.stringify(held),
+                )
             }
-            one.peer.send(`{"op":"value","id":${one.id}${valueTail}`)
-        } else one.peer.send(`{"op":"patch","id":${one.id}${patchTail}`)
+            frame = valueFrame
+        }
+        one.peer.send(one.id, frame)
         one.sent = version
     }
 }

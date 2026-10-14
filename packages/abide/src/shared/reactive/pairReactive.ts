@@ -4,7 +4,7 @@
 // the pair's, and nothing stands here — the value moves when what `get` reads does, as an element's
 // `bind:value={{get, set}}` does.
 //
-// A PROTOTYPE, NOT A BRANCH in the core's `set`, for `brandedPrototype`'s reason: `simpleShape`
+// A PROTOTYPE, NOT A BRANCH in the core's `set`, for `brandedPrototype`'s reason: `seat`
 // leaves a seat it does not own alone, and the adoption path reaches this `set` through the
 // callable it adopted.
 

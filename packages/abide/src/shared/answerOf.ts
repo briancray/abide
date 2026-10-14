@@ -1,13 +1,52 @@
 // 41.21 — A CALL THE PAGE ALREADY STARTED IS TAKEN, NOT MADE AGAIN, and what a call answered is read
 // one way whoever made it: a handler's `wire`, and a handler abide mounts itself (`seededDocument`).
+//
+// ONE CLASSIFIER. The early-call script (41.20) records the `Response` and nothing it decides, so
+// an answer the page started and one fetched here are read by `answerFrom` alike.
 
 import { failedFrom, isProblem } from './Failed.ts'
-import { carriesBytes, framedChunks, framingPrefix } from './framing.ts'
+import {
+    carriesBytes,
+    type Framed,
+    framedChunks,
+    framingOf,
+} from './framing.ts'
 import { principalRotated } from './principalRotated.ts'
 import { refuse } from './refuse.ts'
 import type { RpcRequest } from './rpcRequest.ts'
-import { type Answer, takeEarlyCall } from './takeEarlyCall.ts'
+import { takeEarlyCall } from './takeEarlyCall.ts'
 import { VERSION_HEADER } from './VERSION_HEADER.ts'
+import { versionInEtag } from './versionInEtag.ts'
+
+/** What a call answered, classified once. */
+export type Answer = {
+    status: number
+    statusText: string
+    /** A 2xx. */
+    ok: boolean
+    /** What precedes each chunk's JSON on its line (16.32), or `null` where the answer is not framed. */
+    framing: Framed | null
+    /**
+     * Whether a subscriber may follow it (18.24): a 2xx that is not a binary, whose bytes the mux's
+     * JSON frames cannot carry.
+     */
+    followable: boolean
+    /** The version its `ETag` named (18.5). */
+    version: number | undefined
+    /** The `max-age` its `cache-control` named, in ms (18.14, 21.8). */
+    life: number | undefined
+    text: string | undefined
+    /**
+     * A binary answer's body read to the end (16.34), set in place of `text` — a body read as text
+     * is not the bytes it carried.
+     */
+    bytes: Uint8Array | undefined
+    /**
+     * A streamed answer's body, left unread so its chunks are taken as they land (16.32): framed,
+     * or a binary's where `framing` is `null`.
+     */
+    body: ReadableStream<Uint8Array> | null | undefined
+}
 
 /**
  * A call's answer: the early call's where the page started one, fetched where it did not.
@@ -26,87 +65,77 @@ export function answerOf(
 ): Answer | Promise<Answer> {
     const early = takeEarlyCall(request.key)
     if (early === undefined) return fetched(request, streams, signal)
-    if (early.painted === 1) {
-        const landed = landedAnswer(early)
-        if (landed !== undefined) return landed
-    }
-    return early.promise.then((): Answer | Promise<Answer> => {
-        const landed = landedAnswer(early)
-        if (landed !== undefined) return landed
-        // The early call failed as a request — or read a binary as text, which lost its bytes — so
-        // this one is made again.
-        if (early.body === undefined || early.body === null)
-            return fetched(request, streams, signal)
-        if (streams) return early
-        const read = new Response(early.body)
-        return carriesBytes(early.type) && succeeded(early.status)
-            ? read
-                  .bytes()
-                  .then((bytes) => ({ ...early, bytes, body: undefined }))
-            : read.text().then((text) => ({ ...early, text, body: undefined }))
-    })
-}
-
-/**
- * An early call's answer where it has landed read: as text, or — for one the server painted, whose
- * body the runner reads to the end so hydration waits on it — as bytes, decoded where the answer is
- * not a binary.
- */
-function landedAnswer(early: Answer): Answer | undefined {
-    if (readAsText(early)) return early
-    if (early.bytes === undefined) return undefined
-    return carriesBytes(early.type) && succeeded(early.status)
-        ? early
-        : {
-              ...early,
-              text: new TextDecoder().decode(early.bytes),
-              bytes: undefined,
-          }
-}
-
-/** Whether an early call's answer arrived as text that is what it carried — no binary read as one. */
-function readAsText(early: Answer): boolean {
-    return (
-        early.text !== undefined &&
-        !(carriesBytes(early.type) && succeeded(early.status))
+    if (early.painted === 1 && early.response !== undefined)
+        return answerFrom(early.response, early.bytes, streams)
+    // An early call whose request failed is made again.
+    return early.promise.then(() =>
+        early.response === undefined
+            ? fetched(request, streams, signal)
+            : answerFrom(early.response, early.bytes, streams),
     )
 }
 
-function succeeded(status: number | undefined): boolean {
-    return status !== undefined && status >= 200 && status < 300
-}
-
-/**
- * Fetches a call's answer; a framed answer to a streaming copy keeps its body unread (16.32).
- *
- * Anything else is read to its end: as bytes where it is a binary (16.34), as text otherwise.
- */
+/** Fetches a call's answer. */
 async function fetched(
     request: RpcRequest,
     streams: boolean,
     signal: AbortSignal | undefined,
 ): Promise<Answer> {
-    const answer = await fetch(
+    const response = await fetch(
         request.url,
         signal === undefined ? request.init : { ...request.init, signal },
     )
     // THE HANDLER SIGNED THIS CALLER IN OR OUT, and the cookie is already the browser's.
-    principalRotated(answer)
-    const type = answer.headers.get('content-type')
-    const binary = answer.ok && carriesBytes(type)
-    // A streaming copy reads bytes as they land too (16.46), as it does a framed answer's lines.
-    const unread =
-        streams && answer.ok && (binary || framingPrefix(type) !== null)
-    return {
-        status: answer.status,
-        statusText: answer.statusText,
-        type,
-        version: answer.headers.get(VERSION_HEADER),
-        life: answer.headers.get('cache-control'),
-        text: unread || binary ? undefined : await answer.text(),
-        bytes: !unread && binary ? await answer.bytes() : undefined,
-        body: unread ? answer.body : undefined,
+    principalRotated(response)
+    return answerFrom(response, undefined, streams)
+}
+
+/**
+ * `response`, classified: a body `read` to its end already (an early call the server painted)
+ * decoded as what it carried, and one unread read as bytes where it is a binary (16.34), as text
+ * otherwise — or left unread for a `streams` caller where it is framed or a binary (16.32, 16.46).
+ */
+function answerFrom(
+    response: Response,
+    read: ArrayBuffer | undefined,
+    streams: boolean,
+): Answer | Promise<Answer> {
+    const { status, statusText, headers } = response
+    const type = headers.get('content-type')
+    const ok = status >= 200 && status < 300
+    const framing = framingOf(type)
+    const binary = ok && carriesBytes(type)
+    const seconds = /max-age=(\d+)/.exec(headers.get('cache-control') ?? '')
+    const answer: Answer = {
+        status,
+        statusText,
+        ok,
+        framing,
+        followable: ok && !binary,
+        version: versionInEtag(headers.get(VERSION_HEADER)),
+        life: seconds === null ? undefined : Number(seconds[1]) * 1000,
+        text: undefined,
+        bytes: undefined,
+        body: undefined,
     }
+    if (read !== undefined) {
+        if (binary) answer.bytes = new Uint8Array(read)
+        else answer.text = new TextDecoder().decode(read)
+        return answer
+    }
+    if (streams && ok && (binary || framing !== null)) {
+        answer.body = response.body
+        return answer
+    }
+    return binary
+        ? response.arrayBuffer().then((buffer) => {
+              answer.bytes = new Uint8Array(buffer)
+              return answer
+          })
+        : response.text().then((text) => {
+              answer.text = text
+              return answer
+          })
 }
 
 /**
@@ -120,14 +149,12 @@ async function fetched(
  * value is one production. A marked one reads its body as it lands (`framedStream`).
  */
 export function answered(answer: Answer): unknown {
-    const status = answer.status ?? 0
-    if (status === 204) return undefined
-    const ok = succeeded(status)
-    if (ok) {
+    if (answer.status === 204) return undefined
+    if (answer.ok) {
         // 16.34 — a binary decodes back to the bytes it was.
         if (answer.bytes !== undefined) return answer.bytes
-        const prefix = framingPrefix(answer.type)
-        if (prefix !== null) return framedChunks(answer.text ?? '', prefix)
+        if (answer.framing !== null)
+            return framedChunks(answer.text ?? '', answer.framing)
     }
     let body: unknown
     try {
@@ -135,7 +162,7 @@ export function answered(answer: Answer): unknown {
     } catch {
         body = undefined
     }
-    if (ok) return body
+    if (answer.ok) return body
     if (isProblem(body)) return failedFrom(body)
-    return refuse(status, answer.statusText || undefined)
+    return refuse(answer.status, answer.statusText || undefined)
 }

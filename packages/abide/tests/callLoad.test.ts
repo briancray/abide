@@ -138,3 +138,18 @@ test('calls joining a load start no clock of their own — 16.61', async () => {
     await value
     expect(`clocks: ${clocks}`).toBe('clocks: 1')
 })
+
+// 5.15 IS NOT A LOAD: a window holding a write back is busy, and nothing is in flight for a clock to
+// end — the window's own close is the bound. Timed as a load, the call refused 504 over a value that
+// went on to serve the write, and the refusal stood beside it. THE REVERT: `loadOf` answering the
+// generation for a hold; the await resolves with 0, the value the window was replacing.
+test('a window holding a write back is no load for a call to time — 16.77, 5.15', async () => {
+    const value = reactive<number>(0, { debounce: 60 })
+    value.set(1)
+    expect(`busy: ${value.busy()}`).toBe('busy: true')
+    callLoad(() => value, undefined, undefined, 20)
+    expect(await value).toBe(1)
+    expect(
+        `error: ${(value.error() as { status?: number } | undefined)?.status}`,
+    ).toBe('error: undefined')
+})

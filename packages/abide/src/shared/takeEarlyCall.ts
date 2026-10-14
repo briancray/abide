@@ -5,44 +5,19 @@
 import { EARLY_CALLS } from './EARLY_CALLS.ts'
 
 /**
- * What a call answered: the status and the text — which stays unset where the request itself did
- * not complete.
+ * What the early-call script leaves per call: the request in flight, and once it has answered, the
+ * `Response`. The script decides nothing about it — `answerOf` reads it as it reads any answer.
  */
-export type Answer = {
-    status: number | undefined
-    statusText: string | undefined
-    type: string | null | undefined
-    /**
-     * The answer's version, or `null` where it named none (18.5).
-     *
-     * A `null` is a value built per request.
-     */
-    version: string | null | undefined
-    /** The answer's `cache-control`, whose `max-age` is how long the copy may serve it (21.8). */
-    life: string | null | undefined
-    text: string | undefined
-    /**
-     * A binary answer's body read to the end (16.34), set in place of `text` — a body read as text
-     * is not the bytes it carried.
-     */
-    bytes: Uint8Array | undefined
-    /**
-     * A streamed answer's body, left unread so its chunks are taken as they land (16.32).
-     *
-     * Set in place of `text` for a handler the build marked as streaming, and by the early-call
-     * script for any framed answer.
-     */
-    body: ReadableStream<Uint8Array> | null | undefined
-}
-
-/**
- * What the early-call script leaves per call: the request in flight, and once it has answered, what
- * it answered.
- */
-export type EarlyCall = Answer & {
-    promise: Promise<void>
+export type EarlyCall = {
+    promise: Promise<unknown>
     /** `1` where the server built the page's markup from this call settled (41.25). */
     painted: 1 | undefined
+    /**
+     * Set once the request has answered — and, where `painted`, once its body is read to the end into
+     * `bytes`, so hydration's wait covers the body too. Unset where the request failed.
+     */
+    response: Response | undefined
+    bytes: ArrayBuffer | undefined
 }
 
 function startedCalls(): Record<string, EarlyCall | undefined> | undefined {
@@ -75,10 +50,10 @@ export function takeEarlyCall(key: string): EarlyCall | undefined {
 export function paintedCallsLanded(): Promise<unknown> | undefined {
     const started = startedCalls()
     if (started === undefined) return undefined
-    let waiting: Promise<void>[] | undefined
+    let waiting: Promise<unknown>[] | undefined
     for (const key in started) {
         const early = started[key]
-        if (early?.painted !== 1 || early.text !== undefined) continue
+        if (early?.painted !== 1 || early.response !== undefined) continue
         if (waiting === undefined) waiting = []
         waiting.push(early.promise)
     }

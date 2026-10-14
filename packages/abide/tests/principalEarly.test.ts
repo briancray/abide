@@ -39,14 +39,15 @@ test('the principal read takes the early call, once, and fetches after — 26.17
     const request = rpcRequest('GET', PRINCIPAL_ADDRESS, undefined)
     const started: Record<string, unknown> = {}
     started[request.key] = {
-        status: 200,
-        statusText: 'OK',
-        type: 'application/json',
-        version: null,
-        life: 'private, no-store',
-        text: '{"authenticated":true,"name":"ada"}',
-        body: undefined,
         promise: Promise.resolve(),
+        painted: undefined,
+        response: new Response('{"authenticated":true,"name":"ada"}', {
+            headers: {
+                'content-type': 'application/json',
+                'cache-control': 'private, no-store',
+            },
+        }),
+        bytes: undefined,
     }
     const globals = globalThis as unknown as Record<string, unknown>
     globals[EARLY_CALLS] = started
@@ -85,14 +86,14 @@ test('a refused seed is the refusal, and the principal it refuses is unauthentic
     const started: Record<string, unknown> = {}
     for (const address of [PRINCIPAL_ADDRESS, HEALTH_ADDRESS])
         started[rpcRequest('GET', address, undefined).key] = {
-            status: 502,
-            statusText: 'Bad Gateway',
-            type: 'text/plain',
-            version: null,
-            life: null,
-            text: 'Bad Gateway',
-            body: undefined,
             promise: Promise.resolve(),
+            painted: undefined,
+            response: new Response('Bad Gateway', {
+                status: 502,
+                statusText: 'Bad Gateway',
+                headers: { 'content-type': 'text/plain' },
+            }),
+            bytes: undefined,
         }
     const globals = globalThis as unknown as Record<string, unknown>
     globals[EARLY_CALLS] = started
@@ -118,15 +119,13 @@ test('a refused seed is the refusal, and the principal it refuses is unauthentic
 // in flight — `ready()` false, the document a `Promise` — though the answer is already there.
 test('a seed painted settled is read settled, at once — 41.25, 41.27', () => {
     const settled = (text: string) => ({
-        status: 200,
-        statusText: 'OK',
-        type: 'application/json',
-        version: null,
-        life: 'private, no-store',
-        text,
-        body: undefined,
         promise: Promise.resolve(),
         painted: 1,
+        // Read to its end by the early-call script: the body is in `bytes`.
+        response: new Response(null, {
+            headers: { 'content-type': 'application/json' },
+        }),
+        bytes: new TextEncoder().encode(text).buffer,
     })
     const started: Record<string, unknown> = {}
     started[rpcRequest('GET', PRINCIPAL_ADDRESS, undefined).key] = settled(

@@ -42,7 +42,8 @@ import regionReportSource from './lib/RegionReport.abide' with { type: 'text' }
         one JSON value per line, <code>application/jsonl</code>, or
         <code>application/x-ndjson</code> for a reader that asks for NDJSON by name (16.44). The
         body is written per <code>pull</code>, so back-pressure reaches your database cursor rather
-        than piling rows up in memory.</p>
+        than piling rows up in memory, and it carries <code>X-Accel-Buffering: no</code>, as every
+        streamed answer does, so a proxy in front passes each line on as it arrives (16.75).</p>
 
         <p>That is the default framing and not the only one.</p>
     </Section>
@@ -68,7 +69,7 @@ import regionReportSource from './lib/RegionReport.abide' with { type: 'text' }
         caller that does ask — an <code>EventSource</code> sends <code>Accept:
         text/event-stream</code> — gets the same events from a handler that never declared them: the
         jsonl transcript reframed as <code>data: &lt;json&gt;</code> per line with a blank line
-        after it, <code>no-cache</code> and <code>X-Accel-Buffering: no</code>. That is one URL with
+        after it, under <code>private, no-store</code> like any rpc answer. That is one URL with
         two bodies, so it carries <code>vary: accept</code>. Declaring <code>sse</code> is for the
         caller who cannot say what it wants. The <code>:</code> the card's answer opens on is a
         comment, which sends the head before the first event exists.</p>

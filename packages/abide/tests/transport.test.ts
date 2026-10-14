@@ -73,6 +73,15 @@ export const fixed = GET(() => sse([1, 2]))
 
 export const doc = GET(() => page('<h1>hello</h1>'))
 
+export const streamedDoc = GET(() =>
+    page(
+        (async function* () {
+            yield '<h1>'
+            yield 'hello</h1>'
+        })(),
+    ),
+)
+
 export const moved = POST(() => redirect('/there', 303))
 
 export const nothing = POST(() => undefined)
@@ -277,12 +286,12 @@ test('a streaming answer times its handler to the first chunk — 21.15', async 
 })
 
 // 16.45, 16.46 — sse WHERE `Accept` ASKS FOR IT, with its three headers.
-test('Accept naming event-stream frames as sse — 16.45, 16.46', async () => {
+test('Accept naming event-stream frames as sse — 16.45, 16.46, 16.75', async () => {
     const answer = await Bun.fetch(`${base}${RPC}/feed`, {
         headers: { accept: 'text/event-stream' },
     })
     expect(answer.headers.get('content-type')).toBe('text/event-stream')
-    expect(answer.headers.get('cache-control')).toBe('no-cache')
+    expect(answer.headers.get('cache-control')).toBe('private, no-store')
     expect(answer.headers.get('x-accel-buffering')).toBe('no')
     expect(await answer.text()).toBe(':\n\ndata: {"n":1}\n\ndata: {"n":2}\n\n')
 })
@@ -299,6 +308,27 @@ test('a reader asking for NDJSON is answered it, the same lines as jsonl — 16.
     expect(
         (await answer.text()).split('\n').filter(Boolean).length,
     ).toBeGreaterThan(0)
+})
+
+// 16.75 — NO FRAMING IS HELD BACK BY A PROXY IN FRONT, sse's or any other. THE REVERT: set
+// `x-accel-buffering` in `sseHeaders` alone; jsonl, bytes and a streamed document go without it.
+test('every streamed answer tells a proxy not to buffer it — 16.75', async () => {
+    for (const [address, accept] of [
+        ['feed', '*/*'],
+        ['feed', 'text/event-stream'],
+        ['binary', '*/*'],
+        ['streamedDoc', 'text/html'],
+    ] as const) {
+        const answer = await Bun.fetch(`${base}${RPC}/${address}`, {
+            headers: { accept },
+        })
+        expect([
+            address,
+            accept,
+            answer.headers.get('x-accel-buffering'),
+        ]).toEqual([address, accept, 'no'])
+        await answer.arrayBuffer()
+    }
 })
 
 test('binary chunks are answered as octet-stream — 16.46, 16.47', async () => {

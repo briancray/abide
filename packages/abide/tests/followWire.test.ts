@@ -416,18 +416,14 @@ test('a bare invalidate during a mutation does not send it again — 13.17', asy
 })
 
 // 18.24 — A BINARY ANSWER IS NOT FOLLOWED: the mux's frames are JSON, and a `Blob` sent as one is
-// `{}` written over the bytes. THE REVERT: drop the `carriesBytes` arm from `wire`'s `follow`; a
+// `{}` written over the bytes. THE REVERT: drop `!binary` from `answerFrom`'s `followable`; a
 // `sub` goes out for the cover.
 test('a GET answered with a binary is not followed — 18.24', async () => {
     const answering = globalThis.fetch
-    // happy-dom's `Response` has no `bytes()`, which a browser's does.
     globalThis.fetch = (async () =>
-        Object.assign(
-            new Response(null, {
-                headers: { 'content-type': 'image/png', etag: '"7"' },
-            }),
-            { bytes: async () => new Uint8Array([1, 2, 3]) },
-        )) as unknown as typeof fetch
+        new Response(new Uint8Array([1, 2, 3]), {
+            headers: { 'content-type': 'image/png', etag: '"7"' },
+        })) as unknown as typeof fetch
     try {
         const cover = wire('GET', `${LIBRARY}/cover`) as (
             args?: unknown,
