@@ -23,6 +23,11 @@ export function holdWhileLeaving(
     settling.then(done, done)
 }
 
+/** Whether any element is leaving, so a removal has to ask each node whether it holds one. */
+export function anyLeaving(): boolean {
+    return LEAVING.size !== 0
+}
+
 /** Removes `node`, or holds it where it is while an element it holds is leaving. */
 export function leave(node: ChildNode): void {
     if (LEAVING.size !== 0)

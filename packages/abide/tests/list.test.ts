@@ -295,6 +295,7 @@ function bump() {
 
 <ul id="leaving">{#for row of rows by row.id}<li>{count}</li>{/for}</ul>
 <button id="drop" onclick={drop}>drop</button>
+<button id="empty" onclick={() => { rows = [] }}>empty</button>
 <button id="tick" onclick={bump}>tick</button>`
 
 test('a row that left stops reading', async () => {
@@ -725,6 +726,92 @@ test('a full reverse of 200 rows still transposes correctly', () => {
     // Every row genuinely moves, so this prices nothing — it is here because it is what catches a
     // transposition the two-row cases report clean.
     expect(`moved: ${result.moved}`).toBe(`moved: ${REORDERS - 1}`)
+})
+
+// A LIST EMPTIED CLEARS ITS REGION IN ONE WRITE when the region is all its parent holds, and puts
+// the anchors back. Chromium, clearing 2,000 rows on perf-compare's /complex: 6.1–6.3 -> 5.6–5.7
+// ms over two runs, level with Svelte, which clears the same way.
+//
+// COUNTED AS THE CALLS ABIDE MAKES, because nothing downstream of them can tell the two apart: the
+// DOM counters tally a node removed by `textContent` and one removed by `remove()` the same, and
+// happy-dom implements the clear as a removal per child, so a MutationObserver here reports 204
+// records where Chromium reports 2. What the change buys is one crossing into the engine where
+// there were 200, and that is the number asked for.
+//
+// THE REVERT, run: delete the `data.length === 0` branch at the top of `reconcile`. The document
+// is identical and every other test here passes; this reports 200 removals where 0 are due.
+test('emptying a list clears its region in one write', () => {
+    const { region, data } = seeded()
+    const list = listAt(
+        region,
+        false,
+        (item) => (item as { id: number }).id,
+        () => ({
+            make: () => [document.createElement('li')],
+            mount: () => new Scope(),
+        }),
+    )
+    updateList(list, data)
+    const parent = document.getElementById('wide') as HTMLElement
+    const remove = Element.prototype.remove
+    let removals = 0
+    Element.prototype.remove = function (this: Element) {
+        removals += 1
+        remove.call(this)
+    }
+    try {
+        updateList(list, [])
+    } finally {
+        Element.prototype.remove = remove
+    }
+    expect([...parent.childNodes]).toEqual([region.open, region.close])
+    expect(`removals: ${removals}`).toBe('removals: 0')
+})
+
+// THE SIBLINGS ARE NOT THE REGION'S. A list sharing its parent with other nodes cannot clear the
+// parent, so it removes row by row and leaves what stands around it — and an emptied region
+// refills between anchors that are still where they were.
+test('an emptied list keeps the nodes beside it, and refills', async () => {
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive(['a', 'b', 'c'])
+</script>
+
+<ul id="shared"><li id="head">head</li>{#for row of rows by row}<li>{row}</li>{/for}<li id="tail">tail</li></ul>
+<ul id="alone">{#for row of rows by row}<li>{row}</li>{/for}</ul>
+<button id="clear" onclick={() => { rows = [] }}>clear</button>
+<button id="fill" onclick={() => { rows = ['x', 'y'] }}>fill</button>`)
+    const text = (selector: string): string[] =>
+        [...document.querySelectorAll(`${selector} li`)].map(
+            (node) => node.textContent ?? '',
+        )
+    ;(document.querySelector('#clear') as HTMLElement).click()
+    flushSync()
+    expect([text('#shared'), text('#alone')]).toEqual([['head', 'tail'], []])
+    ;(document.querySelector('#fill') as HTMLElement).click()
+    flushSync()
+    expect([text('#shared'), text('#alone')]).toEqual([
+        ['head', 'x', 'y', 'tail'],
+        ['x', 'y'],
+    ])
+})
+
+// THE ROWS OF AN EMPTIED LIST ARE STOPPED, though no row is dropped one at a time.
+//
+// THE REVERT, run: drop the `row.scope.stop()` loop from `clear` in `reconcile.ts`; the tick wakes
+// 3 bindings over rows no longer in the document.
+test('an emptied list stops reading', async () => {
+    const { mount } = await renderPage(LEAVING)
+    mount()
+    ;(document.querySelector('#empty') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelectorAll('#leaving li').length).toBe(0)
+    const woke = measure(() => {
+        ;(document.querySelector('#tick') as HTMLElement).click()
+        flushSync()
+    })
+    expect(`binding runs: ${woke.bindingRuns}`).toBe('binding runs: 0')
 })
 
 // A SUBJECT THAT WAS ASYNC AND IS NOW A LIST stops the pump. The reconcile re-keys nothing, so a

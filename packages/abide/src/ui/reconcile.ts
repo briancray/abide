@@ -3,6 +3,7 @@ import { LAYER_RECONCILE } from './LAYER_NAMES.ts'
 import type { List } from './List.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
+import { emptyRegion } from './regions.ts'
 import { dropRow, makeRow, moveRow, type Row } from './rows.ts'
 
 // 41.8 — a KEYED list, reconciled by moving the nodes that are already there rather than by
@@ -21,6 +22,10 @@ import { dropRow, makeRow, moveRow, type Row } from './rows.ts'
  * survive are MOVED, never remade.
  */
 export function reconcile(list: List, data: unknown[]): void {
+    if (data.length === 0) {
+        clear(list)
+        return
+    }
     const region = list.region
     const current = list.rows
     const wanted = data.length
@@ -177,6 +182,26 @@ export function reconcile(list: List, data: unknown[]): void {
         for (const row of held.values()) dropRow(row)
         list.rows = []
         throw thrown
+    } finally {
+        endLayer(LAYER_RECONCILE)
+    }
+}
+
+/**
+ * Drops every row, emptying the region in one write rather than one removal a row.
+ *
+ * NOTHING WANTED IS ITS OWN SHAPE: there is no key to match and no order to keep, so the map,
+ * the survivor walk and the placement walk all answer nothing. Every row is still STOPPED first,
+ * as `dropRow` would, so a binding cannot wake over a node that is already gone.
+ */
+function clear(list: List): void {
+    const parent = list.region.close.parentNode
+    if (parent === null) return
+    beginLayer(LAYER_RECONCILE)
+    try {
+        for (const row of list.rows) row.scope.stop()
+        list.rows = []
+        emptyRegion(list.region, parent)
     } finally {
         endLayer(LAYER_RECONCILE)
     }

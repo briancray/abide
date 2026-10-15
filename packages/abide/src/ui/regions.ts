@@ -1,6 +1,6 @@
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
 import { LAYER_FILL } from './LAYER_NAMES.ts'
-import { leave } from './leave.ts'
+import { anyLeaving, leave } from './leave.ts'
 import { Mismatch } from './Mismatch.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
 
@@ -97,7 +97,7 @@ export function fillRegion(
         throw new Mismatch(
             `abide: this region is not in a document, so the client and the server disagree about this region's shape (41.10).`,
         )
-    removeUntil(region.open.nextSibling, region.close)
+    emptyRegion(region, parent)
     if (build === undefined) return
     beginLayer(LAYER_FILL)
     try {
@@ -124,6 +124,31 @@ export function fillEmpty(
     if (!isEmptyRegion(region)) return false
     fillRegion(region, build)
     return true
+}
+
+/**
+ * Removes everything between a region's anchors, which stay.
+ *
+ * ONE WRITE WHERE THE REGION IS ALL ITS PARENT HOLDS — a `<tbody>` or a `<ul>` around one
+ * `{#for}`, the common shape of a list emptied — and the anchors put back after it. A removal per
+ * node is a crossing into the engine per node; the engine's own clear is one.
+ *
+ * NODE BY NODE WHILE ANYTHING IS LEAVING (32.38), because a node holding a leaving element has to
+ * stay where it stands, and only `leave` asks.
+ */
+export function emptyRegion(region: Region, parent: ParentNode): void {
+    const { open, close } = region
+    if (
+        anyLeaving() ||
+        parent.firstChild !== open ||
+        parent.lastChild !== close
+    ) {
+        removeUntil(open.nextSibling, close)
+        return
+    }
+    if (open.nextSibling === close) return
+    parent.textContent = ''
+    parent.append(open, close)
 }
 
 /** Removes `from` and every sibling after it, up to and not including `end`. */

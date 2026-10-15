@@ -108,3 +108,29 @@ const exit = () => () => (globalThis as { __EXIT__?: () => Promise<void> }).__EX
     expect(document.querySelector('#row2')).toBeNull()
     expect(document.querySelector('#row3')).not.toBeNull()
 })
+
+// 32.38 THROUGH AN EMPTIED LIST, which clears its region in one write where nothing is leaving.
+// THE REVERT, run: drop `anyLeaving()` from `emptyRegion`'s guard; every row is gone at the
+// clear, where each is due to stay until its exit settles.
+test('an emptied list holds a leaving row until its exit settles — 32.38', async () => {
+    const exits: (() => void)[] = []
+    ;(globalThis as { __EXIT__?: () => Promise<void> }).__EXIT__ = () =>
+        new Promise<void>((done) => exits.push(done))
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive([1, 2, 3])
+const exit = () => () => (globalThis as { __EXIT__?: () => Promise<void> }).__EXIT__?.()
+</script>
+
+<button id="empty" onclick={() => { rows = [] }}>empty</button>
+<ul>{#for row of rows by row}<li id={\`row\${row}\`} bind:element={exit}>{row}</li>{/for}</ul>`)
+
+    click('#empty')
+    expect(document.querySelectorAll('ul li').length).toBe(3)
+    expect(exits.length).toBe(3)
+    for (const done of exits) done()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(document.querySelectorAll('ul li').length).toBe(0)
+})
