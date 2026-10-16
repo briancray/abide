@@ -1959,6 +1959,12 @@ markup.
 32.67 A `{#for}` MUST keep the row and the nodes of a key it keeps when that key's item is a
 different value, and MUST update the row's bindings that read the item in place.
 
+32.68 A `bind:element` value MUST be handed its element after a region's build has put that element
+in the region, and after every block and component inside the element has built, so a callback
+reading layout, querying its descendants or calling `focus()` acts on a connected, whole node.
+
+32.69 `bind:element` on a component MUST be a build error.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`

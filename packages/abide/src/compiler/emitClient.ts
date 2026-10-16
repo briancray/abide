@@ -558,9 +558,11 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
 
     for (const line of walkTo(positions, live, lowering)) chain.push(line)
 
-    // THE UNITS, in the order a page always installed them — text, listeners, attributes, the node
-    // handed over, then the regions. The walk does not depend on it; a `bind:element` callback has
-    // always run with every other binding already in place, and that is kept.
+    // THE UNITS — text, listeners, attributes, the regions, then the node handed over. The walk
+    // does not depend on the order.
+    // 32.68 — A `bind:element` CALLBACK RUNS LAST, so the node it is handed is whole: a child
+    // component, an arm or a list inside it has built, and `form.querySelector('input')` finds an
+    // `<input>` an `<Input>` makes.
     // 32.67 — A ROW'S ITEM WATCHES FIRST, one after another, which is how its scope finds them
     // (`Scope.itemWatch`).
     const items: string[] = []
@@ -597,7 +599,6 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
     for (const unit of texts) lines.push(unit)
     for (const unit of handlers) lines.push(unit)
     for (const unit of attributes) lines.push(unit)
-    for (const unit of elements) lines.push(unit)
 
     // 32.67 — WHAT A ROW'S REGIONS AND COMPONENTS BIND reads the row's item through its cell: the
     // row's `update` reaches its own top level and no further.
@@ -613,6 +614,7 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
                 else emitInvocation(at, holder, region)
             }
         }
+        for (const unit of elements) lines.push(unit)
         // 32.43 — A REGION THAT MOUNTS NOTHING INVOKES NOTHING, so what it declares is reached
         // from nowhere and is not declared: a row declaring a component it never invokes stays a
         // row whose mount is the shared empty one.

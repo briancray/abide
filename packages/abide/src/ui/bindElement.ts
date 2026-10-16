@@ -21,6 +21,10 @@ import { holdWhileLeaving } from './leave.ts'
  * form is where teardown is decided, and its `Disposer` is the whole of it.
  *
  * 32.38 — A `Disposer` HANDING BACK A THENABLE IS AN EXIT: the element's nodes stay until it settles.
+ *
+ * 32.68 — THE NODE IS CONNECTED AND WHOLE, and nothing here makes it so: this runs from a region's
+ * MOUNT, which every caller (`ArmRegion`, `TryRegion`, `makeRow`) calls after `build`'s nodes are
+ * inserted, and last in it, after the blocks and components inside the node (`emitRegion`).
  */
 export function bindElement(
     element: Element,

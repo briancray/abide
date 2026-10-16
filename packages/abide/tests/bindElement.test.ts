@@ -7,6 +7,7 @@
 // actually depends on is asserted through a region that LEAVES.
 
 import { afterAll, expect, test } from 'bun:test'
+import { emitClient, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, mountPage } from './typed.ts'
@@ -182,4 +183,99 @@ const exit = () => () => (globalThis as { __EXIT__?: () => Promise<void> }).__EX
     await Promise.resolve()
     await Promise.resolve()
     expect(document.querySelectorAll('ul li').length).toBe(0)
+})
+
+// 32.68 — CONNECTED WHEN HANDED OVER. `focus()`, `scrollIntoView()` and a layout read do nothing
+// on a detached node, and a region's build makes its nodes before it inserts them. Every shape
+// a node arrives in by a build: an arm, a row a list grew by, a row in a list an arm built, and a
+// component an arm built. THE REVERT: call the callback from `bindElement` directly, and every
+// one of these reads `false`.
+test('a callback is handed a node already in the document — 32.68', async () => {
+    const seen: string[] = []
+    ;(globalThis as { __CONNECTED__?: string[] }).__CONNECTED__ = seen
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let open = reactive(false)
+let items = reactive([1])
+const note = (name: string) => (node: Element) => {
+    ;(globalThis as { __CONNECTED__?: string[] }).__CONNECTED__?.push(name + ':' + node.isConnected)
+}
+</script>
+
+{#component Child()}<i bind:element={note('component')}>child</i>{/component}
+<button id="open" onclick={() => { open = true }}>open</button>
+<button id="grow" onclick={() => { items = [...items, items.length + 1] }}>grow</button>
+{#for item of items by item}<b bind:element={note('row')}>{item}</b>{/for}
+{#if open}<input id="field" bind:element={note('arm')}>{#for item of items by item}<s bind:element={note('armed row')}>{item}</s>{/for}<Child />{/if}`)
+
+    seen.length = 0
+    click('#open')
+    click('#grow')
+    expect(seen.toSorted()).toEqual(
+        [
+            'arm:true',
+            'armed row:true',
+            'component:true',
+            'row:true',
+            'armed row:true',
+        ].toSorted(),
+    )
+})
+
+test('a callback can focus the node an arm just built — 32.68', async () => {
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let open = reactive(false)
+</script>
+
+<button id="open" onclick={() => { open = true }}>open</button>
+{#if open}<input id="field" bind:element={(node) => (node as HTMLInputElement).focus()}>{/if}`)
+
+    click('#open')
+    expect(document.activeElement?.id).toBe('field')
+})
+
+// 32.68 — AND WHOLE: what the element holds has built. A form whose `<input>` comes from an
+// `<Input>` component, focused from the form's callback, is the shape an app wrote. THE REVERT,
+// run: push the element units ahead of the regions in `emitRegion`, and the form is handed over
+// before its `<Input>` builds — `input=false`, and nothing is focused.
+test('a callback is handed a node whose components have built — 32.68', async () => {
+    await mountPage(
+        `<script>
+import { reactive } from '@abide/abide'
+import Input from './Input.abide'
+
+let open = reactive(false)
+let draft = reactive('')
+</script>
+
+<button id="open" onclick={() => { open = true }}>open</button>
+{#if open}<form bind:element={(form) => form.querySelector('input')?.focus()}><Input bind:value={draft}/></form>{/if}`,
+        {
+            Input: `<script>
+import { props } from '@abide/abide'
+
+const { value = '' } = props<{ value?: string }>()
+</script>
+
+<input id="composer" bind:value={value}>`,
+        },
+    )
+
+    click('#open')
+    expect(document.activeElement?.id).toBe('composer')
+})
+
+// 32.69 — THE REVERT: key `bind:element` in `propKeyOf` like any `bind:`; the tag builds, and the
+// callback is passed as a prop named `element` that nothing calls.
+test('bind:element on a component is refused — 32.69', () => {
+    let refused = 'parsed'
+    try {
+        emitClient(parseAbide('<Input bind:element={(node) => node.focus()}/>'))
+    } catch (thrown) {
+        refused = (thrown as Error).message
+    }
+    expect(refused).toContain('RULEBOOK 32.69')
 })

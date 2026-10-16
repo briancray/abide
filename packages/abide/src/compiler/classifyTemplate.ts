@@ -464,13 +464,15 @@ export function isParserOwned(lowerTag: string): boolean {
 /**
  * The key a component's attribute passes a prop under, or `undefined` where it is no prop.
  *
- * 32.6, 32.10 — a `bind:` handing over a `Reactive` keys the name after it, and any other `:` name
- * — `class:`, `style:`, a `bind:` with nothing bound — is an element's own. The build writes the
+ * 32.6, 32.10, 32.69 — a `bind:` handing over a `Reactive` keys the name after it, and any other
+ * `:` name — `class:`, `style:`, `bind:element`, a `bind:` with nothing bound — is an element's own.
+ * Read as a prop, `bind:element` was one named `element` the child never declared, and the
+ * callback never ran. The build writes the
  * props record by this and the checker projects it by this, so a tag is held to what it sends.
  */
 export function propKeyOf(attribute: Attribute): string | undefined {
     if (attribute.lowerName.startsWith('bind:'))
-        return attribute.expression
+        return attribute.expression && !isElementBind(attribute.lowerName)
             ? attribute.name.slice('bind:'.length)
             : undefined
     return attribute.name.includes(':') ? undefined : attribute.name

@@ -31,7 +31,7 @@ export function invocationProps(
         const key = propKeyOf(attribute)
         if (key === undefined)
             throw new Error(
-                `abide: ${attribute.name} on <${node.tag}> is not a prop a component takes — \`bind:\` hands over the \`Reactive\` in its braces (RULEBOOK 32.6), and \`class:\` and \`style:\` set an element's own class and style. RULEBOOK 32.10.`,
+                `abide: ${attribute.name} on <${node.tag}> is not a prop a component takes — \`bind:\` hands over the \`Reactive\` in its braces (RULEBOOK 32.6), \`class:\` and \`style:\` set an element's own class and style (RULEBOOK 32.10), and \`bind:element\` hands over an element — put it on one inside <${node.tag}>, or pass the callback as a prop (RULEBOOK 32.69).`,
             )
         // A STATIC PROP IS STILL AN ACCESSOR. One shape per prop whatever the call site spelled
         // (33.10), so the child reads every key the same way and a literal is not a second case.

@@ -537,7 +537,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `bind:open` | The same, on a `<details>`. | 32.7 |
 | `bind:group` | Radio or checkbox membership. | 32.8 |
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6 |
-| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9, 32.38, 32.66 |
+| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9, 32.38, 32.66, 32.68, 32.69 |
 | `class:name={cond}` | Toggles a class. | 32.10 |
 | `style:prop={value}` | Sets one style property. | 32.10, 32.19 |
 | `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13 |
