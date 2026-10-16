@@ -31,7 +31,12 @@ import {
     streamingOrSettled,
 } from '#shared/reactive/index.ts'
 import { positiveSetting } from './config.ts'
-import { heldByApp, type PageRender } from './requestScope.ts'
+import {
+    currentRequestScope,
+    heldByApp,
+    type PageRender,
+    releaseScope,
+} from './requestScope.ts'
 
 const HYDRATE_LOG = namedLogger('abide:hydrate')
 
@@ -64,6 +69,10 @@ type Entry = {
     release: () => void
     // 42.11 — unfiles the entry from the app whose render left it, which drops it when it stops.
     unhold: () => void
+    // 41.13 — lets the render's scope go, which the entry holds while what it reached is in flight.
+    letGo: () => void
+    // Whether a call took it, which then answers from what the render reached until that settles.
+    taken: boolean
 }
 
 // INDEXED BY THE THREE THINGS 41.18 MATCHES ON — caller, handler, args key — so a call finds its entry
@@ -103,6 +112,22 @@ export function seedFor(caller: string): PageRender['seed'] {
             timer: undefined,
             release: NOTHING_HELD,
             unhold: NOTHING_HELD,
+            letGo: NOTHING_HELD,
+            taken: false,
+        }
+        // 41.13 — THE RENDER'S SCOPE IS HELD WHILE WHAT IT REACHED IS IN FLIGHT: the page is answered
+        // before a slow value lands, and letting the scope go stops that value's run — a stream the
+        // browser's call would join then never closes. Let go once it settles, a stream at its close.
+        const scope = currentRequestScope()
+        if (scope !== undefined && isReactive(reached)) {
+            scope.holds += 1
+            let held = true
+            entry.letGo = () => {
+                if (!held) return
+                held = false
+                releaseScope(scope)
+            }
+            Promise.resolve(reached).then(entry.letGo, entry.letGo)
         }
         const bound = positiveSetting(
             'ABIDE_MAX_STREAM_BUFFER_SIZE',
@@ -208,6 +233,9 @@ export function takeSeed(
     }
     const entry = entries[0]
     if (entry === undefined) return undefined
+    entry.taken = true
+    // And no longer than the call that took it: a stream that never closes ends with its reader.
+    currentRequestScope()?.stops.push(entry.letGo)
     drop(caller, entry)
     // READ AS WELL AS SWEPT: a timer can fire late, and an entry past its life answers nothing.
     if (entry.expires <= Date.now()) {
@@ -244,6 +272,8 @@ function drop(caller: string, entry: Entry): void {
     clearTimeout(entry.timer)
     entry.release()
     entry.unhold()
+    // Nothing will answer from an entry no call took, so its run need not finish.
+    if (!entry.taken) entry.letGo()
     const byRpc = BUFFER.get(caller)
     const byKey = byRpc?.get(entry.rpc)
     const entries = byKey?.get(entry.key)

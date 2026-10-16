@@ -79,6 +79,26 @@ export const shelve = POST(({ title }: { title: string }) => {
 })
 `
 
+// 41.13 — A STREAM STILL RUNNING WHEN THE PAGE IS ANSWERED, which the browser's call then joins.
+const FEED = `import { GET } from '@abide/abide/server'
+
+export const getFeed = GET(async function* () {
+    for (const line of ['one', 'two', 'three']) {
+        await new Promise((done) => setTimeout(done, 100))
+        yield line
+    }
+})
+`
+
+const FEED_PAGE = `<script>
+import { reactive } from '@abide/abide'
+import getFeed from '#src/feed/getFeed.ts'
+
+const lines = reactive(() => getFeed())
+</script>
+
+<main><p>{lines.busy()}</p></main>`
+
 // 18.23 — A `global` VALUE HOLDING A BINARY.
 const COVERS = `import { GET, reactive } from '@abide/abide/server'
 
@@ -104,6 +124,8 @@ beforeAll(async () => {
         'index.abide': PAGE,
         'painted/index.abide': PAINTED,
         'shelf/index.abide': SHELF_PAGE,
+        'feeds/index.abide': FEED_PAGE,
+        ...handlerFiles('feed', FEED),
         ...handlerFiles('shelf', SHELF),
         ...handlerFiles('covers', COVERS),
         ...handlerFiles('totals', TOTALS),
@@ -165,6 +187,23 @@ test("the browser's call is answered from its render's run, once — 41.13, 41.1
     const cookie = await render()
     expect((await call(cookie)).run).toBe(anchor.run + 1)
     expect((await call(cookie)).run).toBe(anchor.run + 2)
+})
+
+// 41.13 — THE RENDER'S STREAM OUTLIVES THE PAGE'S ANSWER for the call that joins it: the page is
+// answered before the stream's first line, and the scope that answer releases is the one the stream
+// runs in. THE REVERT: drop the hold in `seedFor`; the scope's release stops the stream, it never
+// closes, and the call hangs past its deadline.
+test("a stream the render started still answers the browser's call — 41.13", async () => {
+    const page = await Bun.fetch(`${base}/feeds`)
+    await page.text()
+    const cookie = (page.headers.get('set-cookie') ?? '').split(
+        ';',
+    )[0] as string
+    const answer = await Bun.fetch(`${base}/feed/getFeed`, {
+        headers: { cookie },
+        signal: AbortSignal.timeout(3000),
+    })
+    expect((await answer.text()).trim().split('\n')).toHaveLength(3)
 })
 
 // 41.18 — matched by CALLER: another browser's render is not this browser's answer. THE REVERT: match
