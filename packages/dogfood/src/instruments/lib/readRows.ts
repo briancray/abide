@@ -1,4 +1,4 @@
-import { isRunnerFailure, type RunnerFailure } from 'harness/rows'
+import { isRunnerFailure, type RunnerFailure } from '@abide/harness/rows'
 import { linesOf } from './linesOf.ts'
 
 /**

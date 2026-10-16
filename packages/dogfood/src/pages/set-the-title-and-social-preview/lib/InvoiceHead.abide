@@ -1,0 +1,43 @@
+<script>
+import { reactive, url } from '@abide/abide'
+
+const LIST = url('/pages/set-the-title-and-social-preview/frame')
+const INVOICE = url('/pages/set-the-title-and-social-preview/frame/invoice')
+const PAGES = [
+    { label: 'All invoices', address: LIST },
+    { label: 'INV-4021', address: `${INVOICE}?id=4021` },
+    { label: 'INV-4022', address: `${INVOICE}?id=4022` },
+]
+
+let open = reactive(PAGES[0]?.address ?? '')
+let title = reactive('—')
+let description = reactive('—')
+
+// The frame's own document, read each time it loads.
+function readHead(frame: Element) {
+    const read = () => {
+        const page = (frame as HTMLIFrameElement).contentDocument
+        title = page?.title || '—'
+        description = page?.querySelector('meta[name=description]')
+            ?.getAttribute('content') ?? '—'
+    }
+    frame.addEventListener('load', read)
+    read()
+    return () => frame.removeEventListener('load', read)
+}
+</script>
+
+<div class="tabs">
+    {#for page of PAGES}
+        <button aria-selected={open === page.address}
+            onclick={() => (open = page.address)}>{page.label}</button>
+    {/for}
+</div>
+
+<ul class="fields">
+    <li><span>title</span><strong>{title}</strong></li>
+    <li><span>description</span><strong>{description}</strong></li>
+</ul>
+
+<iframe src={open} bind:element={readHead} title="The invoice page"
+    class="h-28 w-full rounded-md border border-rule"></iframe>

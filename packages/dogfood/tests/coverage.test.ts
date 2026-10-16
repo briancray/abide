@@ -7,7 +7,7 @@
 import { expect, test } from 'bun:test'
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
 import { SITE } from '../src/lib/SITE.ts'
-import { sidebarGroupsOf } from '../src/lib/siteSections.ts'
+import { DOCUMENTS, sidebarGroupsOf } from '../src/lib/siteSections.ts'
 import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
 import {
     allCards,
@@ -176,6 +176,9 @@ test('nothing claims to cover a capability the registry does not have', async ()
 test('every docs page is in SITE, and every SITE entry has its page', async () => {
     const listed = new Set<string>()
     for (const page of await docsPages()) listed.add(page.file)
+    // A document is listed by the reference tab instead.
+    for (const document of DOCUMENTS.pages)
+        listed.add(pageFileOf(document.route))
     const orphans: string[] = []
     for (const path of new Bun.Glob('src/**/index.abide').scanSync({
         cwd: DOGFOOD,
@@ -276,6 +279,26 @@ test('every page with an example declares the app it is drawn from', async () =>
         if (cardsOf(page).length > 0 && page.app === undefined)
             undeclared.push(page.route)
     expect(undeclared).toEqual([])
+})
+
+// 40.17, 40.37, 40.38 — A TEACHING PAGE RUNS WHAT IT TEACHES, or its `SITE` entry says why nothing can: a
+// command run in a terminal, or a deployment's setting. An overview routes and a reference page
+// enumerates (40.11), so neither is held to it. A `cardless` page that grew a card is a stale mark.
+// THE REVERT: drop the card from `/pages/add-a-page`, and the page is named.
+test('every teaching page embeds an example, or is marked cardless', async () => {
+    const overviews = new Set<string>()
+    for (const group of SITE) overviews.add(group.pages[0]?.route ?? '')
+    const missing: string[] = []
+    const stale: string[] = []
+    for (const page of await docsPages()) {
+        if (overviews.has(page.route) || page.route.startsWith('/reference'))
+            continue
+        const cards = cardsOf(page).length
+        if (cards === 0 && page.cardless === undefined && !page.stub)
+            missing.push(page.route)
+        if (cards > 0 && page.cardless !== undefined) stale.push(page.route)
+    }
+    expect({ missing, stale }).toEqual({ missing: [], stale: [] })
 })
 
 // 40.27 — a card follows its heading with nothing between them. A paragraph there is a fourth voice

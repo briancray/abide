@@ -1,12 +1,12 @@
 <script>
 // THE BENCH, RUN FROM THE PAGE. Every row is abide against the hand-written arm in one engine, and
 // nothing here is a result until somebody presses a button — the numbers are the machine's today,
-// not a table somebody typed (`harness/scripts/benchRows.ts` is what produces them).
+// not a table somebody typed (`dogfood/scripts/benchRows.ts` is what produces them).
 //
 // ONE VALUE HOLDS THE ROWS, and a run patches into it as each row lands, so running one bench
 // leaves every other row in the catalog standing.
 import { reactive } from '@abide/abide'
-import { type BenchRow, matchesFilter, type RowItem } from 'harness/rows'
+import { type BenchRow, matchesFilter, type RowItem } from '@abide/harness/rows'
 import benchCatalog from '../benchCatalog.ts'
 import runBench from '../runBench.ts'
 import { messageOf } from './messageOf.ts'
@@ -22,10 +22,10 @@ let running = reactive(false)
 let failure = reactive('')
 let stopping: AbortController | undefined
 
-// THE CATALOG'S OWN ITEMS, grouped — and NOT the readings. A keyed list keeps a row whose item is
-// the same object and remakes one whose item is new, so a section rebuilt per landed row would
-// remake every row in the catalog each time. The readings are looked up by each row's own
-// slots, which is what lets one row change alone.
+// THE CATALOG'S OWN ITEMS, grouped — and NOT the readings. A keyed list leaves a row whose item is
+// the same object alone and wakes every binding of one whose item is new (32.67), so a section
+// rebuilt per landed row would rerun every row in the catalog each time. The readings are looked
+// up by each row's own slots, which is what lets one row change alone.
 const sections = reactive(() => {
     const grouped: Section[] = []
     for (const item of catalog) {
@@ -68,8 +68,8 @@ function cellsOf(item: RowItem) {
         }
     }
     return {
-        abide: figure(row.abide, row.unit),
-        vanilla: figure(row.vanilla, row.unit),
+        abide: figure(row.subject, row.unit),
+        vanilla: figure(row.handWritten, row.unit),
         n: row.n === null ? '—' : row.n.toLocaleString('en-US'),
         floor: row.floor === null ? '—' : `${(row.floor * 100).toFixed(1)}%`,
         claim: row.claim,

@@ -2,7 +2,10 @@
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
 import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import InvoiceLink from './lib/InvoiceLink.abide'
+import invoiceLinkSource from './lib/InvoiceLink.abide' with { type: 'text' }
 </script>
 
 <Doc>
@@ -11,6 +14,17 @@ import Section from '#src/lib/Section.abide'
     <code>abide routes</code> prints every one.</p>
 
     <Section title="The four members an `Rpc` carries">
+        <Example
+            id="rpc-members"
+            title="`rpc.url`, `rpc.method`, `rpc.description`, `rpc.raw` — the handler, described"
+            summary="The invoice file a customer is emailed a link to. Pick an invoice: the address follows its args, and only the raw fetch reaches the handler."
+            files={{
+                'lib/InvoiceLink.abide': invoiceLinkSource,
+            }}
+        >
+            <InvoiceLink />
+        </Example>
+
         <table>
             <thead><tr><th>You read</th><th>What you get</th></tr></thead>
             <tbody>

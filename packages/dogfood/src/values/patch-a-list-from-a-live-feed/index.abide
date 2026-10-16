@@ -113,8 +113,8 @@ import unpatchedRegionsSource from './lib/UnpatchedRegions.abide' with { type: '
         <p><code>set</code> replaces the value with a new one; <code>patch</code> changes the one
         already held (5.7). The reference does not move, so a reader that compares references would
         see nothing — which is why <code>patch</code> wakes its readers itself, and why a
-        <code>{'{#for}'}</code> over the value never keeps a row showing an element as it stood
-        before the patch (32.33).</p>
+        <code>{'{#for}'}</code> over the value updates the row of an element the patch wrote to,
+        in place (32.33, 32.67).</p>
 
         <p>What tells one element from another is <code>by</code> (5.22). A list keyed by its own
         ids moves the rows it keeps (32.29), so a patch that appends, removes or reorders touches

@@ -2,7 +2,10 @@
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
 import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import LogoCache from './lib/LogoCache.abide'
+import logoCacheSource from './lib/LogoCache.abide' with { type: 'text' }
 </script>
 
 <Doc>
@@ -49,6 +52,17 @@ src/media/public/placeholder.svg  ->  /media/placeholder.svg`} />
     </Section>
 
     <Section title="A public file revalidates where a chunk does not">
+        <Example
+            id="public-revalidates"
+            title="`public/ledger-logo.svg` — asked about each time, sent once"
+            summary="The ledger's logo, in a public directory beside its pages. Ask for it the way a browser does, then again with the etag it was given: the second answer is headers alone, while this card's own code is kept for a year."
+            files={{
+                'lib/LogoCache.abide': logoCacheSource,
+            }}
+        >
+            <LogoCache />
+        </Example>
+
         <table>
             <thead><tr><th>Answered</th><th>On</th></tr></thead>
             <tbody>

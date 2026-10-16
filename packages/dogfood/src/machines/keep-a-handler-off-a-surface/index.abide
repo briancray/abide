@@ -2,7 +2,11 @@
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
 import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import ExportListing from './lib/ExportListing.abide'
+import exportListingSource from './lib/ExportListing.abide' with { type: 'text' }
+import exportContactsSource from './exportContacts.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -38,6 +42,18 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section title="`clients` decides what is generated, never who may call">
+        <Example
+            id="clients-listing"
+            title={'`clients: { mcp: false }` — off the tool list, on the network'}
+            summary="The contact export behind a button, kept out of a model's tool list. Ask the MCP endpoint, then the export's own address: it is listed nowhere a model looks, and it still answers."
+            files={{
+                'exportContacts.ts': exportContactsSource,
+                'lib/ExportListing.abide': exportListingSource,
+            }}
+        >
+            <ExportListing />
+        </Example>
+
         <p><strong><code>clients</code> is not access control.</strong> A handler with <code>mcp:
         false</code> is absent from the tool list and answers on its http address exactly as it did.
         Nothing about withholding a listing withholds the endpoint.</p>

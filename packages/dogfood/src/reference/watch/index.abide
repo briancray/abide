@@ -49,8 +49,9 @@ watch(sources, effect)`} />
 
         <p>An error in an effect is never silent. A throw from the effect, a throw from the
         disposer, and a read of a failed value inside one all reach <code>onError</code> with the
-        trace attached and warn on <code>abide:watch</code>. In a browser a throw from the effect is
-        additionally re-thrown, and surfaces as an uncaught error an error reporter sees.</p>
+        trace attached and warn on <code>abide:watch</code>. In a browser a throw from the effect
+        additionally surfaces as an uncaught error an error reporter sees, and every other effect
+        the same write woke still runs.</p>
 
         <p><strong>An effect that threw stops its watch.</strong> One that throws once usually
         throws every run, and a watch rerunning into the same throw is a loop with a log line per

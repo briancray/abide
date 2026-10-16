@@ -219,8 +219,9 @@ count() // 2, now — the read does not wait for the turn to end`} />
         <p>An error in an effect is never silent. A throwing effect, a throwing disposer, and a read
         of a <strong>failed</strong> value inside one — which throws where nothing has landed (2.2)
         — all reach <code>onError</code> with the trace attached and warn on
-        <code>abide:watch</code>. In a browser a throw from the effect is additionally re-thrown,
-        and surfaces as an uncaught error an error reporter sees.</p>
+        <code>abide:watch</code>. In a browser a throw from the effect additionally surfaces as
+        an uncaught error an error reporter sees, and every other effect the same write woke still
+        runs.</p>
 
         <p>Then the watch stops. An effect that throws once usually throws every run, and a watch
         that reruns into the same throw is a loop with a log line per iteration. The warning names

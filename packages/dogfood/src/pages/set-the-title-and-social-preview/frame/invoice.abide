@@ -1,0 +1,21 @@
+<script>
+import { reactive, route } from '@abide/abide'
+
+const INVOICES: Record<string, { customer: string; total: string }> = {
+    '4021': { customer: 'Analytical Engines Ltd', total: '$1,240.00' },
+    '4022': { customer: 'Hopper & Co', total: '$900.00' },
+}
+
+const id = reactive(() => route.url.searchParams.get('id') ?? '4021')
+const invoice = reactive(() => INVOICES[id] ?? { customer: '—', total: '—' })
+</script>
+
+<head>
+    <title>INV-{id} — Ledger</title>
+    <meta name="description" content="{invoice.customer} owes {invoice.total}"/>
+</head>
+
+<ul class="fields">
+    <li><span>customer</span><strong>{invoice.customer}</strong></li>
+    <li><span>total</span><strong>{invoice.total}</strong></li>
+</ul>

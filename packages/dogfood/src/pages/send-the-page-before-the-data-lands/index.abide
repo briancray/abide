@@ -1,11 +1,27 @@
 <script>
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import InvoiceFrame from './lib/InvoiceFrame.abide'
+import invoiceFrameSource from './lib/InvoiceFrame.abide' with { type: 'text' }
+import invoicePageSource from './frame/index.abide' with { type: 'text' }
 </script>
 
 <Doc>
     <Section title="A hole in the page is a sink">
+        <Example
+            id="sink-fill"
+            title="A hole per value in flight — the page first, the invoice after"
+            summary="An invoice page whose ledger takes a second and a half. Load it again: the labels arrive at once, and each value fills its own hole when the ledger answers."
+            files={{
+                'frame/index.abide': invoicePageSource,
+                'lib/InvoiceFrame.abide': invoiceFrameSource,
+            }}
+        >
+            <InvoiceFrame />
+        </Example>
+
         <p>A <strong>sink</strong> is a hole the render leaves where a value is still in flight, for
         the browser to fill once that value lands. It is how markup can be sent past a value that
         has not arrived — the bytes around it go now, and the document closes when the walk is done.

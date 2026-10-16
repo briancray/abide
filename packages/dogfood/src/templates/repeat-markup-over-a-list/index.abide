@@ -110,7 +110,7 @@ import contactsAndQueueSource from './lib/ContactsAndQueue.abide' with { type: '
         <p>A channel is not that case. It is a <code>reactive</code> holding an array, so
         <code>{'{#for m of room}'}</code> reads the array and reconciles it as messages are appended
         and the front is trimmed. With <code>by: 'id'</code> on the value, each message moves one
-        row (32.32); without it the rows are positional, and trimming the front rebuilds every
+        row (32.32); without it the rows are positional, and trimming the front rewrites every
         one.</p>
 
         <p>Read on: <a href={url('/data/send-data-as-it-arrives')}>Streaming data</a> ·

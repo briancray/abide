@@ -1,0 +1,64 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import SignupTotal from './lib/SignupTotal.abide'
+import signupTotalSource from './lib/SignupTotal.abide' with { type: 'text' }
+import sumDaysSource from './lib/sumDays.ts' with { type: 'text' }
+import signupTotalBenchSource from './tests/SignupTotal.bench.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="A ratio prices your code against the hand-written version">
+        <Example
+            id="price-a-derived-total"
+            title="`batch(spec)` and `ratio(a, b, spec)` — two arms, one clock"
+            summary="The total follows the range. Its bench switches the range and reads the total, once as the card does it and once as a plain function call."
+            files={{
+                'lib/SignupTotal.abide': signupTotalSource,
+                'lib/sumDays.ts': sumDaysSource,
+                'tests/SignupTotal.bench.ts': signupTotalBenchSource,
+            }}
+        >
+            <SignupTotal />
+        </Example>
+
+        <p>A millisecond says how fast this machine was today. A ratio against code a person would
+        have written instead says what your version costs, and it holds across machines in a way
+        the millisecond does not. <code>batch</code> times every arm in the same run, interleaved,
+        and sizes each sample until it is a hundred times what the clock can resolve.</p>
+
+        <Code language="sh" caption="terminal" code={`bun tests/SignupTotal.bench.ts`} />
+
+        <p>The first arm is also run against itself, and the spread between those two runs is the
+        floor. <code>ratio</code> refuses two samples taken on different engines, cases or batch
+        sizes, and reports a difference inside the floor as a tag rather than a number.
+        <code>claimOf</code> is the one line a report prints.</p>
+
+        <p>The tracked arm costs more than the plain call, because it keeps the readers and the
+        cutoff the card relies on. The figure is a row in this site's Bench tab, under Docs
+        examples, rather than a number here, so it is rerun whenever someone asks.</p>
+    </Section>
+
+    <Section title="A duration from an emulated DOM is refused">
+        <p>Under <code>bun test</code> the DOM is JavaScript, and a millisecond from it describes the
+        emulator. <code>batch</code> throws on a duration whose op touched one, and on a sample taken
+        in a parallel test worker, so the number never exists to be quoted.</p>
+
+        <p><code>time</code> from <code>@abide/harness/measure</code> is <code>batch</code> with that
+        check filled in from <code>emulatedDom()</code>, and it throws while the counters are armed:
+        a count and a duration are two passes over the same body, never one. Count under
+        <code>bun test</code>, and time in a browser or under <code>bun run</code>.</p>
+    </Section>
+
+    <Section title="A cost that stays under a frame is not quoted as latency">
+        <p>A click shows its result at the next frame, so every version under one frame reads the
+        same to a person. A <code>Sample</code> says whether it was <code>underOneFrame</code>, and
+        <code>THRESHOLDS</code> holds the two lines a cost is judged against: a frame, and the
+        100 ms of an interaction.</p>
+
+        <p>Read on: <a href={url('/measure/find-which-layer-an-op-spends-its-time-in')}>Layer shares</a></p>
+    </Section>
+</Doc>

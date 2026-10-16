@@ -102,6 +102,21 @@ import salesReportSource from './lib/SalesReport.abide' with { type: 'text' }
         <p>Read on: <a href={url('/app/configure-the-app')}>Config</a></p>
     </Section>
 
+    <Section title="The socket and the stop have ceilings of their own">
+        <table>
+            <thead><tr><th></th><th>Default</th><th>What it bounds</th></tr></thead>
+            <tbody>
+                <tr><td><code>ABIDE_MAX_SOCKET_MESSAGE_SIZE</code></td><td><code>1048576</code></td><td>bytes of one frame a browser sends over the socket</td></tr>
+                <tr><td><code>ABIDE_MAX_SOCKET_SUBSCRIPTIONS</code></td><td><code>1024</code></td><td>values one connection may follow at once</td></tr>
+                <tr><td><code>ABIDE_STOP_TIMEOUT</code></td><td><code>5000</code></td><td>ms <code>App.stop</code> waits on requests still answering</td></tr>
+            </tbody>
+        </table>
+
+        <p>These three have finite defaults, unlike the two above: a socket stays open for as long as
+        the page does, and a stop the orchestrator is timing ends in a kill. Past the stop's deadline
+        the connections still answering are closed and <code>onStop</code> runs anyway.</p>
+    </Section>
+
     <Section title="A `signal` lets a caller stop waiting">
         <p>A ceiling protects the server. The caller has its own way out:</p>
 

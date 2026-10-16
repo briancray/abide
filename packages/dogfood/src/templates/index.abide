@@ -26,6 +26,9 @@ import Section from '#src/lib/Section.abide'
         <p>A name in text is a live read, not a snapshot taken when the component mounted. The same
         name works in text, in an attribute, in a class and in an inline style.</p>
 
+        <p>Text is escaped. <code>{'{raw(html)}'}</code> is how a value goes in as markup instead,
+        and it is the only way one does.</p>
+
         <p>Read on: <a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a> ·
         <a href={url('/templates/put-a-value-in-the-markup')}>Expressions</a></p>
     </Section>

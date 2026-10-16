@@ -13,6 +13,9 @@ import appTestSource from './tests/app.test.ts' with { type: 'text' }
 import Pipeline from './lib/Pipeline.abide'
 import pipelineSource from './lib/Pipeline.abide' with { type: 'text' }
 import pipelineTestSource from './tests/Pipeline.test.ts' with { type: 'text' }
+import DealStage from './lib/DealStage.abide'
+import dealStageSource from './lib/DealStage.abide' with { type: 'text' }
+import dealStageTestSource from './tests/DealStage.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -109,6 +112,39 @@ preload = ["@abide/abide/test"]`} />
         path, and the test fails on <code>Pipeline is not a function</code>.</p>
 
         <p>Read on: <a href={url('/pages/render-a-document-yourself')}>Manual rendering</a></p>
+    </Section>
+
+    <Section title="A test mounts a component and counts what a click did">
+        <Example
+            id="mount-in-a-test"
+            title="`mount(component)` and `measure(body)` — a card a test clicks"
+            summary="Advance moves the deal one stage. Its test mounts the same component, clicks Advance, and counts what the click wrote."
+            files={{
+                'lib/DealStage.abide': dealStageSource,
+                'tests/DealStage.test.ts': dealStageTestSource,
+            }}
+        >
+            <DealStage />
+        </Example>
+
+        <p><code>mount</code> renders the component the way the server does and hydrates it with
+        the module the browser loads, so the test clicks the same listener a reader does.
+        <code>measure</code> counts every DOM call its body makes, and abide's own counters beside
+        them: <code>wakes</code> is effects that ran, and <code>bindingRuns</code> is template
+        slots that reran.</p>
+
+        <p>Assert the work as well as the text. A click that rebuilt the whole row would still
+        read <code>qualified</code>; it would also report a <code>nodesCreated</code> above zero,
+        and that is the line that fails.</p>
+
+        <p>Both come from <code>@abide/harness</code>, and one preload sets them up: a DOM to mount
+        into, then the <code>.abide</code> imports above. The scaffold writes it.</p>
+
+        <Code language="toml" caption="bunfig.toml" code={`[test]
+preload = ["@abide/harness/abide/preload"]`} />
+
+        <p>The DOM under <code>bun test</code> is an emulator, so a count from it carries to a
+        browser and a millisecond does not. Assert counts here, and time in a browser.</p>
     </Section>
 
     <Section title="`app.run` is a scope and nothing else">

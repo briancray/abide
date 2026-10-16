@@ -1,32 +1,32 @@
-// THE HARNESS'S TWO ROW RUNNERS, reached from the docs app. Each is a subprocess printing one JSON
+// THE TWO ROW RUNNERS IN `scripts/`, reached from the docs app. Each is a subprocess printing one JSON
 // row per line, so a bench never shares this server's process — its clock, its heap, its event loop
 // — and a run a reader walked away from is killed rather than finished.
 //
-// PIPED, NOT READ. The rows are passed on as the runner wrote them; `harness/rows` is the contract.
+// PIPED, NOT READ. The rows are passed on as the runner wrote them; `@abide/harness/rows` is the contract.
 
 import { request } from '@abide/abide/server'
-import type { RowItem, RunnerFailure } from 'harness/rows'
+import type { RowItem, RunnerFailure } from '@abide/harness/rows'
 import { linesOf } from '../lib/linesOf.ts'
 
 let repo: Promise<string> | undefined
 
 /**
- * The repo root: the nearest directory above this module holding `packages/harness`.
+ * The repo root: the nearest directory above this module holding the docs app's runners.
  *
  * WALKED UP TO, not computed from this file's depth: where the server's modules sit is the
- * build's business, and the harness is wherever the workspace put it.
+ * build's business, not this file's.
  */
 function repoRoot(): Promise<string> {
     repo ??= (async () => {
         let directory = import.meta.dir
         while (
             !(await Bun.file(
-                `${directory}/packages/harness/package.json`,
+                `${directory}/packages/dogfood/scripts/testRows.ts`,
             ).exists())
         ) {
             const parent = directory.slice(0, directory.lastIndexOf('/'))
             if (parent === '' || parent === directory)
-                throw new Error('the harness package is not beside this app')
+                throw new Error('the row runners are not beside this app')
             directory = parent
         }
         return directory
@@ -40,7 +40,7 @@ async function* runnerLines(
     args: string[],
 ): AsyncGenerator<string> {
     const child = Bun.spawn({
-        cmd: [process.execPath, `packages/harness/scripts/${script}`, ...args],
+        cmd: [process.execPath, `packages/dogfood/scripts/${script}`, ...args],
         cwd: await repoRoot(),
         stdout: 'pipe',
         stderr: 'pipe',

@@ -2,7 +2,11 @@
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
 import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import DocumentTiming from './lib/DocumentTiming.abide'
+import documentTimingSource from './lib/DocumentTiming.abide' with { type: 'text' }
+import invoicePageSource from './frame/index.abide' with { type: 'text' }
 </script>
 
 <Doc>
@@ -144,6 +148,18 @@ const invoice = reactive(() => getInvoice({ id: route.params.id }))
     </Section>
 
     <Section title="5. The document closes">
+        <Example
+            id="document-closes"
+            title="The whole document, before the ledger answers"
+            summary="An invoice page whose ledger takes two seconds. Request it the way a browser does: the document is complete long before that, with a hole where the invoice goes."
+            files={{
+                'frame/index.abide': invoicePageSource,
+                'lib/DocumentTiming.abide': documentTimingSource,
+            }}
+        >
+            <DocumentTiming />
+        </Example>
+
         <p>The document closes as soon as the walk is done. A value still in flight at that point is
         left as a hole, and nothing is written after the markup to fill it. The browser's own call
         for that value fills the hole once the page has taken over, and the buffer below answers

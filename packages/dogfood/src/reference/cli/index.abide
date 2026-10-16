@@ -67,6 +67,7 @@ abide --help`} />
                 <tr><td><code>abide bundle [--out]</code></td><td>A desktop app for the host platform, with a window on the app.</td></tr>
                 <tr><td><code>abide lsp</code></td><td>The <code>.abide</code> language server, over stdio.</td></tr>
                 <tr><td><code>--help</code> · <code>-h</code> · <code>abide help</code></td><td>Usage, generated from the command list.</td></tr>
+                <tr><td><code>--version</code> · <code>-v</code></td><td>The version of abide, or of the app a compiled executable holds.</td></tr>
             </tbody>
         </table>
     </Section>

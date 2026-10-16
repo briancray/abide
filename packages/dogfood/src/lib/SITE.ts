@@ -19,6 +19,11 @@ export type SitePage = {
     app?: 'crm' | 'chat' | 'dashboard' | 'player'
     /** Title and intent decided, prose not written. */
     stub?: boolean
+    /**
+     * 40.37, 40.38 — a teaching page with no card: what it teaches is done by a `command` run in a terminal,
+     * or decided by the `deployment` an app is served from, and no component running on it can show it.
+     */
+    cardless?: 'command' | 'deployment'
 }
 
 export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
@@ -45,6 +50,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/start/your-first-page',
+                    app: 'crm',
                     title: 'Your first page',
                     nav: 'First page',
                     intent: 'Put something on screen, change it, and see where the code that changed it lives.',
@@ -52,6 +58,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/start/how-a-page-becomes-html',
+                    app: 'crm',
                     title: 'How a page becomes HTML',
                     nav: 'Request to paint',
                     intent: 'What abide does between a request arriving and a browser having something to look at.',
@@ -307,7 +314,12 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                     nav: 'Streaming data',
                     intent: 'Show the first of it before the last one exists, from one handler that also serves the whole.',
                     lead: 'A report of fifty thousand rows takes a while. The caller does not have to wait for the last row to see the first — and you should not have to write a second endpoint so they do not.',
-                    covers: ['`jsonl`', '`sse`', '`bytes`', '`Values<T>`'],
+                    covers: [
+                        '`jsonl`',
+                        '`sse`',
+                        'rpc › `bytes`',
+                        '`Values<T>`',
+                    ],
                 },
                 {
                     route: '/data/keep-a-room-of-callers-in-sync',
@@ -352,6 +364,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/data/let-another-origin-call-you',
+                    app: 'crm',
                     title: 'Let another origin call you',
                     nav: 'CORS',
                     intent: 'Open one handler to a named origin without opening the app.',
@@ -375,6 +388,9 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`maxBodySize`',
                         '`ABIDE_RPC_TIMEOUT`',
                         '`ABIDE_MAX_REQUEST_BODY_SIZE`',
+                        '`ABIDE_MAX_SOCKET_MESSAGE_SIZE`',
+                        '`ABIDE_MAX_SOCKET_SUBSCRIPTIONS`',
+                        '`ABIDE_STOP_TIMEOUT`',
                     ],
                 },
                 {
@@ -407,6 +423,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/data/find-the-url-a-handler-answers-on',
+                    app: 'crm',
                     title: 'Find the URL a handler answers on',
                     nav: 'Handler URLs',
                     intent: 'Hand the address to something outside abide — a webhook, a form, a curl.',
@@ -435,6 +452,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/pages/add-a-page',
+                    app: 'crm',
                     title: 'Add a page',
                     nav: 'Routes',
                     intent: 'A file becomes a route, and the parts of the path become values you can read.',
@@ -454,6 +472,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/pages/give-pages-the-same-chrome',
+                    app: 'crm',
                     title: 'Give pages the same chrome',
                     nav: 'Layouts',
                     intent: 'A header, a sidebar and a footer that do not rebuild when the page under them changes.',
@@ -475,6 +494,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/pages/set-the-title-and-social-preview',
+                    app: 'crm',
                     title: 'Set the title and social preview',
                     nav: 'Head & metadata',
                     intent: 'Per-page titles and metadata, and whether a correct one is worth waiting for.',
@@ -506,6 +526,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/pages/animate-from-one-page-to-the-next',
+                    app: 'crm',
                     title: 'Animate from one page to the next',
                     nav: 'View transitions',
                     intent: 'View transitions, turned on by the stylesheet that describes them and nothing else.',
@@ -514,6 +535,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/pages/serve-the-app-under-a-sub-path',
+                    cardless: 'deployment',
                     title: 'Serve the app under a sub-path',
                     nav: 'Sub-path mounting',
                     intent: 'Run the whole app under /docs without rewriting a link or rebuilding the bundle.',
@@ -522,6 +544,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/pages/send-the-page-before-the-data-lands',
+                    app: 'crm',
                     title: 'Send the page before the data lands',
                     nav: 'Streaming HTML',
                     intent: 'Flush the document early and fill the holes as the values arrive.',
@@ -580,7 +603,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                     app: 'crm',
                     title: 'Put a value in the markup',
                     nav: 'Expressions',
-                    intent: 'Text, attributes, classes and inline styles that follow a value.',
+                    intent: 'Text, raw HTML, attributes, classes and inline styles that follow a value.',
                     lead: 'A hole in the markup is `{}` around an expression. Whatever it reads, it follows: the text updates, the attribute updates, the class comes and goes. There is no second step where you tell the page that something changed.',
                     covers: [
                         '`{expr}`',
@@ -859,6 +882,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/machines/describe-your-api-without-writing-a-spec',
+                    app: 'crm',
                     title: 'Describe your API without writing a spec',
                     nav: 'OpenAPI',
                     intent: 'An OpenAPI document generated from the handlers you already declared.',
@@ -872,6 +896,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/machines/let-a-model-call-your-handlers',
+                    app: 'crm',
                     title: 'Let a model call your handlers',
                     nav: 'MCP',
                     intent: 'The same handlers as tool definitions, so an agent calls what your pages call.',
@@ -909,6 +934,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/machines/keep-a-handler-off-a-surface',
+                    app: 'crm',
                     title: 'Keep a handler off a surface',
                     nav: 'Withholding a surface',
                     intent: 'One record decides which of the four surfaces carry a handler — and none of it is access control.',
@@ -933,17 +959,20 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/ship/start-a-new-app',
+                    cardless: 'command',
                     title: 'Start a new app',
                     nav: 'Scaffold',
                     intent: 'From nothing to a running page.',
-                    lead: 'Three commands to a page in a browser. There is no template to choose and no options to answer, because the thing being scaffolded is the layout every abide app has.',
+                    lead: 'Four commands to a page in a browser. There is no template to choose and no options to answer, because the thing being scaffolded is the layout every abide app has.',
                     covers: [
                         '`abide scaffold <name>`',
                         '`--help` · `-h` · `abide help`',
+                        '`--version` · `-v`',
                     ],
                 },
                 {
                     route: '/ship/run-the-app-while-you-work',
+                    cardless: 'command',
                     title: 'Run the app while you work',
                     nav: 'Dev server',
                     intent: "The dev loop, and running a single file against your app's own modules.",
@@ -955,6 +984,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/ship/build-and-serve-the-app',
+                    app: 'crm',
                     title: 'Build and serve the app',
                     nav: 'Build & start',
                     intent: 'What a build produces and what serves it.',
@@ -971,6 +1001,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/ship/catch-mistakes-before-you-ship',
+                    cardless: 'command',
                     title: 'Catch mistakes before you ship',
                     nav: 'Checks',
                     intent: 'Type-check the templates as well as the TypeScript, in CI and in your editor.',
@@ -979,6 +1010,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/ship/ship-a-single-binary',
+                    cardless: 'command',
                     title: 'Ship a single binary',
                     nav: 'Compile',
                     intent: 'One executable with the app inside it, for one platform or several.',
@@ -989,6 +1021,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/ship/ship-a-desktop-app',
+                    cardless: 'command',
                     title: 'Ship a desktop app',
                     nav: 'Desktop',
                     intent: 'The app in a window of its own, started here or connected to one running elsewhere.',
@@ -1011,6 +1044,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/ship/call-a-handler-from-the-terminal',
+                    cardless: 'command',
                     title: 'Call a handler from the terminal',
                     nav: 'Call a handler',
                     intent: 'Run an rpc from a shell — the argument schema decides the flags.',
@@ -1024,6 +1058,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/ship/watch-a-room-from-the-terminal',
+                    cardless: 'command',
                     title: 'Watch a channel from the terminal',
                     nav: 'Watch a channel',
                     intent: 'Follow a GET from a shell and watch its value change.',
@@ -1047,6 +1082,129 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`App[Symbol.asyncDispose]`',
                         '`**/tests/**`',
                         '`preload = ["@abide/abide/test"]`',
+                        '`preload = ["@abide/harness/abide/preload"]`',
+                        '`mount`',
+                        '`Mounted`',
+                        '@abide/harness/abide › `measure`',
+                        '`AbideWork`',
+                    ],
+                },
+            ],
+        },
+        {
+            section: 'Measuring',
+            pages: [
+                {
+                    route: '/measure',
+                    title: 'Measuring',
+                    nav: 'Overview',
+                    intent: 'Assert the work an update does, price it against hand-written code, and find where the time goes.',
+                    lead: 'A test that reads the screen passes whether an update rewrote one number or rebuilt the page. `@abide/harness` measures the work instead: the DOM calls an update made, what your code costs against the version a person would write by hand, and which part of a slow click the time went to.',
+                },
+                {
+                    route: '/measure/count-the-work-an-update-does',
+                    app: 'dashboard',
+                    title: 'Count the work an update does',
+                    nav: 'Work counts',
+                    intent: 'Assert which nodes an update touched, not only what it shows.',
+                    lead: 'A click that rewrote three numbers and a click that rebuilt the list look the same once they are done. `measure` counts the DOM calls an update made, and your own code can publish the counts no DOM call shows.',
+                    covers: [
+                        '@abide/harness/measure › `measure`',
+                        '`Work`',
+                        '`patchSet`',
+                        '`preload = ["@abide/harness/preload"]`',
+                        '`publishedBy`',
+                        '`PublishedWork`',
+                        '`PUBLISHED_WORK_KEY`',
+                    ],
+                },
+                {
+                    route: '/measure/prove-a-change-does-less-work',
+                    app: 'crm',
+                    title: 'Prove a change does less work',
+                    nav: 'Work gates',
+                    intent: 'A test that carries the version it replaced, and fails against it.',
+                    lead: 'A test about work passes with the fix in or out, because the output is the same. `gate` carries the version the fix replaced and runs the test against it too, so a test that cannot tell the difference fails.',
+                    covers: [
+                        '`gate`',
+                        '`GateSpec`',
+                        '`spawned`',
+                        '`inAFreshProcess`',
+                    ],
+                },
+                {
+                    route: '/measure/price-code-against-the-hand-written-version',
+                    app: 'dashboard',
+                    title: 'Price code against the hand-written version',
+                    nav: 'Ratios',
+                    intent: 'A cost stated as a ratio to code a person would write, never as a bare millisecond.',
+                    lead: 'A millisecond describes the machine it was taken on. `batch` times your version and a hand-written one in the same run, and `ratio` states the difference only where it is wider than the run against itself.',
+                    covers: [
+                        '`batch`',
+                        '`BatchSpec`',
+                        '`Batched`',
+                        '`Sample`',
+                        '`ratio`',
+                        '`RatioSpec`',
+                        '`Ratio`',
+                        '`claimOf`',
+                        '`emulatedDom`',
+                        '`time`',
+                        '`THRESHOLDS`',
+                    ],
+                },
+                {
+                    route: '/measure/find-which-layer-an-op-spends-its-time-in',
+                    app: 'dashboard',
+                    title: 'Find which layer an op spends its time in',
+                    nav: 'Layer shares',
+                    intent: 'The part of a slow op one layer took, before you spend a week on it.',
+                    lead: 'A faster layer saves at most the part of the op it was. `traceOp` records what Chromium did over one click, and `shares` divides your layer by the whole of it, so the ceiling is known before the work starts.',
+                    covers: [
+                        '`traceOp`',
+                        '`Trace`',
+                        '`shares`',
+                        '`SharesSpec`',
+                        '`Shares`',
+                        '`measuresNamed`',
+                        '`durationOf`',
+                    ],
+                },
+                {
+                    route: '/measure/count-bytes-turns-and-allocations',
+                    app: 'chat',
+                    title: 'Count bytes, turns and allocations',
+                    nav: 'Server costs',
+                    intent: 'What a render sends, how long a call takes to settle, and what it leaves behind.',
+                    lead: 'Some costs never reach a screen: the bytes a render sends, the microtask turns a call takes to settle, the objects it leaves behind. `@abide/harness/server` counts each, and a count compared across two sizes holds on any machine.',
+                    covers: [
+                        '@abide/harness/server › `bytes`',
+                        '`ticks`',
+                        '`retained`',
+                        '`allocated`',
+                        '`closures`',
+                    ],
+                },
+                {
+                    route: '/measure/show-test-and-bench-results-on-a-page',
+                    cardless: 'command',
+                    title: 'Show test and bench results on a page',
+                    nav: 'Result rows',
+                    intent: 'Runners that print one JSON row per line, and a page that reads them as they land.',
+                    lead: 'A runner prints one JSON row per line as each file or bench finishes, so a terminal, a script or a page can follow a run while it happens. `testRows` is one for test files, and `rowsCommand` builds one for anything else.',
+                    covers: [
+                        '`testRows`',
+                        '`TestSuite`',
+                        '`rowsCommand`',
+                        '`RowItem`',
+                        '`RowState`',
+                        '`TestRow`',
+                        '`TestCase`',
+                        '`BenchRow`',
+                        '`RunnerFailure`',
+                        '`isRunnerFailure`',
+                        '`inScope`',
+                        '`matchesFilter`',
                     ],
                 },
             ],

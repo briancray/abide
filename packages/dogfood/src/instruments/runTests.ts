@@ -1,5 +1,5 @@
 import { GET } from '@abide/abide/server'
-import type { TestRow } from 'harness/rows'
+import type { TestRow } from '@abide/harness/rows'
 import { harnessRows } from './server/harnessRows.ts'
 import { localOnly } from './server/localOnly.ts'
 

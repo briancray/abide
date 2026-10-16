@@ -1,0 +1,39 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const getInvoiceFile = GET(
+    ({ id }: { id: string }) => ({ number: `INV-${id}`, pages: 2 }),
+    { description: 'An invoice, as the file a customer is emailed.' },
+)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+let id = reactive('4021')
+let raw = reactive('—')
+
+async function fetchRaw() {
+    const answer = await getInvoiceFile.raw({ id })
+    raw = `${answer.status} ${answer.headers.get('content-type')}`
+}
+</script>
+
+<div class="tabs">
+    {#for each of ['4021', '4022']}
+        <button aria-selected={id === each}
+            onclick={() => { id = each; raw = '—' }}>INV-{each}</button>
+    {/for}
+</div>
+
+<ul class="fields stacked">
+    <li><span>url</span><strong>{getInvoiceFile.url({ id })}</strong></li>
+    <li><span>method</span><strong>{getInvoiceFile.method}</strong></li>
+    <li><span>description</span>
+        <strong>{getInvoiceFile.description}</strong></li>
+    <li><span>raw</span><strong>{raw}</strong></li>
+</ul>
+
+<div class="row">
+    <button onclick={fetchRaw}>Fetch the raw response</button>
+</div>

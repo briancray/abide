@@ -1,0 +1,26 @@
+<script>
+import { reactive, type RouteLiteral, url } from '@abide/abide'
+
+let operation = reactive('')
+
+async function readDocument() {
+    const answer = await fetch(url('/__abide/openapi.json' as RouteLiteral))
+    type Operation = { description: string; parameters: object[] }
+    const spec: { paths: Record<string, { get: Operation }> } =
+        await answer.json()
+    for (const [path, { get }] of Object.entries(spec.paths))
+        if (path.endsWith('/listOverdue')) {
+            const { description, parameters } = get
+            const published = { [path]: { get: { description, parameters } } }
+            operation = JSON.stringify(published, null, 2)
+        }
+}
+</script>
+
+<div class="row">
+    <button onclick={readDocument}>Read /__abide/openapi.json</button>
+</div>
+
+{#if operation}
+    <pre><code>{operation}</code></pre>
+{/if}

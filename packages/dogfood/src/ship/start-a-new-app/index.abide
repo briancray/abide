@@ -6,9 +6,10 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
-    <Code code={`abide scaffold ledger
+    <Code code={`bunx @abide/abide scaffold ledger
 cd ledger
-abide dev`} />
+bun install
+bun run dev`} />
 
     <Section title="What it writes">
         <table>
@@ -16,6 +17,8 @@ abide dev`} />
             <tbody>
                 <tr><td><code>src/index.abide</code></td><td>the page at <code>/</code></td></tr>
                 <tr><td><code>src/layout.abide</code></td><td>the root layout: the document its pages are served in, and the <code>&lt;script server&gt;</code> holding the lifecycle hooks</td></tr>
+                <tr><td><code>src/getGreeting.ts</code></td><td>a handler at <code>/getGreeting</code>, which the page imports and calls</td></tr>
+                <tr><td><code>src/tests/getGreeting.test.ts</code></td><td>a test calling the same handler, run by <code>bun run test</code></td></tr>
                 <tr><td><code>package.json</code>, <code>tsconfig.json</code>, <code>biome.json</code>, <code>bunfig.toml</code></td><td>the toolchain, configured — tests included</td></tr>
             </tbody>
         </table>
@@ -32,17 +35,19 @@ abide dev`} />
         <a href={url('/pages/give-pages-the-same-chrome')}>Layouts</a></p>
     </Section>
 
-    <Section title="`abide` with no command prints usage">
-        <p><code>abide</code>, <code>abide -h</code> and <code>abide --help</code> all print usage
-        <strong>generated from the command list</strong>. It is generated rather than written, so a
-        command that exists is a command the help mentions and there is no second place for one to
-        go missing.</p>
+    <Section title="`abide --help` prints usage">
+        <p><code>abide help</code>, <code>abide -h</code> and <code>abide --help</code> all print
+        usage <strong>generated from the command list</strong>. It is generated rather than written,
+        so a command that exists is a command the help mentions and there is no second place for one
+        to go missing. A mistyped command names the one it was near, and <code>abide --version</code>
+        prints the version installed.</p>
 
         <p>Read on: <a href={url('/reference/cli')}>CLI</a></p>
     </Section>
 
     <Section title="Where to go from the scaffold">
-        <p>The scaffolded page holds a reactive value and shows it. That is the whole of the first
+        <p>The scaffolded page holds a reactive value and shows it, and greets you through a handler
+        it imports — the same function <code>bun run test</code> calls. That is the whole of the first
         thing to learn — a value, and markup that follows it — and everything else on this site is a
         name for something you will want once that is boring.</p>
 

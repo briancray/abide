@@ -2,7 +2,13 @@
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
 import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import LedgerFrame from './lib/LedgerFrame.abide'
+import ledgerFrameSource from './lib/LedgerFrame.abide' with { type: 'text' }
+import layoutSource from './frame/layout.abide' with { type: 'text' }
+import contactsSource from './frame/contacts.abide' with { type: 'text' }
+import invoicesSource from './frame/invoices.abide' with { type: 'text' }
 </script>
 
 <Doc>
@@ -35,6 +41,20 @@ import { principal } from '@abide/abide'
     </Section>
 
     <Section title="What a layout buys is what it does not rebuild">
+        <Example
+            id="layout-kept"
+            title="`layout.abide` — the header two pages share, built once"
+            summary="A ledger whose header holds a note for the call you are on. Type one, then move between contacts and invoices: the page in the slot changes, and the note is still there."
+            files={{
+                'frame/layout.abide': layoutSource,
+                'frame/contacts.abide': contactsSource,
+                'frame/invoices.abide': invoicesSource,
+                'lib/LedgerFrame.abide': ledgerFrameSource,
+            }}
+        >
+            <LedgerFrame />
+        </Example>
+
         <p>The reason to put chrome in a layout rather than in each page is not that it saves
         typing. It is that a shared layout is <strong>not rebuilt</strong> across a navigation: the
         header keeps its scroll position, an open menu stays open, and a component in the sidebar

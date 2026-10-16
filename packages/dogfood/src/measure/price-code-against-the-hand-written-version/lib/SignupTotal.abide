@@ -1,0 +1,18 @@
+<script>
+import { reactive } from '@abide/abide'
+import { sumDays } from './sumDays.ts'
+
+let days = reactive(30)
+const total = reactive(() => sumDays(days))
+</script>
+
+<div class="tabs">
+    {#for choice of [30, 90]}
+        <button aria-selected={days === choice} onclick={() => (days = choice)}>
+            {choice} days
+        </button>
+    {/for}
+</div>
+<ul class="tiles">
+    <li><span>signups</span><strong>{total}</strong></li>
+</ul>

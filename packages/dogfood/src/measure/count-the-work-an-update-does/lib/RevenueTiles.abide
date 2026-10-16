@@ -1,0 +1,21 @@
+<script>
+import { reactive } from '@abide/abide'
+import { summarize } from './summarize.ts'
+
+const revenue = [940, 1120, 880, 1310, 1005, 760, 1240, 990, 1180, 1075]
+let days = reactive(7)
+const summary = reactive(() => summarize(revenue.slice(-days)))
+</script>
+
+<div class="tabs">
+    {#for choice of [7, 10]}
+        <button aria-selected={days === choice} onclick={() => (days = choice)}>
+            {choice} days
+        </button>
+    {/for}
+</div>
+<ul class="tiles">
+    <li><span>total</span><strong>${summary.total}</strong></li>
+    <li><span>daily average</span><strong>${summary.average}</strong></li>
+    <li><span>best day</span><strong>${summary.best}</strong></li>
+</ul>

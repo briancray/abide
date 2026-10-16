@@ -1,0 +1,33 @@
+<script>
+// RULEBOOK.md, served as the docs app builds: the file is the page's text, so the page cannot hold
+// a clause the file does not (40.36). It is a document rather than a guide, so it is not in `SITE`
+// and none of the voice gates read it — every clause carries a requirement keyword by design.
+import { raw } from '@abide/abide'
+import { installDocs } from '#src/lib/installDocs.ts'
+import RULEBOOK from '../../../../docs/RULEBOOK.md' with { type: 'text' }
+import { rulebookOf } from './lib/rulebookOf.ts'
+
+const { summary, html, headings } = rulebookOf(RULEBOOK)
+</script>
+
+<head>
+    <title>Rulebook — abide</title>
+</head>
+
+<main id="content">
+    <header>
+        <h1>Rulebook</h1>
+        <p class="intent">{raw(summary)}</p>
+    </header>
+    <div class="flow">{raw(html)}</div>
+</main>
+<aside class="toc" bind:element={installDocs}>
+    <section>
+        <h2 id="toc-title">On this page</h2>
+        <ul aria-labelledby="toc-title">
+            {#for heading of headings}
+                <li class="lvl-2"><a href="#{heading.id}">{raw(heading.title)}</a></li>
+            {/for}
+        </ul>
+    </section>
+</aside>

@@ -850,3 +850,19 @@
         @apply text-chrome text-muted;
     }
 }
+
+/* A PAGE A CARD FRAMES is the example's app, which the site bar is not drawn over (40.39): with no
+   bar, the body is that page's column rather than the site's grid. Unlayered, so it beats `grid`. */
+body:not(:has(> .site)) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-flow);
+    padding: 1.25rem;
+}
+
+/* THE SITE'S OWN NAVIGATIONS DO NOT ANIMATE. An example names a view transition, which turns them on
+   for the whole app (39.7) — the animation is that example's app's, in its frame, and not the docs'. */
+html:has(> body > .site)::view-transition-old(root),
+html:has(> body > .site)::view-transition-new(root) {
+    animation: none;
+}

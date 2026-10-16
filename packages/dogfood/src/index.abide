@@ -90,6 +90,15 @@ import invoiceSource from './lib/Invoice.abide' with { type: 'text' }
         <a href={url('/ship/call-a-handler-from-the-terminal')}>Call a handler</a></p>
     </Section>
 
+    <Section title="Measuring">
+        <Lead of="/measure" />
+
+        <p>Read on: <a href={url('/measure')}>Measuring</a> ·
+        <a href={url('/measure/count-the-work-an-update-does')}>Work counts</a> ·
+        <a href={url('/measure/prove-a-change-does-less-work')}>Work gates</a> ·
+        <a href={url('/measure/price-code-against-the-hand-written-version')}>Ratios</a></p>
+    </Section>
+
     <Section title="Reference">
         <Lead of="/reference" />
 

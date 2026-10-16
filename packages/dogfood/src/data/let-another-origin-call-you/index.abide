@@ -1,7 +1,10 @@
 <script>
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import PartnerStatement from './lib/PartnerStatement.abide'
+import partnerStatementSource from './lib/PartnerStatement.abide' with { type: 'text' }
 </script>
 
 <Doc>
@@ -9,6 +12,17 @@ import Section from '#src/lib/Section.abide'
     the app stays closed because nothing widened them.</p>
 
     <Section title="`crossOrigin` is per handler, and closed by default">
+        <Example
+            id="cross-origin"
+            title="`crossOrigin: ['https://books.example']` — one partner, named back"
+            summary="An account statement your bookkeeping partner's site reads from its own pages. Ask as the partner, then as any other site: only the partner's origin is named back, so only its browser hands the page the statement."
+            files={{
+                'lib/PartnerStatement.abide': partnerStatementSource,
+            }}
+        >
+            <PartnerStatement />
+        </Example>
+
         <table>
             <thead><tr><th>Value</th><th>Means</th></tr></thead>
             <tbody>

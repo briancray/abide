@@ -2,11 +2,27 @@
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
 import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import ModelCall from './lib/ModelCall.abide'
+import modelCallSource from './lib/ModelCall.abide' with { type: 'text' }
+import getBalanceSource from './getBalance.ts' with { type: 'text' }
 </script>
 
 <Doc>
     <Section title="Every handler is a tool">
+        <Example
+            id="mcp-tool"
+            title="`/__abide/mcp` — the balance handler, as a model sees it"
+            summary="A handler file answering what an account owes. Ask the app's MCP endpoint what it offers, then call it: the tool is the handler, described by its own sentence and answered by its own code."
+            files={{
+                'getBalance.ts': getBalanceSource,
+                'lib/ModelCall.abide': modelCallSource,
+            }}
+        >
+            <ModelCall />
+        </Example>
+
         <p>Every handler the route table publishes is a <strong>tool</strong> — a read that takes
         no arguments as much as a mutation. None is published as an MCP resource, because a client
         that only calls tools, Claude Code under <code>abide-bridge</code> among them, would never

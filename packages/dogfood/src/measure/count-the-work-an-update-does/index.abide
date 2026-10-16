@@ -1,0 +1,98 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import RangeTiles from './lib/RangeTiles.abide'
+import rangeTilesSource from './lib/RangeTiles.abide' with { type: 'text' }
+import totalsSource from './lib/totals.ts' with { type: 'text' }
+import rangeTilesTestSource from './tests/RangeTiles.test.ts' with { type: 'text' }
+import RevenueTiles from './lib/RevenueTiles.abide'
+import revenueTilesSource from './lib/RevenueTiles.abide' with { type: 'text' }
+import summarizeSource from './lib/summarize.ts' with { type: 'text' }
+import revenueTilesTestSource from './tests/RevenueTiles.test.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="A count says which nodes an update touched">
+        <Example
+            id="count-a-range-switch"
+            title="`measure(body)` — the DOM calls one click made"
+            summary="The tiles total the last 7 or 30 days. Its test switches the range and asserts that three numbers changed and nothing was built."
+            files={{
+                'lib/RangeTiles.abide': rangeTilesSource,
+                'lib/totals.ts': totalsSource,
+                'tests/RangeTiles.test.ts': rangeTilesTestSource,
+            }}
+        >
+            <RangeTiles />
+        </Example>
+
+        <p><code>measure</code> runs its body with the DOM's mutating members counted, and hands
+        back a <code>Work</code>: one number per kind of write. The click rewrote three text nodes
+        and two <code>aria-pressed</code> attributes. A version that rebuilt the tiles would show
+        the same numbers on screen, and would fail on <code>nodesCreated</code>.</p>
+
+        <table>
+            <thead><tr><th>Row</th><th>Counts</th></tr></thead>
+            <tbody>
+                <tr><td><code>nodesCreated</code></td><td><code>create*</code>, <code>cloneNode</code> and <code>importNode</code></td></tr>
+                <tr><td><code>elementsMoved</code></td><td>elements inserted or moved, with their subtrees</td></tr>
+                <tr><td><code>markersMoved</code> · <code>textMoved</code></td><td>comment and text nodes inserted or moved</td></tr>
+                <tr><td><code>dataWrites</code> · <code>redundantDataWrites</code></td><td>text written, and text written over the same text</td></tr>
+                <tr><td><code>attributesSet</code></td><td>attributes set, removed or toggled</td></tr>
+                <tr><td><code>classWrites</code> · <code>styleWrites</code></td><td><code>classList</code> changes, and inline style writes</td></tr>
+                <tr><td><code>listenersBound</code></td><td><code>addEventListener</code> calls</td></tr>
+                <tr><td><code>published</code></td><td>what a source on the page counted itself</td></tr>
+            </tbody>
+        </table>
+
+        <p>An element moved and a comment moved are separate rows because they cost different
+        amounts: only the element is laid out again. A DOM member the harness does not count throws
+        naming itself while a case is open, rather than reading as zero, and
+        <code>patchSet()</code> lists every member it does count.</p>
+
+        <p>Under <code>bun test</code> the DOM is an emulator, and one preload registers it with the
+        counting already installed. An abide app preloads the adapter instead, which adds
+        <code>mount</code>.</p>
+
+        <Code language="toml" caption="bunfig.toml" code={`[test]
+preload = ["@abide/harness/preload"]`} />
+
+        <p>Read on: <a href={url('/ship/call-your-app-from-a-test')}>Tests</a></p>
+    </Section>
+
+    <Section title="Publish a count the DOM cannot see">
+        <Example
+            id="publish-a-summary-count"
+            title="`publishedBy(work, source, fields)` — a count your own code keeps"
+            summary="Three tiles read one revenue summary. The summary counts its own passes, and the test asserts one pass per range switch."
+            files={{
+                'lib/RevenueTiles.abide': revenueTilesSource,
+                'lib/summarize.ts': summarizeSource,
+                'tests/RevenueTiles.test.ts': revenueTilesTestSource,
+            }}
+        >
+            <RevenueTiles />
+        </Example>
+
+        <p>A recomputation writes nothing to the DOM, so no patch can see it. The module counts it
+        instead, on a record it puts under <code>globalThis.__HARNESS_WORK__</code> by a name of its
+        own. <code>measure</code> zeroes every published record when a case opens and copies it
+        into <code>work.published</code> when it closes.</p>
+
+        <p><code>publishedBy</code> reads one source back by the fields you expect. A source that
+        published nothing reads as <code>null</code>, never as zeroes, and a field the record does
+        not carry throws naming it. A misspelled counter would otherwise read as one that never
+        moved.</p>
+
+        <p>The tiles read the same derived value, so the summary runs once however many tiles show
+        it. Give each tile its own call and the test reports three. Only two tiles were rewritten,
+        because the best day is the same over both ranges.</p>
+
+        <p>The count costs one increment per pass, kept in production too. abide publishes its own
+        the same way, as <code>wakes</code>, <code>bindingRuns</code> and
+        <code>descents</code>.</p>
+    </Section>
+</Doc>

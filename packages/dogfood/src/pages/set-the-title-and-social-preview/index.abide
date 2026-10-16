@@ -2,7 +2,12 @@
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
 import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import InvoiceHead from './lib/InvoiceHead.abide'
+import invoiceHeadSource from './lib/InvoiceHead.abide' with { type: 'text' }
+import layoutSource from './frame/layout.abide' with { type: 'text' }
+import invoicePageSource from './frame/invoice.abide' with { type: 'text' }
 </script>
 
 <Doc>
@@ -12,6 +17,19 @@ import Section from '#src/lib/Section.abide'
 </head>`} />
 
     <Section title="Where it may go, and how two of them merge">
+        <Example
+            id="head-merge"
+            title="`<head>` in a page and its layout — the deepest title wins"
+            summary="A ledger whose layout titles every page, and an invoice page that titles itself from the invoice. Open the list, then an invoice: the tab takes the invoice's title where it has one."
+            files={{
+                'frame/layout.abide': layoutSource,
+                'frame/invoice.abide': invoicePageSource,
+                'lib/InvoiceHead.abide': invoiceHeadSource,
+            }}
+        >
+            <InvoiceHead />
+        </Example>
+
         <p>A <code>&lt;head&gt;</code> element is <strong>top level</strong> in the file and never
         inside a control block. Contributions are hoisted at compile time, so what the head can
         contain is decided by the build rather than discovered by running the page — which is what

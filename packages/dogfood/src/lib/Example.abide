@@ -6,7 +6,7 @@ import { highlight, sideOf } from './highlight.ts'
 import { inline } from './inline.ts'
 
 const { id, title, summary, files } = props<{
-    /** The example's name: its anchor here, and what its hand-written arm is paired by (44.19). */
+    /** The example's name: its anchor here, and what its hand-written arm is paired by (40.40). */
     id: string
     title: string
     summary: string

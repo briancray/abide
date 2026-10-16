@@ -24,6 +24,9 @@ import poolSource from '../../app/run-code-at-start-and-stop/lib/Pool.abide' wit
                 <tr><td><code>ABIDE_APP_URL</code></td><td><code>string | null</code></td><td>Names an app somewhere else, for the remote CLI.</td></tr>
                 <tr><td><code>ABIDE_RPC_TIMEOUT</code></td><td><code>number</code></td><td>The default ms a call may go without progress.</td></tr>
                 <tr><td><code>ABIDE_MAX_REQUEST_BODY_SIZE</code></td><td><code>number</code></td><td>The default ceiling on a mutation's body.</td></tr>
+                <tr><td><code>ABIDE_MAX_SOCKET_MESSAGE_SIZE</code></td><td><code>number</code></td><td>The ceiling on a frame received over the socket mux, in bytes.</td></tr>
+                <tr><td><code>ABIDE_MAX_SOCKET_SUBSCRIPTIONS</code></td><td><code>number</code></td><td>How many values one connection may follow.</td></tr>
+                <tr><td><code>ABIDE_STOP_TIMEOUT</code></td><td><code>number</code></td><td>How long <code>App.stop</code> drains, in ms.</td></tr>
                 <tr><td><code>ABIDE_MAX_STREAM_BUFFER_SIZE</code></td><td><code>number</code></td><td>The cap on a stream transcript held in memory.</td></tr>
                 <tr><td><code>ABIDE_MAX_LOG_BUFFER_COUNT</code></td><td><code>number</code></td><td>How many lines <code>log.records</code> is trimmed back to. Default 1000.</td></tr>
                 <tr><td><code>ABIDE_LOG_FORMAT</code></td><td><code>'tsv' | 'json' | null</code></td><td>The machine log format.</td></tr>
@@ -67,6 +70,7 @@ import poolSource from '../../app/run-code-at-start-and-stop/lib/Pool.abide' wit
                 <tr><td><code>import '…' with {'{'} type: 'routes' {'}'}</code></td><td>A package's directory mounted at the importing file's directory, its pages, layouts, error pages and handler files answering below it.</td></tr>
                 <tr><td><code>bunfig.toml</code></td><td>Under <code>[serve.static] plugins</code>, the bundler plugins the client is built with.</td></tr>
                 <tr><td><code>preload = ["@abide/abide/test"]</code></td><td>The <code>[test]</code> preload a test imports the app's <code>.abide</code> files through.</td></tr>
+                <tr><td><code>preload = ["@abide/harness/abide/preload"]</code></td><td>The <code>[test]</code> preload that registers a DOM a test mounts into and measures, then abide's own.</td></tr>
             </tbody>
         </table>
 

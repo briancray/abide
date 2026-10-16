@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { spawned } from 'harness/gate'
+import { spawned } from '@abide/harness/gate'
 
 const APP = new URL('..', import.meta.url).pathname
 const BIN = new URL('../../abide/bin/abide.ts', import.meta.url).pathname

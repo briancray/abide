@@ -2,7 +2,11 @@
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
 import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import InvoiceRoute from './lib/InvoiceRoute.abide'
+import invoiceRouteSource from './lib/InvoiceRoute.abide' with { type: 'text' }
+import invoicesPageSource from './frame/[[invoice]].abide' with { type: 'text' }
 </script>
 
 <Doc>
@@ -106,6 +110,18 @@ hooks
     </Section>
 
     <Section title="`route.params` and `route.name` follow the address">
+        <Example
+            id="route-params"
+            title="`[[invoice]].abide` — one file for the list and every invoice"
+            summary="An invoices page filed under an optional segment. Open an invoice, then the list again: the address moves, the pattern it matched stays one, and the segment is absent where nothing matched it."
+            files={{
+                'frame/[[invoice]].abide': invoicesPageSource,
+                'lib/InvoiceRoute.abide': invoiceRouteSource,
+            }}
+        >
+            <InvoiceRoute />
+        </Example>
+
         <p><code>route.url</code> comes from the file path and <code>route.name</code> is the
         <strong>resolution path</strong> — the pattern that matched, not the address that arrived.
         So a log line, a metric and an <code>{'{#if}'}</code> over the current route all key on

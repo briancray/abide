@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
-import { rulebookClauses } from '../../harness/scripts/rulebookClauses.ts'
+import { SyntaxKind } from 'typescript/unstable/ast'
+import { tokenize } from '../../abide/src/compiler/tokenize.ts'
+import { rulebookClauses } from '../scripts/rulebookClauses.ts'
 
 // REGISTRY.md holds signatures and RULEBOOK.md holds requirements, and the split is only worth
 // having if it STAYS split. Prose at the top of a document does not make it stay — a rule written
@@ -177,6 +179,27 @@ test('a clause group is numbered from 1 with no gap', async () => {
         }
     }
     expect(gaps).toEqual([])
+})
+
+// The check above walks the clauses INSIDE a group, so a whole group missing went unseen: the
+// headings ran 42, 44 for as long as nothing looked at them.
+//
+// THE REVERT: renumbering `# 43.` back to `# 44.` reports `44 where 43` and the contents line
+// that no longer matches a heading.
+test('the groups are numbered from 1 with no gap, and the contents list each one', async () => {
+    const headings = [...rulebook.matchAll(/^# (\d+)\. (.+)$/gm)].map(
+        (match) => `${match[1]}. ${match[2]}`,
+    )
+    const gaps: string[] = []
+    for (let index = 0; index < headings.length; index += 1) {
+        const number = Number.parseInt(headings[index] ?? '', 10)
+        if (number !== index + 1) gaps.push(`${number} where ${index + 1}`)
+    }
+    expect(gaps).toEqual([])
+    const contents = [...rulebook.matchAll(/^- \[(\d+\. .+)\]\(#(\d+)\)$/gm)]
+    expect(contents.map((match) => match[1])).toEqual(headings)
+    for (const match of contents)
+        expect(match[1]?.startsWith(`${match[2]}. `)).toBe(true)
 })
 
 test('no clause number is used twice', async () => {
@@ -380,4 +403,55 @@ test('every document the working notes name exists', async () => {
     }
     expect(missing.length).toBe(0)
     expect([...new Set(missing)]).toEqual([])
+})
+
+// THE FRAMEWORK'S OWN MESSAGES CITE THE RULEBOOK TOO, and in the same two ways the notes can go
+// wrong: a `RULEBOOK n.n` a renumber left behind points an author at the wrong rule, and a bare
+// `(41.10)` names no document at all, so nothing looks at it. Read off the string literals alone —
+// a comment's citation is the notes' business, not an author's — through the compiler's own
+// scanner, so a template literal's text is a string and its substitutions are not.
+//
+// THE REVERT: plant `RULEBOOK 99.1` or a bare `(41.10)` in any message under packages/abide/src;
+// the first test names it as dangling, the second as bare.
+const FRAMEWORK = new URL('../../abide/src/', import.meta.url)
+const STRINGS = new Set([
+    SyntaxKind.StringLiteral,
+    SyntaxKind.NoSubstitutionTemplateLiteral,
+    SyntaxKind.TemplateHead,
+    SyntaxKind.TemplateMiddle,
+    SyntaxKind.TemplateTail,
+])
+
+async function frameworkStrings(): Promise<{ file: string; text: string }[]> {
+    const found: { file: string; text: string }[] = []
+    for await (const file of new Bun.Glob('**/*.ts').scan(FRAMEWORK.pathname)) {
+        const source = await Bun.file(new URL(file, FRAMEWORK)).text()
+        for (const token of tokenize(source))
+            if (STRINGS.has(token.kind)) found.push({ file, text: token.text })
+    }
+    return found
+}
+
+test('every clause a framework message cites exists', async () => {
+    const ids = new Set(clauses().map((clause) => clause.id))
+    const dangling: string[] = []
+    let cited = 0
+    for (const { file, text } of await frameworkStrings())
+        for (const match of text.matchAll(
+            /RULEBOOK ((?:\d+\.\d+(?:-\d+\.\d+)?(?:,? (?:and |or )?)?)+)/g,
+        ))
+            for (const id of (match[1] ?? '').matchAll(/\d+\.\d+/g)) {
+                cited += 1
+                if (!ids.has(id[0])) dangling.push(`${file}: ${id[0]}`)
+            }
+    expect(cited).toBeGreaterThan(100)
+    expect(dangling).toEqual([])
+})
+
+test('every clause a framework message cites names its document', async () => {
+    const bare: string[] = []
+    for (const { file, text } of await frameworkStrings())
+        for (const match of text.matchAll(/(?<![\w$])\((\d+\.\d+)[,)-]/g))
+            bare.push(`${file}: ${match[0]}`)
+    expect(bare).toEqual([])
 })

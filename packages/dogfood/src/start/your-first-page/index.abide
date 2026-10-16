@@ -2,7 +2,10 @@
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
 import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import Invoice from './lib/Invoice.abide'
+import invoiceSource from './lib/Invoice.abide' with { type: 'text' }
 </script>
 
 <Doc>
@@ -110,6 +113,17 @@ count.set(count() + 1)`} />
     </Section>
 
     <Section title="A page reaches your database from its own server block">
+        <Example
+            id="first-page-server-block"
+            title="`GET` in `<script server>` — the page's own handler, read like a value"
+            summary="Three invoices on one account, read through the handler this file declares. Open another: the page calls it by name, and the row fills in when it answers."
+            files={{
+                'lib/Invoice.abide': invoiceSource,
+            }}
+        >
+            <Invoice />
+        </Example>
+
         <p>The same page reaches your database through a handler its own
         <code>&lt;script server&gt;</code> declares, and reads it like any other value.</p>
 

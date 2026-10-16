@@ -1,17 +1,28 @@
 <script>
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
-import Code from '#src/lib/Code.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+import InvoicesFrame from './lib/InvoicesFrame.abide'
+import invoicesFrameSource from './lib/InvoicesFrame.abide' with { type: 'text' }
+import listSource from './frame/index.abide' with { type: 'text' }
+import invoicePageSource from './frame/invoice.abide' with { type: 'text' }
 </script>
 
 <Doc>
     <Section title="The stylesheet is the switch">
-        <Code language="abide" caption="src/invoices/[id]/index.abide — excerpt" code={`<style>
-.invoice-total {
-    view-transition-name: invoice-total;
-}
-</style>`} />
+        <Example
+            id="view-transition"
+            title="`view-transition-name` — a total that moves to where it lands"
+            summary="Two invoices in a list, each total named after its invoice in the stylesheet. Open one: the total travels from its row to the head of the invoice, and back again from the link."
+            files={{
+                'frame/index.abide': listSource,
+                'frame/invoice.abide': invoicePageSource,
+                'lib/InvoicesFrame.abide': invoicesFrameSource,
+            }}
+        >
+            <InvoicesFrame />
+        </Example>
 
         <p>Naming an element is what makes the browser animate it from where it was on the outgoing
         page to where it is on the incoming one. A <code>::view-transition-old</code> or

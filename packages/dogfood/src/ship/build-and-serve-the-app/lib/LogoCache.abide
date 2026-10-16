@@ -1,0 +1,32 @@
+<script>
+import { reactive, url } from '@abide/abide'
+
+const LOGO = url('/ship/build-and-serve-the-app/ledger-logo.svg')
+
+let logoCache = reactive('—')
+let askedAgain = reactive('—')
+let chunkCache = reactive('—')
+
+async function askLikeABrowser() {
+    const first = await fetch(LOGO, { cache: 'no-store' })
+    logoCache = first.headers.get('cache-control') ?? '—'
+    const again = await fetch(LOGO, {
+        headers: { 'if-none-match': first.headers.get('etag') ?? '' },
+    })
+    askedAgain = `${again.status}, with no body`
+    // This component's own code, which the build put in a chunk.
+    const chunk = await fetch(import.meta.url, { cache: 'no-store' })
+    chunkCache = chunk.headers.get('cache-control') ?? '—'
+}
+</script>
+
+<div class="row">
+    <img src={LOGO} alt="Ledger" class="size-8">
+    <button onclick={askLikeABrowser}>Ask for the logo, twice</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>the logo, a public file</span><strong>{logoCache}</strong></li>
+    <li><span>asked again with its etag</span><strong>{askedAgain}</strong></li>
+    <li><span>this component's chunk</span><strong>{chunkCache}</strong></li>
+</ul>
