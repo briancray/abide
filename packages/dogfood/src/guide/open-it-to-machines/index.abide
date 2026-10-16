@@ -183,7 +183,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
             <tbody>
                 <tr><td><code>AssistantMessage</code></td><td>One turn of the transcript, <code>{'{ role, content }'}</code>. The last is the user's.</td></tr>
                 <tr><td><code>AssistantOptions</code></td><td><code>mcp</code> to offer the tools, and <code>maxTurns</code>, 10 by default, to cap the model's turns in one call.</td></tr>
-                <tr><td><code>AssistantEvent</code></td><td>What the page reads: <code>text</code>, <code>tool</code>, <code>result</code>, then <code>done</code> with the stop reason and token usage. The same events from every provider.</td></tr>
+                <tr><td><code>AssistantEvent</code></td><td>What the page reads: <code>text</code>, <code>tool</code> as a call starts, <code>input</code> once it is written, <code>result</code>, then <code>done</code> with the stop reason and token usage. The same events from every provider.</td></tr>
                 <tr><td><code>Provider</code></td><td>What runs the conversation: one method, <code>run</code>. Write one for another model, or a recording for a test.</td></tr>
                 <tr><td><code>Toolbox</code></td><td>What a provider is handed: <code>list</code> of the tools, and <code>call</code> to run one as the asker.</td></tr>
                 <tr><td><code>ToolDefinition</code></td><td>One tool in <code>list</code>: its name, description and input schema.</td></tr>
@@ -235,9 +235,17 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
 
         <p><code>claudeCode</code> sends the conversation to Claude Code on the asker's machine,
         on their own sign-in and plan. Its config, <code>ClaudeCodeConfig</code>, is Claude Code's
-        own option names: <code>model</code>, <code>fallbackModel</code>,
-        <code>systemPrompt</code>, <code>appendSystemPrompt</code> and <code>effort</code>. Its
-        tools, permissions and directory are not the site's to set.</p>
+        own option names, each passed as its flag: <code>model</code>, <code>fallbackModel</code>,
+        <code>systemPrompt</code>, <code>appendSystemPrompt</code>, <code>effort</code>,
+        <code>maxBudgetUsd</code>, <code>betas</code> and <code>disallowedTools</code>. Permissions,
+        directories and settings are not the site's to set.</p>
+
+        <p><code>tools</code> asks for Claude Code's built-in tools, and the visitor decides.
+        A tool runs only where they granted it after the command's <code>--</code>, and the
+        bridge tells them about any it was asked for and not given. Anything else after
+        <code>--</code> goes to Claude Code as written, and overrides what the site set.</p>
+
+        <Code code={`bunx @abide/bridge <site> <code> -- --tools WebSearch,WebFetch`} />
 
         <p>The visitor pairs once per visit by running a command, which dials out to the site.
         Asking with nothing paired is refused 409.</p>

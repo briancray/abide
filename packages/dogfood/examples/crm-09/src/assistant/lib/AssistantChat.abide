@@ -17,8 +17,11 @@ const events = reactive(() =>
 {#for event of events}
     {#if event.type === 'tool'}
         <li><span>tool call</span>
+            <p class="font-mono text-chrome">{event.name}</p></li>
+    {:else if event.type === 'input'}
+        <li><span>with input</span>
             <p class="font-mono text-chrome">
-                {event.name} {JSON.stringify(event.input)}
+                {JSON.stringify(event.input)}
             </p></li>
     {:else if event.type === 'result'}
         <li><span>your handler answered</span>

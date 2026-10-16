@@ -2,15 +2,26 @@
 // and a second that answers with what the tool said. The second turn is refused 400 unless the first
 // turn's thinking block came back with its signature, as the real API refuses a tool loop without it.
 //
+// A prompt holding `writing` starts the tool call and never finishes it: the stream stays open after the
+// call's `content_block_start`, the way a model still writing the call's input holds it.
+//
 // Spawned rather than served in the test's process: the DOM preload replaces `Response`.
 
-function sse(events: unknown[]): Response {
+/** `events` as an event stream, which stays open after them where `held`. */
+function sse(events: unknown[], held = false): Response {
     let body = ''
     for (const event of events)
         body += `event: ${(event as { type: string }).type}\ndata: ${JSON.stringify(event)}\n\n`
-    return new Response(body, {
-        headers: { 'content-type': 'text/event-stream' },
-    })
+    return new Response(
+        held
+            ? new ReadableStream({
+                  start(controller) {
+                      controller.enqueue(new TextEncoder().encode(body))
+                  },
+              })
+            : body,
+        { headers: { 'content-type': 'text/event-stream' } },
+    )
 }
 
 type Turn = { role: string; content: unknown }
@@ -20,6 +31,33 @@ const server = Bun.serve({
     async fetch(request) {
         const body = (await request.json()) as { messages: Turn[] }
         const last = body.messages.at(-1) as Turn
+        if (last.content === 'writing')
+            return sse(
+                [
+                    {
+                        type: 'message_start',
+                        message: {
+                            usage: { input_tokens: 1, output_tokens: 1 },
+                        },
+                    },
+                    {
+                        type: 'content_block_start',
+                        index: 0,
+                        content_block: {
+                            type: 'tool_use',
+                            id: 'toolu_1',
+                            name: 'post_invoices_whoami',
+                            input: {},
+                        },
+                    },
+                    {
+                        type: 'content_block_delta',
+                        index: 0,
+                        delta: { type: 'input_json_delta', partial_json: '{' },
+                    },
+                ],
+                true,
+            )
         if (typeof last.content === 'string')
             return sse([
                 {

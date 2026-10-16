@@ -3,9 +3,10 @@
 // turn and answer the MCP requests it makes from the `Toolbox` — in this request's scope, as this
 // asker (44.7) — so its tools are the site's and nothing of the visitor's machine is one.
 //
-// CONFIGURED BY CLAUDE CODE'S OWN OPTION NAMES, and only the ones that shape the answer. What would give
-// a site power over the visitor's machine — its own tools, permissions, directory, settings — is not an
-// option here at all: the bridge decides it (44.15, 44.16).
+// CONFIGURED BY CLAUDE CODE'S OWN OPTION NAMES, which the bridge lays on as their flags, and only the ones
+// that shape the answer. What would give a site power over the visitor's machine — permissions,
+// directory, settings — is not an option here at all, and its built-in `tools` are a request the visitor
+// grants or does not: the bridge decides (44.15, 44.16, 44.30).
 
 import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
@@ -28,13 +29,17 @@ import { mcpFailure } from './generatedSurfaces.ts'
 import { Inbox } from './Inbox.ts'
 import { request } from './requestScope.ts'
 
-/** The Claude Code options a site may set for a turn. */
+/** The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. */
 export type ClaudeCodeConfig = {
     model?: string
     fallbackModel?: string
     systemPrompt?: string
     appendSystemPrompt?: string
     effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+    maxBudgetUsd?: number
+    betas?: string[]
+    disallowedTools?: string[]
+    tools?: string[]
 }
 
 /** Whether this browser's bridge is connected, and the command that pairs one where it is not. */

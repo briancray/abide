@@ -78,6 +78,7 @@ export async function bridge(options: {
     site: string
     code: string
     claude?: string
+    claudeArgs?: string[]
     say?: (line: string) => void
     replyMilliseconds?: number
     silenceMilliseconds?: number
@@ -152,6 +153,14 @@ export async function bridge(options: {
         }, BATCH_MILLISECONDS)
     }
 
+    // A notice a turn repeats is said once, not once per turn.
+    const said = new Set<string>()
+    const sayOnce = (line: string): void => {
+        if (said.has(line)) return
+        said.add(line)
+        say(line)
+    }
+
     const turns = new Map<string, AbortController>()
     let asked = 0
     const secret = crypto.randomUUID()
@@ -220,10 +229,12 @@ export async function bridge(options: {
         try {
             await claudeTurn(turn, {
                 claude: options.claude ?? 'claude',
+                claudeArgs: options.claudeArgs ?? [],
                 mcpUrl: `http://127.0.0.1:${shim.port}/${secret}/${turn.id}`,
                 signal: controller.signal,
                 report: (event) =>
                     report({ type: 'event', turn: turn.id, event }),
+                say: sayOnce,
             })
             report({ type: 'end', turn: turn.id })
         } catch (thrown) {

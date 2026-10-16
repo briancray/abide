@@ -4,8 +4,9 @@
 // says what the tool answered.
 //
 // It records what it was run with to `$FAKE_RECORD` — its arguments, the prompt, its pid, and the
-// config — and a prompt holding `hang` prints one line and then waits to be killed. A prompt holding
-// `record` adds the MCP server's whole reply to the tool call to the record, and ends there.
+// config — and a prompt holding `hang` prints one line and then waits to be killed, one holding `writing`
+// starts the tool call and then waits. A prompt holding `record` adds the MCP server's whole reply to the
+// tool call to the record, and ends there.
 
 const args = process.argv.slice(2)
 const configPath = args[args.indexOf('--mcp-config') + 1] as string
@@ -40,6 +41,20 @@ print({ type: 'system', subtype: 'init' })
 text('checking')
 if (prompt.includes('hang')) await new Promise(() => {})
 
+print({
+    type: 'stream_event',
+    event: {
+        type: 'content_block_start',
+        index: 1,
+        content_block: {
+            type: 'tool_use',
+            id: 'toolu_1',
+            name: 'mcp__app__post_invoices_whoami',
+            input: {},
+        },
+    },
+})
+if (prompt.includes('writing')) await new Promise(() => {})
 print({
     type: 'assistant',
     message: {

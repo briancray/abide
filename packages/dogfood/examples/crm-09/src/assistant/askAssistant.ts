@@ -13,7 +13,8 @@ const recorded: Provider = {
         )
         const name = tool?.name ?? ''
         const input = { name: 'Ada' }
-        yield { type: 'tool', id: 'toolu_1', name, input }
+        yield { type: 'tool', id: 'toolu_1', name }
+        yield { type: 'input', id: 'toolu_1', input }
         const answered = await tools.call(name, input)
         yield { type: 'result', id: 'toolu_1', ...answered }
         yield { type: 'text', text: 'Ada Lovelace is at Analytical Engines.' }

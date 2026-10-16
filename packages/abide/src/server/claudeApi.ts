@@ -118,10 +118,19 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                         case 'message_start':
                             usage.input += inputOf(event.message.usage)
                             break
-                        case 'content_block_start':
-                            blocks[event.index] = event.content_block
+                        case 'content_block_start': {
+                            const block = event.content_block
+                            blocks[event.index] = block
                             partials[event.index] = ''
+                            // 44.29 — announced as the model starts writing it.
+                            if (block.type === 'tool_use')
+                                yield {
+                                    type: 'tool',
+                                    id: block.id as string,
+                                    name: block.name as string,
+                                }
                             break
+                        }
                         case 'content_block_delta': {
                             const block = blocks[event.index] as Block
                             const delta = event.delta
@@ -152,9 +161,8 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                             }
                             called.push(block)
                             yield {
-                                type: 'tool',
+                                type: 'input',
                                 id: block.id as string,
-                                name: block.name as string,
                                 input: block.input,
                             }
                             break

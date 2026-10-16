@@ -20,7 +20,8 @@ export type AssistantMessage = { role: 'user' | 'assistant'; content: string }
 /** What a conversation yields, the same from every provider. */
 export type AssistantEvent =
     | { type: 'text'; text: string }
-    | { type: 'tool'; id: string; name: string; input: unknown }
+    | { type: 'tool'; id: string; name: string }
+    | { type: 'input'; id: string; input: unknown }
     | { type: 'result'; id: string; text: string; failed: boolean }
     | {
           type: 'done'

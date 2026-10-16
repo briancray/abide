@@ -3066,10 +3066,13 @@ and MUST refuse 409 where none is paired.
 44.14 A code `claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that asked for
 it, once, and MUST NOT pair once it has expired.
 
-44.15 A bridge MUST run Claude Code with its built-in tools off, no setting source read and no MCP
-server but the bridge's own, in an empty directory removed when the run ends.
+44.15 A bridge MUST run Claude Code with no MCP server but the bridge's own, in an empty directory
+removed when the run ends, and with no built-in tool and no setting source the visitor did not pass
+it after `--`.
 
-44.16 A bridge MUST take from the site no Claude Code option `ClaudeCodeConfig` does not name.
+44.16 A bridge MUST lay each option a site sets but `tools` (44.30) on as Claude Code's flag of that
+name, MUST fail a turn whose config sets any option `ClaudeCodeConfig` does not name, and MUST lay
+an option the visitor passed after `--` over the site's.
 
 44.17 An MCP request a bridge's Claude Code makes MUST be answered from the `Toolbox` of the turn it
 was made in.
@@ -3104,3 +3107,10 @@ the stream is open.
 
 44.28 A bridge whose stream from `/__abide/bridge` carries no line for 45 seconds MUST end it and
 redial it as 44.25 says.
+
+44.29 A `Provider` MUST yield a tool call's `tool` event when the model starts writing the call,
+and its `input` event, with the same `id`, once the call is written.
+
+44.30 A built-in tool MUST be available to a turn only where the site's `tools` names it and the
+visitor's `--tools` does, MUST be approved without asking unless the visitor passed `--allowedTools`,
+and the bridge MUST say once each tool the site asked for that the visitor did not grant.

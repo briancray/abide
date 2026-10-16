@@ -321,9 +321,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- | --- |
 | `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21 |
 | `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string }` | One turn of the transcript a caller sends. | 44.3, 44.4 |
-| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call, its result, and the end. | 44.2, 44.11 |
+| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string } \| { type: 'input'; id: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call as it starts, its input once written, its result, and the end. | 44.2, 44.11, 44.29 |
 | `AssistantOptions` | `{ mcp?: boolean; maxTurns?: number }` | What `assistant` takes beside a provider. | 44.6, 44.8, 44.11 |
-| `Provider` | `{ run(messages: AssistantMessage[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<AssistantEvent> }` | What runs a conversation. | 44.2 |
+| `Provider` | `{ run(messages: AssistantMessage[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<AssistantEvent> }` | What runs a conversation. | 44.2, 44.29 |
 | `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<{ text: string; failed: boolean }> }` | The app's MCP tools, called as the asker. | 44.6, 44.7 |
 | `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean }; outputSchema: unknown }` | A tool as the app's MCP surface lists it. | 20.14, 20.16, 44.6 |
 
@@ -339,7 +339,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.24, 44.25, 44.28 |
-| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max' }` | The Claude Code options a site may set for a turn. | 44.16 |
+| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. | 44.16, 44.30 |
 | `claudeCode.bridgeCommand` | `() => { command: string; expires: number }` | The command that pairs a bridge with this browser. | 44.14 |
 | `claudeCode.bridge` | `() => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22 |
 | `BridgeStatus` | `{ paired: boolean; command: string \| undefined }` | Whether a bridge is paired, and the command that pairs one where none is. | 44.20 |

@@ -10,7 +10,9 @@ import {
     BRIDGE_PATH,
     RESUME_MILLISECONDS as BRIDGE_RESUME_MILLISECONDS,
 } from '../../bridge/src/bridge.ts'
+import { readLines } from '../../bridge/src/readLines.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
+import type { ClaudeCodeConfig } from '../src/server/claudeCode.ts'
 import {
     answerBridge,
     HEARTBEAT_MILLISECONDS,
@@ -32,7 +34,7 @@ const INVOICES = `import { cookies, POST } from '@abide/abide/server'
 export default POST(() => cookies().get('who') ?? 'nobody', { description: 'Who is asking.' })
 `
 
-const ASK = `import { assistant, type AssistantMessage, claudeApi, claudeCode, GET, POST } from '@abide/abide/server'
+const ASK = `import { assistant, type AssistantMessage, claudeApi, claudeCode, type ClaudeCodeConfig, GET, POST } from '@abide/abide/server'
 
 const HIDDEN = { clients: { mcp: false } }
 
@@ -41,12 +43,13 @@ export const bridge = GET(() => claudeCode.bridge(), { ...HIDDEN, timeout: Infin
 export const command = GET(() => claudeCode.bridgeCommand(), HIDDEN)
 
 export const ask = POST(
-    async function* ({ messages, via, maxTurns }: { messages: AssistantMessage[]; via: 'api' | 'code'; maxTurns?: number }) {
+    async function* ({ messages, via, maxTurns, config }: { messages: AssistantMessage[]; via: 'api' | 'code'; maxTurns?: number; config?: Record<string, unknown> }) {
         yield* assistant(
             messages,
             via === 'api'
                 ? claudeApi({ apiKey: 'key', baseURL: process.env.FAKE_API, model: 'claude-opus-5', max_tokens: 1000 })
-                : claudeCode({ model: 'sonnet', appendSystemPrompt: 'Be brief.' }),
+                // Loose, so an option no site may set reaches the bridge to be refused there.
+                : claudeCode((config ?? { model: 'sonnet', appendSystemPrompt: 'Be brief.' }) as ClaudeCodeConfig),
             { mcp: true, maxTurns },
         )
     },
@@ -114,11 +117,15 @@ async function pairingCode(caller: string): Promise<string> {
     return command.split(' ').at(-1) as string
 }
 
-/** A bridge paired with `caller`, once it has said it connected. */
+/**
+ * A bridge paired with `caller`, run with `claudeArgs` after its `--`, once it has said it connected —
+ * with what it says after that.
+ */
 async function pairBridge(
     caller: string,
     code?: string,
-): Promise<Bun.Subprocess> {
+    claudeArgs: string[] = [],
+): Promise<{ running: Bun.Subprocess; saysNext: () => Promise<string> }> {
     const running = Bun.spawn(
         [
             'bun',
@@ -127,18 +134,20 @@ async function pairBridge(
             code ?? (await pairingCode(caller)),
             '--claude',
             FAKE_CLAUDE,
+            ...(claudeArgs.length === 0 ? [] : ['--', ...claudeArgs]),
         ],
         { stderr: 'pipe', env: environment },
     )
     bridges.push(running)
-    let said = ''
-    for await (const chunk of running.stderr as ReadableStream<Uint8Array>) {
-        said += new TextDecoder().decode(chunk)
-        if (said.includes('\n')) break
+    const reader = (running.stderr as ReadableStream<Uint8Array>).getReader()
+    const saysNext = async (): Promise<string> => {
+        const { value } = await reader.read()
+        return new TextDecoder().decode(value)
     }
+    const said = await saysNext()
     if (!said.startsWith('Connected'))
         throw new Error(`the bridge did not connect: ${said}`)
-    return running
+    return { running, saysNext }
 }
 
 function ask(
@@ -146,6 +155,7 @@ function ask(
     via: 'api' | 'code',
     content: string,
     maxTurns?: number,
+    config?: ClaudeCodeConfig,
 ): Promise<Response> {
     return Bun.fetch(`${base}/ask`, {
         method: 'POST',
@@ -157,6 +167,7 @@ function ask(
         body: JSON.stringify({
             via,
             maxTurns,
+            config,
             messages: [
                 { role: 'user', content: 'earlier question' },
                 { role: 'assistant', content: 'earlier answer' },
@@ -197,12 +208,8 @@ test('the relay answers 404 until the app mints a pairing code — 44.19, 36.7',
 test('both providers play one conversation as one event sequence, tools called as the asker — 44.2, 44.7, 44.17', async () => {
     const expected = [
         { type: 'text', text: 'checking' },
-        {
-            type: 'tool',
-            id: 'toolu_1',
-            name: 'post_invoices_whoami',
-            input: {},
-        },
+        { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami' },
+        { type: 'input', id: 'toolu_1', input: {} },
         { type: 'result', id: 'toolu_1', text: '"ada"', failed: false },
         { type: 'text', text: 'saw "ada"' },
         { type: 'done', stop: 'end_turn', usage: { input: 3, output: 5 } },
@@ -222,15 +229,43 @@ test('both providers play one conversation as one event sequence, tools called a
 test('a conversation out of turns ends on max_turns without running the pending call — 44.11', async () => {
     expect(await events(await ask('one', 'api', 'who am I?', 1))).toEqual([
         { type: 'text', text: 'checking' },
-        {
-            type: 'tool',
-            id: 'toolu_1',
-            name: 'post_invoices_whoami',
-            input: {},
-        },
+        { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami' },
+        { type: 'input', id: 'toolu_1', input: {} },
         { type: 'done', stop: 'max_turns', usage: { input: 1, output: 2 } },
     ])
 })
+
+/** The events `answer` yields until one is a `tool`, or until two seconds pass with none. */
+async function eventsUntilTool(answer: Response): Promise<unknown[]> {
+    const lines = readLines(answer.body as ReadableStream<Uint8Array>)
+    const deadline = Bun.sleep(2_000).then(() => undefined)
+    const found: { type: string }[] = []
+    while (found.at(-1)?.type !== 'tool') {
+        const read = await Promise.race([lines.next(), deadline])
+        if (read === undefined || read.done) break
+        if (read.value !== '') found.push(JSON.parse(read.value))
+    }
+    await lines.return(undefined)
+    return found
+}
+
+// 44.29 — A CALL IS ANNOUNCED AS THE MODEL STARTS WRITING IT. Both models start `post_invoices_whoami`
+// and never finish writing it, so the `tool` is all a page can have seen, and no `input` follows. THE
+// REVERTS: yield `tool` at `content_block_stop` in `claudeApi`, or report it from the finished
+// `assistant` line in the bridge, and that provider yields nothing for two seconds.
+test('a tool call is announced before its input is written — 44.29', async () => {
+    const started = [
+        { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami' },
+    ]
+    expect(await eventsUntilTool(await ask('one', 'api', 'writing'))).toEqual(
+        started,
+    )
+    await pairBridge('one')
+    expect(await eventsUntilTool(await ask('one', 'code', 'writing'))).toEqual([
+        { type: 'text', text: 'checking' },
+        ...started,
+    ])
+}, 30_000)
 
 // 44.20 — THE PAGE SEES THE PAIRING LAND. The status stream says not ready, with the command, and then
 // ready once a bridge connects with that command's code. THE REVERT: drop `wakeWatchers` from `pair`;
@@ -289,9 +324,9 @@ test('nothing paired refuses 409, and a pairing code pairs only once — 44.13, 
     expect(again.stderr).toContain('403')
 }, 30_000)
 
-// 44.5, 44.15, 44.16 — CLAUDE CODE RUNS ALONE on the visitor's machine: its own tools off, no settings read,
-// only the bridge's MCP server, in a directory of its own that is gone once the run is, and with only
-// what the site may set; the transcript reaches it as ONE message. THE REVERTS: send the last turn
+// 44.5, 44.15, 44.16 — CLAUDE CODE RUNS ALONE on the visitor's machine where they gave it nothing: its own
+// tools off, no settings read, only the bridge's MCP server, in a directory of its own that is gone once
+// the run is, and with what the site may set; the transcript reaches it as ONE message. THE REVERTS: send the last turn
 // alone, and the prompt holds no `earlier answer`; drop the `rm`, and the config outlives the run.
 test('Claude Code runs alone, over the whole transcript as one message — 44.5, 44.15, 44.16', async () => {
     await pairBridge('four')
@@ -314,6 +349,51 @@ test('Claude Code runs alone, over the whole transcript as one message — 44.5,
     expect(after('--append-system-prompt')).toBe('Be brief.')
     expect(record.config.mcpServers.app.url).toStartWith('http://127.0.0.1:')
     expect(await Bun.file(record.configPath).exists()).toBe(false)
+}, 30_000)
+
+// 44.15, 44.30 — THE SITE ASKS, THE VISITOR GRANTS: a built-in tool is the turn's only where both named
+// it, approved as granted, and the bridge says once what it was asked for and not given; an option the
+// visitor set outranks the site's. THE REVERTS: lay the site's `tools` on unfiltered, and `--tools`
+// reads `WebSearch,WebFetch`; lay the visitor's options before the site's, and the last `--model` is
+// `sonnet`.
+test('a built-in tool runs only where the site asked and the visitor granted — 44.15, 44.30', async () => {
+    const { saysNext } = await pairBridge('six', undefined, [
+        '--tools',
+        'WebSearch',
+        '--model',
+        'opus',
+    ])
+    const config = { model: 'sonnet', tools: ['WebSearch', 'WebFetch'] }
+    await events(await ask('six', 'code', 'who am I?', undefined, config))
+    const { args } = (await Bun.file(RECORD).json()) as { args: string[] }
+    expect(args[args.indexOf('--tools') + 1]).toBe('WebSearch')
+    const allowed = args.indexOf('--allowedTools')
+    expect(args.slice(allowed + 1, allowed + 3)).toEqual([
+        'mcp__app',
+        'WebSearch',
+    ])
+    expect(args[args.lastIndexOf('--model') + 1]).toBe('opus')
+    expect(await saysNext()).toContain('asked for WebFetch')
+    await events(await ask('six', 'code', 'who am I?', undefined, config))
+    const second = saysNext()
+    expect(
+        await Promise.race([second, Bun.sleep(200).then(() => 'nothing')]),
+    ).toBe('nothing')
+}, 30_000)
+
+// 44.16 — AN OPTION THAT REACHES THE VISITOR'S MACHINE IS NOT THE SITE'S TO SET: the turn fails naming
+// it, before Claude Code runs. THE REVERT: lay every option on as its flag, and the fake runs with
+// `--add-dir /`.
+test('a site setting an option it may not fails the turn — 44.16', async () => {
+    await pairBridge('seven')
+    await Bun.file(RECORD)
+        .delete()
+        .catch(() => {})
+    const answer = await ask('seven', 'code', 'who am I?', undefined, {
+        addDir: ['/'],
+    } as ClaudeCodeConfig)
+    expect(await answer.text()).toContain('takes no `addDir` from a site')
+    expect(await Bun.file(RECORD).exists()).toBe(false)
 }, 30_000)
 
 // 44.18 — A CALLER WHO HANGS UP ENDS THE RUN on the visitor's machine: the page's answer canceled once
