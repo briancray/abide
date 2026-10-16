@@ -8,7 +8,7 @@
 // test here reports a build that succeeded over eighty-five pages whose imports cannot resolve.
 
 import { afterAll, expect, test } from 'bun:test'
-import { spawned } from 'harness/gate'
+import { spawned } from '@abide/harness/gate'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
@@ -90,4 +90,42 @@ test('asking for help is a success and an unknown command is not — 38.12', asy
     const unknown = await spawned(['bun', BIN, 'frobnicate'])
     expect(unknown.exitCode).toBe(1)
     expect(unknown.stderr).toContain("unknown command 'frobnicate'")
+})
+
+// THE REVERT: call `parseArgs` bare again, and the refusal is bun's uncaught `TypeError` with its
+// source frame — exit 1 still, so the line is what the test reads.
+test('a flag nobody reads is one line and the usage, not a stack — 38.113', async () => {
+    for (const [argv, line] of [
+        [['help', '--bogus'], "abide: unknown option '--bogus'"],
+        [
+            ['start', '--port'],
+            "abide: option '--port <value>' argument missing",
+        ],
+    ] as const) {
+        const refused = await spawned(['bun', BIN, ...argv])
+        expect(refused.exitCode).toBe(1)
+        expect(refused.stderr.split('\n')[0]).toBe(line)
+        expect(refused.stderr).toContain('abide <command>')
+        expect(refused.stderr).not.toContain('TypeError')
+    }
+})
+
+// THE REVERT: drop the nearest-command search, and `chek` prints the whole usage with no name in it.
+test('a near miss names the command it was near — 38.114', async () => {
+    const near = await spawned(['bun', BIN, 'chek'])
+    expect(near.exitCode).toBe(1)
+    expect(near.stderr.trim()).toBe(
+        "abide: unknown command 'chek' — did you mean `abide check`?",
+    )
+})
+
+// THE REVERT: drop the `version` flag, and `--version` is refused as an unknown option.
+test('--version prints the package version — 38.115', async () => {
+    const { version } = await Bun.file(
+        new URL('../package.json', import.meta.url),
+    ).json()
+    for (const flag of ['--version', '-v']) {
+        const said = await spawned(['bun', BIN, flag])
+        expect(`${said.exitCode} ${said.stdout.trim()}`).toBe(`0 ${version}`)
+    }
 })

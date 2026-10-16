@@ -1,15 +1,23 @@
 import { type Dirent, readdirSync, realpathSync, statSync } from 'node:fs' // Bun exposes no sync directory listing or realpath of its own
 import { basename, dirname, join, resolve } from 'node:path' // Bun exposes no path helpers of its own
-import { type Node, NodeFlags, SyntaxKind } from 'typescript/unstable/ast'
+import {
+    getTouchingPropertyName,
+    type Node,
+    NodeFlags,
+    SyntaxKind,
+} from 'typescript/unstable/ast'
 import {
     API,
     type Symbol as CheckedSymbol,
     type Checker,
+    type CompletionEntry,
     type CompletionInfo,
+    CompletionItemKind,
     NodeBuilderFlags,
     type Project,
     SignatureKind,
     SymbolFlags,
+    type Type,
 } from 'typescript/unstable/async'
 import { placeOf } from '#server/placement.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
@@ -24,15 +32,17 @@ import {
     moduleConfigShadow,
 } from './checkedShadow.ts'
 import type { Finding } from './Finding.ts'
+import { isIgnored } from './isIgnored.ts'
 import { CHECKED_VALUES } from './Lowering.ts'
 import { diagnosisAt, lineOf } from './lineOf.ts'
 import type { AbideFile } from './parseAbide.ts'
-import { projectShadow } from './projectShadow.ts'
+import { projectShadow, type Span } from './projectShadow.ts'
 import { abideIn } from './reactiveTypes.ts'
 import type { ParsedSource, ReadSource } from './readSources.ts'
 import { readsIn, type ShadowSpans } from './readsIn.ts'
 import { CHECKED_SUFFIX, SHADOW_SUFFIX, ShadowMap } from './ShadowMap.ts'
 import { SOURCE_SUFFIX } from './splitImports.ts'
+import { type TemplateContext, templateContext } from './templateContext.ts'
 import { templateWarnings } from './templateWarnings.ts'
 
 // Where 31.3 gets its answer. A `.abide` file is projected into a SHADOW `.ts` held in a virtual
@@ -639,6 +649,7 @@ export class TypeSession {
                     servers: projection.servers,
                     scripts: projection.scripts,
                     positions: projection.positions,
+                    items: new Set(projection.items.values()),
                 },
             })
         }
@@ -665,7 +676,7 @@ export class TypeSession {
                 // a wrong page, with nothing about it saying so.
                 if (sourceFile === undefined)
                     throw new Error(
-                        `abide: ${source.path} is not inside the project ${this.tsconfig}, so no name in it can be typed (31.3). Give the app a tsconfig whose include reaches it.`,
+                        `abide: ${source.path} is not inside the project ${this.tsconfig}, so no name in it can be typed (RULEBOOK 31.3). Give the app a tsconfig whose include reaches it.`,
                     )
                 const read = await readsIn(
                     checker,
@@ -676,19 +687,25 @@ export class TypeSession {
                     source.file,
                 )
                 answers[at] = read.answer
-                for (const warning of read.warnings)
-                    warnings.push(
-                        diagnosisAt(
-                            source.path,
-                            source.text,
-                            query.map.toSource(
-                                query.map.shadowPath,
-                                warning.at,
-                            ),
-                            'warning',
-                            warning.message,
-                        ),
+                for (const warning of read.warnings) {
+                    const offset = query.map.toSource(
+                        query.map.shadowPath,
+                        warning.at,
                     )
+                    if (
+                        source.text === undefined ||
+                        !isIgnored(source.text, offset, warning.message)
+                    )
+                        warnings.push(
+                            diagnosisAt(
+                                source.path,
+                                source.text,
+                                offset,
+                                'warning',
+                                warning.message,
+                            ),
+                        )
+                }
             }),
         )
         return { answers, warnings }
@@ -942,8 +959,18 @@ export class TypeSession {
                             ),
                         ),
                 )
-        const found = [...refused, ...(await Promise.all(reports)).flat()]
-        found.sort(byPlace)
+        const reported = [...refused, ...(await Promise.all(reports)).flat()]
+        reported.sort(byPlace)
+        // A component's props type is checked twice — in its `props` call and in what a tag is held
+        // to (`checkedShadow`) — and both copies place a finding in it at the one place written.
+        const found: Diagnosis[] = []
+        const placed = new Set<string>()
+        for (const diagnosis of reported) {
+            const key = `${diagnosis.path}:${diagnosis.line}:${diagnosis.column}:${diagnosis.code}:${diagnosis.message}`
+            if (placed.has(key)) continue
+            placed.add(key)
+            found.push(diagnosis)
+        }
         return { diagnoses: found, refused: refusing }
     }
 
@@ -976,9 +1003,9 @@ export class TypeSession {
      * The members that may be written at `offset` in a `.abide`, or `undefined` where none can be.
      *
      * 38.98 — ASKED WHERE A HOVER IS (`askedAt`), so `config().` offers the fields 27.13 declared and
-     * a name read by name offers its value's members (31.1). MEMBERS ALONE: at an identifier the
-     * API rejects ("completion list needs auto imports"), which the language server answers as
-     * nothing offered.
+     * a name read by name offers its value's members (31.1). MEMBERS ALONE in a script or an
+     * expression: at an identifier the API rejects ("completion list needs auto imports"), which
+     * the language server answers as nothing offered. Markup is answered apart (38.117).
      */
     async complete(
         path: string,
@@ -986,6 +1013,8 @@ export class TypeSession {
         offset: number,
         triggerCharacter?: string,
     ): Promise<CompletionInfo | undefined> {
+        const template = templateContext(text, offset)
+        if (template !== undefined) return this.completeTemplate(path, template)
         const at = this.askedAt(path, text, offset)
         if (at === undefined) return undefined
         return at.project.checker.getCompletionsAtPosition(
@@ -993,6 +1022,67 @@ export class TypeSession {
             at.asked.position,
             { triggerCharacter },
         )
+    }
+
+    /**
+     * 38.117 — what markup offers: a block keyword, a component in scope, or a component's props.
+     *
+     * A PROP IS ASKED OF THE LAST LOWERING, by the component's name: the tag being typed is text the
+     * parser refuses, and the import the name resolves through is the same in the lowering before it.
+     */
+    private async completeTemplate(
+        path: string,
+        template: TemplateContext,
+    ): Promise<CompletionInfo> {
+        const entries: CompletionEntry[] = []
+        if (template.kind !== 'attribute') {
+            const kind =
+                template.kind === 'block'
+                    ? CompletionItemKind.Keyword
+                    : CompletionItemKind.Class
+            for (const name of template.offered) entries.push({ name, kind })
+            return { isIncomplete: false, entries }
+        }
+        const lowered = this.loweredForInspect.get(this.keyOf(path))
+        const project = this.latest
+        if (lowered === undefined || project === undefined)
+            return { isIncomplete: false, entries }
+        const checker = project.checker
+        const found = await checker.resolveName(
+            template.tag,
+            SymbolFlags.Value,
+            { document: lowered.map.shadowPath, position: 0 },
+        )
+        const record =
+            found === undefined
+                ? undefined
+                : await propsRecordOf(
+                      checker,
+                      await aliasedSymbol(checker, found),
+                  )
+        if (record === undefined) return { isIncomplete: false, entries }
+        const unwritten = (await checker.getPropertiesOfType(record)).filter(
+            (prop) => !template.written.includes(prop.name),
+        )
+        for (const entry of await Promise.all(
+            unwritten.map(async (prop) => {
+                const type = await checker.getTypeOfSymbol(prop)
+                return {
+                    name: prop.name,
+                    kind: CompletionItemKind.Property,
+                    detail:
+                        type === undefined
+                            ? undefined
+                            : await checker.typeToString(
+                                  type,
+                                  undefined,
+                                  NodeBuilderFlags.NoTruncation,
+                              ),
+                }
+            }),
+        ))
+            entries.push(entry)
+        return { isIncomplete: false, entries }
     }
 
     /**
@@ -1058,6 +1148,180 @@ export class TypeSession {
             signature: signature.replaceAll(`${CHECKED_VALUES}.`, ''),
             documentation,
             definitions,
+        }
+    }
+
+    /**
+     * Every place the name at `offset` in a `.abide` is written, across the files the checker holds,
+     * or `undefined` where nothing is named there.
+     *
+     * 38.116 — ASKED OF EVERY PLACE THE CHECKER READS THE OFFSET AT (`ShadowMap.placesFrom`), because
+     * the checked module rewrites a name read by name into another symbol's read: the projection is
+     * where a reactive's markup uses are the declaration's references. A place is kept only where
+     * both layers copied it from the author's text and that text is the name, so scaffolding a
+     * lowering wrote is never a place to rename.
+     *
+     * AND ASKED AGAIN WHERE A REFERENCE IS TEXT THE CHECKED MODULE COPIES TWICE. A component's props
+     * type is a second copy of its `props` call (`checkedShadow`), and a tag's keys are typed by
+     * that copy: the checker answers them as another symbol's references, so a reference landing
+     * on one copy is asked at every place the author's text is read.
+     */
+    async references(
+        path: string,
+        text: string,
+        offset: number,
+    ): Promise<References | undefined> {
+        const lowered = this.loweredForInspect.get(this.keyOf(path))
+        const project = this.latest
+        if (
+            lowered === undefined ||
+            lowered.text !== text ||
+            project === undefined
+        )
+            return undefined
+        const asked = lowered.map.placesFrom(offset)
+        if (asked.length === 0) return undefined
+        const askedAt = new Set<string>()
+        for (const place of asked)
+            askedAt.add(`${place.path}:${place.position}`)
+        let name: Place | undefined
+        let spelled = ''
+        let renamable = true
+        const seen = new Set<string>()
+        const occurrences: Occurrence[] = []
+        for (let index = 0; index < asked.length; index += 1) {
+            const { path: file, position } = asked[index] as {
+                path: string
+                position: number
+            }
+            const sourceFile = await project.program.getSourceFile(file)
+            if (sourceFile === undefined) continue
+            const node = getTouchingPropertyName(sourceFile, position)
+            if (node.kind !== SyntaxKind.Identifier) continue
+            const written = node.getText(sourceFile)
+            if (name === undefined) {
+                const copied = this.copiedSpan(node, written)
+                name = copied === undefined ? undefined : placeOfSpan(copied)
+                spelled = written
+            }
+            const entries = await project.checker.getReferencedSymbolsForNode(
+                node,
+                position,
+            )
+            for (const entry of entries) {
+                const definition = await entry.definition.resolve(project)
+                if (definition === undefined) continue
+                const declaredIn = definition.getSourceFile().fileName
+                if (!this.authored(declaredIn)) renamable = false
+                const declared = (definition as { name?: Node }).name
+                const references = await Promise.all(
+                    entry.references.map((handle) => handle.resolve(project)),
+                )
+                for (const reference of references) {
+                    if (reference === undefined) continue
+                    const copied = this.copiedSpan(reference, written)
+                    if (copied === undefined) continue
+                    const declaration =
+                        declared !== undefined &&
+                        declared.pos === reference.pos &&
+                        declaredIn === reference.getSourceFile().fileName
+                    // Text the checker reads at more than one place is asked at every one.
+                    const copies = copied.map?.placesFrom(copied.start) ?? []
+                    if (copies.length > 2)
+                        for (const place of copies) {
+                            const at = `${place.path}:${place.position}`
+                            if (askedAt.has(at)) continue
+                            askedAt.add(at)
+                            asked.push(place)
+                        }
+                    const placed = placeOfSpan(copied)
+                    const key = `${placed.path}:${placed.start.line}:${placed.start.column}`
+                    if (seen.has(key)) continue
+                    seen.add(key)
+                    const holder = reference.parent
+                    const declaresHolder =
+                        definition.pos === holder.pos &&
+                        declaredIn === reference.getSourceFile().fileName
+                    const shorthand =
+                        holder.kind ===
+                            SyntaxKind.ShorthandPropertyAssignment ||
+                        (holder.kind === SyntaxKind.BindingElement &&
+                            (holder as { propertyName?: Node }).propertyName ===
+                                undefined)
+                    occurrences.push({
+                        ...placed,
+                        declaration,
+                        // A shorthand names a property and a binding at once, and renaming one
+                        // writes the other out beside it: the binding element declares the local
+                        // and the shorthand assignment the property.
+                        shorthand: !shorthand
+                            ? undefined
+                            : declaresHolder ===
+                                (holder.kind === SyntaxKind.BindingElement)
+                              ? 'local'
+                              : 'property',
+                    })
+                }
+            }
+        }
+        if (name === undefined) return undefined
+        return { name, written: spelled, renamable, occurrences }
+    }
+
+    /**
+     * Whether a file the checker read is one an author wrote and can edit: neither a library's
+     * declaration, nor a dependency's, nor scaffolding this session serves that stands for no `.abide`.
+     */
+    private authored(fileName: string): boolean {
+        if (fileName.endsWith('.d.ts') || fileName.includes('/node_modules/'))
+            return false
+        return (
+            ShadowMap.fileFor(this.canonical(fileName)) !== undefined ||
+            !this.shadows.has(this.keyOf(fileName))
+        )
+    }
+
+    /**
+     * Where a node the checker read stands in the file the author wrote, with that file's map where
+     * it is a `.abide`, or `undefined` where the author did not write `name` there: in scaffolding,
+     * or in a file this session serves.
+     */
+    private copiedSpan(node: Node, name: string): CopiedSpan | undefined {
+        const file = node.getSourceFile()
+        let start = node.getStart(file)
+        let end = node.end
+        // A string literal names a property by its text, inside the quotes.
+        if (node.kind === SyntaxKind.StringLiteral) {
+            start += 1
+            end -= 1
+        }
+        const canonical = this.canonical(file.fileName)
+        const abidePath = ShadowMap.fileFor(canonical)
+        if (abidePath === undefined) {
+            if (!this.authored(file.fileName)) return undefined
+            if (file.text.slice(start, end) !== name) return undefined
+            return {
+                path: file.fileName,
+                text: file.text,
+                start,
+                end,
+                map: undefined,
+            }
+        }
+        const lowered = this.loweredForInspect.get(this.keyOf(abidePath))
+        const span = lowered?.map.copiedToSource(canonical, start, end)
+        if (
+            lowered === undefined ||
+            span === undefined ||
+            lowered.text.slice(span.start, span.end) !== name
+        )
+            return undefined
+        return {
+            path: abidePath,
+            text: lowered.text,
+            start: span.start,
+            end: span.end,
+            map: lowered.map,
         }
     }
 
@@ -1190,6 +1454,45 @@ export type Inspection = {
 }
 
 /**
+ * The name under a cursor and every place it is written.
+ *
+ * 38.116 — `name` is where the cursor's own name stands; `renamable` is false where any symbol it
+ * names is declared somewhere an author does not write.
+ */
+export type References = {
+    name: Place
+    /** The name as it is written. */
+    written: string
+    renamable: boolean
+    occurrences: Occurrence[]
+}
+
+/**
+ * One place a name is written: whether it is where the name is declared, and where it is a
+ * shorthand, which side of it a rename renames — the `local` binding or the `property`.
+ */
+export type Occurrence = Place & {
+    declaration: boolean
+    shorthand: 'local' | 'property' | undefined
+}
+
+/** A span of a file the author wrote, and the map of the `.abide` it is in, where it is in one. */
+type CopiedSpan = Span & {
+    path: string
+    text: string
+    map: ShadowMap | undefined
+}
+
+/** A `CopiedSpan` as lines and columns. */
+function placeOfSpan(span: CopiedSpan): Place {
+    return {
+        path: span.path,
+        start: lineOf(span.text, span.start),
+        end: lineOf(span.text, span.end),
+    }
+}
+
+/**
  * The props type a component's tag is held to, printed.
  *
  * 33.4 — the record its stand-in is called with.
@@ -1198,16 +1501,23 @@ async function propsTypeOf(
     checker: Checker,
     component: CheckedSymbol,
 ): Promise<string> {
+    const record = await propsRecordOf(checker, component)
+    return record === undefined
+        ? 'any'
+        : checker.typeToString(record, undefined, NodeBuilderFlags.NoTruncation)
+}
+
+/** The record a component is called with — the props its tag is held to (33.4). */
+async function propsRecordOf(
+    checker: Checker,
+    component: CheckedSymbol,
+): Promise<Type | undefined> {
     const type = await checker.getTypeOfSymbol(component)
     const call =
         type === undefined
             ? undefined
             : (await checker.getSignaturesOfType(type, SignatureKind.Call))[0]
-    const record =
-        call === undefined ? undefined : await checker.getParameterType(call, 0)
-    return record === undefined
-        ? 'any'
-        : checker.typeToString(record, undefined, NodeBuilderFlags.NoTruncation)
+    return call === undefined ? undefined : checker.getParameterType(call, 0)
 }
 
 /**

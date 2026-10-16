@@ -186,6 +186,12 @@ function scan(
     while (true) {
         let kind = scanner.scan()
         if (kind === SyntaxKind.EndOfFile) return
+        // A `#` NAMING NOTHING scans as an empty private name and the scanner does not move past
+        // it, so `{#` typed at the end of a file never finished parsing. It is stepped over.
+        if (scanner.getTokenEnd() === scanner.getTokenStart()) {
+            scanner.resetTokenState(scanner.getTokenEnd() + 1)
+            continue
+        }
         if (
             expectsOperand &&
             (kind === SyntaxKind.SlashToken ||

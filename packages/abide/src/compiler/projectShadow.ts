@@ -60,6 +60,8 @@ export type Projection = {
      * Per `{#for}` block, the position of its `by` key, which stands inside the loop and sees the row.
      */
     keys: Map<object, Position>
+    /** 32.67 — per `{#for}` block, where its row's item binding starts. */
+    items: Map<object, number>
     /**
      * 32.34 — per invocation, the position of its tag: a read there is a component chosen by a value.
      */
@@ -265,6 +267,7 @@ function project(file: AbideFile): Projection {
     const positions: Position[] = []
     const slots = new Map<object, Position>()
     const keys = new Map<object, Position>()
+    const items = new Map<object, number>()
     const tags = new Map<object, Position>()
     let inlineProps = false
     // Spans are written in ascending order, so the table is sorted as it is pushed.
@@ -355,10 +358,23 @@ function project(file: AbideFile): Projection {
                 if (attribute.expression) refused.push(attribute)
                 continue
             }
-            // The key is scaffolding, and a finding on it — a value of the wrong type, a prop the
-            // child does not declare — is placed at the value it keys, or a literal's name.
-            place(file.origins.holders.get(attribute), 0)
-            text += `${JSON.stringify(key)}: `
+            // 38.116 — A KEY A NAME CAN SPELL IS COPIED FROM THE ATTRIBUTE'S NAME, so the prop's
+            // references reach the tag that passes it. A finding on the key — a value of the wrong
+            // type, a prop the child does not declare — is still placed at the value it keys, or a
+            // literal's name: the empty run at the key's start, after the name's own, is the one a
+            // finding there maps back by.
+            const named = file.origins.names.get(attribute)
+            const holder = file.origins.holders.get(attribute)
+            if (named !== undefined && isNamedAlone(key)) {
+                const keyAt = text.length
+                copied(key, named + attribute.name.length - key.length)
+                if (holder !== undefined)
+                    origins.push({ at: keyAt, source: holder, length: 0 })
+            } else {
+                place(holder, 0)
+                text += JSON.stringify(key)
+            }
+            text += ': '
             if (attribute.expression) prop(attribute)
             else text += `${JSON.stringify(attribute.value)},\n`
         }
@@ -371,6 +387,13 @@ function project(file: AbideFile): Projection {
             text += ',\n'
         }
         text += '}))\n'
+        // 38.116 — a close tag of its own is a second read of the name, so it is renamed with it.
+        const closed = file.origins.closes.get(node)
+        if (closed !== undefined) {
+            text += ';('
+            copied(node.tag, closed)
+            text += ')\n'
+        }
         for (const attribute of refused)
             slots.set(
                 attribute,
@@ -537,7 +560,7 @@ function project(file: AbideFile): Projection {
             // the binding's. The index is a `number`: `= 0` alone types it the literal `0`.
             const bound = file.origins.bindings.get(node)
             text += 'for (const '
-            copied(node.item, bound?.item)
+            items.set(node, copied(node.item, bound?.item).start)
             text += ` of ${ROWS_OF}(${subject})) {\n`
             if (node.index !== '') {
                 text += 'const '
@@ -589,6 +612,7 @@ function project(file: AbideFile): Projection {
         positions: new PositionTable(positions),
         slots,
         keys,
+        items,
         tags,
         origins,
     }
@@ -800,7 +824,7 @@ function refuseTwoFaces(
         (binding.imported === 'default' || binding.imported === '*')
     )
         throw new Error(
-            `abide: <script server> imports ${binding.local} from '${statement.specifier}' as another script block of its file does — a server block's .abide is the function binding its props (34.16), the other block's is its module (32.17), and one name cannot be both. Import it under another name in the <script server>. RULEBOOK 34.22.`,
+            `abide: <script server> imports ${binding.local} from '${statement.specifier}' as another script block of its file does — a server block's .abide is the function binding its props (RULEBOOK 34.16), the other block's is its module (RULEBOOK 32.17), and one name cannot be both. Import it under another name in the <script server>. RULEBOOK 34.22.`,
         )
 }
 

@@ -265,3 +265,31 @@ const answer = 42
         await checker.close()
     }
 }, 60_000)
+
+// 38.34 — WHAT THE PARSER REFUSES OF A FILE IS ITS TEXT'S, and the text is the editor's: the layout's
+// parse of the disk is not a tree refusal, so a saved file the parser refuses is published once,
+// and an edit that fixes it clears it before the save. THE REVERT: keep the layout's parse refusals
+// among `refused`; the saved file reads the one refusal twice, and the fixed text still reads it.
+test('a file the parser refuses is refused once, as the editor holds it — 38.34', async () => {
+    const BROKEN = '<p>{:finally}</p>'
+    const app = appFixture({
+        'index.abide': '<p>home</p>',
+        'broken/index.abide': BROKEN,
+    })
+    const checker = await openChecker(app)
+    const broken = `${app}/broken/index.abide`
+    const said = async (text: string): Promise<string[]> => {
+        const messages: string[] = []
+        for (const diagnosis of await checkSource(checker, broken, text))
+            messages.push(diagnosis.message)
+        return messages
+    }
+    try {
+        const saved = await said(BROKEN)
+        expect(saved).toHaveLength(1)
+        expect(saved[0]).toContain('32.56')
+        expect(await said('<p>fixed</p>')).toEqual([])
+    } finally {
+        await checker.close()
+    }
+}, 60_000)

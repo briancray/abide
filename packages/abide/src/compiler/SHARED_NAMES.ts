@@ -24,6 +24,8 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     // 32.5, 32.8 — what a `bind:` operand holds, which the markup writes into the tag.
     'boundValue',
     'groupHolds',
+    // 32.61 — a bound `<select>`'s options, marked where its value selects them.
+    'selectedMarkup',
     // 32.6, 33.6, 33.7 — a component's `bind:`, and the cell a child writing that prop builds.
     'boundProp',
     'propCell',

@@ -33,6 +33,8 @@ export const playlist = POST(async ({ id }: { id: string }) => new Response(\`#E
     description: 'A playlist.',
 })
 
+export const stamped = GET(() => ({ at: new Date(), count: 1 }), { description: 'When.' })
+
 export const tagged = POST(({ id }: { id: string }) => Response.json({ id }), {
     description: 'Back on.',
     clients: { mcp: true },
@@ -108,6 +110,7 @@ test('the OpenAPI document is derived from the route table — 20.1, 20.6, 20.11
         '/invoices/pay',
         '/invoices/playlist',
         '/invoices/shout',
+        '/invoices/stamped',
         '/invoices/tagged',
     ])
     const get = document.paths['/invoices/getInvoice']?.get
@@ -148,7 +151,7 @@ test('every path parameter is declared, an optional one as required — 20.6', a
 // args as a resource; `get_invoices_listInvoices` is not a tool.
 // 16.37 — AND ONE TYPED AS RETURNING A `Response` IS NEITHER unless its `clients` puts it back:
 // `playlist` is withheld, `tagged` listed. THE REVERT: default `mcp` to true in `declaringMethod`;
-// `invoices_playlist` is listed, seven tools rather than six.
+// `invoices_playlist` is listed, eight tools rather than seven.
 test('MCP lists every handler as a tool — 20.9', async () => {
     const init = (await mcp('initialize')).result as {
         capabilities: Record<string, unknown>
@@ -157,14 +160,17 @@ test('MCP lists every handler as a tool — 20.9', async () => {
     const tools = (
         (await mcp('tools/list')).result as { tools: { name: string }[] }
     ).tools
-    expect(tools.map((tool) => tool.name).sort()).toEqual([
-        'get_invoices_getInvoice',
-        'get_invoices_listInvoices',
-        'post_invoices_guarded',
-        'post_invoices_pay',
-        'post_invoices_shout',
-        'post_invoices_tagged',
-    ])
+    expect(tools.map((tool) => tool.name).sort()).toEqual(
+        [
+            'get_invoices_getInvoice',
+            'get_invoices_listInvoices',
+            'post_invoices_guarded',
+            'post_invoices_pay',
+            'get_invoices_stamped',
+            'post_invoices_shout',
+            'post_invoices_tagged',
+        ].sort(),
+    )
     const resources = (await mcp('resources/list')).error as { code: number }
     expect(resources.code).toBe(-32601)
 })
@@ -225,4 +231,117 @@ test('a cross-origin POST to the MCP endpoint is refused, and a same-origin one 
     }
     expect(called.isError).toBe(false)
     expect(JSON.parse(called.content[0]?.text as string)).toEqual({ paid: 5 })
+})
+
+type Tool = {
+    name: string
+    annotations?: Record<string, boolean>
+    outputSchema?: unknown
+}
+
+async function listedTools(): Promise<Map<string, Tool>> {
+    const tools = ((await mcp('tools/list')).result as { tools: Tool[] }).tools
+    const byName = new Map<string, Tool>()
+    for (const tool of tools) byName.set(tool.name, tool)
+    return byName
+}
+
+// 20.14 — A TOOL SAYS WHAT ITS METHOD PROMISES: a `GET` safe and idempotent, a `POST` a write that may
+// destroy. THE REVERT: drop `annotations` from `McpSurface.list`; both read `undefined`.
+test('a tool is annotated from its handler’s method — 20.14', async () => {
+    const tools = await listedTools()
+    expect(tools.get('get_invoices_getInvoice')?.annotations).toEqual({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+    })
+    expect(tools.get('post_invoices_pay')?.annotations).toEqual({
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+    })
+})
+
+// 19.21, 19.22, 19.23, 20.15 — WHAT A HANDLER ANSWERS IS PUBLISHED AS ITS TYPE SAYS, and nothing is published
+// where it says nothing true: no `additionalProperties: false` on an answer, a `Date` member left
+// unconstrained, and no schema for a value that may be nothing or is a whole `Response`. THE REVERTS:
+// drop `result` from `surfaceOf`, and `pay` publishes none; keep `additionalProperties: false` on an
+// answer, and `pay`'s schema carries it; walk an instance's members, and `at` is an object
+// with every method of `Date` required.
+test('the OpenAPI document publishes what each handler answers — 19.21, 19.22, 19.23, 20.15', async () => {
+    const answer = await Bun.fetch(`${base}/__abide/openapi.json`)
+    const document = (await answer.json()) as {
+        paths: Record<
+            string,
+            Record<
+                string,
+                {
+                    responses: Record<
+                        string,
+                        { content?: Record<string, { schema?: unknown }> }
+                    >
+                }
+            >
+        >
+    }
+    const answered = (path: string, method: string): unknown =>
+        document.paths[path]?.[method]?.responses['200']?.content?.[
+            'application/json'
+        ]?.schema
+    expect(answered('/invoices/pay', 'post')).toEqual({
+        type: 'object',
+        properties: { paid: { type: 'number' } },
+        required: ['paid'],
+    })
+    expect(answered('/invoices/listInvoices', 'get')).toEqual({
+        type: 'array',
+        items: {
+            type: 'object',
+            properties: { id: { type: 'number' } },
+            required: ['id'],
+        },
+    })
+    expect(answered('/invoices/stamped', 'get')).toEqual({
+        type: 'object',
+        properties: { at: {}, count: { type: 'number' } },
+        required: ['at', 'count'],
+    })
+    // 19.23: `getInvoice`'s `args` is a `jsonSchema` with no type argument, which typed its value
+    // `undefined` and published nothing.
+    expect(answered('/invoices/getInvoice', 'get')).toEqual({
+        type: 'object',
+        properties: { id: { type: 'number' }, total: { type: 'number' } },
+        required: ['id', 'total'],
+    })
+    expect(answered('/invoices/shout', 'post')).toBeUndefined()
+    expect(answered('/invoices/playlist', 'post')).toBeUndefined()
+})
+
+// 20.16 — A TOOL ANSWERING AN OBJECT DECLARES ITS SHAPE AND ANSWERS IT STRUCTURED, the text kept beside
+// it; one answering anything else declares none. THE REVERT: leave `structuredContent` out of
+// `tools/call`; the call reads `undefined`.
+test('a tool answering an object declares an output schema and answers structured content — 20.16', async () => {
+    const tools = await listedTools()
+    expect(tools.get('post_invoices_pay')?.outputSchema).toEqual({
+        type: 'object',
+        properties: { paid: { type: 'number' } },
+        required: ['paid'],
+    })
+    expect(tools.get('get_invoices_listInvoices')?.outputSchema).toBeUndefined()
+    const called = (
+        await mcp('tools/call', {
+            name: 'post_invoices_pay',
+            arguments: { amount: 4 },
+        })
+    ).result as {
+        content: { text: string }[]
+        structuredContent?: unknown
+    }
+    expect(called.structuredContent).toEqual({ paid: 4 })
+    expect(JSON.parse(called.content[0]?.text as string)).toEqual({
+        paid: 4,
+    })
+    const refused = (await mcp('tools/call', { name: 'post_invoices_guarded' }))
+        .result as { structuredContent?: unknown }
+    expect(refused.structuredContent).toBeUndefined()
 })

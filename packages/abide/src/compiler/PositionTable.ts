@@ -63,20 +63,27 @@ export class PositionTable {
 
     /** The position `node` is the whole of, or `undefined` where it is none or only part of one. */
     of(node: Node): Position | undefined {
-        const start = node.getStart()
-        let low = 0
-        let high = this.all.length
-        while (low < high) {
-            const middle = (low + high) >>> 1
-            if ((this.all[middle] as Position).start <= start) low = middle + 1
-            else high = middle
-        }
-        const position = this.all[low - 1]
-        if (position === undefined || start >= position.end) return undefined
+        const position = this.holding(node.getStart())
+        if (position === undefined) return undefined
         const parent = node.parent
         return parent === undefined || parent.getStart() < position.start
             ? position
             : undefined
+    }
+
+    /** The position whose span holds `offset`, or `undefined` where none does. */
+    holding(offset: number): Position | undefined {
+        let low = 0
+        let high = this.all.length
+        while (low < high) {
+            const middle = (low + high) >>> 1
+            if ((this.all[middle] as Position).start <= offset) low = middle + 1
+            else high = middle
+        }
+        const position = this.all[low - 1]
+        return position === undefined || offset >= position.end
+            ? undefined
+            : position
     }
 
     /** Whether any position is of a kind `kinds` holds. */

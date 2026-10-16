@@ -1,8 +1,11 @@
 import { existsSync, type FSWatcher, watch } from 'node:fs' // bun exposes no file watcher or sync existence check of its own
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
 import { realOrAsGiven } from '#server/realOrAsGiven.ts'
-import { checkSource } from './checkApp.ts'
+import { checkSource, lowerApp } from './checkApp.ts'
+import { citedClauses } from './citedClauses.ts'
 import { type AppChecker, openChecker } from './compileApp.ts'
+import { DOCS_SITE } from './DOCS_SITE.ts'
+import { isNamedAlone } from './isNamedAlone.ts'
 import { nearest } from './nearest.ts'
 import type { Diagnosis, Inspection, Place } from './TypeSession.ts'
 
@@ -12,9 +15,9 @@ import type { Diagnosis, Inspection, Place } from './TypeSession.ts'
 //
 // WHAT IT SPEAKS is the part of the protocol a diagnostic needs: the handshake, a document opened,
 // changed and closed, and `publishDiagnostics` back. The document is synced whole (`Full`), so what
-// is checked is exactly the editor's text, saved or not. A hover and a jump to a definition are
-// asked of the program that check registered (`TypeSession.inspect`), so they answer about the
-// same text.
+// is checked is exactly the editor's text, saved or not. A hover, a jump to a definition, a
+// completion, the references to a name and a rename of it are asked of the program that check
+// registered (`TypeSession`), so they answer about the same text.
 //
 // THE APP IS THE DOCUMENT'S. An editor starts this at the root of whatever it has open, which in a
 // monorepo is not an app at all, so each document is checked against the root of the NEAREST
@@ -111,7 +114,7 @@ export async function serveLanguage(
                 },
                 severity: SEVERITY[diagnosis.category],
                 source: 'abide',
-                ...(diagnosis.code === 0 ? {} : { code: diagnosis.code }),
+                ...codeOf(diagnosis),
                 message: diagnosis.message,
             })
         }
@@ -120,6 +123,10 @@ export async function serveLanguage(
             params: { uri, diagnostics },
         })
     }
+
+    // The text the editor holds for a file, where it holds one.
+    const held = (path: string): string | undefined =>
+        documents.get(Bun.pathToFileURL(spelled(path)).href)?.text
 
     // An app's checker, opened on first use and kept for the session — and TOLD WHAT MOVED ON DISK,
     // or it answers every check from the text it read when it opened: an export added to a `.ts`
@@ -169,8 +176,7 @@ export async function serveLanguage(
                 await checkerOf(app),
                 path,
                 document.text,
-                (held) =>
-                    documents.get(Bun.pathToFileURL(spelled(held)).href)?.text,
+                held,
             )
         } catch (thrown) {
             // The checker's own failure, not the page's: the next check opens another.
@@ -210,14 +216,22 @@ export async function serveLanguage(
     // A question about a document is about the text the editor shows, so a check still settling
     // runs now rather than after the answer; and it is answered in the queue, after that check.
     const inspect = (params: unknown): Promise<Inspection | undefined> =>
-        ask(params, (session, path, text, offset) =>
-            session.inspect(path, text, offset),
+        ask(params, (checker, path, text, offset) =>
+            checker.session.inspect(path, text, offset),
         )
+
+    // 38.116 — asked after every page of the app is lowered, which is what a page this one never
+    // imports needs to be among the references.
+    const references = (params: unknown) =>
+        ask(params, async (checker, path, text, offset) => {
+            await lowerApp(checker, held)
+            return checker.session.references(path, text, offset)
+        })
 
     const ask = <Answer>(
         params: unknown,
         question: (
-            session: AppChecker['session'],
+            checker: AppChecker,
             path: string,
             text: string,
             offset: number,
@@ -238,7 +252,7 @@ export async function serveLanguage(
             const at = placed(uri)
             if (document === undefined || at === undefined) return undefined
             return question(
-                (await checkerOf(at.app)).session,
+                await checkerOf(at.app),
                 at.path,
                 document.text,
                 offsetOf(document.text, position),
@@ -262,7 +276,11 @@ export async function serveLanguage(
                             textDocumentSync: 1,
                             hoverProvider: true,
                             definitionProvider: true,
-                            completionProvider: { triggerCharacters: ['.'] },
+                            referencesProvider: true,
+                            renameProvider: { prepareProvider: true },
+                            completionProvider: {
+                                triggerCharacters: ['.', '<', '#', ':', '/'],
+                            },
                         },
                         serverInfo: { name: 'abide' },
                     },
@@ -327,8 +345,8 @@ export async function serveLanguage(
                 const trigger = (
                     params?.context as { triggerCharacter?: string } | undefined
                 )?.triggerCharacter
-                const found = await ask(params, (session, path, text, offset) =>
-                    session.complete(path, text, offset, trigger),
+                const found = await ask(params, (checker, path, text, offset) =>
+                    checker.session.complete(path, text, offset, trigger),
                 )
                 const items: object[] = []
                 for (const entry of found?.entries ?? [])
@@ -356,6 +374,75 @@ export async function serveLanguage(
                 for (const place of found?.definitions ?? [])
                     locations.push(locationOf(spelled(place.path), place))
                 send({ id: message.id, result: locations })
+                return true
+            }
+            case 'textDocument/references': {
+                const found = await references(params)
+                const declarations = (
+                    params?.context as
+                        | { includeDeclaration?: boolean }
+                        | undefined
+                )?.includeDeclaration
+                const locations: object[] = []
+                for (const place of found?.occurrences ?? [])
+                    if (declarations !== false || !place.declaration)
+                        locations.push(locationOf(spelled(place.path), place))
+                send({ id: message.id, result: locations })
+                return true
+            }
+            case 'textDocument/prepareRename': {
+                const found = await references(params)
+                send(
+                    found === undefined
+                        ? { id: message.id, result: null }
+                        : !found.renamable
+                          ? refusedRename(message.id, found.written)
+                          : {
+                                id: message.id,
+                                result: {
+                                    range: rangeOf(found.name),
+                                    placeholder: found.written,
+                                },
+                            },
+                )
+                return true
+            }
+            // A rename is every reference given the new name — and a shorthand the half it renames,
+            // with the other written out beside it.
+            case 'textDocument/rename': {
+                const renamed = params?.newName as string
+                if (!isNamedAlone(renamed)) {
+                    send({
+                        id: message.id,
+                        error: {
+                            code: -32602,
+                            message: `\`${renamed}\` is not a name.`,
+                        },
+                    })
+                    return true
+                }
+                const found = await references(params)
+                if (found !== undefined && !found.renamable) {
+                    send(refusedRename(message.id, found.written))
+                    return true
+                }
+                const changes: Record<string, object[]> = {}
+                for (const place of found?.occurrences ?? []) {
+                    const uri = Bun.pathToFileURL(spelled(place.path)).href
+                    const newText =
+                        place.shorthand === 'local'
+                            ? `${found?.written}: ${renamed}`
+                            : place.shorthand === 'property'
+                              ? `${renamed}: ${found?.written}`
+                              : renamed
+                    const edits = changes[uri] ?? []
+                    edits.push({ range: rangeOf(place), newText })
+                    changes[uri] = edits
+                }
+                send({
+                    id: message.id,
+                    result: found === undefined ? null : { changes },
+                })
                 return true
             }
             case 'textDocument/didClose': {
@@ -459,14 +546,47 @@ function offsetOf(
 
 /** A `Place` at `path`, lines and columns from 1, as the protocol's `Location`, from 0. */
 function locationOf(path: string, place: Place): object {
+    return { uri: Bun.pathToFileURL(path).href, range: rangeOf(place) }
+}
+
+/** A `Place`'s span, lines and columns from 1, as the protocol's `Range`, from 0. */
+function rangeOf(place: Place): object {
     return {
-        uri: Bun.pathToFileURL(path).href,
-        range: {
-            start: {
-                line: place.start.line - 1,
-                character: place.start.column - 1,
-            },
-            end: { line: place.end.line - 1, character: place.end.column - 1 },
+        start: {
+            line: place.start.line - 1,
+            character: place.start.column - 1,
+        },
+        end: { line: place.end.line - 1, character: place.end.column - 1 },
+    }
+}
+
+/** 38.116 — a rename refused, for a name declared where no author writes. */
+function refusedRename(id: Message['id'], name: string): object {
+    return {
+        id,
+        error: {
+            code: -32803,
+            message: `\`${name}\` is declared in a library, and a library is not renamed.`,
         },
     }
+}
+
+/**
+ * The protocol's `code` for a finding: the checker's own number, or the clause an abide finding
+ * cites, with the rulebook's page for it.
+ *
+ * 38.118.
+ */
+function codeOf(diagnosis: Diagnosis): {
+    code?: number | string
+    codeDescription?: { href: string }
+} {
+    if (diagnosis.code !== 0) return { code: diagnosis.code }
+    const [clause] = citedClauses(diagnosis.message)
+    return clause === undefined
+        ? {}
+        : {
+              code: clause,
+              codeDescription: { href: `${DOCS_SITE}/rulebook#${clause}` },
+          }
 }

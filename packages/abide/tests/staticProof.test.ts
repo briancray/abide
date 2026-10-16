@@ -10,7 +10,7 @@
 // position still opens nothing, which is what the mount's `wakes` count says.
 
 import { afterAll, expect, test } from 'bun:test'
-import { measure } from 'harness/measure'
+import { measure } from '@abide/harness/abide'
 import { flushSync } from '#shared'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage } from './typed.ts'
@@ -137,6 +137,7 @@ let rows = reactive([{ id: 1, title: 'one' }, { id: 2, title: 'two' }])
     // The live slot and the list's watch. A row's own proven positions open nothing, and the
     // `{#if}` over a proven subject decides its arm once.
     expect(mounting.wakes).toBe(2)
-    expect(client).not.toContain('__setAttribute')
+    // 32.67 — a row's slots reading its item alone are written by its `update`, never watched.
+    expect(client).not.toContain('watch(() => __setAttribute')
     expect(client.match(/\.watch\(/g) ?? []).toHaveLength(2)
 })

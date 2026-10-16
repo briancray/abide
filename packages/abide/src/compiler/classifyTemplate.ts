@@ -84,7 +84,8 @@ export type ClassifiedAttribute = {
     | { kind: 'spread'; explicit: string[] }
     // 32.5, 32.7, 32.8 — the property and the value, kept in step both ways. `reflects` is the
     // attribute the property's value stands at in the tag, and `undefined` where it is not an
-    // attribute: a `<textarea>`'s or `<select>`'s value is the client's to set.
+    // attribute: a `<textarea>`'s value is its text and a `<select>`'s is its options' `selected`,
+    // which the markup writes inside the tag (32.61).
     | {
           kind: 'bound'
           bind: ValueBind

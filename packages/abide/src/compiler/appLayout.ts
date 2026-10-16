@@ -82,6 +82,11 @@ export type AppLayout = {
     addresses: string[]
     /** What the tree refuses, each at its file; a build stops naming every one. */
     refused: Diagnosis[]
+    /**
+     * What the parser refuses of each `.abide` as the disk holds it, each at its file. Apart from
+     * `refused` because it is the TEXT's: an editor's check parses the text it holds instead (38.34).
+     */
+    unparsed: Diagnosis[]
     /** The resolver every import was followed with, whose answers it keeps. */
     resolve: (specifier: string, from: string) => string | undefined
 }
@@ -99,11 +104,19 @@ export async function appLayout(root: string): Promise<AppLayout> {
     const { abide, handlers, modules, published } = appFiles(root, refusals)
     await refuseModuleHooks(root, modules, refusals)
     const resolve = resolverIn()
+    const unparsed = new Refusals(root, true)
     const own = parseSources(
         await textsAt(abide.map((path) => `${root}/${path}`)),
-        refusals,
+        unparsed,
     )
-    const found = await withDependencies(root, own, handlers, resolve, refusals)
+    const found = await withDependencies(
+        root,
+        own,
+        handlers,
+        resolve,
+        refusals,
+        unparsed,
+    )
     const invoked = componentGraph(found.sources, resolve).invoked
     const sources: PlacedSource[] = []
     for (const source of found.sources) {
@@ -150,6 +163,7 @@ export async function appLayout(root: string): Promise<AppLayout> {
         mounted: found.mounted,
         addresses: [...addresses].sort(),
         refused: refusals.found,
+        unparsed: unparsed.found,
         resolve,
     }
 }
@@ -182,6 +196,8 @@ export async function withDependencies(
     own: readonly string[],
     resolve: (specifier: string, from: string) => string | undefined,
     refusals: Refusals,
+    /** Where what the parser refuses of a file reached here goes, where apart from `refusals`. */
+    unparsed: Refusals = refusals,
 ): Promise<{
     sources: ParsedSource[]
     handlers: HandlerFile[]
@@ -215,7 +231,7 @@ export async function withDependencies(
             if ((thrown as { code?: unknown }).code === 'ENOENT') return
             throw thrown
         }
-        for (const one of parseSources([{ path, text }], refusals)) {
+        for (const one of parseSources([{ path, text }], unparsed)) {
             byPath.set(one.path, one)
             all.push(one)
         }

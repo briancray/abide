@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { realpathSync } from 'node:fs' // bun exposes no realpath of its own
 import { relative } from 'node:path' // bun exposes no path helpers of its own
-import { spawned } from 'harness/gate'
+import { spawned } from '@abide/harness/gate'
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
 import type { Diagnosis } from '#compiler/TypeSession.ts'
@@ -14,6 +14,14 @@ import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
+
+const TYPO = `<script>
+import { props } from '@abide/abide'
+
+const { heading } = props<{ heading: Strin }>()
+</script>
+
+<p>{heading}</p>`
 
 const CLEAN = `<script>
 import { reactive } from '@abide/abide'
@@ -128,6 +136,32 @@ const unsure = reactive(() => maybe ?? 'nobody')
 {#for row of rows}<b>{row.id}</b>{/for}
 {#for row of keyed}<input value={row.id}/>{/for}
 {#for row of decoy}<input value={row.id}/>{/for}`
+
+// 14.19 — each read below would be warned on, and the line above it silences the clause it names.
+// `misnamed` is the near miss: its directive names 14.14, and the warning it earns is 14.16.
+const IGNORED = `<script>
+import { reactive } from '@abide/abide'
+
+let flag = reactive(true)
+let one = reactive(1)
+let two = reactive(2)
+const late = reactive(async () => {
+    await Promise.resolve()
+    // abide-ignore 14.14
+    return one
+})
+const picked = reactive(() =>
+    // abide-ignore 14.14 14.15
+    flag ? one : two,
+)
+const misnamed = reactive(() => {
+    // abide-ignore 14.14
+    setTimeout(() => two, 0)
+    return 1
+})
+</script>
+
+<p>{late} {picked} {misnamed}</p>`
 
 const CARD = `<script>
 import { props } from '@abide/abide'
@@ -255,6 +289,7 @@ beforeAll(async () => {
         'index.abide': CLEAN,
         'broken/index.abide': BROKEN,
         'warned/index.abide': WARNED,
+        'ignored/index.abide': IGNORED,
         'shared/index.abide': SHARED,
         'echoed/index.abide': ECHOED,
         'lib/Card.abide': CARD,
@@ -280,6 +315,7 @@ import { route } from '@abide/abide'
 const section: string | string[] | undefined = route.params().section
 </script>
 <slot/>`,
+        'lib/Typo.abide': TYPO,
         'lib/Defaulted.abide': `<script>
 import { props } from '@abide/abide'
 
@@ -340,8 +376,9 @@ test('a tag is held to the props its component declares, on the attribute — 38
         // pair overload, or the `componentBind` arm of `runsSynchronously`; a finding lands on its line.
         // A value of the wrong type — a name read by name is its value (31.1).
         { ...at('<Card title={count}', 13), code: 2322 },
-        // A prop the component does not declare.
-        { ...at('<Card titel', 6), code: 2353 },
+        // A prop the component does not declare — keyed by the attribute's own name (38.116), so
+        // the checker offers the prop it is a misspelling of (TS2561 rather than TS2353).
+        { ...at('<Card titel', 6), code: 2561 },
         // 33.2 — a component with no `props` call takes none.
         { ...at('<Bare extra', 6), code: 2322 },
         // 32.6 — a `bind:` is held to the prop as the value its `Reactive` holds.
@@ -443,6 +480,19 @@ test('config() is typed by what onConfig defaults — 27.13', () => {
     expect(inFile('configured/elsewhere/index.abide')).toEqual([])
 })
 
+// 38.3 — A FINDING IN A COMPONENT'S PROPS TYPE IS REPORTED ONCE, where it was typed, though the
+// checked module reads that type twice (its `props` call, and what a tag is held to). THE REVERT:
+// drop the de-duplication from `TypeSession.diagnose`; it reads twice.
+test("a finding in a component's props type is reported once — 38.3", () => {
+    expect(
+        inFile('lib/Typo.abide').map(({ line, column, code }) => ({
+            line,
+            column,
+            code,
+        })),
+    ).toEqual([{ ...place(TYPO, 'Strin'), code: 2552 }])
+})
+
 // 33.20 — A DEFAULTED PROP IS NEVER UNDEFINED, so its binding is typed without it. THE REVERT: hand
 // `__accessors` no `defaulted` keys; `start.toFixed` reports `start` as possibly undefined (TS18048).
 test('a defaulted prop is typed without undefined — 33.20', () => {
@@ -512,6 +562,18 @@ test('each tracking warning lands on its read and on no near miss — 14.14, 14.
         place(WARNED, 'optional?.refresh'),
     ])
     expect(warnings.length).toBe(8)
+})
+
+// THE REVERT: drop the `isIgnored` test from `TypeSession.readsFor`; the two silenced reads are
+// warned on (3 against 1).
+test('a warning the line above its read names the clause of is not reported — 14.19', () => {
+    const warnings = inFile('ignored/index.abide').filter(
+        (diagnosis) => diagnosis.category === 'warning',
+    )
+    expect(warnings.map(({ message }) => message.slice(-15))).toEqual([
+        'RULEBOOK 14.16.',
+    ])
+    expect(warnings[0]).toMatchObject(place(IGNORED, 'two, 0'))
 })
 
 // THE REVERT: drop the `sharedModuleWrites` call in `readsIn`; nothing lands (0 against 1). Drop

@@ -2,7 +2,7 @@
 // against a scaffolded tree or a served app.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { spawned } from 'harness/gate'
+import { spawned } from '@abide/harness/gate'
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -58,7 +58,7 @@ afterAll(() => {
 
 // 38.1 — THE LAYOUT, WRITTEN, and a step already done is skipped rather than overwritten. The
 // scaffolded app then builds, which is what "a starter project" has to mean.
-test('scaffold writes a starter project, skips what is there, and builds — 38.1, 38.42, 38.103, 38.104', async () => {
+test('scaffold writes a starter project, skips what is there, builds and passes its tests — 38.1, 38.42, 38.103, 38.104, 38.112, 38.119', async () => {
     const into = temporaryModule({ 'readme.md': 'here\n' })
     const first = await spawned(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
@@ -68,6 +68,9 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
     for (const path of [
         'src/index.abide',
         'src/layout.abide',
+        'src/getGreeting.ts',
+        'src/tests/getGreeting.test.ts',
+        'src/tests/index.test.ts',
         'package.json',
         'tsconfig.json',
         'biome.json',
@@ -88,7 +91,14 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
     expect(manifest.dependencies['@abide/abide']).toBe(
         `file:${new URL('..', import.meta.url).pathname.replace(/\/$/, '')}`,
     )
-    expect(Object.keys(manifest.devDependencies)).toEqual(['@types/bun'])
+    expect(Object.keys(manifest.devDependencies)).toEqual([
+        '@abide/harness',
+        '@types/bun',
+    ])
+    // 38.119 — the harness the starter's mounted test measures with, from this checkout too.
+    expect(manifest.devDependencies['@abide/harness']).toBe(
+        `file:${new URL('../../harness', import.meta.url).pathname}`,
+    )
     // 38.103, 38.104 — the checker `tsc` cannot stand in for, and an agent pointed at the docs the
     // package installs with. THE REVERT: drop `check` from the scripts, or the paths from AGENTS.md.
     expect(manifest.scripts.check).toBe('abide check')
@@ -114,7 +124,17 @@ test('scaffold writes a starter project, skips what is there, and builds — 38.
     const built = await spawned(['bun', BIN, 'build'], { cwd: app })
     expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
-})
+
+    // 38.112, 38.119 — the starter's tests, run as its own script runs them: the handler called, and
+    // the page mounted and a click measured. THE REVERT: drop `test` from the scripts, and
+    // `bun run test` exits 1 with `Script not found "test"`.
+    expect(manifest.scripts.test).toBe('bun test')
+    const tested = await spawned(['bun', 'run', 'test'], { cwd: app })
+    expect(
+        `${tested.exitCode} ${tested.stderr.includes('2 pass')}`,
+        tested.stderr,
+    ).toBe('0 true')
+}, 60_000)
 
 // 38.105, 38.106 — WHAT AN INSTALL CARRIES BESIDE THE CODE: the docs the scaffold's AGENTS.md
 // names, written by `prepack` into a directory `files` ships. THE REVERT: drop `docs` from `files`,

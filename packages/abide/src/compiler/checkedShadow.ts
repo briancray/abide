@@ -43,24 +43,36 @@ export type CheckedShadow = {
  */
 export const COMPONENT_STAND_IN = '__component'
 
+/** 34.16 — the arguments a component is called with: none where no prop is required of it. */
+const COMPONENT_RECORD = '__record'
+
 /**
  * The component a checked module exports as its default: called with the record its tag passes
  * (`projectShadow`'s `invocation`), and answering the `Component` a server module's call of it
  * renders (34.16). What its blocks export by name is beside it.
+ *
+ * `props` is spelled ONCE, between `head` and `tail`, so the one spelling is the one a tag's keys are
+ * contextually typed by, and a caller can copy it from the author's call (38.116).
  */
-function componentModule(props: string, generics?: string): string {
+function componentModule(generics?: string): { head: string; tail: string } {
     // 34.13 — generic over what the file's `<script>` declares, so a caller's props infer it, the
     // signature's own parameters shadowing the opaque stand-ins the body was checked against. 34.16 —
     // a component no prop is required of is called with none, as the runtime's bound face takes it.
     const parameters = generics === undefined ? '' : `<${generics}>`
-    return `
-declare const ${COMPONENT_STAND_IN}: ${parameters}(...record: {} extends ${props} ? [record?: ${props}] : [record: ${props}]) => import('${SERVER_SPECIFIER}').Component
+    return {
+        head: `
+type ${COMPONENT_RECORD}<Props> = {} extends Props ? [record?: Props] : [record: Props]
+declare const ${COMPONENT_STAND_IN}: ${parameters}(...record: ${COMPONENT_RECORD}<`,
+        tail: `>) => import('${SERVER_SPECIFIER}').Component
 export default ${COMPONENT_STAND_IN}
-`
+`,
+    }
 }
 
+const STAND_IN = componentModule()
+
 /** A component nothing has lowered takes anything, which is no finding rather than a wrong one. */
-export const COMPONENT_MODULE = componentModule('any')
+export const COMPONENT_MODULE = `${STAND_IN.head}any${STAND_IN.tail}`
 
 /** The file lowered the way the emitters lower it, for the checker to report on. */
 export function checkedShadow(
@@ -103,7 +115,25 @@ export function checkedShadow(
     }
     origins.push({ at: text.length, source: at, length: source.length - at })
     text += source.slice(at)
-    text += componentModule(propsOf(lowering), file.generics)
+    // 33.4 — WHAT THE CHILD DECLARES IS WHAT A CALLER IS HELD TO: the type `props<X>()` hands back,
+    // read off the call as the author wrote it. 33.3 — `props()` with no argument hands back the
+    // untyped record, and takes anything. 38.116 — AND THE COPY IS PLACED where it was copied from,
+    // so a rename of a prop asked at a tag's key reaches the declaration it is a copy of.
+    const module = componentModule(file.generics)
+    text += module.head
+    const read = lowering.ownPropsRead()
+    if (read === undefined) text += NO_PROPS
+    else {
+        text += 'ReturnType<typeof '
+        const called = source.slice(read.from, read.to).replace(/\(\s*\)$/, '')
+        origins.push({
+            at: text.length,
+            source: read.from,
+            length: called.length,
+        })
+        text += `${called}>`
+    }
+    text += module.tail
     // What each name read by name holds when it is read: what calling it hands back, and through a
     // props accessor, what calling what that hands back does.
     let values = ''
@@ -120,22 +150,6 @@ export function checkedShadow(
         ...pointAtCheckedModules(text, origins, scriptsEnd),
         refusals: lowering.refusals,
     }
-}
-
-/**
- * The props type a caller is held to, spelled off the file's `props` call.
- *
- * 33.4 — WHAT THE CHILD DECLARES IS WHAT A CALLER IS HELD TO: the type `props<X>()` hands back, read
- * off the call as the author wrote it, which stands at the top of the module where this is
- * declared. 33.3 — `props()` with no argument hands back the untyped record, and takes anything.
- */
-function propsOf(lowering: Lowering): string {
-    const read = lowering.ownPropsRead()
-    return read === undefined
-        ? NO_PROPS
-        : `ReturnType<typeof ${lowering.projection.text
-              .slice(read.from, read.to)
-              .replace(/\(\s*\)$/, '')}>`
 }
 
 /**

@@ -287,15 +287,15 @@ test('a destructuring loop item survives the head split', () => {
 // hangs outside the element the author wrote it in — a different document, rendered without
 // complaint.
 //
-// THE REVERT: `if (stack.length > 1) stack.pop()` on any close tag, and `blocks.pop()` plus a pop
-// on any `{/if}`. The first case below then renders `<p><br></p>tail` and the second
-// `<div></div><b>x</b>`.
+// THE REVERT: `if (stack.length > 1) stack.pop()` on any close tag; the case below then renders
+// `<p><br></p>tail`. A stray `{/if}` is refused rather than dropped — 32.64, `blockTags.test.ts`.
 test('a close tag closes what it names, and nothing else', async () => {
     const stray = await serverOf('<p><br></br>tail</p>')
     expect(stray).toContain('"<p>" + "<br>" + "tail" + "</p>"')
 
-    const orphan = await serverOf('<div>{/if}<b>x</b></div>')
-    expect(orphan).toContain('"<div>" + "<b>" + "x" + "</b>" + "</div>"')
+    expect(await refusal(serverOf('<div>{/if}<b>x</b></div>'))).toContain(
+        'RULEBOOK 32.64',
+    )
 })
 
 // A `<script>` IS A TAG WHERE THE PARSE REACHES ONE, and nowhere else. The blocks used to be cut
@@ -364,7 +364,7 @@ test('an attribute quote that never closes is refused', async () => {
 // deciding which of two arms a reader sees.
 test('an else arm is told from a name that starts with if', async () => {
     expect(await refusal(serverOf('{#if a}x{:elseif b}y{/if}'))).toContain(
-        'not a control block',
+        '{:else if condition}',
     )
     expect(await refusal(serverOf('{#if a}x{:else ifValid}y{/if}'))).toContain(
         'not a control block',
@@ -669,28 +669,23 @@ test('a default value in a binding pattern is read, not bound — 31.10', async 
 })
 
 // THE CLIENT HALF IS ITS OWN GATE, because the row's MARKUP and the row's BINDINGS are emitted by
-// two different paths and a shadow threaded to one is not threaded to the other. THE REVERT: pass
-// `reactive` rather than `inner` to `renderMarkup` and to `emitRegion` in `emitClient`'s `emitList`.
-// The markup then reads `rows().name`, and the run reads as reactive so a `setText` binding is
-// opened over it as well — 2 sites calling a row parameter as a function, and a waking reader that
-// should not exist, on a page whose server render is fine.
+// two different paths and a shadow threaded to one is not threaded to the other. A write through
+// the item is a write to the item's member — where the page's `rows` would lower to a `set`.
 test('a for row binds its item on the client too', async () => {
     const client = await clientOf(
-        "<script>let rows = reactive([]); const groups = [{ name: 'a' }]</script>{#for rows of groups}<li>{rows.name}</li>{/for}",
+        "<script>let rows = reactive([]); const groups = [{ name: 'a' }]</script>{#for rows of groups}<li onclick={() => { rows.name = 'b' }}>{rows.name}</li>{/for}",
         ['rows'],
     )
-    expect(client).toContain('const ls0_make = (__document, rows, __at)')
-    // `escapeless` HERE AND `escapeText` ON THE SERVER, and the difference is the point rather
-    // than an inconsistency: the server concatenates into markup a browser parses, and this side
-    // CONSTRUCTS — `createTextNode` writes through `data`, where there is nothing to escape. What
-    // these lines are actually guarding is `rows.name` and not `rows().name`; the value is held
-    // once so a `Raw` can be told from text (`builtRun`), and then written through `escapeless`.
+    // The row's functions bind the item off the row's record: `make` and `update` its value, and the
+    // listener reads the record when it runs (32.67). None of them is the page's `rows`.
+    expect(client).toContain(
+        'const ls0_make = (__document, __row, __at) => {\n    const rows = __row.data',
+    )
     expect(client).toContain('const __c1_0 = rows.name')
-    expect(client).toContain('__escapeless(__c1_0)')
-    // The row's own item is not a `Reactive`, so the run opens NO binding: the reconcile is what
-    // rewrites a row whose data changed.
-    expect(client).not.toContain('setText')
+    expect(client).toContain('const __v1_0 = rows.name')
+    expect(client).toContain("ls0_row.data.name = 'b'")
     expect(client).not.toContain('rows()')
+    expect(client).not.toContain('rows.set(')
     // The subject is outside the binding on this side too.
     expect(
         await clientOf(

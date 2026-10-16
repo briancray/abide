@@ -27,7 +27,12 @@ import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { moduleImports } from './emitComponent.ts'
 import { invocationProps, passedName } from './invocationProps.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
-import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
+import {
+    type ItemUses,
+    type LoweredChunk,
+    Lowering,
+    PROPS,
+} from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
     CLIENT_LANE,
@@ -551,6 +556,86 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
         live.add(at)
     }
 
+    for (const line of walkTo(positions, live, lowering)) chain.push(line)
+
+    // THE UNITS, in the order a page always installed them — text, listeners, attributes, the node
+    // handed over, then the regions. The walk does not depend on it; a `bind:element` callback has
+    // always run with every other binding already in place, and that is kept.
+    // 32.67 — A ROW'S ITEM WATCHES FIRST, one after another, which is how its scope finds them
+    // (`Scope.itemWatch`).
+    const items: string[] = []
+    const texts: string[] = []
+    const handlers: string[] = []
+    const attributes: string[] = []
+    const elements: string[] = []
+    const regions: PlacedNode[] = []
+    for (const at of positions) {
+        if (!live.has(at)) continue
+        if (at.kind === 'region') {
+            regions.push(at)
+            continue
+        }
+        const slot = at.name.slice('__c'.length)
+        if (at.kind === 'text') {
+            if (readsOwnItem(at.run, lowering))
+                items.push(textUnit(at, slot, lowering, 'itemWatch'))
+            else texts.push(textUnit(at, slot, lowering, 'watch'))
+            continue
+        }
+        const units = elementUnits(
+            `${lowering.use('elementHere')}(${at.name}, ${JSON.stringify(at.tag)})`,
+            bound.get(at) as ClassifiedAttribute[],
+            slot,
+            lowering,
+        )
+        for (const unit of units.items) items.push(unit)
+        for (const unit of units.handlers) handlers.push(unit)
+        for (const unit of units.attributes) attributes.push(unit)
+        for (const unit of units.elements) elements.push(unit)
+    }
+    for (const unit of items) lines.push(unit)
+    for (const unit of texts) lines.push(unit)
+    for (const unit of handlers) lines.push(unit)
+    for (const unit of attributes) lines.push(unit)
+    for (const unit of elements) lines.push(unit)
+
+    // 32.67 — WHAT A ROW'S REGIONS AND COMPONENTS BIND reads the row's item through its cell: the
+    // row's `update` reaches its own top level and no further.
+    lowering.nestItems(() => {
+        for (const at of regions) {
+            const holder = at.holder
+            if (holder.kind === 'block') {
+                if (holder.block === 'for') emitList(at, holder, region)
+                else if (holder.block === 'try') emitTry(at, holder, region)
+                else emitBlock(at, holder, region)
+            } else if (holder.kind === 'element') {
+                if (isSlot(holder)) emitSlot(at, region)
+                else emitInvocation(at, holder, region)
+            }
+        }
+        // 32.43 — A REGION THAT MOUNTS NOTHING INVOKES NOTHING, so what it declares is reached
+        // from nowhere and is not declared: a row declaring a component it never invokes stays a
+        // row whose mount is the shared empty one.
+        if (lines.length > 0) region.defs = definitions(sink, region)
+    })
+    return region
+}
+
+/**
+ * The walk to every position in `live`: one `const` per position it needs, each found from the one
+ * before it — the region's `chain` (`emitRegion`), and a row's `update` (32.67).
+ *
+ * THE WALK IS PRUNED. A position is walked when something at or after it in its parent needs it —
+ * a binding, or a later position found through it — so a static subtree and a static tail are
+ * never visited. A blank run standing before something walked is put back as the walk passes
+ * (`runHere`), because what follows it is found from it.
+ */
+function walkTo(
+    positions: readonly PlacedNode[],
+    live: ReadonlySet<PlacedNode>,
+    lowering: Lowering,
+): string[] {
+    const chain: string[] = []
     // BACKWARDS, so everything after a position — its later siblings and its own descendants — is
     // decided before it is. `followed` holds the frames, keyed by the element they stand inside,
     // that have a walked position later than the one being decided.
@@ -583,92 +668,64 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
         else chain.push(`const ${at.name} = ${at.from}`)
     }
 
-    // THE UNITS, in the order a page always installed them — text, listeners, attributes, the node
-    // handed over, then the regions. The walk does not depend on it; a `bind:element` callback has
-    // always run with every other binding already in place, and that is kept.
-    const texts: string[] = []
-    const handlers: string[] = []
-    const attributes: string[] = []
-    const elements: string[] = []
-    const regions: PlacedNode[] = []
-    for (const at of positions) {
-        if (!live.has(at)) continue
-        if (at.kind === 'region') {
-            regions.push(at)
-            continue
-        }
-        const slot = at.name.slice('__c'.length)
-        if (at.kind === 'text') {
-            const values: string[] = []
-            const brands: string[] = []
-            const text: string[] = []
-            const markup: string[] = []
-            for (let piece = 0; piece < at.run.length; piece += 1) {
-                const node = at.run[piece] as TemplateNode
-                if (node.kind === 'text') {
-                    markup.push(JSON.stringify(node.text))
-                    // 32.27 — static text is markup, and `data` is not a parse: a piece with an
-                    // entity in it goes in as the characters it stands for, decoded by the build.
-                    text.push(
-                        JSON.stringify(
-                            decodeCharacterReferences(node.text, 'text'),
-                        ),
-                    )
-                    continue
-                }
-                const value = `__v${slot}_${piece}`
-                values.push(`${value} = ${lowering.expression(node)}`)
-                brands.push(`${lowering.use('isRaw')}(${value})`)
-                text.push(`${lowering.use('escapeless')}(${value})`)
-                markup.push(`${lowering.use('escapeText')}(${value})`)
-            }
-            // RESOLVED ONCE, and the binding closes over what it resolved to. The node a position
-            // lands on is the same one on every run while the run holds text — the walk put a blank
-            // run's back and `setText` never removes it — so re-finding it per write is the same
-            // answer bought again: measured in Chromium at 0.47 µs a write against 0.22 µs with the
-            // node held. 32.26 is the one write that changes it: a `Raw` part turns the run into an
-            // anchored one (`setMarkup`) and a later text value turns it back, so each write hands
-            // back what the run now is and the binding holds that.
-            texts.push(
-                `let __t${slot} = ${lowering.use('textHere')}(${at.name})
-${SCOPE}.watch(() => {
-    const ${values.join(', ')}
-    __t${slot} = ${brands.join(' || ')} ? ${lowering.use('setMarkup')}(__t${slot}, ${markup.join(' + ')}) : ${lowering.use('setText')}(__t${slot}, ${text.join(' + ')})
-})`,
+    return chain
+}
+
+/** 32.67 — whether a text run reads a row's item at that row's own top level (`readsOwnItem`). */
+function readsOwnItem(
+    run: readonly TemplateNode[],
+    lowering: Lowering,
+): boolean {
+    for (const piece of run)
+        if (piece.kind === 'expression' && lowering.readsOwnItem(piece))
+            return true
+    return false
+}
+
+/**
+ * One text run's write: the run recomputed whole, as markup where a part is `Raw` (32.26) and as
+ * text otherwise — kept written by a watch where `watched`, and written once for a row's `update`.
+ *
+ * RESOLVED ONCE, and the binding closes over what it resolved to. The node a position lands on is
+ * the same one on every run while the run holds text — the walk put a blank run's back and
+ * `setText` never removes it — so re-finding it per write is the same answer bought again: measured
+ * in Chromium at 0.47 µs a write against 0.22 µs with the node held. 32.26 is the one write that
+ * changes it: a `Raw` part turns the run into an anchored one (`setMarkup`) and a later text value
+ * turns it back, so each write hands back what the run now is and the binding holds that.
+ */
+function textUnit(
+    at: PlacedNode,
+    slot: string,
+    lowering: Lowering,
+    watched: 'watch' | 'itemWatch' | null,
+): string {
+    const values: string[] = []
+    const brands: string[] = []
+    const text: string[] = []
+    const markup: string[] = []
+    for (let piece = 0; piece < at.run.length; piece += 1) {
+        const node = at.run[piece] as TemplateNode
+        if (node.kind === 'text') {
+            markup.push(JSON.stringify(node.text))
+            // 32.27 — static text is markup, and `data` is not a parse: a piece with an entity in
+            // it goes in as the characters it stands for, decoded by the build.
+            text.push(
+                JSON.stringify(decodeCharacterReferences(node.text, 'text')),
             )
             continue
         }
-        const units = elementUnits(
-            `${lowering.use('elementHere')}(${at.name}, ${JSON.stringify(at.tag)})`,
-            bound.get(at) as ClassifiedAttribute[],
-            slot,
-            lowering,
-        )
-        for (const unit of units.handlers) handlers.push(unit)
-        for (const unit of units.attributes) attributes.push(unit)
-        for (const unit of units.elements) elements.push(unit)
+        const value = `__v${slot}_${piece}`
+        values.push(`${value} = ${lowering.binding(node)}`)
+        brands.push(`${lowering.use('isRaw')}(${value})`)
+        text.push(`${lowering.use('escapeless')}(${value})`)
+        markup.push(`${lowering.use('escapeText')}(${value})`)
     }
-    for (const unit of texts) lines.push(unit)
-    for (const unit of handlers) lines.push(unit)
-    for (const unit of attributes) lines.push(unit)
-    for (const unit of elements) lines.push(unit)
-
-    for (const at of regions) {
-        const holder = at.holder
-        if (holder.kind === 'block') {
-            if (holder.block === 'for') emitList(at, holder, region)
-            else if (holder.block === 'try') emitTry(at, holder, region)
-            else emitBlock(at, holder, region)
-        } else if (holder.kind === 'element') {
-            if (isSlot(holder)) emitSlot(at, region)
-            else emitInvocation(at, holder, region)
-        }
-    }
-    // 32.43 — A REGION THAT MOUNTS NOTHING INVOKES NOTHING, so what it declares is reached from
-    // nowhere and is not declared: a row declaring a component it never invokes stays a row whose
-    // mount is the shared empty one.
-    if (lines.length > 0) region.defs = definitions(sink, region)
-    return region
+    const write = `    const ${values.join(', ')}
+    __t${slot} = ${brands.join(' || ')} ? ${lowering.use('setMarkup')}(__t${slot}, ${markup.join(' + ')}) : ${lowering.use('setText')}(__t${slot}, ${text.join(' + ')})`
+    const found = `let __t${slot} = ${lowering.use('textHere')}(${at.name})`
+    return watched === null
+        ? `{\n${found}\n${write}\n}`
+        : `${found}\n${SCOPE}.${watched}(() => {\n${write}\n})`
 }
 
 /**
@@ -686,18 +743,25 @@ function elementUnits(
     classified: ClassifiedAttribute[],
     slot: string,
     lowering: Lowering,
-): { handlers: string[]; attributes: string[]; elements: string[] } {
+): {
+    items: string[]
+    handlers: string[]
+    attributes: string[]
+    elements: string[]
+} {
+    const items: string[] = []
     const handlers: string[] = []
     const attributes: string[] = []
     const elements: string[] = []
     const writes: string[] = []
+    const itemWrites: string[] = []
     const binds: string[] = []
     const spreads: string[] = []
     for (const one of classified) {
         if (!isBound(one)) continue
         if (one.kind === 'handler')
             handlers.push(
-                `${element}.addEventListener(${JSON.stringify(one.event)}, ${lowering.expression(one.attribute)})`,
+                `${element}.addEventListener(${JSON.stringify(one.event)}, ${lowering.listener(one.attribute)})`,
             )
         // 32.5, 32.7, 32.8 — THE PROPERTY AND THE VALUE, IN STEP BOTH WAYS: a watch on this
         // region's scope writes the property, and a listener writes it back.
@@ -732,16 +796,25 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
                           write: 'attribute' as const,
                           name: one.attribute.name,
                       }
-            writes.push(
-                `${SCOPE}.watch(() => ${lowering.use(WRITES[write])}(__a${slot}, ${JSON.stringify(name)}, ${lowering.expression(one.attribute)}))`,
-            )
+            // 32.67 — one reading a row's item is one of the row's item watches, on a name of its
+            // own because it is installed apart from the element's other attributes.
+            if (lowering.readsOwnItem(one.attribute))
+                itemWrites.push(
+                    `${SCOPE}.itemWatch(() => ${lowering.use(WRITES[write])}(__i${slot}, ${JSON.stringify(name)}, ${lowering.binding(one.attribute)}))`,
+                )
+            else
+                writes.push(
+                    `${SCOPE}.watch(() => ${lowering.use(WRITES[write])}(__a${slot}, ${JSON.stringify(name)}, ${lowering.binding(one.attribute)}))`,
+                )
         }
     }
+    if (itemWrites.length > 0)
+        items.push(`const __i${slot} = ${element}\n${itemWrites.join('\n')}`)
     if (writes.length > 0)
         attributes.push(`const __a${slot} = ${element}\n${writes.join('\n')}`)
     for (const unit of binds) attributes.push(unit)
     for (const unit of spreads) attributes.push(unit)
-    return { handlers, attributes, elements }
+    return { items, handlers, attributes, elements }
 }
 
 // A region's bindings go through its SCOPE, so what replaced the region can stop them (see
@@ -1331,11 +1404,38 @@ function emitList(
             : written
 
     const single = isSingleRooted(block.children)
+    // 32.67 — the row's RECORD, under a name of the list's own, for a listener reading the item off
+    // it: a row nested in this one takes `ROW_ROOT` for its own record.
+    const record = `${name}_row`
 
-    const rowRegion = emitRegion(row, region.nested())
+    let rowRegion = region.nested()
+    const mounted = lowering.readItemsAs(block, 'own', record, () => {
+        rowRegion = emitRegion(row, region.nested())
+    })
+    let local = ''
+    const setUp =
+        block.setup === null
+            ? { cell: 0, record: 0 }
+            : lowering.readItemsAs(block, 'nested', record, () => {
+                  local = lowering.setup(block.setup as Setup)
+              })
 
-    // `List` hands the row its document — see `emitMaker` for which rows are parsed instead.
-    const make = `const ${name}_make = (__document, ${item}, ${at}) => {\n    ${emitMaker(row, lowering, () => rowMarkup(row, !single, lowering, CLIENT_LANE), !single)}\n}`
+    // MADE FROM THE ITEM'S VALUE: every slot reading the item alone is written before the row is
+    // inserted, so making a row writes the document once per node (32.67).
+    const valued = `const ${item} = ${ROW_ROOT}.data`
+    const make = `const ${name}_make = (__document, ${ROW_ROOT}, ${at}) => {\n    ${valued}\n    ${emitMaker(row, lowering, () => rowMarkup(row, !single, lowering, CLIENT_LANE), !single)}\n}`
+    const walk = rowRegion.body()
+    // A PATTERN READ OFF THE RECORD is read through one picker a name, the list's rather than the
+    // row's, so a row allocates nothing for it.
+    if (mounted.record > 0 && !isNamedAlone(item))
+        for (const read of lowering.itemNames(block))
+            region.helpers.push(
+                `const ${record}_${read} = (__value) => { const ${item} = __value; return ${read} }`,
+            )
+    const opened =
+        walk.length === 0
+            ? walk
+            : [...itemBinding(block, item, mounted, record, lowering), ...walk]
 
     // A row that cannot be hydrated is REBUILT by the same `make`, in place, and the row's record
     // takes its new first node.
@@ -1343,16 +1443,17 @@ function emitList(
         make,
         mountFunction(
             name,
-            `${ROW_ROOT}, ${item}, ${at}`,
+            `${ROW_ROOT}, ${at}`,
             // The row's walk, INSIDE the mount's one `try` rather than above it, because a row
             // rebuilds whole: a node that refused is the row disagreeing, and re-making it is the
             // answer the page does not have.
-            rowRegion.body(),
-            `${lowering.use('replaceRow')}(${ROW_ROOT}, ${name}_make(${ROW_ROOT}.node.ownerDocument, ${item}, ${at}))`,
+            opened,
+            `${lowering.use('replaceRow')}(${ROW_ROOT}, ${name}_make(${ROW_ROOT}.node.ownerDocument, ${ROW_ROOT}, ${at}))`,
             lowering,
             row.defersSetup,
             block.setup !== null,
         ),
+        rowUpdate(name, row, block, valued, at, lowering),
     ].join('\n')
     // THE LIST CALLS `_setUp` ONCE PER ROW (`List.setUp`). 14.8 — a row with a branch-local
     // `<script>` runs it there, and the row's `make` and `mount` are declared after it, so both close
@@ -1365,13 +1466,17 @@ function emitList(
             block.setup !== null
                 ? rowSetUp(
                       name,
-                      item,
+                      [
+                          ...itemBinding(block, item, setUp, record, lowering),
+                          // A setup reading nothing of the item still sees its value.
+                          ...(setUp.cell === 0 ? [valued] : []),
+                      ].join('\n'),
                       at,
-                      lowering.setup(block.setup),
+                      local,
                       builders,
                       lowering,
                   )
-                : `${builders}\nconst ${name}_builders = { make: ${name}_make, mount: ${name}_mount }\nconst ${name}_setUp = () => ${name}_builders`,
+                : `${builders}\nconst ${name}_builders = { make: ${name}_make, mount: ${name}_mount, update: ${name}_update }\nconst ${name}_setUp = () => ${name}_builders`,
         ].join('\n'),
     )
 
@@ -1387,6 +1492,101 @@ ${SCOPE}.watch(() => ${lowering.use('updateList')}(${name}_list, ${name}_subject
 }
 
 /**
+ * Binds a row function's item names for how `uses` says they were read (32.67): its record under
+ * `record` for a listener, and the row's cell for everything else — the name itself where the item
+ * is one name, and an accessor per name destructuring the cell's value where it is a pattern.
+ */
+function itemBinding(
+    block: object,
+    item: string,
+    uses: ItemUses,
+    record: string,
+    lowering: Lowering,
+): string[] {
+    const lines: string[] = []
+    if (uses.record > 0) lines.push(`const ${record} = ${ROW_ROOT}`)
+    if (uses.cell === 0) return lines
+    const cell = `${lowering.use('rowCell')}(${ROW_ROOT})`
+    if (isNamedAlone(item)) {
+        lines.push(`const ${item} = ${cell}`)
+        return lines
+    }
+    lines.push(`const __cell = ${cell}`)
+    for (const name of lowering.itemNames(block))
+        lines.push(
+            `const ${name} = () => { const ${item} = __cell(); return ${name} }`,
+        )
+    return lines
+}
+
+/**
+ * A row's `update` (32.67): the walk to each text and attribute slot of the row's own top level that
+ * reads the item and nothing that moves, and one write of each from the record's value.
+ *
+ * WHAT `make` WROTE FROM THE ITEM, written again — and nothing a binding keeps written. A bound
+ * slot is its watch's alone (`Scope.itemWatch`), rerun when the row takes a new item (`updateRow`):
+ * a run's node can change kind under a write (32.26), and what the slot reads can change with the
+ * item, so the node and the subscriptions are each held by one writer. A region of the row binds
+ * its own. A row with no such slot shares one `update` that does nothing.
+ */
+function rowUpdate(
+    name: string,
+    row: Cursor,
+    block: object,
+    valued: string,
+    at: string,
+    lowering: Lowering,
+): string {
+    const live = new Set<PlacedNode>()
+    const writes: string[] = []
+    for (const position of row.positions) {
+        if (position.kind === 'region') continue
+        const slot = position.name.slice('__c'.length)
+        if (position.kind === 'text') {
+            let reads = false
+            for (const piece of position.run)
+                if (piece.kind === 'expression')
+                    reads ||= lowering.readsItem(piece, block)
+            if (!reads || lowering.isLiveRun(position.run)) continue
+            live.add(position)
+            writes.push(textUnit(position, slot, lowering, null))
+            continue
+        }
+        const element = `${lowering.use('elementHere')}(${position.name}, ${JSON.stringify(position.tag)})`
+        const own: string[] = []
+        for (const one of classifyAttributes(
+            position.holder as ElementNode,
+            lowering,
+        )) {
+            if (!one.attribute.expression || one.live) continue
+            if (!lowering.readsItem(one.attribute, block)) continue
+            const toggles =
+                one.kind === 'merged'
+                    ? one.toggles
+                    : one.kind === 'dynamic'
+                      ? {
+                            write: 'attribute' as const,
+                            name: one.attribute.name,
+                        }
+                      : undefined
+            if (toggles === undefined) continue
+            own.push(
+                `${lowering.use(WRITES[toggles.write])}(__a${slot}, ${JSON.stringify(toggles.name)}, ${lowering.expression(one.attribute)})`,
+            )
+        }
+        if (own.length === 0) continue
+        live.add(position)
+        writes.push(`{\nconst __a${slot} = ${element}\n${own.join('\n')}\n}`)
+    }
+    if (writes.length === 0)
+        return `const ${name}_update = ${lowering.use('noUpdate')}`
+    return `const ${name}_update = (${ROW_ROOT}, ${at}) => {
+    ${valued}
+${[...walkTo(row.positions, live, lowering), ...writes].join('\n')}
+}`
+}
+
+/**
  * A row's `_setUp` where the row has a branch-local `<script>` (14.8): runs it once for the row,
  * and answers the builders that close over its names.
  *
@@ -1394,18 +1594,19 @@ ${SCOPE}.watch(() => ${lowering.use('updateList')}(${name}_list, ${name}_subject
  */
 function rowSetUp(
     name: string,
-    item: string,
+    bound: string,
     at: string,
     local: string,
     builders: string,
     lowering: Lowering,
 ): string {
     const owning = scopedSetup(local, lowering, true)
-    // The mount takes the setUp's own item and index again, shadowing them with the same values, so
-    // the row record `List` hands in is the only thing that is new.
-    return `const ${name}_setUp = (${item}, ${at}) => {
+    // The mount takes the setUp's own record and index again, so the row record `List` hands in is
+    // the only thing that is new.
+    return `const ${name}_setUp = (${ROW_ROOT}, ${at}) => {
+${bound}
 ${owning.opened}${local}
 ${owning.handed}${builders}
-return { make: ${name}_make, mount: ${name}_mount }${owning.closed}
+return { make: ${name}_make, mount: ${name}_mount, update: ${name}_update }${owning.closed}
 }`
 }

@@ -66,6 +66,8 @@ jobs:
             bun -e 'const p = await Bun.file("package.json").json(); p.dependencies["@abide/abide"] = "file:" + process.env.ABIDE_TARBALL; await Bun.write("package.json", JSON.stringify(p, null, 4) + "\n")'
           bun install
           bun run build
+          # 38.112 — the starter's own test, against the packed preload.
+          bun run test
 
       - name: Boot and curl health and the page
         run: |
@@ -78,4 +80,5 @@ jobs:
           done
           curl -fs "http://localhost:4173/__abide/health" | grep -q '"abide":'
           curl -fs "http://localhost:4173/" | grep -q "Clicked"
+          curl -fs "http://localhost:4173/" | grep -q "Hello, world"
           kill "$SERVER_PID"

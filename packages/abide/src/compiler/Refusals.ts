@@ -1,6 +1,7 @@
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { formatDiagnosis } from './formatDiagnosis.ts'
 import { diagnosisAt } from './lineOf.ts'
+import { PositionedRefusal } from './PositionedRefusal.ts'
 import type { Diagnosis } from './TypeSession.ts'
 
 /**
@@ -25,18 +26,24 @@ export class Refusals {
         this.collecting = collecting
     }
 
-    /** Refuses at `file`, below the root or absolute: `thrown` is thrown, or kept. */
-    at(file: string, thrown: unknown): void {
-        if (!this.collecting) throw thrown
-        this.found.push(
-            diagnosisAt(
-                resolve(this.root, file),
-                undefined,
-                0,
-                'error',
-                thrown instanceof Error ? thrown.message : String(thrown),
-            ),
+    /**
+     * Refuses at `file`, below the root or absolute: `thrown` is thrown, or kept. Handed the file's
+     * `text`, a `PositionedRefusal` is placed on its line and column, and thrown as that line.
+     */
+    at(file: string, thrown: unknown, text?: string): void {
+        const positioned =
+            text !== undefined && thrown instanceof PositionedRefusal
+        if (!this.collecting && !positioned) throw thrown
+        const diagnosis = diagnosisAt(
+            resolve(this.root, file),
+            positioned ? text : undefined,
+            positioned ? thrown.offset : 0,
+            'error',
+            thrown instanceof Error ? thrown.message : String(thrown),
         )
+        if (!this.collecting)
+            throw new Error(formatDiagnosis(diagnosis, process.cwd()))
+        this.found.push(diagnosis)
     }
 
     /**

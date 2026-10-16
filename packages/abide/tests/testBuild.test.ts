@@ -4,7 +4,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { readdir } from 'node:fs/promises' // bun exposes no directory listing of its own
-import { spawned } from 'harness/gate'
+import { spawned } from '@abide/harness/gate'
 import { sharedBuild, sourceHash } from '#server/testBuild.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 

@@ -103,6 +103,11 @@ export type Read = {
     keys: string[]
     /** 23.9 — the read is abide's `route.params`, which a page or a layout types by its route. */
     routeParams: boolean
+    /**
+     * 32.67 — a read of a `{#for}` row's item: where that row's item binding starts in the
+     * projection, or -1 for every other read.
+     */
+    item: number
 }
 
 /**
@@ -134,6 +139,7 @@ export function newRead(
         local: false,
         keys: [],
         routeParams: false,
+        item: -1,
     }
 }
 

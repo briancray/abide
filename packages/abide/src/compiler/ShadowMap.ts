@@ -98,6 +98,43 @@ export class ShadowMap {
             ? { path: this.shadowPath, position: projected }
             : { path: this.checkedPath, position: checked }
     }
+
+    /**
+     * EVERY place the checker reads the author's `position` at: the projection where it copied it,
+     * and the checked module too wherever the lowering copied it on — a component's props type is
+     * a second copy (38.116). A name read by name is a rewrite in the checked module, so its uses
+     * there are another symbol's — the projection's holds them.
+     */
+    placesFrom(position: number): { path: string; position: number }[] {
+        const projected = mapForward(this.projected, position)
+        if (projected === undefined) return []
+        const places = [{ path: this.shadowPath, position: projected }]
+        for (const origin of this.checked)
+            if (
+                projected >= origin.source &&
+                projected < origin.source + origin.length
+            )
+                places.push({
+                    path: this.checkedPath,
+                    position: origin.at + projected - origin.source,
+                })
+        return places
+    }
+
+    /**
+     * `start` to `end` in `path`, placed in the `.abide` only where BOTH layers copied it from what
+     * the author wrote — the strict `spanToSource`, for an edit that must land on the author's text.
+     */
+    copiedToSource(path: string, start: number, end: number): Span | undefined {
+        let projected: number | undefined = start
+        if (path === this.checkedPath)
+            projected = copiedFrom(this.checked, start)
+        if (projected === undefined) return undefined
+        const source = copiedFrom(this.projected, projected)
+        return source === undefined
+            ? undefined
+            : { start: source, end: source + end - start }
+    }
 }
 
 /** The start of the run holding `position`, plus how far in; scaffolding is the run before's end. */

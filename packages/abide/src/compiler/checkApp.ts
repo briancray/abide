@@ -1,5 +1,6 @@
 import { relative } from 'node:path' // bun exposes no path helpers of its own
 import { type Placement, placement } from '#server/placement.ts'
+import type { PlacedSource } from './appLayout.ts'
 import { type AppChecker, compiled } from './compileApp.ts'
 import { abideImportsOf } from './componentGraph.ts'
 import { hooksIn } from './hookCalls.ts'
@@ -48,6 +49,7 @@ export async function checkSource(
     const { session, root } = checker
     const layout = await checker.layout()
     // 38.33 — WHAT THE TREE REFUSES OF IT, off the layout the checker keeps until a move is heard.
+    // What the parser refuses is the held text's, below, never the disk's (`layout.unparsed`).
     const tree: Diagnosis[] = []
     for (const refused of layout.refused)
         if (refused.path === path) tree.push(refused)
@@ -114,6 +116,37 @@ export async function checkSource(
         false,
     )
     return [...tree, ...own, ...diagnoses]
+}
+
+/**
+ * Lowers every `.abide` of the app into the checker, quietly, as an editor holds it.
+ *
+ * 38.116 — A NAME'S REFERENCES ARE THE WHOLE APP'S, and `checkSource` lowers one page and what it
+ * imports: a page this one never imports, reading the same export, is in no program until it is
+ * lowered. A file the parser refuses is left out, as `checkApp` leaves it.
+ */
+export async function lowerApp(
+    checker: AppChecker,
+    held: (path: string) => string | undefined,
+): Promise<void> {
+    const layout = await checker.layout()
+    const refusals = new Refusals(checker.root, true)
+    const sources: (PlacedSource & { quiet: true })[] = []
+    for (const source of layout.sources) {
+        const editing = held(source.path)
+        if (editing === undefined || editing === source.text) {
+            sources.push({ ...source, quiet: true })
+            continue
+        }
+        const [parsed] = parseSources(
+            [{ path: source.path, text: editing, quiet: true }],
+            refusals,
+        )
+        if (parsed !== undefined)
+            sources.push({ ...source, ...parsed, quiet: true })
+    }
+    const { read } = await readSources(checker.session, sources, refusals)
+    await checker.session.diagnose(read, layout, false)
 }
 
 /** Whether a `.abide` an editor holds calls `onConfig`, where its text parses. */

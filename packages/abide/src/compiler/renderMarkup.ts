@@ -302,6 +302,8 @@ function renderPosition(
 
     const parts: string[] = []
     let open = `<${node.tag}`
+    // 32.61 — a `<textarea>`'s or `<select>`'s bound value, which is written inside the tag.
+    let within: string | undefined
     // WHAT IS NOT MARKUP IS NOT WRITTEN: a listener, `bind:element`, a refused URL, a bind whose
     // value is not an attribute, and every merge member after the one the group is written at.
     for (const one of classifyAttributes(node, lowering)) {
@@ -310,7 +312,10 @@ function renderPosition(
             continue
         }
         if (one.kind === 'bound') {
-            if (one.reflects === undefined) continue
+            if (one.reflects === undefined) {
+                if (one.bind === 'value') within = boundRead(one, lowering)
+                continue
+            }
             parts.push(JSON.stringify(open), boundMarkup(one, lowering))
             open = ''
             continue
@@ -349,7 +354,25 @@ function renderPosition(
     // `<br>`, and a close tag written for one is markup no browser accepts.
     if (node.children.length === 0 && VOID_ELEMENTS.has(node.lowerTag))
         return parts.join(' + ')
+    // 32.61 — THE VALUE IN PLACE OF THE AUTHOR'S TEXT, led by the newline the parser drops after
+    // `<textarea>` so a value opening on one keeps it.
+    if (
+        within !== undefined &&
+        node.lowerTag === 'textarea' &&
+        node.children.length === 0
+    )
+        return [
+            ...parts,
+            `'\\n' + ${lowering.use('escapeAttribute')}(${within})`,
+            JSON.stringify(`</${node.tag}>`),
+        ].join(' + ')
     const children = renderLevel(at.children, lowering, lane)
+    if (within !== undefined && node.lowerTag === 'select')
+        return [
+            ...parts,
+            `${lowering.use('selectedMarkup')}(${concat(children)}, ${within})`,
+            JSON.stringify(`</${node.tag}>`),
+        ].join(' + ')
     return [...parts, ...children, JSON.stringify(`</${node.tag}>`)].join(' + ')
 }
 
@@ -586,10 +609,7 @@ function boundMarkup(
     written: ClassifiedAttribute & { kind: 'bound' },
     lowering: Lowering,
 ): string {
-    const read = slotValueOf(
-        lowering,
-        `${lowering.use('boundValue')}(${lowering.reference(written.attribute)})`,
-    )
+    const read = boundRead(written, lowering)
     if (written.bind === 'value')
         return `' value="' + ${lowering.use('escapeAttribute')}(${read}) + '"'`
     const on =
@@ -597,6 +617,17 @@ function boundMarkup(
             ? `${lowering.use('groupHolds')}(${read}, ${JSON.stringify(written.own)})`
             : read
     return `(${on} ? ' ${written.reflects}' : '')`
+}
+
+/** A bind's value at render, under 41.4's guard: `undefined` while it is in flight. */
+function boundRead(
+    written: ClassifiedAttribute & { kind: 'bound' },
+    lowering: Lowering,
+): string {
+    return slotValueOf(
+        lowering,
+        `${lowering.use('boundValue')}(${lowering.reference(written.attribute)})`,
+    )
 }
 
 /**

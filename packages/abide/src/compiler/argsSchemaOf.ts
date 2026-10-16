@@ -30,6 +30,11 @@ type Schema = { [keyword: string]: JsonValue }
  * class graph instead is wide enough to walk for minutes, and widening it is 19.11's answer.
  */
 export type Walk<Seen = Map<number, Schema>> = { seen: Seen; depth: number }
+/**
+ * A schema walk, and which side of the wire it describes: what a caller SENDS, or what a handler
+ * ANSWERS (19.21).
+ */
+type SchemaWalk = Walk & { result: boolean }
 /** The depth a walk stops at: an object type this deep or deeper is not walked. */
 export const DEEPEST = 8
 
@@ -51,7 +56,11 @@ export async function argsSchemaOf(
     const args =
         call === undefined ? undefined : await checker.getParameterType(call, 0)
     if (args === undefined) return undefined
-    const schema = await schemaOf(checker, args, { seen: new Map(), depth: 0 })
+    const schema = await schemaOf(checker, args, {
+        seen: new Map(),
+        depth: 0,
+        result: false,
+    })
     if (schema.type !== 'object') return undefined
     const required = schema.required as string[] | undefined
     if (required !== undefined && defaulted.length > 0) {
@@ -62,10 +71,30 @@ export async function argsSchemaOf(
     return schema
 }
 
+/**
+ * The JSON Schema of what a handler answers, or `undefined` where it says nothing true of it.
+ *
+ * 19.21 — `value` is what the handler's `Rpc` reads, refusals already out of it. A value that may be
+ * nothing answers 204 rather than JSON, and a value the walk can say nothing of — `unknown`, a
+ * `Response`, a stream, a class instance — publishes no schema rather than `{}`.
+ */
+export async function resultSchemaOf(
+    checker: Checker,
+    value: Type | undefined,
+): Promise<Schema | undefined> {
+    if (value === undefined || (await holdsUndefined(value))) return undefined
+    const schema = await schemaOf(checker, value, {
+        seen: new Map(),
+        depth: 0,
+        result: true,
+    })
+    return Object.keys(schema).length === 0 ? undefined : schema
+}
+
 async function schemaOf(
     checker: Checker,
     type: Type,
-    walk: Walk,
+    walk: SchemaWalk,
 ): Promise<Schema> {
     const flags = type.flags
     if (flags & TypeFlags.String) return { type: 'string' }
@@ -89,7 +118,11 @@ async function schemaOf(
     if (walk.depth >= DEEPEST) return {}
     const pending: Schema = {}
     walk.seen.set(type.id, pending)
-    const inner: Walk = { seen: walk.seen, depth: walk.depth + 1 }
+    const inner: SchemaWalk = {
+        seen: walk.seen,
+        depth: walk.depth + 1,
+        result: walk.result,
+    }
     // Three questions of one type, asked together rather than one round trip after another.
     const [array, tuple, calls] = await Promise.all([
         checker.isArrayType(type),
@@ -113,7 +146,7 @@ async function schemaOf(
 async function objectOf(
     checker: Checker,
     type: Type,
-    walk: Walk,
+    walk: SchemaWalk,
 ): Promise<Schema> {
     const properties: Schema = {}
     const required: string[] = []
@@ -124,6 +157,14 @@ async function objectOf(
         const property = members[at] as (typeof members)[number]
         const value = types[at]
         if (value === undefined) continue
+        // 19.22 — AN ANSWER WITH A METHOD IS AN INSTANCE, and what `JSON.stringify` makes of one is
+        // its own `toJSON`'s or its fields', neither of which its members say.
+        if (
+            walk.result &&
+            (await checker.getSignaturesOfType(value, SignatureKind.Call))
+                .length > 0
+        )
+            return {}
         properties[property.name] = await schemaOf(checker, value, walk)
         // A member JSON can leave out is not required, whether `?` said so or `| undefined` did.
         if (
@@ -136,8 +177,9 @@ async function objectOf(
     if (required.length > 0) schema.required = required
     // 19.18 — A MEMBER THE TYPE DOES NOT DECLARE IS REFUSED, where no index signature declares the
     // rest: a caller outside the process sends whatever it likes, and a body writing its args to a
-    // row would write that too. An author who wants the rest declares a schema of their own.
-    schema.additionalProperties = false
+    // row would write that too. An author who wants the rest declares a schema of their own. 19.22 —
+    // an answer is wider than its type wherever the value handed back was.
+    if (!walk.result) schema.additionalProperties = false
     for (const index of await checker.getIndexInfosOfType(type))
         if (index.keyType.flags & TypeFlags.String)
             schema.additionalProperties = await schemaOf(
@@ -156,7 +198,7 @@ async function objectOf(
 async function unionOf(
     checker: Checker,
     union: UnionOrIntersectionType,
-    walk: Walk,
+    walk: SchemaWalk,
 ): Promise<Schema> {
     const all = await union.getTypes()
     const members: Type[] = []
@@ -182,8 +224,12 @@ async function unionOf(
                     type: 'boolean',
                     const: (member as LiteralType).value as boolean,
                 })
-    for (const member of members)
-        schemas.push(await schemaOf(checker, member, walk))
+    for (const member of members) {
+        const schema = await schemaOf(checker, member, walk)
+        // An arm that says nothing leaves the union saying nothing.
+        if (Object.keys(schema).length === 0) return schema
+        schemas.push(schema)
+    }
     if (schemas.length === 1) return schemas[0] as Schema
     const kinds: string[] = []
     for (const schema of schemas) {

@@ -206,7 +206,7 @@ export async function compiled(
     // ONE LAYOUT for the sources, the handler files and the public files, and what the tree refuses
     // is met before the checker is asked anything.
     const layout = await (kept?.layout() ?? appLayout(root))
-    refusals.adopt(layout.refused)
+    refusals.adopt([...layout.unparsed, ...layout.refused])
     const app: CompiledApp = {
         files: {},
         tables: {},
@@ -534,7 +534,7 @@ ${tableOf(routes)}
 ]
 
 // The router this document gets, the page it arrived on, and the two places a reader navigates
-// from (30.7). Hydrating here rather than leaving it to the app is what makes the page the server
+// from (RULEBOOK 30.7). Hydrating here rather than leaving it to the app is what makes the page the server
 // painted live without anybody wiring it.
 export function start(host: Element) {
     const router = startRouter(routes, host, ${transitions})

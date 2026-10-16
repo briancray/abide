@@ -125,6 +125,7 @@ export async function handlersUnder(
                 copy: handler.copy,
                 defaults: handler.defaults,
                 args: handler.args,
+                result: handler.result,
             })
             warnings.push(...handler.unread)
         } catch (thrown) {
@@ -155,6 +156,7 @@ export async function handlersUnder(
                 copy: each.copy,
                 defaults: each.defaults,
                 args: each.args,
+                result: each.result,
             })
             warnings.push(...each.unread)
         }

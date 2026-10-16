@@ -33,6 +33,20 @@ import { nesting, type Token, tokenize } from './tokenize.ts'
 // no parentheses to survive one.
 const SHORT_CIRCUIT: ReadonlySet<string> = new Set(['||', '&&', '??'])
 
+/**
+ * 32.67 — how a `{#for}` row's item is read where it is being emitted.
+ *
+ * `own` is the row's own top level, whose slots reading the item and nothing that moves are written
+ * by the row's `make` and `update` and bind nothing; a binding there is an item watch, the one
+ * writer of its slot, reading the item through `itemOf`.
+ * `nested` is inside a region of the row, a branch-local `<script>` or anything else the `update`
+ * does not reach, where every read but a listener's is a read of the cell. Where an item has no mode
+ * it is read as the value.
+ */
+type ItemMode = 'own' | 'nested'
+/** 32.67 — how many reads of a row's item were emitted as a cell call and as a record read. */
+export type ItemUses = { cell: number; record: number }
+
 /** 23.9 — a page's or a layout's route, which its `route.params` promises. */
 export type Routed = { route: string; kind: 'page' | 'layout' }
 
@@ -93,6 +107,20 @@ export class Lowering {
      * what its `route.params` is typed by.
      */
     private readonly routed: Routed | undefined
+    /**
+     * 32.67 — per `{#for}` item (by where its binding starts), how a read of it is emitted now, the
+     * name its row's record is held under, and how it was read. Set by the client's emitter around
+     * a row's mount alone (`readItemsAs`).
+     */
+    private readonly itemModes = new Map<
+        number,
+        { mode: ItemMode; record: string; uses: ItemUses }
+    >()
+    /**
+     * What is being lowered that reads a row's item off its record: a listener, at any depth, or a
+     * binding of the row's own top level (`binding`); `null` for anything else.
+     */
+    private recording: 'listener' | 'binding' | null = null
 
     constructor(
         file: AbideFile,
@@ -107,6 +135,110 @@ export class Lowering {
         this.checking = checking
         this.chunks = chunks
         this.routed = routed
+    }
+
+    /**
+     * 32.67 — where a `{#for}` block's item binding starts, the key every item question is asked by.
+     */
+    private itemOf(block: object): number {
+        return this.projection.items.get(block) ?? -1
+    }
+
+    /**
+     * 32.67 — emits `body` with `block`'s item read in `mode`, its record held as `record` for a
+     * listener, and answers how the item was read: as a cell, or off the record.
+     */
+    readItemsAs(
+        block: object,
+        mode: ItemMode,
+        record: string,
+        body: () => void,
+    ): ItemUses {
+        const item = this.itemOf(block)
+        const uses = { cell: 0, record: 0 }
+        this.itemModes.set(item, { mode, record, uses })
+        try {
+            body()
+        } finally {
+            this.itemModes.delete(item)
+        }
+        return uses
+    }
+
+    /**
+     * 32.67 — emits `body` with every row item read at its own top level read as `nested`: what a
+     * region of the row binds is bound to the cell, since the row's `update` reaches only its own
+     * top level.
+     */
+    nestItems(body: () => void): void {
+        const own: { mode: ItemMode }[] = []
+        for (const reading of this.itemModes.values())
+            if (reading.mode === 'own') own.push(reading)
+        for (const reading of own) reading.mode = 'nested'
+        try {
+            body()
+        } finally {
+            for (const reading of own) reading.mode = 'own'
+        }
+    }
+
+    /**
+     * 32.67 — a listener, lowered: it runs on an event rather than in a binding, so a row's item is
+     * read off the row's record, which allocates nothing a row.
+     */
+    listener(holder: object): string {
+        return this.recorded('listener', holder)
+    }
+
+    /**
+     * 32.67 — a text or attribute binding's value, lowered: at a row's own top level it reads the
+     * item through `itemOf`, off the record until the row's first new item makes it a cell, so a row
+     * that never takes one allocates nothing for it.
+     */
+    binding(holder: object): string {
+        return this.recorded('binding', holder)
+    }
+
+    /**
+     * 32.67 — whether a binding reads a row's item at that row's own top level, which makes it one
+     * of the row's item watches (`Scope.itemWatch`).
+     */
+    readsOwnItem(holder: object): boolean {
+        return this.holdsRead(
+            holder,
+            (read) =>
+                read.item !== -1 &&
+                this.itemModes.get(read.item)?.mode === 'own',
+        )
+    }
+
+    private recorded(as: 'listener' | 'binding', holder: object): string {
+        const was = this.recording
+        this.recording = as
+        try {
+            return this.expression(holder)
+        } finally {
+            this.recording = was
+        }
+    }
+
+    /** 32.67 — whether a position reads `block`'s item. */
+    readsItem(holder: object, block: object): boolean {
+        const item = this.itemOf(block)
+        return this.holdsRead(holder, (read) => read.item === item)
+    }
+
+    /**
+     * 32.67 — the names a row reads its item through, in the `{#for}`'s scope: its pattern's names,
+     * or the one name.
+     */
+    itemNames(block: object): Set<string> {
+        const item = this.itemOf(block)
+        const names = new Set<string>()
+        for (const read of this.answer.reads)
+            if (read.item === item)
+                names.add(this.projection.text.slice(read.start, read.end))
+        return names
     }
 
     /**
@@ -246,7 +378,12 @@ export class Lowering {
         const to = span.start + text.trimEnd().length
         const reads = this.answer.reads
         const read = reads[this.answer.firstRead(from)]
-        if (read === undefined || read.from !== from || read.shape !== 'value')
+        if (
+            read === undefined ||
+            read.from !== from ||
+            read.shape !== 'value' ||
+            read.item !== -1
+        )
             return undefined
         const path = source.slice(read.to, to)
         if (!/^(\s*\.\s*[A-Za-z_$][\w$]*)+$/.test(path)) return undefined
@@ -285,7 +422,20 @@ export class Lowering {
      * it NAMES a `Reactive`, which writes `{big()}` once where `big` reads `n` in its body.
      */
     isLive(holder: object): boolean {
-        return !this.answer.isStatic(this.spanOf(holder))
+        const span = this.spanOf(holder)
+        if (!this.answer.isStatic(span)) return true
+        // 32.67 — and inside a region of a row, a position reading the row's item is bound to its
+        // cell, which the proof sets aside: the server renders the row once.
+        return (
+            this.itemModes.size !== 0 &&
+            this.answer.holdsRead(span, (read) => this.isNested(read))
+        )
+    }
+
+    private isNested(read: Read): boolean {
+        return (
+            read.item !== -1 && this.itemModes.get(read.item)?.mode === 'nested'
+        )
     }
 
     /**
@@ -323,7 +473,12 @@ export class Lowering {
     holdsMarkup(run: readonly TemplateNode[]): boolean {
         for (const piece of run) {
             if (piece.kind !== 'expression') continue
-            if (this.isLive(piece) || this.holdsRead(piece, isRawCallee))
+            // The PROOF, not `isLive`: a row's item makes a position live on the client alone, and
+            // both lanes have to agree on whether a run is anchored (32.30).
+            if (
+                !this.answer.isStatic(this.spanOf(piece)) ||
+                this.holdsRead(piece, isRawCallee)
+            )
                 return true
         }
         return false
@@ -395,6 +550,16 @@ export class Lowering {
             const current = reads[read] as Read
             if (current.start >= to) break
             if (current.start < at) continue
+            // 32.67 — a row's item is the value wherever its row is not being mounted.
+            if (current.item !== -1) {
+                const rewritten = this.itemRead(current)
+                if (rewritten === undefined) continue
+                copy(current.from)
+                pin(current.from)
+                out += rewritten
+                at = current.to
+                continue
+            }
             // 31.3 — the operand's own read is the one that does not lower — save that a written
             // prop's name is its accessor, and the operand is the cell the accessor hands back.
             if (holds && current.from === wholeFrom && current.to === wholeTo) {
@@ -431,6 +596,23 @@ export class Lowering {
                 at = current.to
                 continue
             }
+            // 38.116 — THE CHECKER'S `props` CALL IS COPIED INSIDE ITS WRAPPER, so its type is the
+            // author's text where a rename looks for it, and a finding in it lands where written.
+            if (this.checking && current.shape === 'props') {
+                copy(current.from)
+                pin(current.from)
+                out += '__accessors('
+                origins?.push({
+                    at: base + out.length,
+                    source: current.from,
+                    length: current.to - current.from,
+                })
+                out += source.slice(current.from, current.to)
+                pin(current.to)
+                out += this.checkedPropsClose(current)
+                at = current.to
+                continue
+            }
             const rewritten = this.rewrite(current)
             if (rewritten === undefined) continue
             copy(current.from)
@@ -440,6 +622,23 @@ export class Lowering {
         }
         copy(to)
         return out
+    }
+
+    /**
+     * 33.4 — what closes the `__accessors(` the checker's `props` call is wrapped in: the record
+     * of accessors the caller passed, with the keys the child writes (33.6) and the keys it
+     * defaults (33.20).
+     */
+    private checkedPropsClose(read: Read): string {
+        const written =
+            read.path.length === 0
+                ? ''
+                : `, ${JSON.stringify(read.path.map((key) => key.name))}`
+        const without =
+            read.keys.length === 0
+                ? ''
+                : `${written === '' ? ', []' : ''}, ${JSON.stringify(read.keys)}`
+        return `${written}${without})`
     }
 
     /**
@@ -454,6 +653,37 @@ export class Lowering {
         if (this.routed !== undefined && read.routeParams)
             return `(${spelled} as unknown as () => __RouteParams<${JSON.stringify(this.routed.route)}, ${JSON.stringify(this.routed.kind)}>)`
         return read.through ? `${spelled}()` : spelled
+    }
+
+    /**
+     * 32.67 — one read of a row's item: the value as written outside its row's mount, the record's
+     * value in a listener, `itemOf` the record in a binding of the row's own top level, and the
+     * cell's read everywhere else in it.
+     */
+    private itemRead(read: Read): string | undefined {
+        const reading = this.itemModes.get(read.item)
+        if (reading === undefined) return undefined
+        const { mode, record, uses } = reading
+        const spelled = this.projection.text.slice(read.start, read.end)
+        let value = `${spelled}()`
+        if (
+            this.recording === 'listener' ||
+            (this.recording === 'binding' && mode === 'own')
+        ) {
+            const from =
+                this.recording === 'listener'
+                    ? `${record}.data`
+                    : `${this.use('itemOf')}(${record})`
+            // A PATTERN'S NAME is no member of the value at one path, so it is the list's own picker
+            // of that name (`rowPickers`), handed the record's value.
+            const text = this.projection.text
+            const named =
+                text.slice(read.item, read.item + spelled.length) === spelled &&
+                !/[\w$]/.test(text[read.item + spelled.length] ?? '')
+            value = named ? from : `${record}_${spelled}(${from})`
+            uses.record += 1
+        } else uses.cell += 1
+        return read.shape === 'shorthand' ? `${spelled}: ${value}` : value
     }
 
     /** What one read lowers to, or `undefined` where it stays exactly as written. */
@@ -498,18 +728,8 @@ export class Lowering {
             // 33.20 — a defaulted key leaves the record, so its default always stands and asks the
             // caller's accessor itself (`propOr`); its cell, where the child writes it, is built there.
             case 'props': {
+                // The checker's is bracketed in `lower` (`checkedPropsClose`).
                 const defaulted = read.keys
-                if (this.checking) {
-                    const written =
-                        read.path.length === 0
-                            ? ''
-                            : `, ${JSON.stringify(read.path.map((key) => key.name))}`
-                    const without =
-                        defaulted.length === 0
-                            ? ''
-                            : `${written === '' ? ', []' : ''}, ${JSON.stringify(defaulted)}`
-                    return `__accessors(${this.projection.text.slice(read.from, read.to)}${written}${without})`
-                }
                 const writtenKeys: (string | undefined)[] = []
                 for (const key of read.path)
                     if (key.name === undefined || !defaulted.includes(key.name))

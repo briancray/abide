@@ -9,6 +9,7 @@ import {
     isClassDeclaration,
     isEnumDeclaration,
     isExpressionStatement,
+    isForOfStatement,
     isFunctionDeclaration,
     isFunctionExpression,
     isIdentifier,
@@ -21,6 +22,7 @@ import {
     isPropertyAccessExpression,
     isReturnStatement,
     isVariableDeclaration,
+    isVariableDeclarationList,
     isVariableStatement,
 } from 'typescript/unstable/ast/is'
 import {
@@ -71,6 +73,8 @@ export type ShadowSpans = {
     servers: Span
     scripts: Span
     positions: PositionTable
+    /** 32.67 — where each `{#for}` row's item binding starts. */
+    items: Set<number>
 }
 
 const SETUP: ReadonlySet<PositionKind> = new Set(['setup'])
@@ -186,6 +190,7 @@ export async function readsIn(
     // listening and be reported unhandled; `await props` still throws it.
     props.catch(() => {})
     const params = routeReads(checker, abide, sourceFile, reads)
+    const rows = rowReads(checker, sourceFile, shadowPath, spans, reads)
     const configs = configReads(
         checker,
         abide,
@@ -256,6 +261,7 @@ export async function readsIn(
     await Promise.all(holding)
     await props
     await params
+    await rows
     await configs
     const statics = new Set<number>()
     const expressions = spans.positions.nodesIn(
@@ -493,11 +499,13 @@ async function proveSlots(
     statics: Set<number>,
 ): Promise<void> {
     // Reads are unsorted here; a position holding one is not asked about. A `raw` callee is the
-    // framework's name rather than a read of the page's, and `provePosition` exempts its call.
+    // framework's name rather than a read of the page's, and `provePosition` exempts its call. A
+    // row's item (32.67) is the value on the server, and the client's `Lowering.isLive` binds it.
     const read = (span: Span): boolean => {
         for (const one of reads)
             if (
                 one.shape !== 'raw' &&
+                one.item === -1 &&
                 one.start >= span.start &&
                 one.start < span.end
             )
@@ -731,6 +739,97 @@ async function routeReads(
             (access as { name?: { text: string } }).name?.text === 'params'
         reads.push(read)
     }
+}
+
+/**
+ * 32.67 — every read of a `{#for}` row's item, which a client lowering reads off the row's record or
+ * its cell inside the row's mount (`Lowering.readItemsAs`), so the value a kept key is handed is
+ * written into the row rather than the row remade.
+ *
+ * EVERY OCCURRENCE IS A READ OF THE ITEM, as a prop's is (`classifyPropRead`): a member written,
+ * `row.done = true`, is the value's member, and a call is the value called. A pattern's names are
+ * each one, read through the item. The ROW'S OWN KEY is not: the key is asked of the value before
+ * there is a row (`List.key`), so it reads the value itself.
+ */
+async function rowReads(
+    checker: Checker,
+    sourceFile: Node,
+    shadowPath: string,
+    spans: ShadowSpans,
+    reads: Read[],
+): Promise<void> {
+    if (spans.items.size === 0) return
+    const bound: Node[] = []
+    const loops: Node[] = []
+    const bind = (name: Node | undefined, loop: Node): void => {
+        if (name === undefined) return
+        if (isIdentifier(name)) {
+            bound.push(name)
+            loops.push(loop)
+            return
+        }
+        if (isObjectBindingPattern(name) || isArrayBindingPattern(name))
+            for (const element of name.elements)
+                bind((element as { name?: Node }).name, loop)
+    }
+    const visit = (node: Node): void => {
+        const declared = rowItemOf(node, spans.items)
+        if (declared !== undefined) bind(declared, node)
+        node.forEachChild(visit)
+    }
+    sourceFile.forEachChild(visit)
+    if (bound.length === 0) return
+    const symbols = await checker.getSymbolAtLocation(bound)
+    const found = await Promise.all(
+        symbols.map(async (symbol) =>
+            symbol === undefined
+                ? []
+                : await Promise.all(
+                      (
+                          await checker.getReferencesToSymbolInFile(
+                              shadowPath,
+                              symbol,
+                          )
+                      ).map((reference) => reference.resolve()),
+                  ),
+        ),
+    )
+    for (let at = 0; at < found.length; at += 1) {
+        const name = bound[at] as Node
+        const loop = loops[at] as Node
+        const item = (rowItemOf(loop, spans.items) as Node).getStart()
+        for (const node of found[at] as (Node | undefined)[]) {
+            if (node === undefined || node === name) continue
+            if (
+                spans.positions.holding(node.getStart())?.kind === 'key' &&
+                rowLoopOf(node, spans.items) === loop
+            )
+                continue
+            const read = classifyPropRead(node)
+            if (read === undefined) continue
+            read.item = item
+            reads.push(read)
+        }
+    }
+}
+
+/** The item binding `node` declares, where it is a `{#for}` row loop. */
+function rowItemOf(node: Node, items: Set<number>): Node | undefined {
+    if (!isForOfStatement(node)) return undefined
+    const list = node.initializer
+    const declared = isVariableDeclarationList(list)
+        ? list.declarations[0]?.name
+        : undefined
+    return declared !== undefined && items.has(declared.getStart())
+        ? declared
+        : undefined
+}
+
+/** The nearest `{#for}` row loop around `node`. */
+function rowLoopOf(node: Node, items: Set<number>): Node | undefined {
+    for (let at = node.parent; at !== undefined; at = at.parent)
+        if (rowItemOf(at, items) !== undefined) return at
+    return undefined
 }
 
 /**

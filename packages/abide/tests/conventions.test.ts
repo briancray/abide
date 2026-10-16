@@ -12,7 +12,7 @@ import { expect, test } from 'bun:test'
 import {
     CITATION,
     rulebookClauses,
-} from '../../harness/scripts/rulebookClauses.ts'
+} from '../../dogfood/scripts/rulebookClauses.ts'
 
 const ABIDE = new URL('../', import.meta.url)
 const PACKAGES = new URL('../../', import.meta.url)
@@ -32,13 +32,15 @@ async function sources(
     return out
 }
 
-// Every package's own source, relative to `packages/`: the framework (its tests are its own), the
-// harness, the docs app's source, and the bridge. The dogfood's playwright
-// specs are left out — they run on node, under rules this file does not hold them to.
+// Every package's own source, relative to `packages/`: the framework (its tests, benches and
+// browser specs are its own), the harness, the docs app's source and scripts, and the bridge. The
+// dogfood's playwright specs are left out — they run on node, under rules this file does not hold
+// them to.
 const AUTHORED = [
     'abide/**/*.ts',
     'harness/**/*.ts',
     'dogfood/src/**/*.ts',
+    'dogfood/scripts/**/*.ts',
     'bridge/**/*.ts',
 ]
 
@@ -67,8 +69,15 @@ const SELF_IMPORT =
 test('framework code imports by seam, never through its own public specifier', async () => {
     const offenders: string[] = []
     for (const { path, text } of await sources(ABIDE)) {
-        // THE STARTER `abide scaffold` COPIES IS AN APP'S CODE, and resolves abide as an app does.
-        if (path.startsWith('tests/') || path.startsWith('scaffold/')) continue
+        // THE STARTER `abide scaffold` COPIES IS AN APP'S CODE, and resolves abide as an app does —
+        // and a bench or a browser spec measures what an app ships, so it resolves abide the same way.
+        if (
+            path.startsWith('tests/') ||
+            path.startsWith('scaffold/') ||
+            path.startsWith('bench/') ||
+            path.startsWith('e2e/')
+        )
+            continue
         for (const match of text.matchAll(SELF_IMPORT)) {
             offenders.push(`${path}: ${match[1]}`)
         }
@@ -90,7 +99,9 @@ test('no test waits on a child process synchronously', async () => {
         'harness/tests/**/*.ts',
         'harness/src/**/*.ts',
         'harness/scripts/**/*.ts',
+        'abide/bench/**/*.ts',
         'dogfood/tests/**/*.ts',
+        'dogfood/scripts/**/*.ts',
     ])
         for (const { path, text } of await sources(PACKAGES, pattern))
             for (const line of text.split('\n'))
@@ -120,6 +131,8 @@ const JUSTIFIED = /\/\/\s*\S/
 test('every node: import names the bun api it stands in for', async () => {
     const bare: string[] = []
     for (const { path, text } of await sources(ABIDE)) {
+        // A playwright spec runs on node, where there is no bun api to stand in for.
+        if (path.startsWith('e2e/')) continue
         const lines = text.split('\n')
         for (let index = 0; index < lines.length; index += 1) {
             const line = lines[index] ?? ''
@@ -228,7 +241,8 @@ function exportedNames(text: string): string[] | undefined {
 test('a file exporting one thing is named after what it exports', async () => {
     const misnamed: string[] = []
     for (const { path, text } of await authored()) {
-        if (/^\w+\/tests\//.test(path)) continue
+        // A test file, a package's or a page's, is named for what it tests.
+        if (/(?:^\w+|\/src\/.*)\/tests\//.test(path)) continue
         const name = path.slice(path.lastIndexOf('/') + 1, -'.ts'.length)
         if (ADDRESSES.has(name)) continue
         const exported = exportedNames(text)
@@ -313,7 +327,7 @@ test('every clause a framework comment cites exists', async () => {
 
 // 38.94 — `sideEffects` in the package's `package.json` lets a bundler drop a module none of whose
 // exports a build uses, and a module that WRITES OUTSIDE ITSELF as it loads is then dropped with its
-// write: the compiled executable lost `installServer()` that way, and a page its `__ABIDE_WORK__`.
+// write: the compiled executable lost `installServer()` that way, and a page its published counters.
 // So every such module is listed, and every file listed by name is one. A write to a module's OWN
 // export (`refuse.named = named`) is not listed: it matters only where that export is used, and a
 // used export keeps its module. THE SPELLINGS READ are a column-0 statement opening with `(`/`;(`,

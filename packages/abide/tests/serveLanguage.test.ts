@@ -4,6 +4,7 @@
 // disk's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { DOCS_SITE } from '#compiler/DOCS_SITE.ts'
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -60,6 +61,61 @@ const paths = ['a', 'b']
 
 {#for path, index of paths}<p>{path}{index}</p>{/for}`
 
+// 38.116 — a reactive read by name in markup, a shorthand binding, and a `.ts` export another page
+// reads too.
+const REFS = `<script>
+import { reactive } from '@abide/abide'
+import { total } from '../lib/total.ts'
+
+let count = reactive(total)
+const { label } = { label: 'x' }
+</script>
+
+<p>{count}{label}</p>
+<button onclick={() => count++}>{count.toFixed(1)}</button>`
+
+const OTHERS = `<script>
+import { total } from '../lib/total.ts'
+</script>
+
+<p>{total}</p>`
+
+const BADGE = `<script>
+import { props } from '@abide/abide'
+
+const { tone, size } = props<{ tone: string; size?: number }>()
+</script>
+
+<p>{tone}{size}</p>`
+
+const TAGS = `<script>
+import Badge from '../lib/Badge.abide'
+</script>
+
+{#if true}<Badge tone="x"/>{/if}`
+
+// 38.116 — a prop passed by a tag, and a component closed by a tag of its own.
+const PANEL = `<script>
+import { props } from '@abide/abide'
+
+const { heading } = props<{ heading: string }>()
+</script>
+
+<h2>{heading}</h2>`
+
+const PANELS = `<script>
+import Panel from '../lib/Panel.abide'
+</script>
+
+<Panel heading="a"></Panel>
+<Panel heading={'b'}/>`
+
+const ELSEWHERE = `<script>
+import Panel from '../lib/Panel.abide'
+</script>
+
+<Panel heading="c"></Panel>`
+
 let app = ''
 let server: Bun.Subprocess<'pipe', 'pipe', 'pipe'> | undefined
 const received: { method?: string; id?: number; params?: unknown }[] = []
@@ -107,6 +163,15 @@ beforeAll(() => {
         'more/index.abide': LATER,
         'reading/index.abide': READING,
         'rows/index.abide': ROWS,
+        'refs/index.abide': REFS,
+        'others/index.abide': OTHERS,
+        'lib/total.ts': 'export const total = 1\n',
+        'lib/Badge.abide': BADGE,
+        'tags/index.abide': TAGS,
+        'lib/Panel.abide': PANEL,
+        'panels/index.abide': PANELS,
+        'elsewhere/index.abide': ELSEWHERE,
+        'refused/index.abide': '<p>x</p>',
         'settings/index.abide': `<script server>
 import { onConfig } from '@abide/abide/server'
 
@@ -547,6 +612,348 @@ test("a {#for}'s item and index hover in its head — 38.39", async () => {
     })
     expect(await hover(31, 'index')).toMatchObject({
         result: { contents: { value: '```ts\nconst index: number\n```' } },
+    })
+}, 60_000)
+
+type Range = {
+    start: { line: number; character: number }
+    end: { line: number; character: number }
+}
+
+// The edits a rename answers with in one file, as `line:character text`, in order.
+function editsIn(
+    changes: Record<string, { range: Range; newText: string }[]>,
+    uri: string,
+): string[] {
+    const edits: string[] = []
+    for (const edit of changes[uri] ?? [])
+        edits.push(
+            `${edit.range.start.line}:${edit.range.start.character} ${edit.newText}`,
+        )
+    return edits.sort()
+}
+
+async function opened(uri: string, text: string): Promise<void> {
+    send({
+        method: 'textDocument/didOpen',
+        params: {
+            textDocument: { uri, languageId: 'abide', version: 1, text },
+        },
+    })
+    await next(
+        (message) =>
+            message.method === 'textDocument/publishDiagnostics' &&
+            (message.params as { uri: string }).uri === uri,
+    )
+}
+
+// 38.116 — A RENAME ASKED AT A REACTIVE'S DECLARATION EDITS ITS MARKUP USES TOO. THE REVERT: ask the
+// checked module alone (`placesFrom` answering `fromSource`'s one place); the markup reads are
+// rewrites there, and the rename edits the declaration alone.
+test("a rename edits a reactive's declaration and its uses in markup — 38.116", async () => {
+    const uri = Bun.pathToFileURL(`${app}/refs/index.abide`).href
+    await opened(uri, REFS)
+    const lines = REFS.split('\n')
+    const declared = lines.findIndex((text) => text.startsWith('let count'))
+    send({
+        id: 40,
+        method: 'textDocument/rename',
+        params: {
+            textDocument: { uri },
+            position: { line: declared, character: 5 },
+            newName: 'tally',
+        },
+    })
+    const renamed = (await next((message) => message.id === 40)) as {
+        result: { changes: Record<string, { range: Range; newText: string }[]> }
+    }
+    const markup = lines.findIndex((text) => text.startsWith('<p>'))
+    const button = markup + 1
+    const row = lines[button] as string
+    expect(editsIn(renamed.result.changes, uri)).toEqual(
+        [
+            `${declared}:4 tally`,
+            `${markup}:4 tally`,
+            `${button}:${row.indexOf('count++')} tally`,
+            `${button}:${row.indexOf('count.toFixed')} tally`,
+        ].sort(),
+    )
+
+    // A SHORTHAND KEEPS THE PROPERTY IT NAMES. THE REVERT: write the new name over a shorthand as
+    // over any other place; the binding reads a property the object does not have.
+    const binding = lines.findIndex((text) => text.startsWith('const { label'))
+    const label = (lines[markup] as string).indexOf('label')
+    send({
+        id: 41,
+        method: 'textDocument/rename',
+        params: {
+            textDocument: { uri },
+            position: { line: markup, character: label },
+            newName: 'caption',
+        },
+    })
+    const shorthand = (await next((message) => message.id === 41)) as {
+        result: { changes: Record<string, { range: Range; newText: string }[]> }
+    }
+    expect(editsIn(shorthand.result.changes, uri)).toEqual(
+        [`${binding}:8 label: caption`, `${markup}:${label} caption`].sort(),
+    )
+
+    // A LIBRARY'S NAME IS NOT RENAMED, and the editor is told before it asks for a new one.
+    send({
+        id: 42,
+        method: 'textDocument/prepareRename',
+        params: {
+            textDocument: { uri },
+            position: { line: button, character: row.indexOf('toFixed') + 1 },
+        },
+    })
+    expect(await next((message) => message.id === 42)).toMatchObject({
+        error: { code: -32803 },
+    })
+    send({
+        id: 43,
+        method: 'textDocument/prepareRename',
+        params: {
+            textDocument: { uri },
+            position: { line: declared, character: 5 },
+        },
+    })
+    expect(await next((message) => message.id === 43)).toMatchObject({
+        result: {
+            range: {
+                start: { line: declared, character: 4 },
+                end: { line: declared, character: 9 },
+            },
+            placeholder: 'count',
+        },
+    })
+}, 60_000)
+
+// 38.116 — A `.ts` EXPORT'S REFERENCES ARE EVERY PAGE'S, open or not, imported by this one or not.
+// THE REVERT: drop `lowerApp` from the references question; `others/index.abide` is in no program,
+// and only this page and the `.ts` are found.
+test('references reach a .ts and a page nobody opened — 38.116', async () => {
+    const uri = Bun.pathToFileURL(`${app}/refs/index.abide`).href
+    const line = REFS.split('\n').findIndex((text) =>
+        text.includes('{ total }'),
+    )
+    send({
+        id: 44,
+        method: 'textDocument/references',
+        params: {
+            textDocument: { uri },
+            position: { line, character: 10 },
+            context: { includeDeclaration: true },
+        },
+    })
+    const found = (await next((message) => message.id === 44)) as {
+        result: { uri: string; range: Range }[]
+    }
+    const files = new Set(found.result.map((location) => location.uri))
+    expect([...files].sort()).toEqual(
+        [
+            uri,
+            Bun.pathToFileURL(`${app}/others/index.abide`).href,
+            Bun.pathToFileURL(`${app}/lib/total.ts`).href,
+        ].sort(),
+    )
+    const others = OTHERS.split('\n')
+    const last = others[others.length - 1] as string
+    expect(
+        found.result
+            .filter((location) => location.uri.endsWith('others/index.abide'))
+            .map((location) => location.range.start)
+            .sort((one, two) => one.line - two.line),
+    ).toEqual([
+        { line: 1, character: 9 },
+        { line: others.length - 1, character: last.indexOf('total') },
+    ])
+}, 60_000)
+
+// Asks a rename at `line`, `character` in `uri`, and answers each file's edits (`editsIn`), by the
+// file's path below the app.
+async function renamedAt(
+    id: number,
+    uri: string,
+    line: number,
+    character: number,
+    newName: string,
+): Promise<Record<string, string[]>> {
+    send({
+        id,
+        method: 'textDocument/rename',
+        params: {
+            textDocument: { uri },
+            position: { line, character },
+            newName,
+        },
+    })
+    const renamed = (await next((message) => message.id === id)) as {
+        result: { changes: Record<string, { range: Range; newText: string }[]> }
+    }
+    const byFile: Record<string, string[]> = {}
+    for (const file of Object.keys(renamed.result.changes))
+        byFile[file.slice(Bun.pathToFileURL(app).href.length + 1)] = editsIn(
+            renamed.result.changes,
+            file,
+        )
+    return byFile
+}
+
+// 38.116 — A PROP IS RENAMED WHERE A TAG PASSES IT, in every page that does, from the prop's side and
+// from the attribute's. THE REVERT: write a component's attribute keys as scaffolding again
+// (`JSON.stringify(key)` in `projectShadow`'s invocation); the declaration's side renames Panel alone,
+// and a rename asked at an attribute answers nothing. Or ask no place again where the checked module
+// copies the props type twice (`TypeSession.references`); asked at the attribute, the shorthand
+// binding keeps the old name.
+test("a prop's rename reaches every tag passing it — 38.116", async () => {
+    const panel = Bun.pathToFileURL(`${app}/lib/Panel.abide`).href
+    const panels = Bun.pathToFileURL(`${app}/panels/index.abide`).href
+    await opened(panel, PANEL)
+    await opened(panels, PANELS)
+    const declared = PANEL.split('\n').findIndex((text) =>
+        text.startsWith('const { heading'),
+    )
+    const declaration = PANEL.split('\n')[declared] as string
+    const passing = PANELS.split('\n')
+    const open = passing.findIndex((text) =>
+        text.startsWith('<Panel heading="a"'),
+    )
+    const expected = {
+        'lib/Panel.abide': [
+            `${declared}:8 title: heading`,
+            `${declared}:${declaration.lastIndexOf('heading')} title`,
+        ].sort(),
+        'panels/index.abide': [`${open}:7 title`, `${open + 1}:7 title`],
+        'elsewhere/index.abide': ['4:7 title'],
+    }
+    expect(
+        await renamedAt(
+            60,
+            panel,
+            declared,
+            declaration.lastIndexOf('heading') + 1,
+            'title',
+        ),
+    ).toEqual(expected)
+    expect(await renamedAt(61, panels, open + 1, 8, 'title')).toEqual(expected)
+}, 60_000)
+
+// 38.116 — A COMPONENT IS RENAMED AT A CLOSE TAG OF ITS OWN as at its open tag, asked at either, and a
+// self-closing tag is the one place. THE REVERT: drop the close tag's read from `projectShadow`'s
+// invocation; the close tags keep the old name, and a rename asked at one answers nothing.
+test('a component is renamed at its close tags too — 38.116', async () => {
+    const panels = Bun.pathToFileURL(`${app}/panels/index.abide`).href
+    const passing = PANELS.split('\n')
+    const imported = passing.findIndex((text) =>
+        text.startsWith('import Panel'),
+    )
+    const open = passing.findIndex((text) =>
+        text.startsWith('<Panel heading="a"'),
+    )
+    const closeAt = (passing[open] as string).indexOf('</Panel>') + 2
+    // A default import's rename is every importer's, as the checker answers it.
+    const elsewhere = ELSEWHERE.split('\n')
+    const elsewhereOpen = elsewhere.length - 1
+    const expected = {
+        'panels/index.abide': [
+            `${imported}:7 Card2`,
+            `${open}:1 Card2`,
+            `${open}:${closeAt} Card2`,
+            `${open + 1}:1 Card2`,
+        ].sort(),
+        'elsewhere/index.abide': [
+            '1:7 Card2',
+            `${elsewhereOpen}:1 Card2`,
+            `${elsewhereOpen}:${(elsewhere[elsewhereOpen] as string).indexOf('</Panel>') + 2} Card2`,
+        ],
+    }
+    expect(await renamedAt(62, panels, imported, 8, 'Card2')).toEqual(expected)
+    expect(await renamedAt(63, panels, open, closeAt + 1, 'Card2')).toEqual(
+        expected,
+    )
+}, 60_000)
+
+// 38.117 — MARKUP OFFERS WHAT MARKUP TAKES: the blocks the parser reads after `{#`, the arms and the
+// close of the block still open after `{:` and `{/`, the components in scope after `<`, and a
+// component's props not yet written inside its tag. THE REVERT: drop the `templateContext` arm of
+// `TypeSession.complete`; every one of these is answered null.
+test('markup completes blocks, component tags and their props — 38.117', async () => {
+    const uri = Bun.pathToFileURL(`${app}/tags/index.abide`).href
+    await opened(uri, TAGS)
+    const labelsAt = async (
+        id: number,
+        text: string,
+        version: number,
+    ): Promise<string[]> => {
+        send({
+            method: 'textDocument/didChange',
+            params: {
+                textDocument: { uri, version },
+                contentChanges: [{ text }],
+            },
+        })
+        const lines = text.split('\n')
+        send({
+            id,
+            method: 'textDocument/completion',
+            params: {
+                textDocument: { uri },
+                position: {
+                    line: lines.length - 1,
+                    character: (lines[lines.length - 1] as string).length,
+                },
+            },
+        })
+        const answered = (await next((message) => message.id === id)) as {
+            result: { items: { label: string }[] } | null
+        }
+        return (answered.result?.items ?? []).map((item) => item.label).sort()
+    }
+    const head = TAGS.slice(0, TAGS.indexOf('{#if'))
+    expect(await labelsAt(50, `${head}{#`, 2)).toEqual([
+        'component',
+        'for',
+        'if',
+        'try',
+    ])
+    expect(await labelsAt(51, `${head}{#try}x{:`, 3)).toEqual([
+        'catch',
+        'finally',
+    ])
+    expect(await labelsAt(52, `${head}{#if true}<p>x</p>{/`, 4)).toEqual(['if'])
+    expect(await labelsAt(53, `${head}<`, 5)).toEqual(['Badge'])
+    expect(await labelsAt(54, `${head}<Badge tone="x" `, 6)).toEqual(['size'])
+}, 60_000)
+
+// 38.118 — AN ABIDE FINDING CARRIES THE CLAUSE IT CITES as its code, linked to the rulebook's page.
+// THE REVERT: publish `code` only where the checker numbered the finding; this one carries none.
+test('a finding citing a clause carries it as its code — 38.118', async () => {
+    const uri = Bun.pathToFileURL(`${app}/refused/index.abide`).href
+    send({
+        method: 'textDocument/didOpen',
+        params: {
+            textDocument: {
+                uri,
+                languageId: 'abide',
+                version: 1,
+                text: '<p>{:finally}</p>',
+            },
+        },
+    })
+    const published = await next(
+        (message) =>
+            message.method === 'textDocument/publishDiagnostics' &&
+            (message.params as { uri: string }).uri === uri,
+    )
+    expect(published.params).toMatchObject({
+        diagnostics: [
+            {
+                code: '32.56',
+                codeDescription: { href: `${DOCS_SITE}/rulebook#32.56` },
+            },
+        ],
     })
 }, 60_000)
 

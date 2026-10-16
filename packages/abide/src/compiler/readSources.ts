@@ -37,7 +37,7 @@ export function parseSources(
         try {
             file = parseAbide(source.text)
         } catch (thrown) {
-            if (!quiet) refusals.at(source.path, thrown)
+            if (!quiet) refusals.at(source.path, thrown, source.text)
             continue
         }
         parsed.push({

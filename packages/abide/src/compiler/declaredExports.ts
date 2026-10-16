@@ -35,8 +35,14 @@ import {
 import type { Method } from '#shared/rpc.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { defaultedMembers, parameterPattern } from './argsDefaultsIn.ts'
-import { argsSchemaOf, DEEPEST, type Walk } from './argsSchemaOf.ts'
+import {
+    argsSchemaOf,
+    DEEPEST,
+    resultSchemaOf,
+    type Walk,
+} from './argsSchemaOf.ts'
 import { diagnosisAt } from './lineOf.ts'
+import type { Refusals } from './Refusals.ts'
 import { isReactiveCall, METHODS, optionNamed } from './reactiveOptions.ts'
 import {
     abideIn,
@@ -44,7 +50,6 @@ import {
     isReactiveMember,
     valueTypeOf,
 } from './reactiveTypes.ts'
-import type { Refusals } from './Refusals.ts'
 import type { Diagnosis } from './TypeSession.ts'
 
 /**
@@ -83,7 +88,7 @@ export async function declaredExports(
                 refusals.at(
                     file,
                     new Error(
-                        `abide: ${path} is not inside the project ${projectName}, so what it exports cannot be read (16.73). Give the app a tsconfig whose include reaches it.`,
+                        `abide: ${path} is not inside the project ${projectName}, so what it exports cannot be read (RULEBOOK 16.73). Give the app a tsconfig whose include reaches it.`,
                     ),
                 )
                 return undefined
@@ -123,17 +128,21 @@ export async function declaredExports(
                             declared === undefined
                                 ? undefined
                                 : await checker.getTypeOfSymbol(target)
+                        const value =
+                            handlerType === undefined
+                                ? undefined
+                                : await valueOfRpc(checker, handlerType)
                         if (handlerType !== undefined && abide.reactive) {
                             const at = await nestedReactiveIn(
                                 checker,
                                 abide.reactive,
-                                await valueOfRpc(checker, handlerType),
+                                value,
                                 '',
                                 { seen: new Set(), depth: 0 },
                             )
                             if (at !== undefined)
                                 throw new Error(
-                                    `abide: ${path} — \`${exported.name}\` returns a \`Reactive\` at \`${at}\`, which the wire would carry as the function it is rather than the value it holds. Read it there, or return the \`Reactive\` itself to have it adopted (11.12). RULEBOOK 16.39.`,
+                                    `abide: ${path} — \`${exported.name}\` returns a \`Reactive\` at \`${at}\`, which the wire would carry as the function it is rather than the value it holds. Read it there, or return the \`Reactive\` itself to have it adopted (RULEBOOK 11.12). RULEBOOK 16.39.`,
                                 )
                         }
                         return {
@@ -153,6 +162,10 @@ export async function declaredExports(
                                           handlerType,
                                           declared?.defaulted ?? [],
                                       ),
+                            // 19.21 — a stream's chunks are framed one by one, never one JSON value.
+                            result: declared?.copy?.stream
+                                ? undefined
+                                : await resultSchemaOf(checker, value),
                             unread,
                         }
                     } catch (thrown) {
@@ -179,7 +192,15 @@ const METHODS_SOURCE = Bun.fileURLToPath(
 type Declared = Mount['method']
 type DeclaredExport = Pick<
     Mount,
-    'name' | 'ui' | 'cli' | 'mcp' | 'copy' | 'defaults' | 'args' | 'description'
+    | 'name'
+    | 'ui'
+    | 'cli'
+    | 'mcp'
+    | 'copy'
+    | 'defaults'
+    | 'args'
+    | 'result'
+    | 'description'
 > & {
     method: Declared | undefined
     /** 18.15 — what its copy's options declare and the build could not read. */

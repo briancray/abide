@@ -3,6 +3,9 @@ import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
 import { isComponentTag, isSlot, propKeyOf } from './classifyTemplate.ts'
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
+import { lineOf } from './lineOf.ts'
+import { PositionedRefusal } from './PositionedRefusal.ts'
+import { TEMPLATE_BLOCKS } from './TEMPLATE_BLOCKS.ts'
 import { importedNames } from './splitImports.ts'
 import {
     type Attribute,
@@ -29,6 +32,11 @@ import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 // and parses the third. The expression grammar is NOT parsed here: `{expr}` is captured as
 // source text and handed to the emitter verbatim, which is what keeps 19.11 a property of
 // the file rather than a promise this parser has to keep.
+
+/** 32.64 — a close tag, naming the block it closes. */
+const CLOSER = new RegExp(
+    `^\\/\\s*(${Object.keys(TEMPLATE_BLOCKS).join('|')})$`,
+)
 
 /** A `.abide` file split into its script, module, style and head blocks and its parsed template. */
 export type AbideFile = {
@@ -94,6 +102,10 @@ type Origins = {
     keys: Map<object, number>
     /** 38.39 — per `{#for}` block, where its item and its index start (`-1` where it has none). */
     bindings: Map<object, { item: number; index: number }>
+    /** 38.116 — per attribute but a spread, where its name starts. */
+    names: Map<object, number>
+    /** 38.116 — per element closed by a tag of its own, where that close tag's name starts. */
+    closes: Map<object, number>
 }
 
 /**
@@ -107,6 +119,66 @@ function armLevel(open: (string | null)[]): number {
     let level = open.length - 1
     while (level > 0 && open[level] !== ARM) level -= 1
     return level
+}
+
+/** The name a block's own tags spell — `if` for `{#if}` and `{/if}`. */
+function blockName(block: TemplateNode | InlineComponent): string {
+    return block.kind === 'block' ? block.block : 'component'
+}
+
+/** Which block IS open where a tag closes or continues another, and where it opened — or none. */
+function innermostOpen(
+    source: string,
+    blocks: (TemplateNode | InlineComponent)[],
+    openedAt: number[],
+): string {
+    const block = blocks[blocks.length - 1]
+    if (block === undefined) return ' No block is open here.'
+    const { line, column } = lineOf(
+        source,
+        openedAt[openedAt.length - 1] as number,
+    )
+    return ` The block open here is the {#${blockName(block)}} at ${line}:${column}.`
+}
+
+/** What to write instead of a block abide has none of, where there is one thing to write. */
+function unknownHint(inner: string): string {
+    if (/^#each(?![\w$])/.test(inner)) return ' — a list is {#for item of list}'
+    if (/^#await(?![\w$])/.test(inner))
+        return ' — there is no {#await}, and a loading arm is {#if value.ready()}'
+    if (/^@html(?![\w$])/.test(inner)) return ' — markup is {raw(value)}'
+    if (/^:else/.test(inner))
+        return ' — an else arm is {:else} or {:else if condition}'
+    return ''
+}
+
+/**
+ * 32.63 — a close tag that names an element opened OUTSIDE a block still open: the block was never
+ * closed inside it. Ignored, the close tag was dropped and the block took the rest of the element
+ * and everything after it as its body — `<p>{#component Card()}x</p>` lost the `<p>` entirely. A
+ * close tag that names no open element at all is still dropped (`parseAbide`).
+ */
+function refuseCrossing(
+    closing: string,
+    open: (string | null)[],
+    blocks: (TemplateNode | InlineComponent)[],
+    openedAt: number[],
+): void {
+    let arms = 0
+    for (let level = open.length - 1; level > 0; level -= 1) {
+        const name = open[level]
+        if (name === ARM) arms += 1
+        else if (typeof name === 'string' && sameTag(name, closing)) {
+            if (arms === 0) return
+            // The first block opened inside the element, which every block above it sits in.
+            const index = blocks.length - arms
+            const block = blocks[index] as TemplateNode | InlineComponent
+            throw new PositionedRefusal(
+                `abide: {#${blockName(block)}} is never closed before </${closing}>, and the element it was opened in ends there. Write {/${blockName(block)}} before </${closing}>. RULEBOOK 32.63.`,
+                openedAt[index] as number,
+            )
+        }
+    }
 }
 
 /** Pops `open` and `stack` together down to `level`, closing whatever the arm still holds open. */
@@ -142,6 +214,8 @@ export function parseAbide(source: string): AbideFile {
         holders: new Map(),
         keys: new Map(),
         bindings: new Map(),
+        names: new Map(),
+        closes: new Map(),
     }
     const root: TemplateNode[] = []
     // The open elements, innermost last. `root` is the floor and is never popped.
@@ -155,6 +229,9 @@ export function parseAbide(source: string): AbideFile {
     // The open control blocks, so a `{:else}` knows which block it belongs to, and the open
     // `{#component}` blocks, whose body a `<script>` or a `<style>` written in it belongs to.
     const blocks: (TemplateNode | InlineComponent)[] = []
+    // Where each open block's own tag starts, beside `blocks`, so a block left open is refused at
+    // the tag that opened it.
+    const openedAt: number[] = []
     // 32.43 — each `{#component}` under the list it was written in, which says whose scope it is in
     // once the tree is whole (`fileComponents`).
     const declared = new Map<TemplateNode[], InlineComponent[]>()
@@ -186,9 +263,20 @@ export function parseAbide(source: string): AbideFile {
                 )
             const innermost = open[open.length - 1]
             if (typeof innermost === 'string' && sameTag(innermost, closing)) {
+                // The element closed is the last node of the level around it, written before
+                // every node now inside it — and placed only where the close spells its name.
+                const around = stack[stack.length - 2] as TemplateNode[]
+                if (closing === innermost) {
+                    let named = at + 2
+                    while (isSpace(source[named] as string)) named += 1
+                    origins.closes.set(
+                        around[around.length - 1] as TemplateNode,
+                        named,
+                    )
+                }
                 stack.pop()
                 open.pop()
-            }
+            } else refuseCrossing(closing, open, blocks, openedAt)
             at = close + 1
             continue
         }
@@ -213,7 +301,7 @@ export function parseAbide(source: string): AbideFile {
                 continue
             }
 
-            const tag = readTag(source, at, origins.holders)
+            const tag = readTag(source, at, origins)
             if (tag === undefined) {
                 // A `<` THAT OPENS NO TAG IS TEXT. `<p>a < b</p>` lost its `<` to a parser that
                 // stepped over what it could not read.
@@ -369,26 +457,15 @@ export function parseAbide(source: string): AbideFile {
                 if (here === undefined) declared.set(children, [component])
                 else here.push(component)
                 blocks.push(component)
+                openedAt.push(at)
                 stack.push(component.children)
                 open.push(ARM)
                 at = end + 1
                 continue
             }
-            if (inner === '/component') {
-                const level = armLevel(open)
-                if (
-                    blocks[blocks.length - 1]?.kind === 'component' &&
-                    level > 0
-                ) {
-                    blocks.pop()
-                    unwindTo(level, open, stack)
-                }
-                at = end + 1
-                continue
-            }
             // `{#if}`, `{:else}`, `{:else if}`, `{/if}` — a control block opens a new ARM rather
             // than a new element, so it keeps its own stack beside the element one.
-            if (inner.startsWith('#if')) {
+            if (/^#if(?![\w$])/.test(inner)) {
                 const subject = trimmed(source, slot.at + 3, end)
                 const branch = newBranch(subject.text)
                 origins.holders.set(branch, subject.at)
@@ -399,37 +476,43 @@ export function parseAbide(source: string): AbideFile {
                 }
                 children.push(block)
                 blocks.push(block)
+                openedAt.push(at)
                 stack.push(branch.children)
                 open.push(ARM)
                 at = end + 1
                 continue
             }
-            if (inner.startsWith(':else')) {
+            if (/^:else(?![\w$])/.test(inner)) {
                 const block = blocks[blocks.length - 1]
+                // 32.64 — AN ELSE ARM OUTSIDE A `{#if}` IS REFUSED, for the reason 32.56 refuses a
+                // stray catch: dropped, the text after it read as the body it stood in.
                 if (
-                    block !== undefined &&
-                    block.kind === 'block' &&
-                    block.block === 'if'
-                ) {
-                    // `{:else}` carries no condition, which is what makes it always take.
-                    const subject = trimmed(
-                        source,
-                        slot.at + elseSubjectAt(inner),
-                        end,
+                    block === undefined ||
+                    block.kind !== 'block' ||
+                    block.block !== 'if'
+                )
+                    throw new PositionedRefusal(
+                        `abide: {${inner}} stands outside a {#if}, and only a {#if} has an else arm.${innermostOpen(source, blocks, openedAt)} RULEBOOK 32.64.`,
+                        at,
                     )
-                    const branch = newBranch(subject.text)
-                    if (branch.subject !== '')
-                        origins.holders.set(branch, subject.at)
-                    // UNWOUND TO THE ARM'S OWN LEVEL, for the reason `{/if}` below is: an
-                    // element the author left open in the PREVIOUS arm sits above it, and
-                    // popping one level left `open` naming that element while `stack` held the
-                    // new arm — so its close tag popped the arm and every node after it landed
-                    // in the first arm, which renders on the opposite condition.
-                    unwindTo(armLevel(open), open, stack)
-                    block.branches.push(branch)
-                    stack.push(branch.children)
-                    open.push(ARM)
-                }
+                // `{:else}` carries no condition, which is what makes it always take.
+                const subject = trimmed(
+                    source,
+                    slot.at + elseSubjectAt(inner),
+                    end,
+                )
+                const branch = newBranch(subject.text)
+                if (branch.subject !== '')
+                    origins.holders.set(branch, subject.at)
+                // UNWOUND TO THE ARM'S OWN LEVEL, for the reason `{/if}` below is: an
+                // element the author left open in the PREVIOUS arm sits above it, and
+                // popping one level left `open` naming that element while `stack` held the
+                // new arm — so its close tag popped the arm and every node after it landed
+                // in the first arm, which renders on the opposite condition.
+                unwindTo(armLevel(open), open, stack)
+                block.branches.push(branch)
+                stack.push(branch.children)
+                open.push(ARM)
                 at = end + 1
                 continue
             }
@@ -444,12 +527,13 @@ export function parseAbide(source: string): AbideFile {
                 }
                 children.push(block)
                 blocks.push(block)
+                openedAt.push(at)
                 stack.push(body.children)
                 open.push(ARM)
                 at = end + 1
                 continue
             }
-            if (inner.startsWith(':catch') || inner === ':finally') {
+            if (/^:catch(?![\w$])/.test(inner) || inner === ':finally') {
                 const block = blocks[blocks.length - 1]
                 // 32.56 — ONLY A `{#try}` HAS THESE ARMS. Anywhere else the tag was dropped and what
                 // followed it read as the body it stood in: a `{#for}`'s catch rendered in every row.
@@ -458,8 +542,9 @@ export function parseAbide(source: string): AbideFile {
                     block.kind !== 'block' ||
                     block.block !== 'try'
                 )
-                    throw new Error(
+                    throw new PositionedRefusal(
                         `abide: {${inner}} stands outside a {#try}, and only a {#try} has a catch or a finally arm. RULEBOOK 32.56.`,
+                        at,
                     )
                 unwindTo(armLevel(open), open, stack)
                 // The finally arm is a third branch until `{/try}` folds it into the other two.
@@ -472,17 +557,42 @@ export function parseAbide(source: string): AbideFile {
                 at = end + 1
                 continue
             }
-            if (inner === '/try') {
-                const level = armLevel(open)
+            if (/^#for(?![\w$])/.test(inner)) {
+                const block = forBlock(
+                    source,
+                    trimmed(source, slot.at + 4, end),
+                    origins,
+                )
+                children.push(block)
+                blocks.push(block)
+                openedAt.push(at)
+                stack.push(block.children)
+                open.push(ARM)
+                at = end + 1
+                continue
+            }
+            // 32.64 — A CLOSE TAG CLOSES THE BLOCK IT NAMES, AND ONLY THAT ONE. Ignored, a stray
+            // `{/if}` let the text after it stand where the author never put it; and closing
+            // whatever was innermost let `{/if}` end a `{#try}` without folding its arms.
+            const closer = CLOSER.exec(inner)
+            if (closer !== null) {
+                const name = closer[1] as string
                 const block = blocks[blocks.length - 1]
-                if (
-                    block !== undefined &&
-                    block.kind === 'block' &&
-                    block.block === 'try' &&
-                    level > 0
-                ) {
-                    blocks.pop()
-                    unwindTo(level, open, stack)
+                if (block === undefined || blockName(block) !== name)
+                    throw new PositionedRefusal(
+                        `abide: {/${name}} closes no {#${name}}.${innermostOpen(source, blocks, openedAt)} RULEBOOK 32.64.`,
+                        at,
+                    )
+                blocks.pop()
+                openedAt.pop()
+                // UNWOUND TO THE ARM'S OWN LEVEL, because an element the author left open inside
+                // the block sits above it. Requiring the arm to be innermost, `<div>{#if a}<b>x
+                // {/if}</div><p>after</p>` closed NOTHING — the `</div>` then matched nothing
+                // either, and the `<p>` landed inside the if-arm and vanished whenever the
+                // condition was false. Closing whatever the block still holds open is what the
+                // close tag of the element AROUND it would have to do anyway.
+                unwindTo(armLevel(open), open, stack)
+                if (block.kind === 'block' && block.block === 'try') {
                     const after = closeTry(block)
                     const around = stack[stack.length - 1] as TemplateNode[]
                     around.push(...after)
@@ -498,36 +608,17 @@ export function parseAbide(source: string): AbideFile {
                 at = end + 1
                 continue
             }
-            if (inner.startsWith('#for')) {
-                const block = forBlock(
-                    source,
-                    trimmed(source, slot.at + 4, end),
-                    origins,
+            // 32.65 — `{#each}`, `{#await}`, `{@html}` and every other tag abide has no block for.
+            // Read as an expression, each surfaced as a TypeScript syntax error about a `#` or an
+            // `@`, which names nothing the author wrote.
+            const unknown = /^(?:[#:@][A-Za-z]|\/\s*[A-Za-z][\w$]*$)/.test(
+                inner,
+            )
+            if (unknown)
+                throw new PositionedRefusal(
+                    `abide: {${inner}} is not a block abide has. A template has {#if}, {#for}, {#try} and {#component Name(pattern)}, each closed by its own {/if}, {/for}, {/try} or {/component}${unknownHint(inner)}. RULEBOOK 32.65.`,
+                    at,
                 )
-                children.push(block)
-                blocks.push(block)
-                stack.push(block.children)
-                open.push(ARM)
-                at = end + 1
-                continue
-            }
-            // A `{/if}` with no block open closes NOTHING — left to pop, it ends the element
-            // around it and every node after it hangs outside.
-            if (inner === '/for' || inner === '/if') {
-                // UNWOUND TO THE ARM'S OWN LEVEL, because an element the author left open inside
-                // the block sits above it. Requiring the arm to be innermost, `<div>{#if a}<b>x
-                // {/if}</div><p>after</p>` closed NOTHING — the `</div>` then matched nothing
-                // either, and the `<p>` landed inside the if-arm and vanished whenever the
-                // condition was false. Closing whatever the block still holds open is what the
-                // close tag of the element AROUND it would have to do anyway.
-                const level = armLevel(open)
-                if (blocks[blocks.length - 1]?.kind === 'block' && level > 0) {
-                    blocks.pop()
-                    unwindTo(level, open, stack)
-                }
-                at = end + 1
-                continue
-            }
 
             const expression: TemplateNode = {
                 kind: 'expression',
@@ -541,6 +632,14 @@ export function parseAbide(source: string): AbideFile {
 
         at = pushText(children, source, at, at)
     }
+    // 32.63 — a block still open at the end of the file closes nowhere, and what it holds would
+    // render only where its arm takes.
+    const unclosed = blocks[blocks.length - 1]
+    if (unclosed !== undefined)
+        throw new PositionedRefusal(
+            `abide: {#${blockName(unclosed)}} is never closed. Write {/${blockName(unclosed)}} where its body ends. RULEBOOK 32.63.`,
+            openedAt[openedAt.length - 1] as number,
+        )
 
     const components = fileComponents(root, declared)
     refuseImported(components, [...modules, ...servers, ...scripts])
@@ -1148,7 +1247,7 @@ function leadingSpace(text: string): number {
 function readTag(
     source: string,
     open: number,
-    origins: Map<object, number>,
+    origins: Origins,
 ):
     | {
           name: string
@@ -1177,7 +1276,8 @@ function readTag(
     const place = (from: number, position: number, named: number): void => {
         for (let index = from; index < attributes.length; index += 1) {
             const placed = attributes[index] as Attribute
-            origins.set(placed, placed.expression ? position : named)
+            origins.holders.set(placed, placed.expression ? position : named)
+            if (placed.name !== '...') origins.names.set(placed, named)
         }
     }
     while (at < source.length) {

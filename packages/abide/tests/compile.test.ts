@@ -11,7 +11,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { readdirSync, rmSync } from 'node:fs' // bun has no sync listing or recursive removal of its own
-import { spawned } from 'harness/gate'
+import { spawned } from '@abide/harness/gate'
 import { addressOf, appFixture, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 

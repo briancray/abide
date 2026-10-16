@@ -1,6 +1,6 @@
 // 38.1 — `abide scaffold <name>`: THE LAYOUT EVERY ABIDE APP HAS, written into `<name>`. There is
-// nothing to choose, because what is scaffolded is a root layout and a page — the files the commands
-// read — and the test preload.
+// nothing to choose, because what is scaffolded is a root layout, a page, a handler file the page
+// calls, a test of that handler, and a test that mounts the page and counts the work a click does.
 // A file that is already there is left as it is and reported skipped, so a scaffold run over a
 // half-made project finishes it rather than overwriting it.
 
@@ -22,15 +22,22 @@ const ABIDE_DEPENDENCY = PACKAGE_ROOT.includes('/node_modules/')
     ? `^${abidePackage.version}`
     : `file:${PACKAGE_ROOT}`
 
+// THE HARNESS BESIDE IT, by the same rule: from a registry its latest, whose peer range on abide is
+// what keeps the two in step; from a checkout the checkout's own harness.
+const HARNESS_DEPENDENCY = PACKAGE_ROOT.includes('/node_modules/')
+    ? 'latest'
+    : `file:${PACKAGE_ROOT.slice(0, PACKAGE_ROOT.lastIndexOf('/'))}/harness`
+
 // The `#src` alias, written as the package's `imports` and again as the checker's `paths`.
 const SOURCE_ALIAS = { '#src/*': ['./src/*', './src/*.ts'] }
 
 /**
- * 38.109 — the starter's `bunfig.toml`: a test imports the app's `.abide` files as modules, with
+ * 38.109, 38.119 — the starter's `bunfig.toml`: the harness's abide preload, which is a DOM a test
+ * can mount into and measure, then abide's own — the app's `.abide` files imported as modules, with
  * nothing booted first.
  */
 export const TEST_PRELOAD =
-    '# 38.109 — a test imports the app\'s `.abide` files as modules, with nothing booted first.\n[test]\npreload = ["@abide/abide/test"]\n'
+    '# 38.109, 38.119 — a DOM to mount into and measure, then the app\'s `.abide` files as modules.\n[test]\npreload = ["@abide/harness/abide/preload"]\n'
 
 // WRITTEN, NOT COPIED, beside the manifests: a packer drops a `bunfig.toml` or a `.gitignore` from
 // the tarball (`bun pm pack` both, `npm pack` the second), so neither survives as a starter file.
@@ -51,6 +58,8 @@ function filesFor(name: string): Record<string, string> {
                     start: 'abide start',
                     // 38.108 — every address, and the file answering it.
                     routes: 'abide routes',
+                    // 38.112 — the starter's own test, under the 38.109 preload.
+                    test: 'bun test',
                 },
                 // ONE ALIAS FOR THE SOURCE, and two targets for it, because an extensionless
                 // specifier is how an import is written and only bun probes for the extension:
@@ -62,8 +71,12 @@ function filesFor(name: string): Record<string, string> {
                 imports: SOURCE_ALIAS,
                 dependencies: { '@abide/abide': ABIDE_DEPENDENCY },
                 // `Bun`, `bun:sqlite` and the rest of the runtime a server module reaches for are
-                // typed by these, and `abide check` reports every one untyped without them.
-                devDependencies: { '@types/bun': 'latest' },
+                // typed by these, and `abide check` reports every one untyped without them. The
+                // harness is what the starter's tests measure the work a click does with (38.119).
+                devDependencies: {
+                    '@abide/harness': HARNESS_DEPENDENCY,
+                    '@types/bun': 'latest',
+                },
             },
             null,
             4,

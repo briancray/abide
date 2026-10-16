@@ -45,6 +45,7 @@ import { pathsUnder, serveBuild } from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
+import abidePackage from '../package.json' with { type: 'json' }
 
 /** Where the app a command builds or serves is, and where its build goes — both absolute. */
 type AppDirectories = { root: string; out: string }
@@ -55,6 +56,7 @@ type AppDirectories = { root: string; out: string }
  */
 const DISK: Host = {
     name: 'abide',
+    version: abidePackage.version,
     // 38.100 — built in this process rather than a child, where nobody built it, and said on
     // stderr: the command's stdout is its own — `openapi`'s document, `mcp`'s messages.
     app: ({ values }) =>
@@ -688,7 +690,8 @@ async function scaffoldCommand({
     for (const path of written) console.log(`  wrote   ${path}`)
     for (const path of skipped) console.log(`  kept    ${path}`)
     console.log(
-        `\nabide scaffold: ${into}\n\n  cd ${name}\n  bun install\n  abide dev`,
+        // The starter's own script: `abide` alone is on no PATH until it is installed globally.
+        `\nabide scaffold: ${into}\n\n  cd ${name}\n  bun install\n  bun run dev`,
     )
     return 0
 }

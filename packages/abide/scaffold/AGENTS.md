@@ -17,6 +17,8 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
   TypeScript service do not read `.abide` files, so a clean `tsc` says nothing about them. Run
   `bun run check` after every change, and treat its warnings as bugs: several of them name a read
   that will not update when its value changes.
+- `bun run test` — runs `bun test`. `src/tests/getGreeting.test.ts` is the pattern: a test imports a
+  handler or a `.abide` file and calls it.
 - `bun run dev` — serves the app on a local port and rebuilds when a file changes.
 - `bun run build` then `bun run start` — the production build, and the app served from it.
 
