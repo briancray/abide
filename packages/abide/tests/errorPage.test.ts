@@ -182,9 +182,13 @@ test('a page whose record is refused answers at the refusal status — 41.1, 35.
 
     const missing = await Bun.fetch(`${base}/records/2`)
     expect(missing.status).toBe(404)
-    expect(await missing.text()).toContain(
-        '<h1 id="records">No such record (404)</h1>',
-    )
+    const painted = await missing.text()
+    expect(painted).toContain('<h1 id="records">No such record (404)</h1>')
+    // 35.18 — marked, where the page it stands in for is not: the browser's router hydrates
+    // `/records/[id]` over the error page's markup otherwise. THE REVERT: drop the meta from
+    // `errorDocument`; the browser throws a `HierarchyRequestError` adopting it.
+    expect(painted).toContain('<meta name="abide-error">')
+    expect(page).not.toContain('abide-error')
 })
 
 // 41.1, 16.41 — A PAGE THAT THROWS is the server's fault, answered 500 by the nearest error page.

@@ -18,6 +18,7 @@ import {
 import { APP_META } from '#shared/APP_META.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
+import { ERROR_META } from '#shared/ERROR_META.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
@@ -514,7 +515,8 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
     const sources: AppSources = {
         routes: rankRoutes([...rows.values()]),
         errors,
-        errorDocument: documentOf([]),
+        // 35.18 — marked, so the browser hydrates no page over what an error page painted.
+        errorDocument: intoHead(documentOf([]), `<meta name="${ERROR_META}">`),
         framework: client.framework,
         published,
         explained: parts.explained,

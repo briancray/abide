@@ -1,5 +1,6 @@
 import { CURRENT_ROUTER, type NavigateOptions } from '#shared/CURRENT_ROUTER.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
+import { ERROR_META } from '#shared/ERROR_META.ts'
 import { firstMatch, type Params, partsOf } from '#shared/matchRoute.ts'
 import { unmounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
@@ -122,6 +123,11 @@ export class Router {
      * it is still waiting on, rather than leaving it to finish for nobody.
      */
     navigation: AbortController
+    /**
+     * 35.18 — whether the document is an error page's. Its markup is no page this router has, so
+     * nothing hydrates over it, and leaving it is a document load.
+     */
+    errorPage: boolean
     /** The place in this document's history of the entry the address bar stands at (`Entry`). */
     index: number
     /**
@@ -153,6 +159,8 @@ export class Router {
         this.mounted = undefined
         this.standing = undefined
         this.navigation = new AbortController()
+        this.errorPage =
+            document.querySelector(`meta[name="${ERROR_META}"]`) !== null
         const state = history.state as Partial<Entry> | null
         if (typeof state?.index === 'number') this.index = state.index
         else {
@@ -213,7 +221,7 @@ export class Router {
             typeof url === 'string' ? new URL(url, location.href) : url
         // A CROSS-ORIGIN ADDRESS IS NOT A ROUTE. Handing it to `pushState` throws, and treating
         // it as a miss would leave the caller with a navigation that silently did nothing.
-        if (target.origin !== location.origin) {
+        if (target.origin !== location.origin || this.errorPage) {
             location.href = target.href
             return
         }
@@ -616,7 +624,7 @@ export class Router {
      * second rendering of it.
      */
     async hydrate(): Promise<void> {
-        const found = this.match(location.pathname)
+        const found = this.errorPage ? undefined : this.match(location.pathname)
         if (found === undefined) return
         // A TICKET LIKE ANY OTHER NAVIGATION. `listenForRoutes` is attached before this is called,
         // so a click during the page module's own load is a `go` that supersedes it — and
