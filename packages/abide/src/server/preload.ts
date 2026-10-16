@@ -8,8 +8,17 @@
 import { appRoot, servedBuild } from './createApp.ts'
 
 const root = appRoot(undefined)
-// A run from a directory that holds no app — a workspace's root — preloads nothing.
+// A run from a directory that holds no app preloads nothing — nor from a workspace's root, whose
+// packages' `.abide` files are each their own app's rather than one app laid out across them.
 // Fresh whatever `NODE_ENV` says: `bun test` sets it only where nothing else has.
-if (root !== undefined) await servedBuild(root, true)
+if (root !== undefined && !(await isWorkspaceRoot(root)))
+    await servedBuild(root, true)
+
+async function isWorkspaceRoot(directory: string): Promise<boolean> {
+    const manifest = Bun.file(`${directory}/package.json`)
+    if (!(await manifest.exists())) return false
+    const json = (await manifest.json()) as { workspaces?: unknown }
+    return json.workspaces !== undefined
+}
 
 export { type Mounted, mount } from './testMount.ts'
