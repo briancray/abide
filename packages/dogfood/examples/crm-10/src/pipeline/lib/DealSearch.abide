@@ -1,0 +1,17 @@
+<script>
+import { reactive } from '@abide/abide'
+import searchDeals from '../searchDeals.ts'
+
+let q = reactive('')
+const found = reactive(() => searchDeals({ q }), { debounce: 300 })
+</script>
+
+<label>search deals
+    <input bind:value={q} placeholder="hopper">
+</label>
+
+<ul class="fields">
+{#for name of found.ready() ? found : []}
+    <li><strong>{name}</strong></li>
+{/for}
+</ul>

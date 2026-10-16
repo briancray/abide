@@ -48,9 +48,6 @@ test.beforeAll(async ({}, testInfo) => {
         'bunfig.toml',
         '.env',
         'src',
-        // 34.23 — the package a card imports a component from, as installed and as its source.
-        'crm-ui',
-        'node_modules/crm-ui',
     ])
         cpSync(`${APP}/${kept}`, `${COPY}/${kept}`, { recursive: true })
     original = readFileSync(BAR, 'utf8')
@@ -82,10 +79,8 @@ test.afterAll(() => {
 test('a save reloads the tab a reader has open — 38.4, 38.15', async ({
     page,
 }) => {
-    await page.goto(`${base}/values/show-a-value-that-changes`)
-    await expect(page.locator('main h1')).toHaveText(
-        'Show a value that changes',
-    )
+    await page.goto(`${base}/guide/edit-a-contact`)
+    await expect(page.locator('main h1')).toHaveText('Edit a contact')
     // A marker the reload erases, so what is asserted is a new DOCUMENT rather than a patched
     // one — the reload client asks for the page again and nothing survives that.
     await page.evaluate(() => {

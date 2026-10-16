@@ -3,8 +3,9 @@
 // what the voice and coverage gates hold the words to.
 
 import { addressOf, BIN } from '../../abide/tests/builtApp.ts'
-import { SITE, type SitePage } from '../src/lib/SITE.ts'
-import { markdownAddressOf } from '../src/lib/sitePages.ts'
+import { referenceFileOf } from '../src/lib/referenceOf.ts'
+import type { SitePage } from '../src/lib/SITE.ts'
+import { markdownAddressOf, SECTIONS } from '../src/lib/sitePages.ts'
 
 /** The docs app's root, with a trailing slash. */
 export const DOGFOOD = new URL('../', import.meta.url).pathname
@@ -22,14 +23,17 @@ export type Card = {
     id: string
     /** The page embedding it. */
     route: string
+    /** The chapter app its files are from, where it names one. */
+    app: string | undefined
     /** The component it renders, from the docs app's root. */
     component: string
     /** Each file the card shows, by the path a reader is shown, to the file from the docs app's root. */
     files: Map<string, string>
 }
 
-/** A page's `index.abide`, from the docs app's root. */
+/** A page's `index.abide`, from the docs app's root — or a generated reference page's file. */
 export function pageFileOf(route: string): string {
+    if (route.startsWith('/reference/')) return referenceFileOf(route)
     return `src${route === '/' ? '' : route}/index.abide`
 }
 
@@ -39,7 +43,7 @@ let pages: Promise<DocsPage[]> | undefined
 export function docsPages(): Promise<DocsPage[]> {
     pages ??= (async () => {
         const read: DocsPage[] = []
-        for (const group of SITE)
+        for (const group of SECTIONS)
             for (const page of group.pages) {
                 const file = pageFileOf(page.route)
                 read.push({
@@ -58,6 +62,8 @@ export function docsPages(): Promise<DocsPage[]> {
 function resolvedFrom(file: string, specifier: string): string {
     if (specifier.startsWith('#src/'))
         return `src/${specifier.slice('#src/'.length)}`
+    // A chapter app, imported by its package name.
+    if (/^crm-\d\d\//.test(specifier)) return `examples/${specifier}`
     return new URL(specifier, `file://${DOGFOOD}${file}`).pathname.slice(
         DOGFOOD.length,
     )
@@ -86,6 +92,7 @@ export function cardsOf(page: DocsPage): Card[] {
         cards.push({
             id,
             route: page.route,
+            app: /\bapp="([^"]+)"/.exec(attributes as string)?.[1],
             component: imported.get(tag as string) ?? '',
             files,
         })
@@ -141,18 +148,45 @@ export function servedDocs(): Promise<{ base: string; stop: () => void }> {
 
 let markdown: Promise<Map<string, string>> | undefined
 
+/**
+ * `work` over every page, eight in flight, answered in reading order. One page after another was
+ * most of a gate's wall clock; every page at once is more sockets than the served app will hold.
+ */
+async function eightAtATime(
+    pages: DocsPage[],
+    work: (page: DocsPage) => Promise<string>,
+): Promise<string[]> {
+    const answers: string[] = []
+    let next = 0
+    const workers: Promise<void>[] = []
+    for (let lane = 0; lane < 8; lane += 1)
+        workers.push(
+            (async () => {
+                while (next < pages.length) {
+                    const at = next++
+                    answers[at] = await work(pages[at] as DocsPage)
+                }
+            })(),
+        )
+    await Promise.all(workers)
+    return answers
+}
+
 /** Each page's markdown, as the built app serves it at the page's address with `.md` on the end. */
 export function renderedMarkdown(): Promise<Map<string, string>> {
     markdown ??= (async () => {
         const { base } = await servedDocs()
-        const bodies = new Map<string, string>()
-        for (const page of await docsPages()) {
+        const pages = await docsPages()
+        const texts = await eightAtATime(pages, async (page) => {
             const address = markdownAddressOf(page.route)
             const answer = await Bun.fetch(`${base}${address}`)
             if (!answer.ok)
                 throw new Error(`docs: ${address} answered ${answer.status}`)
-            bodies.set(page.route, await answer.text())
-        }
+            return answer.text()
+        })
+        const bodies = new Map<string, string>()
+        for (let at = 0; at < pages.length; at += 1)
+            bodies.set((pages[at] as DocsPage).route, texts[at] as string)
         return bodies
     })()
     return markdown
@@ -238,13 +272,16 @@ let html: Promise<Map<string, string>> | undefined
 export function renderedHtml(): Promise<Map<string, string>> {
     html ??= (async () => {
         const { base } = await servedDocs()
-        const documents = new Map<string, string>()
-        for (const page of await docsPages()) {
+        const pages = await docsPages()
+        const texts = await eightAtATime(pages, async (page) => {
             const answer = await Bun.fetch(`${base}${page.route}`)
             if (!answer.ok)
                 throw new Error(`docs: ${page.route} answered ${answer.status}`)
-            documents.set(page.route, await answer.text())
-        }
+            return answer.text()
+        })
+        const documents = new Map<string, string>()
+        for (let at = 0; at < pages.length; at += 1)
+            documents.set((pages[at] as DocsPage).route, texts[at] as string)
         return documents
     })()
     return html

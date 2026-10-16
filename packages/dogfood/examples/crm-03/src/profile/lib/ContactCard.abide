@@ -1,0 +1,11 @@
+<script>
+import { reactive } from '@abide/abide'
+import Avatar from './Avatar.abide'
+
+let name = reactive('Grace Hopper')
+</script>
+
+<div class="row">
+    <Avatar name={name} />
+    <label>name <input bind:value={name}></label>
+</div>

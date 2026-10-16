@@ -1,0 +1,6 @@
+<script>
+import { url } from '@abide/abide'
+</script>
+
+<iframe src={url('/companies')} title="The companies pages"
+    class="h-60 w-full rounded-md border border-rule"></iframe>

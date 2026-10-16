@@ -1,0 +1,25 @@
+<script>
+import AccountFeed from './lib/AccountFeed.abide'
+import ActivityHistory from './lib/ActivityHistory.abide'
+import CsvExport from './lib/CsvExport.abide'
+import QuickLog from './lib/QuickLog.abide'
+import RecentActivity from './lib/RecentActivity.abide'
+import Wallboard from './lib/Wallboard.abide'
+</script>
+
+<head><title>Activity — CRM</title></head>
+
+<main>
+    <h1>Activity</h1>
+    <h2>Logged in this tab</h2>
+    <QuickLog />
+    <RecentActivity />
+    <h2>Hopper &amp; Co, in every tab</h2>
+    <AccountFeed />
+    <h2>Older activity</h2>
+    <ActivityHistory />
+    <h2>Export</h2>
+    <CsvExport />
+    <h2>Wallboard</h2>
+    <Wallboard />
+</main>

@@ -1,0 +1,34 @@
+<script>
+import { reactive } from '@abide/abide'
+import askAssistant from '../askAssistant.ts'
+
+const QUESTION = 'Which company is Ada at?'
+
+let asked = reactive(false)
+const events = reactive(() =>
+    asked
+        ? askAssistant({ messages: [{ role: 'user', content: QUESTION }] })
+        : [],
+)
+</script>
+
+<ul class="chat">
+    <li data-speaker="you"><span>you</span><p>{QUESTION}</p></li>
+{#for event of events}
+    {#if event.type === 'tool'}
+        <li><span>tool call</span>
+            <p class="font-mono text-chrome">
+                {event.name} {JSON.stringify(event.input)}
+            </p></li>
+    {:else if event.type === 'result'}
+        <li><span>your handler answered</span>
+            <p class="font-mono text-chrome">{event.text}</p></li>
+    {:else if event.type === 'text'}
+        <li><span>assistant</span><p>{event.text}</p></li>
+    {/if}
+{/for}
+</ul>
+
+<div class="row">
+    <button disabled={asked} onclick={() => { asked = true }}>Ask</button>
+</div>

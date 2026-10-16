@@ -1,0 +1,17 @@
+<script>
+import { reactive, refresh } from '@abide/abide'
+import olderActivity from '../olderActivity.ts'
+
+const entries = reactive(() => olderActivity())
+</script>
+
+<ul class="fields stacked">
+    {#for entry of entries}
+        <li><span>{entry.on}</span><strong>{entry.note}</strong></li>
+    {/for}
+</ul>
+
+<div class="row">
+    <button onclick={() => refresh(entries)}>Read again</button>
+    {#if entries.busy()}<span class="status">reading the archive…</span>{/if}
+</div>

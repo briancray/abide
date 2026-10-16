@@ -1,0 +1,3 @@
+# 38.109, 38.119 — a DOM to mount into and measure, then the app's `.abide` files as modules.
+[test]
+preload = ["@abide/harness/abide/preload"]

@@ -1,0 +1,15 @@
+<script>
+import { reactive } from '@abide/abide'
+import listDeals from '../listDeals.ts'
+
+const deals = reactive(() => listDeals())
+const selected = reactive.share('selectedDeal', () => reactive(''))
+const deal = reactive(() =>
+    deals.ready() ? deals.find((each) => each.id === selected) : undefined,
+)
+</script>
+
+<ul class="fields stacked">
+    <li><span>selected</span><strong>{deal?.name ?? '—'}</strong></li>
+    <li><span>stage</span><strong>{deal?.stage ?? '—'}</strong></li>
+</ul>

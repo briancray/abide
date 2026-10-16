@@ -8,7 +8,7 @@
 // example running inline as a component of the page it is on.
 
 import { expect, test } from '@playwright/test'
-import { SITE } from '../src/lib/SITE.ts'
+import { SECTIONS } from '../src/lib/sitePages.ts'
 
 // TWO PROJECTS, ONE BUILD: served at the root and again below `/docs` (16.10). Every address a
 // spec asks for goes through `underMount`, so the same spec runs at either mount.
@@ -42,12 +42,10 @@ test.afterEach(() => {
 })
 
 test('a page the server painted carries its own prose', async ({ page }) => {
-    await page.goto(underMount('/values/show-a-value-that-changes'))
+    await page.goto(underMount('/guide/edit-a-contact'))
 
-    await expect(page.locator('main h1')).toHaveText(
-        'Show a value that changes',
-    )
-    await expect(page).toHaveTitle('Show a value that changes — abide')
+    await expect(page.locator('main h1')).toHaveText('Edit a contact')
+    await expect(page).toHaveTitle('Edit a contact — abide')
     // 32.24 THROUGH A PAGE. The body is markdown the build rendered, carried into the page as a
     // `raw` slot — so a table in it is a table rather than the source of one, which is exactly
     // what a client binding over the same slot would have left on screen.
@@ -61,7 +59,7 @@ test('a direct hit is painted by the server, with no script at all', async ({
     await page.context().route('**/docs.js', (route) => route.abort())
     await page.goto(underMount('/reference/reactive'))
 
-    await expect(page.locator('main h1')).toHaveText('reactive()')
+    await expect(page.locator('main h1')).toHaveText('reactive')
     await expect(page.locator('nav a[aria-current="page"]')).toHaveText(
         'reactive',
     )
@@ -70,7 +68,7 @@ test('a direct hit is painted by the server, with no script at all', async ({
 test('a link to another page navigates without reloading — 30.7', async ({
     page,
 }) => {
-    await page.goto(underMount('/values/show-a-value-that-changes'))
+    await page.goto(underMount('/guide/edit-a-contact'))
     // A marker a document reload erases, which is the only way to tell the two apart.
     await page.evaluate(() => {
         ;(window as { __KEPT__?: string }).__KEPT__ = 'yes'
@@ -79,26 +77,22 @@ test('a link to another page navigates without reloading — 30.7', async ({
         ).__KEPT__ = 'yes'
     })
 
-    await page.click(
-        `nav a[href="${underMount('/values/derive-a-value-from-other-values')}"]`,
-    )
+    await page.click(`nav a[href="${underMount('/guide/talk-to-the-server')}"]`)
 
-    await expect(page.locator('main h1')).toHaveText(
-        'Derive a value from other values',
-    )
+    await expect(page.locator('main h1')).toHaveText('Talk to the server')
     // 39.6 — the incoming page's head replaced the outgoing page's, by key.
-    await expect(page).toHaveTitle('Derive a value from other values — abide')
+    await expect(page).toHaveTitle('Talk to the server — abide')
     expect(
         await page.evaluate(() => (window as { __KEPT__?: string }).__KEPT__),
     ).toBe('yes')
     expect(new URL(page.url()).pathname).toBe(
-        underMount('/values/derive-a-value-from-other-values'),
+        underMount('/guide/talk-to-the-server'),
     )
     // THE NAV IS THE ONE THING SHARED BETWEEN TWO PAGES, and the mark on it is the only part
     // that differs — so a navigation that rebuilt the nav from the wrong page's slug shows
     // here and nowhere else.
     await expect(page.locator('nav a[aria-current="page"]')).toHaveText(
-        'Derived values',
+        'Talk to the server',
     )
     // AND IT IS THE SAME NAV. It is the layout's, and a layout is not rebuilt between
     // navigations (41.11) — a marker on the node before the click is still on it after.
@@ -119,18 +113,14 @@ test('a link to another page navigates without reloading — 30.7', async ({
 // that took its listeners (32.9). So the rail here is wired to this page's headings rather than
 // to the ones they arrived on.
 test('the rail follows the page a reader navigated to', async ({ page }) => {
-    await page.goto(underMount('/values/show-a-value-that-changes'))
-    await page.click(
-        `nav a[href="${underMount('/values/patch-a-list-from-a-live-feed')}"]`,
-    )
-    await expect(page.locator('main h1')).toHaveText(
-        'Patch a list as updates arrive',
-    )
+    await page.goto(underMount('/guide/edit-a-contact'))
+    await page.click(`nav a[href="${underMount('/guide/keep-it-current')}"]`)
+    await expect(page.locator('main h1')).toHaveText('Keep it current')
 
     const first = page.locator('.toc a[href^="#"]').first()
     await expect(first).toHaveAttribute(
         'href',
-        '#patch-mutates-the-held-value-and-wakes-its-readers',
+        '#a-call-with-the-same-arguments-is-one-load',
     )
     // The scroll spy marks where you are, and it only can where it re-measured after the
     // navigation — offsets taken against the page a reader left are every heading at once.
@@ -143,24 +133,29 @@ test('the rail follows the page a reader navigated to', async ({ page }) => {
 test('an example card runs on a page a reader navigated to', async ({
     page,
 }) => {
-    await page.goto(underMount('/values/show-a-value-that-changes'))
-    await page.click(
-        `nav a[href="${underMount('/values/derive-a-value-from-other-values')}"]`,
-    )
-    const card = page.locator('.example .ex-render').first()
-    await expect(card.locator('strong', { hasText: '$50' })).toBeVisible()
-    await card.getByRole('button', { name: '+' }).click()
-    await expect(card.locator('strong', { hasText: '$75' })).toBeVisible()
+    await page.goto(underMount('/guide/edit-a-contact'))
+    await page.click(`nav a[href="${underMount('/guide/start-an-app')}"]`)
+    const card = page.locator('#crm-01-star .ex-render')
+    await card.getByRole('button', { name: '☆ Star' }).click()
+    await expect(card.getByRole('button')).toHaveText('★ Starred')
 })
 
 // EVERY CARD ON EVERY PAGE, on a direct hit: the component renders on the server, adopts on the
 // client and its handlers answer. A card that throws takes its whole page with it, and one that
 // mis-adopts rebuilds itself with only a warning — so what is collected is the page error, the
-// hydration warning and a handler that FAILED. A refusal is an answer: `probe-error` and
-// `rung-order` refuse on purpose (503, 401), and that is what those cards are about.
-// ONE TEST PER SECTION, so the sections run in parallel rather than as one long walk.
-for (const group of SITE)
-    test(`every card under ${group.section} renders, adopts and answers`, async ({
+// hydration warning and a document or module that FAILED. A handler's 5xx is not collected: a card
+// about a refusal, a timeout or an error report answers one on purpose.
+// TWENTY PAGES A TEST, so the walk runs in parallel rather than as one long one — the reference
+// alone is a page per export.
+const WALKS: { name: string; routes: string[] }[] = []
+for (const group of SECTIONS)
+    for (let at = 0; at < group.pages.length; at += 20)
+        WALKS.push({
+            name: `${group.section} ${at / 20 + 1}`,
+            routes: group.pages.slice(at, at + 20).map((page) => page.route),
+        })
+for (const walk of WALKS)
+    test(`every card under ${walk.name} renders, adopts and answers`, async ({
         page,
     }) => {
         const problems: string[] = []
@@ -173,12 +168,16 @@ for (const group of SITE)
                 problems.push(`${at}: ${message.text()}`)
         })
         page.on('response', (response) => {
-            if (response.status() >= 500 && response.status() !== 503)
+            const kind = response.request().resourceType()
+            if (
+                response.status() >= 500 &&
+                (kind === 'document' || kind === 'script')
+            )
                 problems.push(`${at}: ${response.status()} ${response.url()}`)
         })
-        for (const item of group.pages) {
-            at = item.route
-            await page.goto(underMount(item.route), {
+        for (const route of walk.routes) {
+            at = route
+            await page.goto(underMount(route), {
                 waitUntil: 'networkidle',
             })
         }
@@ -194,10 +193,10 @@ test('a public file and the markdown twins are answered at their own addresses �
 
     // A page's markdown twin, which the app derives from the page rather than serving a file.
     const markdown = await page.request.get(
-        underMount('/values/show-a-value-that-changes.md'),
+        underMount('/guide/edit-a-contact.md'),
     )
     expect(markdown.status()).toBe(200)
-    expect(await markdown.text()).toContain('# Show a value that changes')
+    expect(await markdown.text()).toContain('# Edit a contact')
 
     const bundle = await page.request.get(underMount('/abide.md'))
     expect(bundle.status()).toBe(200)

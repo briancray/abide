@@ -1,0 +1,24 @@
+<script>
+import { reactive } from '@abide/abide'
+import { money } from './money.ts'
+
+let won = reactive([{ company: 'Analytical Engines', amount: 8000 }])
+
+function winLovelace() {
+    won = [...won, { company: 'Lovelace Ltd', amount: 12500 }]
+}
+</script>
+
+<ul class="fields">
+    {#for deal of won by deal.company}
+        <li>
+            <span>{deal.company}</span>
+            <strong>{money.format(deal.amount)}</strong>
+        </li>
+    {/for}
+</ul>
+<div class="row">
+    <button disabled={won.length > 1} onclick={winLovelace}>
+        Win Lovelace Ltd
+    </button>
+</div>

@@ -1,0 +1,27 @@
+<script>
+import { reactive, type RouteLiteral, url } from '@abide/abide'
+
+type Operation = { description: string; parameters: object[] }
+let operation = reactive('')
+
+async function readDocument() {
+    const answer = await fetch(url('/__abide/openapi.json' as RouteLiteral))
+    const document: { paths: Record<string, { get: Operation }> } =
+        await answer.json()
+    for (const [path, { get }] of Object.entries(document.paths))
+        if (path.endsWith('/assistant/searchContacts')) {
+            const { description, parameters } = get
+            const shown = { [path]: { get: { description, parameters } } }
+            operation = JSON.stringify(shown, null, 2)
+        }
+}
+</script>
+
+<div class="row">
+    <button onclick={readDocument}>Read /__abide/openapi.json</button>
+</div>
+
+{#if operation}
+    <pre class="rounded-md border border-rule bg-raised p-snug
+        text-chrome">{operation}</pre>
+{/if}

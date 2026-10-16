@@ -1,0 +1,13 @@
+<script>
+import { logActivity } from './activity.ts'
+import LastActivity from './LastActivity.abide'
+</script>
+
+<LastActivity />
+
+<div class="row">
+    <span>Grace Hopper</span>
+    <button onclick={() => logActivity('Grace Hopper', 'Call')}>
+        Log a call
+    </button>
+</div>

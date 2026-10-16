@@ -1,0 +1,35 @@
+<script>
+import { type Issues, reactive } from '@abide/abide'
+import createDeal from '../createDeal.ts'
+
+type NewDeal = { name: string; company: string; amount: number }
+
+let name = reactive('Ledger audit')
+let company = reactive('')
+let amount = reactive('0')
+let issues = reactive<Issues<NewDeal>>({})
+
+async function add() {
+    try {
+        await createDeal({ name, company, amount: Number(amount) })
+        issues = {}
+    } catch (error) {
+        if (!createDeal.isError(error, 'ValidationError')) throw error
+        // Keyed by field: `issues.company` is what was wrong with the company.
+        issues = error.data
+    }
+}
+</script>
+
+<div class="row">
+    <label>name <input bind:value={name}></label>
+    <label>company <input bind:value={company}></label>
+    <label>amount <input bind:value={amount}></label>
+    <button onclick={add}>Add deal</button>
+</div>
+
+<ul class="fields">
+{#for [field, messages] of Object.entries(issues)}
+    <li><span>{field}</span><strong>{messages?.[0]}</strong></li>
+{/for}
+</ul>

@@ -1,7 +1,0 @@
-<script>
-import { url } from '@abide/abide'
-</script>
-
-<iframe src={url('/pages/animate-from-one-page-to-the-next/frame')}
-    title="The invoices app"
-    class="h-36 w-full rounded-md border border-rule"></iframe>

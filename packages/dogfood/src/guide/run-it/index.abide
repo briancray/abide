@@ -1,0 +1,304 @@
+<script>
+import { url } from '@abide/abide'
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import Retries from 'crm-08/src/ops/lib/Retries.abide'
+import retriesSource from 'crm-08/src/ops/lib/Retries.abide' with { type: 'text' }
+import getRetriesSource from 'crm-08/src/ops/getRetries.ts' with { type: 'text' }
+import envSource from 'crm-08/.env' with { type: 'text' }
+import retriesTestSource from 'crm-08/src/ops/tests/Retries.test.ts' with { type: 'text' }
+import Pool from 'crm-08/src/ops/lib/Pool.abide'
+import poolSource from 'crm-08/src/ops/lib/Pool.abide' with { type: 'text' }
+import getPoolSource from 'crm-08/src/ops/getPool.ts' with { type: 'text' }
+import poolTestSource from 'crm-08/src/ops/tests/Pool.test.ts' with { type: 'text' }
+import Console from 'crm-08/src/ops/lib/Console.abide'
+import consoleSource from 'crm-08/src/ops/lib/Console.abide' with { type: 'text' }
+import consoleTestSource from 'crm-08/src/ops/tests/Console.test.ts' with { type: 'text' }
+import Sync from 'crm-08/src/ops/lib/Sync.abide'
+import syncSource from 'crm-08/src/ops/lib/Sync.abide' with { type: 'text' }
+import syncContactSource from 'crm-08/src/ops/syncContact.ts' with { type: 'text' }
+import billingSource from 'crm-08/src/ops/lib/billing.ts' with { type: 'text' }
+import syncTestSource from 'crm-08/src/ops/tests/Sync.test.ts' with { type: 'text' }
+import Health from 'crm-08/src/ops/lib/Health.abide'
+import healthSource from 'crm-08/src/ops/lib/Health.abide' with { type: 'text' }
+import healthTestSource from 'crm-08/src/ops/tests/Health.test.ts' with { type: 'text' }
+import OfflineBanner from 'crm-08/src/ops/lib/OfflineBanner.abide'
+import offlineBannerSource from 'crm-08/src/ops/lib/OfflineBanner.abide' with { type: 'text' }
+import offlineBannerTestSource from 'crm-08/src/ops/tests/OfflineBanner.test.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>Everything in this chapter lands on one page of the CRM, <code>/ops</code>, under
+    <code>src/ops</code>. Each card below is one panel of it.</p>
+
+    <Section title="The deployment overrides a setting's default">
+        <Example
+            id="crm-08-config"
+            app="crm-08"
+            title="`onConfig(fn)` and `config()` — a default the deployment overrides"
+            summary="The CRM retries a failed call 3 times by default, and this deployment's .env says 5. The page adds one for the first try and shows 6."
+            files={{
+                'src/ops/lib/Retries.abide': retriesSource,
+                'src/ops/getRetries.ts': getRetriesSource,
+                '.env': envSource.split('\n').filter((line) => line.startsWith('RETRIES')).join('\n'),
+                'src/ops/tests/Retries.test.ts': retriesTestSource,
+            }}
+        >
+            <Retries />
+        </Example>
+
+        <p><code>onConfig</code> returns the defaults, and their types are the settings' types:
+        <code>config().RETRIES</code> is a <code>number</code> with no declaration written.
+        <code>RETRIES=5</code> arrives from <code>.env</code> as text and is coerced to the type of
+        the default it overrides, so <code>retries + 1</code> is 6, not 51. A value that will not
+        coerce, such as <code>RETRIES=lots</code>, leaves the default standing.</p>
+
+        <p>The last layer to name a setting wins:</p>
+
+        <table>
+            <thead><tr><th>Layer</th><th>Wins over</th></tr></thead>
+            <tbody>
+                <tr><td>the environment, <code>Env</code></td><td>everything</td></tr>
+                <tr><td>the app's <code>onConfig</code> defaults</td><td>what abide derived</td></tr>
+                <tr><td>what abide derived</td><td>nothing</td></tr>
+            </tbody>
+        </table>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it is for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>Config</code></td><td>the resolved settings, typed by every <code>onConfig</code>'s defaults</td></tr>
+                <tr><td><code>Env</code></td><td>the process environment as read, every value a string or missing</td></tr>
+                <tr><td><code>ConfigDefaults</code></td><td>the function <code>onConfig</code> takes; synchronous, so a setting that needs a network call is a handler instead</td></tr>
+                <tr><td><code>config.invalidate</code></td><td>has the next read re-read the environment, for a rotated key</td></tr>
+                <tr><td><code>NODE_ENV</code></td><td>the environment name, verbatim: compare it to <code>'production'</code></td></tr>
+                <tr><td><code>APP_NAME</code></td><td>the app's name, from <code>package.json</code> where nothing sets it</td></tr>
+                <tr><td><code>APP_VERSION</code></td><td>the version beside that name</td></tr>
+                <tr><td><code>APP_DATA_DIR</code></td><td>the platform's per-user data directory, for a local database file</td></tr>
+                <tr><td><code>PORT</code></td><td>the port <code>abide start</code> listens on</td></tr>
+            </tbody>
+        </table>
+
+        <p>A setting that has to be right gets a schema. <code>config</code>'s <code>schema</code>
+        is checked last, over the whole document, so it can relate two settings. Keep it loose, or
+        every setting it does not name is dropped:</p>
+
+        <Code language="ts" caption="server" code={`onConfig(() => ({ RETRIES: 3 }), {
+    schema: z.looseObject({
+        RETRIES: z.number().int().min(0).max(10),
+        STRIPE_KEY: z.string().min(1),
+    }),
+})`} />
+
+        <p><code>config()</code> throws what <code>onConfig</code> threw, so a configuration that
+        cannot resolve stops the app from starting. <code>config</code> is a server name: a page
+        reads a setting through a handler, like <code>getRetries</code>, and a key no handler
+        returns never reaches a browser.</p>
+    </Section>
+
+    <Section title="Work at start runs before the first request">
+        <Example
+            id="crm-08-start"
+            app="crm-08"
+            title="`onStart(fn)` — work the first request cannot race"
+            summary="The CRM's database pool takes a moment to connect. Reload: both times stay where the boot put them, the pool first."
+            files={{
+                'src/ops/lib/Pool.abide': poolSource,
+                'src/ops/getPool.ts': getPoolSource,
+                'src/ops/tests/Pool.test.ts': poolTestSource,
+            }}
+        >
+            <Pool />
+        </Example>
+
+        <p><code>onStart</code> hands you the next step. Work before <code>await start()</code>
+        finishes before the app answers anything; work after it knows the app is up. A hook that
+        throws stops the server from coming up, which is the right answer to a failed
+        migration.</p>
+
+        <p><code>onStop</code> is the mirror: <code>await stop()</code> first, then close what you
+        opened, so the pool outlives the last request that could use it. It runs on
+        <code>SIGTERM</code>, <code>Ctrl-C</code> or a crash, and a second signal ends the process
+        at once.</p>
+
+        <p>A hook is called in a page, a layout or a handler file, and returns a function that
+        removes it. The ones for the whole app go in <code>src/layout.abide</code>, the root layout,
+        whose server block the scaffold already starts with an <code>onStart</code>.</p>
+    </Section>
+
+    <Section title="Log namespaces are turned on one at a time">
+        <Example
+            id="crm-08-log"
+            app="crm-08"
+            title="`log.named` and `DEBUG` — one namespace on, one off"
+            summary="Billing and sync each log under their own name, and DEBUG names billing. Send an invoice, then poll: only the invoice is written."
+            files={{
+                'src/ops/lib/Console.abide': consoleSource,
+                'src/ops/tests/Console.test.ts': consoleTestSource,
+            }}
+        >
+            <Console />
+        </Example>
+
+        <p><code>log.named('billing')</code> returns a <code>Logger</code> under the app's name: it
+        writes as <code>crm-08:billing</code> in the downloaded app, and as
+        <code>dogfood:billing</code> on this page. <code>DEBUG</code> takes the comma and
+        wildcard list you already know: <code>DEBUG=crm-08:billing,abide:*</code>. It is read from
+        the environment on the server, and the browser gets it from the document.</p>
+
+        <Code language="ts" caption="shared" code={`log('sending')
+log.debug('cache table', { entries: cache.size })
+log.info('invoice paid', { id: '4310' })
+log.warning('retrying', { attempt: 2 })
+log.error('mailer refused', { error })`} />
+
+        <p><code>log</code>, <code>log.warning</code> and <code>log.error</code> always write.
+        <code>log.info</code> and <code>log.debug</code> write when <code>DEBUG</code> names their
+        namespace, and <code>log.enabled()</code> asks first where building the line is the
+        expensive part.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it is for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>log.records</code></td><td>the lines kept, as a reactive value: an admin page reads it and follows it</td></tr>
+                <tr><td><code>LogRecord</code></td><td>one line: <code>time</code>, <code>level</code>, <code>namespace</code>, <code>message</code> and <code>trace</code></td></tr>
+                <tr><td><code>ABIDE_MAX_LOG_BUFFER_COUNT</code></td><td>how many lines <code>log.records</code> keeps in memory</td></tr>
+                <tr><td><code>ABIDE_LOG_FORMAT</code></td><td><code>tsv</code> or <code>json</code> for a collector; unset, a terminal's readable form</td></tr>
+                <tr><td><code>NO_COLOR</code></td><td>no color, anywhere</td></tr>
+                <tr><td><code>FORCE_COLOR</code></td><td>the readable form, even into a pipe</td></tr>
+            </tbody>
+        </table>
+
+        <p>abide logs under <code>abide:</code>, so <code>DEBUG=abide:*</code> turns on the
+        framework and nothing of yours. The warning namespaces are each a failure that is otherwise
+        silent, and always write:</p>
+
+        <table>
+            <thead><tr><th>Namespace</th><th>Levels</th><th>What it says</th></tr></thead>
+            <tbody>
+                <tr><td><code>abide:request</code></td><td><code>debug</code></td><td>one line per request</td></tr>
+                <tr><td><code>abide:socket</code></td><td><code>debug</code></td><td>one line per frame on the socket</td></tr>
+                <tr><td><code>abide:lifecycle</code></td><td><code>debug</code> <code>error</code></td><td>a lifecycle hook that ran</td></tr>
+                <tr><td><code>abide:principal</code></td><td><code>debug</code> <code>warning</code></td><td>a signed-in caller set or cleared</td></tr>
+                <tr><td><code>abide:health</code></td><td><code>warning</code></td><td>an <code>onHealth</code> that threw or answered a non-object</td></tr>
+                <tr><td><code>abide:render</code></td><td><code>warning</code></td><td>an error page that itself failed</td></tr>
+                <tr><td><code>abide:refuse</code></td><td><code>warning</code></td><td>a refusal's message formatter that threw</td></tr>
+                <tr><td><code>abide:reactive</code></td><td><code>warning</code></td><td>a failed reload over a value still on screen</td></tr>
+                <tr><td><code>abide:watch</code></td><td><code>warning</code></td><td>a <code>watch</code> that threw</td></tr>
+                <tr><td><code>abide:hydrate</code> / <code>abide:navigate</code></td><td><code>warning</code></td><td>the browser's side</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="One trace id covers everything one request did">
+        <Example
+            id="crm-08-trace"
+            app="crm-08"
+            title="`trace()` — one id for everything one request did"
+            summary="Syncing a contact logs in the handler and again in the billing module it calls. Sync, and both lines carry the request's trace; sync again for a new one."
+            files={{
+                'src/ops/lib/Sync.abide': syncSource,
+                'src/ops/syncContact.ts': syncContactSource,
+                'src/ops/lib/billing.ts': billingSource,
+                'src/ops/tests/Sync.test.ts': syncTestSource,
+            }}
+        >
+            <Sync />
+        </Example>
+
+        <p>Nothing starts a trace and nothing passes it down. The billing module was handed a
+        contact id, and its line carries the trace anyway, because every log line does. A request
+        that arrives with a <code>traceparent</code> header continues that trace.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it is for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>trace.span</code></td><td>wraps a body, returns what it returned, and logs its duration as a line</td></tr>
+                <tr><td><code>trace.sampled</code></td><td>whether the caller sampled this trace, carried through unchanged</td></tr>
+                <tr><td><code>trace.headers</code></td><td>the <code>traceparent</code> an outbound <code>fetch</code> carries to the next service</td></tr>
+                <tr><td><code>traceresponse</code></td><td>the response header naming the trace that answered</td></tr>
+                <tr><td><code>server-timing</code></td><td>the response header with the handler's own time, read by the browser's network panel</td></tr>
+            </tbody>
+        </table>
+
+        <Code language="ts" caption="server" code={`const rows = await trace.span('search', () => search(query), {
+    timing: true,
+})
+const answer = await fetch(billingUrl, { headers: trace.headers() })`} />
+
+        <p>With <code>timing</code>, a span joins <code>server-timing</code> under its name, so the
+        name has to be a plain token.</p>
+    </Section>
+
+    <Section title="A load balancer reads the health check">
+        <Example
+            id="crm-08-health"
+            app="crm-08"
+            title="`onHealth(fn)` — your fields beside the baseline"
+            summary="The load balancer in front of the CRM asks whether the database is up. The page reads the same answer through health()."
+            files={{
+                'src/ops/lib/Health.abide': healthSource,
+                'src/ops/tests/Health.test.ts': healthTestSource,
+            }}
+        >
+            <Health />
+        </Example>
+
+        <p><code>GET /__abide/health</code> answers without being declared, with three fields.
+        What <code>onHealth</code> returns is merged over them, and the app's fields win a
+        collision. Widen <code>Health</code> with the <code>declare module</code> block so a page
+        can read <code>account.database</code>.</p>
+
+        <table>
+            <thead><tr><th>Field</th><th>What it says</th></tr></thead>
+            <tbody>
+                <tr><td><code>version</code></td><td>the app's version, <code>0.0.0</code> where the package has none</td></tr>
+                <tr><td><code>abide</code></td><td>the framework's version</td></tr>
+                <tr><td><code>startedAt</code></td><td>when this process came up; a change between two scrapes is a restart</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>health</code> is a handler that takes no arguments, called the same way on both
+        sides. A reporter that throws warns on <code>abide:health</code>, and the baseline still
+        answers. The endpoint goes through the app's <code>middleware</code>, so a rung that
+        refuses callers with no credentials has to let it through.</p>
+    </Section>
+
+    <Section title="The browser going offline is a reactive value">
+        <Example
+            id="crm-08-offline"
+            app="crm-08"
+            title="`online` — the connection, read by name"
+            summary="A contact edit made on a train is not saved. Take the browser offline in DevTools' Network panel and the banner says so."
+            files={{
+                'src/ops/lib/OfflineBanner.abide': offlineBannerSource,
+                'src/ops/tests/OfflineBanner.test.ts': offlineBannerTestSource,
+            }}
+        >
+            <OfflineBanner />
+        </Example>
+
+        <p>Read <code>online</code> by name. There is no listener to attach and none to remove. In
+        the browser it follows <code>navigator.onLine</code>; on the server it is
+        <code>true</code>, since a caller being served has reached the app.</p>
+
+        <p><code>false</code> is certain and <code>true</code> is a guess: a dead server reads as
+        online. Use it to explain a failed load, not to decide whether to try one. To catch up when
+        the connection returns, refresh what is on screen from the root layout:</p>
+
+        <Code language="abide" caption="abide" code={`<script>
+import { online, refresh, watch } from '@abide/abide'
+
+watch(() => { if (online) refresh() })
+</script>`} />
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/guide/open-it-to-machines')}>Open it to machines</a> — the CRM's
+            handlers, described to other programs</li>
+        </ul>
+    </Section>
+</Doc>

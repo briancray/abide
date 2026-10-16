@@ -1,0 +1,80 @@
+<script module>
+// A REFERENCE PAGE, read off docs/REGISTRY.md as it renders (40.47): the rows on the page at this
+// route, under the headings REGISTRY writes them under, each clause a row cites linked to its
+// anchor on the rulebook (40.45), and the guides whose `covers` claim a row (40.46).
+import { REFERENCE } from '#src/lib/REFERENCE.ts'
+import { referenceSectionsOf } from '#src/lib/referenceOf.ts'
+import REGISTRY from '../../../../../docs/REGISTRY.md' with { type: 'text' }
+
+const SECTIONS = referenceSectionsOf(REGISTRY, REFERENCE)
+</script>
+
+<script>
+import { raw, reactive, type RouteLiteral, route, url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import { SITE } from '#src/lib/SITE.ts'
+import { inline, slugify } from '#src/lib/inline.ts'
+
+const sections = SECTIONS.get(route.name()) ?? []
+const rulebook = url('/rulebook' as RouteLiteral)
+
+// A guide claims a row by its name, or by its name qualified with its section where two differ.
+const claims = new Set<string>()
+for (const section of sections)
+    for (const table of section.tables)
+        for (const row of table.rows) {
+            const name = row.cells[0] ?? ''
+            claims.add(name)
+            claims.add(`${row.qualifier} › ${name}`)
+        }
+const guides: { route: string; nav: string }[] = []
+for (const group of SITE)
+    for (const page of group.pages)
+        if (
+            page.route.startsWith('/guide/') &&
+            page.covers?.some((name) => claims.has(name))
+        )
+            guides.push(page)
+
+// THE RAIL'S HEADINGS, filed here rather than by a `<Section>` per row: the sections are a loop,
+// and a heading filed from inside one lands after `<Doc>` has decided whether there is a rail.
+const TAUGHT = 'Taught in'
+const headings = reactive.share('docHeadings', () =>
+    reactive<{ id: string; title: string; level: number }[]>([]),
+)
+const filed: { id: string; title: string; level: number }[] = []
+for (const section of sections)
+    filed.push({ id: slugify(section.heading), title: section.heading, level: 2 })
+filed.push({ id: slugify(TAUGHT), title: TAUGHT, level: 2 })
+headings = filed
+</script>
+
+<Doc>
+    {#for section of sections}
+        <section><div class="flow">
+            <h2 id={slugify(section.heading)}>{raw(inline(section.heading))}</h2>
+            {#for table of section.tables}
+                <table>
+                    <thead><tr>{#for cell of table.header}<th>{cell}</th>{/for}</tr></thead>
+                    <tbody>
+                        {#for row of table.rows}
+                            <tr>{#for cell, index of row.cells}<td>{#if table.header[index] === 'Rules' && cell !== '—'}{#for clause, at of cell.split(/,\s*/)}{at > 0 ? ', ' : ''}<a href="{rulebook}#{clause}">{clause}</a>{/for}{:else}{raw(inline(cell))}{/if}</td>{/for}</tr>
+                        {/for}
+                    </tbody>
+                </table>
+            {/for}
+        </div></section>
+    {/for}
+    <section><div class="flow">
+        <h2 id={slugify(TAUGHT)}>{TAUGHT}</h2>
+        {#if guides.length > 0}
+            <ul>
+                {#for guide of guides}
+                    <li><a href={url(guide.route as RouteLiteral)}>{raw(inline(guide.nav))}</a></li>
+                {/for}
+            </ul>
+        {:else}
+            <p>No guide teaches this yet.</p>
+        {/if}
+    </div></section>
+</Doc>

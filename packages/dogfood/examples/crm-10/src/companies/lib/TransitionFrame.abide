@@ -1,0 +1,6 @@
+<script>
+import { url } from '@abide/abide'
+</script>
+
+<iframe src={url('/companies')} title="The list and a company, transitioning"
+    class="h-60 w-full rounded-md border border-rule"></iframe>

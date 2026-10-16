@@ -40,13 +40,122 @@
       "version": "0.0.0",
       "dependencies": {
         "@abide/abide": "workspace:*",
-        "crm-ui": "file:./crm-ui",
+        "crm-01": "workspace:*",
+        "crm-02": "workspace:*",
+        "crm-03": "workspace:*",
+        "crm-04": "workspace:*",
+        "crm-05": "workspace:*",
+        "crm-06": "workspace:*",
+        "crm-07": "workspace:*",
+        "crm-08": "workspace:*",
+        "crm-09": "workspace:*",
+        "crm-10": "workspace:*",
         "zod": "^4.6.5",
       },
       "devDependencies": {
         "@abide/harness": "workspace:*",
         "bun-plugin-tailwind": "^0.1.2",
         "tailwindcss": "^4.3.3",
+      },
+    },
+    "packages/dogfood/examples/crm-01": {
+      "name": "crm-01",
+      "dependencies": {
+        "@abide/abide": "workspace:*",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
+    "packages/dogfood/examples/crm-02": {
+      "name": "crm-02",
+      "dependencies": {
+        "@abide/abide": "workspace:*",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
+    "packages/dogfood/examples/crm-03": {
+      "name": "crm-03",
+      "dependencies": {
+        "@abide/abide": "workspace:*",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
+    "packages/dogfood/examples/crm-04": {
+      "name": "crm-04",
+      "dependencies": {
+        "@abide/abide": "workspace:*",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
+    "packages/dogfood/examples/crm-05": {
+      "name": "crm-05",
+      "dependencies": {
+        "@abide/abide": "workspace:*",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
+    "packages/dogfood/examples/crm-06": {
+      "name": "crm-06",
+      "dependencies": {
+        "@abide/abide": "workspace:*",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
+    "packages/dogfood/examples/crm-07": {
+      "name": "crm-07",
+      "dependencies": {
+        "@abide/abide": "workspace:*",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
+    "packages/dogfood/examples/crm-08": {
+      "name": "crm-08",
+      "dependencies": {
+        "@abide/abide": "workspace:*",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
+    "packages/dogfood/examples/crm-09": {
+      "name": "crm-09",
+      "dependencies": {
+        "@abide/abide": "workspace:*",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
+    "packages/dogfood/examples/crm-10": {
+      "name": "crm-10",
+      "dependencies": {
+        "@abide/abide": "workspace:*",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest",
       },
     },
     "packages/harness": {
@@ -221,6 +330,26 @@
 
     "cac": ["cac@7.0.1", "", {}, "sha512-86diuUyeeWM8CrqhpGCaDafrzjS1s++7sWy2AbAPoFNz/xKv7ID57CR4pZsMuGCh60PtsnEx4z68b+Vgt07VPw=="],
 
+    "crm-01": ["crm-01@workspace:packages/dogfood/examples/crm-01"],
+
+    "crm-02": ["crm-02@workspace:packages/dogfood/examples/crm-02"],
+
+    "crm-03": ["crm-03@workspace:packages/dogfood/examples/crm-03"],
+
+    "crm-04": ["crm-04@workspace:packages/dogfood/examples/crm-04"],
+
+    "crm-05": ["crm-05@workspace:packages/dogfood/examples/crm-05"],
+
+    "crm-06": ["crm-06@workspace:packages/dogfood/examples/crm-06"],
+
+    "crm-07": ["crm-07@workspace:packages/dogfood/examples/crm-07"],
+
+    "crm-08": ["crm-08@workspace:packages/dogfood/examples/crm-08"],
+
+    "crm-09": ["crm-09@workspace:packages/dogfood/examples/crm-09"],
+
+    "crm-10": ["crm-10@workspace:packages/dogfood/examples/crm-10"],
+
     "dogfood": ["dogfood@workspace:packages/dogfood"],
 
     "entities": ["entities@7.0.1", "", {}, "sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA=="],
@@ -279,6 +408,44 @@
 
     "zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
 
-    "dogfood/crm-ui": ["crm-ui@file:packages/dogfood/crm-ui", { "peerDependencies": { "@abide/abide": "*" } }],
+    "crm-01/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "crm-02/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "crm-03/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "crm-04/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "crm-05/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "crm-06/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "crm-07/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "crm-08/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "crm-09/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "crm-10/@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+
+    "crm-01/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "crm-02/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "crm-03/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "crm-04/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "crm-05/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "crm-06/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "crm-07/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "crm-08/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "crm-09/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+
+    "crm-10/@types/bun/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
   }
 }

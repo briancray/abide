@@ -1,0 +1,21 @@
+<script server>
+import { onError } from '@abide/abide/server'
+import { tracker } from './server/tracker.ts'
+
+onError((error) => tracker.capture(error))
+</script>
+
+<script>
+import { reactive, url } from '@abide/abide'
+
+let note = reactive('')
+</script>
+
+<head><title>Companies — CRM</title></head>
+
+<header class="row">
+    <a href={url('/companies')}>All companies</a>
+    <input bind:value={note} placeholder="Note for the call">
+</header>
+
+<slot/>

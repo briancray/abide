@@ -1,0 +1,47 @@
+<script>
+import { reactive, url } from '@abide/abide'
+
+const PAGES = [
+    { label: 'All companies', address: url('/companies') },
+    {
+        label: 'Hopper & Co',
+        address: url('/companies/[id]', { id: 'hopper-and-co' }),
+    },
+]
+
+let open = reactive(PAGES[0]?.address ?? '')
+let title = reactive('—')
+
+const ALL = { subtree: true, childList: true, characterData: true }
+
+// Follows the framed page's tab title as it loads and as it fills in.
+function followTitle(element: Element) {
+    const frame = element as HTMLIFrameElement
+    const read = () => (title = frame.contentDocument?.title || '—')
+    const watcher = new MutationObserver(read)
+    const watch = () => {
+        read()
+        const head = frame.contentDocument?.head
+        if (head) watcher.observe(head, ALL)
+    }
+    frame.addEventListener('load', watch)
+    return () => {
+        frame.removeEventListener('load', watch)
+        watcher.disconnect()
+    }
+}
+</script>
+
+<div class="tabs">
+    {#for page of PAGES}
+        <button aria-selected={String(open === page.address)}
+            onclick={() => (open = page.address)}>{page.label}</button>
+    {/for}
+</div>
+
+<ul class="fields">
+    <li><span>tab title</span><strong>{title}</strong></li>
+</ul>
+
+<iframe src={open} bind:element={followTitle} title="A page and its title"
+    class="h-48 w-full rounded-md border border-rule"></iframe>

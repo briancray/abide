@@ -1,0 +1,21 @@
+<script>
+import { reactive } from '@abide/abide'
+import getStage from '../getStage.ts'
+import { dollars } from './dollars.ts'
+import { STAGES } from './STAGES.ts'
+
+// Its own stage, and no way to reach the count beside it.
+let stage = reactive('lead')
+const totals = reactive(() => getStage({ stage }))
+</script>
+
+<ul class="fields stacked">
+    <li><span>stage</span>
+        <select bind:value={stage}>
+        {#for one of STAGES}
+            <option value={one}>{one}</option>
+        {/for}
+        </select></li>
+    <li><span>value</span>
+        <strong>{totals.ready() ? dollars(totals.value) : '—'}</strong></li>
+</ul>

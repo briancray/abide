@@ -1,0 +1,40 @@
+<script>
+import { reactive } from '@abide/abide'
+import getDeal from '../getDeal.ts'
+import moveDeal from '../moveDeal.ts'
+
+let id = reactive('d2')
+let refusal = reactive('')
+
+let deal = reactive(() => getDeal({ id }))
+
+async function move(stage: string) {
+    try {
+        deal = await moveDeal({ id, stage })
+        refusal = ''
+    } catch (error) {
+        // Matched by name, so `error.data` has the type the handler gave it.
+        if (!moveDeal.isError(error, 'DealClosed')) throw error
+        refusal = `Already ${error.data.stage}: ${error.message}`
+    }
+}
+</script>
+
+<div class="tabs">
+{#for one of ['d2', 'd3']}
+    <button aria-selected={id === one}
+        onclick={() => { id = one; refusal = '' }}>{one}</button>
+{/for}
+</div>
+
+<ul class="fields">
+    <li><span>{deal.name}</span><strong>{deal.stage}</strong></li>
+</ul>
+
+<div class="row">
+{#for stage of ['lead', 'qualified', 'proposal']}
+    <button onclick={() => move(stage)}>{stage}</button>
+{/for}
+</div>
+
+<p class="status">{refusal}</p>

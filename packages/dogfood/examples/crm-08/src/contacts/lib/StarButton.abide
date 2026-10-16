@@ -1,0 +1,12 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let starred = reactive(false)
+</script>
+
+<div class="row">
+    <button aria-pressed={String(starred)} onclick={() => (starred = !starred)}>
+        {starred ? '★ Starred' : '☆ Star'}
+    </button>
+    <span>Grace Hopper</span>
+</div>

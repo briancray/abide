@@ -1,0 +1,24 @@
+<script>
+import { reactive, refresh } from '@abide/abide'
+import listDeals from '../listDeals.ts'
+
+const deals = reactive(() => listDeals())
+
+const total = reactive(() => {
+    let sum = 0
+    for (const deal of deals) if (deal.stage !== 'won') sum += deal.amount
+    return sum
+})
+</script>
+
+<div class="row">
+    <button onclick={() => refresh(deals)}>Refresh</button>
+    <span class="status">
+        {!deals.ready() ? 'loading…' : deals.busy() ? 'refreshing…' : ''}
+    </span>
+</div>
+
+<ul class="tiles">
+    <li><span>in the pipeline</span>
+        <strong>${total.toLocaleString('en-US')}</strong></li>
+</ul>

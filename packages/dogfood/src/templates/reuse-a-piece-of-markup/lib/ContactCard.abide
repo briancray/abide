@@ -1,8 +1,0 @@
-<script>
-import Initials from 'crm-ui/Initials.abide'
-</script>
-
-<ul class="fields stacked">
-    <li><Initials name="Ada Lovelace" /> Ada Lovelace</li>
-    <li><Initials name="Grace Hopper" /> Grace Hopper</li>
-</ul>

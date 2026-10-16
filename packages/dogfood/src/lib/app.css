@@ -1,9 +1,11 @@
-/* TAILWIND, wired the way `/templates/scope-styles-to-a-component` teaches an app to wire
+/* TAILWIND, wired the way `/guide/edit-a-contact` teaches an app to wire
    it: `bun-plugin-tailwind` in this package's `bunfig.toml`, and this file opening with the import.
    `source("..")` scans `src/`, the directory above this one's `lib`, whatever directory the build
    was started from — the plugin's default is the working directory, and from the repo root that is
    every package. */
 @import "tailwindcss" source("..");
+/* The chapter apps the cards render, which sit beside `src` rather than in it. */
+@source "../../examples";
 
 /* THE TOKENS, as the theme every utility reads. The defaults a token replaces are cleared rather
    than left beside it, so `text-red-500` or `text-sm` is a build that emits nothing rather than a
@@ -837,21 +839,42 @@
         @apply flex flex-col gap-flow border-t border-rule bg-paper p-[1.4rem];
     }
 
-    /* A verdict cell: the answer carries the color, the reason recedes behind it. */
-    .verdict-yes {
-        @apply font-semibold text-good;
+    .ex-app {
+        @apply font-mono text-chrome/4 text-signal;
     }
 
-    .verdict-no {
-        @apply font-semibold text-bad;
+    /* What a test or bench file last reported, above its source: the file's render. */
+    .ex-results {
+        @apply m-0 flex list-none flex-col gap-tight border-b border-rule bg-paper px-4 py-3 font-mono text-chrome/4;
     }
 
-    .verdict-why {
-        @apply text-chrome text-muted;
+    .ex-results li {
+        @apply flex items-baseline gap-snug;
+    }
+
+    .ex-results span {
+        @apply font-medium uppercase text-good;
+    }
+
+    .ex-results[data-kind=bench] span {
+        @apply text-ink;
+    }
+
+    .ex-results li[data-passed=false] span {
+        @apply text-bad;
+    }
+
+    .ex-results small {
+        @apply text-muted;
+    }
+
+    .ex-files button[data-kind=test]::before,
+    .ex-files button[data-kind=bench]::before {
+        @apply rounded-none;
     }
 }
 
-/* A PAGE A CARD FRAMES is the example's app, which the site bar is not drawn over (40.39): with no
+/* A CHAPTER APP'S PAGE is that app, which the site bar is not drawn over (40.37): with no
    bar, the body is that page's column rather than the site's grid. Unlayered, so it beats `grid`. */
 body:not(:has(> .site)) {
     display: flex;

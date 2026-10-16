@@ -1,0 +1,41 @@
+<script>
+import { reactive, type RouteLiteral, url } from '@abide/abide'
+
+let tool = reactive('—')
+let description = reactive('—')
+let answer = reactive('—')
+
+// One JSON-RPC message to the app's MCP endpoint, as a model's client sends it.
+async function ask(method: string, params: object) {
+    const reply = await fetch(url('/__abide/mcp' as RouteLiteral), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    })
+    return (await reply.json()).result
+}
+
+async function callAsAModel() {
+    const { tools } = await ask('tools/list', {})
+    const found = tools.find((each: { name: string }) =>
+        each.name.endsWith('assistant_searchContacts'),
+    )
+    tool = found.name
+    description = found.description
+    const called = await ask('tools/call', {
+        name: found.name,
+        arguments: { name: 'Hopper' },
+    })
+    answer = called.content[0].text
+}
+</script>
+
+<div class="row">
+    <button onclick={callAsAModel}>List the tools, then call one</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>tool</span><strong>{tool}</strong></li>
+    <li><span>what the model reads</span><strong>{description}</strong></li>
+    <li><span>called with name Hopper</span><strong>{answer}</strong></li>
+</ul>

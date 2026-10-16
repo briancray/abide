@@ -1,0 +1,24 @@
+<script server>
+import { onHealth } from '@abide/abide/server'
+import { pool } from '../server/pool.ts'
+
+// Lets a page read `account.database` as a string.
+declare module '@abide/abide' {
+    interface Health {
+        database: string
+    }
+}
+
+onHealth(() => ({ database: pool.connected ? 'connected' : 'closed' }))
+</script>
+
+<script>
+import { health } from '@abide/abide'
+
+const account = health()
+</script>
+
+<ul class="fields stacked">
+    <li><span>up since</span><strong>{account.startedAt}</strong></li>
+    <li><span>database</span><strong>{account.database}</strong></li>
+</ul>

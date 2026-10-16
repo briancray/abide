@@ -1,129 +1,71 @@
 <script>
 import { url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
 import Lead from '#src/lib/Lead.abide'
 import Section from '#src/lib/Section.abide'
-import Invoice from './lib/Invoice.abide'
-import invoiceSource from './lib/Invoice.abide' with { type: 'text' }
 </script>
 
 <Doc>
-    <p>In abide it is the handler, and a page that reads it. You declare what a value <em>is</em>,
-    and reading it loads it — there is nothing in between for you to write.</p>
+    <p>In abide a value on the server is something a page reads, and reading it loads it. The
+    handler you would have written anyway is the whole of the API, its type is the same on both
+    sides, and loading, reloading, streaming and failing are all one type.</p>
 
-    <Section title="Call a server function from a page">
-        <Example
-            id="read-invoice"
-            title="Read an invoice"
-            summary="A row from your database on the page, with nothing between them. One file: the handler you would have written anyway, and the markup that reads it."
-            files={{ 'lib/Invoice.abide': invoiceSource }}
-        >
-            <Invoice />
-        </Example>
+    <p>These docs build one app, a CRM, in ten chapters. Each chapter adds what the CRM needs next,
+    and ends with the CRM as an app you can download and run. Every card is a file from that app,
+    with the tests and the bench the app runs on it.</p>
 
-        <p><em>1 file, 0 API in it</em> — one of those seven is left standing, and it is the
-        handler. Its <code>&lt;script server&gt;</code> never reaches the browser; the page calls
-        <code>getInvoice</code> by the name it was declared with.</p>
+    <Section title="1. Start an app">
+        <Lead of="/guide/start-an-app" />
+        <p>Read on: <a href={url('/guide/start-an-app')}>Start an app</a></p>
     </Section>
 
-    <Section title="Reactive values">
-        <Lead of="/values" />
-
-        <p>Read on: <a href={url('/values')}>Reactive values</a> ·
-        <a href={url('/values/show-a-value-that-changes')}>Local state</a> ·
-        <a href={url('/values/show-a-value-that-isnt-there-yet')}>Loading states</a> ·
-        <a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a></p>
+    <Section title="2. Edit a contact">
+        <Lead of="/guide/edit-a-contact" />
+        <p>Read on: <a href={url('/guide/edit-a-contact')}>Edit a contact</a></p>
     </Section>
 
-    <Section title="Templates">
-        <Lead of="/templates" />
-
-        <p>Read on: <a href={url('/templates')}>Templates</a> ·
-        <a href={url('/templates/read-and-write-a-value-by-name')}>Values by name</a> ·
-        <a href={url('/templates/show-markup-conditionally')}>Conditionals</a> ·
-        <a href={url('/templates/repeat-markup-over-a-list')}>Lists</a></p>
+    <Section title="3. Talk to the server">
+        <Lead of="/guide/talk-to-the-server" />
+        <p>Read on: <a href={url('/guide/talk-to-the-server')}>Talk to the server</a></p>
     </Section>
 
-    <Section title="Data from the server">
-        <Lead of="/data" />
-
-        <p>Read on: <a href={url('/data')}>Data from the server</a> ·
-        <a href={url('/data/read-data-without-writing-an-api')}>Reading data</a> ·
-        <a href={url('/data/change-something-on-the-server')}>Mutations</a> ·
-        <a href={url('/data/keep-a-room-of-callers-in-sync')}>Live updates</a></p>
+    <Section title="4. Keep it current">
+        <Lead of="/guide/keep-it-current" />
+        <p>Read on: <a href={url('/guide/keep-it-current')}>Keep it current</a></p>
     </Section>
 
-    <Section title="Pages and navigation">
-        <Lead of="/pages" />
-
-        <p>Read on: <a href={url('/pages')}>Pages and navigation</a> ·
-        <a href={url('/pages/add-a-page')}>Routes</a> ·
-        <a href={url('/pages/give-pages-the-same-chrome')}>Layouts</a> ·
-        <a href={url('/pages/link-to-another-page')}>Links &amp; navigation</a></p>
+    <Section title="5. Make it live">
+        <Lead of="/guide/make-it-live" />
+        <p>Read on: <a href={url('/guide/make-it-live')}>Make it live</a></p>
     </Section>
 
-    <Section title="The running app">
-        <Lead of="/app" />
-
-        <p>Read on: <a href={url('/app')}>The running app</a> ·
-        <a href={url('/app/configure-the-app')}>Config</a> ·
-        <a href={url('/app/know-who-is-calling')}>Auth &amp; principal</a> ·
-        <a href={url('/app/record-what-happened')}>Logging</a></p>
+    <Section title="6. Add pages">
+        <Lead of="/guide/add-pages" />
+        <p>Read on: <a href={url('/guide/add-pages')}>Add pages</a></p>
     </Section>
 
-    <Section title="For machines">
-        <Lead of="/machines" />
-
-        <p>Read on: <a href={url('/machines')}>For machines</a> ·
-        <a href={url('/machines/describe-your-api-without-writing-a-spec')}>OpenAPI</a> ·
-        <a href={url('/machines/let-a-model-call-your-handlers')}>MCP</a></p>
+    <Section title="7. Decide who sees what">
+        <Lead of="/guide/decide-who-sees-what" />
+        <p>Read on: <a href={url('/guide/decide-who-sees-what')}>Who sees what</a></p>
     </Section>
 
-    <Section title="Shipping">
-        <Lead of="/ship" />
-
-        <p>Read on: <a href={url('/ship')}>Shipping</a> ·
-        <a href={url('/ship/start-a-new-app')}>Scaffold</a> ·
-        <a href={url('/ship/catch-mistakes-before-you-ship')}>Checks</a> ·
-        <a href={url('/ship/build-and-serve-the-app')}>Build &amp; start</a> ·
-        <a href={url('/ship/call-a-handler-from-the-terminal')}>Call a handler</a></p>
+    <Section title="8. Run the CRM">
+        <Lead of="/guide/run-it" />
+        <p>Read on: <a href={url('/guide/run-it')}>Run it</a></p>
     </Section>
 
-    <Section title="Measuring">
-        <Lead of="/measure" />
+    <Section title="9. Open it to machines">
+        <Lead of="/guide/open-it-to-machines" />
+        <p>Read on: <a href={url('/guide/open-it-to-machines')}>Open it to machines</a></p>
+    </Section>
 
-        <p>Read on: <a href={url('/measure')}>Measuring</a> ·
-        <a href={url('/measure/count-the-work-an-update-does')}>Work counts</a> ·
-        <a href={url('/measure/prove-a-change-does-less-work')}>Work gates</a> ·
-        <a href={url('/measure/price-code-against-the-hand-written-version')}>Ratios</a></p>
+    <Section title="10. Test, measure and ship">
+        <Lead of="/guide/test-measure-and-ship" />
+        <p>Read on: <a href={url('/guide/test-measure-and-ship')}>Test, measure, ship</a></p>
     </Section>
 
     <Section title="Reference">
         <Lead of="/reference" />
-
-        <p>Read on: <a href={url('/reference')}>Reference</a> ·
-        <a href={url('/reference/reactive')}><code>reactive</code></a> ·
-        <a href={url('/reference/transports')}>Transports</a> ·
-        <a href={url('/reference/abide-files')}><code>.abide</code> files</a> ·
-        <a href={url('/reference/cli')}>CLI</a></p>
-    </Section>
-
-    <Section title="Start here">
-        <ul>
-            <li><a href={url('/start/what-abide-is-for')}>Why abide</a> — the idea, and who it
-            fits</li>
-            <li><a href={url('/start/your-first-page')}>First page</a> — something on screen</li>
-            <li><a href={url('/data/read-data-without-writing-an-api')}>Reading data</a> — the
-            guide most people want first</li>
-        </ul>
-
-        <blockquote>
-            <strong>These docs run ahead of the code.</strong> abide is documented before it is
-            built, on purpose: a capability that cannot be explained as a problem an app author has
-            is not ready to be a capability. Pages marked <em>stub</em> have a decided title and
-            intent, and no prose yet. Every example is real: the card runs the component its Files
-            tab shows, in this app.
-        </blockquote>
+        <p>Read on: <a href={url('/reference')}>Overview</a></p>
     </Section>
 </Doc>

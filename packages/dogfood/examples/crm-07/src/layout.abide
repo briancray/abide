@@ -1,0 +1,16 @@
+<script server>
+import { csp, middleware } from '@abide/abide/server'
+
+// Every page: the build's own scripts and styles load, and nothing else.
+middleware(csp())
+</script>
+
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+    <slot/>
+</body>
+</html>

@@ -1,0 +1,9 @@
+<script>
+import CustomerBadge from './CustomerBadge.abide'
+import LeadBadge from './LeadBadge.abide'
+</script>
+
+<div class="row">
+    <LeadBadge />
+    <CustomerBadge />
+</div>

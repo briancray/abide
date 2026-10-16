@@ -1,0 +1,12 @@
+<script>
+import { reactive } from '@abide/abide'
+import listContacts from '../listContacts.ts'
+
+const contacts = reactive(() => listContacts())
+</script>
+
+<ul class="fields">
+    {#for contact of contacts}
+        <li><span>{contact.company}</span><strong>{contact.name}</strong></li>
+    {/for}
+</ul>

@@ -1,0 +1,16 @@
+<script>
+import { reactive } from '@abide/abide'
+import ticker from '../ticker.ts'
+
+// A plain request, as a wallboard sends it: no `Accept` asks for events.
+const answer = reactive(async () => {
+    const raw = await ticker.raw()
+    return { type: raw.headers.get('content-type'), body: await raw.text() }
+})
+</script>
+
+<ul class="fields">
+    <li><span>content-type</span><strong>{answer.type}</strong></li>
+</ul>
+
+<pre class="rounded-md border border-rule bg-raised p-3">{answer.body}</pre>

@@ -1,0 +1,5 @@
+<script module>
+// Chapter 2's profile, mounted where its own app serves them, so its cards' requests and its
+// pages' `url()` addresses reach them here (23.19, 40.15).
+import 'crm-02/src/profile' with { type: 'routes' }
+</script>

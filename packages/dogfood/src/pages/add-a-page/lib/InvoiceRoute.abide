@@ -1,7 +1,0 @@
-<script>
-import { url } from '@abide/abide'
-</script>
-
-<iframe src={url('/pages/add-a-page/frame/[[invoice]]')}
-    title="The invoices route"
-    class="h-48 w-full rounded-md border border-rule"></iframe>

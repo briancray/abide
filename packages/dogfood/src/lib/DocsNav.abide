@@ -10,11 +10,11 @@
 //
 // WHERE YOU ARE COMES FROM THE ROUTE. The nav is the layout's, and a layout outlives the page it
 // wraps (41.11), so a prop the page passed would be the FIRST page's for as long as the nav stands.
-// The same route decides WHICH pages it lists — the guides, or the reference, or none beside an
-// instrument — and the site bar above it is where a reader moves between those.
+// The same route decides WHICH pages it lists — the guide or the reference — and the site bar above
+// it is where a reader moves between those.
 //
 // THE LITERAL, NOT THE ADDRESS: `route.name()` is the route an item's `href` is spelled in, where
-// `route.url()` is where the app is served — below a mount, `/docs/values` for `/values` — and the
+// `route.url()` is where the app is served — below a mount, `/docs/guide/run-it` for `/guide/run-it` — and the
 // link is written through `url` for the same reason (16.10).
 import { raw, type RouteLiteral, route, url } from '@abide/abide'
 //

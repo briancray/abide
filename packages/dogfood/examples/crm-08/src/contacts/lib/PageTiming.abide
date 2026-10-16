@@ -1,0 +1,26 @@
+<script>
+import { reactive } from '@abide/abide'
+import listContacts from '../listContacts.ts'
+
+let pageComplete = reactive('—')
+let contactsAnswered = reactive('—')
+
+async function requestPage() {
+    // The contacts page answers at the directory its handler is in.
+    const handler = new URL(listContacts.url(), location.href)
+    const started = performance.now()
+    const since = () => `${Math.round(performance.now() - started)} ms`
+    fetch(handler).then(() => (contactsAnswered = since()))
+    await (await fetch(new URL('.', handler))).text()
+    pageComplete = since()
+}
+</script>
+
+<div class="row">
+    <button onclick={requestPage}>Request the contacts page</button>
+</div>
+
+<ul class="tiles">
+    <li><span>page complete</span><strong>{pageComplete}</strong></li>
+    <li><span>contacts answered</span><strong>{contactsAnswered}</strong></li>
+</ul>

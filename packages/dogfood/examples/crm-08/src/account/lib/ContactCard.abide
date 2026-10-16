@@ -1,0 +1,21 @@
+<script>
+import { principal, reactive, watch } from '@abide/abide'
+import getContact from '../getContact.ts'
+import SignInAs from './SignInAs.abide'
+
+const contact = reactive(() => getContact())
+
+// Read again as whoever signed in, wherever on the page they did.
+watch(principal.resolved, () => getContact.refresh())
+
+const dealValue = () => contact.dealValue ?? 'admins only'
+</script>
+
+<SignInAs />
+
+<ul class="fields">
+    <li><span>name</span>
+        <strong>{contact.ready() ? contact.name : '—'}</strong></li>
+    <li><span>deal value</span>
+        <strong>{contact.ready() ? dealValue() : '—'}</strong></li>
+</ul>

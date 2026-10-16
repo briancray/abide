@@ -1,0 +1,318 @@
+<script>
+import { url } from '@abide/abide'
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import DealDetail from 'crm-03/src/deals/lib/DealDetail.abide'
+import dealDetailSource from 'crm-03/src/deals/lib/DealDetail.abide' with { type: 'text' }
+import getDealSource from 'crm-03/src/deals/getDeal.ts' with { type: 'text' }
+import dealDetailTestSource from 'crm-03/src/deals/tests/DealDetail.test.ts' with { type: 'text' }
+import DealNotes from 'crm-03/src/deals/lib/DealNotes.abide'
+import dealNotesSource from 'crm-03/src/deals/lib/DealNotes.abide' with { type: 'text' }
+import dealNotesTestSource from 'crm-03/src/deals/tests/DealNotes.test.ts' with { type: 'text' }
+import NewDeal from 'crm-03/src/deals/lib/NewDeal.abide'
+import newDealSource from 'crm-03/src/deals/lib/NewDeal.abide' with { type: 'text' }
+import createDealSource from 'crm-03/src/deals/createDeal.ts' with { type: 'text' }
+import newDealTestSource from 'crm-03/src/deals/tests/NewDeal.test.ts' with { type: 'text' }
+import DealStage from 'crm-03/src/deals/lib/DealStage.abide'
+import dealStageSource from 'crm-03/src/deals/lib/DealStage.abide' with { type: 'text' }
+import moveDealSource from 'crm-03/src/deals/moveDeal.ts' with { type: 'text' }
+import dealStageTestSource from 'crm-03/src/deals/tests/DealStage.test.ts' with { type: 'text' }
+import ExportDeals from 'crm-03/src/deals/lib/ExportDeals.abide'
+import exportDealsSource from 'crm-03/src/deals/lib/ExportDeals.abide' with { type: 'text' }
+import exportDealsHandlerSource from 'crm-03/src/deals/exportDeals.ts' with { type: 'text' }
+import exportDealsTestSource from 'crm-03/src/deals/tests/ExportDeals.test.ts' with { type: 'text' }
+import Pipeline from 'crm-03/src/deals/lib/Pipeline.abide'
+import pipelineSource from 'crm-03/src/deals/lib/Pipeline.abide' with { type: 'text' }
+import listDealsSource from 'crm-03/src/deals/listDeals.ts' with { type: 'text' }
+import pipelineTestSource from 'crm-03/src/deals/tests/Pipeline.test.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>Every server call in this chapter is a handler: a function wrapped in <code>GET</code>,
+    <code>POST</code>, <code>PATCH</code> or one of their siblings. A page imports it and calls it
+    like any function. There is no route table, no <code>fetch</code> and no client to keep in step
+    with the server.</p>
+
+    <Section title="A handler file answers at its own path">
+        <p>A <code>.ts</code> file beside the pages is a handler file. Its default export is the
+        handler, and its path below <code>src</code> is the address it answers on.</p>
+
+        <table>
+            <thead><tr><th>File below <code>src</code></th><th>Answers on</th></tr></thead>
+            <tbody>
+                <tr><td><code>**/&lt;name&gt;.ts</code></td><td>its directory's route, then <code>&lt;name&gt;</code></td></tr>
+                <tr><td><code>deals/getDeal.ts</code></td><td><code>GET /deals/getDeal</code></td></tr>
+                <tr><td><code>users/getUser.ts</code></td><td><code>GET /users/getUser</code></td></tr>
+                <tr><td><code>health.ts</code></td><td><code>GET /health</code></td></tr>
+                <tr><td><code>media/[id]/save.ts</code></td><td><code>POST /media/42/save</code>, with <code>id</code> in its args</td></tr>
+                <tr><td><code>media/[id]/lib/Comments.abide</code></td><td><code>/__abide/handlers/media/id/lib/Comments/addComment</code>, for the <code>addComment</code> its <code>&lt;script server&gt;</code> declares</td></tr>
+            </tbody>
+        </table>
+
+        <p>A handler file exports its handler and nothing else. A page imports it, a script calls
+        its address, and the CLI and MCP offer it as a command and a tool.</p>
+    </Section>
+
+    <Section title="A page calls a handler with typed arguments">
+        <Example
+            id="crm-03-deal"
+            app="crm-03"
+            title={'`getDeal({ id })` — a handler called with typed arguments'}
+            summary="Pick a deal. The page asks the server for that one, and its fields fill in when it lands."
+            files={{
+                'src/deals/lib/DealDetail.abide': dealDetailSource,
+                'src/deals/getDeal.ts': getDealSource,
+                'src/deals/tests/DealDetail.test.ts': dealDetailTestSource,
+            }}
+        >
+            <DealDetail />
+        </Example>
+
+        <p>The annotation <code>{'{ id: string }'}</code> is the handler's <code>Args</code>, and
+        what it returns is its <code>Value</code>. <code>GET</code> builds the runtime schema from
+        that annotation, so a request whose arguments do not match it is refused with 422 before the
+        handler runs.</p>
+
+        <p>In the browser the import is an <code>Rpc</code>: a call under the same name, with the
+        same types, sent over http. The call hands back a reactive value rather than a promise, so
+        the page reads <code>deal.name</code> by name and the probes are on the result.</p>
+
+        <p>Reading <code>deal</code> starts the load. The page renders with a hole where each
+        field goes, and the holes fill when the deal lands. A read outside the markup, in a click
+        handler, throws <code>NotLanded</code> until then.</p>
+
+        <p>The <code>description</code> is the sentence every surface shows for the handler:
+        OpenAPI, MCP and the CLI. <code>refuse(404)</code> answers a deal that does not exist.</p>
+    </Section>
+
+    <Section title="A handler only one file calls stays in that file">
+        <Example
+            id="crm-03-notes"
+            app="crm-03"
+            title="`const getNotes = GET(fn)` — a handler its own file calls"
+            summary="The notes on a deal, which only this card shows. The handler sits in the card's own server block."
+            files={{
+                'src/deals/lib/DealNotes.abide': dealNotesSource,
+                'src/deals/tests/DealNotes.test.ts': dealNotesTestSource,
+            }}
+        >
+            <DealNotes />
+        </Example>
+
+        <p>A <code>&lt;script server&gt;</code> runs on the server alone. It declares
+        <code>getNotes</code> as a <code>const</code>, and the same file's script and markup call it
+        by name. A <code>.abide</code> exports nothing, so no other file can reach it.</p>
+
+        <p>It still answers over http, below <code>/__abide/handlers</code> at its file's path and
+        then its name. That address is listed on no surface, and the test calls it to show it is
+        there. When a second file needs the handler, move it into a handler file:
+        <code>const getNotes =</code> becomes <code>export default</code>.</p>
+    </Section>
+
+    <Section title="Four methods declare a write">
+        <table>
+            <thead><tr><th>You write</th><th>For</th><th>Arguments travel</th></tr></thead>
+            <tbody>
+                <tr><td><code>POST(fn)</code></td><td>a new deal</td><td>in the body</td></tr>
+                <tr><td><code>PATCH(fn)</code></td><td>a change to part of one</td><td>in the body</td></tr>
+                <tr><td><code>PUT(fn)</code></td><td>a deal replaced whole</td><td>in the body</td></tr>
+                <tr><td><code>DELETE(fn)</code></td><td>a deal removed</td><td>in the URL, flat</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>POST</code> / <code>PUT</code> / <code>PATCH</code> / <code>DELETE</code> each take
+        what <code>GET</code> takes and are called the way it is. The page never names the method;
+        the declaration carries it. A <code>GET</code> must not write, because a link on another
+        site can reach it with your user's cookie attached.</p>
+    </Section>
+
+    <Section title="A new deal is checked before it is written">
+        <Example
+            id="crm-03-new-deal"
+            app="crm-03"
+            title={'`POST(fn, { args })` — a write checked before it runs'}
+            summary="A new deal with no company and an amount of 0. Press Add deal: the server refuses it, with a message filed under each field that is wrong."
+            files={{
+                'src/deals/lib/NewDeal.abide': newDealSource,
+                'src/deals/createDeal.ts': createDealSource,
+                'src/deals/tests/NewDeal.test.ts': newDealTestSource,
+            }}
+        >
+            <NewDeal />
+        </Example>
+
+        <p><code>args</code> gates the arguments before the handler runs. A request that fails it
+        is refused with 422 and a <code>ValidationError</code>, whose data is
+        <code>Issues&lt;T&gt;</code>: the messages, keyed by the field's path. The card lists each
+        field with its first message, and <code>issues.company</code> is the company's.</p>
+
+        <p>Two presses of Add inside one flight send one request and write one deal, and both get
+        its answer.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>args</code></td><td>gates the arguments a handler is called with</td></tr>
+                <tr><td><code>schema</code></td><td>gates what a reactive value stores, on the side it lives on</td></tr>
+                <tr><td><code>Schema&lt;T&gt;</code></td><td>what either takes: a function returning what it accepts, or a Standard Schema such as zod's</td></tr>
+                <tr><td><code>jsonSchema</code></td><td>turns a JSON Schema document into a <code>Schema</code>, with its validator</td></tr>
+                <tr><td><code>JsonSchema</code></td><td>the document itself, published as written to OpenAPI and MCP</td></tr>
+                <tr><td><code>validateJson</code></td><td>checks a value against a document and hands back the issues, or <code>null</code>: a pasted row before an import</td></tr>
+                <tr><td><code>Issues&lt;T&gt;</code></td><td>the messages, keyed by path; a bare <code>string[]</code> on a primitive</td></tr>
+                <tr><td><code>Paths&lt;T&gt;</code></td><td>the keys of <code>Issues</code>: dot-joined, like <code>lines.0.amount</code></td></tr>
+                <tr><td><code>JsonValue</code></td><td>what an argument may hold, so it can travel and key a cache</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A refusal carries a name the page can match">
+        <Example
+            id="crm-03-move"
+            app="crm-03"
+            title="`moveDeal.isError(error, 'DealClosed')` — the refusal, matched by name"
+            summary="Move the open deal between stages, then try to move the deal already won. The server refuses, and says why."
+            files={{
+                'src/deals/lib/DealStage.abide': dealStageSource,
+                'src/deals/moveDeal.ts': moveDealSource,
+                'src/deals/tests/DealStage.test.ts': dealStageTestSource,
+            }}
+        >
+            <DealStage />
+        </Example>
+
+        <p><code>refuse.named</code> declares a refusal with a name, a status, a message and a
+        schema for its data. The handler refuses by returning it: <code>return myError(data)</code>
+        is the one spelling. A bare <code>myError(data)</code> statement, built and dropped, is a
+        compile error, because the write would carry on as if nothing had been refused.</p>
+
+        <p>Every refusal is a <code>Failed&lt;Name, Data&gt;</code>, in process and over the wire
+        alike. The ones a handler can return are its <code>Failures</code>, so
+        <code>rpc.isError</code> narrows by name and types <code>error.data</code> from the
+        schema. <code>s.isError</code> is the same check on any reactive value, for a refusal the
+        page made itself.</p>
+
+        <p><code>refuse(status)</code> is for where the status is the whole answer. It has no name a
+        caller can narrow to.</p>
+
+        <table>
+            <thead><tr><th>abide's own refusal</th><th>Status</th><th>When</th></tr></thead>
+            <tbody>
+                <tr><td><code>notFound</code></td><td>404</td><td>nothing answers the address, with the path and method as data</td></tr>
+                <tr><td><code>validationError</code></td><td>422</td><td>a schema or an <code>args</code> gate refused, with the issues as data</td></tr>
+                <tr><td><code>aborted</code></td><td>499</td><td>every caller waiting on a load passed a <code>signal</code>, and every one aborted</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A handler can answer with a file">
+        <Example
+            id="crm-03-export"
+            app="crm-03"
+            title="`exportDeals.url()` — a CSV file a link downloads"
+            summary="Sales wants the pipeline in a spreadsheet. The link downloads every deal as a CSV file."
+            files={{
+                'src/deals/lib/ExportDeals.abide': exportDealsSource,
+                'src/deals/exportDeals.ts': exportDealsHandlerSource,
+                'src/deals/tests/ExportDeals.test.ts': exportDealsTestSource,
+            }}
+        >
+            <ExportDeals />
+        </Example>
+
+        <p>A handler that returns a <code>Blob</code> answers with the blob's own type, so this one
+        is <code>text/csv</code>. A link cannot call a handler, so it takes the address:
+        <code>rpc.url</code> is derived from the file's path and the mount, never typed out.</p>
+
+        <table>
+            <thead><tr><th>You return</th><th>The caller gets</th></tr></thead>
+            <tbody>
+                <tr><td><code>page</code></td><td>a rendered document as <code>text/html</code>: a stored invoice as it was sent</td></tr>
+                <tr><td><code>json</code></td><td>JSON whatever the caller's <code>Accept</code> says, with <code>null</code> for nothing</td></tr>
+                <tr><td><code>redirect</code></td><td>a navigation to another address, at a <code>RedirectStatus</code>: 301, 302, 303, 307 or 308</td></tr>
+            </tbody>
+        </table>
+
+        <table>
+            <thead><tr><th>A handler's member</th><th>What you get</th></tr></thead>
+            <tbody>
+                <tr><td><code>rpc.url</code></td><td>the address, with the args written in, for a link, a form or a webhook</td></tr>
+                <tr><td><code>rpc.method</code></td><td>the verb it was declared with</td></tr>
+                <tr><td><code>rpc.raw</code></td><td>the <code>Response</code> itself, for a header or a body you read yourself</td></tr>
+                <tr><td><code>rpc.description</code></td><td>the sentence it was declared with</td></tr>
+            </tbody>
+        </table>
+
+        <p>Every answer carries headers you did not write:</p>
+
+        <table>
+            <thead><tr><th>Header</th><th>On</th></tr></thead>
+            <tbody>
+                <tr><td><code>x-content-type-options: nosniff</code></td><td>everything, so a browser never guesses a type</td></tr>
+                <tr><td><code>cache-control: private, no-store</code></td><td>a page, a handler's answer and any refusal, until the handler sets its own</td></tr>
+                <tr><td><code>cache-control: private, max-age=&lt;ttl&gt;</code></td><td>a <code>GET</code> over a <code>global</code> value</td></tr>
+                <tr><td><code>cache-control: no-store</code></td><td>the OpenAPI document and the MCP endpoint</td></tr>
+                <tr><td><code>cache-control: public, max-age=31536000, immutable</code></td><td>the built bundle, named by its content hash</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`abide routes` prints every address">
+        <Code code={`abide routes
+GET    /deals                       deals/index.abide
+POST   /deals/createDeal            deals/createDeal.ts
+GET    /deals/exportDeals           deals/exportDeals.ts
+GET    /deals/getDeal               deals/getDeal.ts
+GET    /deals/listDeals             deals/listDeals.ts
+PATCH  /deals/moveDeal              deals/moveDeal.ts`} />
+
+        <p><code>abide routes [--json]</code> prints each address, its method and the file
+        answering it, with every private handler marked <code>(private)</code>. With
+        <code>--json</code> it prints the same as one document.</p>
+    </Section>
+
+    <Section title="A refresh keeps the figures on screen">
+        <Example
+            id="crm-03-pipeline"
+            app="crm-03"
+            title="`busy()` and `ready()` — a first load and a refresh, told apart"
+            summary="The pipeline's total. Wait for it, add a deal, then press Refresh: the old figure stays until the new one lands."
+            files={{
+                'src/deals/lib/Pipeline.abide': pipelineSource,
+                'src/deals/listDeals.ts': listDealsSource,
+                'src/deals/tests/Pipeline.test.ts': pipelineTestSource,
+            }}
+        >
+            <Pipeline />
+        </Example>
+
+        <p>A first load is <code>busy()</code> with nothing <code>ready()</code>. A refresh is
+        <code>busy()</code> and still <code>ready()</code>, so the tile keeps the figure it has
+        while the new one loads. One loading flag cannot tell the two apart, and blanks the page on
+        every refresh.</p>
+
+        <table>
+            <thead><tr><th>Probe</th><th>Answers</th></tr></thead>
+            <tbody>
+                <tr><td><code>s.busy</code></td><td>whether work is in flight for the value</td></tr>
+                <tr><td><code>s.ready</code></td><td>whether there is a value to show</td></tr>
+                <tr><td><code>s.error</code></td><td>the standing failure, handed back rather than thrown</td></tr>
+                <tr><td><code>busy</code></td><td>whether anything in a selection is in flight: an app-wide progress bar</td></tr>
+                <tr><td><code>ready</code></td><td>whether everything in a selection has a value</td></tr>
+            </tbody>
+        </table>
+
+        <p>A probe never throws and never starts a load, so it is safe to read before anything has
+        landed. The value is also a promise, for a handler or a test: <code>await deals</code>
+        waits for it, and <code>s.then</code>, <code>s.catch</code> and <code>s.finally</code> reach the same
+        settling.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/guide/keep-it-current')}>Keep it current</a> — load each deal once,
+            and reload it when it goes stale</li>
+        </ul>
+    </Section>
+</Doc>

@@ -1,0 +1,11 @@
+<script>
+import { reactive } from '@abide/abide'
+import getRetries from '../getRetries.ts'
+
+const policy = reactive(() => getRetries())
+</script>
+
+<ul class="tiles">
+    <li><span>retries</span><strong>{policy.retries}</strong></li>
+    <li><span>attempts</span><strong>{policy.retries + 1}</strong></li>
+</ul>

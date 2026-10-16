@@ -1,0 +1,13 @@
+<script>
+import { principal } from '@abide/abide'
+import SignInAs from './SignInAs.abide'
+</script>
+
+<SignInAs />
+
+<ul class="fields">
+    <li><span>name</span>
+        <strong>{principal.resolved().name ?? '—'}</strong></li>
+    <li><span>role</span>
+        <strong>{principal.resolved().role ?? '—'}</strong></li>
+</ul>

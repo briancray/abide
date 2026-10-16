@@ -1,0 +1,19 @@
+<script>
+import { reactive } from '@abide/abide'
+import getStage from '../getStage.ts'
+import { STAGES } from './STAGES.ts'
+
+let stage = reactive('lead')
+const totals = reactive(() => getStage({ stage }))
+</script>
+
+<ul class="fields stacked">
+    <li><span>stage</span>
+        <select bind:value={stage}>
+        {#for one of STAGES}
+            <option value={one}>{one}</option>
+        {/for}
+        </select></li>
+    <li><span>deals</span>
+        <strong>{totals.ready() ? totals.count : '—'}</strong></li>
+</ul>

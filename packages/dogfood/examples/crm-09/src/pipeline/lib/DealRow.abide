@@ -1,0 +1,11 @@
+<script>
+import { props, reactive } from '@abide/abide'
+
+const { id, name } = props<{ id: string; name: string }>()
+// The same key as the detail panel, and no prop between them.
+let selected = reactive.share('selectedDeal', () => reactive(''))
+</script>
+
+<button aria-pressed={String(selected === id)} onclick={() => (selected = id)}>
+    {name}
+</button>

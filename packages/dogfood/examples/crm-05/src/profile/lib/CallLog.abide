@@ -1,0 +1,8 @@
+<script>
+import CallRow from './CallRow.abide'
+</script>
+
+<ul class="fields stacked">
+    <CallRow name="Ada Lovelace" />
+    <CallRow name="Grace Hopper" />
+</ul>

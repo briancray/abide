@@ -1,0 +1,13 @@
+<script>
+import { reactive } from '@abide/abide'
+import exportCsv from '../exportCsv.ts'
+
+const csv = reactive(async () => (await exportCsv.raw()).text())
+</script>
+
+<pre class="rounded-md border border-rule bg-raised p-3">{csv}</pre>
+
+<div class="row">
+    <a href={exportCsv.url()} download="hopper-co.csv">
+        Download hopper-co.csv</a>
+</div>

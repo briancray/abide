@@ -1,0 +1,7 @@
+<span class="badge">Customer</span>
+
+<style>
+.badge {
+    color: rgb(47, 107, 68);
+}
+</style>

@@ -1,32 +1,51 @@
 <script>
-import { url } from '@abide/abide'
+import { raw, reactive, type RouteLiteral, url } from '@abide/abide'
 import Doc from '#src/lib/Doc.abide'
-import Section from '#src/lib/Section.abide'
+import { inline, slugify } from '#src/lib/inline.ts'
+import { REFERENCE } from '#src/lib/REFERENCE.ts'
+import { sidebarGroupsOf } from '#src/lib/siteSections.ts'
+
+// Where each export's page imports it from.
+const ENTRY = new Map<string, string>()
+for (const page of REFERENCE)
+    if (page.entry !== undefined) ENTRY.set(page.route, `\`${page.entry}\``)
+// Every group the reference nav lists, save the overview this is and the documents after the pages.
+const groups = sidebarGroupsOf('/reference').filter(
+    (group) => group.section !== 'Reference' && group.section !== 'Documents',
+)
+
+// The rail's headings, filed here: a `<Section>` per group would file each from inside the loop,
+// after `<Doc>` has decided whether there is a rail (as `lib/Reference.abide` does).
+const headings = reactive.share('docHeadings', () =>
+    reactive<{ id: string; title: string; level: number }[]>([]),
+)
+headings = groups.map((group) => ({
+    id: slugify(group.section),
+    title: group.section,
+    level: 2,
+}))
 </script>
 
 <Doc>
-    <p>Arrive here knowing which thing you want. Nothing on these pages teaches why you would reach
-    for it; each one links back to the guide that does.</p>
+    <p>Arrive here knowing which name you want. Each page is read off the registry: the name's
+    signature, what it is, the rules that govern it, its members and options, and the guide that
+    teaches it. What an app writes in place rather than imports, such as template syntax, files and
+    commands, has one page per area.</p>
 
-    <p>One page per primitive, each in the same order: syntax, parameters, return value, then
-    description and examples. A page you have read is a page you can navigate.</p>
-
-    <Section title="What each page holds">
-        <table>
-            <thead><tr><th>Page</th><th>Holds</th></tr></thead>
-            <tbody>
-                <tr><td><a href={url('/reference/reactive')}><code>reactive</code></a></td><td>The one factory and the one type every producer hands back — every overload, read, probe, trigger and option on it</td></tr>
-                <tr><td><a href={url('/reference/watch')}><code>watch</code></a></td><td>The effect, its disposer, and what a server does with one</td></tr>
-                <tr><td><a href={url('/reference/selections')}>Selections</a></td><td><code>busy</code>, <code>ready</code>, <code>refresh</code> and <code>invalidate</code> over many entries</td></tr>
-                <tr><td><a href={url('/reference/refusals')}>Refusals</a></td><td><code>refuse.named</code>, <code>Failed</code>, and the two abide declares</td></tr>
-                <tr><td><a href={url('/reference/transports')}>Transports</a></td><td><code>rpc</code>, the follow, response helpers, and the headers abide sends</td></tr>
-                <tr><td><a href={url('/reference/ambient-values')}>Ambient values</a></td><td><code>request</code>, <code>route</code>, <code>cookies</code>, <code>principal</code>, <code>config</code>, <code>trace</code>, <code>health</code></td></tr>
-                <tr><td><a href={url('/reference/helpers')}>Helpers</a></td><td><code>log</code>, <code>csp</code>, <code>url</code>, <code>navigate</code></td></tr>
-                <tr><td><a href={url('/reference/abide-files')}><code>.abide</code> files</a></td><td>The template grammar, and the rules that let a reactive value be read and written by name</td></tr>
-                <tr><td><a href={url('/reference/routing')}>Routing</a></td><td>File patterns, precedence, head merging, and <code>render</code></td></tr>
-                <tr><td><a href={url('/reference/configuration')}>Configuration</a></td><td>Environment variables, files, and the lifecycle hooks a <code>&lt;script server&gt;</code> registers</td></tr>
-                <tr><td><a href={url('/reference/cli')}>CLI</a></td><td>Every command, every flag, every exit code</td></tr>
-            </tbody>
-        </table>
-    </Section>
+    {#for group of groups}
+        <section><div class="flow">
+            <h2 id={slugify(group.section)}>{group.section}</h2>
+            <table>
+                <thead><tr><th>Page</th><th>Imported from</th></tr></thead>
+                <tbody>
+                    {#for page of group.pages}
+                        <tr>
+                            <td><a href={url(page.route as RouteLiteral)}>{raw(inline(page.nav))}</a></td>
+                            <td>{raw(inline(ENTRY.get(page.route) ?? 'written in place'))}</td>
+                        </tr>
+                    {/for}
+                </tbody>
+            </table>
+        </div></section>
+    {/for}
 </Doc>

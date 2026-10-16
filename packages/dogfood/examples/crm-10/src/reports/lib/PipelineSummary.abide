@@ -1,0 +1,11 @@
+<script>
+import { reactive } from '@abide/abide'
+import getSummary from '../getSummary.ts'
+
+const summary = reactive(() => getSummary())
+</script>
+
+<ul class="tiles">
+    <li><span>open deals</span><strong>{summary?.open ?? '—'}</strong></li>
+    <li><span>pipeline</span><strong>${summary?.pipeline ?? '—'}</strong></li>
+</ul>

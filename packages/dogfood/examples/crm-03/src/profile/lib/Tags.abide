@@ -1,0 +1,17 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let tags = reactive(['investor', 'speaker', 'mentor'])
+</script>
+
+<div class="row">
+    {#for tag of tags by tag}
+        <span class="flex gap-tight rounded-full border border-rule px-3">
+            <strong class="self-center font-medium">{tag}</strong>
+            <button class="bg-transparent px-2 text-muted"
+                aria-label="Remove {tag}"
+                onclick={() => (tags = tags.filter((other) => other !== tag))}
+            >×</button>
+        </span>
+    {/for}
+</div>

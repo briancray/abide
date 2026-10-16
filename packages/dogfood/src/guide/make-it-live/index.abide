@@ -1,0 +1,273 @@
+<script>
+import { url } from '@abide/abide'
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import QuickLog from 'crm-05/src/activity/lib/QuickLog.abide'
+import quickLogSource from 'crm-05/src/activity/lib/QuickLog.abide' with { type: 'text' }
+import lastActivitySource from 'crm-05/src/activity/lib/LastActivity.abide' with { type: 'text' }
+import activitySource from 'crm-05/src/activity/lib/activity.ts' with { type: 'text' }
+import quickLogTestSource from 'crm-05/src/activity/tests/QuickLog.test.ts' with { type: 'text' }
+import RecentActivity from 'crm-05/src/activity/lib/RecentActivity.abide'
+import recentActivitySource from 'crm-05/src/activity/lib/RecentActivity.abide' with { type: 'text' }
+import recentActivityTestSource from 'crm-05/src/activity/tests/RecentActivity.test.ts' with { type: 'text' }
+import AccountFeed from 'crm-05/src/activity/lib/AccountFeed.abide'
+import accountFeedSource from 'crm-05/src/activity/lib/AccountFeed.abide' with { type: 'text' }
+import feedSource from 'crm-05/src/activity/feed.ts' with { type: 'text' }
+import logToFeedSource from 'crm-05/src/activity/logToFeed.ts' with { type: 'text' }
+import feedsSource from 'crm-05/src/activity/lib/feeds.ts' with { type: 'text' }
+import accountFeedTestSource from 'crm-05/src/activity/tests/AccountFeed.test.ts' with { type: 'text' }
+import ActivityHistory from 'crm-05/src/activity/lib/ActivityHistory.abide'
+import activityHistorySource from 'crm-05/src/activity/lib/ActivityHistory.abide' with { type: 'text' }
+import olderActivitySource from 'crm-05/src/activity/olderActivity.ts' with { type: 'text' }
+import activityHistoryTestSource from 'crm-05/src/activity/tests/ActivityHistory.test.ts' with { type: 'text' }
+import CsvExport from 'crm-05/src/activity/lib/CsvExport.abide'
+import csvExportSource from 'crm-05/src/activity/lib/CsvExport.abide' with { type: 'text' }
+import exportCsvSource from 'crm-05/src/activity/exportCsv.ts' with { type: 'text' }
+import csvExportTestSource from 'crm-05/src/activity/tests/CsvExport.test.ts' with { type: 'text' }
+import Wallboard from 'crm-05/src/activity/lib/Wallboard.abide'
+import wallboardSource from 'crm-05/src/activity/lib/Wallboard.abide' with { type: 'text' }
+import tickerSource from 'crm-05/src/activity/ticker.ts' with { type: 'text' }
+import wallboardTestSource from 'crm-05/src/activity/tests/Wallboard.test.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>A channel is a <code>reactive</code> holding an array. Anything that can reach it appends
+    with <code>patch</code>, and anything that can reach it reads. Put one behind a
+    <code>GET</code> and every open tab follows it. A handler that yields sends each value as it
+    is produced, from the same address that answers with the whole.</p>
+
+    <Section title="A channel is an array anything can append to">
+        <Example
+            id="crm-05-channel"
+            app="crm-05"
+            title="`reactive<Activity[]>([])` — a channel anything can reach"
+            summary="A quick-log bar on a contact, and a line above it that reports the last touch. Log a call and watch a component the bar never names."
+            files={{
+                'src/activity/lib/activity.ts': activitySource,
+                'src/activity/lib/QuickLog.abide': quickLogSource,
+                'src/activity/lib/LastActivity.abide': lastActivitySource,
+                'src/activity/tests/QuickLog.test.ts': quickLogTestSource,
+            }}
+        >
+            <QuickLog />
+        </Example>
+
+        <p><code>activity.ts</code> holds the channel and the one function that writes it. The bar
+        imports the function, the readout imports the channel, and neither imports the other. No
+        prop is threaded between them and no provider wraps them.</p>
+
+        <p>The readout derives <code>last</code> as <code>activity.at(-1)</code>, and follows the
+        channel the way any derived value follows what it read. Opened with an array, the channel
+        has landed: it is <code>ready()</code> at once and never <code>busy()</code> where it is
+        written.</p>
+    </Section>
+
+    <Section title="A feed keeps its last few entries">
+        <Example
+            id="crm-05-recent"
+            app="crm-05"
+            title="`patch` with a trim — the last three entries"
+            summary="The same channel listed in full, already three entries long. Log a meeting and watch the top of the list."
+            files={{
+                'src/activity/lib/RecentActivity.abide': recentActivitySource,
+                'src/activity/lib/activity.ts': activitySource,
+                'src/activity/tests/RecentActivity.test.ts': recentActivityTestSource,
+            }}
+        >
+            <RecentActivity />
+        </Example>
+
+        <p>The trim is one line in the patch that appends: <code>if (entries.length &gt; 3)
+        entries.shift()</code>. <code>patch</code> hands you the array the channel holds and
+        changes it in place, so the push and the trim are one write. abide puts no cap on the
+        array. The condition is yours: a count here, an age or a byte total where that is what
+        bounds it. Keep the push and the trim in one function every writer calls, and the cap
+        belongs to the channel rather than to whichever caller remembered it.</p>
+
+        <p>A value keeps no past of its own. Where you want what came before, make the value the
+        array and append where you write, as here. An undo stack is the same: an array the app
+        pushes into.</p>
+    </Section>
+
+    <Section title="A feed on the server reaches every open tab">
+        <Example
+            id="crm-05-live-feed"
+            app="crm-05"
+            title="`GET` + `POST` — one account's feed, every tab"
+            summary="The activity feed on Hopper & Co. Open this page in a second tab, log a call in either, and both lists grow."
+            files={{
+                'src/activity/lib/AccountFeed.abide': accountFeedSource,
+                'src/activity/lib/feeds.ts': feedsSource,
+                'src/activity/feed.ts': feedSource,
+                'src/activity/logToFeed.ts': logToFeedSource,
+                'src/activity/tests/AccountFeed.test.ts': accountFeedTestSource,
+            }}
+        >
+            <AccountFeed />
+        </Example>
+
+        <table>
+            <thead><tr><th>You write</th><th>What it is</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'reactive(fn, { global: true })'}</code></td><td>the feeds, one per account, shared by every caller</td></tr>
+                <tr><td><code>GET(feeds)</code></td><td>its address: a tab reading it follows it</td></tr>
+                <tr><td><code>POST(…)</code></td><td>the way in: a handler that patches a feed</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>global: true</code> puts the feeds in one cache for the whole process. Leave it
+        out and a value on the server belongs to one request, so every caller gets a feed of their
+        own and nobody sees anybody's calls. The body takes <code>account</code>, so there is one
+        feed per account, and <code>ttl</code> lets one nobody has written to for an hour go.</p>
+
+        <p>A tab reading <code>feed</code> is subscribed to it, over one web socket that every
+        followed <code>GET</code> on the page shares. The button does not paint its own entry. It
+        calls <code>logToFeed</code>, the handler patches the feed, and what the patch wrote goes
+        to every tab following it, this one included. Each write travels as a
+        <code>PatchOp</code>, so a new entry is one <code>add</code> rather than the whole
+        feed.</p>
+
+        <p>The server writes each entry: its id, its kind and its time. A caller can only pick a
+        kind the server knows, so nobody forges an entry, and who may log at all is the
+        <code>POST</code>'s own middleware. The call hands back the same <code>Reactive</code>
+        the handler had, its <code>Produced</code> type included, so <code>entries.length</code>
+        and <code>{'{#for entry of entries}'}</code> read it like any array.</p>
+
+        <p>The feed lives in memory. A restart starts it empty, and each instance of the app holds
+        its own. Activity anyone must scroll back past that belongs in your database, behind an
+        ordinary handler.</p>
+    </Section>
+
+    <Section title="A handler that yields sends each entry as it is read">
+        <Example
+            id="crm-05-stream"
+            app="crm-05"
+            title="`async function*` — the archive, an entry at a time"
+            summary="Hopper & Co's older activity, read from a slow archive. The list fills an entry at a time."
+            files={{
+                'src/activity/lib/ActivityHistory.abide': activityHistorySource,
+                'src/activity/olderActivity.ts': olderActivitySource,
+                'src/activity/tests/ActivityHistory.test.ts': activityHistoryTestSource,
+            }}
+        >
+            <ActivityHistory />
+        </Example>
+
+        <p>A handler written as an async generator streams. Each <code>yield</code> goes out as it
+        happens, one JSON value per line, and a proxy in front passes each line on rather than
+        holding it.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>You get</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'{#for entry of entries}'}</code></td><td>every entry so far, and each one after as it lands</td></tr>
+                <tr><td><code>entries.busy()</code></td><td>true until the stream closes</td></tr>
+                <tr><td><code>await entries</code></td><td>every entry, at the close</td></tr>
+                <tr><td><code>{'for await (const entry of entries)'}</code></td><td>each entry of the run, once, ending at the close</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>for await (… of s)</code> walks the run through
+        <code>s[Symbol.asyncIterator]</code>: from its first entry to its close, so a reader that
+        starts halfway still gets every entry. On a value that does not stream it yields the
+        settled value once and ends. The test walks the run.</p>
+
+        <p>A page rendered on the server is not held for an unfinished stream. What the stream had
+        produced is inline, and the browser picks up the rest. The transcript held for that
+        handoff is capped by <code>ABIDE_MAX_STREAM_BUFFER_SIZE</code>, in bytes, unbounded by
+        default. Past it the browser runs the handler again.</p>
+    </Section>
+
+    <Section title="An export is written as its rows are read">
+        <Example
+            id="crm-05-csv"
+            app="crm-05"
+            title="`bytes(values)` — a CSV written as the cursor reaches each row"
+            summary="An account's activity as a CSV download. Each line goes into the file as its row is read."
+            files={{
+                'src/activity/lib/CsvExport.abide': csvExportSource,
+                'src/activity/exportCsv.ts': exportCsvSource,
+                'src/activity/tests/CsvExport.test.ts': csvExportTestSource,
+            }}
+        >
+            <CsvExport />
+        </Example>
+
+        <p>A helper fixes how a stream is framed, and nothing a caller asks for moves it off.
+        Each takes <code>Values&lt;T&gt;</code>: an array, an iterable, an async iterable or a
+        <code>ReadableStream</code>.</p>
+
+        <table>
+            <thead><tr><th>The handler returns</th><th>The caller gets</th></tr></thead>
+            <tbody>
+                <tr><td>an async generator</td><td>JSON Lines, or events for a caller asking for <code>text/event-stream</code></td></tr>
+                <tr><td><code>jsonl(values)</code></td><td>JSON Lines, whatever the caller asks for: a list sent a line at a time</td></tr>
+                <tr><td><code>sse(values)</code></td><td>server-sent events, whatever the caller asks for</td></tr>
+                <tr><td><code>bytes(values)</code></td><td>the chunks as they are, <code>application/octet-stream</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>A stream whose first chunk is binary is sent as bytes without the helper.
+        <code>bytes</code> says so before there is a first chunk, so an account with no activity
+        downloads an empty file rather than an empty JSON answer.</p>
+    </Section>
+
+    <Section title="A wallboard is sent events whatever it asks for">
+        <Example
+            id="crm-05-ticker"
+            app="crm-05"
+            title="`sse(values)` — events, whoever asks"
+            summary="A wallboard by the sales floor reads today's deal moves. It sends no Accept header, and what comes back is events anyway."
+            files={{
+                'src/activity/lib/Wallboard.abide': wallboardSource,
+                'src/activity/ticker.ts': tickerSource,
+                'src/activity/tests/Wallboard.test.ts': wallboardTestSource,
+            }}
+        >
+            <Wallboard />
+        </Example>
+
+        <p>A wallboard script, like <code>curl</code>, asks for nothing in particular, and an
+        async generator answers that caller with JSON Lines. <code>sse</code> fixes the answer as
+        events, <code>data: </code> and a JSON value per event, so the board reads it with the
+        event-stream parser it already has. An <code>EventSource</code> asks for events by name,
+        and gets them from any streaming handler without the helper.</p>
+    </Section>
+
+    <Section title="Watch a feed from the terminal">
+        <Code code={`abide watch activity/feed account=hopper-co --url http://localhost:3000`} />
+
+        <p><code>abide watch &lt;address&gt; [args]</code> follows a <code>GET</code> and prints
+        its value, then the value again after each patch. The address is the handler's route
+        without its leading <code>/</code>, the args are <code>name=value</code> words, and
+        <code>--url</code> names the running app. Inside the <code>abide</code> shell it is
+        <code>watch activity/feed account=hopper-co</code>.</p>
+
+        <p><code>watch</code> asks the <code>GET</code> for the same event stream any caller may ask for,
+        so what you see is what each tab is sent. With <code>curl</code> it is the value, then
+        each patch as <code>PatchOp</code>s:</p>
+
+        <Code code={`curl -N -H 'Accept: text/event-stream' \\
+  'http://localhost:3000/activity/feed?account=hopper-co'
+
+event: value
+id: 1792159056295002
+data: [{"id":"9dcf…","kind":"Call","at":"13:57:43"}]
+
+event: patch
+id: 1792159056295003
+data: [{"op":"add","path":"/-","value":{"id":"344f…","kind":"Email",…}}]`} />
+
+        <p><code>watch</code> only reads. To log from a terminal, call
+        <code>logToFeed</code> as a tab does, and its middleware decides whether the shell may.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/guide/add-pages')}>Add pages</a> — a page per company, the chrome
+            they share, and what a reader sees when one fails</li>
+        </ul>
+    </Section>
+</Doc>

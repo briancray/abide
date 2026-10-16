@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "private": true,
     "type": "module",
-    "description": "The abide documentation, as an abide app \u2014 and the app abide is dogfooded on",
+    "description": "The abide documentation, as an abide app — and the app abide is dogfooded on",
     "imports": {
         "#src/*": [
             "./src/*",
@@ -19,7 +19,16 @@
     },
     "dependencies": {
         "@abide/abide": "workspace:*",
-        "crm-ui": "file:./crm-ui",
+        "crm-01": "workspace:*",
+        "crm-02": "workspace:*",
+        "crm-03": "workspace:*",
+        "crm-04": "workspace:*",
+        "crm-05": "workspace:*",
+        "crm-06": "workspace:*",
+        "crm-07": "workspace:*",
+        "crm-08": "workspace:*",
+        "crm-09": "workspace:*",
+        "crm-10": "workspace:*",
         "zod": "^4.6.5"
     },
     "devDependencies": {

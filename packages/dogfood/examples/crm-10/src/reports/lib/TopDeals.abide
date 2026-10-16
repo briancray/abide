@@ -1,0 +1,27 @@
+<script>
+import { reactive } from '@abide/abide'
+import { topFive } from './rankDeals.ts'
+
+let by = reactive<'amount' | 'idle'>('amount')
+const top = reactive(() => topFive(by))
+
+const shown = (deal: { amount: number; idle: number }) =>
+    by === 'amount' ? `$${deal.amount}` : `${deal.idle} days idle`
+</script>
+
+<div class="tabs">
+    <button aria-selected={by === 'amount'} onclick={() => (by = 'amount')}>
+        Largest
+    </button>
+    <button aria-selected={by === 'idle'} onclick={() => (by = 'idle')}>
+        Most idle
+    </button>
+</div>
+<ul class="fields">
+    {#for deal of top by deal.company}
+        <li>
+            <span>{deal.company}</span>
+            <strong>{shown(deal)}</strong>
+        </li>
+    {/for}
+</ul>

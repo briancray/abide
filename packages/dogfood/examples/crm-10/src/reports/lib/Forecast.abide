@@ -1,0 +1,25 @@
+<script>
+import { reactive } from '@abide/abide'
+import { advance, type Deal, forecast } from './forecast.ts'
+
+let deals = reactive<Deal[]>([
+    { company: 'Analytical Engines', amount: 8000, stage: 'proposal' },
+    { company: 'Hopper & Co', amount: 4400, stage: 'qualified' },
+])
+const expected = reactive(() => forecast(deals))
+</script>
+
+<ul class="fields">
+    {#for deal, index of deals by deal.company}
+        <li>
+            <span>{deal.company}</span><strong>{deal.stage}</strong>
+            <button
+                disabled={deal.stage === 'won'}
+                onclick={() => (deals = advance(deals, index))}
+            >Advance</button>
+        </li>
+    {/for}
+</ul>
+<ul class="tiles">
+    <li><span>forecast</span><strong>${expected}</strong></li>
+</ul>

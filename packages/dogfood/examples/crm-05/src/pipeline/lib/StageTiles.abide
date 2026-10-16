@@ -1,0 +1,9 @@
+<script>
+import StageCount from './StageCount.abide'
+import StageValue from './StageValue.abide'
+</script>
+
+<div class="row">
+    <StageCount/>
+    <StageValue/>
+</div>

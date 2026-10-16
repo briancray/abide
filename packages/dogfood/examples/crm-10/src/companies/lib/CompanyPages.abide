@@ -1,0 +1,18 @@
+<script>
+import { reactive, url } from '@abide/abide'
+
+const IDS = ['analytical-engines', 'hopper-and-co']
+
+let open = reactive('hopper-and-co')
+const address = reactive(() => url('/companies/[id]', { id: open }))
+</script>
+
+<div class="tabs">
+    {#for id of IDS}
+        <button aria-selected={String(open === id)}
+            onclick={() => (open = id)}>{id}</button>
+    {/for}
+</div>
+<p class="status">{address}</p>
+<iframe src={address} title="A company's page"
+    class="h-60 w-full rounded-md border border-rule"></iframe>

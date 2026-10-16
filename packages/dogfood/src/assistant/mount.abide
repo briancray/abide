@@ -1,0 +1,5 @@
+<script module>
+// Chapter 9's assistant, mounted where its own app serves them, so its cards' requests and its
+// pages' `url()` addresses reach them here (23.19, 40.15).
+import 'crm-09/src/assistant' with { type: 'routes' }
+</script>

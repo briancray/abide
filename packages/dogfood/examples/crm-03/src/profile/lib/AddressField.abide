@@ -1,0 +1,17 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let contact = reactive({
+    name: 'Ada Lovelace',
+    address: { city: 'London' },
+})
+</script>
+
+<label>city
+    <input bind:value={contact.address.city}>
+</label>
+
+<ul class="fields stacked">
+    <li><span>on the record</span>
+        <strong>{contact.name}, {contact.address.city}</strong></li>
+</ul>

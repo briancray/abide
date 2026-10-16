@@ -49,13 +49,17 @@ export default defineConfig({
             testDir: './packages/harness/e2e',
             use: { ...devices['Desktop Safari'] },
         },
-        // A DOCS CARD'S OWN BROWSER SPEC, beside the page it is shown on and named `.e2e.ts` so
-        // `bun test` never reads it. It drives the card on the served page, so it runs with the app.
+        // A CHAPTER APP'S OWN BROWSER SPEC, named `.e2e.ts` so `bun test` never reads it. It drives
+        // the app where the docs serve it (40.15), and its addresses are relative so the same spec
+        // runs against the app served on its own. Chromium: the engine lane is CDP.
         {
             name: 'cards',
-            testDir: './packages/dogfood/src',
+            testDir: './packages/dogfood/examples/crm-10/src',
             testMatch: '**/tests/*.e2e.ts',
-            use: { ...devices['Desktop Chrome'], baseURL: BASE },
+            use: {
+                ...devices['Desktop Chrome'],
+                baseURL: `${BASE}/`,
+            },
         },
         {
             name: 'root',

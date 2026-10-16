@@ -1,0 +1,5 @@
+<script module>
+// Chapter 7's account, mounted where its own app serves them, so its cards' requests and its
+// pages' `url()` addresses reach them here (23.19, 40.15).
+import 'crm-07/src/account' with { type: 'routes' }
+</script>

@@ -1,0 +1,21 @@
+<script>
+import { reactive, route } from '@abide/abide'
+import getCompany from './getCompany.ts'
+import CompanyTabs from './lib/CompanyTabs.abide'
+
+const company = reactive(() => getCompany({ id: route.params.id }))
+</script>
+
+<head><title>{company.name} — CRM</title></head>
+
+<h2 class="text-heading font-semibold"
+    style:view-transition-name="company-{route.params.id}">{company.name}</h2>
+<ul class="fields">
+    <li><span>contact</span><strong>{company.contact}</strong></li>
+    <li><span>pipeline</span><strong>{company.pipeline}</strong></li>
+</ul>
+<CompanyTabs />
+
+<style>
+::view-transition-group(*) { animation-duration: 0.5s; }
+</style>

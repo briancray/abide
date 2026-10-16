@@ -1,0 +1,27 @@
+<script>
+import { reactive, watch } from '@abide/abide'
+import saveNote from '../saveNote.ts'
+
+let note = reactive('Wants a quote by Friday.')
+let saved = reactive('Wants a quote by Friday.')
+
+watch(() => {
+    // Read here: a read inside the timer subscribes to nothing.
+    const draft = note
+    if (draft === saved.peek()) return
+    const timer = setTimeout(async () => {
+        await saveNote({ id: 'd4', note: draft })
+        saved = draft
+    }, 600)
+    // Each rerun clears the timer the run before it started.
+    return () => clearTimeout(timer)
+})
+</script>
+
+<label>note on Hopper & Co expansion
+    <input bind:value={note}>
+</label>
+
+<ul class="fields stacked">
+    <li><span>saved</span><strong>{saved}</strong></li>
+</ul>

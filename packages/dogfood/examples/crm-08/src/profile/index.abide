@@ -1,0 +1,26 @@
+<script>
+import AddressField from './lib/AddressField.abide'
+import CallLog from './lib/CallLog.abide'
+import ContactCard from './lib/ContactCard.abide'
+import ContactFields from './lib/ContactFields.abide'
+import FollowUp from './lib/FollowUp.abide'
+import PhoneField from './lib/PhoneField.abide'
+import ProfileSummary from './lib/ProfileSummary.abide'
+import StageBadges from './lib/StageBadges.abide'
+import Tags from './lib/Tags.abide'
+</script>
+
+<head><title>Profile — CRM</title></head>
+
+<main>
+    <h1>Profile</h1>
+    <ContactCard />
+    <StageBadges />
+    <ContactFields />
+    <PhoneField />
+    <AddressField />
+    <ProfileSummary />
+    <Tags />
+    <FollowUp />
+    <CallLog />
+</main>

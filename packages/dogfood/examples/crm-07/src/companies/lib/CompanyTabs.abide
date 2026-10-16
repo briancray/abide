@@ -1,0 +1,24 @@
+<script>
+import { navigate, reactive, route } from '@abide/abide'
+
+const TABS = ['deals', 'notes']
+
+const tab = reactive(() => route.url.searchParams.get('tab') ?? 'deals')
+let draft = reactive('')
+</script>
+
+<div class="tabs">
+    {#for name of TABS}
+        <button aria-selected={String(tab === name)}
+            onclick={() => navigate(`?tab=${name}`, { replace: true })}
+        >{name}</button>
+    {/for}
+</div>
+
+<label>Draft a note
+    <input bind:value={draft} placeholder="Follow up on Friday">
+</label>
+
+<ul class="fields">
+    <li><span>address</span><strong>{route.url.search || '—'}</strong></li>
+</ul>

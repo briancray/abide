@@ -1,0 +1,44 @@
+<script>
+import { menuItem, onMenu, watch } from '@abide/abide'
+import ClosedTiles from './lib/ClosedTiles.abide'
+import DealsExport from './lib/DealsExport.abide'
+import Forecast from './lib/Forecast.abide'
+import PipelineSummary from './lib/PipelineSummary.abide'
+import StageTiles from './lib/StageTiles.abide'
+import TopDeals from './lib/TopDeals.abide'
+import WonDeals from './lib/WonDeals.abide'
+
+const printReport = menuItem({ label: 'Print Report…', key: 'cmd+p' })
+
+onMenu(() => [
+    {
+        label: 'Reports',
+        items: [
+            printReport,
+            'separator',
+            { label: 'Contacts', href: '/contacts' },
+        ],
+    },
+])
+
+watch(() => printReport.on(() => print()))
+</script>
+
+<head><title>Reports — CRM</title></head>
+
+<main>
+    <h1>Reports</h1>
+    <PipelineSummary />
+    <h2>Closed</h2>
+    <ClosedTiles />
+    <h2>By stage</h2>
+    <StageTiles />
+    <h2>Forecast</h2>
+    <Forecast />
+    <h2>Won</h2>
+    <WonDeals />
+    <h2>Top deals</h2>
+    <TopDeals />
+    <h2>Export</h2>
+    <DealsExport />
+</main>

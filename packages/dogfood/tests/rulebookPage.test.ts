@@ -1,4 +1,4 @@
-// 40.36 — THE RULEBOOK PAGE IS THE FILE. Every clause and every group RULEBOOK.md has is an anchor
+// 40.34 — THE RULEBOOK PAGE IS THE FILE. Every clause and every group RULEBOOK.md has is an anchor
 // on `/rulebook` named by its own number, and nothing else is: an editor links `/rulebook#41.10`,
 // so a clause the page dropped, or one it still shows after a renumber, is a link that lands wrong.
 //

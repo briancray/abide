@@ -1,0 +1,38 @@
+<script>
+import AddContact from './lib/AddContact.abide'
+import Badge from './lib/Badge.abide'
+import ContactCard from './lib/ContactCard.abide'
+import Density from './lib/Density.abide'
+import ExportContacts from './lib/ExportContacts.abide'
+import PartnerStatement from './lib/PartnerStatement.abide'
+import SalesReport from './lib/SalesReport.abide'
+import SignIn from './lib/SignIn.abide'
+import SyncContact from './lib/SyncContact.abide'
+import Widget from './lib/Widget.abide'
+</script>
+
+<head><title>Account — CRM</title></head>
+
+<main>
+    <h1>Account</h1>
+    <h2>Sign in</h2>
+    <SignIn />
+    <h2>Who you are</h2>
+    <Badge />
+    <h2>Density</h2>
+    <Density />
+    <h2>A contact</h2>
+    <ContactCard />
+    <h2>Export</h2>
+    <ExportContacts />
+    <h2>Partner statement</h2>
+    <PartnerStatement />
+    <h2>Sales by region</h2>
+    <SalesReport />
+    <h2>Billing</h2>
+    <SyncContact />
+    <h2>Add a contact</h2>
+    <AddContact />
+    <h2>Chat widget</h2>
+    <Widget />
+</main>

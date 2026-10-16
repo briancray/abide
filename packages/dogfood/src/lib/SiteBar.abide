@@ -17,7 +17,7 @@ import { route, url } from '@abide/abide'
 // `site` and `brand` carry no rule — they are what `e2e/dev.spec.ts` finds the bar by, and it
 // edits the brand's markup as written, which is why its span is styled from the link.
 //
-// NOT OVER A PAGE A CARD FRAMES (40.39), which is the example's app rather than the site — and
+// NOT OVER A CHAPTER APP'S PAGE (40.37), which is that app rather than the site — and
 // with no bar, the body lays it out as that app's page rather than as the site's grid (`app.css`).
 import { isFramed, SITE_TABS, tabOf } from './siteSections.ts'
 

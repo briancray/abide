@@ -1,0 +1,349 @@
+<script>
+import { url } from '@abide/abide'
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import idPageSource from 'crm-06/src/companies/[id].abide' with { type: 'text' }
+import errorPageSource from 'crm-06/src/companies/error.abide' with { type: 'text' }
+import exportCompaniesSource from 'crm-06/src/companies/exportCompanies.ts' with { type: 'text' }
+import getCompanySource from 'crm-06/src/companies/getCompany.ts' with { type: 'text' }
+import indexPageSource from 'crm-06/src/companies/index.abide' with { type: 'text' }
+import layoutSource from 'crm-06/src/companies/layout.abide' with { type: 'text' }
+import CompaniesFrame from 'crm-06/src/companies/lib/CompaniesFrame.abide'
+import companiesFrameSource from 'crm-06/src/companies/lib/CompaniesFrame.abide' with { type: 'text' }
+import CompanyPages from 'crm-06/src/companies/lib/CompanyPages.abide'
+import companyPagesSource from 'crm-06/src/companies/lib/CompanyPages.abide' with { type: 'text' }
+import companySheetSource from 'crm-06/src/companies/lib/CompanySheet.abide' with { type: 'text' }
+import CompanyTabs from 'crm-06/src/companies/lib/CompanyTabs.abide'
+import companyTabsSource from 'crm-06/src/companies/lib/CompanyTabs.abide' with { type: 'text' }
+import ExportButton from 'crm-06/src/companies/lib/ExportButton.abide'
+import exportButtonSource from 'crm-06/src/companies/lib/ExportButton.abide' with { type: 'text' }
+import MissingCompany from 'crm-06/src/companies/lib/MissingCompany.abide'
+import missingCompanySource from 'crm-06/src/companies/lib/MissingCompany.abide' with { type: 'text' }
+import SheetPreview from 'crm-06/src/companies/lib/SheetPreview.abide'
+import sheetPreviewSource from 'crm-06/src/companies/lib/SheetPreview.abide' with { type: 'text' }
+import TransitionFrame from 'crm-06/src/companies/lib/TransitionFrame.abide'
+import transitionFrameSource from 'crm-06/src/companies/lib/TransitionFrame.abide' with { type: 'text' }
+import SlowCompany from 'crm-06/src/companies/lib/SlowCompany.abide'
+import slowCompanySource from 'crm-06/src/companies/lib/SlowCompany.abide' with { type: 'text' }
+import TabTitle from 'crm-06/src/companies/lib/TabTitle.abide'
+import tabTitleSource from 'crm-06/src/companies/lib/TabTitle.abide' with { type: 'text' }
+import previewCompanySource from 'crm-06/src/companies/previewCompany.ts' with { type: 'text' }
+import companyPageTestSource from 'crm-06/src/companies/tests/CompanyPage.test.ts' with { type: 'text' }
+import companyTabsTestSource from 'crm-06/src/companies/tests/CompanyTabs.test.ts' with { type: 'text' }
+import errorPageTestSource from 'crm-06/src/companies/tests/ErrorPage.test.ts' with { type: 'text' }
+import exportButtonTestSource from 'crm-06/src/companies/tests/ExportButton.test.ts' with { type: 'text' }
+import headTestSource from 'crm-06/src/companies/tests/Head.test.ts' with { type: 'text' }
+import layoutTestSource from 'crm-06/src/companies/tests/Layout.test.ts' with { type: 'text' }
+import sheetPreviewTestSource from 'crm-06/src/companies/tests/SheetPreview.test.ts' with { type: 'text' }
+import streamingTestSource from 'crm-06/src/companies/tests/Streaming.test.ts' with { type: 'text' }
+import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.test.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <Section title="A file's path is its address">
+        <table>
+            <thead><tr><th>File</th><th>Answers on</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/companies/index.abide</code></td><td><code>/companies</code></td></tr>
+                <tr><td><code>src/companies/[id].abide</code></td><td><code>/companies/hopper-and-co</code>, and every other id</td></tr>
+                <tr><td><code>src/companies/layout.abide</code></td><td>no address: it wraps every page at <code>/companies</code> and below</td></tr>
+                <tr><td><code>src/companies/error.abide</code></td><td>no address: it answers when a page below it fails</td></tr>
+                <tr><td><code>src/companies/getCompany.ts</code></td><td><code>GET /companies/getCompany</code></td></tr>
+            </tbody>
+        </table>
+
+        <p>An <code>**/index.abide</code> answers its directory's own address, and any other
+        <code>**/&lt;name&gt;.abide</code> adds its name. A part of the path in brackets is a value
+        the page reads:</p>
+
+        <table>
+            <thead><tr><th>Named</th><th>Matches</th><th>In <code>route.params</code></th></tr></thead>
+            <tbody>
+                <tr><td><code>[name]</code></td><td>one segment, required</td><td>text</td></tr>
+                <tr><td><code>[[name]]</code></td><td>one segment or none</td><td>text, absent when nothing matched</td></tr>
+                <tr><td><code>[...name]</code></td><td>every remaining segment</td><td>a list, empty when nothing matched</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`[id].abide` answers for every company">
+        <Example
+            id="crm-06-company-page"
+            app="crm-06"
+            title="`[id].abide` — one file for every company"
+            summary="Two companies, one page file. Pick one: the address changes, and the page loads the company the address names."
+            files={{
+                'src/companies/lib/CompanyPages.abide': companyPagesSource,
+                'src/companies/[id].abide': idPageSource,
+                'src/companies/tests/CompanyPage.test.ts': companyPageTestSource,
+            }}
+        >
+            <CompanyPages />
+        </Example>
+
+        <p><code>route.params.id</code> is the segment the address matched. It is a reactive value
+        like any other, so moving from one company to the next reloads the company rather than
+        rebuilding the page.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>route.name</code></td><td>the pattern that matched, <code>/companies/[id]</code> for every company, so a log line keys on the page rather than on each address</td></tr>
+                <tr><td><code>Params</code></td><td>what the segments matched; a query string is never in it</td></tr>
+                <tr><td><code>RouteParams&lt;P&gt;</code></td><td>the type <code>route.params</code> has in a page filed under <code>P</code>, so <code>id</code> is text and a key the route lacks is an error</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A layout holds what the companies pages share">
+        <Example
+            id="crm-06-layout"
+            app="crm-06"
+            title="`layout.abide` — the header the companies pages share, built once"
+            summary="The companies header holds a note for the call you are on. Type one, then open a company and come back: the page changes, and the note stays."
+            files={{
+                'src/companies/lib/CompaniesFrame.abide': companiesFrameSource,
+                'src/companies/layout.abide': layoutSource,
+                'src/companies/tests/Layout.test.ts': layoutTestSource,
+            }}
+        >
+            <CompaniesFrame />
+        </Example>
+
+        <p>A <code>**/layout.abide</code> wraps every page at its directory and below, and
+        <code>&lt;slot/&gt;</code> is where the page renders. A navigation between two of its pages
+        swaps what is in the slot and leaves the layout alone, so its inputs, its scroll and
+        anything it was loading stay as they were. Layouts nest: the root layout wraps this one.</p>
+
+        <p>A layout's <code>&lt;script server&gt;</code> files hooks for the same pages. The
+        companies layout files its <code>onError</code> hook there.</p>
+
+        <p>A package can ship pages too. <code>import '…' with &#123; type: 'routes' &#125;</code>
+        in a file of your app serves every page and handler in the named directory below that
+        file's directory, and moving the line moves them.</p>
+    </Section>
+
+    <Section title="A link names a route, and `url` fills it in">
+        <p>The list links each company with
+        <code>url('/companies/[id]', &#123; id: company.id &#125;)</code>. You write the pattern a
+        page is filed under rather than the address, and <code>url</code> fills in the segments.
+        Leaving out a required one is a compile error, and a pattern no page is filed under is
+        refused by <code>abide check</code>. A query goes last:
+        <code>url('/companies', &#123;&#125;, &#123; city: 'London' &#125;)</code>.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>Routes</code></td><td>every pattern the CRM files a page under, declared by <code>abide check</code></td></tr>
+                <tr><td><code>RouteLiteral</code></td><td>one of those patterns: what <code>url</code> takes</td></tr>
+                <tr><td><code>Query</code></td><td>the query argument, a record or a <code>URLSearchParams</code></td></tr>
+                <tr><td><code>ParamsOf&lt;P&gt;</code></td><td>the params object pattern <code>P</code> takes</td></tr>
+                <tr><td><code>HasParams&lt;P&gt;</code></td><td>whether <code>P</code> requires one</td></tr>
+                <tr><td><code>HasSegments&lt;P&gt;</code></td><td>whether <code>P</code> has any bracketed segment</td></tr>
+                <tr><td><code>RequiredNames&lt;P&gt;</code></td><td>its <code>[name]</code> segments</td></tr>
+                <tr><td><code>OptionalNames&lt;P&gt;</code></td><td>its <code>[[name]]</code> segments</td></tr>
+                <tr><td><code>RestNames&lt;P&gt;</code></td><td>its <code>[...name]</code> segments</td></tr>
+            </tbody>
+        </table>
+
+        <p>You never write the last six. They are how <code>url</code>'s signature is read off the
+        pattern, and a compile error naming <code>RequiredNames</code> is naming the segment you
+        left out.</p>
+    </Section>
+
+    <Section title="`navigate` moves the address from code">
+        <Example
+            id="crm-06-navigate"
+            app="crm-06"
+            title="`navigate` — a new address, the same page"
+            summary="A company page keeps its open tab in the address, so a link can open it. Type a draft, then switch tabs: the address moves, and the draft stays."
+            files={{
+                'src/companies/lib/CompanyTabs.abide': companyTabsSource,
+                'src/companies/tests/CompanyTabs.test.ts': companyTabsTestSource,
+            }}
+        >
+            <CompanyTabs />
+        </Example>
+
+        <p>An address the page already shown matches moves <code>route.url</code> and keeps the
+        page mounted. Another page's address mounts that page in place, without reloading the
+        document. <code>replace: true</code> writes over the history entry, so Back leaves the
+        company rather than stepping through every tab.</p>
+
+        <p>A plain <code>&lt;a href&gt;</code> click does the same. Reach for
+        <code>navigate</code> when code decides where to go. <code>route.navigating</code> is
+        true while a navigation is in flight, which is what a progress bar reads.</p>
+    </Section>
+
+    <Section title="A view transition carries the company across pages">
+        <Example
+            id="crm-06-view-transition"
+            app="crm-06"
+            title="`view-transition-name` — a company name that moves to where it lands"
+            summary="The list row and the company page give the company's name the same view-transition-name. Open a company: the name travels from its row to the heading."
+            files={{
+                'src/companies/lib/TransitionFrame.abide': transitionFrameSource,
+                'src/companies/index.abide': indexPageSource,
+                'src/companies/[id].abide': idPageSource,
+                'src/companies/tests/ViewTransition.test.ts': viewTransitionTestSource,
+            }}
+        >
+            <TransitionFrame />
+        </Example>
+
+        <p>Elements on two pages that share a <code>view-transition-name</code> are animated from
+        one place to the other. A <code>&lt;style&gt;</code> rule naming a view transition turns
+        them on. The build reads it, so an app with none never looks for one at run time. A
+        navigation waits for the DOM to be written, not for the animation. A browser without view
+        transitions navigates as it otherwise would.</p>
+    </Section>
+
+    <Section title="`<head>` in a page replaces its layout's">
+        <Example
+            id="crm-06-head"
+            app="crm-06"
+            title="`<head>` in a page and its layout — the deepest title wins"
+            summary="The companies layout titles every page, and a company page titles itself. Open the list, then a company: the tab takes the company's name."
+            files={{
+                'src/companies/lib/TabTitle.abide': tabTitleSource,
+                'src/companies/layout.abide': layoutSource,
+                'src/companies/[id].abide': idPageSource,
+                'src/companies/tests/Head.test.ts': headTestSource,
+            }}
+        >
+            <TabTitle />
+        </Example>
+
+        <p>A <code>&lt;head&gt;</code> sits at the top level of a file, never inside a block. A
+        <code>&lt;title&gt;</code>, a <code>&lt;meta&gt;</code> by its name and a
+        <code>&lt;link&gt;</code> by its <code>rel</code> and <code>href</code> each have a key,
+        and the deepest contribution for a key wins. One with no key is appended. Leaving a page puts its layout's
+        title back.</p>
+    </Section>
+
+    <Section title="The page goes out before the company lands">
+        <Example
+            id="crm-06-streaming"
+            app="crm-06"
+            title="A hole per value in flight — the page first, the company after"
+            summary="The company database takes over a second. Load the page again: the labels arrive at once, and each value fills its own hole when the company lands."
+            files={{
+                'src/companies/lib/SlowCompany.abide': slowCompanySource,
+                'src/companies/[id].abide': idPageSource,
+                'src/companies/getCompany.ts': getCompanySource,
+                'src/companies/tests/Streaming.test.ts': streamingTestSource,
+            }}
+        >
+            <SlowCompany />
+        </Example>
+
+        <p>Nothing holds the document for a value. The page gets one turn to start its loads, and
+        a value that answers in that turn is painted. A value still in flight leaves a hole, and
+        the browser's own call fills it, so the document carries no copy of the answer.</p>
+
+        <table>
+            <thead><tr><th>The hole</th><th>What fills</th></tr></thead>
+            <tbody>
+                <tr><td><code>&#123;text&#125;</code> in markup</td><td>the text</td></tr>
+                <tr><td><code>href=&#123;x&#125;</code>, any attribute</td><td>the attribute, on the element itself</td></tr>
+                <tr><td><code>class:</code>, <code>style:</code>, <code>bind:</code></td><td>the class, the style property, the bound property</td></tr>
+                <tr><td><code>&lt;title&gt;&#123;name&#125;&lt;/title&gt;</code></td><td>the element's <code>textContent</code>, so the tab title fills too</td></tr>
+                <tr><td><code>&lt;textarea&gt;&#123;v&#125;&lt;/textarea&gt;</code></td><td>its <code>defaultValue</code>, so a reader's typing is kept</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`error.abide` answers when a page cannot">
+        <Example
+            id="crm-06-error-page"
+            app="crm-06"
+            title="`error.abide` — a company that is not there"
+            summary="An old link points at a company that was merged away. The handler refuses at once, and the companies error page answers with a 404."
+            files={{
+                'src/companies/lib/MissingCompany.abide': missingCompanySource,
+                'src/companies/error.abide': errorPageSource,
+                'src/companies/getCompany.ts': getCompanySource,
+                'src/companies/tests/ErrorPage.test.ts': errorPageTestSource,
+            }}
+        >
+            <MissingCompany />
+        </Example>
+
+        <p>An <code>**/error.abide</code> is found the way a layout is: the nearest one above the
+        page that failed. It gets the refusal as <code>failure</code>, and each refusal's
+        <code>is</code> narrows it. An address no page answers is <code>notFound</code> too. A
+        page asked with a method other than <code>GET</code> or <code>HEAD</code> is a 405,
+        painted by the same page, with <code>allow: GET, HEAD</code> on the answer.</p>
+
+        <p>The refusal has to come in the page's first turn to set the status. That is why
+        <code>getCompany</code> refuses before it waits. An error page that fails itself hands
+        off to the next one up.</p>
+    </Section>
+
+    <Section title="`onError` reports what the caller is not told">
+        <Example
+            id="crm-06-error-report"
+            app="crm-06"
+            title="`onError(fn)` — the tracker hears what the caller is not told"
+            summary="The export worker has stopped answering. Run the export: the button gets a bare 500, and the hook in the companies layout gets the reason."
+            files={{
+                'src/companies/lib/ExportButton.abide': exportButtonSource,
+                'src/companies/exportCompanies.ts': exportCompaniesSource,
+                'src/companies/layout.abide': layoutSource,
+                'src/companies/tests/ExportButton.test.ts': exportButtonTestSource,
+            }}
+        >
+            <ExportButton />
+        </Example>
+
+        <p><code>onError</code> runs on an unexpected error in any request below the file that
+        called it. Send the error to a tracker there. The caller gets a 500 with nothing about the
+        cause, so a stack trace never reaches a browser.</p>
+    </Section>
+
+    <Section title="`render` builds a document from a component">
+        <Example
+            id="crm-06-render"
+            app="crm-06"
+            title="`render(component)` — an account sheet from the component itself"
+            summary="A rep sends a customer a one-page account sheet. The handler renders the sheet component into a document of its own, and the frame shows it."
+            files={{
+                'src/companies/lib/SheetPreview.abide': sheetPreviewSource,
+                'src/companies/previewCompany.ts': previewCompanySource,
+                'src/companies/lib/CompanySheet.abide': companySheetSource,
+                'src/companies/tests/SheetPreview.test.ts': sheetPreviewTestSource,
+            }}
+        >
+            <SheetPreview />
+        </Example>
+
+        <p><code>CompanySheet(&#123; company &#125;)</code> is a <code>Component</code>: the
+        component bound to its props, not yet rendered. <code>render</code> turns it into the
+        document's bytes, built whole, and <code>page</code> answers with them as HTML.</p>
+
+        <p>A component written inside <code>&lt;html&gt;</code> is the whole document, so the
+        sheet carries its own styles and no bundle. The CRM's root layout writes its document the
+        same way.</p>
+    </Section>
+
+    <Section title="Serve the CRM under a sub-path">
+        <Code code={`APP_URL=https://example.com/crm abide start`} />
+
+        <p>Set <code>APP_URL</code> and every page, handler and asset answers below its path.
+        Nothing is rebuilt: <code>url</code>, a handler's address and every asset reference are
+        resolved when they are read, never baked into the build. An address you write out by hand
+        is not, which is one more reason to build them with <code>url</code>.</p>
+
+        <p>Everything abide serves for itself, from handler calls to the health check, is below
+        <code>/__abide/**</code>, so a proxy in front of the CRM forwards one path family.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/guide/decide-who-sees-what')}>Who sees what</a> — sign a user in,
+            and decide what each caller may read</li>
+        </ul>
+    </Section>
+</Doc>

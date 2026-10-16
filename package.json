@@ -3,7 +3,8 @@
     "private": true,
     "type": "module",
     "workspaces": [
-        "packages/*"
+        "packages/*",
+        "packages/dogfood/examples/*"
     ],
     "scripts": {
         "typecheck": "bun check -p packages/abide && bun check -p packages/harness && bun check -p packages/dogfood && bun check -p packages/bridge",
@@ -24,12 +25,13 @@
         "bench": "bun packages/abide/bench/bench.ts",
         "test:gates": "bun run build && HARNESS_VERIFY_GATES=1 bun test packages/abide/tests packages/harness/tests packages/dogfood/tests",
         "bench:reactive": "bun packages/abide/bench/benchReactive.ts",
-        "bench:compiler": "bun packages/dogfood/scripts/benchCompiler.ts",
         "bench:component": "bun packages/abide/bench/benchComponent.ts",
         "bench:grid": "bun packages/abide/bench/benchGrid.ts",
         "bench:render": "bun packages/abide/bench/benchRender.ts",
         "bench:shared": "bun packages/abide/bench/benchShared.ts",
         "bench:share": "bun packages/abide/bench/nameTheShare.ts",
+        "examples:results": "bun packages/dogfood/scripts/exampleResults.ts",
+        "examples:forward": "bun packages/dogfood/scripts/forwardChapters.ts",
         "clauses:uncited": "bun packages/dogfood/scripts/uncitedClauses.ts",
         "bench:reorder": "bun packages/abide/bench/reorderShare.ts",
         "prepare": "git config core.hooksPath .githooks || true",

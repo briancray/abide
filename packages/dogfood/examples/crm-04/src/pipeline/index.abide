@@ -1,0 +1,24 @@
+<script>
+import DealFeed from './lib/DealFeed.abide'
+import DealNote from './lib/DealNote.abide'
+import DealPicker from './lib/DealPicker.abide'
+import DealSearch from './lib/DealSearch.abide'
+import Forecast from './lib/Forecast.abide'
+import PipelineView from './lib/PipelineView.abide'
+import StageBoard from './lib/StageBoard.abide'
+import StageTiles from './lib/StageTiles.abide'
+</script>
+
+<head><title>Pipeline — CRM</title></head>
+
+<main>
+    <h1>Pipeline</h1>
+    <PipelineView />
+    <StageBoard />
+    <StageTiles />
+    <Forecast />
+    <DealSearch />
+    <DealPicker />
+    <DealFeed />
+    <DealNote />
+</main>

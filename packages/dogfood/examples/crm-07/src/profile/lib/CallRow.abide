@@ -1,0 +1,21 @@
+<script module>
+import { reactive } from '@abide/abide'
+
+// Once for the module, however many rows there are.
+let opened = reactive(0)
+</script>
+
+<script>
+import { props } from '@abide/abide'
+
+const { name } = props<{ name: string }>()
+
+// Once per row.
+opened += 1
+const position = opened
+let calls = reactive(0)
+</script>
+
+<li><span>#{position}</span>
+    <strong>{name} · {calls} logged</strong>
+    <button onclick={() => (calls += 1)}>Log a call</button></li>

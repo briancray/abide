@@ -1,0 +1,20 @@
+<script>
+import { reactive } from '@abide/abide'
+import feed from '../feed.ts'
+import logToFeed from '../logToFeed.ts'
+
+const account = 'hopper-co'
+const entries = reactive(() => feed({ account }))
+</script>
+
+<ul class="fields stacked">
+    {#for entry of entries}
+        <li><span>{entry.at}</span><strong>{entry.kind}</strong></li>
+    {/for}
+</ul>
+
+<div class="row">
+    <button onclick={() => logToFeed({ account, kind: 'Call' })}>
+        Log a call
+    </button>
+</div>

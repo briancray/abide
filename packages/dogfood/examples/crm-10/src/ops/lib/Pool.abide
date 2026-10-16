@@ -1,0 +1,11 @@
+<script>
+import { reactive } from '@abide/abide'
+import getPool from '../getPool.ts'
+
+const times = reactive(() => getPool())
+</script>
+
+<ul class="fields stacked">
+    <li><span>pool connected</span><strong>{times.connectedAt}</strong></li>
+    <li><span>app up</span><strong>{times.upAt}</strong></li>
+</ul>

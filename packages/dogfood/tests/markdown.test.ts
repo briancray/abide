@@ -3,8 +3,9 @@
 // from it at run time — so what is gated is the derivation, which fails silently: the page still
 // renders and the twin still reads.
 
-import { expect, test } from 'bun:test'
-import { SITE } from '../src/lib/SITE.ts'
+import { beforeAll, expect, test } from 'bun:test'
+import { SECTIONS } from '../src/lib/sitePages.ts'
+import { DOCUMENTS } from '../src/lib/siteSections.ts'
 import {
     allCards,
     cardsOf,
@@ -14,11 +15,17 @@ import {
     servedDocs,
 } from './docsPages.ts'
 
-/** Every route `SITE` lists. */
+// EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay
+// for the whole load against the chapter apps' suites, inside its own five seconds.
+beforeAll(() => Promise.all([renderedMarkdown(), renderedHtml()]), 60_000)
+
+/** Every route `SITE` lists, and the documents the reference tab lists beside them. */
 function routes(): Set<string> {
     const listed = new Set<string>()
-    for (const group of SITE)
+    for (const group of SECTIONS)
         for (const page of group.pages) listed.add(page.route)
+    // A reference page links each clause it cites into `/rulebook` (40.45).
+    for (const document of DOCUMENTS.pages) listed.add(document.route)
     return listed
 }
 
@@ -97,7 +104,7 @@ test('the bundle carries every page, in reading order', async () => {
         (match) => match[1],
     )
     const expected: string[] = []
-    for (const group of SITE)
+    for (const group of SECTIONS)
         for (const page of group.pages)
             expected.push(
                 page.route === '/' ? 'index.md' : `${page.route.slice(1)}.md`,
@@ -149,18 +156,6 @@ test('a page links to an address the app answers', async () => {
         }
     }
     expect(broken).toEqual([])
-})
-
-// A cell opening on `yes` / `no` renders as a verdict and a recessive reason — and a SENTENCE that
-// begins with the word does not. Both directions, because loosening the pattern breaks only one.
-test('a verdict cell is marked up, and a sentence that opens on one is not', async () => {
-    const pages = await renderedHtml()
-    const holds = pages.get('/values/show-a-value-that-isnt-there-yet') ?? ''
-    expect(holds).toContain('<b class="verdict-no">no</b>')
-    expect(holds).toContain('<b class="verdict-yes">yes</b>')
-    expect(pages.get('/data/refuse-a-request-and-say-why')).toContain(
-        '<td>no route matched',
-    )
 })
 
 // A `**` or a `](` reaching the HTML is markdown a page carried as text, and the page shows its

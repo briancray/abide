@@ -1,6 +1,0 @@
-<script>
-import Shelf from './Shelf.abide'
-</script>
-
-<Shelf name="jazz"/>
-<Shelf name="ambient"/>

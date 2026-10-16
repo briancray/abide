@@ -1,0 +1,316 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import AddressField from 'crm-02/src/profile/lib/AddressField.abide'
+import addressFieldSource from 'crm-02/src/profile/lib/AddressField.abide' with { type: 'text' }
+import addressFieldTestSource from 'crm-02/src/profile/tests/AddressField.test.ts' with { type: 'text' }
+import avatarSource from 'crm-02/src/profile/lib/Avatar.abide' with { type: 'text' }
+import CallLog from 'crm-02/src/profile/lib/CallLog.abide'
+import callLogSource from 'crm-02/src/profile/lib/CallLog.abide' with { type: 'text' }
+import callLogTestSource from 'crm-02/src/profile/tests/CallLog.test.ts' with { type: 'text' }
+import callRowSource from 'crm-02/src/profile/lib/CallRow.abide' with { type: 'text' }
+import ContactCard from 'crm-02/src/profile/lib/ContactCard.abide'
+import contactCardSource from 'crm-02/src/profile/lib/ContactCard.abide' with { type: 'text' }
+import contactCardTestSource from 'crm-02/src/profile/tests/ContactCard.test.ts' with { type: 'text' }
+import ContactFields from 'crm-02/src/profile/lib/ContactFields.abide'
+import contactFieldsSource from 'crm-02/src/profile/lib/ContactFields.abide' with { type: 'text' }
+import contactFieldsTestSource from 'crm-02/src/profile/tests/ContactFields.test.ts' with { type: 'text' }
+import customerBadgeSource from 'crm-02/src/profile/lib/CustomerBadge.abide' with { type: 'text' }
+import FollowUp from 'crm-02/src/profile/lib/FollowUp.abide'
+import followUpSource from 'crm-02/src/profile/lib/FollowUp.abide' with { type: 'text' }
+import followUpTestSource from 'crm-02/src/profile/tests/FollowUp.test.ts' with { type: 'text' }
+import leadBadgeSource from 'crm-02/src/profile/lib/LeadBadge.abide' with { type: 'text' }
+import PhoneField from 'crm-02/src/profile/lib/PhoneField.abide'
+import phoneFieldSource from 'crm-02/src/profile/lib/PhoneField.abide' with { type: 'text' }
+import phoneFieldTestSource from 'crm-02/src/profile/tests/PhoneField.test.ts' with { type: 'text' }
+import ProfileSummary from 'crm-02/src/profile/lib/ProfileSummary.abide'
+import profileSummarySource from 'crm-02/src/profile/lib/ProfileSummary.abide' with { type: 'text' }
+import profileSummaryTestSource from 'crm-02/src/profile/tests/ProfileSummary.test.ts' with { type: 'text' }
+import StageBadges from 'crm-02/src/profile/lib/StageBadges.abide'
+import stageBadgesSource from 'crm-02/src/profile/lib/StageBadges.abide' with { type: 'text' }
+import stageBadgesTestSource from 'crm-02/src/profile/tests/StageBadges.test.ts' with { type: 'text' }
+import Tags from 'crm-02/src/profile/lib/Tags.abide'
+import tagsSource from 'crm-02/src/profile/lib/Tags.abide' with { type: 'text' }
+import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>The profile lives in <code>src/profile</code>, at <code>/profile</code>. Each card is one
+    of its components, with the test the app runs on it.</p>
+
+    <Section title="A field and its value are one copy">
+        <Example
+            id="crm-02-bind-value"
+            app="crm-02"
+            title="`bind:value` — the field writes the value, and the value fills the field"
+            summary="A contact's email, with what a save would send. Type a new one."
+            files={{
+                'src/profile/lib/ContactFields.abide': contactFieldsSource,
+                'src/profile/tests/ContactFields.test.ts': contactFieldsTestSource,
+            }}
+        >
+            <ContactFields />
+        </Example>
+
+        <p><code>bind:value</code> sets the field from the value, and writes the value back on
+        <code>input</code> or <code>change</code>. There is no form model beside it and no handler
+        per field. A <code>&lt;textarea&gt;</code> and a <code>&lt;select&gt;</code> take the same
+        binding.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>What it binds</th></tr></thead>
+            <tbody>
+                <tr><td><code>bind:checked</code></td><td>a checkbox, to a boolean</td></tr>
+                <tr><td><code>bind:open</code></td><td>a <code>&lt;details&gt;</code>, to whether it is open</td></tr>
+                <tr><td><code>bind:group</code></td><td>radios to one value, or checkboxes to an array of their <code>value</code>s</td></tr>
+                <tr><td><code>{'bind:value={{get, set}}'}</code></td><td>a field to a pair you write, where the value is computed</td></tr>
+                <tr><td><code>{'bind:prop={state}'}</code></td><td>a component's prop, so the child's write reaches your value</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A reactive value is read and written by its name">
+        <p><code>reactive</code> holds a value. Inside a <code>.abide</code> file its name is the
+        value: <code>email</code> in an expression reads it, and <code>email = 'a@b.co'</code>
+        writes it. The sugar sits over two explicit members, <code>s</code> and
+        <code>s.set</code>, and a <code>.ts</code> file writes those out.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>You get</th></tr></thead>
+            <tbody>
+                <tr><td><code>foo</code> wherever the declared type of its position is not a <code>Reactive</code></td><td>a live read</td></tr>
+                <tr><td><code>const x: Reactive&lt;…&gt; = foo</code> / a <code>Reactive&lt;…&gt;</code>-typed parameter, return or <code>bind:</code> operand</td><td>the <code>Reactive</code> itself</td></tr>
+                <tr><td><code>const [a, b] = foo</code> / <code>...foo</code></td><td>one read, taken apart</td></tr>
+                <tr><td><code>foo = bar</code></td><td>a write</td></tr>
+                <tr><td><code>foo.bar</code></td><td>the value's <code>bar</code></td></tr>
+                <tr><td><code>foo.bar(…)</code></td><td>the value's method, or a member of the <code>Reactive</code> such as <code>busy</code></td></tr>
+                <tr><td><code>foo()</code> / <code>foo.set(v)</code></td><td>the explicit read and write</td></tr>
+                <tr><td><code>await foo</code></td><td>the value, once it has settled</td></tr>
+                <tr><td><code>refresh(foo)</code> / a <code>Selection</code>-typed parameter</td><td>the <code>Reactive</code> itself</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A transform shapes what the record keeps">
+        <Example
+            id="crm-02-transform"
+            app="crm-02"
+            title={'`reactive(v, { transform })` — the record keeps the digits'}
+            summary="A phone number typed with punctuation. Type one in the usual way."
+            files={{
+                'src/profile/lib/PhoneField.abide': phoneFieldSource,
+                'src/profile/tests/PhoneField.test.ts': phoneFieldTestSource,
+            }}
+        >
+            <PhoneField />
+        </Example>
+
+        <p>The transform runs on every write, so the field shows back what was stored rather than
+        what you typed. <code>Accepted</code> is the type a write takes and <code>Stored</code> is
+        the type the transform returns. <code>Shaped</code> is everything a transform can return,
+        a refusal included, and <code>Transformer</code> is the type of the option.</p>
+    </Section>
+
+    <Section title="A derived value follows the fields it read">
+        <Example
+            id="crm-02-derived"
+            app="crm-02"
+            title="`reactive(() => …)` — initials and a count, computed from the fields"
+            summary="A profile's initials and how much of it is filled in. Change the name, then add a phone."
+            files={{
+                'src/profile/lib/ProfileSummary.abide': profileSummarySource,
+                'src/profile/tests/ProfileSummary.test.ts': profileSummaryTestSource,
+            }}
+        >
+            <ProfileSummary />
+        </Example>
+
+        <p>Give <code>reactive</code> a body, <code>reactive(() =&gt; …)</code>, and what the body
+        read on its last run is what reruns it. You list no dependencies. The test counts the work:
+        a phone edit walks to the count and never reaches the initials, because the initials never
+        read the phone.</p>
+
+        <p>A body with a parameter, <code>reactive((args) =&gt; …)</code>, is a
+        <code>Keyed</code>: a factory holding one value per set of arguments. It is how a handler
+        is called per contact, in <a href={url('/guide/talk-to-the-server')}>Talk to the
+        server</a>.</p>
+    </Section>
+
+    <Section title="A write through a path copies down the path">
+        <Example
+            id="crm-02-path-write"
+            app="crm-02"
+            title="`contact.address.city = v` — a write two levels down"
+            summary="A contact's city, inside its address. Type a new city."
+            files={{
+                'src/profile/lib/AddressField.abide': addressFieldSource,
+                'src/profile/tests/AddressField.test.ts': addressFieldTestSource,
+            }}
+        >
+            <AddressField />
+        </Example>
+
+        <p><code>foo.bar = v</code> copies <code>contact</code>, copies its
+        <code>address</code>, sets <code>city</code>, and writes the new record back. The copy is
+        what wakes the readers: a record changed in place is the object it already was, and nothing
+        downstream has a reason to read it again.</p>
+
+        <p><code>foo.push(v)</code> is the same write reached through an array's mutator, once the
+        compiler lifts it (31.9). Until then, write the new array:
+        <code>tags = [...tags, tag]</code>.</p>
+    </Section>
+
+    <Section title="A hole in the markup follows what it reads">
+        <p>A hole is <code>{'{}'}</code> around an expression, and it updates the one thing it
+        names and nothing around it.</p>
+
+        <table>
+            <thead><tr><th>You write</th><th>Where it lands</th></tr></thead>
+            <tbody>
+                <tr><td><code>{'{expr}'}</code></td><td>a text node, escaped</td></tr>
+                <tr><td><code>{'{raw(...)}'}</code></td><td>markup, unescaped: <code>raw</code> brands a string as a <code>Raw</code></td></tr>
+                <tr><td><code>{'name={expr}'}</code></td><td>one attribute, whole</td></tr>
+                <tr><td><code>{'name="…{expr}…"'}</code></td><td>one attribute, interpolated</td></tr>
+                <tr><td><code>{'class:name={cond}'}</code></td><td>one class, there while the condition holds</td></tr>
+                <tr><td><code>{'style:prop={value}'}</code></td><td>one style property</td></tr>
+                <tr><td><code>{'{...expr}'}</code></td><td>every attribute on an element, or every prop on a component</td></tr>
+                <tr><td><code>{'on<event>={fn}'}</code></td><td>a native listener, removed with its element</td></tr>
+                <tr><td><code>{'bind:element={Reactive<Element> | ((element: Element) => void | Disposer)}'}</code></td><td>the element itself, to focus or measure</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A keyed list removes one row and leaves the rest">
+        <Example
+            id="crm-02-keyed-list"
+            app="crm-02"
+            title={'`{#for tag of tags by tag}` — a row per tag, kept by its key'}
+            summary="A contact's tags. Remove one."
+            files={{
+                'src/profile/lib/Tags.abide': tagsSource,
+                'src/profile/tests/Tags.test.ts': tagsTestSource,
+            }}
+        >
+            <Tags />
+        </Example>
+
+        <p><code>{'{#for item, index of list by key}'}</code> renders its body once per item, and
+        <code>by</code> says which row is which. The test removes the first tag and counts the
+        work: one row goes, and no other row's text is touched. Without <code>by</code> the rows
+        are matched by position, so the two that stay are both rewritten.</p>
+
+        <p>A list shown in more than one place can carry its key on the value instead:
+        <code>{"reactive(contacts, { by: 'id' })"}</code>.</p>
+    </Section>
+
+    <Section title="A branch is in the page only while its condition holds">
+        <Example
+            id="crm-02-conditional"
+            app="crm-02"
+            title={'`{#if}` — a date field that exists only when asked for'}
+            summary="A follow-up reminder for this contact. Tick the box, then clear it."
+            files={{
+                'src/profile/lib/FollowUp.abide': followUpSource,
+                'src/profile/tests/FollowUp.test.ts': followUpTestSource,
+            }}
+        >
+            <FollowUp />
+        </Example>
+
+        <p><code>{'{#if cond}'}</code> builds the branch it takes and nothing of the one it does
+        not. Clearing the box removes the date field, and an <code>{'{:else}'}</code> branch would
+        render in its place. <code>{'{#try}'}</code> is the other block: it renders <code>{'{:catch e}'}</code>
+        in place of its whole body when rendering the body throws.</p>
+    </Section>
+
+    <Section title="A component reads its props live">
+        <Example
+            id="crm-02-props"
+            app="crm-02"
+            title="`props()` — the avatar follows the name it was handed"
+            summary="A contact card with an avatar component. Change the name."
+            files={{
+                'src/profile/lib/ContactCard.abide': contactCardSource,
+                'src/profile/lib/Avatar.abide': avatarSource,
+                'src/profile/tests/ContactCard.test.ts': contactCardTestSource,
+            }}
+        >
+            <ContactCard />
+        </Example>
+
+        <p>A component is a <code>.abide</code> file, and <code>&lt;Name/&gt;</code> invokes it.
+        <code>props</code> hands back each prop as a live read of what the caller passed, so the
+        avatar follows the field and nothing is rebuilt: the test counts no node made or moved.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>&lt;Tag&gt;…&lt;/Tag&gt;</code></td><td>passes the markup between the tags as <code>children</code></td></tr>
+                <tr><td><code>&lt;slot&gt;fallback&lt;/slot&gt;</code></td><td>renders the children, or the fallback when there are none</td></tr>
+                <tr><td><code>{'{#component Name(pattern)}'}</code></td><td>declares a component inline, for a row worth naming but not a file</td></tr>
+                <tr><td><code>Attributes&lt;Tag&gt;</code></td><td>types the props a wrapper passes on to its element</td></tr>
+                <tr><td><code>**/node_modules/**/*.abide</code></td><td>a design system's components, compiled with the app that imports them</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A component's styles reach only its own markup">
+        <Example
+            id="crm-02-scoped-style"
+            app="crm-02"
+            title="`<style>` — two components, one class name, two rules"
+            summary="A lead badge and a customer badge, side by side. Each styles its own badge class in its own color."
+            files={{
+                'src/profile/lib/StageBadges.abide': stageBadgesSource,
+                'src/profile/lib/LeadBadge.abide': leadBadgeSource,
+                'src/profile/lib/CustomerBadge.abide': customerBadgeSource,
+                'src/profile/tests/StageBadges.test.ts': stageBadgesTestSource,
+            }}
+        >
+            <StageBadges />
+        </Example>
+
+        <p>A <code>&lt;style&gt;</code> block's rules require the component's scope token, and only
+        that component's markup carries it. So <code>.badge</code> in one file never reaches the
+        other's badge, and neither needs a naming convention.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>:global(…)</code></td><td>exempts one selector from the scope</td></tr>
+                <tr><td><code>import './app.css'</code></td><td>makes the app's stylesheet a dependency of the component that imports it</td></tr>
+                <tr><td><code>bunfig.toml</code></td><td>declares a bun plugin, such as Tailwind, that builds the stylesheet</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A script runs per instance, and a module script once">
+        <Example
+            id="crm-02-script"
+            app="crm-02"
+            title="`<script>` and `<script module>` — per row, and once"
+            summary="Two contact rows from one component. Log a call on the first."
+            files={{
+                'src/profile/lib/CallLog.abide': callLogSource,
+                'src/profile/lib/CallRow.abide': callRowSource,
+                'src/profile/tests/CallLog.test.ts': callLogTestSource,
+            }}
+        >
+            <CallLog />
+        </Example>
+
+        <p>A <code>&lt;script&gt;</code> block runs each time the component is used, top to
+        bottom, so each row has its own <code>calls</code>. A <code>&lt;script module&gt;</code>
+        block runs once for the file, so both rows count up one <code>opened</code>. On a server, a
+        <code>reactive</code> in module scope is still one per request.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/guide/talk-to-the-server')}>Talk to the server</a> — load a contact
+            from a handler, and save it back</li>
+        </ul>
+    </Section>
+</Doc>

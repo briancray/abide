@@ -1,0 +1,289 @@
+<script>
+import { url } from '@abide/abide'
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import OpenApiOperation from 'crm-09/src/assistant/lib/OpenApiOperation.abide'
+import openApiOperationSource from 'crm-09/src/assistant/lib/OpenApiOperation.abide' with { type: 'text' }
+import openApiOperationTestSource from 'crm-09/src/assistant/tests/OpenApiOperation.test.ts' with { type: 'text' }
+import searchContactsSource from 'crm-09/src/assistant/searchContacts.ts' with { type: 'text' }
+import ModelToolCall from 'crm-09/src/assistant/lib/ModelToolCall.abide'
+import modelToolCallSource from 'crm-09/src/assistant/lib/ModelToolCall.abide' with { type: 'text' }
+import modelToolCallTestSource from 'crm-09/src/assistant/tests/ModelToolCall.test.ts' with { type: 'text' }
+import WithheldExport from 'crm-09/src/assistant/lib/WithheldExport.abide'
+import withheldExportSource from 'crm-09/src/assistant/lib/WithheldExport.abide' with { type: 'text' }
+import exportContactsSource from 'crm-09/src/assistant/exportContacts.ts' with { type: 'text' }
+import withheldExportTestSource from 'crm-09/src/assistant/tests/WithheldExport.test.ts' with { type: 'text' }
+import AssistantChat from 'crm-09/src/assistant/lib/AssistantChat.abide'
+import assistantChatSource from 'crm-09/src/assistant/lib/AssistantChat.abide' with { type: 'text' }
+import askAssistantSource from 'crm-09/src/assistant/askAssistant.ts' with { type: 'text' }
+import assistantChatTestSource from 'crm-09/src/assistant/tests/AssistantChat.test.ts' with { type: 'text' }
+import ClaudeApiRequest from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide'
+import claudeApiRequestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide' with { type: 'text' }
+import askClaudeSource from 'crm-09/src/assistant/askClaude.ts' with { type: 'text' }
+import messagesSource from 'crm-09/src/assistant/v1/messages.ts' with { type: 'text' }
+import claudeApiRequestTestSource from 'crm-09/src/assistant/tests/ClaudeApiRequest.test.ts' with { type: 'text' }
+import ClaudeCodeBridge from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide'
+import claudeCodeBridgeSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide' with { type: 'text' }
+import bridgeSource from 'crm-09/src/assistant/bridge.ts' with { type: 'text' }
+import askClaudeCodeSource from 'crm-09/src/assistant/askClaudeCode.ts' with { type: 'text' }
+import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBridge.test.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>A handler file already carries an address, a method, an argument type and a description.
+    That is everything an OpenAPI operation, an MCP tool and a command need, so the build derives
+    all three from the same route table the browser's calls come from.</p>
+
+    <table>
+        <thead><tr><th>Surface</th><th>Who reads it</th><th>Where</th></tr></thead>
+        <tbody>
+            <tr><td><code>ui</code></td><td>a page</td><td><code>import searchContacts from './searchContacts.ts'</code></td></tr>
+            <tr><td><code>openapi</code></td><td>a generated client, an API gateway</td><td><code>/__abide/openapi.json</code></td></tr>
+            <tr><td><code>mcp</code></td><td>a model</td><td><code>/__abide/mcp</code></td></tr>
+            <tr><td><code>cli</code></td><td>a person or a script in a terminal</td><td><code>abide call</code></td></tr>
+        </tbody>
+    </table>
+
+    <Section title="OpenAPI is generated from the handler files">
+        <Example
+            id="crm-09-openapi"
+            app="crm-09"
+            title="`/__abide/openapi.json` — the operation, from the handler file"
+            summary="A partner's integration wants the CRM's contact search as an OpenAPI operation. Read the app's document: the operation carries the handler's sentence and its typed argument."
+            files={{
+                'src/assistant/lib/OpenApiOperation.abide': openApiOperationSource,
+                'src/assistant/searchContacts.ts': searchContactsSource,
+                'src/assistant/tests/OpenApiOperation.test.ts': openApiOperationTestSource,
+            }}
+        >
+            <OpenApiOperation />
+        </Example>
+
+        <p>Nobody wrote the operation. The parameter is the handler's argument type and the
+        description is its <code>description</code> option, so the document cannot describe a
+        handler that is not there. A handler added is an operation published, with no step to
+        rerun.</p>
+
+        <p>The document is OpenAPI 3.1, whose schema dialect is JSON Schema, so a handler's schema
+        is published as it is. The test reads the same document from <code>createApp</code>, in
+        process.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>OpenApiDocument</code></td><td>The type of the document, for code that reads it.</td></tr>
+                <tr><td><code>abide openapi [--url &lt;origin&gt;]</code></td><td>Prints the document from the source, for a spec committed beside the code. <code>--url</code> asks a running deployment instead.</td></tr>
+                <tr><td><code>abide:openapi</code></td><td>The log namespace that warns when a handler's schema has no JSON Schema of its own.</td></tr>
+            </tbody>
+        </table>
+
+        <Code code={`abide openapi > openapi.json`} />
+    </Section>
+
+    <Section title="MCP lets a model call the handlers">
+        <Example
+            id="crm-09-mcp"
+            app="crm-09"
+            title="`/__abide/mcp` — the search handler, as a model sees it"
+            summary="A model is asked who works at Hopper. Ask the app's MCP endpoint for its tools, then call one as the model's client does."
+            files={{
+                'src/assistant/lib/ModelToolCall.abide': modelToolCallSource,
+                'src/assistant/searchContacts.ts': searchContactsSource,
+                'src/assistant/tests/ModelToolCall.test.ts': modelToolCallTestSource,
+            }}
+        >
+            <ModelToolCall />
+        </Example>
+
+        <p>Every handler the app publishes is a tool, a read as much as a write. The model picks a
+        tool by its <code>description</code>, the same sentence the OpenAPI operation carries, so
+        write one on every handler. A tool with none warns on <code>abide:mcp</code>.</p>
+
+        <p>The endpoint runs inside the app's own middleware. The rung that decides what a browser
+        may call decides what a model may call, and a declared refusal reaches the model by its
+        name, so it can tell the person why it stopped. Read on:
+        <a href={url('/guide/decide-who-sees-what')}>Who sees what</a></p>
+
+        <p><code>abide mcp [--url &lt;origin&gt;]</code> serves the same tools over stdio, which is
+        what a desktop MCP client expects.</p>
+
+        <Code code={`abide mcp --url https://crm.example`} />
+    </Section>
+
+    <Section title="`clients` keeps a handler off a surface">
+        <Example
+            id="crm-09-withhold"
+            app="crm-09"
+            title={'`clients: { mcp: false }` — off the tool list, on the network'}
+            summary="The export button reads every contact at once, and no model needs that. Ask the MCP endpoint for its tools, then ask the export's own address."
+            files={{
+                'src/assistant/lib/WithheldExport.abide': withheldExportSource,
+                'src/assistant/exportContacts.ts': exportContactsSource,
+                'src/assistant/tests/WithheldExport.test.ts': withheldExportTestSource,
+            }}
+        >
+            <WithheldExport />
+        </Example>
+
+        <p>The export is not a tool, and its address still answers. <code>clients</code> decides
+        what is listed, never who may call: put a rung on a handler that some callers may not
+        reach.</p>
+
+        <p><code>Clients</code> has one key per surface, and each defaults to
+        <code>true</code>.</p>
+
+        <table>
+            <thead><tr><th>Key</th><th>Set to <code>false</code></th></tr></thead>
+            <tbody>
+                <tr><td><code>ui</code></td><td>No page can import the handler: the import is a compile error naming it. The stand-in in <code>v1/messages.ts</code> sets it.</td></tr>
+                <tr><td><code>openapi</code></td><td>No operation in <code>/__abide/openapi.json</code>.</td></tr>
+                <tr><td><code>mcp</code></td><td>No tool on <code>/__abide/mcp</code>, and none for the assistant.</td></tr>
+                <tr><td><code>cli</code></td><td>Not callable with <code>abide call</code>.</td></tr>
+            </tbody>
+        </table>
+
+        <p>A handler that returns a whole <code>Response</code> starts with <code>mcp</code> and
+        <code>cli</code> off, having no result type to publish. A handler declared in a
+        <code>&lt;script server&gt;</code> is on no surface at all.</p>
+    </Section>
+
+    <Section title="An assistant on the site calls the CRM's handlers">
+        <Example
+            id="crm-09-assistant-tools"
+            app="crm-09"
+            title={"`assistant(messages, provider, { mcp: true })` — the CRM's handlers as its tools"}
+            summary="A rep asks the CRM's assistant where Ada works. The model here is a recording with fixed lines; the tool call it makes runs the CRM's own search handler."
+            files={{
+                'src/assistant/lib/AssistantChat.abide': assistantChatSource,
+                'src/assistant/askAssistant.ts': askAssistantSource,
+                'src/assistant/tests/AssistantChat.test.ts': assistantChatTestSource,
+            }}
+        >
+            <AssistantChat />
+        </Example>
+
+        <p><code>assistant</code> has no address of its own. You yield it from a streaming handler
+        you write, so the address and the middleware are yours, and the page reads the events like
+        any stream. Read on: <a href={url('/guide/make-it-live')}>Make it live</a></p>
+
+        <p><code>mcp: true</code> hands the model the tools <code>/__abide/mcp</code> lists. Each
+        call goes through the app's middleware with the asker's <code>cookie</code> and
+        <code>authorization</code> headers, so the model can do what the person asking can do and
+        nothing more. The handler sets <code>{'clients: { mcp: false }'}</code> so the assistant is
+        not one of its own tools.</p>
+
+        <p><code>assistant</code> keeps nothing between calls. The page sends the whole transcript
+        each time, so a reload or a second server answers the next turn the same way, and every
+        call pays for the transcript's tokens again.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>AssistantMessage</code></td><td>One turn of the transcript, <code>{'{ role, content }'}</code>. The last is the user's.</td></tr>
+                <tr><td><code>AssistantOptions</code></td><td><code>mcp</code> to offer the tools, and <code>maxTurns</code>, 10 by default, to cap the model's turns in one call.</td></tr>
+                <tr><td><code>AssistantEvent</code></td><td>What the page reads: <code>text</code>, <code>tool</code>, <code>result</code>, then <code>done</code> with the stop reason and token usage. The same events from every provider.</td></tr>
+                <tr><td><code>Provider</code></td><td>What runs the conversation: one method, <code>run</code>. Write one for another model, or a recording for a test.</td></tr>
+                <tr><td><code>Toolbox</code></td><td>What a provider is handed: <code>list</code> of the tools, and <code>call</code> to run one as the asker.</td></tr>
+                <tr><td><code>ToolDefinition</code></td><td>One tool in <code>list</code>: its name, description and input schema.</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`claudeApi` sends the request body you wrote">
+        <Example
+            id="crm-09-claude-api"
+            app="crm-09"
+            title="`claudeApi(config)` — the request body you wrote, sent as written"
+            summary="The assistant on Anthropic's API, its baseURL pointed at a stand-in in the CRM that answers with the body it was sent. Ask, and read the request."
+            files={{
+                'src/assistant/lib/ClaudeApiRequest.abide': claudeApiRequestSource,
+                'src/assistant/askClaude.ts': askClaudeSource,
+                'src/assistant/v1/messages.ts': messagesSource,
+                'src/assistant/tests/ClaudeApiRequest.test.ts': claudeApiRequestTestSource,
+            }}
+        >
+            <ClaudeApiRequest />
+        </Example>
+
+        <p><code>claudeApi</code> takes a Messages API request body as Anthropic documents it,
+        with the client's <code>apiKey</code> and <code>baseURL</code> beside it. Its type is
+        <code>ClaudeApiConfig</code>. abide adds <code>messages</code> and <code>stream</code>, and
+        every other field is sent as you wrote it.</p>
+
+        <p>Leave <code>baseURL</code> out and the request goes to Anthropic. <code>claudeApi</code>
+        reads no key from the environment, so pass <code>apiKey</code> from wherever the CRM keeps
+        its secrets. Read on: <a href={url('/guide/run-it')}>Run it</a></p>
+    </Section>
+
+    <Section title="`claudeCode` runs on the visitor's own Claude Code">
+        <Example
+            id="crm-09-claude-code"
+            app="crm-09"
+            title="`claudeCode(config)` — a turn on the reader's own Claude Code"
+            summary="The assistant on whatever Claude Code is paired with this browser. Ask first and it is refused; connect, run the command in a terminal, and ask again."
+            files={{
+                'src/assistant/lib/ClaudeCodeBridge.abide': claudeCodeBridgeSource,
+                'src/assistant/bridge.ts': bridgeSource,
+                'src/assistant/askClaudeCode.ts': askClaudeCodeSource,
+                'src/assistant/tests/ClaudeCodeBridge.test.ts': claudeCodeBridgeTestSource,
+            }}
+        >
+            <ClaudeCodeBridge />
+        </Example>
+
+        <p><code>claudeCode</code> sends the conversation to Claude Code on the asker's machine,
+        on their own sign-in and plan. Its config, <code>ClaudeCodeConfig</code>, is Claude Code's
+        own option names: <code>model</code>, <code>fallbackModel</code>,
+        <code>systemPrompt</code>, <code>appendSystemPrompt</code> and <code>effort</code>. Its
+        tools, permissions and directory are not the site's to set.</p>
+
+        <p>The visitor pairs once per visit by running a command, which dials out to the site.
+        Asking with nothing paired is refused 409.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired with the command to run, then paired.</td></tr>
+                <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, command }'}</code>.</td></tr>
+                <tr><td><code>claudeCode.bridgeCommand</code></td><td>Mints the command alone, for a page that wants the line without the stream. Its code expires unused after ten minutes.</td></tr>
+                <tr><td><code>/__abide/bridge</code></td><td>Where the visitor's bridge connects. It opens the first time a command is minted.</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`abide call` runs a handler from the terminal">
+        <Code code={`abide call assistant/searchContacts name=Ada`} />
+
+        <p><code>abide call &lt;address&gt; [args]</code> takes the handler's route without its
+        leading <code>/</code>, and each argument as <code>name=value</code>. The handler's
+        argument type reads each value, and an argument it refuses names the field.</p>
+
+        <table>
+            <thead><tr><th>Exit code</th><th>Means</th></tr></thead>
+            <tbody>
+                <tr><td><code>0</code></td><td>the handler answered</td></tr>
+                <tr><td><code>7</code></td><td>the handler refused</td></tr>
+                <tr><td><code>8</code></td><td>the app faulted</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>abide [--url &lt;origin&gt;] [--port &lt;n&gt;]</code> alone opens a shell on
+        the app, with every handler in scope and Tab completing addresses and argument names.</p>
+
+        <Code code={`abide                           # a shell on the built app
+abide --url https://crm.example # a shell on a running one`} />
+
+        <p>Without <code>--url</code>, the CLI reads <code>ABIDE_APP_URL</code>, then falls back
+        to the local app. <code>ABIDE_APP_TOKEN</code> is the bearer it sends, so a shell profile
+        per environment is the whole setup.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/guide/test-measure-and-ship')}>Test, measure, ship</a> — prove
+            the CRM works, and ship it</li>
+        </ul>
+    </Section>
+</Doc>

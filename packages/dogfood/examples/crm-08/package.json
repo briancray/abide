@@ -1,0 +1,27 @@
+{
+    "name": "crm-08",
+    "private": true,
+    "type": "module",
+    "description": "The CRM at the end of chapter 8, Run it",
+    "scripts": {
+        "check": "abide check",
+        "dev": "abide dev",
+        "build": "abide build",
+        "start": "abide start",
+        "routes": "abide routes",
+        "test": "bun test"
+    },
+    "imports": {
+        "#src/*": [
+            "./src/*",
+            "./src/*.ts"
+        ]
+    },
+    "dependencies": {
+        "@abide/abide": "workspace:*"
+    },
+    "devDependencies": {
+        "@abide/harness": "workspace:*",
+        "@types/bun": "latest"
+    }
+}

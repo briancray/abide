@@ -1,0 +1,24 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let name = reactive('Ada Lovelace')
+let phone = reactive('')
+
+const initials = reactive(() =>
+    name
+        .split(' ')
+        .map((word) => word.charAt(0))
+        .join(''),
+)
+const filled = reactive(() => [name, phone].filter(Boolean).length)
+</script>
+
+<div class="row">
+    <label>name <input bind:value={name}></label>
+    <label>phone <input bind:value={phone}></label>
+</div>
+
+<ul class="fields">
+    <li><span>initials</span><strong>{initials}</strong></li>
+    <li><span>profile</span><strong>{filled} of 2 filled in</strong></li>
+</ul>

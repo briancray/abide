@@ -1,0 +1,7 @@
+<script>
+import previewCompany from '../previewCompany.ts'
+</script>
+
+<iframe src={previewCompany.url({ id: 'hopper-and-co' })}
+    title="The account sheet"
+    class="h-48 w-full rounded-md border border-rule"></iframe>

@@ -1,9 +1,0 @@
-<script>
-import Overdue from './Overdue.abide'
-import Paid from './Paid.abide'
-</script>
-
-<div class="row">
-    <Overdue/>
-    <Paid/>
-</div>

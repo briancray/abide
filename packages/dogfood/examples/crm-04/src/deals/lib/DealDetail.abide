@@ -1,0 +1,20 @@
+<script>
+import { reactive } from '@abide/abide'
+import getDeal from '../getDeal.ts'
+
+let id = reactive('d1')
+
+const deal = reactive(() => getDeal({ id }))
+</script>
+
+<div class="tabs">
+{#for one of ['d1', 'd2']}
+    <button aria-selected={id === one}
+        onclick={() => { id = one }}>{one}</button>
+{/for}
+</div>
+
+<ul class="fields stacked">
+    <li><span>deal</span><strong>{deal.name}</strong></li>
+    <li><span>company</span><strong>{deal.company}</strong></li>
+</ul>

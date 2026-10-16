@@ -1,0 +1,19 @@
+<script>
+import { reactive } from '@abide/abide'
+import { closedTotals } from './closedTotals.ts'
+
+let days = reactive(7)
+const closed = reactive(() => closedTotals(days))
+</script>
+
+<div class="tabs">
+    {#for choice of [7, 30]}
+        <button aria-selected={days === choice} onclick={() => (days = choice)}>
+            {choice} days
+        </button>
+    {/for}
+</div>
+<ul class="tiles">
+    <li><span>deals closed</span><strong>{closed.deals}</strong></li>
+    <li><span>revenue</span><strong>${closed.revenue}</strong></li>
+</ul>

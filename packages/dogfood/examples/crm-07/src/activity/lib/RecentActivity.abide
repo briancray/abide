@@ -1,0 +1,18 @@
+<script>
+import { activity, logActivity } from './activity.ts'
+</script>
+
+<ul class="fields stacked">
+    {#for entry of activity}
+        <li>
+            <span>#{entry.id} {entry.kind}</span>
+            <strong>{entry.contact}</strong>
+        </li>
+    {/for}
+</ul>
+
+<div class="row">
+    <button onclick={() => logActivity('Ada Lovelace', 'Meeting')}>
+        Log a meeting
+    </button>
+</div>

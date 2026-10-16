@@ -1,0 +1,35 @@
+<script>
+import { reactive } from '@abide/abide'
+import listDeals from '../listDeals.ts'
+import { dollars } from './dollars.ts'
+
+const deals = reactive(() => listDeals())
+
+// Each update names one deal and its new amount.
+const UPDATES = [
+    { id: 'd4', amount: 27_500 },
+    { id: 'd2', amount: 9_200 },
+    { id: 'd1', amount: 45_000 },
+]
+
+function applyNextUpdate() {
+    const update = UPDATES.shift()
+    if (!update) return
+    UPDATES.push(update)
+    deals.patch((held) => {
+        const deal = held.find((each) => each.id === update.id)
+        if (deal) deal.amount = update.amount
+    })
+}
+</script>
+
+<ul class="fields">
+{#for deal of deals.ready() ? deals : [] by deal.id}
+    <li><span>{deal.stage}</span><strong>{dollars(deal.amount)}</strong>
+        {deal.name}</li>
+{/for}
+</ul>
+
+<div class="row">
+    <button onclick={applyNextUpdate}>Apply next update</button>
+</div>

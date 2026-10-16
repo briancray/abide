@@ -1,0 +1,23 @@
+<script>
+import { reactive } from '@abide/abide'
+import { summarizeStage } from './summarizeStage.ts'
+
+let stage = reactive('qualified')
+const summary = reactive(() => summarizeStage(stage))
+</script>
+
+<div class="tabs">
+    {#for choice of ['qualified', 'proposal']}
+        <button
+            aria-selected={stage === choice}
+            onclick={() => (stage = choice)}
+        >
+            {choice}
+        </button>
+    {/for}
+</div>
+<ul class="tiles">
+    <li><span>deals</span><strong>{summary.deals}</strong></li>
+    <li><span>value</span><strong>${summary.value}</strong></li>
+    <li><span>largest</span><strong>${summary.largest}</strong></li>
+</ul>

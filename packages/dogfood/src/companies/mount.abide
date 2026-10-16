@@ -1,0 +1,5 @@
+<script module>
+// Chapter 6's companies, mounted where its own app serves them, so its cards' requests and its
+// pages' `url()` addresses reach them here (23.19, 40.15).
+import 'crm-06/src/companies' with { type: 'routes' }
+</script>

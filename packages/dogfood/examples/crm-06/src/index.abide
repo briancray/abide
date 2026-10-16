@@ -1,0 +1,15 @@
+<script>
+import { url } from '@abide/abide'
+</script>
+
+<head><title>CRM</title></head>
+
+<main>
+    <h1>CRM</h1>
+    <p><a href={url('/contacts')}>Contacts</a></p>
+    <p><a href={url('/profile')}>Profile</a></p>
+    <p><a href={url('/deals')}>Deals</a></p>
+    <p><a href={url('/pipeline')}>Pipeline</a></p>
+    <p><a href={url('/activity')}>Activity</a></p>
+    <p><a href={url('/companies')}>Companies</a></p>
+</main>

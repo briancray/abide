@@ -1,0 +1,11 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let followUp = reactive(false)
+</script>
+
+<label><input type="checkbox" bind:checked={followUp}> Follow up</label>
+
+{#if followUp}
+    <label>on <input type="date" value="2026-11-02"></label>
+{/if}

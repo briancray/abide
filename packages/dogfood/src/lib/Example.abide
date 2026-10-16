@@ -1,27 +1,62 @@
+<script server>
+import { GET } from '@abide/abide/server'
+import type { ExampleResults } from './ExampleResults.ts'
+import { exampleDirectory } from './server/exampleDirectory.ts'
+
+// What `bun run examples:results` last kept for the app, or `null` where this build never ran it.
+const resultsOf = GET(async ({ app }: { app: string }) => {
+    const directory = await exampleDirectory(app)
+    const results = directory && Bun.file(`${directory}/.abide/results.json`)
+    return results && (await results.exists())
+        ? ((await results.json()) as ExampleResults)
+        : null
+})
+</script>
+
 <script>
 // 40.5 — an example card: the component itself, running, above a tab per file it is made of. The
 // render is never a tab; it is what the example IS, and the files are what you consult about it.
-import { props, raw, reactive } from '@abide/abide'
+// A test or a bench file's tab renders what that file last reported, above its source.
+import { props, type RouteLiteral, raw, reactive, url } from '@abide/abide'
 import { highlight, sideOf } from './highlight.ts'
 import { inline } from './inline.ts'
 
-const { id, title, summary, files } = props<{
-    /** The example's name: its anchor here, and what its hand-written arm is paired by (40.40). */
+const { id, title, summary, files, app } = props<{
+    /** The example's name: its anchor on the page. */
     id: string
     title: string
     summary: string
     /** Each file the example is made of, by the path a reader is shown, to its text. */
     files: Record<string, string>
+    /** The chapter app the files are from, which the card links to and offers as a download. */
+    app?: string
 }>()
 
 const paths = Object.keys(files)
 let open = reactive(0)
+
+const kindOf = (path: string) =>
+    path.endsWith('.test.ts') ? 'test' : path.endsWith('.bench.ts') ? 'bench' : 'file'
+
+// Read only once a test or bench tab is open, so a card nobody inspects never asks.
+const results = reactive(() =>
+    app !== undefined && kindOf(paths[open] ?? '') !== 'file'
+        ? resultsOf({ app })
+        : null,
+)
+
+const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
 </script>
 
 <figure class="example" id={id}>
     <figcaption>
         <span class="ex-title">{raw(inline(title))}</span>
         <span class="ex-summary">{summary}</span>
+        {#if app !== undefined}
+            <span class="ex-app">
+                <a href={url(`/examples/${app}.tar.gz` as RouteLiteral)} download>Download {app}</a>
+            </span>
+        {/if}
     </figcaption>
     <div class="ex-render"><slot/></div>
     <div class="ex-files" role="tablist">
@@ -30,11 +65,39 @@ let open = reactive(0)
                 role="tab"
                 aria-selected={String(open === index)}
                 data-side={sideOf(path)}
+                data-kind={kindOf(path)}
                 onclick={() => (open = index)}
             >{path}</button>
         {/for}
     </div>
     {#for path, index of paths}
+        {#if open === index && kindOf(path) === 'test'}
+            {#if results?.tests[path]}
+                <ul class="ex-results">
+                    {#for one of results.tests[path].cases}
+                        <li data-passed={String(one.failure === null)}>
+                            <span>{one.failure === null ? 'pass' : 'fail'}</span>
+                            {one.name}
+                            <small>{one.milliseconds.toFixed(0)} ms</small>
+                        </li>
+                    {/for}
+                </ul>
+            {:else}
+                <p class="ex-results">Not run in this build. Run <code>bun test</code> in the app.</p>
+            {/if}
+        {/if}
+        {#if open === index && kindOf(path) === 'bench'}
+            {#if results?.benches[path]}
+                <ul class="ex-results" data-kind="bench">
+                    {#for arm of Object.keys(results.benches[path].arms)}
+                        <li><span>{arm}</span>{nanoseconds(results.benches[path].arms[arm] ?? 0)} per op</li>
+                    {/for}
+                    <li><small>{results.benches[path].claim} · {results.benches[path].n} ops a sample</small></li>
+                </ul>
+            {:else}
+                <p class="ex-results">Not run in this build. Run <code>bun run examples:results</code>.</p>
+            {/if}
+        {/if}
         <pre hidden={open !== index}><code>{raw(highlight((files[path] ?? '').trimEnd()))}</code></pre>
     {/for}
 </figure>

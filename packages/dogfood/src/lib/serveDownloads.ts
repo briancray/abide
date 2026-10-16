@@ -1,11 +1,12 @@
 // THE DOCS AS MARKDOWN, for a reader with no browser: every page at its own address with `.md` on
 // the end, `abide.md` holding them all in reading order, and `llms.txt` pointing an agent at that.
+// And every chapter app as a tarball, at `/examples/<app>.tar.gz`.
 // A rung the root layout files as middleware, so it answers addresses no route has (37.3). Each
 // page's markdown is read off the page the app renders, so the words have the one home.
 import { type Middleware, type RouteLiteral, url } from '@abide/abide'
 import { markdownOf } from '../server/markdownOf.ts'
-import { SITE } from './SITE.ts'
-import { markdownAddressOf } from './sitePages.ts'
+import { exampleArchive } from './server/exampleArchive.ts'
+import { markdownAddressOf, SECTIONS } from './sitePages.ts'
 
 const MARKDOWN = { 'content-type': 'text/markdown; charset=utf-8' }
 
@@ -20,7 +21,7 @@ async function pageMarkdown(route: string, origin: string): Promise<string> {
 async function bundle(origin: string): Promise<string> {
     let contents = ''
     let body = ''
-    for (const group of SITE) {
+    for (const group of SECTIONS) {
         contents += `\n**${group.section}**\n\n`
         for (const page of group.pages) {
             const address = markdownAddressOf(page.route).slice(1)
@@ -44,6 +45,18 @@ export const serveDownloads: Middleware<
     Response
 > = async (next, { request }) => {
     const { pathname, origin } = new URL(request.url)
+    const archived = /^\/examples\/([^/]+)\.tar\.gz$/.exec(pathname)
+    if (archived) {
+        const archive = await exampleArchive(archived[1] as string)
+        return archive
+            ? new Response(archive, {
+                  headers: {
+                      'content-type': 'application/gzip',
+                      'content-disposition': `attachment; filename="${archived[1]}.tar.gz"`,
+                  },
+              })
+            : next()
+    }
     if (!pathname.endsWith('.md') && !pathname.endsWith('/llms.txt'))
         return next()
     if (pathname === '/llms.txt')
@@ -52,7 +65,7 @@ export const serveDownloads: Middleware<
         bundled ??= bundle(origin)
         return new Response(await bundled, { headers: MARKDOWN })
     }
-    for (const group of SITE)
+    for (const group of SECTIONS)
         for (const page of group.pages)
             if (pathname === markdownAddressOf(page.route))
                 return new Response(await pageMarkdown(page.route, origin), {

@@ -1,0 +1,13 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let email = reactive('ada@example.com')
+</script>
+
+<label>email
+    <input bind:value={email}>
+</label>
+
+<ul class="fields stacked">
+    <li><span>a save would send</span><strong>{email}</strong></li>
+</ul>

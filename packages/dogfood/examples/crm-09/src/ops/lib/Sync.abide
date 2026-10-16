@@ -1,0 +1,23 @@
+<script>
+import { reactive } from '@abide/abide'
+import syncContact from '../syncContact.ts'
+
+let synced = reactive<{ trace: string; lines: string[] }>()
+
+async function sync() {
+    synced = await syncContact({ id: 'c2' })
+}
+</script>
+
+<div class="row">
+    <button onclick={sync}>Sync Grace Hopper</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>trace</span>
+        <strong>{synced.ready() ? synced.trace : '—'}</strong></li>
+    <li><span>its lines</span>
+        <strong>
+            {synced.ready() ? synced.lines.join(' · ') : '—'}
+        </strong></li>
+</ul>

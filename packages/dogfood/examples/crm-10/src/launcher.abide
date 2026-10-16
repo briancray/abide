@@ -1,0 +1,5 @@
+<script server>
+import { onLauncher } from '@abide/abide/server'
+
+onLauncher(() => ({ width: 1100, height: 720, minWidth: 720, minHeight: 480 }))
+</script>

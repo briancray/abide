@@ -1,0 +1,22 @@
+<script>
+import { reactive } from '@abide/abide'
+import syncContact from '../syncContact.ts'
+
+let status = reactive('')
+
+async function sync() {
+    status = 'asking billing…'
+    try {
+        await syncContact({ id: 'c2' })
+        status = 'copied'
+    } catch (refusal) {
+        if (!syncContact.isError(refusal, 'HttpError')) throw refusal
+        status = refusal.message
+    }
+}
+</script>
+
+<div class="row">
+    <button onclick={sync}>Copy Grace Hopper to billing</button>
+    <span class="status">{status}</span>
+</div>

@@ -1,0 +1,25 @@
+<script>
+import Console from './lib/Console.abide'
+import Health from './lib/Health.abide'
+import OfflineBanner from './lib/OfflineBanner.abide'
+import Pool from './lib/Pool.abide'
+import Retries from './lib/Retries.abide'
+import Sync from './lib/Sync.abide'
+</script>
+
+<head><title>Operations — CRM</title></head>
+
+<main>
+    <h1>Operations</h1>
+    <OfflineBanner />
+    <h2>Config</h2>
+    <Retries />
+    <h2>Database</h2>
+    <Pool />
+    <h2>Health</h2>
+    <Health />
+    <h2>Sync</h2>
+    <Sync />
+    <h2>Log</h2>
+    <Console />
+</main>

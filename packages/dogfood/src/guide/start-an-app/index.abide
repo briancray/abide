@@ -1,0 +1,188 @@
+<script>
+import { url } from '@abide/abide'
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import ContactList from 'crm-01/src/contacts/lib/ContactList.abide'
+import contactListSource from 'crm-01/src/contacts/lib/ContactList.abide' with { type: 'text' }
+import listContactsSource from 'crm-01/src/contacts/listContacts.ts' with { type: 'text' }
+import contactListTestSource from 'crm-01/src/contacts/tests/ContactList.test.ts' with { type: 'text' }
+import PageTiming from 'crm-01/src/contacts/lib/PageTiming.abide'
+import pageTimingSource from 'crm-01/src/contacts/lib/PageTiming.abide' with { type: 'text' }
+import pageTimingTestSource from 'crm-01/src/contacts/tests/PageTiming.test.ts' with { type: 'text' }
+import StarButton from 'crm-01/src/contacts/lib/StarButton.abide'
+import starButtonSource from 'crm-01/src/contacts/lib/StarButton.abide' with { type: 'text' }
+import starButtonTestSource from 'crm-01/src/contacts/tests/StarButton.test.ts' with { type: 'text' }
+import ContactNote from 'crm-01/src/contacts/lib/ContactNote.abide'
+import contactNoteSource from 'crm-01/src/contacts/lib/ContactNote.abide' with { type: 'text' }
+import contactNoteTestSource from 'crm-01/src/contacts/tests/ContactNote.test.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <Code code={`bunx @abide/abide scaffold crm
+cd crm
+bun install
+bun run dev`} />
+
+    <p>The scaffold writes a root layout, a page, a handler file the page calls, and a test of
+    each. <code>bun run dev</code> runs <code>abide dev</code>, which serves the app on
+    <code>localhost:3000</code> and restarts it on every save, with the open tab reloading behind
+    it.</p>
+
+    <p>Every chapter ends with the CRM it built, as an app you can download and run. Each card
+    below is a file from that app, with the test the app runs on it.</p>
+
+    <Section title="A file's path is the address it answers">
+        <p>A file's path below <code>src</code> is its address. Nothing else names a route.</p>
+
+        <table>
+            <thead><tr><th>File</th><th>Answers on</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/index.abide</code></td><td><code>/</code></td></tr>
+                <tr><td><code>src/contacts/index.abide</code></td><td><code>/contacts</code></td></tr>
+                <tr><td><code>src/contacts/listContacts.ts</code></td><td><code>GET /contacts/listContacts</code>, the handler its default export declares</td></tr>
+                <tr><td><code>src/contacts/lib/ContactList.abide</code></td><td>no address: a component the pages import</td></tr>
+                <tr><td><code>src/contacts/tests/ContactList.test.ts</code></td><td>no address: what <code>bun test</code> runs</td></tr>
+            </tbody>
+        </table>
+
+        <p>Code that is not an address goes in a directory that never is. The directory also
+        decides where the code runs:</p>
+
+        <table>
+            <thead><tr><th>Directory</th><th>What goes in it</th><th>Where it runs</th></tr></thead>
+            <tbody>
+                <tr><td><code>src/**</code></td><td>the app</td><td>both sides, unless its directory says otherwise</td></tr>
+                <tr><td><code>src/**/</code></td><td>pages, layouts and handler files, routed by their path</td><td>a page on both sides; a handler on the server, with a call in its place in the browser</td></tr>
+                <tr><td><code>**/lib/**</code></td><td>components and modules</td><td>wherever they are imported</td></tr>
+                <tr><td><code>**/server/**</code></td><td>the database, secrets, anything the browser never loads</td><td>the server alone; a page importing it is a compile error</td></tr>
+                <tr><td><code>**/tests/**</code></td><td>tests</td><td><code>bun test</code>, never served</td></tr>
+                <tr><td><code>**/public/**</code></td><td>files answered as they are</td><td>nowhere; each is sent at its path</td></tr>
+            </tbody>
+        </table>
+
+        <p>Any other file beside the pages fails the build, so listing a directory lists its
+        routes. The CRM keeps its contacts in <code>src/contacts/server/CONTACTS.ts</code>, and
+        only the handler reads it.</p>
+    </Section>
+
+    <Section title="A page reads a handler like a value">
+        <Example
+            id="crm-01-contact-list"
+            app="crm-01"
+            title="`listContacts` — a handler file, read like a value"
+            summary="The contacts page lists every contact. The list is empty until the handler answers, then fills in."
+            files={{
+                'src/contacts/lib/ContactList.abide': contactListSource,
+                'src/contacts/listContacts.ts': listContactsSource,
+                'src/contacts/tests/ContactList.test.ts': contactListTestSource,
+            }}
+        >
+            <ContactList />
+        </Example>
+
+        <p><code>listContacts.ts</code> runs on the server. The list imports it like any module,
+        and the browser is sent a call under the same name in its place, so there is no
+        <code>fetch</code>, no route to register, and no second copy of the contact type.</p>
+
+        <p>The test imports the same handler and calls it, in process. A handler only one page
+        calls can live in that page's <code>&lt;script server&gt;</code> instead. See
+        <a href={url('/guide/talk-to-the-server')}>Talk to the server</a>.</p>
+    </Section>
+
+    <Section title="The page is sent before the data lands">
+        <Example
+            id="crm-01-page-sent-first"
+            app="crm-01"
+            title="The whole contacts page, before the contacts answer"
+            summary="The contacts handler takes 400 ms. Request the page the way a browser does, and compare when it is complete with when the contacts answer."
+            files={{
+                'src/contacts/lib/PageTiming.abide': pageTimingSource,
+                'src/contacts/tests/PageTiming.test.ts': pageTimingTestSource,
+            }}
+        >
+            <PageTiming />
+        </Example>
+
+        <p>Reading <code>contacts</code> starts the load, and the document does not wait for it.
+        The page goes out as soon as it is built, with a hole where the list goes, and the hole
+        fills when the contacts land. Neither file has a loading branch in it.</p>
+
+        <p>The browser's call for the contacts is answered from what the server render already
+        fetched, so the handler runs once. The cost is a client with no JavaScript: its hole
+        stays empty.</p>
+
+        <p>A page's <code>&lt;script&gt;</code> runs on the server to render it, then again in the
+        browser. That is why the card reads <code>location</code> inside the click and not at the
+        top of its script.</p>
+    </Section>
+
+    <Section title="A value is read and written by name">
+        <Example
+            id="crm-01-star"
+            app="crm-01"
+            title="`starred` — read by name, written by name"
+            summary="Star a contact. The button reads the value, and the click writes it."
+            files={{
+                'src/contacts/lib/StarButton.abide': starButtonSource,
+                'src/contacts/tests/StarButton.test.ts': starButtonTestSource,
+            }}
+        >
+            <StarButton />
+        </Example>
+
+        <p>Naming <code>starred</code> in the markup reads it and follows it from then on.
+        Assigning to it writes it and wakes everything that read it. There is no store to declare
+        and no re-render to ask for. A <code>.ts</code> file has no markup around it, so it writes
+        the same value as <code>starred()</code> and <code>starred.set(true)</code>.</p>
+
+    </Section>
+
+    <Section title="Every value is a `Reactive`">
+        <Example
+            id="crm-01-one-type"
+            app="crm-01"
+            title="`Reactive` — four ways to get a value, one way to ask"
+            summary="A note on a contact. Watch which rows say … on arrival, then type a note and save it."
+            files={{
+                'src/contacts/lib/ContactNote.abide': contactNoteSource,
+                'src/contacts/tests/ContactNote.test.ts': contactNoteTestSource,
+            }}
+        >
+            <ContactNote />
+        </Example>
+
+        <p>A value the page owns, a value derived from it, a value loaded from a handler, and a
+        value that waits for its first write: all four come from <code>reactive</code>, and all
+        four are a <code>Reactive</code>. <code>ready()</code> asks each one the same question, so
+        the branch you write for "not here yet" works on every one of them.</p>
+
+        <p>Swapping a local value for a loaded one changes how it is declared and nothing that
+        reads it.</p>
+    </Section>
+
+    <Section title="The `abide` command">
+        <table>
+            <thead><tr><th>Command</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>abide scaffold &lt;name&gt;</code></td><td>writes the starter app above</td></tr>
+                <tr><td><code>abide dev [--port &lt;n&gt;]</code></td><td>serves the app and restarts it on every save; takes the first free port from 3000, or the one you name</td></tr>
+                <tr><td><code>abide run &lt;file&gt; [args…]</code></td><td>runs one script with the app's own modules, such as a script that loads contacts from a spreadsheet</td></tr>
+                <tr><td><code>--help</code> · <code>-h</code> · <code>abide help</code></td><td>prints every command</td></tr>
+                <tr><td><code>--version</code> · <code>-v</code></td><td>prints the version installed</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>abide dev</code> runs the same server <code>abide start</code> does, so a bug you
+        see while you work is a bug you can reproduce in production. A stack trace names the
+        <code>.abide</code> file and the line you wrote.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/guide/edit-a-contact')}>Edit a contact</a> — hold a contact the page
+            can edit, and show what follows from it</li>
+        </ul>
+    </Section>
+</Doc>

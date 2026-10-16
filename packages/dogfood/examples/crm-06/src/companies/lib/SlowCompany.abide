@@ -1,0 +1,13 @@
+<script>
+import { reactive, url } from '@abide/abide'
+
+const PAGE = url('/companies/[id]', { id: 'hopper-and-co' })
+
+let loads = reactive(1)
+</script>
+
+<div class="row">
+    <button onclick={() => (loads += 1)}>Load the page again</button>
+</div>
+<iframe src="{PAGE}?load={loads}" title="A company's page, loading"
+    class="h-60 w-full rounded-md border border-rule"></iframe>

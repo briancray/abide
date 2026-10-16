@@ -1,0 +1,25 @@
+<script>
+import { reactive } from '@abide/abide'
+import askClaude from '../askClaude.ts'
+
+const QUESTION = 'Which company is Ada at?'
+
+let asked = reactive(false)
+const events = reactive(() =>
+    asked
+        ? askClaude({ messages: [{ role: 'user', content: QUESTION }] })
+        : [],
+)
+</script>
+
+<div class="row">
+    <button disabled={asked} onclick={() => { asked = true }}>Ask</button>
+    <span class="status">{QUESTION}</span>
+</div>
+
+{#for event of events}
+    {#if event.type === 'text'}
+        <pre class="rounded-md border border-rule bg-raised p-snug
+            text-chrome">{event.text}</pre>
+    {/if}
+{/for}

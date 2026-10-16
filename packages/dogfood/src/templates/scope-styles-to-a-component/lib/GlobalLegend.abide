@@ -1,8 +1,0 @@
-<script>
-import Legend from './Legend.abide'
-</script>
-
-<div class="row">
-    <Legend/>
-    <p class="invoice-legend">past its due date</p>
-</div>

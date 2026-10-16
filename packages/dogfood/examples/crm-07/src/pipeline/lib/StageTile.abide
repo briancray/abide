@@ -1,0 +1,12 @@
+<script>
+import { props, reactive } from '@abide/abide'
+import getStage from '../getStage.ts'
+
+const { stage } = props<{ stage: string }>()
+const totals = reactive(() => getStage({ stage }))
+</script>
+
+<li class={totals.busy() ? 'opacity-40' : ''}>
+    <span>{stage}</span>
+    <strong>{totals.ready() ? totals.count : '—'}</strong>
+</li>

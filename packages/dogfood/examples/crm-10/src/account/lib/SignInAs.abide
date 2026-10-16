@@ -1,0 +1,20 @@
+<script>
+import { principal } from '@abide/abide'
+import signIn from '../signIn.ts'
+import signOut from '../signOut.ts'
+
+const PEOPLE = [
+    { name: 'Nobody', email: '' },
+    { name: 'Maya Chen', email: 'maya@crm.example' },
+    { name: 'Theo Park', email: 'theo@crm.example' },
+]
+
+const become = (email: string) => (email === '' ? signOut() : signIn({ email }))
+</script>
+
+<div class="tabs">
+{#for one of PEOPLE}
+    <button aria-selected={(principal.resolved().name ?? 'Nobody') === one.name}
+        onclick={() => become(one.email)}>{one.name}</button>
+{/for}
+</div>

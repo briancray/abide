@@ -1,0 +1,23 @@
+<script>
+import getStage from '../getStage.ts'
+import winDeal from '../winDeal.ts'
+import StageTile from './StageTile.abide'
+import { STAGES } from './STAGES.ts'
+
+async function win() {
+    await winDeal()
+    // The two stages the deal left and joined, and no others.
+    getStage.refresh({ stage: 'lead' })
+    getStage.refresh({ stage: 'won' })
+}
+</script>
+
+<ul class="tiles">
+{#for stage of STAGES}
+    <StageTile stage={stage}/>
+{/for}
+</ul>
+
+<div class="row">
+    <button onclick={win}>Win a lead</button>
+</div>

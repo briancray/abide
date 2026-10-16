@@ -37,122 +37,29 @@ function fenceOnlySections(page: DocsPage): number {
     return teaching.size
 }
 
-/** The pages whose count differs from the one recorded, both ways. */
-function drifted(
-    recorded: Map<string, number>,
-    counted: Map<string, number>,
-): string[] {
-    const out: string[] = []
-    for (const slug of new Set([...recorded.keys(), ...counted.keys()])) {
-        const was = recorded.get(slug) ?? 0
-        const now = counted.get(slug) ?? 0
-        if (now > was) out.push(`${slug}: ${was} -> ${now}, up`)
-        else if (now < was)
-            out.push(
-                `${slug}: ${was} -> ${now}, down — lower the recorded number`,
-            )
-    }
-    return out
-}
-
-// 40.17 AND 40.6, AS A RATCHET. A section that teaches with a fence it wrote by hand embeds no
-// `<Example>` and quotes nothing that runs, so the code under its heading is a claim no build
-// checks. Converting a section lowers its page's number here; a page that gains one fails, which
-// is the moment somebody notices. Both directions bind, so the list cannot creep back up to a
-// number it once had. Revert-verified: one more fenced section under a heading -> `up` names it.
-const FENCE_ONLY_SECTIONS = new Map<string, number>([
-    ['/app/configure-the-app', 1],
-    ['/app/follow-a-request-across-services', 4],
-    ['/app/know-when-the-browser-goes-offline', 2],
-    ['/app/know-who-is-calling', 1],
-    ['/app/lock-down-what-the-page-may-load', 1],
-    ['/app/read-the-incoming-request', 1],
-    ['/app/record-what-happened', 2],
-    ['/app/run-code-at-start-and-stop', 1],
-    ['/machines/put-a-claude-assistant-on-your-site', 2],
-    ['/pages/give-pages-the-same-chrome', 1],
-    ['/pages/set-the-title-and-social-preview', 1],
-    ['/data/answer-with-something-other-than-json', 1],
-    ['/data/change-something-on-the-server', 1],
-    ['/data/check-what-callers-send-you', 4],
-    ['/data/decide-who-may-call-what', 2],
-    ['/data/find-the-url-a-handler-answers-on', 4],
-    ['/data/keep-a-room-of-callers-in-sync', 2],
-    ['/data/put-a-ceiling-on-a-request', 1],
-    ['/data/read-data-without-writing-an-api', 2],
-    ['/data/refuse-a-request-and-say-why', 3],
-    ['/data/send-data-as-it-arrives', 2],
-    ['/ship/call-your-app-from-a-test', 1],
-    // A native menu bar, a bundle's settings and a page rendered before the app runs have no
-    // browser to render in, so no `<Example>` can run them.
-    ['/ship/ship-a-desktop-app', 3],
-    ['/start/how-a-page-becomes-html', 4],
-    ['/start/what-abide-is-for', 1],
-    ['/templates/bind-a-form-to-state', 4],
-    ['/templates/reuse-a-piece-of-markup', 4],
-    ['/templates/scope-styles-to-a-component', 1],
-    ['/values/decide-when-a-value-reloads', 2],
-    ['/values/do-something-when-a-value-changes', 1],
-    ['/values/keep-a-value-outside-the-process', 2],
-    ['/values/keep-the-last-few-values', 1],
-    ['/values/share-one-value-across-components', 1],
-])
-
-test('no teaching page has more fence-only sections than recorded', async () => {
-    const counted = new Map<string, number>()
-    for (const page of await docsPages()) {
-        if (!page.covers?.length) continue
-        const count = fenceOnlySections(page)
-        if (count) counted.set(page.route, count)
-    }
-    expect(drifted(FENCE_ONLY_SECTIONS, counted)).toEqual([])
+// 40.17 AND 40.6. A section that teaches with a fence it wrote by hand embeds no `<Example>` and
+// quotes nothing that runs, so the code under its heading is a claim no build checks. Revert-verified:
+// one fenced section under a heading with no card names its page.
+test('no teaching page has a section that teaches with a fence alone', async () => {
+    const fenced: string[] = []
+    for (const page of await docsPages())
+        if (page.covers?.length && fenceOnlySections(page))
+            fenced.push(page.route)
+    expect(fenced).toEqual([])
 })
 
 // BRAND's spine: an ADDRESS a reader cannot open is a claim. A `<Snippet>` derives its
 // caption from a file the build reads; a hand-written fence captioned with a path derives nothing,
 // and naming a file that happens to exist in the docs app is no better — every one that did,
-// showed something else. Until its example exists a fence takes a bare side word. The count
-// only shrinks. Revert-verified: one more `ts #server/…` fence -> `up` names the page.
-const ADDRESS_CAPTIONED_FENCES = new Map<string, number>([
-    ['/app/know-when-the-browser-goes-offline', 2],
-    ['/app/lock-down-what-the-page-may-load', 1],
-    ['/app/read-the-incoming-request', 1],
-    ['/machines/keep-a-handler-off-a-surface', 1],
-    ['/machines/put-a-claude-assistant-on-your-site', 1],
-    ['/pages/add-a-page', 1],
-    ['/pages/give-pages-the-same-chrome', 1],
-    ['/pages/link-to-another-page', 1],
-    ['/pages/set-the-title-and-social-preview', 2],
-    ['/pages/show-a-page-when-something-fails', 1],
-    ['/reference/abide-files', 2],
-    ['/reference/ambient-values', 2],
-    ['/reference/routing', 1],
-    ['/reference/transports', 1],
-    ['/data/answer-with-something-other-than-json', 1],
-    ['/data/change-something-on-the-server', 1],
-    ['/data/check-what-callers-send-you', 4],
-    ['/data/find-the-url-a-handler-answers-on', 1],
-    ['/data', 1],
-    ['/data/read-data-without-writing-an-api', 2],
-    ['/data/refuse-a-request-and-say-why', 1],
-    ['/data/send-data-as-it-arrives', 1],
-    ['/start/how-a-page-becomes-html', 2],
-    ['/start/what-abide-is-for', 1],
-    ['/start/your-first-page', 3],
-    ['/templates/bind-a-form-to-state', 4],
-    ['/templates/reuse-a-piece-of-markup', 7],
-    ['/values/share-one-value-across-components', 1],
-])
-
-test('no page captions more hand-written fences with an address than recorded', async () => {
-    const counted = new Map<string, number>()
-    for (const page of await docsPages()) {
-        let count = 0
+// showed something else. A fence takes a bare side word. Revert-verified: one `ts #server/…`
+// fence names its page.
+test('no page captions a hand-written fence with an address', async () => {
+    const captioned: string[] = []
+    for (const page of await docsPages())
         for (const fence of fencesOf(page))
-            if (isAddress(fence.caption)) count += 1
-        if (count) counted.set(page.route, count)
-    }
-    expect(drifted(ADDRESS_CAPTIONED_FENCES, counted)).toEqual([])
+            if (isAddress(fence.caption))
+                captioned.push(`${page.route}: ${fence.caption}`)
+    expect(captioned).toEqual([])
 })
 
 // A caption WITHOUT `— excerpt` claims the whole file, so every other fence of that address,

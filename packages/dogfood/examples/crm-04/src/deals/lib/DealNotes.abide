@@ -1,0 +1,22 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const NOTES: Record<string, string[]> = {
+    d1: ['Wants a three-year term.'],
+}
+
+// No export: this file is the one caller.
+const getNotes = GET(({ id }: { id: string }) => NOTES[id] ?? [])
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+const notes = reactive(() => getNotes({ id: 'd1' }))
+</script>
+
+<ul class="fields stacked">
+{#for note of notes}
+    <li><span>note</span><strong>{note}</strong></li>
+{/for}
+</ul>

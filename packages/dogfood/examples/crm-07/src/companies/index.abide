@@ -1,0 +1,19 @@
+<script>
+import { reactive, url } from '@abide/abide'
+import listCompanies from './listCompanies.ts'
+
+const companies = reactive(() => listCompanies())
+</script>
+
+<ul class="fields">
+    {#for company of companies by company.id}
+        <li><span>{company.city}</span>
+            <a href={url('/companies/[id]', { id: company.id })}
+                style:view-transition-name="company-{company.id}"
+            >{company.name}</a></li>
+    {/for}
+</ul>
+
+<style>
+::view-transition-group(*) { animation-duration: 0.5s; }
+</style>

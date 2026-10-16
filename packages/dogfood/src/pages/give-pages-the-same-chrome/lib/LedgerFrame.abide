@@ -1,7 +1,0 @@
-<script>
-import { url } from '@abide/abide'
-</script>
-
-<iframe src={url('/pages/give-pages-the-same-chrome/frame/contacts')}
-    title="The ledger app"
-    class="h-44 w-full rounded-md border border-rule"></iframe>

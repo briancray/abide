@@ -1,0 +1,19 @@
+<script>
+import { cookies, reactive } from '@abide/abide'
+
+const DENSITIES = ['comfortable', 'compact']
+
+const density = reactive(() => cookies().get('density') ?? 'comfortable')
+</script>
+
+<div class="tabs">
+{#for one of DENSITIES}
+    <button aria-selected={density === one}
+        onclick={() => cookies().set('density', one)}>{one}</button>
+{/for}
+</div>
+
+<ul class={density === 'compact' ? 'fields gap-0' : 'fields gap-flow'}>
+    <li><span>Hopper &amp; Co</span><strong>Grace Hopper</strong></li>
+    <li><span>Langley</span><strong>Katherine Johnson</strong></li>
+</ul>

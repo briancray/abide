@@ -1,0 +1,13 @@
+<script>
+import { type Failed, notFound, props } from '@abide/abide'
+
+const { failure } = props<{ failure: Failed<string, unknown> }>()
+</script>
+
+{#if notFound.is(failure)}
+    <h2 class="text-heading font-semibold">No such company</h2>
+    <p>It may have been merged into another, or removed.</p>
+{:else}
+    <h2 class="text-heading font-semibold">Something went wrong</h2>
+    <p>{failure.message}</p>
+{/if}

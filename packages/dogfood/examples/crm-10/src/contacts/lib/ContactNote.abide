@@ -1,0 +1,27 @@
+<script>
+import { reactive } from '@abide/abide'
+import listContacts from '../listContacts.ts'
+
+// Owned, derived, loaded, and waiting for its first write.
+let draft = reactive('')
+const words = reactive(() => (draft ? draft.split(' ').length : 0))
+const contacts = reactive(() => listContacts())
+let saved = reactive<string>()
+</script>
+
+<ul class="fields">
+    <li><span>draft</span>
+        <strong>{draft.ready() ? draft || '—' : '…'}</strong></li>
+    <li><span>words</span><strong>{words.ready() ? words : '…'}</strong></li>
+    <li><span>contacts</span>
+        <strong>{contacts.ready() ? contacts.length : '…'}</strong></li>
+    <li><span>saved note</span>
+        <strong>{saved.ready() ? saved : '…'}</strong></li>
+</ul>
+
+<div class="row">
+    <label>Note on Grace Hopper
+        <input bind:value={draft}>
+    </label>
+    <button onclick={() => (saved = draft)}>Save</button>
+</div>

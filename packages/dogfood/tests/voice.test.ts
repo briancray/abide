@@ -15,8 +15,12 @@
 // corpus sits in one band — so it is a dial on taste rather than a detector. A second-person rule
 // would fire hardest on the tutorial, where addressing the reader is the form. Both were dropped.
 
-import { expect, test } from 'bun:test'
+import { beforeAll, expect, test } from 'bun:test'
 import { docsPages, renderedMarkdown } from './docsPages.ts'
+
+// EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay
+// for the whole load against the chapter apps' suites, inside its own five seconds.
+beforeAll(() => renderedMarkdown(), 60_000)
 
 // Every written page with the markdown a reader gets, a stub's words not being the voice yet.
 async function written(): Promise<

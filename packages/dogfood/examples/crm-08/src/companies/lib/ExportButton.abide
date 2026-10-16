@@ -1,0 +1,26 @@
+<script>
+import { isFailed, reactive, refresh } from '@abide/abide'
+import exportCompanies from '../exportCompanies.ts'
+import reportedErrors from '../reportedErrors.ts'
+
+let told = reactive('—')
+const reported = reactive(() => reportedErrors())
+
+async function runExport() {
+    try {
+        await exportCompanies()
+    } catch (failed) {
+        if (isFailed(failed)) told = `${failed.status} ${failed.message}`
+    }
+    refresh(reported)
+}
+</script>
+
+<div class="row">
+    <button onclick={runExport}>Export companies</button>
+</div>
+
+<ul class="fields stacked">
+    <li><span>the caller got</span><strong>{told}</strong></li>
+    <li><span>onError got</span><strong>{reported[0] ?? '—'}</strong></li>
+</ul>

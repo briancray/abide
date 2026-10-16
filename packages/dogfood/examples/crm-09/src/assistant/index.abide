@@ -1,0 +1,26 @@
+<script>
+import AssistantChat from './lib/AssistantChat.abide'
+import ClaudeApiRequest from './lib/ClaudeApiRequest.abide'
+import ClaudeCodeBridge from './lib/ClaudeCodeBridge.abide'
+import ModelToolCall from './lib/ModelToolCall.abide'
+import OpenApiOperation from './lib/OpenApiOperation.abide'
+import WithheldExport from './lib/WithheldExport.abide'
+</script>
+
+<head><title>Assistant — CRM</title></head>
+
+<main>
+    <h1>Assistant</h1>
+    <h2>The API, described</h2>
+    <OpenApiOperation />
+    <h2>A model calls a handler</h2>
+    <ModelToolCall />
+    <h2>A handler kept off the tool list</h2>
+    <WithheldExport />
+    <h2>The assistant, with the CRM's handlers as tools</h2>
+    <AssistantChat />
+    <h2>The request Claude is sent</h2>
+    <ClaudeApiRequest />
+    <h2>Your own Claude Code</h2>
+    <ClaudeCodeBridge />
+</main>

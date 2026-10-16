@@ -1,0 +1,24 @@
+<script>
+import { reactive } from '@abide/abide'
+import exportContacts from '../exportContacts.ts'
+import SignInAs from './SignInAs.abide'
+
+let status = reactive('')
+
+async function exportAll() {
+    try {
+        const contacts = await exportContacts()
+        status = `${contacts.length} contacts exported`
+    } catch (refusal) {
+        if (!exportContacts.isError(refusal, 'HttpError')) throw refusal
+        status = `${refusal.status} ${refusal.message}`
+    }
+}
+</script>
+
+<SignInAs />
+
+<div class="row">
+    <button onclick={exportAll}>Export contacts</button>
+    <span class="status">{status}</span>
+</div>

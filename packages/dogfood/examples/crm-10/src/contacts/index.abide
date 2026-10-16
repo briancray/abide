@@ -1,0 +1,16 @@
+<script>
+import ContactList from './lib/ContactList.abide'
+import ContactNote from './lib/ContactNote.abide'
+import PageTiming from './lib/PageTiming.abide'
+import StarButton from './lib/StarButton.abide'
+</script>
+
+<head><title>Contacts — CRM</title></head>
+
+<main>
+    <h1>Contacts</h1>
+    <ContactList />
+    <StarButton />
+    <ContactNote />
+    <PageTiming />
+</main>

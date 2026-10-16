@@ -4,7 +4,7 @@
 // second tab still reads `no`.
 import { expect, test } from '@playwright/test'
 
-const PAGE = 'app/know-who-is-calling'
+const PAGE = 'guide/decide-who-sees-what'
 
 function underMount(address: string): string {
     const base = test.info().project.use.baseURL ?? ''
@@ -19,22 +19,16 @@ test('a sign-in in one tab reaches the other tabs of the browser — 26.24', asy
     const second = await context.newPage()
     await first.goto(underMount(PAGE), { waitUntil: 'networkidle' })
     await second.goto(underMount(PAGE), { waitUntil: 'networkidle' })
-    // The card under "One seal, read everywhere": the page carries other sign-in cards beside it.
+    // The sign-in card: the page carries other cards that read the principal beside it.
     const card = (page: typeof first) =>
-        page
-            .locator('section', {
-                has: page.locator('#one-seal-read-everywhere'),
-            })
-            .locator('.ex-render')
-    const signedIn = (page: typeof first) =>
-        card(page)
-            .locator('ul.fields li', { hasText: 'signed in' })
-            .locator('strong')
-    await expect(signedIn(second)).toHaveText('no')
-    await card(first).getByRole('button', { name: 'Sign in' }).click()
-    await expect(signedIn(first)).toHaveText('yes')
-    await expect(signedIn(second)).toHaveText('yes')
-    await card(first).getByRole('button', { name: 'Sign out' }).click()
-    await expect(signedIn(second)).toHaveText('no')
+        page.locator('#crm-07-sign-in .ex-render')
+    // The card's one button reads which side of a sign-in the tab is on.
+    const button = (page: typeof first) => card(page).getByRole('button')
+    await expect(button(second)).toHaveText('Sign in')
+    await button(first).click()
+    await expect(button(first)).toHaveText('Sign out')
+    await expect(button(second)).toHaveText('Sign out')
+    await button(first).click()
+    await expect(button(second)).toHaveText('Sign in')
     await context.close()
 })

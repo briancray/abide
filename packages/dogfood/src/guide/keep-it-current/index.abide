@@ -1,0 +1,334 @@
+<script>
+import { url } from '@abide/abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import DealFeed from 'crm-04/src/pipeline/lib/DealFeed.abide'
+import dealFeedSource from 'crm-04/src/pipeline/lib/DealFeed.abide' with { type: 'text' }
+import listDealsSource from 'crm-04/src/pipeline/listDeals.ts' with { type: 'text' }
+import dealFeedTestSource from 'crm-04/src/pipeline/tests/DealFeed.test.ts' with { type: 'text' }
+import DealNote from 'crm-04/src/pipeline/lib/DealNote.abide'
+import dealNoteSource from 'crm-04/src/pipeline/lib/DealNote.abide' with { type: 'text' }
+import saveNoteSource from 'crm-04/src/pipeline/saveNote.ts' with { type: 'text' }
+import dealNoteTestSource from 'crm-04/src/pipeline/tests/DealNote.test.ts' with { type: 'text' }
+import DealPicker from 'crm-04/src/pipeline/lib/DealPicker.abide'
+import dealPickerSource from 'crm-04/src/pipeline/lib/DealPicker.abide' with { type: 'text' }
+import dealRowSource from 'crm-04/src/pipeline/lib/DealRow.abide' with { type: 'text' }
+import dealDetailSource from 'crm-04/src/pipeline/lib/DealDetail.abide' with { type: 'text' }
+import dealPickerTestSource from 'crm-04/src/pipeline/tests/DealPicker.test.ts' with { type: 'text' }
+import DealSearch from 'crm-04/src/pipeline/lib/DealSearch.abide'
+import dealSearchSource from 'crm-04/src/pipeline/lib/DealSearch.abide' with { type: 'text' }
+import searchDealsSource from 'crm-04/src/pipeline/searchDeals.ts' with { type: 'text' }
+import dealSearchTestSource from 'crm-04/src/pipeline/tests/DealSearch.test.ts' with { type: 'text' }
+import Forecast from 'crm-04/src/pipeline/lib/Forecast.abide'
+import forecastSource from 'crm-04/src/pipeline/lib/Forecast.abide' with { type: 'text' }
+import getForecastSource from 'crm-04/src/pipeline/getForecast.ts' with { type: 'text' }
+import forecastTestSource from 'crm-04/src/pipeline/tests/Forecast.test.ts' with { type: 'text' }
+import PipelineView from 'crm-04/src/pipeline/lib/PipelineView.abide'
+import pipelineViewSource from 'crm-04/src/pipeline/lib/PipelineView.abide' with { type: 'text' }
+import preferenceStoreSource from 'crm-04/src/pipeline/lib/preferenceStore.ts' with { type: 'text' }
+import getPreferenceSource from 'crm-04/src/pipeline/getPreference.ts' with { type: 'text' }
+import setPreferenceSource from 'crm-04/src/pipeline/setPreference.ts' with { type: 'text' }
+import pipelineViewTestSource from 'crm-04/src/pipeline/tests/PipelineView.test.ts' with { type: 'text' }
+import StageBoard from 'crm-04/src/pipeline/lib/StageBoard.abide'
+import stageBoardSource from 'crm-04/src/pipeline/lib/StageBoard.abide' with { type: 'text' }
+import stageTileSource from 'crm-04/src/pipeline/lib/StageTile.abide' with { type: 'text' }
+import winDealSource from 'crm-04/src/pipeline/winDeal.ts' with { type: 'text' }
+import stageBoardTestSource from 'crm-04/src/pipeline/tests/StageBoard.test.ts' with { type: 'text' }
+import StageTiles from 'crm-04/src/pipeline/lib/StageTiles.abide'
+import stageTilesSource from 'crm-04/src/pipeline/lib/StageTiles.abide' with { type: 'text' }
+import stageCountSource from 'crm-04/src/pipeline/lib/StageCount.abide' with { type: 'text' }
+import stageValueSource from 'crm-04/src/pipeline/lib/StageValue.abide' with { type: 'text' }
+import getStageSource from 'crm-04/src/pipeline/getStage.ts' with { type: 'text' }
+import stageTilesTestSource from 'crm-04/src/pipeline/tests/StageTiles.test.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>The pipeline lives at <code>src/pipeline</code>: deals in four stages, a forecast, a search,
+    and a few panels that all read the same deals. Each card below is one of those panels, with
+    the handler it calls and the test the app runs on it.</p>
+
+    <Section title="A call with the same arguments is one load">
+        <Example
+            id="crm-04-stage-shared"
+            app="crm-04"
+            title={'`getStage({ stage })` — one entry per set of arguments'}
+            summary="Two panels, each with its own stage picker. Put one on won, and then the other."
+            files={{
+                'src/pipeline/lib/StageTiles.abide': stageTilesSource,
+                'src/pipeline/lib/StageCount.abide': stageCountSource,
+                'src/pipeline/lib/StageValue.abide': stageValueSource,
+                'src/pipeline/getStage.ts': getStageSource,
+                'src/pipeline/tests/StageTiles.test.ts': stageTilesTestSource,
+            }}
+        >
+            <StageTiles />
+        </Example>
+
+        <p>The two panels never speak to each other, and nothing is lifted into a parent. When
+        both ask for the same stage they get the same entry, so the second panel paints at once,
+        with no request. On two stages they are two entries, and each
+        pays for its own.</p>
+
+        <p>A body with a parameter is a keyed value: one entry per set of arguments, held. That is
+        true of a handler like <code>getStage</code>, and of <code>{'reactive((args) => …)'}</code>
+        written in a page. The arguments are its <code>Args</code>, and the key is their JSON with
+        the properties sorted, so argument order never splits an entry.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>reactive</code> body, keyed</td><td><code>{'reactive(({ stage }) => …)'}</code> holds one entry per stage. Its body does not track what it reads; triggers reload it</td></tr>
+                <tr><td><code>k.busy</code>, <code>k.ready</code></td><td>whether any entry of a keyed value, or those a partial <code>Args</code> matches, is loading or has landed</td></tr>
+                <tr><td><code>rpc.busy</code>, <code>rpc.ready</code></td><td>the same two on a handler: <code>{'getStage.busy({ stage: \'won\' })'}</code></td></tr>
+                <tr><td><code>global</code></td><td><code>{'{ global: true }'}</code> shares one cache across every caller in the process, where the default is one per request on a server and one per tab in a browser</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`refresh` reloads now, and `invalidate` marks stale">
+        <Example
+            id="crm-04-stale"
+            app="crm-04"
+            title="`refresh()` and `invalidate()` — the two ways back to the server"
+            summary="The weighted forecast, with both buttons under it. Press Reload now, then Mark stale."
+            files={{
+                'src/pipeline/lib/Forecast.abide': forecastSource,
+                'src/pipeline/getForecast.ts': getForecastSource,
+                'src/pipeline/tests/Forecast.test.ts': forecastTestSource,
+            }}
+        >
+            <Forecast />
+        </Example>
+
+        <p><code>refresh()</code> loads now and keeps the forecast on screen while it does: the
+        value is <code>busy()</code> and still <code>ready()</code>, and it swaps when the new one
+        lands. <code>invalidate()</code> loads nothing. It marks what is held as wrong, and the
+        next read fetches.</p>
+
+        <p>Press Mark stale and then Reload now, and the forecast blanks between the two. The
+        reload has nothing trusted to serve, so it is a first load again. Reach for one or the
+        other, not both.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>s.refresh</code></td><td>reloads one value now, serving what is held until the new one lands</td></tr>
+                <tr><td><code>s.invalidate</code></td><td>marks one value stale; the next read loads</td></tr>
+                <tr><td><code>ttl</code></td><td><code>{'{ ttl: 60_000 }'}</code> lets a value expire a minute after it loaded. Expiry wakes nobody, and the next read loads</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="After a write, reload only the entries it changed">
+        <Example
+            id="crm-04-refresh-stages"
+            app="crm-04"
+            title={'`getStage.refresh({ stage })` — reload a slice of a keyed value'}
+            summary="A board of the four stages. Win a lead, and watch which stages load again."
+            files={{
+                'src/pipeline/lib/StageBoard.abide': stageBoardSource,
+                'src/pipeline/lib/StageTile.abide': stageTileSource,
+                'src/pipeline/winDeal.ts': winDealSource,
+                'src/pipeline/tests/StageBoard.test.ts': stageBoardTestSource,
+            }}
+        >
+            <StageBoard />
+        </Example>
+
+        <p>Winning a lead moves one deal out of <code>lead</code> and into <code>won</code>. The
+        board reloads those two entries and leaves <code>qualified</code> and
+        <code>proposal</code> alone, because the argument to <code>refresh</code> is a partial
+        <code>Args</code> that picks entries out of the keyed value.</p>
+
+        <p>The triggers also come as free functions, and those take a <code>Selection</code>: the
+        set of entries to act on.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>k.refresh</code>, <code>k.invalidate</code></td><td>the triggers on a keyed value, narrowed by a partial <code>Args</code>; no argument reaches every entry</td></tr>
+                <tr><td><code>rpc.refresh</code>, <code>rpc.invalidate</code></td><td>the same two on a handler, which is what the board calls</td></tr>
+                <tr><td><code>refresh</code>, <code>invalidate</code></td><td><code>refresh(getStage)</code> is <code>getStage.refresh()</code>; with no selection they reach every load in this scope</td></tr>
+                <tr><td><code>Selection</code></td><td>a value, a keyed value, a handler, or <code>{'{ tags: [...] }'}</code></td></tr>
+                <tr><td><code>tags</code></td><td><code>{'{ tags: ({ stage }) => [`stage:${stage}`] }'}</code> labels entries, so <code>{'refresh({ tags: [\'stage:won\'] })'}</code> reaches every value about that stage, whichever handler it came from</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A search box waits for the typing to stop">
+        <Example
+            id="crm-04-search"
+            app="crm-04"
+            title={'`{ debounce }` — one search once the typing stops'}
+            summary="A search over the deals. Type hopper quickly, and watch the results rather than the field."
+            files={{
+                'src/pipeline/lib/DealSearch.abide': dealSearchSource,
+                'src/pipeline/searchDeals.ts': searchDealsSource,
+                'src/pipeline/tests/DealSearch.test.ts': dealSearchTestSource,
+            }}
+        >
+            <DealSearch />
+        </Example>
+
+        <p>Every keystroke is a new <code>q</code>, and so a new key. <code>debounce: 300</code>
+        holds the search back until the keys stop for 300 ms, so six keystrokes are one request.
+        The results already held stay on screen meanwhile, and the test counts the searches to
+        prove it.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>debounce</code></td><td>changes once the changes stop for that many ms</td></tr>
+                <tr><td><code>throttle</code></td><td>changes at once, then at most once per window: a live deal count that updates every second, not every message</td></tr>
+                <tr><td><code>identity</code></td><td>what counts as the same value: a new value equal to the held one by it wakes nobody. The default is the reference</td></tr>
+                <tr><td><code>structural</code></td><td><code>{'{ identity: structural }'}</code> compares by content, so a forecast that reloads to the same record does not repaint</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="`patch` changes one row of a list in place">
+        <Example
+            id="crm-04-patch"
+            app="crm-04"
+            title="`deals.patch(mutate)` — change what is held, and wake its readers"
+            summary="The deal list, loaded once. Updates arrive one deal at a time; apply a few."
+            files={{
+                'src/pipeline/lib/DealFeed.abide': dealFeedSource,
+                'src/pipeline/listDeals.ts': listDealsSource,
+                'src/pipeline/tests/DealFeed.test.ts': dealFeedTestSource,
+            }}
+        >
+            <DealFeed />
+        </Example>
+
+        <p><code>patch</code> hands you the value already held, lets you change it, and wakes what
+        reads it. One update rewrites one amount: no list refetched, no row rebuilt. The test
+        counts one text write and no nodes made or moved.</p>
+
+        <p>The <code>by deal.id</code> on the loop keeps each row tied to its deal, so the row
+        the update names is the only one that changes.</p>
+
+        <p>Change the held value without <code>patch</code> and nothing on the page moves, because
+        no reader was told. The change shows up on the next patch, attached to the wrong
+        update.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>transform</code></td><td><code>{'{ transform: (rows) => new Map(rows.map((deal) => [deal.id, deal])) }'}</code> reshapes the list once, as it lands, so an update by id is a lookup rather than a scan. The function is a <code>Transformer</code></td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="Two components far apart share one value">
+        <Example
+            id="crm-04-share"
+            app="crm-04"
+            title="`reactive.share(key, build)` — one value for a subtree"
+            summary="A detail panel above a row of deals. Pick a deal, and the panel follows."
+            files={{
+                'src/pipeline/lib/DealPicker.abide': dealPickerSource,
+                'src/pipeline/lib/DealRow.abide': dealRowSource,
+                'src/pipeline/lib/DealDetail.abide': dealDetailSource,
+                'src/pipeline/tests/DealPicker.test.ts': dealPickerTestSource,
+            }}
+        >
+            <DealPicker />
+        </Example>
+
+        <p><code>DealPicker</code> creates <code>selectedDeal</code>. Every row and the detail
+        panel ask for the same key, find that one on the way up, and never run their own build.
+        No prop runs between them.</p>
+
+        <p>Use the value <code>reactive.share</code> returns, and no other name. A value lives in
+        the component that created it and below, so two pickers on one page each get their own.
+        Where a value is one thing for the whole app, export it from a module instead.</p>
+
+        <p><code>Shared</code> is an interface you widen with declaration merging to type each
+        key. It is optional: without it, the type comes from the build function.</p>
+    </Section>
+
+    <Section title="`watch` runs something outside the page when a value changes">
+        <Example
+            id="crm-04-autosave"
+            app="crm-04"
+            title="`watch(effect)` — save a note a beat after the typing stops"
+            summary="A note on a deal, saved to the server while you type. Type a sentence quickly, and watch the saved line."
+            files={{
+                'src/pipeline/lib/DealNote.abide': dealNoteSource,
+                'src/pipeline/saveNote.ts': saveNoteSource,
+                'src/pipeline/tests/DealNote.test.ts': dealNoteTestSource,
+            }}
+        >
+            <DealNote />
+        </Example>
+
+        <p><code>watch</code> runs its effect now, and again whenever a value it read changes.
+        The effect returns a <code>Disposer</code>, which runs before the next run and when the
+        component goes. Each keystroke clears the timer the one before it started, so a burst of
+        typing is one save.</p>
+
+        <p>The draft is read in the effect, not inside the timer: a read there happens after
+        tracking ends and subscribes to nothing. <code>saved.peek()</code> reads the saved note
+        without subscribing, so saving it does not wake the watch again.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
+            <tbody>
+                <tr><td><code>watch</code></td><td><code>watch(effect)</code> wakes on whatever the effect read; <code>watch(sources, effect)</code> wakes only on the values listed</td></tr>
+                <tr><td><code>s.watch</code></td><td><code>watch</code> over one value, handed to the effect</td></tr>
+                <tr><td><code>Effect</code></td><td>the function a watch runs, returning nothing or a <code>Disposer</code></td></tr>
+                <tr><td><code>Disposer</code></td><td>what tears the previous run down</td></tr>
+                <tr><td><code>s.peek</code></td><td>reads what is held without subscribing</td></tr>
+                <tr><td><code>flushSync</code></td><td>runs every effect a write woke before it returns, for a handler that measures or scrolls the page the write left</td></tr>
+            </tbody>
+        </table>
+
+        <p>Where a read subscribes depends on where it runs:</p>
+
+        <table>
+            <thead><tr><th>A read in</th><th>Subscribes</th></tr></thead>
+            <tbody>
+                <tr><td><code>watch</code> effect, bare</td><td>to everything it reads</td></tr>
+                <tr><td><code>watch</code> effect, over sources</td><td>to the sources alone</td></tr>
+                <tr><td><code>Transformer</code>, <code>Disposer</code>, middleware, lifecycle hooks</td><td>to nothing: none of them is rebuilt</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A `store` keeps a preference between visits">
+        <Example
+            id="crm-04-store"
+            app="crm-04"
+            title={'`{ store }` — where a value lives between visits'}
+            summary="The pipeline as a board or a list. Pick list, then reload the page."
+            files={{
+                'src/pipeline/lib/PipelineView.abide': pipelineViewSource,
+                'src/pipeline/lib/preferenceStore.ts': preferenceStoreSource,
+                'src/pipeline/getPreference.ts': getPreferenceSource,
+                'src/pipeline/setPreference.ts': setPreferenceSource,
+                'src/pipeline/tests/PipelineView.test.ts': pipelineViewTestSource,
+            }}
+        >
+            <PipelineView />
+        </Example>
+
+        <p>A <code>Store</code> is a <code>get</code> and a <code>set</code>. The value reads the
+        store when it is built and falls back to <code>'board'</code> on a miss, and every change
+        is written back. The reads and writes in the markup do not change.</p>
+
+        <p>This store goes through two handlers, so the server and the browser read the same
+        preference and the first paint is already right. A store over
+        <code>localStorage</code> works too, but only in a browser, so the server paints the
+        fallback first. After a write, <code>set</code> invalidates the read it made, so the
+        next read asks the server rather than this tab's copy.</p>
+    </Section>
+
+    <Section title="Next">
+        <ul>
+            <li><a href={url('/guide/make-it-live')}>Make it live</a> — every open tab sees a
+            change as it happens</li>
+        </ul>
+    </Section>
+</Doc>

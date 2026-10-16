@@ -1,0 +1,30 @@
+<script>
+import { reactive, type RouteLiteral, url } from '@abide/abide'
+import exportContacts from '../exportContacts.ts'
+
+let listed = reactive('—')
+let answers = reactive('—')
+
+async function check() {
+    const reply = await fetch(url('/__abide/mcp' as RouteLiteral), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    })
+    const { tools } = (await reply.json()).result
+    const found = tools.some((tool: { name: string }) =>
+        tool.name.endsWith('assistant_exportContacts'),
+    )
+    listed = found ? 'yes' : 'no'
+    answers = String((await exportContacts.raw(undefined)).status)
+}
+</script>
+
+<div class="row">
+    <button onclick={check}>Ask the tool list, then the address</button>
+</div>
+
+<ul class="tiles">
+    <li><span>a tool on mcp</span><strong>{listed}</strong></li>
+    <li><span>its address answers</span><strong>{answers}</strong></li>
+</ul>

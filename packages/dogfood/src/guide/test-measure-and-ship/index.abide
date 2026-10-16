@@ -1,0 +1,425 @@
+<script>
+import { url } from '@abide/abide'
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
+import bunfigSource from 'crm-10/bunfig.toml' with { type: 'text' }
+import launcherSource from 'crm-10/src/launcher.abide' with { type: 'text' }
+import getSummarySource from 'crm-10/src/reports/getSummary.ts' with { type: 'text' }
+import reportsPageSource from 'crm-10/src/reports/index.abide' with { type: 'text' }
+import ClosedTiles from 'crm-10/src/reports/lib/ClosedTiles.abide'
+import closedTilesSource from 'crm-10/src/reports/lib/ClosedTiles.abide' with { type: 'text' }
+import closedTotalsSource from 'crm-10/src/reports/lib/closedTotals.ts' with { type: 'text' }
+import DealsExport from 'crm-10/src/reports/lib/DealsExport.abide'
+import dealsExportSource from 'crm-10/src/reports/lib/DealsExport.abide' with { type: 'text' }
+import dealsOfSource from 'crm-10/src/reports/lib/dealsOf.ts' with { type: 'text' }
+import Forecast from 'crm-10/src/reports/lib/Forecast.abide'
+import forecastSource from 'crm-10/src/reports/lib/Forecast.abide' with { type: 'text' }
+import forecastLogicSource from 'crm-10/src/reports/lib/forecast.ts' with { type: 'text' }
+import moneySource from 'crm-10/src/reports/lib/money.ts' with { type: 'text' }
+import PipelineSummary from 'crm-10/src/reports/lib/PipelineSummary.abide'
+import pipelineSummarySource from 'crm-10/src/reports/lib/PipelineSummary.abide' with { type: 'text' }
+import rankDealsSource from 'crm-10/src/reports/lib/rankDeals.ts' with { type: 'text' }
+import StageTiles from 'crm-10/src/reports/lib/StageTiles.abide'
+import stageTilesSource from 'crm-10/src/reports/lib/StageTiles.abide' with { type: 'text' }
+import summarizeStageSource from 'crm-10/src/reports/lib/summarizeStage.ts' with { type: 'text' }
+import TopDeals from 'crm-10/src/reports/lib/TopDeals.abide'
+import topDealsSource from 'crm-10/src/reports/lib/TopDeals.abide' with { type: 'text' }
+import WonDeals from 'crm-10/src/reports/lib/WonDeals.abide'
+import wonDealsSource from 'crm-10/src/reports/lib/WonDeals.abide' with { type: 'text' }
+import closedTilesTestSource from 'crm-10/src/reports/tests/ClosedTiles.test.ts' with { type: 'text' }
+import dealsExportTestSource from 'crm-10/src/reports/tests/DealsExport.test.ts' with { type: 'text' }
+import forecastBenchSource from 'crm-10/src/reports/tests/Forecast.bench.ts' with { type: 'text' }
+import forecastTestSource from 'crm-10/src/reports/tests/Forecast.test.ts' with { type: 'text' }
+import pipelineSummaryTestSource from 'crm-10/src/reports/tests/PipelineSummary.test.ts' with { type: 'text' }
+import stageTilesTestSource from 'crm-10/src/reports/tests/StageTiles.test.ts' with { type: 'text' }
+import topDealsSpecSource from 'crm-10/src/reports/tests/TopDeals.e2e.ts' with { type: 'text' }
+import wonDealsTestSource from 'crm-10/src/reports/tests/WonDeals.test.ts' with { type: 'text' }
+</script>
+
+<Doc>
+    <p>Each card is a file of the reports page, beside the test or the bench that proves it. The
+    commands that ship the CRM close the chapter.</p>
+
+    <Section title="A test holds the app with `createApp`">
+        <Example
+            id="crm-10-app-fetch"
+            app="crm-10"
+            title="`createApp()` — the app a test holds, with no port"
+            summary="The reports page opens on a summary of the pipeline. Its test asks the app for the same handler the tiles read, as a request, and reads the answer the wire would carry."
+            files={{
+                'src/reports/lib/PipelineSummary.abide': pipelineSummarySource,
+                'src/reports/getSummary.ts': getSummarySource,
+                'src/reports/tests/PipelineSummary.test.ts': pipelineSummaryTestSource,
+            }}
+        >
+            <PipelineSummary />
+        </Example>
+
+        <p><code>createApp</code> builds the app from the directory it runs in, the way
+        <code>abide start</code> does, and binds no port. Run <code>bun test</code> from the app's
+        own directory. <code>app.fetch</code> takes a <code>Request</code> through everything a
+        served one goes through: the middleware, the argument checks, the headers and the status a
+        refusal carries.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>App</code></td><td>what <code>createApp</code> hands back, to a test, a script or a host</td></tr>
+                <tr><td><code>App.fetch</code></td><td>one request, through the whole app, in this process</td></tr>
+                <tr><td><code>App.run</code></td><td>runs a function inside one request's scope, so two reads of one key load once</td></tr>
+                <tr><td><code>App.listen</code></td><td>binds the socket, for a test that needs a real <code>WebSocket</code></td></tr>
+                <tr><td><code>App.stop</code></td><td>drains what is in flight, then runs <code>onStop</code></td></tr>
+                <tr><td><code>App[Symbol.asyncDispose]</code></td><td><code>stop</code>, under the name <code>await using</code> calls</td></tr>
+            </tbody>
+        </table>
+
+        <p>Hold the app with <code>await using</code> and it stops when the test ends, a failed one
+        included. An app nobody stops leaves open whatever <code>onStart</code> opened, and the
+        suite hangs with no report at all.</p>
+
+        <p>A file under <code>**/tests/**</code> has no address, so a test sits beside the feature
+        it tests and is never served.</p>
+    </Section>
+
+    <Section title="A test mounts a component and counts what a click did">
+        <Example
+            id="crm-10-range-switch"
+            app="crm-10"
+            title="`mount(component)` and `measure(body)` — the DOM calls one click made"
+            summary="The closed-deals tiles total the last 7 or 30 days. Its test switches the range and asserts that two numbers changed and nothing was built."
+            files={{
+                'src/reports/lib/ClosedTiles.abide': closedTilesSource,
+                'src/reports/lib/closedTotals.ts': closedTotalsSource,
+                'src/reports/tests/ClosedTiles.test.ts': closedTilesTestSource,
+            }}
+        >
+            <ClosedTiles />
+        </Example>
+
+        <p><code>mount</code> renders the component the way the server does and hydrates it with
+        the module the browser loads, so the test clicks the listener a reader clicks. It hands
+        back a <code>Mounted</code>, and <code>using</code> stops it when the test ends.</p>
+
+        <p><code>measure</code> counts every DOM call its body makes. A version that rebuilt the
+        tiles shows the same numbers on screen and fails on <code>nodesCreated</code>. The one from
+        <code>@abide/harness/abide</code> hands back an <code>AbideWork</code>: the DOM counts, plus
+        <code>wakes</code>, <code>bindingRuns</code> and <code>descents</code> from abide itself.</p>
+
+        <table>
+            <thead><tr><th>Row of a <code>Work</code></th><th>Counts</th></tr></thead>
+            <tbody>
+                <tr><td><code>nodesCreated</code></td><td><code>create*</code>, <code>cloneNode</code> and <code>importNode</code></td></tr>
+                <tr><td><code>elementsMoved</code></td><td>elements inserted or moved, with their subtrees</td></tr>
+                <tr><td><code>markersMoved</code> · <code>textMoved</code></td><td>comment and text nodes inserted or moved</td></tr>
+                <tr><td><code>dataWrites</code> · <code>redundantDataWrites</code></td><td>text written, and text written over the same text</td></tr>
+                <tr><td><code>attributesSet</code></td><td>attributes set, removed or toggled</td></tr>
+                <tr><td><code>classWrites</code> · <code>styleWrites</code></td><td><code>classList</code> changes, and inline style writes</td></tr>
+                <tr><td><code>listenersBound</code></td><td><code>addEventListener</code> calls</td></tr>
+                <tr><td><code>published</code></td><td>what code on the page counted itself</td></tr>
+            </tbody>
+        </table>
+
+        <p>A DOM member the harness does not count throws while a case is open, rather than
+        reading as zero. <code>patchSet()</code> lists every member it does count.</p>
+
+        <p>The DOM under <code>bun test</code> comes from one line in <code>bunfig.toml</code>,
+        which the scaffold writes:</p>
+
+        <Snippet source={bunfigSource} path="bunfig.toml" />
+
+        <table>
+            <thead><tr><th>Preload</th><th>What it gives a test</th></tr></thead>
+            <tbody>
+                <tr><td><code>preload = ["@abide/harness/abide/preload"]</code></td><td>a counted DOM, <code>.abide</code> imports as components, and <code>mount</code></td></tr>
+                <tr><td><code>preload = ["@abide/abide/test"]</code></td><td><code>.abide</code> imports as components, for a test that only renders</td></tr>
+                <tr><td><code>preload = ["@abide/harness/preload"]</code></td><td>a counted DOM alone, for code that is not abide</td></tr>
+            </tbody>
+        </table>
+
+        <p>The emulated DOM is JavaScript, so a count from it holds in a browser and a millisecond
+        does not. Count under <code>bun test</code>, and time in a bench. The DOM counts alone come
+        from <code>@abide/harness/measure</code> › <code>measure</code>, which hands back a plain
+        <code>Work</code>.</p>
+    </Section>
+
+    <Section title="Publish a count the DOM cannot see">
+        <Example
+            id="crm-10-publish-count"
+            app="crm-10"
+            title="`publishedBy(work, source, fields)` — a count your own code keeps"
+            summary="Three tiles show the deals in one stage. The stage summary counts its own passes, and the test asserts one pass per switch."
+            files={{
+                'src/reports/lib/StageTiles.abide': stageTilesSource,
+                'src/reports/lib/summarizeStage.ts': summarizeStageSource,
+                'src/reports/tests/StageTiles.test.ts': stageTilesTestSource,
+            }}
+        >
+            <StageTiles />
+        </Example>
+
+        <p>A recomputation writes nothing to the DOM, so no DOM count can see it. The module counts
+        its own passes on a record under <code>globalThis.__HARNESS_WORK__</code>, the global
+        <code>PUBLISHED_WORK_KEY</code> names. <code>measure</code> zeroes every published record
+        when a case opens, and copies it into <code>work.published</code>, a
+        <code>PublishedWork</code>, when it closes.</p>
+
+        <p><code>publishedBy</code> reads one source back by the fields you expect. A source that
+        published nothing reads as <code>null</code>, and a field the record does not carry
+        throws, so a misspelled counter never reads as one that stayed at zero.</p>
+
+        <p>The three tiles read one derived value, so the summary runs once however many tiles
+        show it. Give each tile its own call and the test reports three.</p>
+    </Section>
+
+    <Section title="A gate fails with the fix taken out">
+        <Example
+            id="crm-10-gate"
+            app="crm-10"
+            title={'`gate(name, { revert, worth }, body)` — a test that runs its own revert'}
+            summary="Every amount on the reports goes through one formatter. Winning a deal builds none, and the gate puts the formatter-per-amount version back to prove the test can tell."
+            files={{
+                'src/reports/lib/WonDeals.abide': wonDealsSource,
+                'src/reports/lib/money.ts': moneySource,
+                'src/reports/tests/WonDeals.test.ts': wonDealsTestSource,
+            }}
+        >
+            <WonDeals />
+        </Example>
+
+        <p>A test about work passes with the fix in or out, because the screen reads the same
+        either way. <code>gate</code> carries the version the fix replaced, as a
+        <code>GateSpec</code>: <code>revert</code> installs it and hands back the undo, and
+        <code>worth</code> is the number that version reports.</p>
+
+        <Code code={`HARNESS_VERIFY_GATES=1 bun test`} />
+
+        <p>With that set, every gate runs a second time with the revert installed, and that run
+        passes only if the test fails reporting every number in <code>worth</code>. A test that
+        cannot tell the two versions apart fails here.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>spawned</code></td><td>runs a command to its end, awaited, and kills it at a deadline naming the command</td></tr>
+                <tr><td><code>inAFreshProcess</code></td><td>runs source in a child <code>bun</code> with no DOM preloaded, for a check the DOM would skew</td></tr>
+            </tbody>
+        </table>
+    </Section>
+
+    <Section title="A bench prices code at two sizes">
+        <Example
+            id="crm-10-forecast-bench"
+            app="crm-10"
+            title="`batch(spec)` — one op, timed at two sizes"
+            summary="The forecast weights every deal by the odds of its stage. Advance a deal and the forecast moves; the bench times that among 100 deals and among 1,000."
+            files={{
+                'src/reports/lib/Forecast.abide': forecastSource,
+                'src/reports/lib/forecast.ts': forecastLogicSource,
+                'src/reports/tests/Forecast.test.ts': forecastTestSource,
+                'src/reports/tests/Forecast.bench.ts': forecastBenchSource,
+            }}
+        >
+            <Forecast />
+        </Example>
+
+        <p>A millisecond describes the machine it was taken on. A ratio between two sizes of the
+        same structure says how the cost grows, and that holds on any machine. Near 1, the op costs
+        the same however many deals there are. Near 10, it grows with the deals: the forecast reads
+        every one of them.</p>
+
+        <p><code>batch</code> times every arm in one run, interleaved, and sizes each sample to a
+        hundred times what the clock can resolve. It runs the first arm against itself too, and
+        the spread between those two runs is the floor. <code>ratio</code> reports a difference
+        inside the floor as a tag rather than a number, and <code>claimOf</code> is the one line a
+        report prints.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>BatchSpec</code></td><td>the arms, the case's name, and whether the op touches an emulated DOM</td></tr>
+                <tr><td><code>Batched</code></td><td>what <code>batch</code> hands back: a <code>Sample</code> per arm, and the floor</td></tr>
+                <tr><td><code>Sample</code></td><td>one arm's time per op, its batch size, and whether it was <code>underOneFrame</code></td></tr>
+                <tr><td><code>ratio</code> · <code>RatioSpec</code> · <code>Ratio</code></td><td>one sample over another, judged against the floor</td></tr>
+                <tr><td><code>claimOf</code></td><td>a <code>Ratio</code> as one printed line</td></tr>
+                <tr><td><code>emulatedDom</code></td><td>whether this process's DOM is an emulator</td></tr>
+                <tr><td><code>time</code></td><td><code>batch</code> with <code>emulated</code> filled in, refusing to run while the counters are armed</td></tr>
+                <tr><td><code>THRESHOLDS</code></td><td>a frame and an interaction, the two lines a cost is judged against</td></tr>
+            </tbody>
+        </table>
+
+        <p><code>batch</code> throws on a duration whose op touched an emulated DOM, and on a sample
+        taken in a parallel test worker. That is why the bench builds no component: it times the
+        derived value the component reads. Run a bench under <code>bun run</code>, never inside
+        <code>bun test</code>.</p>
+    </Section>
+
+    <Section title="Find which layer a click spends its time in">
+        <Example
+            id="crm-10-layer-share"
+            app="crm-10"
+            title="`traceOp(page, op, body)` and `shares(trace, spec)` — one layer's part of a click"
+            summary="Ranking five thousand deals takes a sort and a render. Its spec clicks the other ranking in Chromium and asks what part of the click the sort was."
+            files={{
+                'src/reports/lib/TopDeals.abide': topDealsSource,
+                'src/reports/lib/rankDeals.ts': rankDealsSource,
+                'src/reports/tests/TopDeals.e2e.ts': topDealsSpecSource,
+            }}
+        >
+            <TopDeals />
+        </Example>
+
+        <p>A faster sort saves at most the part of the click the sort was. Find that part before
+        changing the sort. The code marks its layer with <code>performance.measure</code>, and the
+        spec marks the whole click the same way, from the click to the frame that shows it.</p>
+
+        <p><code>traceOp</code> records what Chromium did over that window, as a
+        <code>Trace</code>: the user timing, and the style recalculations, layouts, paints and
+        forced layouts. <code>shares</code> divides the layer by the op, as a
+        <code>SharesSpec</code> names them, and hands back a <code>Shares</code>.
+        <code>ceilingCpu</code> is the part of the processor's time the layer took.
+        <code>ceilingObserved</code> is zero whenever the whole click fits in a frame, because a
+        person sees the result at the same frame either way.</p>
+
+        <p><code>measuresNamed</code> lists every measure of one name in a trace, and
+        <code>durationOf</code> sums them. The trace is read over the DevTools protocol, so the
+        spec is a Playwright test that runs in Chromium against the served app.</p>
+    </Section>
+
+    <Section title="A render's bytes grow by the same amount per deal">
+        <Example
+            id="crm-10-export-bytes"
+            app="crm-10"
+            title="`bytes(of)` — what a render sends, compared across sizes"
+            summary="The export renders every deal as a table row on the server. Its test renders it at 20, 40 and 80 deals and asserts every deal adds the same bytes."
+            files={{
+                'src/reports/lib/DealsExport.abide': dealsExportSource,
+                'src/reports/lib/dealsOf.ts': dealsOfSource,
+                'src/reports/tests/DealsExport.test.ts': dealsExportTestSource,
+            }}
+        >
+            <DealsExport />
+        </Example>
+
+        <p><code>bytes</code> measures a <code>Response</code>, a <code>Blob</code>, a string or a
+        buffer by its length. One size says little, because the table around the rows is in it
+        too. Three sizes say how the cost grows. An export that repeated earlier rows in every new
+        one passes at 20 deals and fails here.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>ticks</code></td><td>the microtask turns a call took to settle; a value already held settles in none</td></tr>
+                <tr><td><code>retained</code></td><td>the live objects a body left behind, by type</td></tr>
+                <tr><td><code>closures</code></td><td>the functions and scopes a body left behind</td></tr>
+                <tr><td><code>allocated</code></td><td>what a body allocates per run, as a mean over a batch</td></tr>
+            </tbody>
+        </table>
+
+        <p>The last three read the engine's heap, and throw where a DOM is preloaded, because the
+        DOM's own objects would be counted with yours. Run them through
+        <code>inAFreshProcess</code>.</p>
+    </Section>
+
+    <Section title="Test and bench results on a page">
+        <Code code={`bun scripts/testRows.ts --list
+bun scripts/testRows.ts --scope all --filter reports`} />
+
+        <p><code>testRows</code> runs each test file of a <code>TestSuite</code> in a process of its
+        own, and prints one <code>TestRow</code> per line as each file finishes, with a
+        <code>TestCase</code> per test. The cards in this chapter read their results from those
+        rows.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>rowsCommand</code></td><td>the same command line for your own runner: <code>--list</code>, <code>--scope</code>, <code>--filter</code></td></tr>
+                <tr><td><code>RowItem</code> · <code>RowState</code></td><td>one entry a runner offers, and where it is in its run</td></tr>
+                <tr><td><code>BenchRow</code></td><td>one bench's figures and the claim between them</td></tr>
+                <tr><td><code>RunnerFailure</code> · <code>isRunnerFailure</code></td><td>the last line of a runner that died, and how to tell it from a row</td></tr>
+                <tr><td><code>inScope</code> · <code>matchesFilter</code></td><td>the selection, so a page filters with the function the runner selects with</td></tr>
+            </tbody>
+        </table>
+
+        <p>A file whose runner wrote no report is <code>broken</code>, which is different from a
+        red result: a suite that hangs reports nothing.</p>
+    </Section>
+
+    <Section title="Check, build and start the CRM">
+        <Code code={`abide check && abide build && bun test
+abide start --port 8080`} />
+
+        <p><code>abide check [dir…]</code> type-checks the <code>.abide</code> files as well as
+        the TypeScript, and reports on the line you wrote. <code>abide lsp</code> is the same check
+        in your editor. Run it first in CI, because it is the cheapest failure to report.</p>
+
+        <p><code>abide build</code> writes content-hashed chunks and a manifest naming them.
+        <code>abide start [--port &lt;n&gt;]</code> serves what was built, and builds first where
+        nothing was. Configuration is checked as it starts, so a misconfigured deployment fails to
+        come up.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>**/public/**</code></td><td>a file served at its directory's path, with the bytes as written</td></tr>
+                <tr><td><code>src/public/favicon.ico</code></td><td>the tab icon, at <code>/favicon.ico</code></td></tr>
+                <tr><td><code>src/public/robots.txt</code></td><td>what crawlers read, at <code>/robots.txt</code></td></tr>
+                <tr><td><code>cache-control: public, max-age=0, must-revalidate</code></td><td>what a public file answers, so a browser asks about it every time</td></tr>
+                <tr><td><code>etag</code></td><td>a public file's hash, so asking again costs headers and a 304, not the file</td></tr>
+            </tbody>
+        </table>
+
+        <p>A chunk can be cached for a year because changing it changes its address. A public file
+        keeps its address across deploys, so it revalidates instead.</p>
+    </Section>
+
+    <Section title="Compile the CRM to a single binary">
+        <Code code={`abide compile
+abide compile --platforms linux-x64,darwin-arm64`} />
+
+        <p><code>abide compile [--target] [--out] [--platforms]</code> writes one executable with
+        the built client, the server and the runtime inside it. <code>--target</code> picks one
+        platform, <code>--platforms</code> builds several in one run, and <code>--out</code> names
+        the file. The executable is <code>abide</code> for this one app:
+        <code>./crm-10 start</code> serves it, and <code>config()</code> still reads the
+        environment.</p>
+    </Section>
+
+    <Section title="Ship the CRM as a desktop app">
+        <Code code={`abide bundle
+abide bundle --out ~/Applications/CRM.app`} />
+
+        <p><code>abide bundle [--out]</code> wraps the compiled executable in a macOS
+        <code>.app</code> that opens the CRM in a window of its own. Its icon is
+        <code>src/public/icon.png</code> · <code>src/public/icon.icns</code>. The first launch
+        offers Start, which runs the app here, and Connect…, which opens one running at a URL.</p>
+
+        <Snippet source={launcherSource} path="src/launcher.abide" />
+
+        <p><code>src/launcher.abide</code> sits beside the root layout, and what its
+        <code>onLauncher</code> answers sets the window and the forms. The answer is a
+        <code>LauncherOptions</code>: the window's size and floor, and <code>start</code> or
+        <code>connect</code> set to <code>false</code> to drop a form. Markup in the same file
+        replaces the launch page, and is rendered with a <code>Launch</code>, whose
+        <code>fields</code> hold one <code>ConfigField</code> per input the start form asks
+        for.</p>
+
+        <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['const printReport', 'onMenu(', 'watch(']} />
+
+        <p>The reports page adds a Reports menu while it is showing. <code>onMenu</code> is read
+        the way markup is, so the menus follow the page's state. Each entry is a
+        <code>MenuItem</code>: <code>'separator'</code>, an item with an <code>href</code>, one
+        with a <code>MenuRole</code> the platform performs, or a <code>MenuEntry</code> made by
+        <code>menuItem</code>. <code>MenuEntry.on</code> files what runs when it is picked, and
+        hands back what stops it, which is what <code>watch</code> takes. In a browser nothing
+        picks an item, and the page runs unchanged.</p>
+    </Section>
+
+    <Section title="Next">
+        <p>That is the CRM: contacts, deals, a live feed, pages, access, operations, machines, and
+        now reports, tested and shipped. Start again from
+        <a href={url('/guide/start-an-app')}>Start an app</a> with an app of your own.</p>
+    </Section>
+</Doc>
