@@ -1,5 +1,23 @@
 # @abide/abide
 
+## 0.106.0
+
+### Minor Changes
+
+- 9aa03a5: socket mux bounds, request ceilings, stop timeout, scroll restore, numeric and composed bind:value, and keyed rows kept across patches (16.78, 18.28-18.32, 30.29-30.31, 32.58-32.62, 32.66, 32.67, 42.17) ([`301bf47`](https://github.com/briancray/abide/commit/301bf47adf5059271b439fe3c129963861dd1c72))
+- 9aa03a5: block tags and template context, cited clauses on diagnostics, lsp references and completions, derived answer schemas, and a scaffold with a handler and its test (32.63-32.65, 38.112-38.118, 19.21-19.24) ([`4f86359`](https://github.com/briancray/abide/commit/4f86359c7f995e2ec8c7b71d1bce5bae4cccc465))
+- 9aa03a5: publish @abide/harness, with abide's bench and e2e moved to abide and the arms to the docs app (43.1, 43.21, 43.23, 38.119) ([`8521bd7`](https://github.com/briancray/abide/commit/8521bd7b364d998a1a59f764b51b34cf273f7a84))
+
+### Patch Changes
+
+- 9aa03a5: a render's scope is held while the values it seeded are in flight, so a joined stream closes (41.13) ([`09d7aa0`](https://github.com/briancray/abide/commit/09d7aa040d20205dddd5c8de19a425523f5124a4))
+- 9aa03a5: an error page's document is marked, so the browser hydrates no page over it and leaving it is a document load (35.18) ([`28daeed`](https://github.com/briancray/abide/commit/28daeed1468c8f466c722d177a5abbf5afaf333a))
+- 9aa03a5: url() takes a union of route literals with optional params ([`3cd7683`](https://github.com/briancray/abide/commit/3cd76831f9dc0867b9a2f8576803ca9ddcac845e))
+- 9aa03a5: a mutation called twice in one turn is two writes (16.7) ([`60c5915`](https://github.com/briancray/abide/commit/60c5915be24e843eee0671fa0db444aeb8a69525))
+- d42dfad: @abide/abide/test preloads no build from a workspace's root ([`c76a54e`](https://github.com/briancray/abide/commit/c76a54e3ddaf03d42c5534dee97c124856d063fb))
+- 9aa03a5: a request with no args is held to a derived args schema, so a missing required member is refused (19.9) ([`e8e65f9`](https://github.com/briancray/abide/commit/e8e65f9ac7de561deb649b19c792ca31dd816008))
+- 9aa03a5: a checker releases the snapshots it replaced, and abide lsp closes an app's checker once none of its pages is open ([`fc19c96`](https://github.com/briancray/abide/commit/fc19c965fb2ef5abdc873279a1091806f2745ac9))
+
 ## 0.105.1
 
 ### Patch Changes
