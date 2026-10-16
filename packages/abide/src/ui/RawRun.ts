@@ -94,6 +94,6 @@ function clearRun(run: RawRun): void {
 
 function detached(): Mismatch {
     return new Mismatch(
-        "abide: this text run is not in a document, so the client and the server disagree about this region's shape (41.10).",
+        "abide: this text run is not in a document, so the client and the server disagree about this region's shape. RULEBOOK 41.10.",
     )
 }

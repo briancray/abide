@@ -6,9 +6,9 @@ import { isEmptyRegion, type Region, removeUntil } from './regions.ts'
 import {
     dropRow,
     makeRow,
+    paintedRow,
     type Row,
-    type RowBuilders,
-    rowOf,
+    type RowSetUp,
     rowsIn,
 } from './rows.ts'
 
@@ -58,13 +58,13 @@ export class List {
      * names; every other list hands back the one record it was built with, so a row allocates
      * nothing more.
      */
-    setUp: (item: unknown, at: number) => RowBuilders
+    setUp: RowSetUp
 
     constructor(
         region: Region,
         anchored: boolean,
         key: (item: unknown, at: number) => unknown,
-        setUp: (item: unknown, at: number) => RowBuilders,
+        setUp: RowSetUp,
     ) {
         this.region = region
         this.rows = []
@@ -110,13 +110,13 @@ function stopPump(list: List): void {
  * read there and only there, so the rows are hydrated against the same items the watch then
  * compares against. Read twice — once to hydrate and again on the watch's first run — a subject
  * that builds fresh items (`rows.map(…)`) matched no row by identity, and every row the server sent
- * was dropped and remade on load.
+ * was written again on load, every binding in it rerun (32.67).
  */
 export function listAt(
     region: Region,
     anchored: boolean,
     key: (item: unknown, at: number) => unknown,
-    setUp: (item: unknown, at: number) => RowBuilders,
+    setUp: RowSetUp,
 ): List {
     return new List(region, anchored, key, setUp)
 }
@@ -155,7 +155,7 @@ function hydrate(list: List, items: unknown[]): boolean {
     if (!agreed) {
         warnMismatch(
             new Mismatch(
-                `abide: the document holds ${found.length} rows where this {#for} computes ${items.length}, so the client and the server disagree about this region's shape (41.10).`,
+                `abide: the document holds ${found.length} rows where this {#for} computes ${items.length}, so the client and the server disagree about this region's shape. RULEBOOK 41.10.`,
             ),
         )
         if (found.length > items.length)
@@ -165,8 +165,8 @@ function hydrate(list: List, items: unknown[]): boolean {
     for (let at = 0; at < wired; at += 1) {
         const item = items[at]
         list.rows.push(
-            rowOf(
-                list.setUp(item, at),
+            paintedRow(
+                list.setUp,
                 list.key(item, at),
                 item,
                 found[at] as ChildNode,

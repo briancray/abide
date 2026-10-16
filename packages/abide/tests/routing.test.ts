@@ -35,12 +35,15 @@ const session = await TypeSession.open(`${ROOT}tsconfig.json`)
 // 30.15 — THE SERVER EVERY NAVIGATION ASKS FIRST: a go-ahead unless a test says otherwise, and
 // the addresses asked, in order.
 const asked: string[] = []
+// 30.31 — the signal each of those requests was sent with, in the same order.
+const signals: (AbortSignal | undefined)[] = []
 const goAhead = (): Response => new Response(null, { status: 204 })
 let answering: (url: URL) => Response = goAhead
 const unstubbed = globalThis.fetch
-globalThis.fetch = (async (input: URL | string) => {
+globalThis.fetch = (async (input: URL | string, init?: RequestInit) => {
     const url = new URL(String(input))
     asked.push(url.pathname)
+    signals.push(init?.signal ?? undefined)
     const answer = answering(url)
     // A fetched answer carries the address it came from, and one built by hand carries ''.
     return answer.url === ''
@@ -50,6 +53,7 @@ globalThis.fetch = (async (input: URL | string) => {
 afterEach(() => {
     answering = goAhead
     asked.length = 0
+    signals.length = 0
 })
 afterAll(async () => {
     await session.close()
@@ -1287,6 +1291,7 @@ crumbs.set(['Home'])
 // says the animation is over. `undefined` removes it, which is a browser with no support.
 function viewTransitions(): {
     calls: number
+    types: (string[] | undefined)[]
     release: () => void
     finish: () => void
     finished: boolean
@@ -1296,6 +1301,7 @@ function viewTransitions(): {
     const ends: (() => void)[] = []
     const stub = {
         calls: 0,
+        types: [] as (string[] | undefined)[],
         finished: false,
         release: () => {
             for (const run of pending.splice(0)) run()
@@ -1311,7 +1317,20 @@ function viewTransitions(): {
     }
     Object.defineProperty(document, 'startViewTransition', {
         configurable: true,
-        value: (update: () => void) => {
+        // 39.18, 39.19 — the callback alone, or the options form carrying the types.
+        value: (
+            given: (() => void) | { update: () => void; types: string[] },
+        ) => {
+            // A browser with no types reads the options form as a callback that is not one.
+            const typed = (
+                globalThis as { ViewTransition?: { prototype: object } }
+            ).ViewTransition?.prototype
+            if (typeof given !== 'function' && !(typed && 'types' in typed))
+                throw new TypeError('startViewTransition: not a function')
+            const update = typeof given === 'function' ? given : given.update
+            stub.types.push(
+                typeof given === 'function' ? undefined : given.types,
+            )
             stub.calls += 1
             const updateCallbackDone = new Promise<void>((resolve) =>
                 pending.push(() => {
@@ -1888,4 +1907,177 @@ watch(() => {
     tick.set(1)
     flushSync()
     expect(counted.innerRuns).toBe(1)
+})
+
+// 32.66 — A PAGE LEAVING UNDER AN EXIT IS NOT THE ARRIVING PAGE'S MARKUP. The router stops the
+// leaving page first, so its exit holds `#home` (32.38) through the emptying of the region the
+// arriving page then mounts against. THE REVERT, run: drop the anchor move from `emptyRegion`; the
+// held `#home` makes the region look painted, the invoice adopts it rather than building, and
+// `#invoice` never arrives.
+test('a page leaving under an exit is not adopted by the page arriving — 32.66', async () => {
+    history.replaceState(null, '', '/')
+    const exits: (() => void)[] = []
+    ;(globalThis as { __EXIT__?: () => Promise<void> }).__EXIT__ = () =>
+        new Promise<void>((done) => exits.push(done))
+    const r = router(
+        await pages(
+            undefined,
+            `<script>
+const exit = () => () => (globalThis as { __EXIT__?: () => Promise<void> }).__EXIT__?.()
+</script>
+
+<main id="home" bind:element={exit}><h1>Home</h1></main>`,
+        ),
+    )
+    await r.hydrate()
+    flushSync()
+    await navigate('/invoices/42')
+    flushSync()
+    expect(exits.length).toBe(1)
+    expect(document.querySelector('#home')).not.toBeNull()
+    expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
+    expect(document.querySelectorAll('#invoice li').length).toBe(2)
+    // OUTSIDE THE ANCHORS, so the next emptiness test and the next hydration walk never see it.
+    expect(r.region.open.nextSibling).toBe(document.querySelector('#invoice'))
+    for (const done of exits) done()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(document.querySelector('#home')).toBeNull()
+    expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
+})
+
+// What the browser does for Back or Forward: the bar moved to the entry, its state with it, and
+// `popstate` dispatched after.
+async function step(state: unknown, address: string): Promise<void> {
+    history.replaceState(state, '', address)
+    dispatchEvent(new PopStateEvent('popstate'))
+    await until(
+        () => location.pathname === new URL(address, location.href).pathname,
+    )
+    await Bun.sleep(0)
+    flushSync()
+}
+
+// 30.29 — BACK AND FORWARD TO A REMOUNTED PAGE LAND WHERE THE READER LEFT IT. The browser's own
+// restoration runs before the page it restores exists, so it is off while routes are listened for
+// and the router puts each entry's scroll back once its page is mounted. The states the steps
+// carry hold no scroll, so what is restored is what the router remembered as each entry was left.
+// THE REVERT, run: drop the `step.scroll` restore from `commit`; back stays at 120 where 300 is due.
+test('back and forward restore the scroll each entry was left at — 30.29', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    const stop = listenForRoutes(r)
+    try {
+        expect(history.scrollRestoration).toBe('manual')
+        const home = history.state as { index: number }
+        scrollTo(0, 300)
+        await navigate('/invoices/42')
+        flushSync()
+        expect(scrollY).toBe(0)
+        // THE ENTRY LEFT BY A PUSH carries its scroll, for a reload to find.
+        expect((history.state as { index: number }).index).toBe(home.index + 1)
+        scrollTo(0, 120)
+
+        await step({ index: home.index, scroll: null }, '/')
+        expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+        expect(scrollY).toBe(300)
+
+        await step({ index: home.index + 1, scroll: null }, '/invoices/42')
+        expect(document.querySelector('#invoice h1')?.textContent).toBe(
+            'Invoice',
+        )
+        expect(scrollY).toBe(120)
+    } finally {
+        stop()
+        scrollTo(0, 0)
+    }
+    expect(history.scrollRestoration).toBe('auto')
+})
+
+// 30.30 THROUGH A RELOAD: the scroll the entry was written with on the way out is where the
+// hydrated page lands. THE REVERT, run: drop the restore from `hydrate`; the page stays at 0.
+test('a reloaded entry hydrates at the scroll it was left at — 30.30', async () => {
+    history.replaceState({ index: 4, scroll: [0, 250] }, '', '/')
+    const r = router(await pages())
+    expect(r.index).toBe(4)
+    await r.hydrate()
+    expect(scrollY).toBe(250)
+    scrollTo(0, 0)
+})
+
+// 30.31 — A SUPERSEDED NAVIGATION'S REQUEST IS ABORTED, not left to finish for nobody. THE REVERT,
+// run: drop the `abort()` from `supersede`; the first request's signal reads not aborted.
+test('a superseded navigation aborts its middleware request — 30.31', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    const superseded = r.go('/invoices/42')
+    const winner = r.go('/?tab=2')
+    await Promise.all([superseded, winner])
+    flushSync()
+    expect(asked).toEqual(['/invoices/42'])
+    expect(signals[0]?.aborted).toBe(true)
+    expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+})
+
+// 39.18 — A NAVIGATION'S TRANSITION IS TYPED WITH ITS DIRECTION, so the stylesheet decides what a
+// back step looks like. 39.19 — a browser with no transition types is handed the callback alone.
+// THE REVERTS, run: hand `startViewTransition` the callback whatever the browser takes, and the
+// types read [undefined, …] where push, back and forward are due; hand it the options form
+// whatever the browser takes, and every transition test throws the TypeError such a browser does.
+test('a view transition carries the direction it moved in — 39.18, 39.19', async () => {
+    history.replaceState(null, '', '/')
+    const transition = viewTransitions()
+    const typed = (globalThis as { ViewTransition?: unknown }).ViewTransition
+    ;(globalThis as { ViewTransition?: unknown }).ViewTransition = class {
+        types = new Set<string>()
+    }
+    Object.defineProperty(
+        (globalThis as { ViewTransition: { prototype: object } }).ViewTransition
+            .prototype,
+        'types',
+        { value: new Set<string>() },
+    )
+    const r = router(await pages(), true)
+    await r.hydrate()
+    const stop = listenForRoutes(r)
+    // Each navigation's transition, released once the browser has been handed it.
+    const released = async (calls: number): Promise<void> => {
+        await until(() => transition.calls === calls)
+        transition.release()
+        await Bun.sleep(0)
+        flushSync()
+    }
+    try {
+        const home = (history.state as { index: number }).index
+        const going = navigate('/invoices/42')
+        await released(1)
+        await going
+        history.replaceState({ index: home, scroll: null }, '', '/')
+        dispatchEvent(new PopStateEvent('popstate'))
+        await released(2)
+        await until(() => document.querySelector('#home') !== null)
+        history.replaceState(
+            { index: home + 1, scroll: null },
+            '',
+            '/invoices/42',
+        )
+        dispatchEvent(new PopStateEvent('popstate'))
+        await released(3)
+        await until(() => document.querySelector('#invoice') !== null)
+        expect(transition.types).toEqual([['push'], ['back'], ['forward']])
+
+        // 39.19 — NO TYPES: the callback form, and the navigation still writes.
+        ;(globalThis as { ViewTransition?: unknown }).ViewTransition = typed
+        const untyped = navigate('/')
+        await released(4)
+        await untyped
+        expect(transition.types[3]).toBeUndefined()
+        expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+    } finally {
+        stop()
+        transition.remove()
+        ;(globalThis as { ViewTransition?: unknown }).ViewTransition = typed
+    }
 })

@@ -33,6 +33,7 @@ export async function runCompiled(
     }
     const host: Host = {
         name: process.execPath.slice(process.execPath.lastIndexOf('/') + 1),
+        version: origin.package.version ?? '0.0.0',
         app: () => app,
         source: undefined,
     }

@@ -4,7 +4,8 @@
 // says what the tool answered.
 //
 // It records what it was run with to `$FAKE_RECORD` — its arguments, the prompt, its pid, and the
-// config — and a prompt holding `hang` prints one line and then waits to be killed.
+// config — and a prompt holding `hang` prints one line and then waits to be killed. A prompt holding
+// `record` adds the MCP server's whole reply to the tool call to the record, and ends there.
 
 const args = process.argv.slice(2)
 const configPath = args[args.indexOf('--mcp-config') + 1] as string
@@ -53,7 +54,7 @@ print({
     },
 })
 const server = config.mcpServers.app
-const answered = (await (
+const replied = await (
     await fetch(server.url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -64,7 +65,16 @@ const answered = (await (
             params: { name: 'post_invoices_whoami', arguments: {} },
         }),
     })
-).json()) as {
+).json()
+if (prompt.includes('record')) {
+    await Bun.write(
+        process.env.FAKE_RECORD as string,
+        JSON.stringify({ args, prompt, pid: process.pid, reply: replied }),
+    )
+    print({ type: 'result', subtype: 'success', stop_reason: 'end_turn' })
+    process.exit(0)
+}
+const answered = replied as {
     result: { content: { type: string; text: string }[]; isError: boolean }
 }
 const said = answered.result.content[0]?.text as string

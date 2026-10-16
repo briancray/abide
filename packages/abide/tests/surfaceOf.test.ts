@@ -31,6 +31,7 @@ function row(path: string, rest: Partial<Mount> = {}): Mount {
         copy: undefined,
         defaults: undefined,
         args: undefined,
+        result: undefined,
         ...rest,
     }
 }
@@ -96,6 +97,7 @@ test('a mounted handler is projected off the handler, a row off the build — 20
         name: 'get_invoices_hidden',
         description: 'At run time.',
         schema: { type: 'object' },
+        result: undefined,
     })
     expect(surfaceOf(TABLE[0] as Mount, 'openapi')?.description).toBe(
         'One invoice.',

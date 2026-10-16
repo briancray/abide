@@ -2,7 +2,7 @@
 // holds across the real process boundary: a browser's call, a cookie, a response streamed off
 // `abide start`. The app is a temporary module, so `removeTemporaryModules` takes it away.
 
-import { spawned } from 'harness/gate'
+import { spawned } from '@abide/harness/gate'
 import { type Compilation, servedTable } from '#server/abideModules.ts'
 import { COMPILATION } from '#server/CLIENT_BUILD.ts'
 import { serveBuild } from '#server/serveBuild.ts'

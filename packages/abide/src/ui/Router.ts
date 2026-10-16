@@ -51,6 +51,29 @@ type Compiled = Route & { segments: Segment[] }
 
 type Found = { route: Compiled; params: Params }
 
+/** A window's scroll, `[scrollX, scrollY]`. */
+type Scroll = readonly [number, number]
+
+/**
+ * What the router writes to `history.state`: the entry's place in this document's history, and the
+ * scroll it was left at where the router could write it before leaving (30.29, 30.30).
+ */
+type Entry = { index: number; scroll: Scroll | null }
+
+/**
+ * How a navigation arrives at its entry: the view transition type it carries (39.18), and the scroll
+ * it restores on a history step (30.29).
+ */
+type Step = {
+    direction: 'push' | 'back' | 'forward'
+    scroll: Scroll | undefined
+}
+
+const PUSHED: Step = { direction: 'push', scroll: undefined }
+
+/** What a superseded navigation's ticket is aborted with. */
+const SUPERSEDED = 'superseded'
+
 /**
  * The client router: matches addresses, and mounts and replaces the page chain.
  *
@@ -83,19 +106,31 @@ export class Router {
      */
     standing: Compiled | undefined
     /**
-     * The ticket of the live navigation; a superseded one stops when it sees a newer ticket.
+     * The ticket of the live navigation; a superseded one stops when it sees its own aborted.
      *
      * Both ways in await the destination's module before they touch anything, and a dynamic import
      * resolves in whatever order the chunks arrive — so two clicks, or a click landing while
      * `hydrate` is still loading, each mounted a page: the second one to finish overwrote the
      * standing scope and the first page's bindings were left awake, writing into nodes the other
      * page had replaced. Nothing about the screen showed it — the newest markup was on top — which
-     * is why it is a counter rather than a flag.
+     * is why each navigation takes a ticket of its own rather than sharing a flag.
      *
      * TAKEN BEFORE THE AWAIT AND CHECKED AFTER IT, so a superseded navigation stops before it
      * stops a scope, empties the region or pushes a history entry for a page nobody will see.
+     *
+     * 30.31 — AN `AbortController`, so superseding a navigation also aborts the `middleware` request
+     * it is still waiting on, rather than leaving it to finish for nobody.
      */
-    navigation: number
+    navigation: AbortController
+    /** The place in this document's history of the entry the address bar stands at (`Entry`). */
+    index: number
+    /**
+     * 30.29 — the scroll each entry was left at, by its `index`.
+     *
+     * HELD HERE AS WELL AS IN `history.state`, because a back or forward step has already moved the
+     * bar when `popstate` arrives, so the entry it left can no longer be written to.
+     */
+    scrolls: (Scroll | undefined)[]
     /**
      * The routes whose chunks `prefetch` has already asked for.
      *
@@ -117,7 +152,14 @@ export class Router {
         this.chain = []
         this.mounted = undefined
         this.standing = undefined
-        this.navigation = 0
+        this.navigation = new AbortController()
+        const state = history.state as Partial<Entry> | null
+        if (typeof state?.index === 'number') this.index = state.index
+        else {
+            this.index = 0
+            history.replaceState(entryAt(this.index, null), '')
+        }
+        this.scrolls = []
         this.prefetched = new Set()
         this.transitions = transitions
     }
@@ -162,7 +204,11 @@ export class Router {
      * fills itself from the template it carries. One module, both ways in — the `fillEmpty`
      * the emitter already writes is the whole of the difference.
      */
-    async go(url: URL | string, options: NavigateOptions = {}): Promise<void> {
+    async go(
+        url: URL | string,
+        options: NavigateOptions = {},
+        step: Step = PUSHED,
+    ): Promise<void> {
         const target =
             typeof url === 'string' ? new URL(url, location.href) : url
         // A CROSS-ORIGIN ADDRESS IS NOT A ROUTE. Handing it to `pushState` throws, and treating
@@ -182,11 +228,10 @@ export class Router {
         // the same address. The page reads its address through `route`, so it follows rather than
         // being rebuilt, and there is no path for `middleware` to decide anything new about.
         if (found.route === this.standing && this.mounted === target.pathname) {
-            this.follow(target, options, found)
+            this.follow(target, options, found, step)
             return
         }
-        this.navigation += 1
-        const ticket = this.navigation
+        const ticket = this.supersede()
         route.navigating.set(true)
         // EVERY WAY OUT CLEARS WHAT THE WAY IN SET: a load that fails, a setup that throws and a
         // navigation that completes all leave `navigating` false and every layer closed. A
@@ -195,13 +240,13 @@ export class Router {
             // 30.15 — THE SERVER IS ASKED ALONGSIDE THE LOAD, so its `middleware` decides the
             // navigation for the price of the one round trip the chunks already cost.
             const [answer, loaded] = await Promise.all([
-                ask(target),
+                ask(target, ticket.signal),
                 loadOrMiss(found.route),
             ])
             // SUPERSEDED, so this navigation is over. Nothing has been touched yet, which is the
             // whole reason the ticket is checked here rather than after the mount — and
             // `navigating` stays the newer navigation's to clear.
-            if (this.navigation !== ticket) return
+            if (ticket.signal.aborted) return
             // 30.18 — A REFUSAL, A RESPONSE MIDDLEWARE ANSWERED ITSELF, or no answer at all: the
             // document asks again and paints whatever the server says. A fetch that failed —
             // offline, or a redirect to another origin that CORS will not let it follow — goes to
@@ -226,18 +271,18 @@ export class Router {
             // 30.23 — THE ROUTE STANDING, AT ANOTHER PATH: `middleware` has said yes to the path, and
             // the page it matched is the one already mounted, so it follows.
             if (landing.route === this.standing) {
-                this.follow(landed, options, landing)
+                this.follow(landed, options, landing, step)
                 return
             }
             const arriving =
                 landing === found ? loaded : await loadOrMiss(landing.route)
-            if (this.navigation !== ticket) return
+            if (ticket.signal.aborted) return
             if (arriving === undefined) {
                 location.href = landed.href
                 return
             }
-            await this.write(ticket, () =>
-                this.commit(landed, landing, arriving, options),
+            await this.write(ticket, step.direction, () =>
+                this.commit(landed, landing, arriving, options, step),
             )
         } finally {
             if (this.navigation === ticket) route.navigating.set(false)
@@ -250,24 +295,97 @@ export class Router {
      * A STEP WITHIN THE STANDING PAGE: the address written and `route` moved, and the page, its
      * scope and every call it made left where they are. It supersedes a navigation in flight the
      * way a click on another link would. Back and forward arrive here with the bar already moved
-     * and `keepScroll`, which leaves the scroll to the browser's own restoration.
+     * and `keepScroll`, and with the scroll the entry was left at (30.29).
      *
      * 30.25 — THE SCROLL STAYS where no page was replaced, except to a fragment the address names:
      * a reader choosing a season is not sent back to the top of the series.
      */
-    follow(target: URL, options: NavigateOptions, found: Found): void {
-        this.navigation += 1
+    follow(
+        target: URL,
+        options: NavigateOptions,
+        found: Found,
+        step: Step,
+    ): void {
+        this.supersede()
         route.navigating.set(false)
         // THE SAME ADDRESS REPLACES rather than pushing, which is what the browser does for a
         // link to the fragment it is already at.
-        writeAddress(
+        this.writeAddress(
             target,
             options.replace === true || target.href === location.href,
+            [scrollX, scrollY],
         )
         arrive(target.href, found.route.pattern, found.params)
         this.mounted = target.pathname
-        if (options.keepScroll !== true && target.hash !== '')
+        if (step.scroll !== undefined) scrollTo(step.scroll[0], step.scroll[1])
+        else if (options.keepScroll !== true && target.hash !== '')
             scrollToFragment(target.hash)
+    }
+
+    /**
+     * Records a back or forward step the browser has already taken; answers how to arrive.
+     *
+     * 30.29 — THE ENTRY LEFT keeps the scroll it stood at, and the one arrived at hands back its own.
+     * 39.18 — the direction is read off the two entries' `index`. An entry with none is one the
+     * browser pushed itself — a link to a fragment — so it is stamped as the next entry, and
+     * arrived at as a push.
+     */
+    stepped(): Step {
+        this.scrolls[this.index] = [scrollX, scrollY]
+        const state = history.state as Partial<Entry> | null
+        if (typeof state?.index !== 'number') {
+            this.index += 1
+            this.scrolls.length = this.index
+            history.replaceState(entryAt(this.index, null), '')
+            return PUSHED
+        }
+        const direction = state.index < this.index ? 'back' : 'forward'
+        this.index = state.index
+        return {
+            direction,
+            scroll: this.scrolls[state.index] ?? state.scroll ?? undefined,
+        }
+    }
+
+    /**
+     * Writes the scroll the standing entry is at into its `history.state`, where a reload finds it
+     * (30.30) — the one way out of an entry the router cannot write to after it leaves.
+     */
+    remember(scroll: Scroll = [scrollX, scrollY]): void {
+        this.scrolls[this.index] = scroll
+        history.replaceState(entryAt(this.index, scroll), '')
+    }
+
+    /**
+     * Aborts the live navigation and answers the ticket of the one replacing it.
+     *
+     * ABORTED WITH A REASON, because `abort()` with none builds a `DOMException`, stack trace and
+     * all — 1.1 ms of every page load in Chromium, where hydrate supersedes a ticket nothing holds.
+     */
+    private supersede(): AbortController {
+        this.navigation.abort(SUPERSEDED)
+        this.navigation = new AbortController()
+        return this.navigation
+    }
+
+    /**
+     * Writes `target` to the address bar, pushing a new entry or replacing the standing one.
+     *
+     * 30.29 — A PUSH LEAVES AN ENTRY, so the scroll it stood at is written to it first, and every
+     * entry after it is gone from the history the push forked. `left` is that scroll, read by the
+     * caller before it wrote anything: read after a region was emptied, it forces a layout and
+     * reads the offset that layout clamped.
+     */
+    private writeAddress(target: URL, replace: boolean, left: Scroll): void {
+        const full = `${target.pathname}${target.search}${target.hash}`
+        if (replace) {
+            history.replaceState(entryAt(this.index, null), '', full)
+            return
+        }
+        this.remember(left)
+        this.index += 1
+        this.scrolls.length = this.index
+        history.pushState(entryAt(this.index, null), '', full)
     }
 
     /**
@@ -280,16 +398,27 @@ export class Router {
      * THE TICKET IS CHECKED AGAIN INSIDE THE CALLBACK, because the browser runs it a frame later,
      * after capturing the outgoing page — and a transition another navigation skipped still runs
      * its callback, which would mount the page the reader clicked away from.
+     *
+     * 39.18 — TYPED WITH THE DIRECTION, so the stylesheet decides what a back step looks like
+     * (`:active-view-transition-type(back)`). 39.19 — a browser whose transitions take no types is
+     * handed the callback alone: the options form is a `TypeError` there.
      */
-    private async write(ticket: number, commit: () => void): Promise<void> {
+    private async write(
+        ticket: AbortController,
+        direction: Step['direction'],
+        commit: () => void,
+    ): Promise<void> {
         if (
             !this.transitions ||
             typeof document.startViewTransition !== 'function'
         )
             return commit()
-        await document.startViewTransition(() => {
-            if (this.navigation === ticket) commit()
-        }).updateCallbackDone
+        const update = (): void => {
+            if (!ticket.signal.aborted) commit()
+        }
+        await document.startViewTransition(
+            takesTypes() ? { update, types: [direction] } : update,
+        ).updateCallbackDone
     }
 
     /**
@@ -303,6 +432,7 @@ export class Router {
         found: Found,
         arriving: PageModule[],
         options: NavigateOptions,
+        step: Step,
     ): void {
         // OPENED WHERE THE NAVIGATION COMMITS, which is after the last early exit and after the
         // `await` above. The awaited load is a NETWORK wait, and a layer that contained it would
@@ -322,6 +452,7 @@ export class Router {
                 shared,
                 this.levels.length,
             )
+            const left: Scroll = [scrollX, scrollY]
             this.stopFrom(shared)
             // The region the arriving part goes into: the page region where nothing is kept, and
             // the deepest kept layout's own slot where something is.
@@ -336,7 +467,7 @@ export class Router {
             // build is this removal, and it carries the 41.10 refusal for a region no longer in a
             // document that a hand-written walk swallows.
             if (into !== undefined) fillRegion(into)
-            writeAddress(target, options.replace === true)
+            this.writeAddress(target, options.replace === true, left)
             // 39.6 — each arriving level applies its own head as it mounts into its emptied region,
             // outermost first; a kept layout is not mounted again, so neither is its head.
             this.mountChain(target, found, arriving, shared, into)
@@ -346,8 +477,11 @@ export class Router {
                 Level.headsOf(this.levels, 0, shared),
                 Level.headsOf(this.levels, shared, this.levels.length),
             ])
-            // The top of the page, or — as the browser does on a load — the fragment's element.
-            if (options.keepScroll !== true) scrollToFragment(target.hash)
+            // 30.29 — where the entry was left, on a history step; else the top of the page, or —
+            // as the browser does on a load — the fragment's element.
+            if (step.scroll !== undefined)
+                scrollTo(step.scroll[0], step.scroll[1])
+            else if (options.keepScroll !== true) scrollToFragment(target.hash)
         } finally {
             endLayer(LAYER_NAVIGATE)
         }
@@ -488,8 +622,7 @@ export class Router {
         // so a click during the page module's own load is a `go` that supersedes it — and
         // hydrating on top of the markup that navigation had already put in the region wired the
         // arriving page's bindings to the departing page's nodes.
-        this.navigation += 1
-        const ticket = this.navigation
+        const ticket = this.supersede()
         // NO HEAD IS APPLIED FOR A PAINTED PAGE: its region is not empty, so its mount hydrates
         // rather than fills, and the head is the one the server wrote. Re-applying would replace
         // each contribution with an identical copy — a `<link rel=stylesheet>` refetched and a
@@ -499,10 +632,13 @@ export class Router {
         const landing = paintedCallsLanded()
         const standing = await load(found.route)
         if (landing !== undefined) await landing
-        if (this.navigation !== ticket) return
+        if (ticket.signal.aborted) return
         // THE HYDRATE SHARE. Same name as the navigation's mount because it is the same work on the
         // same chain — what differs is the op it is a fraction of.
         this.mountChain(new URL(location.href), found, standing, 0, this.region)
+        // 30.30 — A RELOAD lands on an entry that carries the scroll `remember` wrote on the way out.
+        const scroll = (history.state as Partial<Entry> | null)?.scroll
+        if (scroll != null) scrollTo(scroll[0], scroll[1])
     }
 
     /**
@@ -559,11 +695,15 @@ function loadOrMiss(route: Compiled): Promise<PageModule[] | undefined> {
  * is followed here, carrying the header, so the answer at the end of it is the server's go-ahead
  * for the address it landed on.
  */
-async function ask(target: URL): Promise<Response | undefined> {
+async function ask(
+    target: URL,
+    signal: AbortSignal,
+): Promise<Response | undefined> {
     try {
         return await fetch(target, {
             headers: { [NAVIGATION_HEADER]: '1' },
             cache: 'no-store',
+            signal,
         })
     } catch {
         return undefined
@@ -585,10 +725,20 @@ async function ask(target: URL): Promise<Response | undefined> {
  */
 const ROUTE_PROPS = { params: (): Params => route.params() }
 
-function writeAddress(target: URL, replace: boolean): void {
-    const full = `${target.pathname}${target.search}${target.hash}`
-    if (replace) history.replaceState(null, '', full)
-    else history.pushState(null, '', full)
+function entryAt(index: number, scroll: Scroll | null): Entry {
+    return { index, scroll }
+}
+
+/**
+ * Whether this browser's view transitions take `types` (39.19).
+ *
+ * Asked of `ViewTransition`'s prototype, where a browser that knows types puts the member.
+ */
+function takesTypes(): boolean {
+    return (
+        typeof ViewTransition === 'function' &&
+        'types' in ViewTransition.prototype
+    )
 }
 
 /**

@@ -1,6 +1,7 @@
 import {
     type Disposer,
     type Effect,
+    rerunWatch,
     watchTracked,
 } from '#shared/reactive/watch.ts'
 
@@ -54,6 +55,13 @@ export class Scope {
      * 32.16 — read once at construction.
      */
     boundary: Boundary | undefined = BOUNDARY.current
+    /**
+     * 32.67 — where in `stops` a row's item watches start (`itemWatch`), and how many there are:
+     * opened one after another by a row's mount, so two numbers find them and the row allocates
+     * nothing to be found by.
+     */
+    itemsAt = 0
+    items = 0
 
     watch(effect: Effect): void {
         const boundary = this.boundary
@@ -64,6 +72,26 @@ export class Scope {
         // UNDER A BOUNDARY, a throw is the boundary's and the scopes a rerun builds are too, and a
         // failed binding is retried by running it again.
         this.stops.push(watchTracked(() => boundary.guard(effect, effect)))
+    }
+
+    /**
+     * A watch over a row's item, which reads it off the row's record until the row has a cell
+     * (`itemOf`) — `rerunItems` reruns it when the row takes its first new item.
+     *
+     * A row's mount opens these one after another, so they stand together in `stops`.
+     */
+    itemWatch(effect: Effect): void {
+        if (this.items === 0) this.itemsAt = this.stops.length
+        this.items += 1
+        this.watch(effect)
+    }
+
+    /** Reruns every `itemWatch`, each reading — and subscribing to — the row's cell this time. */
+    rerunItems(): void {
+        const stops = this.stops
+        const end = this.itemsAt + this.items
+        for (let index = this.itemsAt; index < end; index += 1)
+            rerunWatch(stops[index] as Disposer)
     }
 
     /**
@@ -99,6 +127,7 @@ export class Scope {
         for (let index = from; index < stops.length; index += 1)
             (stops[index] as Disposer)()
         stops.length = from
+        if (from <= this.itemsAt) this.items = 0
         const children = this.children
         if (children === undefined) return
         for (const child of children) child.stop()

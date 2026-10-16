@@ -109,6 +109,55 @@ const exit = () => () => (globalThis as { __EXIT__?: () => Promise<void> }).__EX
     expect(document.querySelector('#row3')).not.toBeNull()
 })
 
+// 32.66 THROUGH A COMPONENT SWAPPED IN ITS REGION (32.35): the leaving one's exit holds `#first`
+// while the arriving one asks whether the region is empty. THE REVERT, run: drop the anchor move
+// from `emptyRegion`; the held `#first` reads as painted markup and `#second` never builds.
+test('a component swapped in while the last one is leaving builds its own markup — 32.66', async () => {
+    const exits: (() => void)[] = []
+    ;(globalThis as { __EXIT__?: () => Promise<void> }).__EXIT__ = () =>
+        new Promise<void>((done) => exits.push(done))
+    await mountPage(
+        `<script>
+import { reactive } from '@abide/abide'
+import First from './First.abide'
+import Second from './Second.abide'
+
+let count = reactive(0)
+let swapped = reactive(false)
+let Shown = reactive(() => (swapped ? Second : First))
+</script>
+
+<button id="swap" onclick={() => { swapped = true }}>swap</button>
+<button id="bump" onclick={() => { count = count + 1 }}>bump</button>
+<div id="host"><Shown count={count}/></div>`,
+        {
+            First: `<script>
+const exit = () => () => (globalThis as { __EXIT__?: () => Promise<void> }).__EXIT__?.()
+</script>
+
+<p id="first" bind:element={exit}>first</p>`,
+            Second: `<script>
+import { props } from '@abide/abide'
+
+const { count } = props<{ count: number }>()
+</script>
+
+<p id="second">{count}</p>`,
+        },
+    )
+
+    click('#swap')
+    expect(document.querySelector('#first')).not.toBeNull()
+    expect(document.querySelector('#second')?.textContent).toBe('0')
+    click('#bump')
+    expect(document.querySelector('#second')?.textContent).toBe('1')
+    for (const done of exits) done()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(document.querySelector('#first')).toBeNull()
+    expect(document.querySelector('#second')?.textContent).toBe('1')
+})
+
 // 32.38 THROUGH AN EMPTIED LIST, which clears its region in one write where nothing is leaving.
 // THE REVERT, run: drop `anyLeaving()` from `emptyRegion`'s guard; every row is gone at the
 // clear, where each is due to stay until its exit settles.

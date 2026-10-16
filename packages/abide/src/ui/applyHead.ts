@@ -45,11 +45,11 @@ export function applyHead(
         if (key === undefined) {
             const standing = replaced[next]
             next += 1
-            if (standing === undefined) head.appendChild(node)
+            if (standing === undefined) head.appendChild(runnable(node))
             // The same node left standing, as a key's is: a `<style>` put back as itself is not
-            // re-parsed into the cascade.
+            // re-parsed into the cascade, and a `<script>` is not run twice.
             else if (!standing.isEqualNode(node))
-                head.replaceChild(node, standing)
+                head.replaceChild(runnable(node), standing)
             continue
         }
         const element = node as Element
@@ -76,6 +76,28 @@ export function applyHead(
     if (deeper !== undefined)
         for (const key of deeper.keys()) withdrawn.delete(key)
     restoreKeys(head, withdrawn, outer())
+}
+
+/**
+ * `node`, or — for a `<script>` — the same script made by the document rather than the parser.
+ *
+ * 39.17 — A PARSED SCRIPT NEVER RUNS. The fragment parser marks every `<script>` it makes "already
+ * started", and `parseMarkup` is that parser, so a script it made and then moved into the head is
+ * inert where the server's, made by the document's own parser, ran. One made by `createElement`
+ * starts clear and runs on insertion. Keyless always (39.11 keys no `<script>`), so this is reached
+ * only where a keyless contribution is actually written.
+ */
+function runnable(node: Node): Node {
+    if (node.nodeName !== 'SCRIPT') return node
+    const parsed = node as HTMLScriptElement
+    const script = document.createElement('script')
+    const attributes = parsed.attributes
+    for (let index = 0; index < attributes.length; index += 1) {
+        const attribute = attributes[index] as Attr
+        script.setAttribute(attribute.name, attribute.value)
+    }
+    script.text = parsed.text
+    return script
 }
 
 /**

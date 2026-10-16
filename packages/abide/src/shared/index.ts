@@ -15,7 +15,12 @@ export type { Attributes } from './Attributes.ts'
 // 32.37 — what a value writes into an attribute, on both sides.
 export { attributeMarkup, attributeText } from './attributeText.ts'
 // EMITTED CODE'S: the value a `bind:` operand holds, as the server writes it into the tag (32.5).
-export { boundProp, boundValue, groupHolds } from './boundValue.ts'
+export {
+    boundProp,
+    boundValue,
+    groupHolds,
+    selectedMarkup,
+} from './boundValue.ts'
 export { type Cookies, cookies } from './cookies.ts'
 export { csp } from './csp.ts'
 export {
@@ -43,7 +48,6 @@ export {
     type MenuRole,
     menuItem,
 } from './menuItem.ts'
-export { onMenu } from './onMenu.ts'
 // `navigate` ALONE, of everything routing needs. This barrel is what an app resolves through the
 // bare `@abide/abide` specifier, and the matcher, the pattern grammar and `routeOf` are reached by path
 // from the two places that have them — the build and the client router. Putting them here would
@@ -51,6 +55,7 @@ export { onMenu } from './onMenu.ts'
 // modules into the static closure of the entry every page imports.
 export { navigate } from './navigate.ts'
 export { online } from './online.ts'
+export { onMenu } from './onMenu.ts'
 export { type Principal, principal } from './principal.ts'
 // EMITTED CODE'S: a prop the child writes (33.6, 33.7).
 export {

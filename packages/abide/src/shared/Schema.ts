@@ -161,7 +161,7 @@ function runSchemaTracked(schema: unknown, value: unknown): Checked {
         // rather than returning it. A real `Schema<boolean>` only ever sees booleans.
         if (typeof returned === 'boolean' && typeof value !== 'boolean')
             throw new Error(
-                'A predicate is not a Schema: it answered true/false where the value was expected. A Schema returns what it accepts (RULEBOOK 19.2) and throws what it refuses (19.4).',
+                'A predicate is not a Schema: it answered true/false where the value was expected. A Schema returns what it accepts (RULEBOOK 19.2) and throws what it refuses (RULEBOOK 19.4).',
             )
         return accepted(returned)
     }

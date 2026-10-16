@@ -20,6 +20,14 @@ export class Inbox<Item> implements AsyncIterable<Item> {
         this.#wake?.()
     }
 
+    /** Closes this inbox and hands what nothing has read yet to a new one, for a new reader. */
+    handOff(): Inbox<Item> {
+        const next = new Inbox<Item>()
+        next.#items = this.#items.splice(0)
+        this.close()
+        return next
+    }
+
     async *[Symbol.asyncIterator](): AsyncGenerator<Item> {
         for (;;) {
             if (this.#items.length > 0) {

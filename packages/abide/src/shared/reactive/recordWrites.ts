@@ -7,7 +7,7 @@
 // slots a proxy cannot stand in for — `Map.prototype.set` refuses a proxy as its receiver — so one
 // reached is marked written the moment it is read, path and all, and each object a `Map` or a `Set`
 // hands out is marked as it leaves (`heldView`). That over-reports, and an over-report costs a row
-// remade where an under-report shows a stale one.
+// its bindings rerun where an under-report shows a stale one.
 //
 // 18.11 — AND WHERE A SINK IS HANDED IN, each write is kept as data too, as JSON Patch (RFC 6902) at
 // the JSON Pointer it was reached by: a member set is `add`, an index `replace` (or `add` one past

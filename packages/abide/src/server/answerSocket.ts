@@ -25,8 +25,10 @@ import { refuse } from '#shared/refuse.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { handlerKey, type Mounted } from './answerRpc.ts'
 import { argsFor } from './argsFor.ts'
+import { positiveSetting } from './config.ts'
 import { closedTo, crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
 import { failureOf } from './hooks.ts'
+import { sendOrClose } from './muxUpgrade.ts'
 import {
     heldByApp,
     inOpenScope,
@@ -49,6 +51,9 @@ export type Socket = {
 }
 
 const ENCODER = new TextEncoder()
+
+// 18.31 — a page follows each value it reads once, so a thousand is a page no one could read.
+const MAX_SUBSCRIPTIONS = 1024
 
 /**
  * One `ServerFrame`, for every follower it is sent to.
@@ -124,7 +129,7 @@ class SocketPeer implements Peer {
         this.socket = socket
     }
     send(id: number, frame: Frame): void {
-        this.socket.send(frame.json(id))
+        sendOrClose(this.socket, frame.json(id))
     }
     close(code: number, reason: string): unknown {
         return this.socket.close(code, reason)
@@ -350,6 +355,26 @@ export class MuxConnection {
             subscriptions.get(id)?.()
             subscriptions.delete(id)
             return
+        }
+        // 18.31 — A CONNECTION FOLLOWS AT MOST `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` VALUES; 18.32 — a frame
+        // naming an id it already holds replaces that one rather than adding to them.
+        if (frame.op === 'sub' && !subscriptions.has(id)) {
+            const most = positiveSetting(
+                'ABIDE_MAX_SOCKET_SUBSCRIPTIONS',
+                MAX_SUBSCRIPTIONS,
+            )
+            if (subscriptions.size >= most) {
+                this.peer.send(
+                    id,
+                    refusal(
+                        refuse(
+                            429,
+                            `This connection follows ${most} values already.`,
+                        ),
+                    ),
+                )
+                return
+            }
         }
         const handler =
             frame.op === 'sub'

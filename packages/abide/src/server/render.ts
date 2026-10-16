@@ -76,7 +76,10 @@ export async function composePage(
         if (at < layouts.length)
             levelProps.children = (): string => {
                 const below = levels[at + 1] as Rendered
-                if (below.head !== '') heads.push(below.head)
+                // THE SLOT IS TAKEN BEFORE THE HEAD IS READ: reading it builds the level, which
+                // pushes the heads deeper still, and the tree's order is what the merge keys on.
+                const slot = heads.push('') - 1
+                heads[slot] = below.head
                 return below.body
             }
         const level = (

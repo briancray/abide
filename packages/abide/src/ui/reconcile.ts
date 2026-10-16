@@ -4,9 +4,9 @@ import type { List } from './List.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
 import { emptyRegion } from './regions.ts'
-import { dropRow, makeRow, moveRow, type Row } from './rows.ts'
+import { dropRow, makeRow, moveRow, type Row, updateRow } from './rows.ts'
 
-// 41.8 — a KEYED list, reconciled by moving the nodes that are already there rather than by
+// 41.8, 32.67 — a KEYED list, reconciled by moving the nodes that are already there rather than by
 // rebuilding them. A rebuild produces the right screen and the wrong document: focus, selection,
 // scroll position and anything a row was in the middle of go with the nodes that were replaced.
 //
@@ -19,7 +19,7 @@ import { dropRow, makeRow, moveRow, type Row } from './rows.ts'
  * Reconciles a keyed list's rows to `data`, moving survivors rather than remaking them.
  *
  * A key it has not seen gets a row from the builders `list.setUp` answers for it (14.8). Rows that
- * survive are MOVED, never remade.
+ * survive are MOVED, never remade, and take the value now under their key (32.67).
  */
 export function reconcile(list: List, data: unknown[]): void {
     if (data.length === 0) {
@@ -98,33 +98,28 @@ export function reconcile(list: List, data: unknown[]): void {
         for (let at = 0; at < wanted; at += 1) {
             const key = keys[at] as unknown
             const existing = held.get(key)
-            // `Object.is` RATHER THAN `===`, for NaN: `NaN === NaN` is false, so a row whose value is
-            // NaN never matched itself and was stopped, removed and remade on every reconcile —
-            // taking its focus, selection, scroll position and any transition mid-flight with it —
-            // while the text on screen stayed identical, so nothing about the output could show it.
-            if (
-                existing !== undefined &&
-                Object.is(existing.data, data[at]) &&
-                !patchedSince(existing)
-            ) {
-                held.delete(key)
-                existing.seen = PATCHES.epoch
-                survivor[at] = existing
-                from[at] = existing.at
-                if (existing.at < lastSurvivor) ordered = false
-                lastSurvivor = existing.at
+            if (existing === undefined) {
+                survivor[at] = null
+                from[at] = -1
                 continue
             }
-            // Either a key never seen, or one whose value is a different object or one a patch wrote
-            // to — each is a row this document does not have, and each is made. A stale one's nodes go NOW: the placement
-            // walk anchors on nodes that are still attached, and a node about to be replaced is not
-            // one of them.
-            if (existing !== undefined) {
-                held.delete(key)
-                dropRow(existing)
-            }
-            survivor[at] = null
-            from[at] = -1
+            held.delete(key)
+            // 32.67 — A KEPT KEY KEEPS ITS ROW, whatever value now stands under it: a different one
+            // is written into the row's item and its bindings update in place, so focus, selection
+            // and an open `<details>` stay with nodes that were never replaced. 32.33 — so is the
+            // same object a patch wrote inside.
+            //
+            // `Object.is` RATHER THAN `===`, for NaN: `NaN === NaN` is false, so a row whose value is
+            // NaN was written on every reconcile and woke every binding it holds for a value that
+            // never moved — and nothing about the output could show it.
+            const value = data[at]
+            if (!Object.is(existing.data, value) || patchedSince(existing))
+                updateRow(existing, value)
+            existing.seen = PATCHES.epoch
+            survivor[at] = existing
+            from[at] = existing.at
+            if (existing.at < lastSurvivor) ordered = false
+            lastSurvivor = existing.at
         }
 
         // THE ROWS THAT NEED NOT MOVE ARE THE LONGEST RUN ALREADY IN ORDER. Every survivor outside it

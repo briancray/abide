@@ -3,10 +3,20 @@
 // scripted Claude Code (`fixtures/assistant`). Both play the same conversation: a turn that calls
 // `post_invoices_whoami`, and a turn that says what it answered.
 
-import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
-import { spawned } from 'harness/gate'
-import { BRIDGE_PATH } from '../../bridge/src/bridge.ts'
+import { afterAll, afterEach, beforeAll, expect, jest, test } from 'bun:test'
+import { spawned } from '@abide/harness/gate'
+import {
+    HEARTBEAT_MILLISECONDS as BRIDGE_HEARTBEAT_MILLISECONDS,
+    BRIDGE_PATH,
+    RESUME_MILLISECONDS as BRIDGE_RESUME_MILLISECONDS,
+} from '../../bridge/src/bridge.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
+import {
+    answerBridge,
+    HEARTBEAT_MILLISECONDS,
+    mintCode,
+    RESUME_MILLISECONDS,
+} from '../src/server/bridgeRelay.ts'
 import { BRIDGE_ADDRESS } from '../src/shared/ADDRESSES.ts'
 import { handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -165,10 +175,10 @@ async function events(answer: Response): Promise<unknown[]> {
     return found
 }
 
-// 45.19, 36.7 — THE RELAY OPENS WITH THE FIRST PAIRING COMMAND, so it runs first: every test after it
+// 44.19, 36.7 — THE RELAY OPENS WITH THE FIRST PAIRING COMMAND, so it runs first: every test after it
 // mints one. THE REVERT: drop the `minted` check from `answerBridge`, and the first ask is the 403
 // a stale code gets rather than 404.
-test('the relay answers 404 until the app mints a pairing code — 45.19, 36.7', async () => {
+test('the relay answers 404 until the app mints a pairing code — 44.19, 36.7', async () => {
     const before = await Bun.fetch(`${base}/__abide/bridge?code=none`)
     expect(before.status).toBe(404)
     await before.text()
@@ -178,13 +188,13 @@ test('the relay answers 404 until the app mints a pairing code — 45.19, 36.7',
     await after.text()
 })
 
-// 45.2, 45.7, 45.17 — ONE CONVERSATION, ONE EVENT SEQUENCE, WHICHEVER PROVIDER PLAYED IT, and the tool
+// 44.2, 44.7, 44.17 — ONE CONVERSATION, ONE EVENT SEQUENCE, WHICHEVER PROVIDER PLAYED IT, and the tool
 // called as the person asking: `whoami` reads the cookie on the ASK request, which for Claude Code is a
 // request the bridge never sees. THE REVERTS: carry no headers (`CARRIED_HEADERS = []`), and both read
 // `"nobody"`; send the API turn's blocks back without the thinking block's signature, and the fake API
 // refuses the second turn 400; answer the bridge's `tools/call` with no result, and Claude Code's
 // sequence loses its `"ada"`.
-test('both providers play one conversation as one event sequence, tools called as the asker — 45.2, 45.7, 45.17', async () => {
+test('both providers play one conversation as one event sequence, tools called as the asker — 44.2, 44.7, 44.17', async () => {
     const expected = [
         { type: 'text', text: 'checking' },
         {
@@ -204,12 +214,12 @@ test('both providers play one conversation as one event sequence, tools called a
     )
 }, 30_000)
 
-// 45.11 — THE LAST TURN'S TOOL CALL IS NEVER RUN. With one turn allowed, the model's call to
+// 44.11 — THE LAST TURN'S TOOL CALL IS NEVER RUN. With one turn allowed, the model's call to
 // `post_invoices_whoami` is announced as it streams, but no `result` follows and the conversation ends on
 // `max_turns` rather than the `tool_use` the turn stopped for. THE REVERTS: yield `stop` as it arrived
 // in `claudeApi`'s `done`, and this reads `tool_use`; drop `turn >= maxTurns`, and the call runs and a
 // second turn answers `saw "ada"`.
-test('a conversation out of turns ends on max_turns without running the pending call — 45.11', async () => {
+test('a conversation out of turns ends on max_turns without running the pending call — 44.11', async () => {
     expect(await events(await ask('one', 'api', 'who am I?', 1))).toEqual([
         { type: 'text', text: 'checking' },
         {
@@ -222,10 +232,10 @@ test('a conversation out of turns ends on max_turns without running the pending 
     ])
 })
 
-// 45.20 — THE PAGE SEES THE PAIRING LAND. The status stream says not ready, with the command, and then
+// 44.20 — THE PAGE SEES THE PAIRING LAND. The status stream says not ready, with the command, and then
 // ready once a bridge connects with that command's code. THE REVERT: drop `wakeWatchers` from `pair`;
 // the stream never says ready and this times out.
-test('the bridge status turns ready the moment the bridge connects — 45.20', async () => {
+test('the bridge status turns ready the moment the bridge connects — 44.20', async () => {
     const answer = await Bun.fetch(`${base}/bridge`, {
         headers: { ...asPage('two'), accept: 'application/jsonl' },
     })
@@ -257,8 +267,8 @@ test('the bridge status turns ready the moment the bridge connects — 45.20', a
     await lines.return(undefined)
 }, 30_000)
 
-// 45.13, 45.14 — a page with no bridge paired is told so, and a code pairs once.
-test('nothing paired refuses 409, and a pairing code pairs only once — 45.13, 45.14', async () => {
+// 44.13, 44.14 — a page with no bridge paired is told so, and a code pairs once.
+test('nothing paired refuses 409, and a pairing code pairs only once — 44.13, 44.14', async () => {
     const unpaired = await ask('three', 'code', 'who am I?')
     expect(unpaired.status).toBe(409)
     await unpaired.text()
@@ -279,11 +289,11 @@ test('nothing paired refuses 409, and a pairing code pairs only once — 45.13, 
     expect(again.stderr).toContain('403')
 }, 30_000)
 
-// 45.5, 45.15, 45.16 — CLAUDE CODE RUNS ALONE on the visitor's machine: its own tools off, no settings read,
+// 44.5, 44.15, 44.16 — CLAUDE CODE RUNS ALONE on the visitor's machine: its own tools off, no settings read,
 // only the bridge's MCP server, in a directory of its own that is gone once the run is, and with only
 // what the site may set; the transcript reaches it as ONE message. THE REVERTS: send the last turn
 // alone, and the prompt holds no `earlier answer`; drop the `rm`, and the config outlives the run.
-test('Claude Code runs alone, over the whole transcript as one message — 45.5, 45.15, 45.16', async () => {
+test('Claude Code runs alone, over the whole transcript as one message — 44.5, 44.15, 44.16', async () => {
     await pairBridge('four')
     await events(await ask('four', 'code', 'who am I?'))
     const record = (await Bun.file(RECORD).json()) as {
@@ -306,10 +316,10 @@ test('Claude Code runs alone, over the whole transcript as one message — 45.5,
     expect(await Bun.file(record.configPath).exists()).toBe(false)
 }, 30_000)
 
-// 45.18 — A CALLER WHO HANGS UP ENDS THE RUN on the visitor's machine: the page's answer canceled once
+// 44.18 — A CALLER WHO HANGS UP ENDS THE RUN on the visitor's machine: the page's answer canceled once
 // the first event is in. THE REVERT: drop the `cancel` frame `claudeCode` sends on abort; the fake
 // waits forever and its pid still answers a signal 0.
-test('a caller hanging up kills the Claude Code run — 45.18', async () => {
+test('a caller hanging up kills the Claude Code run — 44.18', async () => {
     await pairBridge('five')
     const answer = await ask('five', 'code', 'hang')
     const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
@@ -328,8 +338,8 @@ test('a caller hanging up kills the Claude Code run — 45.18', async () => {
     expect(alive).toBe(false)
 }, 30_000)
 
-// 45.3 — a transcript ending on the model's own turn is refused before any provider is reached.
-test('a transcript that does not end on a user turn is refused — 45.3', async () => {
+// 44.3 — a transcript ending on the model's own turn is refused before any provider is reached.
+test('a transcript that does not end on a user turn is refused — 44.3', async () => {
     const answer = await Bun.fetch(`${base}/ask`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -339,15 +349,15 @@ test('a transcript that does not end on a user turn is refused — 45.3', async 
         }),
     })
     expect(answer.status).toBe(400)
-    expect(await answer.text()).toContain('45.3')
+    expect(await answer.text()).toContain('44.3')
 }, 30_000)
 
-// 45.6, 42.12 — A TOOL IS CALLED THROUGH THE APP ANSWERING THE CONVERSATION, not whichever `App` the
+// 44.6, 42.12 — A TOOL IS CALLED THROUGH THE APP ANSWERING THE CONVERSATION, not whichever `App` the
 // process built last: two held in one process, the second stopped, and the first still lists and
 // calls its tools. THE REVERT: build the `McpSurface` in `bootApp` over `RPC_SERVER.raw` rather than
 // the app's own `fetch`, and set that to `fetch` alone; the stopped app answers the tool call, and its
 // result reads "the app is stopping".
-test('a tool is called through the app answering the conversation — 45.6, 42.12', async () => {
+test('a tool is called through the app answering the conversation — 44.6, 42.12', async () => {
     await Bun.write(
         `${app}/host.ts`,
         `import { bootApp, originUnder } from '${SERVER}/createApp.ts'
@@ -386,4 +396,220 @@ test('the pairing command names the bridge package’s own version', async () =>
 // sides to one address — apart, the bridge dials a path nothing answers.
 test('the bridge dials the address the site relays at', () => {
     expect(BRIDGE_PATH).toBe(BRIDGE_ADDRESS)
+})
+
+/** What a bridge run to its end against a `fakeBridgeSite` misbehaving as `how` said, and the site saw. */
+async function againstFakeSite(
+    how: 'drop' | 'mute' | 'refuse' | 'silent',
+    replyMilliseconds: number,
+    silenceMilliseconds?: number,
+): Promise<{ exitCode: number; stderr: string; saw: string[] }> {
+    const site = Bun.spawn(['bun', `${FIXTURES}fakeBridgeSite.ts`, how], {
+        stdout: 'pipe',
+        env: environment,
+    })
+    const reader = (site.stdout as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    let printed = ''
+    while (!printed.includes('\n')) {
+        const { done, value } = await reader.read()
+        if (done) break
+        printed += decoder.decode(value, { stream: true })
+    }
+    const origin = printed.slice(0, printed.indexOf('\n')).replace(/\/$/, '')
+    try {
+        const ran = await spawned(
+            [
+                'bun',
+                `${FIXTURES}bridgeHost.ts`,
+                origin,
+                'code',
+                FAKE_CLAUDE,
+                String(replyMilliseconds),
+                ...(silenceMilliseconds === undefined
+                    ? []
+                    : [String(silenceMilliseconds)]),
+            ],
+            { deadline: 15_000, env: environment },
+        )
+        site.kill()
+        for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            printed += decoder.decode(value, { stream: true })
+        }
+        return {
+            exitCode: ran.exitCode,
+            stderr: ran.stderr,
+            saw: printed.split('\n').slice(1),
+        }
+    } finally {
+        site.kill()
+    }
+}
+
+/** The MCP server's reply to the record-mode fake's tool call. */
+async function recordedReply(): Promise<unknown> {
+    return ((await Bun.file(RECORD).json()) as { reply: unknown }).reply
+}
+
+// 44.24 — A REPORT THE SITE REFUSED IS A FAILED TOOL CALL, not one Claude Code waits on for good: the
+// site answers every post 500, and the call the post carried is answered failed with what the site
+// said. THE REVERT: swallow the post's failure (`.catch(() => {})`, no `answer`); the call waits out
+// the 60-second reply deadline, and the bridge outlives the 15-second wait here.
+test('a report the site refused answers its tool call failed — 44.24', async () => {
+    const { exitCode } = await againstFakeSite('refuse', 60_000)
+    expect(exitCode).toBe(0)
+    expect(await recordedReply()).toEqual({
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+            content: [
+                {
+                    type: 'text',
+                    text: expect.stringContaining('refused a report (500)'),
+                },
+            ],
+            isError: true,
+        },
+    })
+}, 30_000)
+
+// 44.24 — A REPLY THAT NEVER COMES IS A FAILED TOOL CALL once the deadline passes. THE REVERT: drop
+// the `deadline` timer; the call waits for good, and the bridge outlives the wait here.
+test('a tool call the site never replies to fails at the deadline — 44.24', async () => {
+    const { exitCode } = await againstFakeSite('silent', 300)
+    expect(exitCode).toBe(0)
+    expect(await recordedReply()).toEqual({
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+            content: [
+                {
+                    type: 'text',
+                    text: expect.stringContaining('no reply within 300 ms'),
+                },
+            ],
+            isError: true,
+        },
+    })
+}, 30_000)
+
+// 44.25 — A DROPPED STREAM IS REDIALED with the pairing's token. THE REVERT: end where the stream ends
+// (`redial` answering `undefined`); the site never sees the redial.
+test('a bridge redials a dropped stream with its token — 44.25', async () => {
+    const { exitCode, stderr, saw } = await againstFakeSite('drop', 60_000)
+    expect(exitCode).toBe(0)
+    expect(saw).toContain('resumed Bearer token-1')
+    expect(stderr).toContain('Reconnected')
+}, 30_000)
+
+// 44.28 — A STREAM THAT GOES SILENT WITHOUT ENDING IS REDIALED once the silence passes the bound: the
+// site says `paired` and then nothing, holding the connection open. THE REVERT: drop the `silence`
+// timer; the bridge reads the open stream for good and outlives the 15-second wait here.
+test('a bridge redials a stream gone silent — 44.28', async () => {
+    const { exitCode, stderr, saw } = await againstFakeSite('mute', 60_000, 500)
+    expect(exitCode).toBe(0)
+    expect(saw).toContain('resumed Bearer token-1')
+    expect(stderr).toContain('Reconnected')
+}, 30_000)
+
+// 44.27 — A PAIRING'S STREAM CARRIES A COMMENT EVERY HEARTBEAT while it has nothing to send. THE
+// REVERT: answer `framed`'s body bare in `attach`; the read past the heartbeat waits for good.
+test('a pairing stream beats while it is quiet — 44.27', async () => {
+    jest.useFakeTimers()
+    try {
+        const { code } = mintCode('heartbeat')
+        const answer = (await answerBridge(
+            new Request(`http://site${BRIDGE_ADDRESS}?code=${code}`),
+        )) as Response
+        const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
+        const decoder = new TextDecoder()
+        let read = ''
+        while (!read.includes('"paired"'))
+            read += decoder.decode((await reader.read()).value)
+        jest.advanceTimersByTime(HEARTBEAT_MILLISECONDS)
+        const beat = await Promise.race([
+            reader.read().then((next) => decoder.decode(next.value)),
+            new Promise<string>((done) => setImmediate(() => done('nothing'))),
+        ])
+        expect(beat).toBe(':\n\n')
+        await reader.cancel()
+    } finally {
+        jest.useRealTimers()
+    }
+})
+
+/** The `data:` frames an event stream carries, parsed, as they land. */
+async function* framesOf(
+    answer: Response,
+): AsyncGenerator<{ type: string; token?: string }> {
+    let buffered = ''
+    for await (const chunk of answer.body as ReadableStream<Uint8Array>) {
+        buffered += new TextDecoder().decode(chunk)
+        let newline = buffered.indexOf('\n')
+        while (newline !== -1) {
+            const line = buffered.slice(0, newline)
+            buffered = buffered.slice(newline + 1)
+            if (line.startsWith('data: '))
+                yield JSON.parse(line.slice('data: '.length))
+            newline = buffered.indexOf('\n')
+        }
+    }
+}
+
+// 44.26 — A PAIRING OUTLIVES ITS DROPPED STREAM, and the turn asked meanwhile is sent once the stream
+// is resumed by its token. THE REVERT: drop the bridge on the stream's abort, as `pair` did; the ask
+// is refused 409 and the resume 401.
+test('a dropped pairing is held, and resumed by its token with what it missed — 44.26', async () => {
+    const pairing = framesOf(
+        await Bun.fetch(
+            `${base}${BRIDGE_ADDRESS}?code=${await pairingCode('six')}`,
+        ),
+    )
+    const first = (await pairing.next()).value
+    expect(first?.type).toBe('paired')
+    // The stream dropped: its body canceled, which closes the connection.
+    await pairing.return(undefined)
+    await Bun.sleep(200)
+    // Answered once the turn says something, which is only once a bridge has it.
+    const asked = Bun.fetch(`${base}/ask`, {
+        method: 'POST',
+        headers: {
+            ...asPage('six'),
+            'content-type': 'application/json',
+            accept: 'application/jsonl',
+        },
+        body: JSON.stringify({
+            via: 'code',
+            messages: [{ role: 'user', content: 'hang' }],
+        }),
+    })
+    const resumed = await Bun.fetch(`${base}${BRIDGE_ADDRESS}`, {
+        headers: { authorization: `Bearer ${first?.token}` },
+    })
+    expect(resumed.status).toBe(200)
+    const frames = framesOf(resumed)
+    const turn = (await frames.next()).value as { type: string; id: string }
+    expect(turn.type).toBe('turn')
+    // The turn ended as a bridge would end it, so the ask answers.
+    await Bun.fetch(`${base}${BRIDGE_ADDRESS}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${first?.token}` },
+        body: JSON.stringify({ type: 'fail', turn: turn.id, message: 'done' }),
+    })
+    await (await asked).text()
+    await frames.return(undefined)
+}, 30_000)
+
+// The bridge spells the site's resume window out rather than importing it, so this holds the two to
+// one length — apart, a bridge gives up on a pairing the site still holds, or dials one it dropped.
+test('the bridge redials for as long as the site holds a pairing', () => {
+    expect(BRIDGE_RESUME_MILLISECONDS).toBe(RESUME_MILLISECONDS)
+})
+
+// Spelled out for the same reason: apart, a bridge takes a quiet stream for a dropped one, or waits
+// on a dead one longer than the bound says.
+test('the bridge bounds silence by the heartbeat the site sends', () => {
+    expect(BRIDGE_HEARTBEAT_MILLISECONDS).toBe(HEARTBEAT_MILLISECONDS)
 })

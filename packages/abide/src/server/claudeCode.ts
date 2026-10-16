@@ -1,11 +1,11 @@
-// 45.13 — THE CLAUDE CODE ON THE VISITOR'S OWN MACHINE AS A `Provider`, reached through the bridge they
+// 44.13 — THE CLAUDE CODE ON THE VISITOR'S OWN MACHINE AS A `Provider`, reached through the bridge they
 // paired (`bridgeRelay.ts`). Claude Code runs its own loop there; what this side does is hand it the
 // turn and answer the MCP requests it makes from the `Toolbox` — in this request's scope, as this
-// asker (45.7) — so its tools are the site's and nothing of the visitor's machine is one.
+// asker (44.7) — so its tools are the site's and nothing of the visitor's machine is one.
 //
 // CONFIGURED BY CLAUDE CODE'S OWN OPTION NAMES, and only the ones that shape the answer. What would give
 // a site power over the visitor's machine — its own tools, permissions, directory, settings — is not an
-// option here at all: the bridge decides it (45.15, 45.16).
+// option here at all: the bridge decides it (44.15, 44.16).
 
 import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
@@ -45,7 +45,7 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
     return {
         async *run(messages, tools, { maxTurns, signal }) {
             const bridge = pairedBridge(askingCaller())
-            // 45.13 — nothing paired is the page's cue to show the command.
+            // 44.13 — nothing paired is the page's cue to show the command.
             if (bridge === undefined)
                 throw refuse(
                     409,
@@ -59,7 +59,7 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
                 config,
                 maxTurns,
             })
-            // 45.18 — a caller hanging up ends the run on the bridge.
+            // 44.18 — a caller hanging up ends the run on the bridge.
             const cancel = (): void => {
                 bridge.frames.push({ type: 'cancel', turn: turn.id })
             }
@@ -69,7 +69,7 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
                     if (item.kind === 'event')
                         yield item.event as AssistantEvent
                     else if (item.kind === 'mcp')
-                        // 45.17 — answered by the app's own MCP surface, through the turn's `Toolbox`.
+                        // 44.17 — answered by the app's own MCP surface, through the turn's `Toolbox`.
                         void forwardOf(tools)(item.method, item.params)
                             .catch((thrown: unknown) =>
                                 mcpFailure(-32603, String(thrown)),
@@ -83,7 +83,7 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
                                 })
                             })
                     else if (item.kind === 'end') return
-                    // 45.21.
+                    // 44.21.
                     else
                         throw refuse(502, `Claude Code failed: ${item.message}`)
                 }
@@ -95,7 +95,7 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
     }
 }
 
-/** The transcript as the one message Claude Code is sent: earlier turns folded above the last. 45.5. */
+/** The transcript as the one message Claude Code is sent: earlier turns folded above the last. 44.5. */
 function foldedPrompt(messages: AssistantMessage[]): string {
     const last = (messages.at(-1) as AssistantMessage).content
     if (messages.length === 1) return last
@@ -107,7 +107,7 @@ function foldedPrompt(messages: AssistantMessage[]): string {
     return `<conversation>\n${earlier}</conversation>\n\n${last}`
 }
 
-/** The browser asking, which a pairing is to. 45.13. */
+/** The browser asking, which a pairing is to. 44.13. */
 function askingCaller(): string {
     const caller = callerOf()
     if (caller === undefined)
@@ -118,7 +118,7 @@ function askingCaller(): string {
     return caller
 }
 
-/** The command that pairs a bridge with this browser, and when its code stops standing. 45.14. */
+/** The command that pairs a bridge with this browser, and when its code stops standing. 44.14. */
 function bridgeCommand(): { command: string; expires: number } {
     const { code, expires } = mintCode(askingCaller())
     const site = `${appOrigin() ?? new URL(request().url).origin}${mounted('')}`
@@ -130,7 +130,7 @@ function bridgeCommand(): { command: string; expires: number } {
 
 /**
  * This browser's pairing as it changes: unpaired with the command to run, then paired the moment a
- * bridge connects, and unpaired again if it goes. 45.20.
+ * bridge connects, and unpaired again if it goes. 44.20.
  */
 async function* bridge(): AsyncGenerator<BridgeStatus> {
     const caller = askingCaller()

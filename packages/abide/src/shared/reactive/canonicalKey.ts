@@ -58,7 +58,7 @@ function canonical(value: unknown, path: Steps): unknown {
     // canonicalize to one string, and 1.8 joins the second reach to the first's standing work.
     // `Object.create(null)` closed that too, and V8 builds it in DICTIONARY mode: the shipped key
     // took 49-56% of the time without it there, and a standing keyed reach 53%, where JSC reads
-    // level to 110% (`harness/scripts/sharedCases.ts`, two runs per engine).
+    // level to 110% (`abide/bench/sharedCases.ts`, two runs per engine).
     const out: Record<string, unknown> = {}
     for (let index = 0; index < keys.length; index += 1) {
         const key = keys[index] as string

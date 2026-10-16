@@ -99,6 +99,8 @@ export type Mount = {
     defaults: Defaults | undefined
     /** The JSON Schema the handler's args annotation derives, where it takes a record. 19.9. */
     args: JsonValue | undefined
+    /** The JSON Schema of what it answers, where its type says one. 19.21. */
+    result: JsonValue | undefined
 }
 
 /**
@@ -166,6 +168,7 @@ export function mountedOwn(
             copy: undefined,
             defaults: undefined,
             args: undefined,
+            result: undefined,
             handler: handler as Mounted['handler'],
             argsDocument: undefined,
             wireArgs: undefined,
@@ -250,14 +253,7 @@ export async function answerRpc(
     // 16.13 — A MUTATION FROM ANOTHER ORIGIN IS REFUSED unless the handler declared it may come.
     if (closed && !inUrl)
         return answered(crossingRefusal(crossing, found.method))
-    // 16.54 — THE BODY CEILING, none where neither the handler nor the environment names one; 16.55 —
-    // read off the declared length before a byte of the body is.
-    const ceiling =
-        handler.maxBodySize ??
-        positiveSetting('ABIDE_MAX_REQUEST_BODY_SIZE', Number.POSITIVE_INFINITY)
-    if (!inUrl && Number(request.headers.get('content-length') ?? 0) > ceiling)
-        return answered(overCeiling(ceiling))
-    const raw = await argsOf(request, url, inUrl, form, ceiling)
+    const raw = await argsOf(request, url, inUrl, form, handler.maxBodySize)
     if (isFailed(raw)) return answered(raw)
     const sent = withParameters(raw, params, inUrl || form, found)
     if (isFailed(sent)) return answered(sent)
@@ -442,16 +438,14 @@ async function argsOf(
     url: URL,
     inUrl: boolean,
     form: boolean,
-    ceiling: number,
+    maxBodySize: number | undefined,
 ): Promise<unknown | Failed<'HttpError', undefined>> {
     if (inUrl) {
         const query = url.searchParams
         if (query.size === 0) return undefined
         return collapsed(query)
     }
-    const body = Number.isFinite(ceiling)
-        ? await bodyUnder(request, ceiling)
-        : request
+    const body = await bodyWithin(request, maxBodySize)
     if (isFailed(body)) return body
     // 16.38 — a form's fields, a field given more than once a list, as a query's are.
     if (form) {
@@ -502,6 +496,26 @@ function withParameters(
               unknown
           >)
     return isRecord(sent) ? { ...sent, ...fromPath } : { ...fromPath }
+}
+
+/**
+ * The request's body under the ceiling `maxBodySize` sets, or `ABIDE_MAX_REQUEST_BODY_SIZE` where it
+ * is unset, or a 413 refusal past it — the request itself where neither names one.
+ *
+ * 16.54 — NO CEILING BY DEFAULT. 16.55 — read off the declared length before a byte of the body is.
+ * 16.78 — EVERY BODY ABIDE READS, a handler's and `/__abide/mcp`'s and `/__abide/bridge`'s alike.
+ */
+export async function bodyWithin(
+    request: Request,
+    maxBodySize: number | undefined,
+): Promise<Request | Response | Failed<'HttpError', undefined>> {
+    const ceiling =
+        maxBodySize ??
+        positiveSetting('ABIDE_MAX_REQUEST_BODY_SIZE', Number.POSITIVE_INFINITY)
+    if (!Number.isFinite(ceiling)) return request
+    if (Number(request.headers.get('content-length') ?? 0) > ceiling)
+        return overCeiling(ceiling)
+    return bodyUnder(request, ceiling)
 }
 
 /**

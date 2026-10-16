@@ -15,7 +15,7 @@
 // what makes everything after it where the rest of the page expects it.
 
 import { afterAll, expect, test } from 'bun:test'
-import { measure } from 'harness/measure'
+import { measure } from '@abide/harness/abide'
 import { parseAbide } from '#compiler'
 import { emitSource } from '#compiler/emitSource.ts'
 import { placement } from '#server/placement.ts'
@@ -1035,10 +1035,9 @@ function held(owner: unknown, into = { scopes: 0, stops: 0 }) {
 // item. THE REVERT: a block scope and a mount for every `{#if}` whatever its arms hold — 6 scopes
 // a row instead of 2, 61 held against 21.
 //
-// AND `{#if row.stub}` HOLDS NO READER AT ALL: the row's item is typed, `stub` is a plain boolean
-// on it, so the subject is proven static (14.2) and the arm is decided once. The reader over
-// `selected` and the inner list's stay — one `watch` each a row. THE REVERT: watch every `{#if}`
-// whatever its subject — 31 stops against 21.
+// THREE READERS A ROW, each over something that can change under a row that stays: `{#if row.stub}`
+// and the inner list's subject read the row's item through its cell (32.67), and the last `{#if}`
+// reads `selected` too. Each inner row's `{part}` reads its item alone, which its `update` rewrites.
 test('an {#if} whose arms bind nothing opens no scope and no mount — 32.12', async () => {
     const { scope } = await mountPage(`<script>
 import { reactive } from '@abide/abide'
@@ -1049,7 +1048,7 @@ let selected = reactive(1)
 
 <ul>{#for row of ROWS by row.id}<li>{#if row.stub}<i>stub</i>{/if}{#for part of row.parts}<b>{part}</b>{/for}{#if row.id === selected}<em>on</em>{/if}</li>{/for}</ul>
 <button id="pick" onclick={() => { selected = 2 }}>pick</button>`)
-    expect(held(scope)).toEqual({ scopes: 21, stops: 21 })
+    expect(held(scope)).toEqual({ scopes: 21, stops: 31 })
     expect(document.querySelectorAll('i')).toHaveLength(5)
     expect(document.querySelectorAll('b')).toHaveLength(10)
     click('#pick')
@@ -1402,13 +1401,15 @@ function next() {
 <ul id="list">{#for row of rows by row.id}{#if row.on}<b>{row.id}{mark}</b>{/if}<span>{row.id}</span>{/for}</ul>
 <button id="next" onclick={next}>next</button>`
 
-// The list's children as one line: an anchor by its data, an element by its tag and its text.
+// The list's children as one line: an anchor by its data, an element by its tag and its text. A
+// region's opening anchor is read without the arm the server labeled it with, which a row the
+// server painted keeps (32.67) and a row the browser made never had.
 function flatOf(list: Element): string {
     const parts: string[] = []
     for (const node of list.childNodes)
         parts.push(
             node.nodeType === 8
-                ? (node as Comment).data
+                ? (node as Comment).data.replace(/^\[\d+$/, '[')
                 : node.nodeType === 3
                   ? `#${JSON.stringify((node as Text).data)}`
                   : `${node.nodeName.toLowerCase()}(${node.textContent})`,
@@ -1453,8 +1454,8 @@ test('a region filled inside a grown row moves with the row', async () => {
     await mountPage(STRANDED)
     const list = document.querySelector('#list') as Element
     const known = new Map([['a', { id: 'a', on: true }]])
-    // The page's own item is a different object from the one above, so `a` is remade here too —
-    // both rows are the browser's from this step on.
+    // The page's own item is a different object from the one above, which `a`'s row — the server's
+    // — takes in place (32.67).
     stepTo(known, ['a', 'b'])
     const grown = stepTo(known, ['a', 'b'])
     expect(flatOf(list)).toBe(flatDue(grown))

@@ -2,10 +2,10 @@
 // every provider shares: the transcript's check, the app's MCP tools as a `Toolbox`, and the turn cap.
 // A `Provider` runs the conversation — `claudeApi` by looping over the Messages API itself,
 // `claudeCode` by handing it to a Claude Code on the visitor's own machine — and yields the one
-// `AssistantEvent` stream either way (45.2).
+// `AssistantEvent` stream either way (44.2).
 //
-// THE TOOLS ARE THE APP'S OWN MCP SURFACE (45.6), called in process through the app answering this
-// request and carrying the asker's credentials (45.7), so a tool does what the person asking could do
+// THE TOOLS ARE THE APP'S OWN MCP SURFACE (44.6), called in process through the app answering this
+// request and carrying the asker's credentials (44.7), so a tool does what the person asking could do
 // and nothing more. Both are CAPTURED when the conversation starts: a provider may call a tool from
 // another request's scope — `claudeCode` answers one from the bridge's — and the call is still this
 // asker's.
@@ -33,6 +33,12 @@ export type ToolDefinition = {
     name: string
     description: string
     inputSchema: unknown
+    annotations: {
+        readOnlyHint: boolean
+        destructiveHint: boolean
+        idempotentHint: boolean
+    }
+    outputSchema: unknown
 }
 
 /** The app's MCP tools, called as the asker. */
@@ -57,7 +63,7 @@ export type Provider = {
 export type AssistantOptions = { mcp?: boolean; maxTurns?: number }
 
 const MAX_TURNS = 10
-// 45.7 — the caller's credentials, and nothing else of their request.
+// 44.7 — the caller's credentials, and nothing else of their request.
 const CARRIED_HEADERS = ['cookie', 'authorization']
 
 /** A conversation over `messages`, run by `provider`, as the events it produces. */
@@ -66,11 +72,11 @@ export async function* assistant(
     provider: Provider,
     options: AssistantOptions = {},
 ): AsyncGenerator<AssistantEvent> {
-    // 45.3 — a transcript a model can answer ends on the asker's turn.
+    // 44.3 — a transcript a model can answer ends on the asker's turn.
     if (messages.at(-1)?.role !== 'user')
         throw refuse(
             400,
-            'The transcript has to end on a user turn for the assistant to answer it. RULEBOOK 45.3.',
+            'The transcript has to end on a user turn for the assistant to answer it. RULEBOOK 44.3.',
         )
     const tools = toolboxOver(
         options.mcp === true ? appSurface() : NO_SURFACE,
@@ -90,7 +96,7 @@ type McpForward = (method: string, params: unknown) => Promise<McpReply>
 // the type rather than on it, since a `Toolbox` is public and this is not.
 const FORWARDS = new WeakMap<Toolbox, McpForward>()
 
-/** Where `tools` sends an MCP request whole. 45.17. */
+/** Where `tools` sends an MCP request whole. 44.17. */
 export function forwardOf(tools: Toolbox): McpForward {
     const forward = FORWARDS.get(tools)
     if (forward === undefined)
@@ -107,23 +113,23 @@ const NO_SURFACE = new McpSurface(
     async () => new Response(null, { status: 404 }),
 )
 
-/** The MCP surface of the app answering this request. 45.6, 45.8. */
+/** The MCP surface of the app answering this request. 44.6, 44.8. */
 function appSurface(): McpSurface {
     // 42.12 — the app answering this request, captured: a later call may come from another's scope.
     const app = within('assistant').app
     if (app === undefined)
         throw new Error(
-            'abide: assistant tools are the app’s MCP surface, and no app is answering this request. RULEBOOK 45.6.',
+            'abide: assistant tools are the app’s MCP surface, and no app is answering this request. RULEBOOK 44.6.',
         )
-    // 45.8, 20.7 — asking for tools where no handler is published to MCP is a mistake to name.
+    // 44.8, 20.7 — asking for tools where no handler is published to MCP is a mistake to name.
     if (!app.mcp.opened)
         throw new Error(
-            'abide: assistant was asked for tools, and this app publishes no handler to MCP. RULEBOOK 45.8.',
+            'abide: assistant was asked for tools, and this app publishes no handler to MCP. RULEBOOK 44.8.',
         )
     return app.mcp
 }
 
-/** The asking request as a tool call is made: its credentials, and nothing else of it. 45.7. */
+/** The asking request as a tool call is made: its credentials, and nothing else of it. 44.7. */
 function askerOf(asked: Request): Request {
     const carried: Record<string, string> = {}
     for (const name of CARRIED_HEADERS) {
@@ -133,7 +139,7 @@ function askerOf(asked: Request): Request {
     return new Request(asked.url, { headers: carried })
 }
 
-/** `surface` as a `Toolbox`, every call made as `asker`. 45.6, 45.7. */
+/** `surface` as a `Toolbox`, every call made as `asker`. 44.6, 44.7. */
 function toolboxOver(surface: McpSurface, asker: Request): Toolbox {
     const tools: Toolbox = {
         list: surface.list(),

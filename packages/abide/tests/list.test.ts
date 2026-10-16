@@ -7,10 +7,11 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
-import { measure } from 'harness/measure'
+import { measure } from '@abide/harness/abide'
 import { flushSync, reactive } from '#shared'
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
 import { List, listAt, updateList } from '#ui/List.ts'
+import { noUpdate } from '#ui/rows.ts'
 import { EMPTY_SCOPE, Scope } from '#ui/Scope.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import {
@@ -342,15 +343,13 @@ test('the loop variable is a parameter, not a rewrite of emitted text', async ()
     ).toBe('')
 })
 
-// A KEY THAT SURVIVES AND A VALUE THAT DOES NOT — the branch every case above is blind to. They
-// all PERMUTE the row objects, so `existing.data === data[at]` is true for every key that is still
-// there and the remake branch is never reached at all. A REFETCH is the shape that reaches it: the
-// same ids come back under new objects, so the key says "already here" and the value says "stale".
+// A KEY THAT SURVIVES AND A VALUE THAT DOES NOT — the branch every permuting case above is blind
+// to, since they keep every row object. A REFETCH reaches it: the same ids come back under new
+// objects, so the key says "already here" and the value says "different" — and 32.67 keeps the
+// row and writes the new object into it.
 //
-// THE REVERT: remove a stale row's nodes BEFORE walking the cursor past them, which is what
-// `reconcile` did. The cursor is left pointing at a node that is no longer in the document, and
-// the `insertBefore` after it throws `DOMException: ... not a child of this node` on the FIRST
-// replaced row — 0 of 4 rows rendered where 4 are due, and the list is gone.
+// THE REVERT, run: drop and remake a kept key whose value changed. The text is right either way;
+// this reports 0 of 4 rows kept where 4 are due.
 const REFETCH = `<script>
 import { reactive } from '@abide/abide'
 
@@ -379,8 +378,9 @@ const refetched = (): string[] =>
         (node) => node.textContent ?? '',
     )
 
-test('a refetch that keeps every key and replaces every row remakes them in place', async () => {
+test('a refetch that keeps every key and replaces every value keeps every row — 32.67', async () => {
     await mountPage(REFETCH)
+    const before = [...document.querySelectorAll('#refetched li')]
     expect(refetched()).toEqual([
         'Ada Lovelace',
         'Grace Hopper',
@@ -396,12 +396,14 @@ test('a refetch that keeps every key and replaces every row remakes them in plac
         'KATHERINE JOHNSON',
         'DOROTHY VAUGHAN',
     ])
+    const after = [...document.querySelectorAll('#refetched li')]
+    const kept = before.filter((node, at) => node === after[at]).length
+    expect(`${kept} of 4 rows kept`).toBe('4 of 4 rows kept')
 })
 
-// AND THE ROWS AROUND A REPLACED ONE ARE NOT TOUCHED. A whole-list refetch cannot tell a correct
-// remake from one that rebuilds the list — every row is new either way — so this replaces two of
-// four and asks whether the other two are the same nodes.
-test('a row remade between two that survive keeps its neighbors', async () => {
+// AND THE ROWS AROUND A REPLACED VALUE ARE NOT TOUCHED: this replaces two of four and asks whether
+// the other two are the same nodes.
+test('a row given a new value between two that survive keeps its neighbors', async () => {
     await mountPage(REFETCH)
     const first = document.querySelectorAll('#refetched li')[0] as HTMLElement
     const last = document.querySelectorAll('#refetched li')[3] as HTMLElement
@@ -419,13 +421,301 @@ test('a row remade between two that survive keeps its neighbors', async () => {
     expect(document.querySelectorAll('#refetched li')[3]).toBe(last)
 })
 
-// A ROW THAT DID NOT CHANGE IS NOT REMADE, and NaN is the value that made `===` say otherwise:
+// 32.67 — A KEPT KEY KEEPS ITS ROW when the value under it is a NEW OBJECT, which is what an
+// immutable update makes: `rows.map((row) => row.id === id ? { ...row, name } : row)`. The row's
+// item is a cell the new object is written into, so its bindings update the nodes already there —
+// and the focus, selection and open `<details>` that live in those nodes stay.
+//
+// THE REVERT, run: drop a kept key whose value changed and make it again, as `reconcile` did. The
+// text still updates — which is why the refetch cases above stayed green — while the `<li>` and the
+// focused `<input>` are new nodes, and focus falls to the body.
+const EDITED = `<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive([
+    { id: 'ada', name: 'Ada Lovelace' },
+    { id: 'grace', name: 'Grace Hopper' },
+    { id: 'katherine', name: 'Katherine Johnson' },
+])
+
+function rename() {
+    rows = rows.map((row) => row.id === 'grace' ? { ...row, name: 'Grace Brewster Hopper' } : row)
+}
+</script>
+
+<ul id="list">{#for row of rows by row.id}<li data-id={row.id}><input id={'edit-' + row.id} />{row.name}</li>{/for}</ul>
+<button id="rename" onclick={rename}>rename</button>`
+
+test('a kept key over a new object keeps its row, its text updated and its focus held — 32.67', async () => {
+    await mountPage(EDITED)
+    const row = document.querySelector('#list li[data-id="grace"]') as Element
+    const input = document.querySelector('#edit-grace') as HTMLInputElement
+    input.focus()
+    expect(document.activeElement).toBe(input)
+
+    ;(document.querySelector('#rename') as HTMLElement).click()
+    flushSync()
+
+    expect(textOf('grace')).toBe('Grace Brewster Hopper')
+    expect(document.querySelector('#list li[data-id="grace"]')).toBe(row)
+    expect(document.activeElement).toBe(input)
+})
+
+// A ROW IS WRITTEN WHOLE BEFORE IT IS INSERTED. A slot reading the item alone is the row's `make`'s
+// to write, and its `update`'s to write again (32.67): bound instead, it was written by a binding's
+// first run AFTER the row was in the document — four records a row where one is due, on every row
+// a list ever made, to speed up the one edit that rewrites a row's item.
+//
+// THE REVERT, run: count every read of a row's item as live in `Lowering.isLive`, which is what
+// this lane first shipped. Each row is then inserted with an empty text node, which is appended and
+// written, and its attribute written — 12 records for 3 rows where 3 are due.
+test('a row reading its item is written before it is inserted — 32.67', async () => {
+    await mountPage(
+        EDITED.replace("<input id={'edit-' + row.id} />", '').replace(
+            '<button id="rename"',
+            `<button id="grow" onclick={() => { rows = [...rows, { id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }] }}>grow</button>
+<button id="rename"`,
+        ),
+    )
+    const list = document.querySelector('#list') as Element
+    const observer = new MutationObserver(() => {})
+    observer.observe(list, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        characterData: true,
+    })
+    ;(document.querySelector('#grow') as HTMLElement).click()
+    flushSync()
+    const records = observer.takeRecords().length
+    observer.disconnect()
+    expect(textOf('b')).toBe('B')
+    expect(`${records} records for 3 rows`).toBe('3 records for 3 rows')
+})
+
+// WHAT ITS `update` DOES NOT REACH READS THE ROW'S CELL: a region of the row and a binding over the
+// item and something else follow the new value too, and a listener reads the value standing when
+// it runs.
+//
+// THE REVERT, run: drop `moveItem` from `updateRow`. The text the `update` writes still moves, and
+// the listener reads the record; the `{#if}` keeps its arm and the class its old value.
+test("a kept row's regions, mixed bindings and listeners take the new value — 32.67", async () => {
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive([{ id: 'a', name: 'Ada', done: false }])
+let selected = reactive('')
+let heard = reactive('')
+
+function finish() {
+    rows = rows.map((row) => ({ ...row, name: 'Ada L.', done: true }))
+    selected = 'a'
+}
+</script>
+
+<ul id="list">{#for row of rows by row.id}<li data-id={row.id} class:on={selected === row.id && row.done} onclick={() => { heard = row.name }}>{row.name}{#if row.done}<b>done</b>{/if}</li>{/for}</ul>
+<p id="heard">{heard}</p>
+<button id="finish" onclick={finish}>finish</button>`)
+    const row = document.querySelector('#list li') as HTMLElement
+    ;(document.querySelector('#finish') as HTMLElement).click()
+    flushSync()
+    row.click()
+    flushSync()
+    expect(document.querySelector('#list li')).toBe(row)
+    expect([
+        row.textContent,
+        row.classList.contains('on'),
+        document.querySelector('#heard')?.textContent,
+    ]).toEqual(['Ada L.done', true, 'Ada L.'])
+})
+
+// A BOUND SLOT OF A KEPT ROW IS ITS BINDING'S ALONE. A run that reads the item beside something
+// else is kept written by a watch, and the new item reaches it by rerunning that watch (through the
+// row's cell, made on the row's first new item — `updateRow`) — so the node
+// the run stands as (a text node, or a `raw` value's anchored markup, 32.26) and what the run reads
+// are each held in one place. Written by the row's `update` as well, the update swapped the run's
+// node out from under the watch, and the watch's next write landed on a detached one.
+//
+// THE REVERT, run: let `rowUpdate` write a run its mount watches, as the keyed lane shipped. Each
+// row's watch is left holding the node a flip detached, throws "this text run is not in a
+// document" on its next write and is stopped, and the rows fall a step behind from there.
+const FLIPPED = `<script>
+import { reactive, raw } from '@abide/abide'
+
+let rows = reactive([{ id: 'a', html: '', text: 'plain' }])
+let suffix = reactive('!')
+
+function toMarkup() { rows = rows.map((row) => ({ ...row, html: '<b>' + row.id + '</b>' })) }
+function toText() { rows = rows.map((row) => ({ ...row, html: '' })) }
+function add() { rows = [...rows, { id: 'b', html: '', text: 'made' }] }
+</script>
+
+<ul id="list">{#for row of rows by row.id}<li data-id={row.id}>{row.html ? raw(row.html) : row.text}{suffix}</li>{/for}</ul>
+<button id="markup" onclick={toMarkup}>markup</button>
+<button id="text" onclick={toText}>text</button>
+<button id="add" onclick={add}>add</button>
+<button id="suffix" onclick={() => { suffix = suffix + '!' }}>suffix</button>`
+
+test('a kept row flipping a run between raw markup and text keeps writing the run it holds — 32.67, 32.26', async () => {
+    await mountPage(FLIPPED)
+    const shown = (): string =>
+        [...document.querySelectorAll('#list li')]
+            .map((row) =>
+                (row.textContent ?? '').concat(
+                    row.querySelector('b') === null ? '' : ' (b)',
+                ),
+            )
+            .join(' | ')
+    const steps: string[] = [shown()]
+    // The painted row first, then a row the browser made, each through both shapes and a write to
+    // the other value it reads between every flip.
+    for (const id of [
+        'markup',
+        'suffix',
+        'text',
+        'suffix',
+        'add',
+        'markup',
+        'suffix',
+        'text',
+        'suffix',
+    ]) {
+        ;(document.querySelector(`#${id}`) as HTMLElement).click()
+        flushSync()
+        steps.push(shown())
+    }
+    expect(steps).toEqual([
+        'plain!',
+        'a! (b)',
+        'a!! (b)',
+        'plain!!',
+        'plain!!!',
+        'plain!!! | made!!!',
+        'a!!! (b) | b!!! (b)',
+        'a!!!! (b) | b!!!! (b)',
+        'plain!!!! | made!!!!',
+        'plain!!!!! | made!!!!!',
+    ])
+})
+
+// WHAT A BOUND SLOT READS FOLLOWS THE NEW ITEM. A slot that reads another value only for some items
+// reads it once the item it is handed does — the watch reruns, so it subscribes to what this item
+// makes it read.
+//
+// THE REVERT, run: the keyed lane's code — a bound slot reading the item off the row's record, and
+// the row's `update` writing it. The update writes the new item's value once, outside the watch,
+// which never subscribed to `other`: both slots keep `one` after `other` moves. Dropping
+// `rerunItems` from `updateRow` reports the same, the watches never reading the cell made there.
+test('a kept row subscribes to what its new item makes a slot read — 32.67', async () => {
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive([{ id: 'a', follows: false, text: 'own' }])
+let other = reactive('one')
+</script>
+
+<ul id="list">{#for row of rows by row.id}<li title={row.follows ? other : row.text}>{row.follows ? other : row.text}</li>{/for}</ul>
+<button id="follow" onclick={() => { rows = rows.map((row) => ({ ...row, follows: true })) }}>follow</button>
+<button id="other" onclick={() => { other = 'two' }}>other</button>`)
+    const row = document.querySelector('#list li') as HTMLElement
+    ;(document.querySelector('#follow') as HTMLElement).click()
+    flushSync()
+    ;(document.querySelector('#other') as HTMLElement).click()
+    flushSync()
+    expect(document.querySelector('#list li')).toBe(row)
+    expect([row.textContent, row.title]).toEqual(['two', 'two'])
+})
+
+// A ROW THAT NEVER TAKES A NEW ITEM ALLOCATES NO CELL FOR IT. Its bindings over the item and
+// something else read the item off the row's record (`itemOf`), and the cell is made on the row's
+// first new item (`updateRow`) — the select-row shape, `class={row.id === selected ? … : …}`, on
+// every row of most lists. A count of cells, not a value: a row holding one renders the same.
+//
+// THE REVERT, run: read a binding's item through the row's cell in `Lowering.itemRead` (drop its
+// `binding` arm), which is what the first cut of this fix shipped. Every row then holds a cell from
+// its mount — `4 of 4 rows hold a cell` where 0 are due, and 4 where 1 is after one row moves.
+test('a row with a bound slot over its item makes its cell on its first new item, not before — 32.67', async () => {
+    const { scope } = await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive([{ id: 'a', label: 'A' }])
+let selected = reactive('b')
+</script>
+
+<ul id="list">{#for row of rows by row.id}<li class={row.id === selected ? 'danger' : ''}>{row.label}{row.id === selected ? '*' : ''}</li>{/for}</ul>
+<button id="grow" onclick={() => { rows = [...rows, { id: 'b', label: 'B' }, { id: 'c', label: 'C' }, { id: 'd', label: 'D' }] }}>grow</button>
+<button id="relabel" onclick={() => { rows = rows.map((row) => row.id === 'c' ? { ...row, id: 'c', label: 'C!' } : row) }}>relabel</button>
+<button id="select" onclick={() => { selected = 'c' }}>select</button>`)
+    const list = (scope.children ?? []).find(
+        (child) => child instanceof List,
+    ) as List
+    const cells = (): string =>
+        `${list.rows.filter((row) => row.item !== null).length} of ${list.rows.length} rows hold a cell`
+    ;(document.querySelector('#grow') as HTMLElement).click()
+    flushSync()
+    expect(cells()).toBe('0 of 4 rows hold a cell')
+    ;(document.querySelector('#relabel') as HTMLElement).click()
+    flushSync()
+    ;(document.querySelector('#select') as HTMLElement).click()
+    flushSync()
+    expect(cells()).toBe('1 of 4 rows hold a cell')
+    expect(
+        [...document.querySelectorAll('#list li')].map(
+            (row) => `${row.className}:${row.textContent}`,
+        ),
+    ).toEqual([':A', ':B', 'danger:C!*', ':D'])
+})
+
+// A PATTERN'S NAMES ARE EACH READ THROUGH THE ROW'S CELL, so a destructured row takes a new value
+// in place as a named one does.
+test('a destructured row takes a new value in place — 32.67', async () => {
+    await mountPage(
+        EDITED.replace(
+            "{#for row of rows by row.id}<li data-id={row.id}><input id={'edit-' + row.id} />{row.name}</li>{/for}",
+            '{#for { id, name } of rows by id}<li data-id={id}>{name}</li>{/for}',
+        ),
+    )
+    expect(document.querySelector('#list input')).toBeNull()
+    const row = document.querySelector('#list li[data-id="grace"]') as Element
+    const work = measure(() => {
+        ;(document.querySelector('#rename') as HTMLElement).click()
+        flushSync()
+    })
+    expect(textOf('grace')).toBe('Grace Brewster Hopper')
+    expect(document.querySelector('#list li[data-id="grace"]')).toBe(row)
+    expect(work.nodesCreated).toBe(0)
+})
+
+// THE WORK, against the hand-written arm: the same edit by hand writes one text node's `data` and
+// touches nothing else. THE REVERT above reports 3 nodes created and 3 moved where the vanilla arm creates and moves 0.
+test('a kept key over a new object creates and moves no node, as the vanilla arm does — 32.67', async () => {
+    document.body.innerHTML =
+        '<ul id="vanilla"><li><input>Grace Hopper</li></ul>'
+    const text = (document.querySelector('#vanilla li') as Element)
+        .lastChild as Text
+    const vanilla = measure(() => {
+        text.data = 'Grace Brewster Hopper'
+    })
+
+    await mountPage(EDITED)
+    const work = measure(() => {
+        ;(document.querySelector('#rename') as HTMLElement).click()
+        flushSync()
+    })
+
+    const counted = (of: typeof work): string =>
+        `${of.nodesCreated} created, ${of.elementsMoved} moved, ${of.dataWrites} text written`
+    expect(counted(work)).toBe(counted(vanilla))
+    expect(counted(work)).toBe('0 created, 0 moved, 1 text written')
+})
+
+// A ROW THAT DID NOT CHANGE IS NOT WRITTEN, and NaN is the value that made `===` say otherwise:
 // `NaN === NaN` is false, so the row never matched itself. This is a WORK assertion and it has to
 // be — the text on screen is `NaN` before and after either way, which is why no case above sees it.
 //
-// THE REVERT: compare with `existing.data === data[at]`. The NaN row's element is then a DIFFERENT
-// node after an append that did not touch it — 2 of 3 rows kept where 3 are due — so its focus,
-// selection, scroll position and any transition mid-flight go with the node that was replaced.
+// THE REVERT, run: compare with `existing.data !== value`. The row is kept either way (32.67), but
+// the NaN row is rewritten on every reconcile for a value that never moved — 1 slot write where 0
+// are due.
 const NUMBERS = `<script>
 import { reactive } from '@abide/abide'
 
@@ -439,13 +729,15 @@ function append() {
 <ul id="nums">{#for n of nums}<li>{n}</li>{/for}</ul>
 <button id="append" onclick={append}>append</button>`
 
-test('a row whose value is NaN is not remade', async () => {
+test('a row whose value is NaN is not remade or rewritten', async () => {
     const { mount } = await renderPage(NUMBERS)
     mount()
 
     const before = [...document.querySelectorAll('#nums li')]
-    ;(document.querySelector('#append') as HTMLElement).click()
-    flushSync()
+    const work = measure(() => {
+        ;(document.querySelector('#append') as HTMLElement).click()
+        flushSync()
+    })
     const after = [...document.querySelectorAll('#nums li')]
 
     expect(after.map((node) => node.textContent)).toEqual([
@@ -459,6 +751,10 @@ test('a row whose value is NaN is not remade', async () => {
         true,
         true,
     ])
+    // The list's own rerun, and no write for the NaN row.
+    expect(`${work.wakes} wakes, ${work.bindingRuns} slot writes`).toBe(
+        '1 wakes, 0 slot writes',
+    )
 })
 
 // 32.15 — `{#for}` OVER AN ASYNC ITERABLE RENDERS EACH ITEM AS IT ARRIVES AND APPENDS RATHER THAN
@@ -611,9 +907,9 @@ test('a second call with the same source does not restart the pump', async () =>
     }
     const source = arriving()
 
-    const make = (made: Document, item: unknown): Node[] => {
+    const make = (made: Document, item: { data: unknown }): Node[] => {
         const row = made.createElement('li')
-        row.textContent = String(item)
+        row.textContent = String(item.data)
         return [row]
     }
     const mount = (): Scope => new Scope()
@@ -621,7 +917,7 @@ test('a second call with the same source does not restart the pump', async () =>
     const text = (): string[] =>
         [...host.querySelectorAll('li')].map((node) => node.textContent ?? '')
 
-    const builders = { make, mount }
+    const builders = { make, mount, update: noUpdate }
     const list = listAt(region, false, key, () => builders)
     updateList(list, source)
     await new Promise((settle) => setTimeout(settle, 0))
@@ -686,6 +982,7 @@ function reorder(permute: (order: number[]) => number[]): {
         () => ({
             make: () => [document.createElement('li')],
             mount: () => new Scope(),
+            update: noUpdate,
         }),
     )
     updateList(list, data)
@@ -749,6 +1046,7 @@ test('emptying a list clears its region in one write', () => {
         () => ({
             make: () => [document.createElement('li')],
             mount: () => new Scope(),
+            update: noUpdate,
         }),
     )
     updateList(list, data)
@@ -837,16 +1135,16 @@ test('a list arriving in place of a stream stops the stream', async () => {
         await held
         yield 'c'
     }
-    const make = (made: Document, item: unknown): Node[] => {
+    const make = (made: Document, item: { data: unknown }): Node[] => {
         const row = made.createElement('li')
-        row.textContent = String(item)
+        row.textContent = String(item.data)
         return [row]
     }
     const list = listAt(
         { open, close },
         false,
         (item) => item,
-        () => ({ make, mount: () => new Scope() }),
+        () => ({ make, mount: () => new Scope(), update: noUpdate }),
     )
     const text = (): string[] =>
         [...host.querySelectorAll('li')].map((node) => node.textContent ?? '')
@@ -889,16 +1187,16 @@ test('a list stopped while its source is quiet returns the source at once — 12
             },
         }),
     }
-    const make = (made: Document, item: unknown): Node[] => {
+    const make = (made: Document, item: { data: unknown }): Node[] => {
         const row = made.createElement('li')
-        row.textContent = String(item)
+        row.textContent = String(item.data)
         return [row]
     }
     const list = listAt(
         { open, close },
         false,
         (item) => item,
-        () => ({ make, mount: () => new Scope() }),
+        () => ({ make, mount: () => new Scope(), update: noUpdate }),
     )
     updateList(list, quiet)
     await new Promise((settle) => setTimeout(settle, 0))
@@ -922,16 +1220,16 @@ test('a value a row read while it was built does not rerun the list', () => {
 
     const selected = reactive('a')
     const rows = reactive(['a', 'b'])
-    const make = (made: Document, item: unknown): Node[] => {
+    const make = (made: Document, item: { data: unknown }): Node[] => {
         const row = made.createElement('li')
-        row.className = selected() === item ? 'danger' : ''
+        row.className = selected() === item.data ? 'danger' : ''
         return [row]
     }
     const list = listAt(
         { open, close },
         false,
         (item) => item,
-        () => ({ make, mount: () => new Scope() }),
+        () => ({ make, mount: () => new Scope(), update: noUpdate }),
     )
     let listRuns = 0
     const scope = new Scope()
@@ -949,9 +1247,9 @@ test('a value a row read while it was built does not rerun the list', () => {
 
 // THE SUBJECT IS READ ONCE ON LOAD, and the rows are hydrated against that one read. Read twice —
 // once to hydrate and again on the watch's first run — a subject building FRESH items matched no
-// row by identity, so every row the server sent was dropped and remade before anyone touched the
-// page. THE REVERT: hydrate from a `seed` read ahead of the watch rather than on its first run;
-// this reports 0 of 3 server rows kept where 3 are due.
+// row by identity, so every row the server sent was written again before anyone touched the page
+// (32.67). THE REVERT, run: reconcile the hydrated rows against a second copy of the items; this
+// reports 7 wakes where 4 are due.
 const FRESH = `<script>
 import { reactive } from '@abide/abide'
 
@@ -963,12 +1261,17 @@ let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 test('a subject building fresh items keeps the rows the server sent', async () => {
     const { mount } = await renderPage(FRESH)
     const sent = [...document.querySelectorAll('#fresh li')]
-    mount()
+    const work = measure(() => {
+        mount()
+        flushSync()
+    })
     const kept = [...document.querySelectorAll('#fresh li')].filter(
         (node, at) => node === sent[at],
     )
     expect(sent).toHaveLength(3)
     expect(kept).toHaveLength(3)
+    // The list's run and each row's one binding, once.
+    expect(work.wakes).toBe(4)
 })
 
 // 41.10 THROUGH THE COUNTS, which is the only truth hydration has. A hydrating run wires row `at`
@@ -1153,7 +1456,8 @@ test('a {#for} over a value computed from one declaring `by` stays positional', 
 })
 
 // 5.7 — A PATCH MUTATES IN PLACE, so the list's next run finds every key over the SAME object and
-// `reconcile` keeps the row. The row's text reads a field of a plain object, which wakes nothing.
+// `reconcile` keeps the row. The row reads its item through the row's cell (32.67), which the patch
+// is written into as a new value would be.
 //
 // THE REVERT, for this and the three 32.33 cases below it: `patchedSince` answering false. Every row
 // is kept, and each of the four reports the text it showed before the patch.
@@ -1190,7 +1494,7 @@ let rows = reactive([
 const textOf = (id: string): string | null | undefined =>
     document.querySelector(`#list li[data-id="${id}"]`)?.textContent
 
-test('a patch remakes the one row it wrote to and keeps the rest', async () => {
+test('a patch updates the one row it wrote to in place — 32.33, 32.67', async () => {
     await mountPage(PATCHED('rows', `list[1].name = 'Grace Brewster Hopper'`))
     const nodes = nodesById()
 
@@ -1200,14 +1504,11 @@ test('a patch remakes the one row it wrote to and keeps the rest', async () => {
     })
 
     expect(textOf('grace')).toBe('Grace Brewster Hopper, New York')
-    expect(document.querySelector('#list li[data-id="ada"]')).toBe(
-        nodes.get('ada') as Element,
-    )
-    expect(document.querySelector('#list li[data-id="katherine"]')).toBe(
-        nodes.get('katherine') as Element,
-    )
-    // ONE ROW: its `<li>` and the text inside it.
-    expect(work.nodesCreated).toBe(2)
+    for (const [id, node] of nodes)
+        expect(document.querySelector(`#list li[data-id="${id}"]`)).toBe(node)
+    // THE ROW IT WROTE TO IS KEPT TOO, and only its one changed text is written.
+    expect(work.nodesCreated).toBe(0)
+    expect(work.dataWrites).toBe(1)
 })
 
 // 32.33 THROUGH A `Map`, which no proxy can watch: a row over `[...byId.values()]` shows the item a
@@ -1245,7 +1546,7 @@ test('a list over an array computed from a patched value shows the patch', async
 
 // A WRITE BELOW THE ROW'S OWN OBJECT. The row reads `row.place.city`, and the object written is
 // `place` — so the whole path down to it is what the patch marks.
-test('a patch nested below a row remakes that row', async () => {
+test('a patch nested below a row updates that row', async () => {
     await mountPage(PATCHED('rows', `list[0].place.city = 'Marylebone'`))
     ;(document.querySelector('#patch') as HTMLElement).click()
     flushSync()
@@ -1296,7 +1597,8 @@ let rows = reactive([
 })
 
 // A ROW THAT BINDS NOTHING OPENS NO SCOPE — a hydrated row and a made one alike hold the one shared
-// empty scope, so a static row costs no `Scope` and no `stops` array. A count of allocations, not a
+// empty scope, so a static row costs no `Scope` and no `stops` array — a row reading its item alone
+// included, whose slots its `update` rewrites (32.67). A count of allocations, not a
 // value: a row with a scope of its own renders the same. THE REVERT: emit the scope and `try` for an
 // empty body in `mountFunction`; this reports 5 of 5 rows with a scope of their own where 0 are due.
 const STATIC_ROWS = `<script>
@@ -1337,13 +1639,17 @@ test('a row that throws while made leaves no row unrecorded — 41.14', () => {
     const close = document.createComment(REGION_CLOSE)
     host.append(open, close)
     document.body.append(host)
-    const make = (made: Document, item: unknown): Node[] => {
-        if (item === 'boom') throw new Error('boom')
+    const make = (made: Document, item: { data: unknown }): Node[] => {
+        if (item.data === 'boom') throw new Error('boom')
         const row = made.createElement('li')
-        row.textContent = String(item)
+        row.textContent = String(item.data)
         return [row]
     }
-    const builders = { make, mount: (): Scope => new Scope() }
+    const builders = {
+        make,
+        mount: (): Scope => new Scope(),
+        update: noUpdate,
+    }
     const list = listAt(
         { open, close },
         false,

@@ -56,3 +56,84 @@ export function boundProp(hold: () => unknown): (held?: true) => unknown {
 export function groupHolds(group: unknown, value: unknown): boolean {
     return Array.isArray(group) ? group.includes(value) : group === value
 }
+
+/**
+ * Whether a `<select>`'s bound value selects an option: it is the option's value, or a list
+ * holding it.
+ *
+ * 32.61, 32.62 — compared as TEXT, unlike `groupHolds`: a select's value is written to the
+ * property as its text, so a number selects the option whose value spells it.
+ */
+export function selectHolds(value: unknown, option: string): boolean {
+    if (!Array.isArray(value))
+        return value !== undefined && value !== null && String(value) === option
+    for (const member of value) if (String(member) === option) return true
+    return false
+}
+
+// An `<option` open tag: the name, then attributes up to the `>` that ends it, a quoted value
+// carrying any `>` it holds.
+const OPTION_TAG = /<option(?=[\s>])((?:[^>"']|"[^"]*"|'[^']*')*)>/gi
+const VALUE_ATTRIBUTE = /\svalue\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i
+// What ends an option's text where it has no `value`: the next tag that is not a comment.
+const OPTION_TEXT_END = /<(?!!--)/
+const COMMENT = /<!--[\s\S]*?-->/g
+const REFERENCE = /&(?:#(\d+)|#x([\da-f]+)|(amp|lt|gt|quot|apos));/gi
+const NAMED: Record<string, string> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+}
+
+/**
+ * A `<select>`'s rendered options with `selected` written on each its bound value selects.
+ *
+ * 32.61 — THE SERVER'S HALF OF THE PROPERTY: a select's value is no attribute of its own, so the
+ * painted page carries it on the options. Read off the markup rather than the template, because an
+ * option may come from a `{#for}`, an arm or a component, and every one of them has rendered by
+ * now. A single select marks the first match, which is the one assigning `value` selects.
+ */
+export function selectedMarkup(markup: string, value: unknown): string {
+    if (value === undefined || value === null) return markup
+    const multiple = Array.isArray(value)
+    let out = ''
+    let cut = 0
+    let marked = false
+    for (const match of markup.matchAll(OPTION_TAG)) {
+        if (marked && !multiple) break
+        const end = (match.index as number) + match[0].length
+        const named = VALUE_ATTRIBUTE.exec(match[1] as string)
+        let text: string
+        if (named !== null)
+            text = decoded(named[1] ?? named[2] ?? named[3] ?? '')
+        else {
+            // The option's text, as the browser reads `value` from it: comments out,
+            // whitespace collapsed.
+            const rest = markup.slice(end)
+            const stop = rest.search(OPTION_TEXT_END)
+            text = decoded(
+                (stop === -1 ? rest : rest.slice(0, stop)).replace(COMMENT, ''),
+            )
+                .replace(/\s+/g, ' ')
+                .trim()
+        }
+        if (!selectHolds(value, text)) continue
+        out += `${markup.slice(cut, end - 1)} selected>`
+        cut = end
+        marked = true
+    }
+    return cut === 0 ? markup : out + markup.slice(cut)
+}
+
+function decoded(text: string): string {
+    if (!text.includes('&')) return text
+    return text.replace(REFERENCE, (whole, decimal, hex, name) =>
+        decimal !== undefined
+            ? String.fromCodePoint(Number(decimal))
+            : hex !== undefined
+              ? String.fromCodePoint(Number.parseInt(hex, 16))
+              : (NAMED[(name as string).toLowerCase()] ?? whole),
+    )
+}

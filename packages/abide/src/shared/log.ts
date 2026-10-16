@@ -144,6 +144,14 @@ function currentGate(): Gate {
     return gate
 }
 
+/**
+ * Whether `DEBUG` could enable any namespace at all: with no inclusion nothing passes, so a gated
+ * line returns before its namespace is built (28.12 still reads it on every line that can write).
+ */
+function anyEnabled(): boolean {
+    return currentGate().include.length !== 0
+}
+
 /** Whether `DEBUG` enables a namespace's gated lines (28.6). */
 function isEnabled(namespace: string): boolean {
     const { include, exclude } = currentGate()
@@ -247,10 +255,12 @@ function loggerOver(namespaceOf: () => string): Logger {
         write(namespaceOf(), 'info', args)
     }) as Logger
     logger.info = (...args) => {
+        if (!anyEnabled()) return
         const namespace = namespaceOf()
         if (isEnabled(namespace)) write(namespace, 'info', args)
     }
     logger.debug = (...args) => {
+        if (!anyEnabled()) return
         const namespace = namespaceOf()
         if (isEnabled(namespace)) write(namespace, 'debug', args)
     }
@@ -259,7 +269,7 @@ function loggerOver(namespaceOf: () => string): Logger {
     // 28.4 — another segment, below this one. 28.12 — asked per line too, so a logger named at module
     // load, before the app's name resolved, writes under the name once it has.
     logger.named = (name) => loggerOver(() => `${namespaceOf()}:${name}`)
-    logger.enabled = () => isEnabled(namespaceOf())
+    logger.enabled = () => anyEnabled() && isEnabled(namespaceOf())
     Object.defineProperty(logger, 'records', { get: recordsValue })
     return logger
 }

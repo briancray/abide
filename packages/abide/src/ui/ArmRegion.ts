@@ -116,7 +116,7 @@ export class ArmRegion {
         const painted = namedArm(this.region.open.data)
         if (painted === undefined || painted === next) return false
         HYDRATE_LOG.warning(
-            `abide: the server painted arm ${painted} of this region and the client chose arm ${String(next)}, so the region is rebuilt (41.24).`,
+            `abide: the server painted arm ${painted} of this region and the client chose arm ${String(next)}, so the region is rebuilt. RULEBOOK 41.24.`,
         )
         return true
     }
@@ -162,7 +162,7 @@ export class ChosenRegion extends ArmRegion {
     override paintedOther(next: unknown): boolean {
         if (next != null) return false
         HYDRATE_LOG.warning(
-            'abide: the server painted a component in this region and the client chose none, so the region is emptied (41.24).',
+            'abide: the server painted a component in this region and the client chose none, so the region is emptied. RULEBOOK 41.24.',
         )
         return true
     }

@@ -17,11 +17,17 @@ import { Mux, type MuxConnection } from './answerSocket.ts'
 import { appDirectories } from './appDirectories.ts'
 import { holdsApp } from './appTree.ts'
 import { buildDirectory } from './buildDirectory.ts'
-import { APP_PACKAGE, type AppPackage, config, packageUnder } from './config.ts'
+import {
+    APP_PACKAGE,
+    type AppPackage,
+    config,
+    packageUnder,
+    positiveSetting,
+} from './config.ts'
 import { McpSurface } from './generatedSurfaces.ts'
 import { HOOKS, inOrder, reportUnexpected, rootRungs } from './hooks.ts'
 import { installServer } from './installServer.ts'
-import { admitsMux, upgraded } from './muxUpgrade.ts'
+import { admitsMux, muxSocketOptions, upgraded } from './muxUpgrade.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { realOrAsGiven } from './realOrAsGiven.ts'
 import {
@@ -38,6 +44,11 @@ import { traceResponse } from './trace.ts'
 
 // 28.8 — one line per request.
 const REQUEST_LOG = namedLogger('abide:request')
+
+// 42.18 — HALF OF `docker stop`'s TEN-SECOND GRACE, the shortest a common supervisor gives before its
+// `SIGKILL`: the other half is `onStop`'s, so the teardown runs before the kill rather than being cut
+// by it.
+const STOP_TIMEOUT = 5000
 
 /** The app object: what a host, a test or a script holds the app as. */
 export interface App {
@@ -360,11 +371,33 @@ export async function bootEntered(
         // stream ended, which a listener's stop otherwise waits on for as long as it streams.
         mux?.closeAll(1001, 'the app is stopping')
         endHeld()
-        await bound?.stop()
-        if (inFlight > 0)
-            await new Promise<void>((done) => {
-                drained = done
-            })
+        const drain = (async () => {
+            await bound?.stop()
+            if (inFlight > 0)
+                await new Promise<void>((done) => {
+                    drained = done
+                })
+            return true
+        })()
+        // 42.17, 42.18 — THE DRAIN HAS A DEADLINE: past it, every connection still answering is
+        // closed and `onStop` runs without waiting on the rest. A request `App.fetch` was handed with
+        // no socket bound has no connection to close, and is only no longer waited on.
+        let deadline: ReturnType<typeof setTimeout> | undefined
+        const finished = await Promise.race([
+            drain,
+            new Promise<false>((done) => {
+                deadline = setTimeout(
+                    () => done(false),
+                    // setTimeout reads anything past a signed 32-bit count as 1 ms.
+                    Math.min(
+                        positiveSetting('ABIDE_STOP_TIMEOUT', STOP_TIMEOUT),
+                        2 ** 31 - 1,
+                    ),
+                )
+            }),
+        ])
+        clearTimeout(deadline)
+        if (!finished) await bound?.stop(true)
         // What the requests drained here left behind them.
         endHeld()
         if (LISTENING.server === bound) LISTENING.server = undefined
@@ -409,6 +442,7 @@ export async function bootEntered(
                         : answered
                 },
                 websocket: {
+                    ...muxSocketOptions(),
                     open(socket) {
                         socket.data.connection = opened.connect(
                             socket.data.request,

@@ -2,7 +2,7 @@
 // for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { gate, spawned } from 'harness/gate'
+import { gate, spawned } from '@abide/harness/gate'
 import { reactive } from '#shared'
 import { chunksOfStream } from '#shared/reactive/index.ts'
 import { handlerFiles, serveApp } from './builtApp.ts'

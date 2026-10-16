@@ -35,7 +35,7 @@ const VERIFIED = new WeakSet<object>()
  * WHERE AN ISSUE GOES, and `null` is a combinator's SCRATCH ATTEMPT: a branch whose issues are
  * only ever counted, never read. A record per branch per value was the whole of what `anyOf`,
  * `oneOf` and `not` allocated beyond the walk itself: 83-90% of the time without it in V8 and
- * 78-88% in JSC, and the walk is 86-99% of a gated write (`harness/scripts/sharedCases.ts`).
+ * 78-88% in JSC, and the walk is 86-99% of a gated write (`abide/bench/sharedCases.ts`).
  */
 type Report = Record<string, string[]> | null
 

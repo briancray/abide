@@ -21,7 +21,7 @@ import { shell } from './shell.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /** What a command is handed: the words after the flags, the command's own first, and the flags. */
-export type Given = ReturnType<typeof parsed>
+export type Given = ReturnType<typeof parseFlags>
 
 type Command = (given: Given) => Promise<number | undefined>
 
@@ -42,6 +42,8 @@ type SourceCommands = Record<
 export type Host = {
     /** What usage and every message speak as: `abide`, or the name the executable was run by. */
     name: string
+    /** What `--version` prints: abide's own, or the compiled app's. 38.115. */
+    version: string
     /**
      * The app the invocation means, found once off its flags (38.25): every command that serves,
      * boots, lists or announces it derives from this one handle.
@@ -60,24 +62,68 @@ export async function runCommands(
     host: Host,
     argv: string[],
 ): Promise<number | undefined> {
+    const commands = commandsOf(host)
     // 38.2 — EVERYTHING AFTER THE FILE IS THE SCRIPT'S, flags included, so `run` is taken before the
     // parser sees an argument it does not know.
-    const given: Given =
+    const given =
         argv[0] === 'run' ? { positionals: argv, values: {} } : parsed(argv)
+    // 38.113 — a flag the parser refuses is one line and the usage, never the parser's stack.
+    if (typeof given === 'string') {
+        console.error(`${host.name}: ${given}\n\n${usage(host, commands)}`)
+        return 1
+    }
     const command = given.positionals[0]
-    const commands = commandsOf(host)
     if (command === 'help' || given.values.help) {
         console.log(usage(host, commands))
         return 0
     }
+    if (given.values.version) {
+        console.log(host.version)
+        return 0
+    }
     if (command === undefined)
         return await shellOn(host, host.app(given), given)
-    for (const [name, , body] of commands)
-        if (name.split(' ')[0] === command) return await body(given)
+    let nearest: string | undefined
+    let nearestDistance = NEAREST_COMMAND_DISTANCE + 1
+    for (const [name, , body] of commands) {
+        const word = name.split(' ')[0] as string
+        if (word === command) return await body(given)
+        const distance = editDistance(word, command)
+        if (distance < nearestDistance) {
+            nearest = word
+            nearestDistance = distance
+        }
+    }
+    // 38.114 — a near miss is named, and the usage is left for a word nothing is near.
     console.error(
-        `${host.name}: unknown command '${command}'\n\n${usage(host, commands)}`,
+        nearest === undefined
+            ? `${host.name}: unknown command '${command}'\n\n${usage(host, commands)}`
+            : `${host.name}: unknown command '${command}' — did you mean \`${host.name} ${nearest}\`?`,
     )
     return 1
+}
+
+// Two edits covers a dropped, doubled or swapped letter; three reaches unrelated words.
+const NEAREST_COMMAND_DISTANCE = 2
+
+/** The Levenshtein distance between two words: the fewest insertions, deletions and substitutions. */
+function editDistance(from: string, to: string): number {
+    let previous: number[] = []
+    for (let column = 0; column <= to.length; column++) previous.push(column)
+    for (let row = 1; row <= from.length; row++) {
+        const current = [row]
+        for (let column = 1; column <= to.length; column++)
+            current.push(
+                Math.min(
+                    (previous[column] as number) + 1,
+                    (current[column - 1] as number) + 1,
+                    (previous[column - 1] as number) +
+                        (from[row - 1] === to[column - 1] ? 0 : 1),
+                ),
+            )
+        previous = current
+    }
+    return previous[to.length] as number
 }
 
 // A command, and whether it is one of `SourceCommands` — which a host without them still answers
@@ -190,8 +236,10 @@ function usage(host: Host, commands: Row[]): string {
             text += `  ${command.padEnd(width)}  ${meaning}\n`
     if (!sourced)
         return `${text}
-  --port  the listen port the app is served on
-  --url   the running app the shell, call, watch, openapi and mcp talk to
+  --port     the listen port the app is served on
+  --url      the running app the shell, call, watch, openapi and mcp talk to
+  --method   the method call sends, where the handler answers more than one
+  --version  the version of this executable's app
 `
     text += `
   --root       the app's source directory, where its pages sit —
@@ -202,11 +250,26 @@ function usage(host: Host, commands: Row[]): string {
   --url        the running app the shell, call, watch, openapi and mcp talk to
   --target     the platform compile builds for — linux-x64, darwin-arm64, windows-x64…
   --platforms  several of them, comma-separated, one executable each
+  --method     the method call sends, where the handler answers more than one
+  --version    the version of abide
 `
     return text
 }
 
+/** The words and flags `argv` holds, or the parser's refusal of a flag, as one line. */
 function parsed(argv: string[]) {
+    try {
+        return parseFlags(argv)
+    } catch (thrown) {
+        const { code, message } = thrown as { code?: string; message: string }
+        if (!code?.startsWith('ERR_PARSE_ARGS_')) throw thrown
+        // Bun's message goes on to advise `--`, which no command here reads.
+        const refusal = message.split('. ')[0] as string
+        return `${refusal[0]?.toLowerCase()}${refusal.slice(1)}`
+    }
+}
+
+function parseFlags(argv: string[]) {
     return parseArgs({
         args: argv,
         options: {
@@ -225,6 +288,7 @@ function parsed(argv: string[]) {
             platforms: { type: 'string' },
             json: { type: 'boolean' },
             help: { type: 'boolean', short: 'h' },
+            version: { type: 'boolean', short: 'v' },
         },
         allowPositionals: true,
     })
@@ -361,7 +425,6 @@ async function run(
     return undefined
 }
 
-/** `call`: one call to one handler on a running app. 38.8. */
 /** `watch <address> [args]`: a `GET`'s value and each patch, as its event stream sends them (38.69). */
 async function watch(host: Host, given: Given): Promise<number> {
     const {
@@ -380,6 +443,7 @@ async function watch(host: Host, given: Given): Promise<number> {
     })
 }
 
+/** `call`: one call to one handler on a running app. 38.8. */
 async function call(host: Host, app: AppHandle, given: Given): Promise<number> {
     const {
         positionals: [, address, ...args],

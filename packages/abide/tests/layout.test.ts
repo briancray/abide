@@ -7,7 +7,7 @@
 // `Bun.serve` refuses one it did not define.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { spawned } from 'harness/gate'
+import { spawned } from '@abide/harness/gate'
 import { addressOf, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -176,4 +176,16 @@ test("a level's keyed head contributions replace the one above — 39.4", async 
     ])
     const about = await (await Bun.fetch(`${base}/about`)).text()
     expect(titles(about)).toEqual(['<title>Shell</title>'])
+})
+
+// 39.4 THREE LEVELS DEEP: a page under a section layout, both keying a `<title>`. A level's head is
+// read lazily, and reading it builds the level — so the section's head, read after its own build had
+// pushed the page's, landed after it, and the section's title beat the page's.
+// THE REVERT: push `below.head` where it is read rather than into a slot taken first, and
+// `/invoices` reads `Section`.
+test("a page's keyed head contributions replace its section layout's — 39.4", async () => {
+    const html = await (await Bun.fetch(`${base}/invoices`)).text()
+    expect(
+        html.slice(0, html.indexOf('<body>')).match(/<title>[^<]*<\/title>/g),
+    ).toEqual(['<title>Invoices</title>'])
 })

@@ -49,10 +49,12 @@ export {
     type Identity,
     isStreaming,
     loadOf,
-    servedCellOf,
+    moveItem,
     type Reactive,
     type ReactiveOptions,
+    rowItem,
     type Store,
+    servedCellOf,
     streamingOrSettled,
     type Transformer,
 } from './Reactive.ts'
@@ -308,21 +310,27 @@ export function reactive<
       >,
     AdoptedProduced<ReturnType<Body>, Kept<Shaped>>
 >
-/** A computed value: `body` produces it, and runs again when a value it read changes. */
+/**
+ * A computed value: `body` produces it, and runs again when a value it read changes.
+ *
+ * 19.24 — `Computed` IS READ OFF THE BODY ALONE, hence `NoInfer` in the options: the checker infers
+ * through `Awaited`, so a `Schema<{ id: number }>` beside an async body put `{ id: number }` in
+ * `Computed` and the body's promise no longer fit it.
+ */
 export function reactive<
     Computed,
     Shaped = Awaited<Computed>,
     Gate = Schema<Awaited<Computed>>,
 >(
     body: () => Computed,
-    options?: Shaping<Awaited<Computed>, Shaped, never, Gate>,
+    options?: Shaping<Awaited<NoInfer<Computed>>, Shaped, never, Gate>,
 ): Reactive<
     Kept<Shaped>,
     Awaited<Computed>,
     AdoptedFailures<Computed> | Refusals<Shaped, Gate, Awaited<Computed>>,
     AdoptedProduced<Computed, Kept<Shaped>>
 >
-/** A keyed value: `body` declares a parameter, and each `Args` key reached is its own entry. */
+/** A keyed value: `body` declares a parameter, and each `Args` key reached is its own entry. `NoInfer` for 19.24, as above. */
 export function reactive<
     Computed,
     Args,
@@ -331,7 +339,7 @@ export function reactive<
     ArgsGate = Schema<Args>,
 >(
     body: (args: Args) => Computed,
-    options?: Shaping<Awaited<Computed>, Shaped, Args, Gate, ArgsGate>,
+    options?: Shaping<Awaited<NoInfer<Computed>>, Shaped, Args, Gate, ArgsGate>,
 ): Keyed<
     Kept<Shaped>,
     Args,

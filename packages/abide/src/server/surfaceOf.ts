@@ -15,6 +15,8 @@ export type Listed = {
     description: string | undefined
     /** Its args' JSON Schema, where it has one. 19.9, 20.11. */
     schema: unknown
+    /** What it answers, as JSON Schema, where its type says. 19.21. */
+    result: unknown
 }
 
 /**
@@ -47,6 +49,7 @@ export function surfaceOf(
         description:
             live === undefined ? mount.description : live.handler.description,
         schema: live === undefined ? mount.args : live.argsDocument,
+        result: mount.result,
     }
 }
 

@@ -9,7 +9,7 @@
 // in the document.
 
 import { afterAll, expect, test } from 'bun:test'
-import { measure } from 'harness/measure'
+import { measure } from '@abide/harness/abide'
 import { flushSync } from '#shared'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage } from './typed.ts'

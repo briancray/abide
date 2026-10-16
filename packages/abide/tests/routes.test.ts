@@ -3,7 +3,7 @@
 // document. Spawned, as an author runs it, over an app holding one of each.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { spawned } from 'harness/gate'
+import { spawned } from '@abide/harness/gate'
 import { appFixture, BIN } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

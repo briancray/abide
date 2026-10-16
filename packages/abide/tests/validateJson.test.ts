@@ -3,6 +3,7 @@
 // path (19.5), which is what `jsonSchema` carries into the Standard form of `Schema`.
 
 import { expect, test } from 'bun:test'
+import { GET } from '#server'
 import type { JsonValue, StandardSchemaV1 } from '#shared'
 import { jsonSchema, reactive, validateJson } from '#shared'
 
@@ -613,4 +614,67 @@ test('an args gate types its ValidationError into a keyed error(), and only a ga
     const plain = reactive((args: { id: number }) => args.id * 2)
     // @ts-expect-error — no gate declared, so no refusal to read.
     expect(plain({ id: -1 }).error()?.data).toBeUndefined()
+})
+
+// 19.23, 19.24 IN THE TYPE: a body's value is typed from the body, whatever gates it. A `jsonSchema`
+// with no type argument fits the slot it is given to, and a Standard Schema beside an async body
+// does not decide what the body is. The annotations are the assertion — `bun run typecheck`
+// reads them.
+//
+// THE REVERTS: give `jsonSchema` no `Untyped` default for `T`, and `tsc` refuses the keyed call (`No overload
+// matches this call` — the checker settles `T` against the first overload it tries, whose `args` is
+// `never`, and keeps it) and types `label` as `unknown`. Read `Computed` off the options again
+// (`Shaping<Awaited<Computed>, …>`), and the async body gated by `standard` is refused (`No overload
+// matches this call` — `Computed` inferred as `{ id: number }` from the schema, which the body's
+// promise is not).
+test('a body is typed from the body, whatever schema gates it — 19.23, 19.24', async () => {
+    const invoice = GET(
+        reactive(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
+            args: jsonSchema({
+                type: 'object',
+                properties: { id: { type: 'integer' } },
+                required: ['id'],
+            }),
+        }),
+    )
+    const total: number = (await invoice({ id: 2 })).total
+    expect(total).toBe(20)
+
+    const label = reactive(() => 'seats', {
+        schema: jsonSchema({ type: 'string' }),
+    })
+    const read: string = label()
+    expect(read).toBe('seats')
+
+    const standard: StandardSchemaV1<{ id: number }> = {
+        '~standard': {
+            version: 1,
+            vendor: 'test',
+            validate: (value) => ({ value: value as { id: number } }),
+        },
+    }
+    const loaded = reactive(async () => ({ id: 7 }), { schema: standard })
+    const id: number = (await loaded).id
+    expect(id).toBe(7)
+})
+
+// 19.23 AGAIN, ON A VALUE: the slot's type is the initial's, widened as it is with no schema. THE
+// REVERT: type a bare `jsonSchema` as `StandardSchemaV1<never>` and `tsc` types `count` as
+// `Reactive<0>` and refuses `set(5)` — a `never` drawn from inside the schema is a candidate that is
+// not top level, and that stops the literal widening. As `StandardSchemaV1<any>`, `count()` is `any`
+// and the `@ts-expect-error` below is unused.
+test('a bare jsonSchema leaves a value typed by its initial — 19.23', () => {
+    const count = reactive(0, { schema: jsonSchema({ type: 'number' }) })
+    count.set(5)
+    const read: number = count()
+    expect(read).toBe(5)
+    // @ts-expect-error — a number slot, so a string is no value of it.
+    count.set('five')
+
+    const totals = reactive(
+        { seats: 1 },
+        { schema: jsonSchema({ type: 'object' }) },
+    )
+    totals.set({ seats: 2 })
+    expect(totals().seats).toBe(2)
 })

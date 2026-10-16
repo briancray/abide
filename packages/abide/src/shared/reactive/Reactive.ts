@@ -1395,6 +1395,44 @@ export function signalMoved(signal: Tracked): void {
 }
 
 /**
+ * A `{#for}` row's item as a cell, read by calling what this hands back (32.67).
+ *
+ * A `Cell` AND NOT A `reactive(value)`. The item is held exactly as the list handed it over — a
+ * `Reactive` item is not adopted (11.61), a function is not run as a body and `undefined` is a
+ * value rather than nothing landed (2.2) — and a `Cell` rather than a leaner record, so a derived
+ * value that reads a row keeps one element type in its `sources` for every walk over them.
+ *
+ * NO BRAND: the accessor is the row's own, and nothing it is handed to should take it for a value.
+ */
+export function rowItem(value: unknown): () => unknown {
+    const cell = new Cell('row', null, undefined, undefined, false)
+    serve(cell, value)
+    // A ROW ITEM IS ALWAYS DIRECT — it reads nothing, so no mark ever reaches it, and it carries no
+    // expiry, stream or store — so the read is the tracking and the field.
+    const self = function readItem(): unknown {
+        const reader = TRACKING.reader
+        if (reader !== null) {
+            const at = reader.cursor
+            if (reader.sources[at] === cell) reader.cursor = at + 1
+            else track(cell, reader)
+        }
+        return cell.value
+    } as unknown as (() => unknown) & Callable
+    self[CELL] = cell
+    return self
+}
+
+/**
+ * Writes `value` into a row's item and wakes what reads it — the same object included, which is
+ * what a patch that wrote inside it is (32.33).
+ */
+export function moveItem(item: () => unknown, value: unknown): void {
+    const cell = (item as unknown as Callable)[CELL]
+    cell.value = value
+    cascade(cell)
+}
+
+/**
  * Marks a production's readers and schedules the effects it reached.
  *
  * THE CASCADE, WHICH NO LONGER RUNS A SINGLE DERIVED BODY. It marks, and it schedules the
@@ -1420,68 +1458,54 @@ function cascade(cell: Cell): void {
 }
 
 /**
- * Runs the queued effects, abandoning the queue if one throws.
+ * Runs the queued effects to the end of the queue, reporting a throw rather than stopping at it.
  *
- * THE DRAIN, BEHIND ITS OWN FRAME. A `try`/`finally` in `cascade` is a `try`/`finally`
- * on every write, and the arm that needs it is the one that actually has an effect to
- * run — so the guard is up there and the handler is down here.
+ * THE DRAIN, BEHIND ITS OWN FRAME. A `try` in `cascade` is a `try` on every write, and the arm
+ * that needs it is the one that actually has an effect to run — so the guard is up there and the
+ * handler is down here. The `try` is ENTERED ONCE PER THROW, not once per effect: the inner loop is
+ * the drain, and a throw re-enters it at the next slot.
+ *
+ * 12.7 — THE DRAIN FINISHES. What reaches the catch is an effect that already stopped its own
+ * watch (12.8) and was reported (12.6); unwinding the queue over it left every sibling the drain
+ * had not reached unrun on the write that woke them. `reportError` is the throw surfacing as
+ * uncaught — the window's `error` event and the console, with the thrown value as thrown — without
+ * the unwind, and in the same turn, where a `queueMicrotask` re-throw would put it after effects
+ * that ran later than it did.
  */
 function drainPending(): void {
     draining = true
-    try {
-        // Re-read `pendingCount` per turn: an effect that writes appends to the queue
-        // this loop is walking, and those belong to this drain rather than the next write.
-        while (pendingAt < pendingCount) {
-            const reader = PENDING[pendingAt] as Subscriber
-            // THE SLOT IS RELEASED, THE ARRAY IS NOT. Holding the capacity is what keeps a
-            // push a plain indexed store, and a slot left pointing at a drained subscriber
-            // holds its `notify` — and through it the effect body and the whole scope that
-            // body closed over — until another effect happens to land on that index. A
-            // disposed `watch` stayed reachable to the next high-water mark, which on a page
-            // is every node the torn-down component built. One store per effect ALREADY RUN,
-            // against a body call.
-            PENDING[pendingAt] = null
-            pendingAt += 1
-            // A DIRECT READER OF WHAT WAS WRITTEN is `DIRTY`, which is the overwhelming
-            // shape and asks nothing: there is no source to interrogate, because the
-            // mark says one of them already produced.
-            if (reader.state === DIRTY && reader.alive) {
-                reader.state = CLEAN
-                reader.notify()
-                continue
+    // Re-read `pendingCount` per turn: an effect that writes appends to the queue this loop is
+    // walking, and those belong to this drain rather than the next write.
+    while (pendingAt < pendingCount) {
+        try {
+            while (pendingAt < pendingCount) {
+                const reader = PENDING[pendingAt] as Subscriber
+                // THE SLOT IS RELEASED, THE ARRAY IS NOT. Holding the capacity is what keeps a
+                // push a plain indexed store, and a slot left pointing at a drained subscriber
+                // holds its `notify` — and through it the effect body and the whole scope that
+                // body closed over — until another effect happens to land on that index. A
+                // disposed `watch` stayed reachable to the next high-water mark, which on a page
+                // is every node the torn-down component built. One store per effect ALREADY RUN,
+                // against a body call. Released BEFORE the run, so a throw resumes past it.
+                PENDING[pendingAt] = null
+                pendingAt += 1
+                // A DIRECT READER OF WHAT WAS WRITTEN is `DIRTY`, which is the overwhelming
+                // shape and asks nothing: there is no source to interrogate, because the
+                // mark says one of them already produced.
+                if (reader.state === DIRTY && reader.alive) {
+                    reader.state = CLEAN
+                    reader.notify()
+                    continue
+                }
+                resolveEffect(reader)
             }
-            resolveEffect(reader)
+        } catch (thrown) {
+            reportError(thrown)
         }
-    } finally {
-        // The queue is abandoned rather than carried into the next write: an effect that
-        // threw has already stopped its own watch (12.8), and a half-drained queue
-        // outliving the throw would run it against a later write's marks. The tail is
-        // released for the reason the loop above releases each slot; on the path that did
-        // not throw the cursor has already reached the count and this walks nothing.
-        //
-        // THE MARK GOES WITH THE QUEUE, and that is what abandoning has to mean. A reader
-        // left standing at `DIRTY` with nothing holding it takes `markReaders`' own
-        // `state >= wanted` short-circuit on every later write, so it is never queued
-        // again — one effect throwing left every sibling it had not reached permanently
-        // deaf, silently, while the value went on being right. Back to `CLEAN` is the
-        // state the next write's mark can reach.
-        //
-        // AN EFFECT ONLY, THOUGH. The queue is not effects alone: `markReaders` also pushes a
-        // derived CELL on 2.13's aborted-body path, and for one of those `state` is not a
-        // reminder to run — it IS the pull the next read takes (`state !== CLEAN` is what sends
-        // a read a frame in). Forced back to `CLEAN` it is not deaf, it is settled: the read
-        // path skips `resolve`, the aborted body is never rerun and the `ready()` guard that
-        // queued it answers false for the life of the page — undoing, on any throw anywhere in
-        // the drain, exactly what that push was added to repair.
-        for (let index = pendingAt; index < pendingCount; index += 1) {
-            const abandoned = PENDING[index] as Subscriber
-            PENDING[index] = null
-            if (abandoned.isEffect) abandoned.state = CLEAN
-        }
-        pendingAt = 0
-        pendingCount = 0
-        draining = false
     }
+    pendingAt = 0
+    pendingCount = 0
+    draining = false
 }
 
 /**
@@ -3095,7 +3119,7 @@ function walkBusy(cell: Cell, pass: number): boolean {
  * never reads `s()` — so it subscribes to NOTHING, and the value landing wakes nobody. It
  * is stuck on the spinner for the life of the page, with the value sitting right there.
  *
- * ON ITS OWN EDGE, which is 3.3's "that probe alone" and is bought by what the other
+ * ON ITS OWN EDGE, which is 3.3's "and MUST NOT subscribe it to the value", bought by what the other
  * spelling costs the DOM. Subscribing a probe reader through the VALUE edge works and is
  * twenty lines lighter — and then a load STARTING wakes every reader of the value, which
  * on a fifty-row list is fifty `.data` writes with the same string in them. Measured with
@@ -3610,7 +3634,7 @@ function readStore(cell: Cell, persisted: Persisted): unknown {
     } catch (failed) {
         warnStore(
             cell,
-            'could not be read, and is taken as a miss (8.15)',
+            'could not be read, and is taken as a miss. RULEBOOK 8.15',
             failed,
         )
         return undefined
@@ -3657,7 +3681,7 @@ function restoreFirst(
             if (cell.generation !== generation) return
             warnStore(
                 cell,
-                'could not be read, and is taken as a miss (8.15)',
+                'could not be read, and is taken as a miss. RULEBOOK 8.15',
                 failed,
             )
             settleRestore(cell, persisted, undefined, initial)
@@ -3759,7 +3783,7 @@ function rereadStore(cell: Cell, persisted: Persisted): void {
             if (cell.generation !== generation) return
             warnStore(
                 cell,
-                'could not be read, and is taken as a miss (8.15)',
+                'could not be read, and is taken as a miss. RULEBOOK 8.15',
                 failed,
             )
             settleReread(cell, persisted, undefined)
@@ -3820,7 +3844,11 @@ function writeStore(cell: Cell, persisted: Persisted, value: unknown): void {
 }
 
 function storeWriteFailed(cell: Cell, failed: unknown): void {
-    warnStore(cell, 'write failed, and the store stays attached (8.12)', failed)
+    warnStore(
+        cell,
+        'write failed, and the store stays attached. RULEBOOK 8.12',
+        failed,
+    )
     UNEXPECTED.report?.(failed)
 }
 

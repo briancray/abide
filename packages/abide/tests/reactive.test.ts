@@ -5,7 +5,7 @@
 // arm carry it, per CLAUDE.md's revert discipline.
 
 import { expect, setSystemTime, test } from 'bun:test'
-import { gate } from 'harness/gate'
+import { gate } from '@abide/harness/gate'
 import { handOnError, onError } from '#server/hooks.ts'
 import {
     busy,
@@ -1129,16 +1129,24 @@ test('for await over a value that failed throws its failure — 2.5', async () =
 // one source, so it must answer a throwing effect the same way. It did not — it had no
 // catch at all, so the reader stayed alive and reran into the same throw on every write,
 // where `watch(…)` stops. Nothing about the values either one serves says so.
-// 12.8 STOPS THE EFFECT THAT THREW AND NOTHING ELSE. The throw unwinds out of the drain,
-// whose `finally` abandons the queue — and a reader abandoned at `DIRTY` takes
-// `markReaders`' own `state >= wanted` short-circuit on every later write, so it is never
-// queued again. One effect throwing left every sibling the drain had not yet reached
-// permanently deaf, silently, while the value went on being right.
+// 12.8 STOPS THE EFFECT THAT THREW AND NOTHING ELSE, on the write that threw and on every one
+// after. A drain that unwound on the throw left each sibling it had not reached at `DIRTY`, which
+// `markReaders`' own `state >= wanted` short-circuit then skips on every later write — permanently
+// deaf, silently, while the value went on being right. 12.7's drain runs on past the throw, so
+// nothing is left marked.
 //
-// THE REVERT is abandoning the queue without resetting the state: `ran: 0` against 2.
-test('an effect that throws leaves its siblings alive for the next write', () => {
+// THE REVERT is the drain's catch re-throwing, which unwinds it: `ran: 0, later: 0` against
+// `ran: 2, later: 2`.
+test('an effect that throws leaves its siblings running, on that write and the next — 12.7, 12.8', () => {
     const source = reactive(0)
     const ran: number[] = []
+    const report = globalThis.reportError
+    const reported: unknown[] = []
+    globalThis.reportError = (thrown: unknown): void => {
+        reported.push(thrown)
+    }
+    const warn = console.warn
+    console.warn = (): void => {}
     watch(source, () => {
         if (source() === 1) throw new Error('boom')
     })
@@ -1148,16 +1156,22 @@ test('an effect that throws leaves its siblings alive for the next write', () =>
     const third = watch(source, () => {
         ran.push(2)
     })
+    ran.length = 0
     try {
         source.set(1)
         flushSync()
     } catch {
-        // 12.8: the throwing one is stopped, and it rethrows on the way out.
+        // Recorded by `ran` staying short: a throw that reached here unwound the drain.
+    } finally {
+        globalThis.reportError = report
+        console.warn = warn
     }
+    const first = ran.length
     ran.length = 0
     source.set(2)
     flushSync()
-    expect(`ran: ${ran.length}`).toBe('ran: 2')
+    expect(`ran: ${first}, later: ${ran.length}`).toBe('ran: 2, later: 2')
+    expect(String(reported[0])).toContain('boom')
     second()
     third()
 })
@@ -1256,21 +1270,39 @@ test('on a server, an effect that throws reaches onError and warns on abide:watc
     expect(`runs: ${runs}`).toBe('runs: 2')
 })
 
-// 12.7 IN A BROWSER: the same report, and the throw goes on out to surface as an uncaught error.
+// 12.7 IN A BROWSER: the same report, and the throw surfaces as an uncaught error — through
+// `reportError` from a rerun, so the write that woke it does not unwind; to `watch`'s caller from
+// a first run.
 //
-// THE REVERT is `effectThrew` never re-throwing: `threw: 0`.
-test('in a browser, an effect that throws warns on abide:watch and is re-thrown — 12.6, 12.7', () => {
+// THE REVERT is the drain never reporting: `surfaced: 0`.
+test('in a browser, an effect that throws warns on abide:watch and surfaces as uncaught — 12.6, 12.7', () => {
     const source = reactive(0)
+    const report = globalThis.reportError
+    const surfaced: unknown[] = []
+    globalThis.reportError = (thrown: unknown): void => {
+        surfaced.push(thrown)
+    }
+    let first: unknown
     const { handed, warned, threw } = effectReports(false, () => {
         watch(source, () => {
             if (source() === 1) throw new Error('boom')
         })
+        try {
+            watch(() => {
+                throw new Error('at once')
+            })
+        } catch (thrown) {
+            first = thrown
+        }
         source.set(1)
         flushSync()
     })
+    globalThis.reportError = report
     expect(
-        `handed: ${handed.length}, warned: ${warned.length}, threw: ${threw.length}`,
-    ).toBe('handed: 1, warned: 1, threw: 1')
+        `handed: ${handed.length}, warned: ${warned.length}, threw: ${threw.length}, surfaced: ${surfaced.length}`,
+    ).toBe('handed: 2, warned: 2, threw: 0, surfaced: 1')
+    expect(String(surfaced[0])).toContain('boom')
+    expect(String(first)).toContain('at once')
 })
 
 // 12.6 FOR A DISPOSER, before a rerun and at teardown alike. Neither stops the effect: 12.8 is an
@@ -2137,6 +2169,28 @@ test('a refresh wakes a reader that asked whether it was busy', async () => {
     await source
     // And again when it settles, since `busy` moved back.
     expect(seen.at(-1)).toBe(false)
+    stop()
+})
+
+// 3.3'S EDGE IS SHARED BY THE PROBES, and this is what that costs, counted so a change to it
+// is a number moving rather than a silence. A same-value reload flips `busy` and back while
+// `ready` stays true (3.6), and a guard on `ready` wakes for both flips. Measured in Chromium
+// over 100 keyed rows each guarded by `ready()`: the two wakes per row are 53% of a refresh,
+// 34 of 62 µs, and no DOM — kept because it stays under a frame until ~50k guarded rows,
+// where a split `busy` edge would grow every `Cell` on every hot path.
+//
+// The count is pinned rather than reverted: splitting `busy` onto its own edge is 2 -> 0.
+test('a ready guard wakes when busy flips under it', async () => {
+    const held = reactive('a')
+    const seen: boolean[] = []
+    const stop = watch(() => {
+        seen.push(held.ready())
+    })
+    held.set(Promise.resolve('a'))
+    flushSync()
+    await held
+    flushSync()
+    expect(seen).toEqual([true, true, true])
     stop()
 })
 

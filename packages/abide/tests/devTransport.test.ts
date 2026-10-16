@@ -200,6 +200,60 @@ middleware(async (next, { request }) =>
     }
 }, 30_000)
 
+// 18.28 UNDER `abide dev` — THE FRAME LIMIT IS THE APP'S CONFIGURATION, `onConfig` included, which
+// only the worker resolves: it reports the limit on `ready` and the listener is reloaded with it.
+// THE REVERT: drop the `reload` from `serveDev`'s `ready`; the listener keeps the mebibyte it read
+// with no configuration, and the 1000-byte frame is taken — this reads 'open'.
+test('a frame past an onConfig ABIDE_MAX_SOCKET_MESSAGE_SIZE closes the mux under abide dev — 18.28', async () => {
+    const limited = temporaryModule({
+        'index.abide': '<main>home</main>',
+        'layout.abide': `<script server>
+import { onConfig } from '@abide/abide/server'
+
+onConfig(() => ({ ABIDE_MAX_SOCKET_MESSAGE_SIZE: 64 }))
+</script>
+`,
+        'books.ts': `import { GET } from '@abide/abide/server'
+
+export default GET(() => ['dune'])
+`,
+        'package.json': JSON.stringify({
+            name: 'dev-limited-fixture',
+            type: 'module',
+            imports: { '#src/*': './*' },
+        }),
+    })
+    const dir = temporaryModule({
+        'oversize.ts': `await fetch(process.argv[2])
+const ws = new WebSocket(process.argv[2].replace('http', 'ws') + '/__abide/socket')
+const outcome = await new Promise((done) => {
+    ws.onopen = () => {
+        ws.send('x'.repeat(1000))
+        setTimeout(() => done('open'), 1000)
+    }
+    ws.onclose = (event) => done(event.code)
+})
+console.log(JSON.stringify(outcome))
+process.exit(0)
+`,
+    })
+    const limitedServer = Bun.spawn(
+        ['bun', BIN, 'dev', '--root', limited, '--port', '0'],
+        { stdout: 'pipe', stderr: 'pipe' },
+    )
+    try {
+        expect(
+            await lastLinePrinted<number | string>([
+                'bun',
+                `${dir}/oversize.ts`,
+                await addressOf(limitedServer),
+            ]),
+        ).toBe(1006)
+    } finally {
+        limitedServer.kill()
+    }
+}, 30_000)
+
 // 21.1, 21.3 — THE LISTENER'S OWN ANSWERS carry what every answer does, though no app stamps them.
 // THE REVERT: build `serveDev`'s 400 as a bare `Response`; this reads null for both headers.
 test('the dev listener refuses a bad upgrade with nosniff and private, no-store — 21.1, 21.3', async () => {

@@ -179,3 +179,109 @@ test('a spread binds its on<event> functions as listeners, and keeps them in ste
     target.click()
     expect(heard).toEqual(['first', 'second'])
 })
+
+const NUMERIC = `<script>
+import { reactive } from '@abide/abide'
+
+let price = reactive<number | undefined>(1)
+</script>
+
+<input id="price" bind:value={price}>
+<p id="out">{typeof price} {price}</p>`
+
+const type = (field: HTMLInputElement, text: string) => {
+    field.value = text
+    field.dispatchEvent(new Event('input'))
+    flushSync()
+}
+
+// 32.59 — TEXT THAT READS AS THE VALUE IS LEFT AS TYPED: `2.` is a decimal point on its way, and
+// `0.10` a trailing zero the reader put there. THE REVERT: drop the `numberFromText` early return
+// from `bindValue`'s watch; the field reads `2` after `2.` is typed.
+test('a numeric bind leaves text that already reads as the value — 32.59', async () => {
+    await mountPage(NUMERIC)
+    const price = input('price')
+    type(price, '2.')
+    expect(price.value).toBe('2.')
+    type(price, '2.5')
+    expect(out()).toBe('number 2.5')
+    type(price, '0.10')
+    expect(price.value).toBe('0.10')
+    expect(out()).toBe('number 0.1')
+})
+
+// 32.58 — A BLANK FIELD IS `undefined`, AND THE BIND STAYS NUMERIC: the digit typed after it is a
+// number, and text that reads as none writes nothing. THE REVERT: decide `numeric` from the
+// standing value at each write, as the listener did; `5` after a blank is written as the string.
+test('a numeric bind writes undefined for a blank field and stays numeric — 32.58', async () => {
+    await mountPage(NUMERIC)
+    const price = input('price')
+    type(price, '')
+    expect(out()).toBe('undefined ')
+    type(price, '-')
+    expect(out()).toBe('undefined ')
+    expect(price.value).toBe('-')
+    type(price, '5')
+    expect(out()).toBe('number 5')
+})
+
+// 32.60 — A COMPOSITION IS ONE WRITE, on its end. THE REVERT: drop the `composing` check from the
+// `input` listener; the value reads the half-composed `k` before the composition ends.
+test('bind:value writes once when a composition ends — 32.60', async () => {
+    await mountPage(PAGE)
+    const name = input('name')
+    name.dispatchEvent(new Event('compositionstart'))
+    type(name, 'k')
+    expect(out()).toStartWith('ada ')
+    name.value = 'か'
+    name.dispatchEvent(new Event('compositionend'))
+    flushSync()
+    expect(out()).toStartWith('か ')
+})
+
+const CHOOSE = `<script>
+import { reactive } from '@abide/abide'
+
+let note = reactive('first\\n<b>')
+let size = reactive(2)
+let sizes = [1, 2, 3]
+let tags = reactive(['a', 'c'])
+</script>
+
+<textarea id="note" bind:value={note}></textarea>
+<select id="size" bind:value={size}>{#for one of sizes}<option value={one}>{one}</option>{/for}</select>
+<select id="tags" multiple bind:value={tags}><option>a</option><option value="b">b</option><option>c</option></select>
+<p id="out">{tags.join(',')}</p>`
+
+// 32.61 — THE PAINTED PAGE CARRIES THE VALUE before a script runs: a textarea's as its text, a
+// select's as `selected` on the option it selects, however the option was rendered. THE REVERT:
+// drop the `within` arms from `renderPosition`; the textarea renders empty and no option is
+// selected.
+test('the server writes a textarea text and a select option selected — 32.61', async () => {
+    const { html } = await renderPage(CHOOSE)
+    expect(html).toContain('<textarea id="note">\nfirst\n&lt;b&gt;</textarea>')
+    expect(html).toContain('<option value="2" selected>2</option>')
+    expect(html).not.toContain('<option value="1" selected>')
+    expect(html).toContain('<option selected>a</option>')
+    expect(html).toContain('<option value="b">b</option>')
+    expect(html).toContain('<option selected>c</option>')
+})
+
+// 32.62 — A `<select multiple>` HOLDS A LIST: what is selected, read and written per option. THE
+// REVERT: drop the `multiple` arm from `bindValue`; the watch writes the list as the select's one
+// value, `a,c`, which no option has, and hydration deselects both options the server selected.
+test('bind:value on a select multiple holds the selected values — 32.62', async () => {
+    await mountPage(CHOOSE)
+    const tags = document.getElementById('tags') as HTMLSelectElement
+    const options = tags.options
+    expect([...options].map((option) => option.selected)).toEqual([
+        true,
+        false,
+        true,
+    ])
+    ;(options[0] as HTMLOptionElement).selected = false
+    ;(options[1] as HTMLOptionElement).selected = true
+    tags.dispatchEvent(new Event('change'))
+    flushSync()
+    expect(out()).toBe('b,c')
+})

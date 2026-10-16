@@ -14,8 +14,17 @@ import { validateJson } from './validateJson.ts'
  * `validateJson`'s own, split at the dots `runSchema` joins it back at. And the document is
  * exposed where a Standard Schema exposes its JSON Schema, so 20.11's one probe publishes it with
  * no case of its own.
+ *
+ * 19.23 — WITH NO TYPE ARGUMENT IT IS `Untyped`, whose `validate` answers `any`: assignable to every
+ * slot, and a source the checker draws NO candidate from. A document says nothing the checker can
+ * read, so the value's type has to come from what the schema gates. Typed `StandardSchemaV1<never>`
+ * instead, `never` was a candidate nested inside the schema, and a candidate that is not top level
+ * stops a literal widening: `reactive(0, { schema })` was `Reactive<0>`. Typed
+ * `StandardSchemaV1<any>`, `any` was a candidate and every gated value became `any`.
  */
-export function jsonSchema<T>(document: JsonValue): StandardSchemaV1<T> {
+export function jsonSchema<T = Untyped>(
+    document: JsonValue,
+): [T] extends [Untyped] ? UntypedSchema : StandardSchemaV1<T> {
     return {
         '~standard': {
             version: 1,
@@ -46,5 +55,19 @@ export function jsonSchema<T>(document: JsonValue): StandardSchemaV1<T> {
                 output: () => document,
             },
         },
-    } as StandardSchemaV1<T>
+    } as [T] extends [Untyped] ? UntypedSchema : StandardSchemaV1<T>
+}
+
+declare const UNTYPED: unique symbol
+
+/** The type argument a bare `jsonSchema` takes: no output was named. */
+type Untyped = typeof UNTYPED
+
+/** A Standard Schema whose output is whatever the slot it gates says (19.23). */
+type UntypedSchema = {
+    readonly '~standard': {
+        readonly version: 1
+        readonly vendor: string
+        readonly validate: (value: unknown) => any
+    }
 }

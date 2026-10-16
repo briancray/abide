@@ -1,6 +1,6 @@
 // 18.11 — WHAT A PATCH WROTE, WRITTEN AGAIN HERE: a JSON Patch (RFC 6902) applied in order, each op's
 // `path` a JSON Pointer (RFC 6901). Called inside the value's own `s.patch`, so the rows it reaches are
-// the rows 32.33 remakes. A browser replays the server's writes.
+// the rows 32.33 updates. A browser replays the server's writes.
 //
 // A pointer walks own properties alone, and an array step is an index or, for `add`, `-`. Every op a
 // patch records passes, so the check costs a browser replaying its server nothing, and an op naming

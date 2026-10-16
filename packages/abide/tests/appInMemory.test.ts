@@ -140,12 +140,12 @@ const ASKED = {
     },
 }
 
-// 20.9, 20.10, 45.7 — THE MCP SURFACE IN PROCESS, as a `Toolbox` holds it, with no JSON-RPC between: it
+// 20.9, 20.10, 44.7 — THE MCP SURFACE IN PROCESS, as a `Toolbox` holds it, with no JSON-RPC between: it
 // lists what the endpoint lists, and a call is still a request through the app made as the asker, so
 // the handler reads the asker's credentials and a rung refuses it as it would anyone. THE REVERTS: start
 // `callOf`'s headers empty rather than from the asker's, and `whoami` reads "nobody"; answer a call
 // off the handler's own function rather than through the app, and `guarded` is not refused.
-test('the MCP surface lists and calls in process, as the asker — 20.9, 20.10, 45.7', async () => {
+test('the MCP surface lists and calls in process, as the asker — 20.9, 20.10, 44.7', async () => {
     await using app = await inMemoryApp(ASKED)
     const surface = await app.run(
         () => currentRequestScope()?.app?.mcp as McpSurface,

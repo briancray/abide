@@ -3,7 +3,7 @@
 // failure clears comes back.
 
 import { afterAll, expect, test } from 'bun:test'
-import { measure } from 'harness/measure'
+import { measure } from '@abide/harness/abide'
 import { parseAbide } from '#compiler'
 import { flushSync, NotLanded } from '#shared'
 import { Mismatch } from '#ui/Mismatch.ts'

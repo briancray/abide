@@ -3,7 +3,7 @@
 // wait bounded, so a revert fails here rather than hanging the suite.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { spawned } from 'harness/gate'
+import { spawned } from '@abide/harness/gate'
 import { GET } from '#server'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
 import { seedFor, takeSeed } from '#server/seedBuffer.ts'
@@ -43,6 +43,11 @@ beforeAll(async () => {
 ${HOOKS}</script>
 `,
         'probe/fault.ts': FAULT,
+        // A request that never finishes, for the drain to wait on.
+        'probe/hang.ts': `import { POST } from '@abide/abide/server'
+
+export default POST(() => new Promise(() => {}))
+`,
     })
     const built = await buildApp(app)
     if (built.exitCode !== 0)
@@ -153,6 +158,41 @@ console.log(first === second)
         env: { ...process.env, MARK: mark },
     })
     expect(ran.stdout.trim()).toBe('true')
+    expect(await Bun.file(mark).text()).toBe('stopped;')
+}, 30_000)
+
+// 42.17 — A DRAIN PAST `ABIDE_STOP_TIMEOUT` IS CUT: a request that never finishes is still in flight
+// when the app stops, and the stop closes its connection once the deadline passes and runs `onStop`
+// rather than waiting on it. Served over a unix socket, so the script needs no port. THE REVERT: await
+// `drain` in `stopOnce` rather than racing it against the deadline; the stop never finishes, and the
+// script is killed at `spawned`'s deadline with nothing printed.
+test('App.stop cuts a drain past ABIDE_STOP_TIMEOUT and runs onStop — 42.17', async () => {
+    const mark = `${app}/deadline.txt`
+    await Bun.write(
+        `${app}/tests/deadline.ts`,
+        `import { createApp } from '@abide/abide/server'
+
+const app = await createApp()
+const unix = '${app}/deadline.sock'
+await app.listen({ unix })
+const asked = fetch('http://app.internal/probe/hang', {
+    unix,
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+}).then((answer) => 'answered ' + answer.status, () => 'aborted')
+await Bun.sleep(200)
+await app.stop()
+console.log(await Promise.race([asked, Bun.sleep(1000).then(() => 'still pending')]))
+process.exit(0)
+`,
+    )
+    const ran = await spawned(['bun', `${app}/tests/deadline.ts`], {
+        cwd: app,
+        env: { ...process.env, MARK: mark, ABIDE_STOP_TIMEOUT: '300' },
+        deadline: 10_000,
+    })
+    expect(ran.stdout.trim()).toBe('aborted')
     expect(await Bun.file(mark).text()).toBe('stopped;')
 }, 30_000)
 

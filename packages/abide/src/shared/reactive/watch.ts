@@ -48,9 +48,11 @@ function reportThrow(thrown: unknown, message: string): void {
 /**
  * Reports an effect's throw, then re-throws it in a browser.
  *
- * 12.7 — A BROWSER HAS NO `onError`, so the throw goes on out to surface as an uncaught error. A
- * server's has been handed it, and re-thrown there it would fail the handler or the render whose
- * write woke this effect — a second report of one failure, against code that did not fail.
+ * 12.7 — A BROWSER HAS NO `onError`, so the throw goes on out to surface as an uncaught error: to
+ * the caller of `watch` on a first run, and on a rerun to the drain, which reports it and runs the
+ * rest of its queue (`drainPending`). A server's has been handed it, and re-thrown there it would
+ * fail the handler or the render whose write woke this effect — a second report of one failure,
+ * against code that did not fail.
  */
 function effectThrew(thrown: unknown): void {
     reportThrow(
@@ -305,10 +307,30 @@ export function watchTracked(effect: Effect): Disposer {
             truncateProbes(reader)
     }
     reader.notify()
-    return (): void => {
+    return (signal?: typeof RERUN): void => {
         if (!reader.alive) return
+        if (signal === RERUN) {
+            reader.notify()
+            return
+        }
         reader.alive = false
         detach(reader)
         if (typeof dispose === 'function') runDisposer(dispose)
     }
+}
+
+// What `rerunWatch` hands a tracked watch's stop: a symbol, so a stop called with any argument a
+// caller happens to pass — an index from `forEach` — still stops.
+const RERUN = Symbol('rerun')
+
+/**
+ * Runs the watch `stop` was handed back for (`watchTracked`) again now, tracking what it reads this
+ * time; a stopped one stays stopped.
+ *
+ * THE WATCH'S OWN STOP, CALLED WITH A SIGNAL, rather than a handle beside it: what reruns a watch
+ * is its reader, which only the stop closes over, and a second handle would cost every watch an
+ * allocation for a rerun almost none of them are ever asked for.
+ */
+export function rerunWatch(stop: Disposer): void {
+    ;(stop as (signal: typeof RERUN) => void)(RERUN)
 }

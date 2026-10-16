@@ -35,7 +35,7 @@ export const OPENAPI_ADDRESS = `${ABIDE_ADDRESS}/openapi.json`
 export const MCP_ADDRESS = `${ABIDE_ADDRESS}/mcp`
 /** The health check. */
 export const HEALTH_ADDRESS = `${ABIDE_ADDRESS}/health`
-/** Where a visitor's Claude Code bridge pairs, and is relayed turns (45.13). */
+/** Where a visitor's Claude Code bridge pairs, and is relayed turns (44.13). */
 export const BRIDGE_ADDRESS = `${ABIDE_ADDRESS}/bridge`
 
 /**

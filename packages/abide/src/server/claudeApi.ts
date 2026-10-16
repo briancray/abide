@@ -1,4 +1,4 @@
-// 45.9 — THE MESSAGES API AS A `Provider`, configured the way Anthropic documents it: the request
+// 44.9 — THE MESSAGES API AS A `Provider`, configured the way Anthropic documents it: the request
 // body's own fields, snake_case, beside the client's `apiKey` and `baseURL`. abide owns `messages`
 // and `stream`; every other field is laid on the body as written, and the `tools` written there —
 // a server tool like web search — are sent beside the app's own.
@@ -64,10 +64,10 @@ type ApiEvent = {
 
 /** The Messages API, streamed, looping while Claude asks for tools. */
 export function claudeApi(config: ClaudeApiConfig): Provider {
-    // 45.10 — the key is the app's to hand over, and nothing reads one from the environment.
+    // 44.10 — the key is the app's to hand over, and nothing reads one from the environment.
     if (typeof config.apiKey !== 'string' || config.apiKey === '')
         throw new Error(
-            'abide: claudeApi was handed no apiKey. RULEBOOK 45.10.',
+            'abide: claudeApi was handed no apiKey. RULEBOOK 44.10.',
         )
     const { apiKey, baseURL, tools: ownTools, ...body } = config
     return {
@@ -102,7 +102,7 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                         }),
                     },
                 )
-                // 45.21 — the API's own failure, answered before the first event where it comes first.
+                // 44.21 — the API's own failure, answered before the first event where it comes first.
                 if (!answered.ok || answered.body === null)
                     throw refuse(
                         502,
@@ -143,7 +143,7 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                             if (block.type !== 'tool_use') break
                             const partial = partials[event.index] as string
                             // Cut short at `max_tokens`, a call's input is not JSON — and that turn did
-                            // not stop for `tool_use`, so it is never run (45.9).
+                            // not stop for `tool_use`, so it is never run (44.9).
                             try {
                                 block.input =
                                     partial === '' ? {} : JSON.parse(partial)
@@ -165,7 +165,7 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                             usage.output += event.usage?.output_tokens ?? 0
                             break
                         case 'error':
-                            // 45.21.
+                            // 44.21.
                             throw refuse(
                                 502,
                                 `The Claude API failed: ${event.error.message}`,
@@ -205,7 +205,7 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                         is_error: result.failed,
                     })
                 }
-                // 45.12 — every result of one turn in one message.
+                // 44.12 — every result of one turn in one message.
                 history.push({ role: 'user', content })
             }
         },

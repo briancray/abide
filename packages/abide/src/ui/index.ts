@@ -56,7 +56,7 @@ export {
     type Region,
 } from './regions.ts'
 export { rowKeyOf } from './rowKeyOf.ts'
-export { replaceRow } from './rows.ts'
+export { itemOf, noUpdate, replaceRow, rowCell } from './rows.ts'
 export { EMPTY_SCOPE, Scope } from './Scope.ts'
 export { setAttribute } from './setAttribute.ts'
 export { setClass } from './setClass.ts'

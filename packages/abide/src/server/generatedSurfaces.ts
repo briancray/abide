@@ -19,7 +19,7 @@ import { type Reactive, reactive } from '#shared/reactive/index.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import { answered } from './answerFailure.ts'
-import type { Mounted } from './answerRpc.ts'
+import { bodyWithin, type Mounted } from './answerRpc.ts'
 import type { ToolDefinition } from './assistant.ts'
 import { appIdentity } from './config.ts'
 import { crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
@@ -97,7 +97,13 @@ function openApiOf(handlers: Map<string, Mounted>): {
             responses: {
                 '200': {
                     description: 'The value.',
-                    content: { 'application/json': {} },
+                    // 20.15 — what the handler answers, where its type says (19.21).
+                    content: {
+                        'application/json':
+                            each.result === undefined
+                                ? {}
+                                : { schema: each.result },
+                    },
                 },
                 '204': { description: 'Nothing to say.' },
                 default: {
@@ -214,7 +220,6 @@ export function openApi(
 
 const published = new WeakMap<Map<string, Mounted>, Reactive<Published[]>>()
 
-
 type JsonRpc = {
     jsonrpc: '2.0'
     id?: number | string | null
@@ -276,6 +281,17 @@ export class McpSurface {
                 name: tool.name,
                 description: tool.description ?? '',
                 inputSchema: tool.schema ?? { type: 'object' },
+                // 20.14 — what the method promises: a `GET` is safe, and a `GET`, a `PUT` and a
+                // `DELETE` idempotent. Any other write may destroy, and nothing says it does not.
+                annotations: {
+                    readOnlyHint: tool.method === 'GET',
+                    destructiveHint: tool.method !== 'GET',
+                    idempotentHint:
+                        tool.method === 'GET' ||
+                        tool.method === 'PUT' ||
+                        tool.method === 'DELETE',
+                },
+                outputSchema: structured(tool) ? tool.result : undefined,
             })
         }
         return listing
@@ -350,6 +366,12 @@ export class McpSurface {
                 return {
                     result: {
                         content: [{ type: 'text', text }],
+                        // 20.16 — the same value as structured content, where the tool declares
+                        // its shape; a refusal is not that value.
+                        structuredContent:
+                            failed || !structured(tool)
+                                ? undefined
+                                : JSON.parse(text),
                         isError: failed,
                     },
                 }
@@ -358,6 +380,14 @@ export class McpSurface {
                 return mcpFailure(-32601, `No method ${method}.`)
         }
     }
+}
+
+/**
+ * Whether a tool declares an `outputSchema`: MCP's structured content is an object, so only a
+ * result schema that is one. 20.16.
+ */
+function structured(tool: Listed): boolean {
+    return (tool.result as { type?: unknown } | undefined)?.type === 'object'
 }
 
 /**
@@ -377,9 +407,12 @@ export async function answerMcp(
     // with the caller's own cookies, and a `text/plain` body is sent cross-origin with no preflight.
     const crossing = crossingOrigin(request.headers.get('origin'), request.url)
     if (crossing !== null) return answered(crossingRefusal(crossing, 'POST'))
+    // 16.78 — under the environment's body ceiling, as a handler's body is.
+    const body = await bodyWithin(request, undefined)
+    if (isFailed(body)) return answered(body)
     let message: JsonRpc
     try {
-        message = (await request.json()) as JsonRpc
+        message = (await body.json()) as JsonRpc
     } catch {
         return {
             jsonrpc: '2.0',

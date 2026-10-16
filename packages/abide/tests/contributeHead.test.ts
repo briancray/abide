@@ -2,7 +2,7 @@
 // with it. A `Level` alone, with no router: the head is the level's to hold, apply and hand back.
 
 import { expect, test } from 'bun:test'
-import { withdrawHead } from '#ui/applyHead.ts'
+import { applyHead, withdrawHead } from '#ui/applyHead.ts'
 import { contributeHead, Level } from '#ui/Level.ts'
 import type { Region } from '#ui/regions.ts'
 
@@ -66,4 +66,42 @@ test("a component's head lands with its level and leaves with it — 39.1, 39.14
     expect(document.title).toBe('Layout')
     expect(document.head.querySelector('meta[name="description"]')).toBe(null)
     expect(document.head.querySelector('meta[http-equiv]')).toBe(null)
+})
+
+// 39.17 — A `<script>` A CLIENT WRITES INTO THE HEAD RUNS, as the one a server painted does. The
+// fragment parser marks every script it makes "already started", and happy-dom models that once
+// it evaluates scripts at all — which this preload leaves off, so the case turns it on for itself.
+// Chromium and WebKit answer the same three numbers.
+//
+// THE REVERT: `runnable` handing the parsed node back as it came — `first: 0, again: 0, changed: 0`.
+test('a head script a client writes runs once, and again only when it changes — 39.15, 39.16, 39.17', () => {
+    const settings = (
+        window as unknown as {
+            happyDOM: { settings: { enableJavaScriptEvaluation: boolean } }
+        }
+    ).happyDOM.settings
+    const record = globalThis as unknown as { headScriptRuns: number }
+    record.headScriptRuns = 0
+    document.head.innerHTML = '<title>Layout</title>'
+    const once = '<script>globalThis.headScriptRuns += 1</script>'
+    const changed = '<script>globalThis.headScriptRuns += 10</script>'
+    settings.enableJavaScriptEvaluation = true
+    let first = 0
+    let again = 0
+    try {
+        applyHead(once)
+        first = record.headScriptRuns
+        // Written again unchanged, the standing script is left standing and not run twice.
+        applyHead(once, '', once)
+        again = record.headScriptRuns
+        applyHead(changed, '', once)
+    } finally {
+        settings.enableJavaScriptEvaluation = false
+    }
+    expect(
+        `first: ${first}, again: ${again}, changed: ${record.headScriptRuns}`,
+    ).toBe('first: 1, again: 1, changed: 11')
+    expect(document.head.querySelectorAll('script').length).toBe(1)
+    withdrawHead(changed, () => ['', ''])
+    expect(document.head.querySelectorAll('script').length).toBe(0)
 })

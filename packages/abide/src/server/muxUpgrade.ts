@@ -10,6 +10,7 @@
 
 import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
 import { unmounted } from '#shared/mount.ts'
+import { positiveSetting } from './config.ts'
 import { plainAnswer } from './plainAnswer.ts'
 
 const MUX_ADMITTED = 204
@@ -69,4 +70,50 @@ export function upgraded<Data>(
     return server.upgrade(request, { data })
         ? undefined
         : plainAnswer('expected a websocket', 400)
+}
+
+/**
+ * The limits a listener holds every connection to the mux to, `App.listen`'s and `abide dev`'s alike —
+ * read off the resolved configuration, which `abide dev`'s worker reports to its listener.
+ *
+ * 18.28 — A FRAME IN past `ABIDE_MAX_SOCKET_MESSAGE_SIZE`, a mebibyte unless set: a frame names an
+ * address and its args, which a `GET` carries in its URL. 18.29 — A CONNECTION IDLE is pinged, and
+ * closed where two minutes pass with nothing back. 18.30 — WHAT IS SENT is buffered to bun's 16 MiB,
+ * past which `send` drops it and the mux closes the peer (`SocketPeer`).
+ */
+export function muxSocketOptions(): {
+    maxPayloadLength: number
+    idleTimeout: number
+    sendPings: boolean
+    backpressureLimit: number
+} {
+    return {
+        maxPayloadLength: positiveSetting(
+            'ABIDE_MAX_SOCKET_MESSAGE_SIZE',
+            1024 * 1024,
+        ),
+        idleTimeout: 120,
+        sendPings: true,
+        backpressureLimit: 16 * 1024 * 1024,
+    }
+}
+
+/**
+ * Sends `text` to `socket`, and closes it where bun dropped the frame rather than sending or buffering it.
+ *
+ * 18.30 — A FOLLOWER THAT MISSED A FRAME stands at a version the next one does not build on, so the
+ * peer is closed rather than written past: the browser reconnects naming the version it holds (18.9)
+ * and is sent what stands. No buffer of our own — what bun buffers is the bound.
+ */
+export function sendOrClose(
+    socket:
+        | {
+              send(text: string): unknown
+              close(code: number, reason: string): unknown
+          }
+        | undefined,
+    text: string,
+): void {
+    if (socket?.send(text) === 0)
+        socket.close(1013, 'the connection fell behind')
 }

@@ -54,7 +54,7 @@ export function pageRegion(host: Node): Region {
         if (close !== null) return { open: node as Comment, close }
     }
     throw new Mismatch(
-        "abide: the host holds no page region, so the client and the server disagree about this document's shape (41.10).",
+        "abide: the host holds no page region, so the client and the server disagree about this document's shape. RULEBOOK 41.10.",
     )
 }
 
@@ -95,7 +95,7 @@ export function fillRegion(
     const parent = region.close.parentNode
     if (parent === null)
         throw new Mismatch(
-            `abide: this region is not in a document, so the client and the server disagree about this region's shape (41.10).`,
+            `abide: this region is not in a document, so the client and the server disagree about this region's shape. RULEBOOK 41.10.`,
         )
     emptyRegion(region, parent)
     if (build === undefined) return
@@ -135,6 +135,12 @@ export function fillEmpty(
  *
  * NODE BY NODE WHILE ANYTHING IS LEAVING (32.38), because a node holding a leaving element has to
  * stay where it stands, and only `leave` asks.
+ *
+ * 32.66 — AND WHAT STAYS IS PUT OUTSIDE THE ANCHORS by moving the OPEN anchor past it, so the
+ * region is empty to `isEmptyRegion` and a hydration walk from `open.nextSibling` starts at what
+ * the next fill builds. The comment moves rather than the held nodes: it has no box, and moving an
+ * element mid-exit would restart a CSS animation on it. Everything left between the anchors after
+ * the removal is held, so the move puts all of it before `open`, where it already stood on screen.
  */
 export function emptyRegion(region: Region, parent: ParentNode): void {
     const { open, close } = region
@@ -144,6 +150,7 @@ export function emptyRegion(region: Region, parent: ParentNode): void {
         parent.lastChild !== close
     ) {
         removeUntil(open.nextSibling, close)
+        if (open.nextSibling !== close) parent.insertBefore(open, close)
         return
     }
     if (open.nextSibling === close) return

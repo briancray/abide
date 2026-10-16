@@ -37,7 +37,7 @@ import {
 import { type BootedApp, bootApp, originUnder } from './createApp.ts'
 import { keepServing } from './faultPolicy.ts'
 import { type Manifest, NO_MANIFEST } from './manifestOf.ts'
-import { admitsMux } from './muxUpgrade.ts'
+import { admitsMux, muxSocketOptions } from './muxUpgrade.ts'
 import { LISTENING } from './requestScope.ts'
 import {
     describe,
@@ -82,7 +82,7 @@ export type ToWorker =
  * Out: ready, a frame the mux sends a browser, and what answers a request (`FromRelay`).
  */
 export type FromWorker =
-    | { kind: 'ready' }
+    | { kind: 'ready'; muxOptions: ReturnType<typeof muxSocketOptions> }
     | { kind: 'socket-send'; connection: number; text: string }
     | FromRelay
 
@@ -151,7 +151,7 @@ async function receive(message: ToWorker): Promise<void> {
     if (message.kind === 'start') {
         opening = open(message)
         await opening
-        toListener({ kind: 'ready' })
+        toListener({ kind: 'ready', muxOptions: muxSocketOptions() })
         return
     }
     if (

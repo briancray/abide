@@ -43,6 +43,7 @@ export function inMemoryApp(
             copy: undefined,
             defaults: undefined,
             args: undefined,
+            result: undefined,
             ...rows.find((row) => row.address === address),
         })
     }

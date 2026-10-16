@@ -43,6 +43,7 @@ import {
     STYLE_QUERY,
     TEXT_QUERY,
 } from './MODULE_QUERIES.ts'
+import { MOUNTABLE } from './MOUNTABLE.ts'
 import { realOrAsGiven } from './realOrAsGiven.ts'
 import { SERVER_TABLE } from './TABLES.ts'
 import { VIRTUAL_DIRECTORY } from './VIRTUAL_DIRECTORY.ts'
@@ -449,6 +450,7 @@ function compiledAt(served: Held, path: string): CompiledFile {
 // 34.16 — BOUND, NOT RAW. The compiled module is a function of accessors answering its markup (33.4);
 // what an app's own module calls is a function of plain props answering a `Component` (35.4), which
 // `render` invokes with nothing. The component is the module's one export (34.17).
+// 38.119 — and it carries what `mount` hydrates it with: the same accessors, and its browser module.
 function boundModule(path: string): string {
     return `import component from ${JSON.stringify(path)}
 export default (props = {}) => {
@@ -457,7 +459,12 @@ export default (props = {}) => {
         const value = props[key]
         accessors[key] = () => value
     }
-    return () => component(accessors)
+    const bound = () => component(accessors)
+    bound[Symbol.for(${JSON.stringify(MOUNTABLE.description)})] = {
+        accessors,
+        client: () => import(${JSON.stringify(`${path}${CLIENT_QUERY}`)}),
+    }
+    return bound
 }
 `
 }

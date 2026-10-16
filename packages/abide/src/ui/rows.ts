@@ -1,4 +1,5 @@
 import { REGION_CLOSE, ROW_OPEN } from '#shared/ANCHORS.ts'
+import { moveItem, rowItem } from '#shared/reactive/index.ts'
 import { PATCHES } from '#shared/reactive/PATCHES.ts'
 import { leave } from './leave.ts'
 import { moveNode } from './moveNode.ts'
@@ -18,13 +19,24 @@ import { EMPTY_SCOPE, type Scope } from './Scope.ts'
 export type Row = {
     key: unknown
     /**
-     * The value the row was built from.
+     * The value the row shows.
      *
-     * A row that survives a reorder keeps its NODES, which is the whole point — but if the value
-     * behind that key is a different object, its content is stale and the row is remade. Identity
-     * is the signal here, the inverse of the case where a freshly built wrapper defeats one.
+     * A KEPT KEY KEEPS ITS ROW (32.67): a different value under it is written here and into the
+     * row's bindings rather than remaking the row, so identity decides whether there is anything to
+     * write, not whether the row survives.
      */
     data: unknown
+    /**
+     * The row's item as a cell (`rowCell`), or null where nothing the row binds reads it through
+     * one yet.
+     *
+     * MADE ONLY WHERE A BINDING NEEDS IT: a slot that reads the item and nothing else is written by
+     * `update`, and a binding at the row's top level reads the record until the row's first new
+     * item (`updateRow`), so a row that never takes one allocates nothing for 32.67.
+     */
+    item: (() => unknown) | null
+    /** Rewrites the row's slots that read its item alone (`RowBuilders.update`). */
+    update: (row: Row, at: number) => void
     /**
      * The row's first node: its element, or its `ROW_OPEN` anchor where the body has several —
      * the start of a range, not the nodes `make` handed back.
@@ -43,7 +55,7 @@ export type Row = {
      */
     at: number
     /**
-     * The patch epoch the row was made at (32.33).
+     * The patch epoch the row last took its item at (32.33).
      *
      * Its item written past this is content the row never saw, under the same object a kept row is
      * matched by.
@@ -51,18 +63,27 @@ export type Row = {
     seen: number
 }
 
+/**
+ * A row's builders, each handed the row's RECORD — whose `data` is the item — so the one record
+ * carries the item to all four, and a rebuilt row (41.10) writes its new first node back there.
+ */
 export type RowBuilders = {
     /**
      * A row's nodes, BUILT in the document the list stands in — handed over by the reconcile
-     * rather than found by the row, which is the one place a row's document is decided.
+     * rather than found by the row, which is the one place a row's document is decided. Every slot
+     * reading the item alone is written here, before the nodes are inserted.
      */
-    make: (document: Document, item: unknown, at: number) => Node[]
-    /**
-     * Handed the row's RECORD rather than its nodes: a row it rebuilds (41.10) writes its new
-     * first node back there.
-     */
-    mount: (row: Row, item: unknown, at: number) => Scope
+    make: (document: Document, row: Row, at: number) => Node[]
+    mount: (row: Row, at: number) => Scope
+    /** 32.67 — rewrites, from `row.data`, the slots `make` wrote from the item alone. */
+    update: (row: Row, at: number) => void
 }
+
+/** Answers the builders a row is made and mounted by; called once per row (14.8). */
+export type RowSetUp = (row: Row, at: number) => RowBuilders
+
+/** The `update` of a row that has no slot reading its item alone. */
+export function noUpdate(): void {}
 
 /**
  * The anchor ending the anchored row whose first node is `first`: the next `ROW_OPEN` or
@@ -167,37 +188,98 @@ export function replaceRow(row: Row, next: Node[]): void {
 
 /** A new row, built and inserted before `before`. */
 export function makeRow(
-    setUp: (item: unknown, at: number) => RowBuilders,
+    setUp: RowSetUp,
     parent: Node,
     before: Node,
     key: unknown,
-    item: unknown,
+    data: unknown,
     at: number,
 ): Row {
+    // `before` STANDS IN FOR THE ROW'S FIRST NODE until `make` hands it over, so the field holds a
+    // node for the record's whole life.
+    const row = newRow(key, data, before as ChildNode, at)
     // 14.8 — set up ONCE for the row, and the same builders make it and mount it.
-    const builders = setUp(item, at)
-    const nodes = builders.make(parent.ownerDocument as Document, item, at)
+    const builders = setUp(row, at)
+    row.update = builders.update
+    const nodes = builders.make(parent.ownerDocument as Document, row, at)
     for (const node of nodes) parent.insertBefore(node, before)
-    return rowOf(builders, key, item, nodes[0] as ChildNode, at)
+    row.node = nodes[0] as ChildNode
+    row.scope = builders.mount(row, at)
+    return row
 }
 
 /**
- * A row record over nodes already in the document, mounted.
+ * A row over nodes the server painted, set up and mounted.
  *
- * The one place a row's record is written, so its shape is fixed once for every path that makes one
- * — a made row and a hydrated one alike. The mount is handed the RECORD, because a row it rebuilds
- * (41.10) has a new first node to write back.
+ * 41.8 — the hydration half of `makeRow`: the nodes are already in the document.
  */
-export function rowOf(
-    builders: RowBuilders,
+export function paintedRow(
+    setUp: RowSetUp,
     key: unknown,
-    item: unknown,
+    data: unknown,
     node: ChildNode,
     at: number,
 ): Row {
-    const row: Row = {
+    const row = newRow(key, data, node, at)
+    const builders = setUp(row, at)
+    row.update = builders.update
+    row.scope = builders.mount(row, at)
+    return row
+}
+
+/**
+ * The row's item as a cell its bindings read, made on the first ask (32.67).
+ *
+ * Asked by a row whose binding reads the item inside a region of its own, or a branch-local setup.
+ */
+export function rowCell(row: Row): () => unknown {
+    let item = row.item
+    if (item === null) {
+        item = rowItem(row.data)
+        row.item = item
+    }
+    return item
+}
+
+/**
+ * The row's item as a binding at its own top level reads it (`Scope.itemWatch`): off the record
+ * until the row has a cell, and through the cell from then on (32.67).
+ */
+export function itemOf(row: Row): unknown {
+    const item = row.item
+    return item === null ? row.data : item()
+}
+
+/**
+ * Writes a kept key's new value into its row, which keeps its nodes (32.67).
+ *
+ * 32.33 — the same object a patch wrote inside is written too, and wakes the row's readers as a
+ * different one would.
+ *
+ * THE CELL IS MADE ON THE FIRST NEW ITEM, not when the row is: a row's item watches read the record
+ * until then (`itemOf`), so a row that never takes one allocates nothing for it. Made here, they
+ * are rerun to read it, which is also what subscribes them to whatever the new item has them read.
+ */
+export function updateRow(row: Row, data: unknown): void {
+    row.data = data
+    if (row.item !== null) moveItem(row.item, data)
+    else if (row.scope.items !== 0) {
+        row.item = rowItem(data)
+        row.scope.rerunItems()
+    }
+    row.update(row, row.at)
+}
+
+/**
+ * A row's record, its shape fixed once for every path that makes one — a made row and a hydrated
+ * one alike.
+ */
+function newRow(key: unknown, data: unknown, node: ChildNode, at: number): Row {
+    return {
         key,
-        data: item,
+        data,
+        item: null,
+        update: noUpdate,
         node,
         // A `Scope` rather than `undefined` until the mount returns, so the field holds one class
         // for the record's whole life.
@@ -205,8 +287,6 @@ export function rowOf(
         at,
         seen: PATCHES.epoch,
     }
-    row.scope = builders.mount(row, item, at)
-    return row
 }
 
 /**
