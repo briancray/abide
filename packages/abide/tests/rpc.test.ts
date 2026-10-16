@@ -79,6 +79,30 @@ test('a mutation runs again on a later call, where a read serves what it holds �
     expect(payments).toBe(2)
 })
 
+// 16.7 IN ONE TURN — the `ttl` of 0 is dropped by a timer, and a second call awaited straight after
+// the first reached the answer before the timer did. THE REVERT: drop the `outlived` check in the
+// keyed reach and the `dropExpired` in `rpc.ts`; each body runs 1 time where 2 are due.
+test('a mutation called again in the same turn runs again — 16.7', async () => {
+    let payments = 0
+    const payInvoice = POST(({ id }: { id: string }) => {
+        payments += 1
+        return id
+    })
+    let pings = 0
+    const ping = POST(() => {
+        pings += 1
+        return pings
+    })
+
+    await payInvoice({ id: '42' })
+    await payInvoice({ id: '42' })
+    await ping()
+    await ping()
+
+    expect(payments).toBe(2)
+    expect(pings).toBe(2)
+})
+
 // 16.6 — A PLAIN HANDLER TAKES THE VALUE'S OPTIONS BESIDE THE ADDRESS'S, in one object: the gate
 // refuses before the body runs, and a mutation that declares a `ttl` is held for it rather than
 // 16.7's 0. The type half is `isError` narrowing to the `ValidationError` the `args` gate added,

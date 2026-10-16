@@ -107,7 +107,7 @@ type Follower = {
  * RECENCY IS THE ORDER OF A MAP. A production moves its key to the end by deleting and re-setting
  * it, so the oldest entry is always the first one and 11.48's "armed at the oldest" is one
  * iterator step rather than a scan — and the sweep stops at the first entry still inside its
- * life, the way `dropExpired` stops at the first live production.
+ * life.
  *
  * THE PRODUCTION IS HEARD BY A MIRROR ON EACH ENTRY, which is what the refusal that stood here
  * said could not be had without a hook on every cell in the design. A mirror is a reader, so only
@@ -117,6 +117,13 @@ type Follower = {
  * those apart: every one of them leaves nothing to serve, where a production always leaves
  * something.
  */
+function end(follower: Follower): void {
+    follower.reader.alive = false
+    dropReader(follower.cell, follower.reader)
+    detachProbes(follower.reader)
+    follower.evict()
+}
+
 class Lifetime {
     ms: number
     followed: Map<string, Follower>
@@ -178,12 +185,29 @@ class Lifetime {
             // 11.69 — PARKED, NOT EVICTED: a call reaching it joins the load, and the load's end
             // touches it back into the order.
             if (follower.cell.loading) continue
-            follower.reader.alive = false
-            dropReader(follower.cell, follower.reader)
-            detachProbes(follower.reader)
-            follower.evict()
+            end(follower)
         }
         this.arm()
+    }
+
+    /**
+     * Evicts `key`'s entry where its life has run out and no load holds it, and says whether it did.
+     *
+     * THE REACH'S HALF of the sweep, as 6.5 is the read's half of 6.3: a timer that has not fired
+     * yet — a `ttl` of 0 is past as the entry produces — leaves an entry a reach would otherwise
+     * join. 16.7's mutation called twice in one turn is the case: the second call is a second write.
+     */
+    outlived(key: string): boolean {
+        const follower = this.followed.get(key)
+        if (
+            follower === undefined ||
+            follower.cell.loading ||
+            Date.now() - follower.at < this.ms
+        )
+            return false
+        this.followed.delete(key)
+        end(follower)
+        return true
     }
 }
 
@@ -354,7 +378,7 @@ export function createKeyed<
     function reach(given: Args): Reactive<Stored, Accepted, Failures> {
         const args = normalized(self, given)
         const key = canonicalKey(args)
-        const standing = entries.get(key)
+        const standing = lifetime?.outlived(key) ? undefined : entries.get(key)
         // 1.8: reaching an instance that exists joins the standing work — 15.19, unless that work
         // failed transiently, which this reach runs again.
         if (standing !== undefined) {

@@ -4297,6 +4297,36 @@ export function loadOf(value: unknown): number | undefined {
     return cell.generation
 }
 
+// The cells a mutation's call has been answered from, so the next call knows the answer is spent.
+const ANSWERED = new WeakSet<object>()
+
+/**
+ * Drops what an unkeyed mutation's last call was answered with, where it is past its deadline.
+ *
+ * 16.7 — A MUTATION CALLED AGAIN IS A SECOND WRITE. Its `ttl` of 0 puts what the last call answered
+ * past its deadline as it lands, and 6.3's timer drops it — but a call in the same turn reaches it
+ * before the timer does, so the call takes the timer's drop itself and its await reloads (6.6).
+ *
+ * ONLY AN ANSWER A CALL WAS GIVEN: reaching a value is what starts its first run, and a request's
+ * own instance (11.32) starts there — that run is this call's, not a spent one. A load in flight is
+ * joined (1.8), and a `ttl` the handler declared still holds.
+ */
+export function dropAnswered(value: unknown): void {
+    const cell = (value as Callable)[CELL]
+    if (!ANSWERED.has(cell)) {
+        ANSWERED.add(cell)
+        return
+    }
+    const expiry = cell.expiry
+    if (
+        expiry !== null &&
+        !cell.loading &&
+        standingLive(cell, expiry) &&
+        Date.now() - expiry.at >= expiry.ms
+    )
+        dropStanding(cell, expiry)
+}
+
 /**
  * The generation `value`'s past stands at, or `undefined` while a load is in flight.
  *

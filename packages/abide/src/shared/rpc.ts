@@ -46,6 +46,7 @@ import {
     streamingOrSettled,
 } from './reactive/index.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
+import { dropAnswered } from './reactive/Reactive.ts'
 import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { isForwarder } from './reactive/scoped.ts'
 import { checkArgs } from './refuse.ts'
@@ -393,6 +394,10 @@ export function declare(method: Method): Declare {
                     return reactive(() => refused)
                 }
             }
+            // 16.7 — a mutation's call is a write each time, even where the last one settled this
+            // turn: a keyed value's reach evicts an outlived entry itself, and an unkeyed one's
+            // spent answer is dropped here.
+            if (cacheOptions !== undefined && !keyed) dropAnswered(value)
             const reached = callLoad(
                 reachThrough,
                 args,
