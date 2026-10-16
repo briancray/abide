@@ -35,9 +35,13 @@ export type RestNames<P extends string> =
             : never
         : never
 
-export type HasParams<P extends string> = [RequiredNames<P>] extends [never]
-    ? false
-    : true
+// DISTRIBUTED over a union, so a value typed as any of several literals (`x as RouteLiteral`) takes
+// its params optionally rather than demanding the union of every member's.
+export type HasParams<P extends string> = P extends string
+    ? [RequiredNames<P>] extends [never]
+        ? false
+        : true
+    : never
 
 export type HasSegments<P extends string> = [
     RequiredNames<P> | OptionalNames<P> | RestNames<P>,

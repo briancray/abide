@@ -66,10 +66,16 @@ test('a required segment makes the params argument required — 30.2', () => {
     const optionalOnly: HasParams<'/a/[[id]]'> = false
     const segmented: HasSegments<'/a/[...rest]'> = true
     const plain: HasSegments<'/a/b'> = false
-    expect([required, optionalOnly, segmented, plain]).toEqual([
+    // A value that may be any of several literals takes its params optionally: one with a required
+    // segment among them does not make every call demand that member's params.
+    const anyOf = '/invoices' as '/invoices' | '/invoices/[id]'
+    url(anyOf)
+    const mixed: HasParams<'/invoices' | '/invoices/[id]'> = false
+    expect([required, optionalOnly, segmented, plain, mixed]).toEqual([
         true,
         false,
         true,
+        false,
         false,
     ])
 })
