@@ -16,7 +16,8 @@ import { coerceArgs } from './coerceArgs.ts'
  * 19.7 — the text as the types the handler's `args` declares. 11.27 — then the defaults, ahead of
  * every key taken after it: the seed a render filed and the `global` entry standing were both filed
  * under them (11.29). 19.9 — THE WIRE HELD TO THE ANNOTATION, where no `args` schema is declared to
- * hold it; args that did not come are the handler's to answer.
+ * hold it. Args that did not come are held as an empty record: a schema is only derived where the
+ * handler's args are a required record, so a required member missing is refused, not read off nothing.
  */
 export function argsFor(
     found: Pick<Mounted, 'handler' | 'argsDocument' | 'wireArgs'>,
@@ -32,8 +33,8 @@ export function argsFor(
                   query,
               )
     const args = normalized(found.handler, coerced)
-    if (found.wireArgs !== undefined && args !== undefined) {
-        const issues = validateJson(found.wireArgs, args)
+    if (found.wireArgs !== undefined) {
+        const issues = validateJson(found.wireArgs, args ?? {})
         if (issues !== null) throw validationError(issues)
     }
     return args

@@ -44,7 +44,6 @@ test('text args are coerced and JSON args are not — 19.7', () => {
     })
     expect(argsFor(found, { id: '4' }, '')).toEqual({ id: 4 })
     expect(argsFor(found, { id: 4 }, undefined)).toEqual({ id: 4 })
-    expect(argsFor(found, undefined, '')).toBeUndefined()
 })
 
 // 19.9 — ARGS THAT DO NOT HOLD TO THE ANNOTATION ARE REFUSED, thrown as the refusal answered. THE
@@ -57,4 +56,19 @@ test('args that do not hold to the annotation are refused — 19.9', () => {
         refused = thrown
     }
     expect(isFailed(refused) && refused.status).toBe(422)
+})
+
+// 19.9 — NO ARGS AT ALL ARE AN EMPTY RECORD, held to the same annotation: a required member missing is
+// refused rather than handed to a handler that destructures nothing. Args with nothing required
+// still arrive as none. THE REVERT: skip validation where nothing was sent; the call is let through.
+test('a call that sends no args is held to the annotation — 19.9', () => {
+    let refused: unknown
+    try {
+        argsFor(found, undefined, '')
+    } catch (thrown) {
+        refused = thrown
+    }
+    expect(isFailed(refused) && refused.status).toBe(422)
+    const optional = { ...found, wireArgs: { ...SCHEMA, required: [] } }
+    expect(argsFor(optional, undefined, '')).toBeUndefined()
 })
