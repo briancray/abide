@@ -1,5 +1,11 @@
 # @abide/bridge
 
+## 0.3.1
+
+### Patch Changes
+
+- cc6f899: a bridge stopped by SIGTERM, SIGINT or SIGHUP ends every Claude Code run it started before it exits ([`5847a59`](https://github.com/briancray/abide/commit/5847a59e0de0d45ed1ea11b526fda27c24490ebc))
+
 ## 0.3.0
 
 ### Minor Changes
