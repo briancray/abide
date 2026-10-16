@@ -4,8 +4,8 @@
 // engine number is not available inside a case body and never will be.
 
 import { expect, test } from 'bun:test'
-import { shares, type Trace } from 'harness/engine'
-import { THRESHOLDS } from 'harness/report'
+import { shares, type Trace } from '@abide/harness/engine'
+import { THRESHOLDS } from '@abide/harness/report'
 
 function traceOf(
     measures: [name: string, start: number, end: number][],

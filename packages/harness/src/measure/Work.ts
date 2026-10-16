@@ -1,5 +1,7 @@
+import type { PublishedWork } from './PUBLISHED_WORK.ts'
+
 /**
- * What an op did to the DOM and the reactive graph, one count per row.
+ * What an op did to the DOM, one count per row, and what the subject published it did besides.
  *
  * Partitioned at the point of counting, and there is deliberately no accessor that adds the first
  * three rows up. Moving a COMMENT is 0.11 µs and moving an ELEMENT with its subtree is 2.8 µs —
@@ -57,32 +59,13 @@ export type Work = {
      * zero with the mechanism in AND out.
      */
     listenersBound: number
-    // THE THREE ROWS THIS LANE DOES NOT COUNT. They are read off the record abide publishes
-    // (`PUBLISHED_WORK.ts`), and `null` is "abide published nothing" rather than "the op did none
-    // of it" — 44.20. A prototype patch cannot see an effect rerun and the lane may not import
-    // abide to count one, so zero here would be the silent zero the `refused` list exists to
-    // prevent, with every reactive-core work gate green against a counter that was never wired.
-    //
-    // `number | null` is a fixed shape, not a grown one: every field is initialized at
-    // construction and the union is the same at every read.
     /**
-     * Compiled reactive slots that RAN: the renderer's bindings per row.
+     * What each published source counted during the op, by source and then by field — the work a
+     * prototype patch cannot see (`PUBLISHED_WORK.ts`).
      *
-     * `null` when abide published no record (44.20).
+     * A source that published nothing has NO KEY here rather than a record of zeroes: absent is
+     * "nothing was wired", never "the op did none of it" (43.19). Read a source through
+     * `publishedBy`, which throws naming a field the record lacks (43.20).
      */
-    bindingRuns: number | null
-    /**
-     * Effect reruns. `null` when abide published no record (44.20).
-     *
-     * A reader that woke when nothing it reads changed still reads the right value, which is why
-     * this is asserted and the value is not.
-     */
-    wakes: number | null
-    /**
-     * Nodes visited per propagation. `null` when abide published no record (44.20).
-     *
-     * The reactive core's 16-against-256 gate, counted inside `markReaders`, which is module-local
-     * to `Reactive.ts` and reachable no other way.
-     */
-    descents: number | null
+    published: PublishedWork
 }

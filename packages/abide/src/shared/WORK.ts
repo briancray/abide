@@ -1,14 +1,11 @@
 /**
  * The three work counters the measurement lane reads, and the record they are published on.
  *
- * A leaf — no imports of its own — because both seams increment it and `harness/measure` reads it
- * off `globalThis` rather than importing it: that lane may have no abide in its graph at all
- * (44.1), so the two halves cannot share a declaration and the key is spelled on both sides.
- *
- * WHY ALL THREE OR NONE. `armCase()` zeroes every field it reads, so a field abide declares and
- * never increments is created at 0 and read back at 0 — and every gate asserting it passes
- * against a counter that was never wired (44.21). Publishing two of three is worse than
- * publishing none, because the third looks measured.
+ * A leaf — no imports of its own — because both seams increment it and `@abide/harness/measure`
+ * reads it off `globalThis` rather than importing it: that lane may have nothing under test in its
+ * graph at all (43.1), so the two halves cannot share a declaration and the key is spelled on both
+ * sides. `@abide/harness/abide`'s `measure` reads it back by these field names, and throws naming
+ * one the record lacks (43.20).
  *
  * WHAT IT COSTS is one integer increment on the propagation walk and one per effect run, and it
  * is UNDER THE NOISE FLOOR rather than priced: two runs of `bun run bench:reactive` put the
@@ -31,7 +28,12 @@ export const WORK = {
     descents: 0,
 }
 
-// The name is spelled here and again in `harness/measure`'s own leaf. Two copies on purpose: the
-// lane checks the SHAPE at the read rather than sharing a type, so a rename breaks a test rather
-// than silently publishing to a key nothing looks at.
-;(globalThis as unknown as Record<string, unknown>).__ABIDE_WORK__ = WORK
+// The key is spelled here and again in the harness's own leaf. Two copies on purpose: the lane
+// checks the SHAPE at the read rather than sharing a type, so a rename breaks a test rather than
+// silently publishing to a key nothing looks at.
+type HarnessGlobal = {
+    __HARNESS_WORK__?: Record<string, Record<string, number>>
+}
+const published = (globalThis as HarnessGlobal).__HARNESS_WORK__ ?? {}
+published.abide = WORK
+;(globalThis as HarnessGlobal).__HARNESS_WORK__ = published

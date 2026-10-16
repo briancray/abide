@@ -5,18 +5,15 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { CASES } from '../e2e/CASES.ts'
 
 GlobalRegistrator.register({ url: 'http://localhost/' })
-const { install, measure, patchSet } = await import('../src/measure/index.ts')
+const { install } = await import('../src/measure/install.ts')
+const { measure, patchSet } = await import('../src/measure/index.ts')
 install()
 
 /**
- * Each case's counts under bun, keyed by case name.
- *
- * `number | null` rather than `number`: the three rows this lane reads off the published counter
- * are absent in both substrates here, and 44.20 says absent is `null`. Typed as `number` the two
- * sides would still compare equal and the declaration would be a lie.
+ * Each case's `Work` under bun, keyed by case name. Nothing publishes here, so `published` is
+ * empty in both substrates and compares equal with the counts.
  */
-const cases: Record<string, Record<string, number | null>> = {}
-for (const [name, body] of Object.entries(CASES))
-    cases[name] = measure(body) as unknown as Record<string, number | null>
+const cases: Record<string, unknown> = {}
+for (const [name, body] of Object.entries(CASES)) cases[name] = measure(body)
 
 console.log(JSON.stringify({ patchSet: patchSet(), cases }))

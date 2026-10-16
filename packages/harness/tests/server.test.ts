@@ -4,8 +4,8 @@
 // trap would produce.
 
 import { expect, test } from 'bun:test'
-import { inAFreshProcess } from 'harness/gate'
-import { bytes, ticks } from 'harness/server'
+import { inAFreshProcess } from '@abide/harness/gate'
+import { bytes, ticks } from '@abide/harness/server'
 
 const SERVER = new URL('../src/server/index.ts', import.meta.url).pathname
 
@@ -16,7 +16,7 @@ test('retained() throws in a process with a DOM', async () => {
     const { GlobalRegistrator } = await import('@happy-dom/global-registrator')
     expect(typeof document).toBe('object')
     expect(GlobalRegistrator).toBeDefined()
-    const { retained } = await import('harness/server')
+    const { retained } = await import('@abide/harness/server')
     expect(() => retained(() => ({}))).toThrow(/ran in a process with a DOM/)
 })
 

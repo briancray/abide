@@ -3,14 +3,10 @@
 // discipline it imposes.
 
 import { expect, test } from 'bun:test'
-import { inAFreshProcess } from 'harness/gate'
-import {
-    clockResolution,
-    nanoseconds,
-    ratio,
-    type Sample,
-    THRESHOLDS,
-} from 'harness/report'
+import { inAFreshProcess } from '@abide/harness/gate'
+import { ratio, type Sample, THRESHOLDS } from '@abide/harness/report'
+// The clock is the batcher's, and not a name the package exports.
+import { clockResolution, nanoseconds } from '../src/report/clock.ts'
 
 const IMPORTS = `import { batch } from '${new URL('../src/report/index.ts', import.meta.url).pathname}'`
 

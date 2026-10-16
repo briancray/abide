@@ -3,7 +3,8 @@
 [serve.static]
 plugins = ["bun-plugin-tailwind"]
 
-# A test imports the docs app's `.abide` files as the components they compile to (RULEBOOK 38.109) —
-# the setup `/ship/call-your-app-from-a-test` teaches. Read only by `bun test` run from this directory.
+# A test mounts and measures the docs app's components (RULEBOOK 38.119), importing its `.abide`
+# files as the components they compile to (38.109) — the setup `/ship/call-your-app-from-a-test`
+# teaches. Read only by `bun test` run from this directory.
 [test]
-preload = ["@abide/abide/test"]
+preload = ["@abide/harness/abide/preload"]

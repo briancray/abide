@@ -6,8 +6,9 @@
 // It publishes on the global rather than exporting: it runs as a classic script at
 // document-start, before any page code, which is the only moment the patches can be
 // installed.
-import { measure } from './measure.ts'
+
 import { install, patchSet } from './install.ts'
+import { measure } from './measure.ts'
 
 install()
 ;(

@@ -1,0 +1,86 @@
+// `bun run bench` — the machinery triple's two countable members for the harness package itself,
+// printed: code lines and exported names. The third, branches added to a shared path, stays
+// hand-counted. Then the browser specs that only REPORT — `reactive`, `shared` and `shapes` —
+// at full size in both engines, which the e2e gate runs only as a one-rep smoke (`BENCH_SIZING`).
+// Every other bench is a script of its own under `bench:*`, and the ones with a hand-written arm
+// are rows on the docs app's `/bench` page too.
+//
+// A WORKSPACE SCRIPT AND NOT AN `abide` COMMAND. `abide <cmd>` is governed surface —
+// RULEBOOK 38 and REGISTRY's Commands section — so a bench subcommand would owe a
+// clause, a registry row and a decisions entry, for a tool no app author runs.
+
+import { countExportedNames } from './countExportedNames.ts'
+import { countLines } from './countLines.ts'
+
+const PACKAGE = new URL('../../harness/', import.meta.url)
+
+/**
+ * The package's public entries, READ OFF ITS `exports` MAP rather than listed — a list beside the
+ * map is a second copy, and the one this replaced named five entries while the map had seven.
+ *
+ * 43.1's five are the three lanes and the two entries that are not lanes, `report` and `gate`.
+ * The rest are surface all the same and are counted with them: `preload` registers the DOM,
+ * `rows` is the contract a page reading runner output keeps, and `runner` writes those rows.
+ * `package.json` is not code and is not counted.
+ */
+async function exportedEntries(): Promise<{
+    specifiers: string[]
+    files: string[]
+}> {
+    const manifest = (await Bun.file(
+        new URL('package.json', PACKAGE),
+    ).json()) as {
+        name: string
+        exports: Record<string, string>
+    }
+    const specifiers: string[] = []
+    const files: string[] = []
+    for (const [subpath, file] of Object.entries(manifest.exports)) {
+        if (!file.endsWith('.ts')) continue
+        specifiers.push(`${manifest.name}${subpath.slice(1)}`)
+        files.push(file.replace(/^\.\//, ''))
+    }
+    return { specifiers, files }
+}
+
+async function machinery(): Promise<void> {
+    const { specifiers, files: entryFiles } = await exportedEntries()
+    // EVERYTHING UNDER `src/`, plus each entry file that lives outside it — a surface counted for
+    // its names and not its lines is half a budget.
+    const files = [
+        ...new Bun.Glob('src/**/*.ts').scanSync({
+            cwd: PACKAGE.pathname,
+            onlyFiles: true,
+        }),
+    ]
+    for (const file of entryFiles) if (!files.includes(file)) files.push(file)
+    const lines = await countLines(PACKAGE, files)
+    const names = await countExportedNames(specifiers)
+    console.log(`harness: ${lines} code lines across ${files.length} files`)
+    console.log(
+        `harness: ${names.total} exported names across ${specifiers.length} entries`,
+    )
+    for (const [entry, exported] of Object.entries(names.byEntry))
+        console.log(`  ${entry}: ${exported.join(', ') || '—'}`)
+}
+
+const REPORT_SPECS = ['reactive', 'shared', 'shapes']
+
+/** The report-only browser specs at full size, through playwright, in both engines. */
+async function reportSpecs(): Promise<number> {
+    const command = ['bunx', 'playwright', 'test']
+    for (const name of REPORT_SPECS)
+        command.push(`packages/abide/e2e/${name}.spec.ts`)
+    command.push('--project', 'abide', '--project', 'abide-webkit')
+    const child = Bun.spawn(command, {
+        cwd: new URL('../../', PACKAGE).pathname,
+        env: { ...process.env, HARNESS_BENCH: '1' },
+        stdio: ['inherit', 'inherit', 'inherit'],
+    })
+    return child.exited
+}
+
+if (import.meta.main) {
+    await machinery()
+    process.exitCode = await reportSpecs()
+}

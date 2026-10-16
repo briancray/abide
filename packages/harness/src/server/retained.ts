@@ -21,7 +21,7 @@ const ROOTS: unknown[] = []
 /**
  * The change in reachable objects by JSC type across one call of `body`, with its result held.
  *
- * Throws in a process with a DOM (44.16).
+ * Throws in a process with a DOM (43.16).
  *
  * JSC BUCKETS A PLAIN CLASS INSTANCE AS `Object`. A gate written against
  * `objectTypeCounts.Scope` reads 0 forever and is green forever, and so does a gate reading a

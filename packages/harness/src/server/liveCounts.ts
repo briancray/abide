@@ -6,7 +6,7 @@ import { fullGC, heapStats } from 'bun:jsc'
 /**
  * Live object counts by JSC type, after a full collection.
  *
- * Throws in a process with a DOM, naming the `caller` that read it — `retained`'s under 44.16.
+ * Throws in a process with a DOM, naming the `caller` that read it — `retained`'s under 43.16.
  */
 export function liveCounts(caller: string): Record<string, number> {
     // happy-dom's own implementation objects land in the same untyped `Object` bucket as the

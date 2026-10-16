@@ -2,11 +2,12 @@
 // suites inside themselves.
 
 import { expect, test } from 'bun:test'
+// The JUnit reading is `testRows`' own, and not a name the package exports.
 import {
     BUN_REPORT,
     PLAYWRIGHT_REPORT,
     parseJUnit,
-} from '../scripts/runSuite.ts'
+} from '../src/runner/runSuite.ts'
 
 const REPORT = `<?xml version="1.0" encoding="UTF-8"?>
 <testsuites name="bun test" tests="3" failures="1">

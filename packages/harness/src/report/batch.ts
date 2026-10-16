@@ -173,7 +173,7 @@ export function batch(spec: BatchSpec): Batched {
         throw new Error(
             `batch("${spec.case}") ran in parallel worker ${WORKER_ID}. Counts belong in \`bun test\`; anything with a clock runs under \`bun run test:serial\` or \`bun run bench\`.`,
         )
-    // Refusal 4 (44.23). Not "a bun sample with unit ms" — that refuses a build-time µs and a
+    // Refusal 4 (43.22). Not "a bun sample with unit ms" — that refuses a build-time µs and a
     // TTFB, both DOM-free, and lets a `ns` through on a spelling.
     if (spec.emulated === 'dom')
         throw new Error(

@@ -1,27 +1,71 @@
 {
-    "name": "harness",
-    "version": "0.0.0",
-    "private": true,
+    "name": "@abide/harness",
+    "version": "0.1.0",
     "type": "module",
-    "description": "The three measurement lanes abide is tested and measured with, the report leaf they share, the bun-side gate vocabulary, the hand-written signal reactive ratios are against, and the row contract the docs app's bench and tests pages read",
+    "description": "Ratios against hand-written code, counts of the work an op did, and gates whose revert can be run — three measurement lanes for anything that renders, on bun",
+    "license": "MIT",
+    "author": "Brian Cray",
+    "homepage": "https://github.com/briancray/abide#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/briancray/abide.git",
+        "directory": "packages/harness"
+    },
+    "bugs": {
+        "url": "https://github.com/briancray/abide/issues"
+    },
+    "keywords": [
+        "bun",
+        "benchmark",
+        "testing",
+        "measurement",
+        "dom",
+        "playwright"
+    ],
+    "engines": {
+        "bun": ">=1.4.3"
+    },
+    "publishConfig": {
+        "access": "public",
+        "provenance": true
+    },
+    "files": [
+        "src",
+        "scripts/buildInjectable.ts"
+    ],
     "exports": {
         "./measure": "./src/measure/index.ts",
-        "./measure/vanilla": "./src/measure/vanilla/signal.ts",
+        "./preload": "./src/measure/preload.ts",
         "./engine": "./src/engine/index.ts",
         "./server": "./src/server/index.ts",
         "./report": "./src/report/index.ts",
         "./gate": "./src/gate/index.ts",
-        "./rows": "./scripts/rows.ts"
+        "./rows": "./src/rows/index.ts",
+        "./runner": "./src/runner/index.ts",
+        "./abide": "./src/abide/index.ts",
+        "./abide/preload": "./src/abide/preload.ts",
+        "./package.json": "./package.json"
     },
     "scripts": {
         "typecheck": "bun check",
         "build:injectable": "bun scripts/buildInjectable.ts"
     },
-    "devDependencies": {
-        "@happy-dom/global-registrator": "^20.14.6",
-        "happy-dom": "^20.14.6"
+    "dependencies": {
+        "@happy-dom/global-registrator": "^20.14.6"
     },
     "peerDependencies": {
-        "@playwright/test": "^1.64.0"
+        "@playwright/test": "^1.64.0",
+        "@abide/abide": ">=0.105.0"
+    },
+    "peerDependenciesMeta": {
+        "@playwright/test": {
+            "optional": true
+        },
+        "@abide/abide": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@abide/abide": "workspace:*"
     }
 }

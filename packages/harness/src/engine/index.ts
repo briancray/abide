@@ -7,6 +7,12 @@
 // `harness/report` is a FOURTH entry and is not a fourth lane: a lane is a DEPENDENCY
 // partition, and the leaf depends on nothing.
 
-export { type Shares, type SharesSpec, shares } from './shares.ts'
+export {
+    durationOf,
+    measuresNamed,
+    type Shares,
+    type SharesSpec,
+    shares,
+} from './shares.ts'
 export type { Trace } from './Trace.ts'
 export { traceOp } from './traceOp.ts'

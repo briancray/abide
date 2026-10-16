@@ -60,6 +60,29 @@ export const CASES: Record<string, () => void> = {
         list.insertBefore(rows[2] as Node, rows[0] as Node)
         list.insertBefore(rows[0] as Node, null)
     },
+    // The same swap as the reconcile makes it: `moveNode` calls `moveBefore` where it
+    // exists and `insertBefore` where it does not, and either is one move. Reverted — the
+    // three `moveBefore` declarations out of `install.ts` — chromium reports 4
+    // `elementsMoved` against bun's 6: both moves vanish.
+    'a two-row swap through moveBefore where it exists': () => {
+        const list = document.createElement('ul')
+        const rows: HTMLElement[] = []
+        for (let index = 0; index < 3; index += 1) {
+            const row = document.createElement('li')
+            list.appendChild(row)
+            rows.push(row)
+        }
+        document.body.appendChild(list)
+        const parent = list as HTMLElement & {
+            moveBefore?(node: Node, before: Node | null): void
+        }
+        const move = (node: Node, before: Node | null) =>
+            parent.moveBefore === undefined
+                ? parent.insertBefore(node, before)
+                : parent.moveBefore(node, before)
+        move(rows[2] as Node, rows[0] as Node)
+        move(rows[0] as Node, null)
+    },
     // A TEMPLATE, because the compiled arm makes every row from one and this is the
     // shadowing case: happy-dom gives `HTMLTemplateElement` its own `innerHTML` where
     // Chromium leaves it on `Element`, so a declaration naming only `Element` counts

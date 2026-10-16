@@ -11,3 +11,5 @@ const root = appRoot(undefined)
 // A run from a directory that holds no app — a workspace's root — preloads nothing.
 // Fresh whatever `NODE_ENV` says: `bun test` sets it only where nothing else has.
 if (root !== undefined) await servedBuild(root, true)
+
+export { type Mounted, mount } from './testMount.ts'

@@ -3,14 +3,15 @@
 // were wrong — each names the number it reports with the mechanism out.
 
 import { expect, test } from 'bun:test'
-import { gate } from 'harness/gate'
+import { gate } from '@abide/harness/gate'
 import {
     measure,
     PUBLISHED_WORK_KEY,
     type PublishedWork,
     patchSet,
+    publishedBy,
     time,
-} from 'harness/measure'
+} from '@abide/harness/measure'
 
 function row(): HTMLElement {
     const element = document.createElement('li')
@@ -175,120 +176,120 @@ test('the style proxy is scoped to the case and writes still land', () => {
 
 // `addEventListener` is NOT "bindings per row". A keyed row calls it in neither arm,
 // so read as the binding count the two arms agree at zero with the mechanism in and
-// out — a gate green against its own bug.
-//
-// WITH NO RECORD PUBLISHED, which is what the case is about: abide publishes one when its
-// core loads, so in a process where an earlier file imported abide the lane reads binding
-// runs off it and `0` is right. Pinned here and put back after, so later files keep theirs.
-test('listeners bound and binding runs are separate rows', () => {
-    const global = globalThis as Record<string, unknown>
-    const standing = global[PUBLISHED_WORK_KEY] as
-        | Partial<PublishedWork>
-        | undefined
-    publish(undefined)
+// out — a gate green against its own bug. A listener is a DOM call this lane counts;
+// a binding run is something only the subject can count, and publishes.
+test('listeners bound are counted and nothing published is invented', () => {
+    const standing = publish(undefined)
     try {
         const element = document.createElement('button')
         const work = measure(() => element.addEventListener('click', () => {}))
         expect(work.listenersBound).toBe(1)
-        // NULL, not 0. This lane counts listeners and does not count binding runs, and
-        // `0` was the row saying "none ran" about a counter it never reads — 44.20.
-        expect(work.bindingRuns).toBeNull()
+        expect(work.published).toEqual({})
     } finally {
         publish(standing)
     }
 })
 
-// Wakes, binding runs and descents are read off the record abide publishes, zeroed
-// per case, and NOT off a DOM patch — a prototype patch cannot see an effect rerun,
-// and this lane may not import abide to count one.
+// A SUBJECT'S OWN COUNTERS are read off the record it publishes, zeroed per case, and
+// NOT off a DOM patch — a prototype patch cannot see an effect rerun, and this lane may
+// not import the subject to count one.
 //
 // The one gate in this file whose broken arm is INSTALLABLE, so it carries a runnable
 // revert rather than a comment: the mechanism lives behind a global, and a global is
 // something a test can replace. The rest of the reverts here are structural — a
 // module-level depth guard, a record shape fixed at construction — and are recorded
 // above with the number each reports.
-// The shape is IMPORTED rather than restated. It was declared here and in the lane, and
-// abide will declare a third — the wire cannot be typed across the seam (44.1), so the
-// two copies that CAN be one are one, and 44.21 covers the one that cannot.
-function publish(record: Partial<PublishedWork> | undefined): void {
+/** Replaces the published records, returning what stood before so a test can put it back. */
+function publish(
+    records: PublishedWork | undefined,
+): PublishedWork | undefined {
     const global = globalThis as Record<string, unknown>
-    if (record === undefined) delete global[PUBLISHED_WORK_KEY]
-    else global[PUBLISHED_WORK_KEY] = record
+    const standing = global[PUBLISHED_WORK_KEY] as PublishedWork | undefined
+    if (records === undefined) delete global[PUBLISHED_WORK_KEY]
+    else global[PUBLISHED_WORK_KEY] = records
+    return standing
 }
 
 gate(
-    'the wake counter is read off the published record and zeroed per case',
+    'a published counter is read off its record and zeroed per case',
     {
         // A record that refuses to be zeroed: case 2 then inherits case 1's wakes,
         // which is the same defect as a single always-live DOM record one level up.
         revert: () => {
             let wakes = 0
-            publish({
-                get wakes() {
-                    return wakes
+            const standing = publish({
+                subject: {
+                    get wakes() {
+                        return wakes
+                    },
+                    set wakes(next: number) {
+                        if (next !== 0) wakes = next
+                    },
                 },
-                set wakes(next: number) {
-                    if (next !== 0) wakes = next
-                },
-                bindingRuns: 0,
-                descents: 0,
-            } as PublishedWork)
-            return () => publish(undefined)
+            })
+            return () => publish(standing)
         },
         worth: { wakes: 3 },
     },
     () => {
         const global = globalThis as Record<string, unknown>
-        if (!global[PUBLISHED_WORK_KEY])
-            publish({ wakes: 0, bindingRuns: 0, descents: 0 })
+        global[PUBLISHED_WORK_KEY] ??= {}
+        const records = global[PUBLISHED_WORK_KEY] as PublishedWork
+        const seeded = records.subject === undefined
+        if (seeded) records.subject = { wakes: 0 }
         try {
             const first = measure(() => {
-                ;(global[PUBLISHED_WORK_KEY] as PublishedWork).wakes += 3
+                ;(records.subject as { wakes: number }).wakes += 3
             })
-            expect(first.wakes).toBe(3)
+            expect(publishedBy(first, 'subject', ['wakes'])?.wakes).toBe(3)
             const second = measure(() => {})
-            expect(second.wakes).toBe(0)
+            expect(publishedBy(second, 'subject', ['wakes'])?.wakes).toBe(0)
         } finally {
-            publish(undefined)
+            if (seeded) delete records.subject
         }
     },
 )
 
-// THE ROW THIS LANE DOES NOT COUNT IS `null`, NOT 0. Every gate in this file above
-// publishes nothing, which is the case abide's own tests will be in until the reactive
-// core lands — and until this change those three rows came back 0, meaning "the op woke
-// nobody" about a counter that had never been wired. Eleven of `REACTIVE.md`'s gates
-// assert exactly these three rows.
+// A SOURCE NOBODY PUBLISHED IS ABSENT, NOT ZERO. `0` would be the row saying "the op
+// woke nobody" about a counter that had never been wired — 43.19.
 //
-// The revert is STRUCTURAL — the shape is fixed in `blankWork()` and there is no arm to
-// install — so it is a comment with its number, verified by hand: initialize the three
-// to 0 and this file reports `0` where it asks for null, which is the reading every one
-// of those eleven gates would have accepted.
-test('the rows this lane does not count read as absent, not as zero', () => {
-    const work = measure(() => document.createElement('div'))
-    expect(work.nodesCreated).toBe(1)
-    expect(work.wakes).toBeNull()
-    expect(work.bindingRuns).toBeNull()
-    expect(work.descents).toBeNull()
+// The revert is STRUCTURAL — the record starts empty in `blankWork()` — so it is a
+// comment with its number, verified by hand: seed it with a zeroed source and
+// `publishedBy` reports `{ wakes: 0 }` where this asks for null, which is the reading
+// every work gate downstream would have accepted.
+test('a source that published nothing reads as absent, not as zero', () => {
+    const standing = publish(undefined)
+    try {
+        const work = measure(() => document.createElement('div'))
+        expect(work.nodesCreated).toBe(1)
+        expect(publishedBy(work, 'subject', ['wakes'])).toBeNull()
+    } finally {
+        publish(standing)
+    }
 })
 
-// THE THIRD CASE, and it is the worst of the three rather than the mildest. A record
-// that IS published and is missing a field does not read back `undefined`: `armCase()`
-// zeroes all three fields on whatever was published, so a field the publisher never
-// declared is CREATED at 0 and read back at 0, and the two halves of this wire cannot
-// be typed against each other (44.1).
+// A RECORD MISSING A FIELD IS NAMED, NOT FILLED. Zeroing only touches a field that is
+// there and is a number, so a field the publisher never declared stays missing rather
+// than being CREATED at 0 and read back at 0 — and `publishedBy` names it.
 //
-// Structural revert, verified by running it: with the field loop out, a record carrying
-// only `wakes` and `bindingRuns` reports `descents: 0`, and `REACTIVE.md`'s k=8 gate —
-// 16 nodes visited against 256 — passes on that 0. Nothing anywhere says a word.
+// Structural revert, verified by running it: zero every field the reader names and a
+// record carrying only `wakes` reports `descents: 0`, and a k=8 gate of 16 nodes
+// visited against 256 passes on that 0. Nothing anywhere says a word.
 test('a published record missing a field throws naming it', () => {
+    const standing = publish({ subject: { wakes: 0 } })
     try {
-        publish({ wakes: 0, bindingRuns: 0 })
-        expect(() => measure(() => {})).toThrow(/numeric descents/)
-        publish({ wakes: 0, descents: 0, bindingRuns: 'many' } as never)
-        expect(() => measure(() => {})).toThrow(/numeric bindingRuns/)
+        const work = measure(() => {})
+        expect(work.published.subject).toEqual({ wakes: 0 })
+        expect(() =>
+            publishedBy(work, 'subject', ['wakes', 'descents']),
+        ).toThrow(/numeric descents/)
+        publish({ subject: { wakes: 0, runs: 'many' } as never })
+        const unread = measure(() => {})
+        expect(() => publishedBy(unread, 'subject', ['runs'])).toThrow(
+            /numeric runs/,
+        )
     } finally {
-        publish(undefined)
+        publish(standing)
     }
 })
 
@@ -328,6 +329,7 @@ test('the patch set is the declared list, by interface and member', () => {
         'EventTarget.addEventListener',
         'DOMTokenList.add',
         'CSSStyleDeclaration.setProperty',
+        'Element.moveBefore',
     ])
         expect(installed).toContain(required)
 })

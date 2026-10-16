@@ -14,12 +14,15 @@
     },
     "packages/abide": {
       "name": "@abide/abide",
-      "version": "0.101.0",
+      "version": "0.105.0",
       "bin": {
         "abide": "./bin/abide.ts",
       },
       "dependencies": {
         "typescript": "^7.0.2",
+      },
+      "devDependencies": {
+        "@abide/harness": "workspace:*",
       },
     },
     "packages/bridge": {
@@ -41,27 +44,36 @@
         "zod": "^4.6.5",
       },
       "devDependencies": {
+        "@abide/harness": "workspace:*",
         "bun-plugin-tailwind": "^0.1.2",
-        "harness": "workspace:*",
         "tailwindcss": "^4.3.3",
       },
     },
     "packages/harness": {
-      "name": "harness",
-      "version": "0.0.0",
-      "devDependencies": {
+      "name": "@abide/harness",
+      "version": "0.1.0",
+      "dependencies": {
         "@happy-dom/global-registrator": "^20.14.6",
-        "happy-dom": "^20.14.6",
+      },
+      "devDependencies": {
+        "@abide/abide": "workspace:*",
       },
       "peerDependencies": {
+        "@abide/abide": ">=0.105.0",
         "@playwright/test": "^1.64.0",
       },
+      "optionalPeers": [
+        "@abide/abide",
+        "@playwright/test",
+      ],
     },
   },
   "packages": {
     "@abide/abide": ["@abide/abide@workspace:packages/abide"],
 
     "@abide/bridge": ["@abide/bridge@workspace:packages/bridge"],
+
+    "@abide/harness": ["@abide/harness@workspace:packages/harness"],
 
     "@biomejs/biome": ["@biomejs/biome@2.5.15", "", { "optionalDependencies": { "@biomejs/cli-darwin-arm64": "2.5.15", "@biomejs/cli-darwin-x64": "2.5.15", "@biomejs/cli-linux-arm64": "2.5.15", "@biomejs/cli-linux-arm64-musl": "2.5.15", "@biomejs/cli-linux-x64": "2.5.15", "@biomejs/cli-linux-x64-musl": "2.5.15", "@biomejs/cli-win32-arm64": "2.5.15", "@biomejs/cli-win32-x64": "2.5.15" }, "bin": { "biome": "bin/biome" } }, "sha512-WZTW4slm/pdkh92K6t/3aEN++44JD1PQ7squ7RCMLI1flHGl43DVOIGXvCjHiZgBMO1V4uYxoFNtqrIA4qGuIQ=="],
 
@@ -222,8 +234,6 @@
     "fdir": ["fdir@6.5.0", "", { "peerDependencies": { "picomatch": "^3 || ^4" }, "optionalPeers": ["picomatch"] }, "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg=="],
 
     "happy-dom": ["happy-dom@20.14.6", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-5DDsf4QmEIlRL6NkCv/fxSjYHHkZceL/IaYQdJc2h3G7DRTEai++VTjbfL0LB9geW2VrA3+vrjF3Efx+OTtX0Q=="],
-
-    "harness": ["harness@workspace:packages/harness"],
 
     "human-id": ["human-id@4.2.2", "", { "bin": { "human-id": "dist/cli.js" } }, "sha512-Z+8unD6em/MJwyrkWQ2M3wygRGI1+MztbutiNwk1DCuEPXOZRWGjtcMPZYP1exY9iNZMhd7ZOSMQSo9WYtiQRw=="],
 

@@ -1,28 +1,19 @@
 // Lane 1 of 3 — DOM CALL COUNTS, taken from inside the page.
 // The only lane that runs in BOTH substrates (bun's DOM and a real browser), which
-// is what lets a hand-written arm and an abide arm share one clock and one batch
-// size. This lane has no abide in its import graph, and that constraint is the whole
-// reason harness is a package rather than a folder (CLAUDE.md, "seams and imports").
+// is what lets a hand-written arm and the arm under test share one clock and one
+// batch size. This lane has nothing under test in its import graph, and that is
+// the whole reason the harness is a package of its own.
 //
 // `harness/report` is a FOURTH entry and is not a fourth lane: a lane is a DEPENDENCY
 // partition, and the leaf depends on nothing.
 
-import {
-    type Batched,
-    type BatchSpec,
-    batch,
-    emulatedDom,
-    underBun,
-} from '../report/index.ts'
+import { type Batched, type BatchSpec, batch } from '../report/batch.ts'
+import { emulatedDom, underBun } from '../report/environment.ts'
 import { install, isArmed } from './install.ts'
 
-export { measure } from './measure.ts'
-export { install, patchSet } from './install.ts'
-export {
-    PUBLISHED_WORK_FIELDS,
-    PUBLISHED_WORK_KEY,
-    type PublishedWork,
-} from './PUBLISHED_WORK.ts'
+export { patchSet } from './install.ts'
+export { measure, publishedBy } from './measure.ts'
+export { PUBLISHED_WORK_KEY, type PublishedWork } from './PUBLISHED_WORK.ts'
 export type { Work } from './Work.ts'
 
 /**

@@ -6,7 +6,7 @@ const DEFAULT_TIMEOUT_MILLISECONDS = 30_000
  * Runs `source` in a child bun with no DOM preload and no worker mark (unless `workerId` is set).
  *
  * Two of the harness's refusals are about the process a number is taken in — `retained()` throws
- * where a DOM is preloaded (44.16), the batcher throws in a parallel worker (44.18) — and
+ * where a DOM is preloaded (43.16), the batcher throws in a parallel worker (43.18) — and
  * `bunfig.toml` preloads happy-dom into every `bun test` process while `bun run test` runs them
  * all under `--parallel`. So a gate on either refusal cannot be taken in the suite that states
  * it: it is taken in a child.
@@ -34,7 +34,7 @@ export async function inAFreshProcess(
             environment[key] = value
     if (workerId !== undefined) environment.BUN_TEST_WORKER_ID = workerId
     const run = await spawned(['bun', '-e', source], {
-        cwd: new URL('../../../../', import.meta.url).pathname,
+        cwd: process.cwd(),
         env: environment,
         deadline: timeoutMilliseconds,
     })

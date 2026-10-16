@@ -73,6 +73,11 @@ const DECLARED: [interfaceName: string, member: string, role: Role][] = [
     ['Element', 'append', 'insertArgs'],
     ['Element', 'prepend', 'insertArgs'],
     ['Element', 'replaceChildren', 'replaceChildren'],
+    // A KEYED REORDER IN CHROMIUM IS THIS CALL (`moveNode`), so leaving it off read
+    // every reorder there as 0 moves. One node moves, as with `insertBefore`.
+    ['Element', 'moveBefore', 'insertFirstArg'],
+    ['Document', 'moveBefore', 'insertFirstArg'],
+    ['DocumentFragment', 'moveBefore', 'insertFirstArg'],
     ['Document', 'append', 'insertArgs'],
     ['Document', 'prepend', 'insertArgs'],
     ['Document', 'replaceChildren', 'replaceChildren'],
@@ -107,7 +112,7 @@ const DECLARED: [interfaceName: string, member: string, role: Role][] = [
     // THE ONE MEMBER INTERCEPTED ON READ, and it is here because `style.paddingLeft =
     // x` never reaches `setProperty`: it is an own accessor on `CSSStyleDeclaration`
     // per CSS property, hundreds of them, and enumerating those at install would make
-    // the patch set a different list in each substrate — which 44.5 forbids and is the
+    // the patch set a different list in each substrate — which 43.5 forbids and is the
     // one thing the byte-identical gate exists to catch. So the getter hands back a
     // counting proxy while armed and the real declaration otherwise, and every write
     // is counted without naming a single property. `HTMLElement.style` resolves at the
@@ -151,11 +156,9 @@ export function blankWork(): Work {
         dataWrites: 0,
         redundantDataWrites: 0,
         listenersBound: 0,
-        // NOT 0 — this lane does not count these three and `null` says so. 44.20, and
-        // the reason is on the fields in `Work.ts`.
-        bindingRuns: null,
-        wakes: null,
-        descents: null,
+        // EMPTY, not zeroed — a source nobody published is absent (43.19). Replaced whole
+        // at disarm, so the shape is the same object type at every read.
+        published: {},
     }
 }
 
@@ -498,6 +501,7 @@ export function install(): void {
         DOMTokenList: element.classList,
         CSSStyleDeclaration: element.style,
         HTMLTemplateElement: document.createElement('template'),
+        DocumentFragment: document.createDocumentFragment(),
     }
 
     const taken: string[] = []
@@ -513,6 +517,14 @@ export function install(): void {
                 `harness/measure declares ${interfaceName}.${member} and this substrate has no prototype named ${interfaceName}.`,
             )
         const descriptor = descriptorFrom(proto, member)
+        // 43.5 — A MEMBER ONE SUBSTRATE LACKS IS LEFT ABSENT, and listed: happy-dom and WebKit have
+        // no `moveBefore`, and supplying one would turn every measured page's feature probe to the
+        // path it never takes there. Absent, nothing calls it, so it counts nothing — and the
+        // `insertBefore` a probe falls back to counts the one insert instead.
+        if (!descriptor && member === 'moveBefore') {
+            taken.push(`${interfaceName}.${member}`)
+            continue
+        }
         if (!descriptor)
             throw new Error(
                 `harness/measure declares ${interfaceName}.${member} and this substrate does not have it. The patch set has to be the same list in both substrates.`,

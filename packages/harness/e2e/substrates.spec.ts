@@ -17,7 +17,7 @@ const REPO = new URL('../../../', import.meta.url).pathname
 /** The patch set and per-case counts under bun, read off `bunSideCounts.ts`. */
 function bunSide(): {
     patchSet: string[]
-    cases: Record<string, Record<string, number | null>>
+    cases: Record<string, unknown>
 } {
     return JSON.parse(
         execFileSync('bun', ['packages/harness/scripts/bunSideCounts.ts'], {

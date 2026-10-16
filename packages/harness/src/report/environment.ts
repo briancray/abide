@@ -15,7 +15,7 @@ export function underBun(): boolean {
 /**
  * `'dom'` where a DOM is present under bun, which makes it an emulator's, and `null` anywhere else.
  *
- * What a lane hands `batch` as `emulated` for an op that touches the DOM (44.23).
+ * What a lane hands `batch` as `emulated` for an op that touches the DOM (43.22).
  */
 export function emulatedDom(): 'dom' | null {
     return UNDER_BUN && typeof document !== 'undefined' ? 'dom' : null

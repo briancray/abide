@@ -1,12 +1,13 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// FOUR PROJECTS, TWO QUESTIONS. The dogfood app is served at the root and again under
+// SIX PROJECTS, THREE QUESTIONS. The dogfood app is served at the root and again under
 // a sub-path — the sub-path arm is what catches a URL the framework built by assuming
-// '/'. The harness pair is the measure lane's both-substrates gate, which needs a
-// browser and no app, and runs in each of the two engines a reader actually brings.
+// '/'. The abide pair is the framework's own browser specs and benches, and the harness
+// pair is the measure lane's both-substrates gate; both need a browser and no app, and
+// run in each of the two engines a reader actually brings.
 //
 // ONE CONFIG, BECAUSE `webServer` IS A WHOLE-RUN OPTION rather than a per-project one: the
-// harness pair serves nothing and the app pair serves everything, so the two are told apart
+// browser pairs serve nothing and the app pair serves everything, so they are told apart
 // by project name rather than by a config each.
 const PORT = 3131
 const BASE = `http://localhost:${PORT}`
@@ -23,11 +24,21 @@ export default defineConfig({
     reporter: process.env.CI ? 'blob' : 'list',
     use: { trace: 'on-first-retry' },
     projects: [
-        // THE HARNESS PAIR IS LISTED FIRST because its specs are the run's longest, and playwright
+        // THE ABIDE PAIR IS LISTED FIRST because its specs are the run's longest, and playwright
         // hands out work in project order: started last, they were the tail every worker waited on.
         // TWO ENGINES, because the measure lane runs in whatever browser a READER
         // brought. V8 and JSC are the two that reach a card in practice, and the whole
         // claim of this lane is that one case counts the same in each.
+        {
+            name: 'abide',
+            testDir: './packages/abide/e2e',
+            use: { ...devices['Desktop Chrome'] },
+        },
+        {
+            name: 'abide-webkit',
+            testDir: './packages/abide/e2e',
+            use: { ...devices['Desktop Safari'] },
+        },
         {
             name: 'harness',
             testDir: './packages/harness/e2e',
@@ -37,6 +48,14 @@ export default defineConfig({
             name: 'harness-webkit',
             testDir: './packages/harness/e2e',
             use: { ...devices['Desktop Safari'] },
+        },
+        // A DOCS CARD'S OWN BROWSER SPEC, beside the page it is shown on and named `.e2e.ts` so
+        // `bun test` never reads it. It drives the card on the served page, so it runs with the app.
+        {
+            name: 'cards',
+            testDir: './packages/dogfood/src',
+            testMatch: '**/tests/*.e2e.ts',
+            use: { ...devices['Desktop Chrome'], baseURL: BASE },
         },
         {
             name: 'root',

@@ -2,7 +2,7 @@
 // `inScope` and `matchesFilter` keep, so "Run 6 shown" running a seventh is a bug in here.
 
 import { expect, test } from 'bun:test'
-import { inScope, matchesFilter } from '../scripts/rows.ts'
+import { inScope, matchesFilter } from '@abide/harness/rows'
 
 const ITEM = {
     id: 'reactive/fan-out',
