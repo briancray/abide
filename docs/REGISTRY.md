@@ -338,7 +338,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.24, 44.25, 44.28 |
+| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.24, 44.25, 44.28, 44.31 |
 | `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. | 44.16, 44.30 |
 | `claudeCode.bridgeCommand` | `() => { command: string; expires: number }` | The command that pairs a bridge with this browser. | 44.14 |
 | `claudeCode.bridge` | `() => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22 |

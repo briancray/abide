@@ -418,6 +418,31 @@ test('a caller hanging up kills the Claude Code run — 44.18', async () => {
     expect(alive).toBe(false)
 }, 30_000)
 
+// 44.31 — A BRIDGE STOPPED BY A SIGNAL TAKES ITS RUN WITH IT: the bridge is sent SIGTERM mid-turn. THE
+// REVERT: drop the bridge's signal handlers; it exits without reaching `claudeTurn`'s `finally`, and the
+// fake, orphaned, still answers a signal 0.
+test('a bridge stopped by a signal kills its Claude Code run — 44.31', async () => {
+    const { running } = await pairBridge('signaled')
+    const answer = await ask('signaled', 'code', 'hang')
+    const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
+    await reader.read()
+    const { pid } = (await Bun.file(RECORD).json()) as { pid: number }
+    running.kill('SIGTERM')
+    expect(await running.exited).toBe(143)
+    let alive = true
+    for (let tries = 0; alive && tries < 50; tries++) {
+        await Bun.sleep(50)
+        try {
+            process.kill(pid, 0)
+        } catch {
+            alive = false
+        }
+    }
+    if (alive) process.kill(pid, 'SIGKILL')
+    await reader.cancel()
+    expect(alive).toBe(false)
+}, 30_000)
+
 // 44.3 — a transcript ending on the model's own turn is refused before any provider is reached.
 test('a transcript that does not end on a user turn is refused — 44.3', async () => {
     const answer = await Bun.fetch(`${base}/ask`, {

@@ -3114,3 +3114,6 @@ and its `input` event, with the same `id`, once the call is written.
 44.30 A built-in tool MUST be available to a turn only where the site's `tools` names it and the
 visitor's `--tools` does, MUST be approved without asking unless the visitor passed `--allowedTools`,
 and the bridge MUST say once each tool the site asked for that the visitor did not grant.
+
+44.31 A bridge stopped by `SIGTERM`, `SIGINT` or `SIGHUP` MUST end every Claude Code run it started
+before it exits.

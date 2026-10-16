@@ -162,6 +162,15 @@ export async function bridge(options: {
     }
 
     const turns = new Map<string, AbortController>()
+    // 44.31 — A SIGNAL ENDS THE RUNS WITH THE BRIDGE: exiting on one skips every `finally`, so a run
+    // still going would outlive it, orphaned.
+    const signals = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 } as const
+    const stopped = (signal: keyof typeof signals): void => {
+        for (const controller of turns.values()) controller.abort()
+        process.exit(signals[signal])
+    }
+    for (const signal of Object.keys(signals) as (keyof typeof signals)[])
+        process.on(signal, stopped)
     let asked = 0
     const secret = crypto.randomUUID()
     const shim = Bun.serve({
@@ -327,6 +336,8 @@ export async function bridge(options: {
             stream = resumed
         }
     } finally {
+        for (const signal of Object.keys(signals) as (keyof typeof signals)[])
+            process.off(signal, stopped)
         for (const controller of turns.values()) controller.abort()
         await flushing
         await flush()
