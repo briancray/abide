@@ -38,6 +38,9 @@ jobs:
       - name: Pack @abide/abide
         run: cd packages/abide && bun pm pack --destination "$RUNNER_TEMP"
 
+      - name: Pack @abide/harness
+        run: cd packages/harness && bun pm pack --destination "$RUNNER_TEMP"
+
       - name: Scaffold an app from the packed artifact
         run: |
           mkdir "$RUNNER_TEMP/consumer"
@@ -58,12 +61,14 @@ jobs:
           test "$PIN" = "$EXPECTED"
 
       # The pinned version is not on the registry yet — this run is what publishes it — so the
-      # dependency is pointed at the tarball outright.
+      # dependency is pointed at the tarball outright, and the harness the starter's tests import
+      # at its own.
       - name: Build the scaffolded app from the tarball
         run: |
           cd "$RUNNER_TEMP/consumer/my-app"
           ABIDE_TARBALL="$(echo "$RUNNER_TEMP"/abide-abide-*.tgz)" \
-            bun -e 'const p = await Bun.file("package.json").json(); p.dependencies["@abide/abide"] = "file:" + process.env.ABIDE_TARBALL; await Bun.write("package.json", JSON.stringify(p, null, 4) + "\n")'
+          HARNESS_TARBALL="$(echo "$RUNNER_TEMP"/abide-harness-*.tgz)" \
+            bun -e 'const p = await Bun.file("package.json").json(); p.dependencies["@abide/abide"] = "file:" + process.env.ABIDE_TARBALL; p.devDependencies["@abide/harness"] = "file:" + process.env.HARNESS_TARBALL; await Bun.write("package.json", JSON.stringify(p, null, 4) + "\n")'
           bun install
           bun run build
           # 38.112 — the starter's own test, against the packed preload.
