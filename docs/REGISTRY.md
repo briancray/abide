@@ -58,12 +58,12 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `Shaped` | `unknown` | What a `transform` hands back: the value to store, or a refusal. | 4.6, 4.9 |
 | `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.2, 9.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.4, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.64, 19.15 |
-| `reactive` | `<Computed, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>>(body: () => Computed, options?: Omit<ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never>, 'schema'> & { transform?: (value: Awaited<Computed>) => Shaped; schema?: Gate & Schema<Awaited<Computed>> }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>>, AdoptedProduced<Computed, Kept<Shaped>>>` | The unkeyed body overload. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14 |
+| `reactive` | `<Computed, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>>(body: () => Computed, options?: Omit<ReactiveOptions<Awaited<NoInfer<Computed>>, Kept<Shaped>, never>, 'schema'> & { transform?: (value: Awaited<NoInfer<Computed>>) => Shaped; schema?: Gate & Schema<Awaited<NoInfer<Computed>>> }) => Reactive<Kept<Shaped>, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>>, AdoptedProduced<Computed, Kept<Shaped>>>` | The unkeyed body overload. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14, 19.24 |
 | `reactive` | `<Chunk, Shaped = Chunk[], Gate = Schema<Chunk[]>>(body: () => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Omit<ReactiveOptions<Chunk[], Kept<Shaped>, never>, 'schema'> & { transform?: (value: Chunk[]) => Shaped; schema?: Gate & Schema<Chunk[]> }) => Reactive<Kept<Shaped>, Chunk[], Refused<Shaped> \| Gated<Gate, Chunk[]>, Chunk>` | The streaming body overload. | 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9 |
 | `reactive` | `<Chunk, Args, Shaped = Chunk[], Gate = Schema<Chunk[]>, ArgsGate = Schema<Args>>(body: (args: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Omit<ReactiveOptions<Chunk[], Kept<Shaped>, never, Args>, 'schema' \| 'args'> & { transform?: (value: Chunk[]) => Shaped; schema?: Gate & Schema<Chunk[]>; args?: ArgsGate & Schema<Args> }) => Keyed<Kept<Shaped>, Args, Chunk[], Refused<Shaped> \| Gated<Gate, Chunk[]> \| Gated<ArgsGate, Args>, Chunk>` | The keyed streaming body overload. | 9.6, 9.9 |
 | `reactive` | `<Chunk, Args, Shaped = Chunk[], Gate = Schema<Chunk[]>, ArgsGate = Schema<Args \| undefined>>(body: (args?: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Omit<ReactiveOptions<Chunk[], Kept<Shaped>, never, Args \| undefined>, 'schema' \| 'args'> & { transform?: (value: Chunk[]) => Shaped; schema?: Gate & Schema<Chunk[]>; args?: ArgsGate & Schema<Args \| undefined> }) => Keyed<Kept<Shaped>, Args \| undefined, Chunk[], Refused<Shaped> \| Gated<Gate, Chunk[]> \| Gated<ArgsGate, Args \| undefined>, Chunk>` | The keyed streaming overload for a body whose parameter is optional. | 11.2 |
-| `reactive` | `<Computed, Args, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>, ArgsGate = Schema<Args>>(body: (args: Args) => Computed, options?: Omit<ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args>, 'schema' \| 'args'> & { transform?: (value: Awaited<Computed>) => Shaped; schema?: Gate & Schema<Awaited<Computed>>; args?: ArgsGate & Schema<Args> }) => Keyed<Kept<Shaped>, Args, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>> \| Gated<ArgsGate, Args>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed body overload. | 11.2, 11.3, 11.4, 11.6, 11.7, 11.23, 11.55, 11.62 |
-| `reactive` | `<Computed, Args, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>, ArgsGate = Schema<Args \| undefined>>(body: (args?: Args) => Computed, options?: Omit<ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args \| undefined>, 'schema' \| 'args'> & { transform?: (value: Awaited<Computed>) => Shaped; schema?: Gate & Schema<Awaited<Computed>>; args?: ArgsGate & Schema<Args \| undefined> }) => Keyed<Kept<Shaped>, Args \| undefined, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>> \| Gated<ArgsGate, Args \| undefined>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed overload for a body whose parameter is optional. | 11.2 |
+| `reactive` | `<Computed, Args, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>, ArgsGate = Schema<Args>>(body: (args: Args) => Computed, options?: Omit<ReactiveOptions<Awaited<NoInfer<Computed>>, Kept<Shaped>, never, Args>, 'schema' \| 'args'> & { transform?: (value: Awaited<NoInfer<Computed>>) => Shaped; schema?: Gate & Schema<Awaited<NoInfer<Computed>>>; args?: ArgsGate & Schema<Args> }) => Keyed<Kept<Shaped>, Args, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>> \| Gated<ArgsGate, Args>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed body overload. | 11.2, 11.3, 11.4, 11.6, 11.7, 11.23, 11.55, 11.62, 19.24 |
+| `reactive` | `<Computed, Args, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>, ArgsGate = Schema<Args \| undefined>>(body: (args?: Args) => Computed, options?: Omit<ReactiveOptions<Awaited<Computed>, Kept<Shaped>, never, Args \| undefined>, 'schema' \| 'args'> & { transform?: (value: Awaited<Computed>) => Shaped; schema?: Gate & Schema<Awaited<Computed>>; args?: ArgsGate & Schema<Args \| undefined> }) => Keyed<Kept<Shaped>, Args \| undefined, Awaited<Computed>, AdoptedFailures<Computed> \| Refused<Shaped> \| Gated<Gate, Awaited<Computed>> \| Gated<ArgsGate, Args \| undefined>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed overload for a body whose parameter is optional. | 11.2, 19.24 |
 | `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Accepted \| Promise<Accepted>, options?: Omit<ReactiveOptions<Accepted, Kept<Shaped>, never>, 'schema'> & { transform?: (value: Accepted) => Shaped; schema?: Gate & Schema<Accepted> }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped> \| Gated<Gate, Accepted>>` | The value overload, for what the scope owns outright. | 4.1, 4.2, 4.14, 4.15, 4.16 |
 | `reactive` | `<Accepted = undefined, Shaped = Accepted, Gate = Schema<Accepted>>(initial: undefined, options?: Omit<ReactiveOptions<Accepted, Kept<Shaped>, never>, 'schema'> & { transform?: (value: Accepted) => Shaped; schema?: Gate & Schema<Accepted> }) => Reactive<Kept<Shaped>, Accepted, Refused<Shaped> \| Gated<Gate, Accepted>>` | The undefined overload, for a value opening at `undefined`. | 4.15, 4.16 |
 | `reactive` | `<Accepted>() => Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty overload, for a value nothing has written yet. | 4.14 |
@@ -190,12 +190,12 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Context | Meaning | Rules |
 | --- | --- | --- |
-| template expression | The flow itself. | 14.1, 14.2, 14.11, 14.17, 32.25, 32.57 |
+| template expression | The flow itself. | 14.1, 14.2, 14.11, 14.17, 14.19, 32.25, 32.57 |
 | branch-local `<script>` | An item's own setup scope. | 14.8, 34.7, 34.8, 34.9, 34.10 |
-| `reactive` body, unkeyed | The unkeyed body's own scope. | 14.3, 14.11, 14.15, 14.16, 14.17 |
+| `reactive` body, unkeyed | The unkeyed body's own scope. | 14.3, 14.11, 14.15, 14.16, 14.17, 14.19 |
 | `reactive` body, keyed | The keyed body's own scope. | 14.4 |
 | block body binding | A live read, like a prop. | 14.5 |
-| `watch` effect, bare | The effect's own scope. | 14.6, 14.14, 14.16 |
+| `watch` effect, bare | The effect's own scope. | 14.6, 14.14, 14.16, 14.19 |
 | `watch` effect, over sources | The scope its sources narrow. | 12.3, 14.6 |
 | component `<script>` setup | The component's own setup scope. | 14.7, 14.12, 14.13 |
 | event handler | Not the flow. | 14.9 |
@@ -272,7 +272,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | 19.4, 19.19 |
 | `Paths<T>` | `string` | The dot-joined leaf paths of a type. | 19.5 |
 | `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.7, 19.14 |
-| `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.13, 19.14, 20.11 |
+| `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.13, 19.14, 19.23, 20.11 |
 | `validateJson` | `<T>(schema: JsonSchema, value: unknown) => Issues<T> \| null` | The native validator. | 19.13 |
 
 ## Headers abide generates
@@ -306,44 +306,44 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `/__abide/openapi.json` | `GET` | The generated OpenAPI document. | 20.5, 20.6, 20.7, 20.8, 20.11, 20.13, 36.7 |
+| `/__abide/openapi.json` | `GET` | The generated OpenAPI document. | 19.21, 19.22, 20.5, 20.6, 20.7, 20.8, 20.11, 20.13, 20.15, 36.7 |
 | `OpenApiDocument` | `JsonValue` | OpenAPI 3.1, whose schema dialect is `JsonSchema`. | 20.6 |
 
 ## MCP
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 20.5, 20.7, 20.8, 20.9, 20.10, 20.12, 20.13, 36.7 |
+| `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 19.21, 19.22, 20.5, 20.7, 20.8, 20.9, 20.10, 20.12, 20.13, 20.14, 20.16, 20.17, 36.7, 16.78 |
 
 # Assistant
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 45.1, 45.2, 45.3, 45.4, 45.21 |
-| `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string }` | One turn of the transcript a caller sends. | 45.3, 45.4 |
-| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call, its result, and the end. | 45.2, 45.11 |
-| `AssistantOptions` | `{ mcp?: boolean; maxTurns?: number }` | What `assistant` takes beside a provider. | 45.6, 45.8, 45.11 |
-| `Provider` | `{ run(messages: AssistantMessage[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<AssistantEvent> }` | What runs a conversation. | 45.2 |
-| `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<{ text: string; failed: boolean }> }` | The app's MCP tools, called as the asker. | 45.6, 45.7 |
-| `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown }` | A tool as the app's MCP surface lists it. | 45.6 |
+| `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21 |
+| `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string }` | One turn of the transcript a caller sends. | 44.3, 44.4 |
+| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call, its result, and the end. | 44.2, 44.11 |
+| `AssistantOptions` | `{ mcp?: boolean; maxTurns?: number }` | What `assistant` takes beside a provider. | 44.6, 44.8, 44.11 |
+| `Provider` | `{ run(messages: AssistantMessage[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<AssistantEvent> }` | What runs a conversation. | 44.2 |
+| `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<{ text: string; failed: boolean }> }` | The app's MCP tools, called as the asker. | 44.6, 44.7 |
+| `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean }; outputSchema: unknown }` | A tool as the app's MCP surface lists it. | 20.14, 20.16, 44.6 |
 
 ## `claudeApi`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `claudeApi` | `(config: ClaudeApiConfig) => Provider` | The Claude Messages API as a provider. | 45.9, 45.10, 45.12, 45.21 |
-| `ClaudeApiConfig` | `{ apiKey: string; baseURL?: string; model: string; max_tokens: number; system?: string \| unknown[]; tools?: unknown[]; [field: string]: unknown }` | A Messages API request body, less `messages` and `stream`, with the client's key and origin. | 45.9, 45.10 |
+| `claudeApi` | `(config: ClaudeApiConfig) => Provider` | The Claude Messages API as a provider. | 44.9, 44.10, 44.12, 44.21 |
+| `ClaudeApiConfig` | `{ apiKey: string; baseURL?: string; model: string; max_tokens: number; system?: string \| unknown[]; tools?: unknown[]; [field: string]: unknown }` | A Messages API request body, less `messages` and `stream`, with the client's key and origin. | 44.9, 44.10 |
 
 ## `claudeCode`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 45.5, 45.13, 45.17, 45.18, 45.19 |
-| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max' }` | The Claude Code options a site may set for a turn. | 45.16 |
-| `claudeCode.bridgeCommand` | `() => { command: string; expires: number }` | The command that pairs a bridge with this browser. | 45.14 |
-| `claudeCode.bridge` | `() => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 45.20, 45.22 |
-| `BridgeStatus` | `{ paired: boolean; command: string \| undefined }` | Whether a bridge is paired, and the command that pairs one where none is. | 45.20 |
-| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 45.14, 45.15, 45.19 |
+| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.24, 44.25, 44.28 |
+| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max' }` | The Claude Code options a site may set for a turn. | 44.16 |
+| `claudeCode.bridgeCommand` | `() => { command: string; expires: number }` | The command that pairs a bridge with this browser. | 44.14 |
+| `claudeCode.bridge` | `() => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22 |
+| `BridgeStatus` | `{ paired: boolean; command: string \| undefined }` | Whether a bridge is paired, and the command that pairs one where none is. | 44.20 |
+| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.27, 16.78 |
 
 # Ambient values
 
@@ -500,7 +500,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27 |
+| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27, 30.29, 30.30, 30.31 |
 
 # `.abide` files
 
@@ -532,13 +532,13 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37 |
 | `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3 |
-| `bind:value` | Two-way bind on an element. | 5.16, 32.5 |
+| `bind:value` | Two-way bind on an element. | 5.16, 32.5, 32.58, 32.59, 32.60, 32.61, 32.62 |
 | `bind:prop={state}` | Hands a component prop the caller's `Reactive`, or a `{get, set}` pair, to write through. | 32.6, 33.6, 33.8, 14.18 |
 | `bind:checked` | A boolean bind on an input. | 32.7 |
 | `bind:open` | The same, on a `<details>`. | 32.7 |
 | `bind:group` | Radio or checkbox membership. | 32.8 |
 | `bind:value={{get, set}}` | Two-way bind over an explicit accessor pair, on an element or a component. | 32.5, 32.6 |
-| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9, 32.38 |
+| `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer)}` | A node reference. | 32.9, 32.38, 32.66 |
 | `class:name={cond}` | Toggles a class. | 32.10 |
 | `style:prop={value}` | Sets one style property. | 32.10, 32.19 |
 | `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13 |
@@ -555,15 +555,15 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Spelling | Branches | Meaning | Rules |
 | --- | --- | --- | --- |
-| `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.12, 32.21, 41.24 |
-| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. | 32.13, 32.14, 32.15, 32.22, 32.29, 32.32, 32.33, 41.8, 41.14, 41.15 |
-| `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16, 32.56 |
+| `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.12, 32.21, 32.63, 32.64, 32.65, 41.24 |
+| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. | 32.13, 32.14, 32.15, 32.22, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 41.8, 41.14, 41.15 |
+| `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16, 32.56, 32.63, 32.64 |
 
 ### Components
 
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
-| `{#component Name(pattern)}` | An inline component. | 32.39, 32.40, 32.41, 32.42, 32.43, 32.44, 32.45, 32.46, 32.47, 32.48, 32.49, 32.50, 32.51, 32.52, 32.53, 32.54, 32.55 |
+| `{#component Name(pattern)}` | An inline component. | 32.39, 32.40, 32.41, 32.42, 32.43, 32.44, 32.45, 32.46, 32.47, 32.48, 32.49, 32.50, 32.51, 32.52, 32.53, 32.54, 32.55, 32.63, 32.64 |
 | `<Name/>` | A component invocation. | 32.17, 32.34, 32.35, 32.36, 33.19, 33.21, 41.24, 41.28 |
 | `<slot/>` | The position children render into. | 32.18 |
 | `<slot>fallback</slot>` | Renders children, or a fallback. | 32.18 |
@@ -594,8 +594,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Path | Meaning | Rules |
 | --- | --- | --- |
-| `<head>` | A page's, layout's or component's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14, 39.15, 39.16 |
-| `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10 |
+| `<head>` | A page's, layout's or component's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14, 39.15, 39.16, 39.17 |
+| `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10, 39.18, 39.19 |
 | `[name]` | A required dynamic segment. | 16.65, 23.5, 30.3 |
 | `[[name]]` | An optional segment. | 23.5, 30.4 |
 | `[...name]` | A rest segment, terminal. | 23.5, 30.5 |
@@ -634,7 +634,10 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `ABIDE_APP_TOKEN` | `string \| null` | The bearer the remote CLI sends. | 36.6 |
 | `ABIDE_APP_URL` | `string \| null` | Names an app somewhere else, for the remote CLI. | 36.6 |
 | `ABIDE_RPC_TIMEOUT` | `number` | The default ms a call may go without progress. | 16.22, 16.56, 16.58 |
-| `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55 |
+| `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55, 16.78 |
+| `ABIDE_MAX_SOCKET_MESSAGE_SIZE` | `number` | The ceiling on a frame received over the socket mux, in bytes. | 18.28 |
+| `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` | `number` | How many values one connection to the socket mux may follow. | 18.31, 18.32 |
+| `ABIDE_STOP_TIMEOUT` | `number` | How long `App.stop` drains, in ms. | 42.17, 42.18 |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
 | `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |
 | `ABIDE_LOG_FORMAT` | `'tsv' \| 'json' \| null` | The machine log format. | 36.8 |
@@ -702,9 +705,118 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
 | `App.fetch` | `(request: Request) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6 |
 | `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 11.38 |
-| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9 |
-| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 37.4 |
+| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 18.28, 18.29, 18.30 |
+| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4 |
 | `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
+
+# Tests
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119 |
+| `Mounted` | `{ stop(): void; [Symbol.dispose](): void }` | A component `mount` hydrated, until it is stopped. | 38.119 |
+
+# The measurement harness
+
+`@abide/harness`, a package of its own: three lanes, the report and gate vocabulary they share, the
+rows a runner prints, and an adapter for an abide app.
+
+## `@abide/harness/measure` — DOM calls, counted from inside the page
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `measure` | `(body: () => void) => Work` | The work `body` did to the DOM, and what every published source counted while it ran. | 43.1, 43.3, 43.4, 43.6, 43.15, 43.19 |
+| `Work` | `{ elementsMoved: number; markersMoved: number; textMoved: number; nodesCreated: number; attributesSet: number; classWrites: number; styleWrites: number; dataWrites: number; redundantDataWrites: number; listenersBound: number; published: PublishedWork }` | What an op did, one count per row. | 43.2, 43.6, 43.19 |
+| `publishedBy` | `<Field extends string>(work: Work, source: string, fields: readonly Field[]) => Record<Field, number> \| null` | One source's counters off a `Work`. | 43.19, 43.20 |
+| `PublishedWork` | `Record<string, Record<string, number>>` | The records sources publish, by source name. | 43.21 |
+| `PUBLISHED_WORK_KEY` | `'__HARNESS_WORK__'` | The global a source publishes its record under. | 43.21 |
+| `time` | `(spec: Omit<BatchSpec, 'emulated'>) => Batched` | `batch`, with whether the DOM is emulated filled in. | 43.6, 43.22 |
+| `patchSet` | `() => string[]` | Every DOM member the lane counts, as `Interface.member`. | 43.5 |
+
+## `@abide/harness/preload` — a DOM for `bun test`
+
+| Name | Meaning | Rules |
+| --- | --- | --- |
+| `preload = ["@abide/harness/preload"]` | The `[test]` preload that registers a DOM with the measure lane's patches installed. | 43.4 |
+
+## `@abide/harness/engine` — what the browser engine did
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `traceOp` | `(page: Page, op: string, body: () => Promise<void>) => Promise<Trace>` | One op in a Chromium page, traced. | 43.1 |
+| `Trace` | `{ op: string; measures: { name: string; startNanoseconds: number; endNanoseconds: number }[]; counters: { recalcStyle: number; layout: number; paint: number; forcedLayout: number }; layers: { style: number; layout: number; script: number } }` | What the engine did over one traced op, and the user timing emitted inside it. | 43.13 |
+| `shares` | `(trace: Trace, spec: SharesSpec) => Shares` | The fraction of an op one layer took. | 43.13, 43.14 |
+| `SharesSpec` | `{ layer: string; of: string; threshold: 'frame' \| 'interaction' }` | The layer, the op it is a share of, and the threshold it is judged against. | 43.13 |
+| `Shares` | `{ op: string; layer: string; layerNanoseconds: number; opNanoseconds: number; ceilingCpu: number; ceilingObserved: number; threshold: 'frame' \| 'interaction'; underOneFrame: boolean; overTheThreshold: boolean }` | What `shares` hands back. | 43.14 |
+| `measuresNamed` | `(trace: Trace, name: string) => { startNanoseconds: number; endNanoseconds: number }[]` | Every user-timing measure in a trace with one name. | — |
+| `durationOf` | `(trace: Trace, name: string) => number` | The summed duration of the measures in a trace with one name. | — |
+
+## `@abide/harness/server` — bytes, turns and allocations
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `bytes` | `(of: unknown) => Promise<number>` | A payload's byte length, or the engine's shallow estimate of any other value. | 43.1 |
+| `ticks` | `(body: () => unknown) => Promise<number>` | The microtask turns `body`'s result took to settle. | 43.1 |
+| `retained` | `(body: () => unknown) => Record<string, number>` | The live objects `body` left behind, by type. | 43.16 |
+| `allocated` | `(body: () => unknown, reps?: number) => { tagged: 'batch mean'; reps: number; perRep: Record<string, number>; growth: Record<string, number> }` | The objects `body` allocates per run, as a batch mean. | 43.17 |
+| `closures` | `(body: () => unknown) => { 'Function': number; 'JSLexicalEnvironment': number }` | The functions and scopes `body` left behind. | 43.16 |
+
+## `@abide/harness/report` — samples, ratios and the clock
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `batch` | `(spec: BatchSpec) => Batched` | Each arm timed in interleaved batches, with an A/A floor. | 43.7, 43.8, 43.11, 43.12, 43.18, 43.22 |
+| `BatchSpec` | `{ case: string; arms: Record<string, () => void>; emulated: 'dom' \| null; work?: Readonly<Record<string, Readonly<Record<string, number>>>>; n?: number; reps?: number; warmup?: number; budgetNanoseconds?: number }` | The arms `batch` interleaves, and the options that pin or bound the run. | 43.8, 43.22 |
+| `Batched` | `{ case: string; n: number; reps: number; warmup: number; substrate: 'jsc' \| 'v8' \| 'spidermonkey' \| 'unknown'; floor: number; samples: Record<string, Sample> }` | What `batch` hands back. | 43.7 |
+| `Sample` | `{ arm: string; case: string; n: number; reps: number; warmup: number; substrate: 'jsc' \| 'v8' \| 'spidermonkey' \| 'unknown'; emulated: 'dom' \| null; nanoseconds: number; p95: number; underOneFrame: boolean; work: Readonly<Record<string, number>> \| null }` | One arm's timing. | 43.11, 43.12 |
+| `ratio` | `(numerator: Sample, denominator: Sample, spec: RatioSpec) => Ratio` | One arm's time over another's, as the floor allows it to be said. | 43.7, 43.10 |
+| `RatioSpec` | `{ floor: number; workFactor?: number }` | The floor and the work tolerance a `ratio` is judged against. | 43.7 |
+| `Ratio` | `{ kind: 'ratio'; case: string; numerator: string; denominator: string; value: number; workDisagreement: string[] } \| { kind: 'underOneFrame'; case: string; numerator: string; denominator: string; workDisagreement: string[] } \| { kind: 'underTheFloor'; case: string; numerator: string; denominator: string; floor: number; workDisagreement: string[] }` | What `ratio` hands back. | 43.7 |
+| `claimOf` | `(result: Ratio) => string` | A `Ratio` as the one line a report prints. | 43.7 |
+| `emulatedDom` | `() => 'dom' \| null` | Whether the DOM in this process is emulated. | 43.22 |
+| `THRESHOLDS` | `{ readonly frame: 16700000; readonly interaction: 100000000 }` | Where a cost crosses perception, in nanoseconds. | 43.14 |
+
+## `@abide/harness/gate` — tests whose revert can be run
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `gate` | `(name: string, spec: GateSpec, body: () => void \| Promise<void>) => void` | A test with a runnable revert. | 43.9 |
+| `GateSpec` | `{ revert: () => unknown; worth: Record<string, number \| string> }` | A gate's revert and what the broken arm reports. | 43.9 |
+| `spawned` | `(command: string[], options?: { cwd?: string; env?: Record<string, string \| undefined>; deadline?: number }) => Promise<{ exitCode: number; stdout: string; stderr: string }>` | A child process run to its end, awaited. | 43.24 |
+| `inAFreshProcess` | `(source: string, workerId?: string, timeoutMilliseconds?: number) => Promise<{ ok: boolean; output: string }>` | Source run in a child bun with no DOM preloaded. | 43.25 |
+
+## `@abide/harness/rows` — what a runner prints
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `RowItem` | `{ id: string; section: string; name: string }` | One entry a runner offers to run. | 43.26 |
+| `RowState` | `'queued' \| 'running' \| 'done' \| 'broken'` | Where a row is in its run. | 43.27 |
+| `BenchRow` | `{ id: string; state: RowState; unit: string; subject: number \| null; handWritten: number \| null; claim: string; n: number \| null; floor: number \| null; note: string }` | One bench's result against its hand-written arm. | 43.26 |
+| `TestRow` | `{ id: string; state: RowState; tests: number; failures: number; skipped: number; milliseconds: number; cases: TestCase[]; note: string }` | One test file's result. | 43.27 |
+| `TestCase` | `{ name: string; milliseconds: number; skipped: boolean; failure: string \| null }` | One test in a file, as its report gave it. | 43.27 |
+| `RunnerFailure` | `{ failure: string }` | The line written after a runner died part way. | — |
+| `isRunnerFailure` | `(line: object) => line is RunnerFailure` | Whether a line is a `RunnerFailure`. | — |
+| `inScope` | `(item: RowItem, scope: string) => boolean` | Whether an item falls in a `--scope`. | 43.26 |
+| `matchesFilter` | `(item: RowItem, filter: string) => boolean` | Whether an item matches a `--filter`. | 43.26 |
+
+## `@abide/harness/runner` — runners that print rows
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `rowsCommand` | `<Item extends RowItem, Row>(items: Item[], run: (selected: Item[], emit: (row: Row) => void) => Promise<void>) => Promise<void>` | A runner's command line: its catalog under `--list`, else the rows of what it selects. | 43.26 |
+| `testRows` | `(suites: TestSuite[], cwd: string) => Promise<void>` | `rowsCommand` over the test files of `suites`, one `TestRow` per file. | 43.27 |
+| `TestSuite` | `{ section: string; root: string; runner: 'bun'; pattern?: string } \| { section: string; root: string; runner: 'playwright'; projects: string[]; pattern?: string }` | One directory of test files, listed under one section. | 43.27 |
+
+## `@abide/harness/abide` — the adapter for an abide app
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `measure` | `(body: () => void) => AbideWork` | The work an op did to the DOM, with abide's own counters beside it. | 43.1, 43.19, 43.20, 43.23 |
+| `AbideWork` | `Work & { wakes: number \| null; bindingRuns: number \| null; descents: number \| null }` | What `measure` hands back. | 43.23 |
+
+| Name | Meaning | Rules |
+| --- | --- | --- |
+| `preload = ["@abide/harness/abide/preload"]` | The `[test]` preload that registers a DOM a test mounts into and measures, then abide's own. | 38.109, 38.119 |
 
 # CLI
 
@@ -712,7 +824,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Command | Meaning | Rules |
 | --- | --- | --- |
-| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106 |
+| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, and where each hook is filed. | 38.108 |
@@ -726,5 +838,6 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. | 38.69 |
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97 |
 | `abide bundle [--out]` | A desktop app for the host platform, with a window on the app. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102 |
-| `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98 |
-| `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12 |
+| `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118 |
+| `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
+| `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |

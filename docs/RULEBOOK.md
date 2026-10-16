@@ -37,6 +37,53 @@ These are immutable. A change to them is a change to what this document is.
 7. **A clause states what holds today.** A rule that stops holding is deleted, and the clauses
    after it close the gap — every citation of a number is swept in the same change.
 
+## Contents
+
+- [1. The reactive value](#1)
+- [2. Reads](#2)
+- [3. Probes](#3)
+- [4. Writes and gates](#4)
+- [5. Productions and identity](#5)
+- [6. Expiry](#6)
+- [7. Triggers](#7)
+- [8. Stores](#8)
+- [9. Streams and wired values](#9)
+- [10. Sharing](#10)
+- [11. Derived and keyed values](#11)
+- [12. Effects](#12)
+- [13. Selections](#13)
+- [14. Tracking](#14)
+- [15. Refusals](#15)
+- [16. Handlers and transports](#16)
+- [17. Response helpers](#17)
+- [18. Following a `GET`](#18)
+- [19. Mount paths and schemas](#19)
+- [20. Generated surfaces](#20)
+- [21. Generated headers](#21)
+- [22. Request-scoped ambients](#22)
+- [23. Route and connectivity](#23)
+- [24. Tracing](#24)
+- [25. Health](#25)
+- [26. Principal](#26)
+- [27. Configuration](#27)
+- [28. Logging](#28)
+- [29. Content security policy](#29)
+- [30. Addresses and navigation](#30)
+- [31. Reading and writing by name](#31)
+- [32. Templating](#32)
+- [33. Props](#33)
+- [34. Script and style blocks](#34)
+- [35. Pages, rendering and sinks](#35)
+- [36. Environment and files](#36)
+- [37. Lifecycle hooks](#37)
+- [38. Commands](#38)
+- [39. Head and view transitions](#39)
+- [40. Documentation](#40)
+- [41. Rendering and hydration](#41)
+- [42. The app object](#42)
+- [43. The measurement harness](#43)
+- [44. The assistant](#44)
+
 ## Terms
 
 A term below is a category the clauses are written over. It is defined here rather than in
@@ -135,7 +182,8 @@ from its first, and MUST end when that run closes.
 3.2 A probe MUST answer about the value a read would serve, running what that read would run, and
 MUST NOT otherwise start work.
 
-3.3 Reading a probe MUST subscribe to that probe alone.
+3.3 Reading a probe MUST subscribe the reader to that value's probes together, and MUST NOT
+subscribe it to the value.
 
 3.4 A sink MUST be opened where `s.busy` is true and `s.ready` is false.
 
@@ -601,8 +649,9 @@ teardown of the scope it was opened in.
 12.6 A throw from an `Effect` or a `Disposer`, and a read of a failed `Reactive` inside one, MUST
 reach `onError` as thrown, and MUST warn on `abide:watch` with the trace.
 
-12.7 In a browser a throw from an `Effect` MUST additionally be re-thrown, to surface as an uncaught
-error.
+12.7 In a browser a throw from an `Effect` MUST additionally surface as an uncaught error — re-thrown
+to the caller of `watch` from its first run, and reported with `reportError` from a rerun — and
+MUST NOT keep any other `Effect` the same turn woke from running.
 
 12.8 An `Effect` that threw MUST stop its `watch`.
 
@@ -718,6 +767,9 @@ excludes `null` and `undefined`, naming `s.ready`.
 14.18 The compiler MUST NOT warn under 14.16 on a read inside the `get` or `set` of a component's
 `bind:` pair.
 
+14.19 The compiler MUST NOT report a warning on a reactive read where the line above the read holds
+`abide-ignore` followed by the number of the clause the warning cites.
+
 # 15. Refusals
 
 15.1 A refusal MUST be a declared value, and MUST NOT be a status code or a transport concern.
@@ -782,6 +834,8 @@ states otherwise.
 
 # 16. Handlers and transports
 
+## The handler and its `Rpc`
+
 16.1 A handler MUST be a `reactive`, a plain function, or a value.
 
 16.2 `GET`, `POST`, `PUT`, `PATCH` and `DELETE` MUST give the handler a handler file exports as its
@@ -810,6 +864,8 @@ carry the rest in the query on a `GET` or a `DELETE` alone.
 
 16.10 `rpc.url` MUST resolve a mount-relative address at run time, and the build MUST NOT bake an
 absolute one.
+
+## Middleware and arguments
 
 16.11 A `Middleware` rung MUST run on every call, in process as much as over the wire.
 
@@ -853,6 +909,8 @@ read it.
 
 16.27 A `schema` MUST run where its `Reactive` lives.
 
+## What crosses the wire
+
 16.28 A browser MUST receive a generated `Rpc` wrapper carrying the method, the mount-relative address and
 the description, and MUST NOT receive the handler file or the `<script server>` that declared it.
 
@@ -886,6 +944,8 @@ ETag it derives, and answer 206, 416 and 304 as the protocol requires.
 
 16.39 A handler whose value carries a `Reactive` below its top level MUST be a compile error naming
 the handler and the path to it.
+
+## Answers and failures
 
 16.40 A `Failed` escaping a handler MUST be answered at its own `status`.
 
@@ -926,6 +986,8 @@ MUST refuse with `aborted` at status 499, and MUST abort the request carrying it
 16.53 The 303 16.38 answers MUST go to the mount's root where the referrer is absent or is not of
 `APP_URL`'s origin, per 36.2.
 
+## Ceilings and timeouts
+
 16.54 `maxBodySize` and `ABIDE_MAX_REQUEST_BODY_SIZE` MUST default to no ceiling.
 
 16.55 A mutation's body over the ceiling `maxBodySize` or `ABIDE_MAX_REQUEST_BODY_SIZE` sets MUST
@@ -953,6 +1015,8 @@ that call passed.
 answer `aborted` at 499, and MUST NOT report the throw as unexpected.
 
 16.64 An `Rpc` over a plain function MUST NOT run that function before the first call reaches it.
+
+## Addresses and private handlers
 
 16.65 Each parameter of the route a handler file answers at MUST reach its handler's `Args` from the
 path.
@@ -987,6 +1051,8 @@ naming it.
 16.74 A module of the client graph importing a handler file MUST receive the wrapper 16.28 states as
 that file's default.
 
+## Streamed answers and ceilings, continued
+
 16.75 A streamed answer — jsonl, sse, bytes, or a document `page` hands a stream — MUST carry
 `X-Accel-Buffering: no`.
 
@@ -995,6 +1061,9 @@ close, where a new run replaces it, and with the failure that run ended on.
 
 16.77 A `timeout` MUST NOT end a `throttle` or `debounce` window holding a production back, and the
 call MUST wait on that window as 5.15 has it.
+
+16.78 A body `/__abide/mcp` or `/__abide/bridge` reads over the ceiling `ABIDE_MAX_REQUEST_BODY_SIZE`
+sets MUST be refused 413, whether its length was declared or streamed.
 
 # 17. Response helpers
 
@@ -1102,6 +1171,22 @@ declared it, as it opens, and MUST NOT be fed where a rung answered in the handl
 it by the format's fields: a comment skipped, the space after a field's colon optional, `data` lines
 joined, and an event ended by a blank line.
 
+18.28 A frame received over a connection `App.listen` or `abide dev` upgrades to the socket mux that is
+over `ABIDE_MAX_SOCKET_MESSAGE_SIZE` bytes, 1048576 where it is unset, MUST close that connection.
+
+18.29 A connection `App.listen` or `abide dev` upgrades to the socket mux MUST be pinged while idle,
+and MUST be closed where 120 seconds pass with nothing received over it.
+
+18.30 A connection `App.listen` or `abide dev` upgrades to the socket mux MUST be closed with 1013
+where a frame sent to it is dropped rather than sent or held, which happens once 16 MiB are held
+unsent, and MUST NOT be sent the frames after it.
+
+18.31 A subscription to a `GET` that would take one connection to the socket mux past
+`ABIDE_MAX_SOCKET_SUBSCRIPTIONS`, 1024 where it is unset, MUST be refused 429.
+
+18.32 A subscription to a `GET` naming an id its connection already follows MUST replace that one, and
+MUST NOT count toward 18.31's bound.
+
 # 19. Mount paths and schemas
 
 19.1 A route MUST be answered for each method by one file at most, a page answering `GET` and `HEAD`
@@ -1159,6 +1244,19 @@ record keyed by `''`.
 19.20 A request MUST be answered by the most specific route answering its method, ranked as 30.9
 ranks routes for `navigate`.
 
+19.21 What a handler answers MUST be derived at build as a JSON Schema from the value its `Rpc`
+reads, and none MUST be derived where that value may be `undefined`, where the handler streams, or
+where the derivation constrains nothing.
+
+19.22 A `JsonSchema` derived per 19.21 MUST NOT refuse a member its type does not declare, and MUST
+leave unconstrained a value whose type has a method.
+
+19.23 A `jsonSchema` given no type argument MUST be accepted as the `Schema` of any slot it is given
+to, and MUST NOT change the type of the value that slot gates.
+
+19.24 The value a body produces MUST be typed from the body alone, and a `schema` declared beside it
+MUST NOT change that type.
+
 # 20. Generated surfaces
 
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored
@@ -1199,6 +1297,19 @@ the body.
 and then its route, each joined by `_`, with every character but a letter, a digit and `-` written
 `_` and a segment's brackets and dots dropped, and two handlers sharing one MUST be a build error
 naming both.
+
+20.14 Every tool `/__abide/mcp` lists MUST carry `annotations` read off its handler's method:
+`readOnlyHint` true for a `GET` alone, `idempotentHint` true for a `GET`, a `PUT` and a `DELETE`
+alone, and `destructiveHint` true for every method but `GET`.
+
+20.15 `/__abide/openapi.json` MUST publish a handler's 19.21 schema as its `200` response's, and
+MUST publish none where 19.21 derives none.
+
+20.16 A tool `/__abide/mcp` lists MUST declare its handler's 19.21 schema as its `outputSchema`
+where that schema is an object, and MUST declare none otherwise.
+
+20.17 A `tools/call` that `/__abide/mcp` answers for a tool declaring an `outputSchema` MUST carry
+the value as `structuredContent` beside its text, and a refused call MUST carry none.
 
 # 21. Generated headers
 
@@ -1592,6 +1703,15 @@ to the document.
 member left `undefined` omitted, a list its member repeated, an empty list its name with no `=`, and
 anything else its text.
 
+30.29 A back or forward history step `navigate` answers MUST restore the scroll the entry it arrives
+at was left at, once that entry's page is mounted.
+
+30.30 A page hydrated at an entry that carries the scroll it was left at, by a reload or a return to
+the document, MUST land at that scroll.
+
+30.31 A `navigate` that a later `navigate` overtakes before it mounts MUST abort the request it made
+to `middleware`.
+
 # 31. Reading and writing by name
 
 31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
@@ -1723,8 +1843,8 @@ a `{#for}`, a `{#try}`, a `<slot/>` or a `<Name/>`.
 32.32 `{#for}` without a key over a subject that is a `Reactive` named alone MUST key its rows by
 that value's `by`, where it declares one.
 
-32.33 A `{#for}` MUST NOT keep a row showing an item as it stood before an `s.patch` wrote to that
-item, or to an object the patch reached through it.
+32.33 A `{#for}` MUST take an `s.patch` written to a row's item, or to an object the patch reached
+through it, as that item changing under 32.67.
 
 32.34 A `<Name/>` whose name is bound to a `Reactive`, or to a prop `props` hands back, MUST invoke
 the component the value holds.
@@ -1803,6 +1923,40 @@ error.
 32.57 An `await` in a template expression — a slot, an attribute value, a listener, a `bind:`
 operand, a `{#if}` condition, a `{#for}` subject or key, or a value handed to a component — outside
 any function that expression declares, MUST be a compile error.
+
+32.58 A `bind:value` MUST be numeric once its value has been a number or its input is `type=number`
+or `type=range`, and MUST stay numeric for the life of the binding; a numeric bind MUST write a
+number for text that reads as one, `undefined` for blank text, and nothing for any other text.
+
+32.59 A numeric `bind:value` MUST NOT write its value into the property while the property's text
+already reads as that number.
+
+32.60 A `bind:value` MUST NOT write between a `compositionstart` and its `compositionend`, and MUST
+write once on the `compositionend`.
+
+32.61 The server MUST render a `<textarea>`'s `bind:value` as its text, and a `<select>`'s as
+`selected` on the option its value selects — the first whose value reads as the value's text, or
+each one a list holds under 32.62.
+
+32.62 A `bind:value` on a `<select multiple>` MUST hold a list: each option is selected where the list
+holds its value as text, and a change MUST write the values of the selected options, in order.
+
+32.63 A `{#if}`, `{#for}`, `{#try}` or `{#component Name(pattern)}` not closed by its own close tag
+before the end of the file, or before the close tag of the element it was opened in, MUST be a build
+error at the tag that opened it.
+
+32.64 An `{:else}` anywhere but directly inside a `{#if}`, and a close tag that does not name the
+innermost open block, MUST be a build error at that tag.
+
+32.65 A template tag spelled as a block — `{#name}`, `{:name}`, `{/name}` or `{@name}` — whose name is
+none of the blocks 32.12, 32.13, 32.16 and 32.39 govern MUST be a build error naming those blocks.
+
+32.66 A region emptied while a `bind:element` exit (32.38) holds a node in it MUST be filled by what
+arrives in it next as an empty region, and the held node MUST NOT be hydrated as that arrival's
+markup.
+
+32.67 A `{#for}` MUST keep the row and the nodes of a key it keeps when that key's item is a
+different value, and MUST update the row's bindings that read the item in place.
 
 # 33. Props
 
@@ -2027,7 +2181,7 @@ on any element is.
 36.6 `ABIDE_APP_TOKEN` and `ABIDE_APP_URL` MUST be read by the remote CLI only.
 
 36.7 A closed surface — `/__abide/openapi.json` or `/__abide/mcp` (20.7), or `/__abide/bridge`
-(45.19) — MUST answer 404.
+(44.19) — MUST answer 404.
 
 36.8 `ABIDE_LOG_FORMAT` unset MUST follow the TTY.
 
@@ -2108,6 +2262,8 @@ file MUST be a build error naming the module and the hook.
 
 # 38. Commands
 
+## The commands
+
 38.1 `abide scaffold` MUST write a starter project, and MUST skip a step already done.
 
 38.2 `abide run` MUST pass everything after the file to the script.
@@ -2135,6 +2291,8 @@ per 20.1.
 
 38.13 `abide mcp` MUST be a bridge a model client spawns and kills, and `abide start` MUST NOT be
 put in that position.
+
+## `dev`, `build`, `start` and `check`
 
 38.14 `abide dev` MUST hold the app in a child process and keep the listener in its own.
 
@@ -2212,6 +2370,8 @@ a component tag as the component it invokes.
 38.41 A worker `abide dev` did not replace that exits MUST be replaced, and every request it held
 MUST be answered or ended rather than left open.
 
+## Scaffolding, compiled executables and the shell
+
 38.42 The project `abide scaffold` writes MUST depend on the abide that wrote it in a spelling that
 installs, and MUST type the runtime its server modules run on.
 
@@ -2268,6 +2428,8 @@ one.
 38.62 38.7's shell MUST list and complete each handler `call` reaches that `clients.cli` does not
 withhold, with its args, and with its `description` where the declaration writes one as a literal.
 
+## Ports, rebuilds and encodings
+
 38.63 `abide dev` given neither `--port` nor `PORT` MUST listen on the first free port from 3000
 through 3099.
 
@@ -2285,6 +2447,8 @@ its output only a file it did not produce that was written before it began.
 
 38.69 `abide watch` MUST follow a `GET` per 18.20, and print its value and its value after each
 `s.patch`.
+
+## The desktop app
 
 38.70 The executable `abide bundle` writes, started on macOS with no command, MUST open a window on
 the app rather than 38.53's shell, and given a command MUST answer it as 38.50 does.
@@ -2360,6 +2524,8 @@ rest.
 to what an `onMenu` it filed read, and MUST be the default alone from each load the launcher starts
 until the page loaded tells it its route's menus.
 
+## Bytecode, chunks and tooling
+
 38.93 The executable `abide compile` writes MUST carry the app's code as bytecode, and MUST still
 report an error at its source line.
 
@@ -2418,6 +2584,37 @@ be reported on stderr, leaving the command's stdout to its own output.
 
 38.111 `abide openapi` MUST print the OpenAPI document on stdout.
 
+38.112 The project `abide scaffold` writes MUST carry a handler file, a test that calls it, a test
+that mounts its page and measures a click with `@abide/harness/abide`, and a `test` script that runs
+`bun test`, and those tests MUST pass in the project as written.
+
+38.113 A flag `abide` does not know, or one missing its value, MUST be refused with one line naming
+the flag, followed by the usage, and MUST NOT be a success.
+
+38.114 An unknown command within two edits of an `abide` command MUST be refused naming that
+command.
+
+38.115 `--version` MUST print the version of abide, and on a compiled app's executable (38.50) the
+version of the app it holds, and MUST be a success.
+
+38.116 `abide lsp` MUST answer the references to a name and a rename of it across every `.abide`
+and `.ts` of the app, each placed where the author wrote it — a reactive's declaration in a script
+and its reads by name in markup alike, a prop and the attribute naming it on every tag that passes
+it, asked at either, and a component and its close tags as well as its open ones — and MUST refuse
+a rename of a name declared in a library.
+
+38.117 `abide lsp` MUST answer a completion in markup with the blocks the template parser reads
+after `{#`, `{:` and `{/`, the components in scope after `<`, and inside a component's tag the props
+its `props` call declares that the tag does not yet pass.
+
+38.118 A diagnostic `abide lsp` publishes for a finding that cites a clause MUST carry the clause as
+its code, linked to that clause on the documentation's rulebook page.
+
+38.119 `mount` MUST render the component it is given into the document's body as the server renders
+it, MUST hydrate it there with that component's browser module, and MUST run every effect the
+hydration woke before it settles; it MUST throw where the component was not imported from a
+`.abide` and bound, or where the process has no DOM.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -2466,6 +2663,15 @@ MUST replace, in place, the one that same contributor wrote before.
 39.16 A `<head>` contribution with no merge key MUST be removed when the page, layout or component
 that made it leaves.
 
+39.17 A `<script>` a `<head>` contribution writes in a browser MUST run when it is written, as the
+one a server paints does, and MUST NOT run again while the same contributor writes it unchanged.
+
+39.18 A `view-transition-name` transition a navigation starts MUST carry the type `back` or `forward`
+for a history step in that direction, and `push` for any other navigation.
+
+39.19 A browser whose view transitions take no types MUST run a navigation's `view-transition-name`
+transition without them.
+
 # 40. Documentation
 
 *Free-standing: these clauses govern the documentation system, which REGISTRY does not name — a
@@ -2512,7 +2718,7 @@ NOT be answered by a fixture.
 
 40.16 Instrumentation the documentation adds to an `<Example>` MUST sit outside the render.
 
-40.17 A page MUST embed one `<Example>` per behavior it teaches.
+40.17 A page MUST embed one `<Example>` per behavior it teaches, save a page 40.37 exempts.
 
 40.18 An `<Example>` MUST demonstrate exactly one behavior.
 
@@ -2560,6 +2766,21 @@ about.
 
 40.35 A page's `.md` twin MUST be derived from what its `index.abide` renders.
 
+40.36 The documentation site MUST serve `docs/RULEBOOK.md` at `/rulebook`, read from the file as the
+site builds, with each clause and each group anchored by its own number.
+
+40.37 A page whose every behavior is performed by a command, or decided by the deployment an app is
+served from, MAY embed no `<Example>`.
+
+40.38 A page embedding no `<Example>` under 40.37 MUST name which of the two in its `SITE` entry's
+`cardless`.
+
+40.39 A page an `<Example>` frames MUST sit below a `frame` directory beside the page embedding it,
+and MUST be served with none of the site's chrome around it.
+
+40.40 A hand-written arm under the documentation site's `arms` MUST be paired with an `<Example>`
+of the same id.
+
 # 41. Rendering and hydration
 
 41.1 `render` MUST send nothing until the page and every layout around it are set up and built, and a
@@ -2581,7 +2802,8 @@ again, and a serialized setup result MUST NOT be adopted.
 41.7 The `Rpc` calls that re-execution makes MUST be answered from the seed buffer.
 
 41.8 A `{#for}` block over a value the server already painted MUST be reconciled against that value by
-the block's key once it lands, and MUST NOT be appended to.
+the block's key once it lands, keeping each painted row whose key the value holds under 32.67, and
+MUST NOT be appended to.
 
 41.9 `render` MUST delimit a dynamic region with a comment anchor, and MUST NOT add a node, an
 attribute or a wrapper to the document for any other purpose than 41.20's script.
@@ -2683,130 +2905,169 @@ client of its own for one.
 the framework's, MUST NOT boot a build that state did not make, and MUST NOT require a prior
 `abide build`.
 
-# 44. The measurement harness
+42.17 `App.stop` still draining once `ABIDE_STOP_TIMEOUT` milliseconds have passed MUST close every
+connection still answering, and MUST then run `onStop` without waiting on what is still in flight.
 
-*Free-standing: these clauses govern the measurement harness, which REGISTRY does not name — a
-`Sample` is not something an app writes.*
+42.18 `ABIDE_STOP_TIMEOUT` MUST default to 5000.
 
-44.1 `harness/measure`, `harness/engine` and `harness/server` MUST each be reachable through only
-the dependency each is named for, and `harness/report` MUST have none.
+# 43. The measurement harness
 
-44.2 A `Work` record MUST partition nodes moved by node kind, and MUST NOT carry a total across
+43.1 `@abide/harness/measure`, `@abide/harness/engine` and `@abide/harness/server` MUST each be
+reachable through only the dependency each is named for, `@abide/harness/report` MUST have none,
+and no module `@abide/harness` ships outside `@abide/harness/abide` MUST reach a package it is used
+to measure.
+
+43.2 A `Work` record MUST partition nodes moved by node kind, and MUST NOT carry a total across
 those kinds.
 
-44.3 A DOM member `harness/measure` does not count MUST throw naming that member while a case is
+43.3 A DOM member `@abide/harness/measure` does not count MUST throw naming that member while a case is
 armed.
 
-44.4 A patched member MUST tally only where no patched member is already tallying, and
-`harness/measure` MUST install its patches once for the process.
+43.4 A patched member MUST tally only where no patched member is already tallying, and
+`@abide/harness/measure` MUST install its patches once for the process.
 
-44.5 The patch set `harness/measure` installs MUST be the same list of interfaces and members in
-both substrates.
+43.5 The patch set `@abide/harness/measure` installs MUST be the same list of interfaces and members in
+both substrates, and it MUST NOT add a member to the DOM it measures: a listed member a substrate
+lacks is left absent there.
 
-44.6 A `Work` record MUST NOT carry a duration, and `time` MUST throw while the counters are armed.
+43.6 A `Work` record MUST NOT carry a duration, and `time` MUST throw while the counters are armed.
 
-44.7 A floor MUST be measured by running one arm twice under its own name, and `ratio` MUST report
+43.7 A floor MUST be measured by running one arm twice under its own name, and `ratio` MUST report
 a value inside that floor as a tag rather than as a number.
 
-44.8 `batch` MUST interleave its arms, and MUST NOT run one arm in a block.
+43.8 `batch` MUST interleave its arms, and MUST NOT run one arm in a block.
 
-44.9 A `gate` MUST carry a revert installing the broken arm and what that arm reports, and a revert
+43.9 A `gate` MUST carry a revert installing the broken arm and what that arm reports, and a revert
 leaving the gate passing MUST be reported as a failure.
 
-44.10 `ratio` MUST throw where two samples disagree on substrate, on case or on batch size, and
+43.10 `ratio` MUST throw where two samples disagree on substrate, on case or on batch size, and
 where one arm is given twice.
 
-44.11 A `Sample` MUST be at least 100 times the clock's measured resolution, and `batch` MUST throw
+43.11 A `Sample` MUST be at least 100 times the clock's measured resolution, and `batch` MUST throw
 rather than report a smaller one.
 
-44.12 A refusal MUST be taken where the `Sample` is constructed, and MUST NOT be deferred to where
+43.12 A refusal MUST be taken where the `Sample` is constructed, and MUST NOT be deferred to where
 it is reported.
 
-44.13 `shares` MUST take the trace, the layer, the denominator and a threshold, and MUST throw
+43.13 `shares` MUST take the trace, the layer, the denominator and a threshold, and MUST throw
 where the layer runs outside the denominator.
 
-44.14 `shares` MUST report an observed ceiling of zero for an op under one frame.
+43.14 `shares` MUST report an observed ceiling of zero for an op under one frame.
 
-44.15 A count of calls MUST be taken with `spyOn`.
+43.15 A count of calls MUST be taken with `spyOn`.
 
-44.16 `retained` MUST throw in a process with a DOM.
+43.16 `retained` MUST throw in a process with a DOM.
 
-44.17 `allocated` MUST report a batch mean, and MUST NOT report a count an exact integer can be
+43.17 `allocated` MUST report a batch mean, and MUST NOT report a count an exact integer can be
 compared against.
 
-44.18 `batch` MUST throw in a parallel worker.
+43.18 `batch` MUST throw in a parallel worker.
 
-44.19 A hand-written arm under `harness/arms` MUST be paired with an `<Example>` of the same id.
 
-44.20 `measure` MUST report `wakes`, `bindingRuns` and `descents` as absent where no record has been
-published, and MUST NOT report zero for one.
+43.19 `measure` MUST leave a source that published no record absent from `published`, and
+`publishedBy` MUST return null for that source rather than a record of zeroes.
 
-44.21 A published record MUST carry every field `measure` reads off it as a number, and `measure`
-MUST throw naming each field that is absent.
+43.20 `publishedBy` MUST throw naming each field it is asked for that the source's record does not
+carry as a number, and `measure` MUST NOT create a field a source did not publish.
 
-44.22 A counter `measure` reads rather than counts MUST be published as a fixed-shape record
-reached through `globalThis.__ABIDE_WORK__`.
+43.21 A counter `measure` reads rather than counts MUST be published as a fixed-shape record of
+numbers under its source's name on `globalThis.__HARNESS_WORK__`.
 
-44.23 `batch` MUST throw on a duration whose op touched an emulated DOM.
-# 45. The assistant
+43.22 `batch` MUST throw on a duration whose op touched an emulated DOM.
 
-45.1 `assistant` MUST answer only through a handler that yields it, and MUST NOT mount an address
+43.23 `measure` from `@abide/harness/abide` MUST report `wakes`, `bindingRuns` and `descents` off the
+record abide publishes, and MUST report each as absent where abide has published none.
+
+43.24 `spawned` MUST kill a child that has not exited by its deadline and throw naming the command,
+and MUST NOT wait on a child synchronously.
+
+43.25 `inAFreshProcess` MUST run its source in a child `bun` with no DOM preloaded, and MUST NOT mark
+the child a parallel worker unless it is given a worker id.
+
+43.26 `rowsCommand` MUST print its catalog as one JSON array under `--list`, and otherwise MUST print
+one JSON row per line as each lands, for the items `inScope` and `matchesFilter` select by
+`--scope` and `--filter`.
+
+43.27 `testRows` MUST run each test file in a process of its own, and MUST report a file whose
+runner wrote no report as `broken` rather than as a result.
+
+# 44. The assistant
+
+44.1 `assistant` MUST answer only through a handler that yields it, and MUST NOT mount an address
 of its own.
 
-45.2 `assistant` MUST yield the same `AssistantEvent` sequence for one conversation whichever
+44.2 `assistant` MUST yield the same `AssistantEvent` sequence for one conversation whichever
 `Provider` ran it.
 
-45.3 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript whose last
+44.3 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript whose last
 `AssistantMessage` is not the user's.
 
-45.4 `assistant` MUST hold no conversation between calls, and MUST take the whole transcript with
+44.4 `assistant` MUST hold no conversation between calls, and MUST take the whole transcript with
 each one.
 
-45.5 `claudeCode` MUST send a transcript to Claude Code as one message, its earlier turns folded
+44.5 `claudeCode` MUST send a transcript to Claude Code as one message, its earlier turns folded
 above the last.
 
-45.6 With `mcp`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
+44.6 With `mcp`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
 lists, and MUST call each as a request through the app answering the request.
 
-45.7 A `Toolbox` call MUST carry the asking request's `cookie` and `authorization` headers, and MUST
+44.7 A `Toolbox` call MUST carry the asking request's `cookie` and `authorization` headers, and MUST
 NOT carry any other header of it.
 
-45.8 `mcp` over an app whose route table lists no handler for `/__abide/mcp` MUST throw.
+44.8 `mcp` over an app whose route table lists no handler for `/__abide/mcp` MUST throw.
 
-45.9 `claudeApi` MUST call the Messages API again with the tool results only while a turn stops for
+44.9 `claudeApi` MUST call the Messages API again with the tool results only while a turn stops for
 `tool_use`, and MUST send each assistant turn's blocks back as they arrived.
 
-45.10 `claudeApi` MUST throw where no `apiKey` is given, and MUST NOT read a key from the
+44.10 `claudeApi` MUST throw where no `apiKey` is given, and MUST NOT read a key from the
 environment.
 
-45.11 A conversation reaching `maxTurns` with a tool call pending MUST end on a `done` whose `stop`
+44.11 A conversation reaching `maxTurns` with a tool call pending MUST end on a `done` whose `stop`
 is `max_turns`, and MUST NOT run that call.
 
-45.12 `claudeApi` MUST send the results of one turn's tool calls back in one message.
+44.12 `claudeApi` MUST send the results of one turn's tool calls back in one message.
 
-45.13 `claudeCode` MUST run a turn on the Claude Code of the bridge paired with the asking browser,
+44.13 `claudeCode` MUST run a turn on the Claude Code of the bridge paired with the asking browser,
 and MUST refuse 409 where none is paired.
 
-45.14 A code `claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that asked for
+44.14 A code `claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that asked for
 it, once, and MUST NOT pair once it has expired.
 
-45.15 A bridge MUST run Claude Code with its built-in tools off, no setting source read and no MCP
+44.15 A bridge MUST run Claude Code with its built-in tools off, no setting source read and no MCP
 server but the bridge's own, in an empty directory removed when the run ends.
 
-45.16 A bridge MUST take from the site no Claude Code option `ClaudeCodeConfig` does not name.
+44.16 A bridge MUST take from the site no Claude Code option `ClaudeCodeConfig` does not name.
 
-45.17 An MCP request a bridge's Claude Code makes MUST be answered from the `Toolbox` of the turn it
+44.17 An MCP request a bridge's Claude Code makes MUST be answered from the `Toolbox` of the turn it
 was made in.
 
-45.18 `claudeCode` MUST end a turn's run on the bridge when the caller hangs up.
+44.18 `claudeCode` MUST end a turn's run on the bridge when the caller hangs up.
 
-45.19 `/__abide/bridge` MUST be closed until `claudeCode` has minted a pairing code in that process.
+44.19 `/__abide/bridge` MUST be closed until `claudeCode` has minted a pairing code in that process.
 
-45.20 `claudeCode.bridge` MUST yield a `BridgeStatus` whenever the asking browser's pairing changes,
+44.20 `claudeCode.bridge` MUST yield a `BridgeStatus` whenever the asking browser's pairing changes,
 and MUST yield a fresh command where the standing one's code expires unpaired.
 
-45.21 A failure the Messages API reports to `claudeApi`, or a bridge reports to `claudeCode`, MUST
+44.21 A failure the Messages API reports to `claudeApi`, or a bridge reports to `claudeCode`, MUST
 refuse 502.
 
-45.22 A bridge `claudeCode.bridge` has watched MUST be sent away once nothing watches it and it has
+44.22 A bridge `claudeCode.bridge` has watched MUST be sent away once nothing watches it and it has
 run no turn for 30 seconds.
+
+44.23 A post to `/__abide/bridge` carrying a line that is not JSON MUST be refused 400, and none of
+its lines MUST be relayed.
+
+44.24 A bridge MUST answer an MCP request its Claude Code made with a failure where the report
+carrying it was not taken by `/__abide/bridge`, or where no reply arrived within 120 seconds.
+
+44.25 A bridge whose stream from `/__abide/bridge` ends unasked MUST redial it with its pairing's
+token, each wait twice the last, until it is refused or 30 seconds have passed.
+
+44.26 `/__abide/bridge` MUST hold a pairing whose stream dropped for 30 seconds, and a `GET` bearing
+its token within them MUST resume the stream with every frame the dropped one had not sent.
+
+44.27 `/__abide/bridge` MUST send a comment on a pairing's stream every 15 seconds for as long as
+the stream is open.
+
+44.28 A bridge whose stream from `/__abide/bridge` carries no line for 45 seconds MUST end it and
+redial it as 44.25 says.

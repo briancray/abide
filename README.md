@@ -25,7 +25,7 @@ does not read them.
 ## Layout
 
     packages/abide      the framework
-    packages/harness    the three measurement lanes everything is tested and measured with
+    packages/harness    @abide/harness: the measurement lanes everything is tested and measured with
     packages/dogfood    the documentation app, and the app abide is dogfooded on
     packages/bridge     abide-bridge, the CLI that connects Claude Code to an abide site
 
@@ -33,15 +33,16 @@ does not read them.
 framework-internal code imports through. An app resolves `@abide/abide`, `@abide/abide/runtime` and
 `@abide/abide/server` instead.
 
-`harness` is split by DEPENDENCY, and that is why it is a package rather than a folder:
-`harness/measure` has no abide in its graph at all, which is what lets the hand-written arm
-of a ratio be timed by the same clock and the same batch sizing as the abide arm.
+`@abide/harness` measures anything, abide included: nothing it ships reaches abide, which is what
+lets the hand-written arm of a ratio be timed by the same clock and the same batch sizing as the
+abide arm, and what lets an app measure itself with it. What measures abide lives with abide, in
+`packages/abide/bench` and `packages/abide/e2e`. The harness is split by DEPENDENCY:
 
 | lane | answers | substrate |
 | --- | --- | --- |
-| `harness/measure` | DOM calls, from inside the page | bun **and** browser |
-| `harness/engine`  | what Blink did — style, layout, paint, per-layer shares | chromium, over CDP |
-| `harness/server`  | bytes, microtask turns, allocations | bun |
+| `@abide/harness/measure` | DOM calls, from inside the page | bun **and** browser |
+| `@abide/harness/engine`  | what Blink did — style, layout, paint, per-layer shares | chromium, over CDP |
+| `@abide/harness/server`  | bytes, microtask turns, allocations | bun |
 
 ## Brand
 
@@ -68,7 +69,7 @@ THE DOCS ARE AN ABIDE APP, written the way an app author writes one: `packages/d
 - An EXAMPLE is ONE `.abide` in the `lib/` beside the page that embeds it — its `<script server>`
   handlers, hooks and data, its `<script>` and its markup in one file (RULEBOOK 40.34) — and the card's Files
   tab shows that file, imported as text (`with { type: 'text' }`, 34.21). A card's `id` is what its
-  hand-written arm under `packages/harness/arms/` is paired by (44.19).
+  hand-written arm under `packages/dogfood/arms/` is paired by (40.40).
 - Every page is also served as markdown at its address with `.md` on the end, and `/abide.md` is
   every page in reading order — derived from the rendered page by `src/lib/downloads.ts`,
   so the words have one home (40.35).
@@ -84,8 +85,8 @@ reading `SITE.ts`, each `index.abide`, and the pages and markdown the built app 
     bun run test:serial   the same, unparallelized — rerun a TIMING failure here before believing it
     bun run test:changed  only what a change reaches
     bun run lint          unused locals, imports and parameters
-    bun run e2e           playwright: the docs app at the root and under a sub-path, and the
-                          harness's browser specs in chromium and webkit
+    bun run e2e           playwright: abide's and the harness's browser specs in chromium and
+                          webkit, and the docs app at the root and under a sub-path
     bun run knip          exports and files nothing resolves through
     bun run verify        lint, typecheck, test
 

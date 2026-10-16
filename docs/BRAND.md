@@ -261,7 +261,7 @@ three pages later.
   subscribes, then a title saying auto-tracked derivation, then a summary saying the total
   follows the seats. Four ways to say it before anything had been shown.
 * **The opening card is the one to price.** The line after it says what it cost, against the
-  hand-written arm paired with the example (44.19). A page's opening card
+  hand-written arm paired with the example (40.40). A page's opening card
   carries the claim the title made; the cards after it are already inside an argument the reader
   has accepted, and pricing each of them turns the device into furniture.
 * **Second person, imperative.** What *you* write, what *it* does. "You write one instead", not
