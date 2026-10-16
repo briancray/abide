@@ -1,6 +1,6 @@
 {
     "name": "@abide/bridge",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "type": "module",
     "description": "Connects the Claude Code on your machine to the assistant on an abide site",
     "license": "MIT",

@@ -1,5 +1,15 @@
 # @abide/abide
 
+## 0.107.0
+
+### Minor Changes
+
+- bd2a74f: Breaking: an assistant announces a tool call as the model starts writing it, and a site may ask the visitor's Claude Code for built-in tools ([`c959804`](https://github.com/briancray/abide/commit/c959804fd19c3e99fe439f3f1120f1ef13f42ff8))
+
+### Patch Changes
+
+- bd2a74f: a bind:element callback is handed a connected node whose blocks and components have built, and bind:element on a component is a build error ([`e15fbee`](https://github.com/briancray/abide/commit/e15fbee6f7c780dab2105ca245dd79dbb4a2e317))
+
 ## 0.106.0
 
 ### Minor Changes

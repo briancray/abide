@@ -1,5 +1,11 @@
 # @abide/bridge
 
+## 0.3.0
+
+### Minor Changes
+
+- bd2a74f: Breaking: an assistant announces a tool call as the model starts writing it, and a site may ask the visitor's Claude Code for built-in tools ([`c959804`](https://github.com/briancray/abide/commit/c959804fd19c3e99fe439f3f1120f1ef13f42ff8))
+
 ## 0.2.0
 
 ### Minor Changes
