@@ -15,5 +15,22 @@ import { install } from './install.ts'
 // that exports it made the local gate red where CI, which never sets it, stayed green.
 delete process.env.FORCE_COLOR
 
+// THE WIRE STAYS BUN'S. happy-dom registers its own `fetch` family over bun's, and those drop a
+// `cookie` or `origin` header a test sets, hand a handler a `Blob` with no `bytes()`, and are refused
+// by `Bun.serve`. The DOM reaches its own through its window either way.
+const WIRE = [
+    'fetch',
+    'Request',
+    'Response',
+    'Headers',
+    'Blob',
+    'File',
+    'FormData',
+    'AbortController',
+    'AbortSignal',
+] as const
+const native: Record<string, unknown> = {}
+for (const name of WIRE) native[name] = globalThis[name]
 GlobalRegistrator.register({ url: 'http://localhost/' })
+for (const name of WIRE) Object.assign(globalThis, { [name]: native[name] })
 install()
