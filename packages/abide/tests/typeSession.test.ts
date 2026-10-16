@@ -202,6 +202,36 @@ test('a whole build takes ONE snapshot, not one per file', async () => {
     }
 })
 
+// A KEPT SESSION RELEASES THE SNAPSHOT A LATER ONE REPLACED, or the checker process holds every
+// program it ever built — an `abide lsp` checker reached 59 GB in two hours. Asserted on the
+// snapshots the API holds open, which is what the process keeps. A call in flight holds the
+// retired ones until it is out. THE REVERT: make `retire` keep nothing; this reports 3 held where 1
+// is due.
+test('a kept session holds one snapshot however many it has taken', async () => {
+    const kept = await TypeSession.open(TSCONFIG)
+    const held = (): number =>
+        (kept as unknown as { api: { activeSnapshots: Set<unknown> } }).api
+            .activeSnapshots.size
+    try {
+        const ask = (at: number) =>
+            kept.reads(
+                `${ROOT}src/kept.abide`,
+                parseAbide(`<script>\nconst value${at} = ${at}\n</script><p>{value${at}}</p>`),
+            )
+        for (let at = 0; at < 3; at += 1) await ask(at)
+        expect(kept.snapshots).toBe(3)
+        expect(held()).toBe(1)
+
+        const inFlight = kept.hold()
+        for (let at = 3; at < 6; at += 1) await ask(at)
+        expect(held()).toBe(4)
+        inFlight[Symbol.dispose]()
+        expect(held()).toBe(1)
+    } finally {
+        await kept.close()
+    }
+})
+
 const PROBE = `<script>
 import { reactive } from '@abide/abide'
 let rows = reactive([1])

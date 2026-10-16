@@ -58,6 +58,8 @@ export async function handlersUnder(
         paths.push(file.path)
         named.push(file.relative)
     }
+    // The project is asked of below, so the session keeps its snapshot until then.
+    using _held = session.hold()
     const project = await session.projectWith(paths)
     for (const source of serving) {
         paths.push(session.projectionOf(source.path))

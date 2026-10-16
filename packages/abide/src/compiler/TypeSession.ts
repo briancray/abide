@@ -16,6 +16,7 @@ import {
     NodeBuilderFlags,
     type Project,
     SignatureKind,
+    type Snapshot,
     SymbolFlags,
     type Type,
 } from 'typescript/unstable/async'
@@ -260,6 +261,52 @@ export class TypeSession {
      * rather than taking a second one.
      */
     private latest: Project | undefined = undefined
+    private latestSnapshot: Snapshot | undefined = undefined
+
+    /**
+     * Snapshots a later one replaced, released once no call is in flight (`hold`).
+     *
+     * THE CHECKER PROCESS KEEPS EVERY SNAPSHOT UNTIL IT IS RELEASED — `updateSnapshot` releases
+     * nothing — and each holds a whole program and checker. Dropped unreleased, a kept session grew
+     * without bound: an `abide lsp` checker reached 59 GB in two hours of watcher-driven snapshots.
+     * Released the moment it is replaced, a question still being answered over it throws, so the
+     * release waits for the last call out.
+     */
+    private retired: Snapshot[] = []
+    private inFlight = 0
+
+    /**
+     * Marks a call in flight until the returned value is disposed (`using`); the last one out
+     * releases what was retired meanwhile. A caller holding a `Project` across calls (`projectWith`)
+     * holds the session for as long.
+     */
+    hold(): Disposable {
+        this.inFlight += 1
+        return {
+            [Symbol.dispose]: () => {
+                this.inFlight -= 1
+                if (this.inFlight === 0) this.releaseRetired()
+            },
+        }
+    }
+
+    private retire(snapshot: Snapshot): void {
+        this.retired.push(snapshot)
+        if (this.inFlight === 0) this.releaseRetired()
+    }
+
+    private releaseRetired(): void {
+        for (const snapshot of this.retired) {
+            // A process that has stopped answering rejects the release, and dies with what it held.
+            const release = snapshot.dispose().catch(() => {})
+            this.releasing.add(release)
+            void release.finally(() => this.releasing.delete(release))
+        }
+        this.retired = []
+    }
+
+    /** Releases sent and not yet answered, which `close` lets finish before ending the connection. */
+    private releasing = new Set<Promise<void>>()
 
     /**
      * Paths edited or deleted on disk since the last snapshot, or `everything`.
@@ -407,10 +454,12 @@ export class TypeSession {
         // after it: a dropped cache re-reads what the project already listed, and a shadow written
         // for a page in a directory it never listed is not among them.
         if (everything)
-            await this.api.updateSnapshot({
-                openProjects: [this.opened],
-                fileChanges: { invalidateAll: true },
-            })
+            this.retire(
+                await this.api.updateSnapshot({
+                    openProjects: [this.opened],
+                    fileChanges: { invalidateAll: true },
+                }),
+            )
         const snapshot = await this.api.updateSnapshot({
             openProjects: [this.opened],
             fileChanges: {
@@ -419,6 +468,8 @@ export class TypeSession {
                 deleted: edits.deleted,
             },
         })
+        if (this.latestSnapshot !== undefined) this.retire(this.latestSnapshot)
+        this.latestSnapshot = snapshot
         this.latest = snapshot.getProjects()[0]
         return this.latest
     }
@@ -467,6 +518,7 @@ export class TypeSession {
     async projectWith(
         modules: readonly string[],
     ): Promise<Project | undefined> {
+        using _held = this.hold()
         const changed: string[] = []
         for (const path of modules) {
             const canonical = this.canonical(path)
@@ -485,7 +537,7 @@ export class TypeSession {
             if (found[at] === undefined) missing.push(modules[at] as string)
         return missing.length === 0
             ? project
-            : this.currentProject(missing, [...missing])
+            : await this.currentProject(missing, [...missing])
     }
 
     /**
@@ -572,6 +624,7 @@ export class TypeSession {
             text?: string
         })[],
     ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
+        using _held = this.hold()
         const answered = await this.classify(sources)
         for (let at = 0; at < sources.length; at += 1) {
             const source = sources[at] as (typeof sources)[number]
@@ -724,6 +777,7 @@ export class TypeSession {
         within: string,
         sources: readonly Omit<ParsedSource, 'quiet'>[],
     ): Promise<{ ambient: Diagnosis[]; unkeyed: Diagnosis[] }> {
+        using _held = this.hold()
         const ambient: Diagnosis[] = []
         const unkeyed: Diagnosis[] = []
         const project = await this.currentProject()
@@ -830,6 +884,7 @@ export class TypeSession {
         app: Pick<AppLayout, 'root' | 'addresses' | 'handlers'>,
         scripts = true,
     ): Promise<{ diagnoses: Diagnosis[]; refused: Set<string> }> {
+        using _held = this.hold()
         const within = app.root
         const created: string[] = []
         const changed: string[] = []
@@ -1013,11 +1068,13 @@ export class TypeSession {
         offset: number,
         triggerCharacter?: string,
     ): Promise<CompletionInfo | undefined> {
+        using _held = this.hold()
         const template = templateContext(text, offset)
-        if (template !== undefined) return this.completeTemplate(path, template)
+        if (template !== undefined)
+            return await this.completeTemplate(path, template)
         const at = this.askedAt(path, text, offset)
         if (at === undefined) return undefined
-        return at.project.checker.getCompletionsAtPosition(
+        return await at.project.checker.getCompletionsAtPosition(
             at.asked.path,
             at.asked.position,
             { triggerCharacter },
@@ -1103,6 +1160,7 @@ export class TypeSession {
         text: string,
         offset: number,
     ): Promise<Inspection | undefined> {
+        using _held = this.hold()
         const at = this.askedAt(path, text, offset)
         if (at === undefined) return undefined
         const { project, asked } = at
@@ -1171,6 +1229,7 @@ export class TypeSession {
         text: string,
         offset: number,
     ): Promise<References | undefined> {
+        using _held = this.hold()
         const lowered = this.loweredForInspect.get(this.keyOf(path))
         const project = this.latest
         if (
@@ -1384,12 +1443,22 @@ export class TypeSession {
             }
         ).client
         const child = client.process
+        // A release still being written when the connection ends is a write after end, thrown
+        // where nothing catches it. Bounded, for the same process that has stopped answering.
+        if (this.releasing.size > 0)
+            await Promise.race([
+                Promise.allSettled(this.releasing),
+                Bun.sleep(RELEASE_GRACE_MS),
+            ])
         await client.close()
         child?.kill()
     }
 }
 
 const AMBIENT = 'abide-check.d.ts'
+
+// How long `close` waits on releases in flight before ending the connection under them.
+const RELEASE_GRACE_MS = 1000
 
 // What the checker asks for when it resolves an import of `x.abide` (`standIn`).
 const DECLARATION_SUFFIX = '.abide.d.ts'

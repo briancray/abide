@@ -162,6 +162,18 @@ export async function serveLanguage(
         return checker
     }
 
+    // An app with no page open is checked again only when one opens, and its checker is a process
+    // holding the whole program — closed rather than kept, or every app the editor ever visited
+    // keeps one for the session. Queued behind the checks, so none is in flight when it closes.
+    const closeIfUnopened = async (app: string): Promise<void> => {
+        for (const uri of documents.keys()) if (placed(uri)?.app === app) return
+        watchers.get(app)?.close()
+        watchers.delete(app)
+        const checker = checkers.get(app)
+        checkers.delete(app)
+        await checker?.close().catch(() => {})
+    }
+
     const run = async (uri: string): Promise<void> => {
         const document = documents.get(uri)
         if (document === undefined) return
@@ -451,6 +463,9 @@ export async function serveLanguage(
                 clearTimeout(timers.get(closed.uri))
                 timers.delete(closed.uri)
                 publish(closed.uri, [], '')
+                const at = placed(closed.uri)
+                if (at !== undefined)
+                    queue = queue.then(() => closeIfUnopened(at.app))
                 return true
             }
         }
