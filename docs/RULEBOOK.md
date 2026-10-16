@@ -118,6 +118,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | fence | A `server`, `public`, `lib` or `tests` directory. |
 | handler file | A `.ts` of the app's own, neither a `.d.ts` nor a `.test.ts`, directly in a directory under no fence. |
 | private handler | A handler a `<script server>` declares. |
+| chapter app | The app the documentation's story has built by the end of one chapter, kept whole so a reader can download it and run it. |
 
 RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**, **SHALL**,
 **SHOULD**, **SHOULD NOT**, **MAY**.
@@ -2166,6 +2167,9 @@ refused where it renders.
 35.17 An attribute on the document's `<html>` or `<body>` MUST be typed, rendered and bound as one
 on any element is.
 
+35.18 A document an `error.abide` answers MUST NOT be hydrated as the page its address names, and a
+navigation from it MUST load the document it asks for.
+
 # 36. Environment and files
 
 36.1 `PORT` MUST default to 3000, and a command's own port flag MUST override it by declaring it.
@@ -2681,7 +2685,8 @@ transition without them.
 
 40.2 Every name REGISTRY carries MUST be documented against real `.abide` and `.ts` files.
 
-40.3 Every `<Example>` SHOULD carry an end-to-end spec.
+40.3 Every `<Example>` MUST show a test file of its chapter app that exercises the component it
+renders.
 
 40.4 A file an `<Example>` names that is not part of the problem its summary names MUST NOT be
 one of its files.
@@ -2718,68 +2723,87 @@ NOT be answered by a fixture.
 
 40.16 Instrumentation the documentation adds to an `<Example>` MUST sit outside the render.
 
-40.17 A page MUST embed one `<Example>` per behavior it teaches, save a page 40.37 exempts.
+40.17 A page MUST embed one `<Example>` per behavior it teaches, save a page 40.35 exempts.
 
 40.18 An `<Example>` MUST demonstrate exactly one behavior.
 
-40.19 A readout the hand-written arm paired with an `<Example>` renders MUST be one that example's
-own source names.
+40.19 An `<Example>` MUST be embedded by exactly one page declaring `covers`.
 
-40.20 An `<Example>` MUST be embedded by exactly one page declaring `covers`.
+40.20 An `<Example>` MUST model a pattern from the app `docs/BRAND.md` names.
 
-40.21 An `<Example>` MUST model a pattern from an app `docs/BRAND.md` names.
+40.21 Every `<Example>` a chapter embeds MUST name that chapter's own chapter app.
 
-40.22 Every `<Example>` a page embeds MUST be drawn from the same app.
+40.22 A control an `<Example>` renders MUST sit with the value it changes.
 
-40.23 A control an `<Example>` renders MUST sit with the value it changes.
+40.23 An `<Example>` MUST prove the heading it sits under.
 
-40.24 An `<Example>` MUST prove the heading it sits under.
+40.24 An `<Example>` MUST NOT carry code its proof does not need.
 
-40.25 An `<Example>` MUST NOT carry code its proof does not need.
-
-40.26 The capability an `<Example>` proves MUST be one the app it is drawn from would reach
+40.25 The capability an `<Example>` proves MUST be one the app it is drawn from would reach
 for.
 
-40.27 A heading that carries an `<Example>` MUST be followed by it, with nothing between
+40.26 A heading that carries an `<Example>` MUST be followed by it, with nothing between
 them.
 
-40.28 An `<Example>`'s summary MUST state the situation it is in, and MUST NOT restate the
+40.27 An `<Example>`'s summary MUST state the situation it is in, and MUST NOT restate the
 heading.
 
-40.29 A comment in an `<Example>`'s own source MUST fit on one line, and a reason longer than
+40.28 A comment in an `<Example>`'s own source MUST fit on one line, and a reason longer than
 that MUST go in the copy after the card.
 
-40.30 A page's lead MUST read standalone, being what a section overview shows for that page, and
-MUST NOT carry a relative link.
+40.29 A page's lead MUST read standalone, being what the home page shows for that page, and MUST
+NOT carry a relative link.
 
-40.31 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
+40.30 A page whose `covers` names one REGISTRY entry SHOULD open on a section giving that entry's
 forms, the options they share, and a link to its reference page.
 
-40.32 A page reporting the build's own results MUST NOT be listed in `SITE`.
+40.31 A documentation page other than a reference page MUST be an `index.abide` written by hand at
+its route, and its title, nav label, intent, lead and `covers` MUST be its `SITE` entry's alone.
 
-40.33 A documentation page MUST be an `index.abide` written by hand at its route, and its title, nav
-label, intent, lead, app and `covers` MUST be its `SITE` entry's alone.
-
-40.34 An `<Example>` MUST render a component in the `lib` directory beside the page that embeds it,
-and that component's handlers, hooks and data MUST be in its own file, save a file the example is
+40.32 An `<Example>` MUST render a component in a `lib` directory of the chapter app it names, and
+that component's handlers, hooks and data MUST be in its own file, save a file the example is
 about.
 
-40.35 A page's `.md` twin MUST be derived from what its `index.abide` renders.
+40.33 A page's `.md` twin MUST be derived from what the page renders.
 
-40.36 The documentation site MUST serve `docs/RULEBOOK.md` at `/rulebook`, read from the file as the
+40.34 The documentation site MUST serve `docs/RULEBOOK.md` at `/rulebook`, read from the file as the
 site builds, with each clause and each group anchored by its own number.
 
-40.37 A page whose every behavior is performed by a command, or decided by the deployment an app is
+40.35 A page whose every behavior is performed by a command, or decided by the deployment an app is
 served from, MAY embed no `<Example>`.
 
-40.38 A page embedding no `<Example>` under 40.37 MUST name which of the two in its `SITE` entry's
+40.36 A page embedding no `<Example>` under 40.35 MUST name which of the two in its `SITE` entry's
 `cardless`.
 
-40.39 A page an `<Example>` frames MUST sit below a `frame` directory beside the page embedding it,
-and MUST be served with none of the site's chrome around it.
+40.37 The documentation site MUST serve each chapter's feature directory at the address the chapter
+app serves it at, with none of the site's chrome around its pages.
 
-40.40 A hand-written arm under the documentation site's `arms` MUST be paired with an `<Example>`
-of the same id.
+40.38 A chapter app MUST be a package directly under the documentation site's `examples`, and MUST
+pass its own tests and its own `abide check` run from its own directory.
+
+40.39 An `<Example>` naming a chapter app MUST render, above the source of each test or bench file
+it shows, what that file last reported in the results the site keeps for the app.
+
+40.40 An `<Example>` naming a chapter app whose results were never kept MUST say so where the
+results would render.
+
+40.41 The documentation site MUST serve each chapter app as a gzipped tarball at
+`/examples/<app>.tar.gz`, holding every file of the app save its `node_modules` and `.abide`, with
+each workspace dependency naming the published version it stands for.
+
+40.42 The documentation site MUST give every name a public entry point exports and REGISTRY names a
+reference page of its own, generated from REGISTRY and the entry points' exports.
+
+40.43 Every row of `docs/REGISTRY.md` MUST be on exactly one reference page.
+
+40.44 A REGISTRY table no export's reference page holds MUST be on the reference page of the `#`
+group it is in, one page per group.
+
+40.45 A reference page MUST link each clause its rows cite to that clause's anchor on `/rulebook`.
+
+40.46 A reference page MUST link to every guide whose `covers` claims one of its rows.
+
+40.47 A reference page's rows MUST be read from REGISTRY as the page renders.
 
 # 41. Rendering and hydration
 
@@ -2990,6 +3014,9 @@ one JSON row per line as each lands, for the items `inScope` and `matchesFilter`
 
 43.27 `testRows` MUST run each test file in a process of its own, and MUST report a file whose
 runner wrote no report as `broken` rather than as a result.
+
+43.28 The DOM `@abide/harness/preload` registers MUST leave the runtime's own `fetch`, `Request`,
+`Response`, `Headers`, `Blob`, `File`, `FormData`, `AbortController` and `AbortSignal` the globals.
 
 # 44. The assistant
 

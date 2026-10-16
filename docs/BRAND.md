@@ -118,44 +118,40 @@ measurement lanes, the reactive core and the documentation are real; the compile
 the transports are not written. Say so. The
 docs already do, and being early in public is only a liability if the copy pretends otherwise.
 
-# The four apps an example is drawn from
+# The app an example is drawn from
 
-An example is a tiny product, and a product needs a world. Four are named here and nowhere else,
-so a card is a pattern out of one of them rather than a situation invented at the moment of
-writing.
+An example is a tiny product, and a product needs a world. The docs have ONE: a CRM, built across
+the guide's ten chapters, so a card is a piece of an app the reader has watched grow rather than a
+situation invented at the moment of writing. Each chapter ends with that CRM as a chapter app the
+reader can download and run, and every card is a file from it.
 
-| The app | What it exercises |
-| --- | --- |
-| **A CRM** | Records loaded per id, forms over them, saves that can fail, fields not everyone may see |
-| **An LLM chat** | Tokens arriving over time, a transcript that grows, a stop button, a channel more than one caller reads |
-| **An analytics dashboard** | Values derived from other values, queries cached per range, polling that must not stampede |
-| **A media library and player** | One playback state many components read, settings that outlive the tab, artwork per id |
+A CRM is the ordinary case, and that is the point: records loaded per id, forms over them, saves
+that can fail, fields not everyone may see. What a CRM does not obviously have, it grows a feature
+for — an activity feed is its live channel, a pipeline is its cached and patched list, an assistant
+is its surface for machines.
 
-They are chosen to cover the surface between them rather than to flatter it: the CRM is the ordinary
-case, the chat is the one nothing else on this list needs, the dashboard is where a wrong
-recomputation is invisible, and the player is where state outlives the component that owns it. What
 **A pattern is a problem the app has, not a name the framework has.** "The record you are editing
 gets reloaded under you" is a pattern. "A write to a derived value stands until the next recompute" is the
 clause it lands on, and the clause is the page's title rather than the card's.
 
-| The app | Patterns it has | Where they land |
+| Chapter feature | Patterns it has | Where they land |
 | --- | --- | --- |
-| CRM | Reopening a contact you already opened · a phone stored raw and shown formatted · your unsaved edit wiped by a reload · a save button that has to know in-flight from first-load | a keyed `reactive`, `transform`, a write to a derived value, `busy` against `ready` |
-| CRM | A list that must not refetch because you sorted it · a search that holds what each query found | an unkeyed `reactive` body, a keyed `reactive` body |
-| LLM chat | A transcript that grows without being rebuilt · a stop that leaves the partial answer standing · one answer many tabs read | `history`, `refresh`, `publish` |
-| Dashboard | A total that follows its filter · a metric three tiles want and one load answers · a poll that has to be capped · a count that quietly stopped following its filter | an unkeyed `reactive` body, `global`, `throttle`, tracking after `await` |
-| Player | A now-playing bar and a library that agree · a volume that survives the tab · a scrub that fires per frame | `reactive.share`, `store`, `debounce` |
+| Contacts and their profile | Reopening a contact you already opened · a phone stored raw and shown formatted · your unsaved edit wiped by a reload · a save button that has to know in-flight from first-load | a keyed `reactive`, `transform`, a write to a derived value, `busy` against `ready` |
+| Deals and the pipeline | A list that must not refetch because you sorted it · a total that follows its filter · a figure three tiles want and one load answers · a search that fires per keystroke | an unkeyed and a keyed `reactive` body, `global`, `debounce`, `patch` |
+| The activity feed | A feed that grows without being rebuilt · one update every open tab sees · a summary streamed as it is written | a channel, `history`, an async generator handler |
+| Companies, accounts and operations | A page per company · a field only some users see · a server an operator has to watch | routes and layouts, `principal`, `log`, `health` |
 
-**Why 40.22 holds a page to one app.** Six cards drawn from four worlds is six worlds to enter, and
-the reader pays that toll per card while the thing being taught is the same one throughout.
+**Why one app.** Cards drawn from several worlds make the reader enter a new world per card while
+the thing being taught is the same one throughout, and a story only reads as one when every chapter
+adds to the same thing.
 
-**Why 40.23 seats a control with its value.** Held apart from it a button has to name its own
+**Why 40.22 seats a control with its value.** Held apart from it a button has to name its own
 subject — "add one" of what — and that name is longer and vaguer than the arrow it replaced. This
 is the same economy the readouts are under: what the layout can say, the words do not have to.
 
 # What an example has to prove
 
-40.24, 40.25 and 40.26 are one rule rather than three, because dropping any one is a distinct way
+40.23, 40.24 and 40.25 are one rule rather than three, because dropping any one is a distinct way
 for a card to go wrong: a card that proves nothing is
 decoration, a card that proves it in forty lines has buried the proof under the setup, and a card
 that proves it in a world nobody has is proving it to nobody.
@@ -171,24 +167,26 @@ situation needs, and a count kept only to prove a point is code the proof did no
 
 # Documentation structure
 
-Three levels, and a reader may stop at any of them.
+Two parts, and a reader uses them differently.
 
 | | |
 | --- | --- |
-| Main overview | one section per area, each showing that area's own opening |
-| Section overview | that same opening, then what does not fit on a landing page — every part linking to the page that covers it |
-| Topic page | one problem, solved |
+| The guide | one story, read in order: ten chapters building one CRM, each ending with that CRM as an app to download |
+| The reference | one page per export, looked up rather than read, generated from REGISTRY |
 
-The three levels are 40.11's, the constraint on a lead is 40.30's and the map section is 40.31's;
-`<Lead of="…"/>` is how an overview shows one, reading it from `SITE`. SOME OF WHAT IS BELOW IS GATED as well, in
+The home page shows each chapter's opening, through `<Lead of="…"/>` reading it from `SITE`; the
+constraint on a lead is 40.29's and the map section is 40.30's. SOME OF WHAT IS BELOW IS GATED as well, in
 `packages/dogfood/tests/coverage.test.ts` and `voice.test.ts` — the tests are the list, an
 enumeration here being a second copy of them that nothing reruns. A rule here that turns out to be
 checkable belongs in a test rather than in prose; what stays is what only a reader can decide.
 
-* **A page's LEAD is what the section overview says about it.** 40.30 is the constraint and also
+* **A chapter adds to the app; it does not survey a topic.** A chapter is the next thing the CRM
+  needs, and its sections are the behaviors that thing takes. A name that matters to the CRM gets a
+  card; a name that does not gets a row in a table, and its reference page carries the rest.
+* **A page's LEAD is what the home page says about it.** 40.29 is the constraint and also
   the test: the lead is about the whole page rather than about whatever the first heading happens
   to be, and an opening that describes the first card advertises the page as that one card.
-* **Where a page's subject is a NAME, the first section is the map 40.31 asks for.** A reader
+* **Where a page's subject is a NAME, the first section is the map 40.30 asks for.** A reader
   arriving to compare two spellings gets them in the first screen instead of assembling them from
   six sections; one who came to learn scrolls past a table costing four lines. It fits a page whose
   subject is one name with variants, which is most of the primitives, and it does not fit a page
@@ -248,20 +246,20 @@ three pages later.
   A reader who can check a claim in two seconds holds it; one who is asked to follow an
   argument is still deciding. This is the strongest form of "claim, then evidence" and the
   default — reach for prose evidence only where no example fits. Every example is a real `.abide` or
-  `.ts` file in the docs app, running on the page that teaches it, and 40.3 asks it for a spec,
-  which is what keeps it evidence rather than illustration.
+  `.ts` file of the chapter app, running on the page that teaches it, and 40.3 asks it to show the
+  test its app reruns, which is what keeps it evidence rather than illustration.
 * **Four layers reach a card, and each says a thing the others cannot.** The HEADING is the
-  claim, in the reader's words, and 40.24 is what binds the card to it. The card's TITLE is the
+  claim, in the reader's words, and 40.23 is what binds the card to it. The card's TITLE is the
   signature and a gloss, which is the address in the API the claim is about. The card's SUMMARY
   is the situation and what to do in it, one or two sentences. And the copy AFTER the card is
   everything none of those can carry: the reason, the refusal, the thing the running page cannot
-  show. 40.27 is what keeps a fourth voice out from between a heading and its card — the layer that kept being
+  show. 40.26 is what keeps a fourth voice out from between a heading and its card — the layer that kept being
   written and is always a fourth voice restating one of the other three — a card had a heading
   saying a derived value reruns when what it read changes, then a paragraph saying reading is what
   subscribes, then a title saying auto-tracked derivation, then a summary saying the total
   follows the seats. Four ways to say it before anything had been shown.
-* **The opening card is the one to price.** The line after it says what it cost, against the
-  hand-written arm paired with the example (40.40). A page's opening card
+* **The opening card is the one to price.** The line after it says what it cost, from the card's
+  own bench — a ratio between two sizes of the same structure, never a figure in prose. A page's opening card
   carries the claim the title made; the cards after it are already inside an argument the reader
   has accepted, and pricing each of them turns the device into furniture.
 * **Second person, imperative.** What *you* write, what *it* does. "You write one instead", not
@@ -367,8 +365,9 @@ OUTSIDE the render rather than inside it wearing a tip (40.16).
 
 **An example leads with the running component, and the component is really running.** The render
 sits above the tabs and stays there, and what it runs is the example's own component, inline in the
-docs app (40.14), answered by the docs app's own handlers (40.15) — the code in the Files tab is the
-code on screen, with nothing standing in for either half. Files is what a reader consults ABOUT it.
+docs app (40.14), answered by its app's own handlers the docs app mounts (40.15) — the code in a file
+tab is the code on screen, with nothing standing in for either half, and a test or bench tab is what
+that file last reported. The tabs are what a reader consults ABOUT it.
 The thing an example is for is the thing that runs, and a reader who has to find a tab before
 seeing one has been handed source to read instead of something to try.
 

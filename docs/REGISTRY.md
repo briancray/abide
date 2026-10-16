@@ -181,9 +181,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `refuse.named` | `<Name extends string, Data extends JsonValue>(name: Name, status: number \| undefined, message: string \| ((data: Data) => string) \| undefined, options: { schema: Schema<Data> }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | The same, carrying data its schema declares. | 15.3, 15.11, 15.12, 15.13, 15.14, 15.15, 15.18 |
 | `Failed<Name, Data>` | `Error & { name: Name; status: number; message: string; data: Data }` | The one refusal type, in-process and over a wire alike. | 15.1, 15.2, 15.6, 16.40, 16.41, 15.21 |
 | `return myError(data)` | `Failed<Name, Data>` | The one spelling for every refusal. | 15.4, 15.5 |
-| `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | Abide's own refusal for an address nothing answers. | 15.7, 15.9, 15.22 |
-| `validationError` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | Abide's own refusal for a schema or an `args` gate that refused, or a call's route parameter no segment can spell. | 15.8, 15.9 |
-| `aborted` | `(data?: undefined) => Failed<'Aborted', undefined>` | Abide's own refusal for a load every caller aborted, and for a client that left. | 15.9, 16.49, 16.63 |
+| `notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | abide's own refusal for an address nothing answers. | 15.7, 15.9, 15.22 |
+| `validationError` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | abide's own refusal for a schema or an `args` gate that refused, or a call's route parameter no segment can spell. | 15.8, 15.9 |
+| `aborted` | `(data?: undefined) => Failed<'Aborted', undefined>` | abide's own refusal for a load every caller aborted, and for a client that left. | 15.9, 16.49, 16.63 |
 | `myError(data)` DISCARDED | compile error | A `Failed` built and thrown away. | 15.10 |
 
 ## Tracking
@@ -466,7 +466,6 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `abide:health` | `warning` | An `onHealth` that threw or answered a non-object. | 25.2, 28.8 |
 | `abide:mcp` | `debug` `warning` | A handler withheld from MCP, or a tool published with no description. | 20.3, 20.9, 28.8 |
 | `abide:openapi` | `warning` | A handler whose schema had no JSON Schema export. | 20.11, 28.8 |
-| `abide:config` | `warning` | A second `onConfig` replacing the first. | 27.6, 28.8 |
 | `abide:render` | `warning` | An `error.abide` that itself failed. | 28.8 |
 | `abide:refuse` | `warning` | A message formatter that threw. | 15.13, 28.8 |
 | `abide:reactive` | `warning` | A failed revalidation over a value still being served. | 4.12, 28.8 |
@@ -664,7 +663,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
 | `src/launcher.abide` | The desktop launcher, beside the root layout: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
 | `src/layout.abide` | The root layout, whose `<script server>` is the app's own, and whose `<html>` is the document its pages are served in. | 35.15, 35.16, 35.17, 37.1, 37.3, 39.4 |
-| `**/error.abide` | The page a refusal renders in. | 35.2, 35.3, 35.14 |
+| `**/error.abide` | The page a refusal renders in. | 35.2, 35.3, 35.14, 35.18 |
 | `**/node_modules/**/*.abide` | A component a dependency ships as source, compiled with the app that imports it. | 34.23, 34.24, 34.25, 34.26, 34.27, 38.99 |
 | `import '…' with { type: 'routes' }` | A package's directory mounted at the importing file's directory, its pages, layouts, error pages and handler files answering below it. | 23.19, 23.20 |
 | `bunfig.toml` | The file whose `[serve.static] plugins` the client is built with. | 38.43 |
@@ -737,7 +736,7 @@ rows a runner prints, and an adapter for an abide app.
 
 | Name | Meaning | Rules |
 | --- | --- | --- |
-| `preload = ["@abide/harness/preload"]` | The `[test]` preload that registers a DOM with the measure lane's patches installed. | 43.4 |
+| `preload = ["@abide/harness/preload"]` | The `[test]` preload that registers a DOM with the measure lane's patches installed. | 43.4, 43.28 |
 
 ## `@abide/harness/engine` — what the browser engine did
 

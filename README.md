@@ -54,25 +54,29 @@ goes.
 ## Documentation
 
 THE DOCS ARE AN ABIDE APP, written the way an app author writes one: `packages/dogfood` is served by
-`abide dev`, built by `abide build`, and has nothing generated in its source tree.
+`abide dev`, built by `abide build`, and the one generated part of its source tree — the reference —
+is gated against the registry it is generated from.
 
     bun run dev           abide dev on :3131
     bun run build         abide build
 
-- A page is a hand-written `index.abide` at its route — `src/values/show-a-value-that-changes/index.abide`
-  is `/values/show-a-value-that-changes` — wrapped in `<Doc>`, with its headings as `<Section>`s,
-  its code as `<Code>` and `<Snippet>`, and its live examples as `<Example>` cards. Those components
-  are the docs app's own, in `src/lib/`.
-- `src/lib/SITE.ts` is the site map: every page in reading order, with its title, nav label,
-  intent, opening paragraph, the app its examples are drawn from and the REGISTRY names it
-  `covers`. The nav, a page's header and a section overview's `<Lead>`s all read it.
-- An EXAMPLE is ONE `.abide` in the `lib/` beside the page that embeds it — its `<script server>`
-  handlers, hooks and data, its `<script>` and its markup in one file (RULEBOOK 40.34) — and the card's Files
-  tab shows that file, imported as text (`with { type: 'text' }`, 34.21). A card's `id` is what its
-  hand-written arm under `packages/dogfood/arms/` is paired by (40.40).
+- The docs are ONE STORY: ten chapters at `/guide/<chapter>` that build one CRM. Each is a
+  hand-written `index.abide` wrapped in `<Doc>`, with its headings as `<Section>`s, its code as
+  `<Code>` and `<Snippet>`, and its live examples as `<Example>` cards — the docs app's own
+  components, in `src/lib/`.
+- Each chapter ends with a CHAPTER APP, `packages/dogfood/examples/crm-NN`: a real abide app holding
+  everything the CRM has by then, which `/examples/crm-NN.tar.gz` serves as a download (40.41). A
+  card renders a component from that app's `lib/` and shows its files, its tests and its bench; a
+  test or bench tab renders what that file last reported (40.39), kept by
+  `bun run examples:results`. The docs app mounts each chapter's feature directory at the address
+  the app serves it at, so a card's requests reach the app's own handlers (40.37).
+- `src/lib/SITE.ts` is the guide's site map: every chapter in reading order, with its title, nav
+  label, intent, opening paragraph and the REGISTRY names it `covers`. The REFERENCE is generated —
+  one page per export, read from `docs/REGISTRY.md` (`bun packages/dogfood/scripts/referencePages.ts`,
+  40.42).
 - Every page is also served as markdown at its address with `.md` on the end, and `/abide.md` is
-  every page in reading order — derived from the rendered page by `src/lib/downloads.ts`,
-  so the words have one home (40.35).
+  every page in reading order — derived from the rendered page by `src/lib/serveDownloads.ts`,
+  so the words have one home (40.33).
 
 `bun test` gates the docs against the REGISTRY and against RULEBOOK 40 and BRAND —
 `packages/dogfood/tests/coverage.test.ts`, `markdown.test.ts`, `voice.test.ts`, `fences.test.ts` —
