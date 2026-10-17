@@ -1,5 +1,18 @@
 # @abide/abide
 
+## 0.108.0
+
+### Minor Changes
+
+- fda92c3: every MCP tool call writes a debug line on abide:mcp, and every assistant conversation one on abide:assistant ([`6c4d8c7`](https://github.com/briancray/abide/commit/6c4d8c745491308c0208eb18e900473fb8ee9e03))
+
+### Patch Changes
+
+- fda92c3: a back or forward that reloads no longer writes the departed page's scroll into the entry being loaded ([`294c0e6`](https://github.com/briancray/abide/commit/294c0e6ed806c38e80a1f872e7be6ac5579c7382))
+- fda92c3: a site holds a dropped bridge pairing for 60 seconds, past when the bridge notices a silent drop ([`ac8e1d3`](https://github.com/briancray/abide/commit/ac8e1d313b7ea54414cd1034b56eb4cfa88ab31b))
+- fda92c3: bind:value on a <select> selects an option added after the value was written ([`cd592b2`](https://github.com/briancray/abide/commit/cd592b2ccdc617c5cfed2a6acf5f5a458bc9986b))
+- fda92c3: markup the client parses for a raw value, an {#if} arm or a {#for} row inside an <svg> or <math> is parsed in that namespace ([`f8ba81e`](https://github.com/briancray/abide/commit/f8ba81e94e0583858811e3c403535c0c0632b87c))
+
 ## 0.107.0
 
 ### Minor Changes
