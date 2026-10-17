@@ -464,7 +464,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `abide:lifecycle` | `debug` `error` | A lifecycle that ran. | 28.8 |
 | `abide:principal` | `debug` `warning` | A principal set or cleared. | 28.8 |
 | `abide:health` | `warning` | An `onHealth` that threw or answered a non-object. | 25.2, 28.8 |
-| `abide:mcp` | `debug` `warning` | A handler withheld from MCP, or a tool published with no description. | 20.3, 20.9, 28.8 |
+| `abide:mcp` | `debug` `warning` | A handler withheld from MCP, a tool call answered, or a tool published with no description. | 20.3, 20.9, 20.18, 28.8 |
+| `abide:assistant` | `debug` | One line per conversation, once it ends. | 44.32 |
 | `abide:openapi` | `warning` | A handler whose schema had no JSON Schema export. | 20.11, 28.8 |
 | `abide:render` | `warning` | An `error.abide` that itself failed. | 28.8 |
 | `abide:refuse` | `warning` | A message formatter that threw. | 15.13, 28.8 |

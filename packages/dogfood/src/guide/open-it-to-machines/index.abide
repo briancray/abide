@@ -99,7 +99,9 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
 
         <p>Every handler the app publishes is a tool, a read as much as a write. The model picks a
         tool by its <code>description</code>, the same sentence the OpenAPI operation carries, so
-        write one on every handler. A tool with none warns on <code>abide:mcp</code>.</p>
+        write one on every handler. A tool with none warns on <code>abide:mcp</code>, and with
+        <code>DEBUG=abide:mcp</code> every call writes a line naming the tool, its status and how
+        long it took.</p>
 
         <p>The endpoint runs inside the app's own middleware. The rung that decides what a browser
         may call decides what a model may call, and a declared refusal reaches the model by its
@@ -187,6 +189,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
                 <tr><td><code>Provider</code></td><td>What runs the conversation: one method, <code>run</code>. Write one for another model, or a recording for a test.</td></tr>
                 <tr><td><code>Toolbox</code></td><td>What a provider is handed: <code>list</code> of the tools, and <code>call</code> to run one as the asker.</td></tr>
                 <tr><td><code>ToolDefinition</code></td><td>One tool in <code>list</code>: its name, description and input schema.</td></tr>
+                <tr><td><code>abide:assistant</code></td><td>The log namespace that writes one <code>debug</code> line per conversation once it ends: the stop reason, the transcript's length, the tool calls, the tokens and the time.</td></tr>
             </tbody>
         </table>
     </Section>

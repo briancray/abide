@@ -10,6 +10,7 @@
 // another request's scope — `claudeCode` answers one from the bridge's — and the call is still this
 // asker's.
 
+import { namedLogger } from '#shared/log.ts'
 import { refuse } from '#shared/refuse.ts'
 import { type McpReply, McpSurface } from './generatedSurfaces.ts'
 import { request, within } from './requestScope.ts'
@@ -64,6 +65,7 @@ export type Provider = {
 export type AssistantOptions = { mcp?: boolean; maxTurns?: number }
 
 const MAX_TURNS = 10
+const ASSISTANT_LOG = namedLogger('abide:assistant')
 // 44.7 — the caller's credentials, and nothing else of their request.
 const CARRIED_HEADERS = ['cookie', 'authorization']
 
@@ -83,10 +85,39 @@ export async function* assistant(
         options.mcp === true ? appSurface() : NO_SURFACE,
         askerOf(request()),
     )
-    yield* provider.run(messages, tools, {
+    const events = provider.run(messages, tools, {
         maxTurns: options.maxTurns ?? MAX_TURNS,
         signal: request().signal,
     })
+    // 28.7 — a closed namespace runs the provider's stream untouched.
+    yield* ASSISTANT_LOG.enabled() ? traced(events, messages.length) : events
+}
+
+/** `events`, and one line on `abide:assistant` once they end, however they end. 44.32. */
+async function* traced(
+    events: AsyncGenerator<AssistantEvent>,
+    messageCount: number,
+): AsyncGenerator<AssistantEvent> {
+    const started = performance.now()
+    let calls = 0
+    let done: Extract<AssistantEvent, { type: 'done' }> | undefined
+    try {
+        for await (const event of events) {
+            if (event.type === 'tool') calls += 1
+            else if (event.type === 'done') done = event
+            yield event
+        }
+    } finally {
+        ASSISTANT_LOG.debug(
+            done === undefined ? 'unfinished' : done.stop,
+            `${messageCount} messages`,
+            `${calls} tool calls`,
+            done === undefined
+                ? 'no usage'
+                : `${done.usage.input}/${done.usage.output} tokens`,
+            `${(performance.now() - started).toFixed(1)}ms`,
+        )
+    }
 }
 
 /** Where an MCP request is answered, as JSON-RPC's `result` or `error`. */

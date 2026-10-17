@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { clientTags } from '#server/answerRequest.ts'
+import { type AssistantEvent, assistant } from '#server/assistant.ts'
+import { inScope } from '#server/requestScope.ts'
 import { log } from '#shared'
 import { APP_META } from '#shared/APP_META.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
@@ -188,4 +190,41 @@ test("a browser's log.named prefixes the app name the document carries — 28.4"
         meta.remove()
     }
     expect(log.records().at(-1)?.namespace).toBe('ledger:billing')
+})
+
+// 44.32 — A CONVERSATION WRITES ONE LINE ON `abide:assistant` WHEN ITS EVENTS END, and one its caller
+// stopped reading reads `unfinished`. THE REVERT: yield the provider's events untraced in `assistant`;
+// neither conversation writes a line.
+test('a conversation writes one debug line on abide:assistant when it ends — 44.32', async () => {
+    process.env.DEBUG = 'abide:assistant'
+    const played: AssistantEvent[] = [
+        { type: 'tool', id: 't1', name: 'get_contacts' },
+        { type: 'input', id: 't1', input: {} },
+        { type: 'result', id: 't1', text: '[]', failed: false },
+        { type: 'done', stop: 'end_turn', usage: { input: 12, output: 3 } },
+    ]
+    const provider = {
+        async *run() {
+            yield* played
+        },
+    }
+    const conversation = (): AsyncGenerator<AssistantEvent> =>
+        assistant([{ role: 'user', content: 'who?' }], provider)
+    const lines = (): string[] =>
+        (log.records.peek() ?? [])
+            .filter((record) => record.namespace === 'abide:assistant')
+            .map((record) => record.message)
+    const before = lines().length
+    await inScope(new Request('http://crm.test/ask'), async () => {
+        for await (const _ of conversation());
+        for await (const _ of conversation()) break
+    })
+    const written = lines().slice(before)
+    expect(written.length).toBe(2)
+    expect(written[0]).toMatch(
+        /^end_turn 1 messages 1 tool calls 12\/3 tokens \d+\.\dms$/,
+    )
+    expect(written[1]).toMatch(
+        /^unfinished 1 messages 1 tool calls no usage \d+\.\dms$/,
+    )
 })

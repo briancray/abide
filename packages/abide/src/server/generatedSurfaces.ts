@@ -304,11 +304,13 @@ export class McpSurface {
         asker: Request,
     ): Promise<{ text: string; failed: boolean }> {
         const tool = this.#tool(name)
-        if (tool === undefined)
+        if (tool === undefined) {
+            logCall(String(name), 404, undefined)
             return Promise.resolve({
                 text: `No tool named ${name}.`,
                 failed: true,
             })
+        }
         return this.#called(tool, args as Record<string, unknown>, asker)
     }
 
@@ -321,15 +323,23 @@ export class McpSurface {
         args: Record<string, unknown> | undefined,
         asker: Request,
     ): Promise<{ text: string; failed: boolean }> {
+        // 28.7 — a closed namespace does not pay for the line it would have written.
+        const started = MCP_LOG.enabled() ? performance.now() : undefined
         let answer: Response
         try {
             answer = await this.#answer(callOf(asker, one, args))
         } catch (thrown) {
             // 15.8 — a path parameter no address carries, refused as the wire's 422 is (`rpcRequest`).
-            if (!isFailed(thrown)) throw thrown
+            if (!isFailed(thrown)) {
+                logCall(one.name, 500, started)
+                throw thrown
+            }
             answer = answered(thrown)
         }
-        return { text: await answer.text(), failed: answer.status >= 400 }
+        // The body is the call's too: a handler that streams has only begun when its head arrives.
+        const text = await answer.text()
+        logCall(one.name, answer.status, started)
+        return { text, failed: answer.status >= 400 }
     }
 
     /** One MCP request, made as `asker`, as JSON-RPC's `result` or `error`. */
@@ -353,11 +363,13 @@ export class McpSurface {
                 return { result: { tools: this.list() } }
             case 'tools/call': {
                 const tool = this.#tool(params?.name)
-                if (tool === undefined)
+                if (tool === undefined) {
+                    logCall(String(params?.name), 404, undefined)
                     return mcpFailure(
                         -32602,
                         `No tool named ${String(params?.name)}.`,
                     )
+                }
                 const { text, failed } = await this.#called(
                     tool,
                     params?.arguments as Record<string, unknown> | undefined,
@@ -380,6 +392,23 @@ export class McpSurface {
                 return mcpFailure(-32601, `No method ${method}.`)
         }
     }
+}
+
+// 20.18 — ONE LINE PER CALL, whoever framed it: this endpoint or a provider's `Toolbox`, and a call
+// to a tool that is not published (404) or whose answer threw (500) included. `started` is unset
+// where nothing ran, or where the namespace is closed (28.7).
+function logCall(
+    name: string,
+    status: number,
+    started: number | undefined,
+): void {
+    if (!MCP_LOG.enabled()) return
+    MCP_LOG.debug(
+        'call',
+        name,
+        status,
+        `${started === undefined ? '0.0' : (performance.now() - started).toFixed(1)}ms`,
+    )
 }
 
 /**

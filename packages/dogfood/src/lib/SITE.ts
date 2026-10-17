@@ -412,6 +412,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`abide mcp [--url <origin>]`',
                         '`abide:mcp`',
                         '`assistant`',
+                        '`abide:assistant`',
                         '`AssistantMessage`',
                         '`AssistantEvent`',
                         '`AssistantOptions`',

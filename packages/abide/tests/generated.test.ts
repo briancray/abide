@@ -35,6 +35,11 @@ export const playlist = POST(async ({ id }: { id: string }) => new Response(\`#E
 
 export const stamped = GET(() => ({ at: new Date(), count: 1 }), { description: 'When.' })
 
+export const traced = GET(
+    () => (log.records.peek() ?? []).filter((record) => record.namespace === 'abide:mcp').map((record) => record.message),
+    { clients: { mcp: false, openapi: false } },
+)
+
 export const tagged = POST(({ id }: { id: string }) => Response.json({ id }), {
     description: 'Back on.',
     clients: { mcp: true },
@@ -45,16 +50,20 @@ let base = ''
 let stop = (): void => {}
 
 beforeAll(async () => {
-    ;({ base, stop } = await serveApp({
-        'index.abide': '<main>home</main>',
-        ...handlerFiles('invoices', HANDLERS),
-        'files/[[folder]]/listFiles.ts': `import { GET } from '@abide/abide/server'
+    ;({ base, stop } = await serveApp(
+        {
+            'index.abide': '<main>home</main>',
+            ...handlerFiles('invoices', HANDLERS),
+            'files/[[folder]]/listFiles.ts': `import { GET } from '@abide/abide/server'
 
 export default GET(({ folder }: { folder?: string }) => [folder ?? '/'], {
     clients: { mcp: false },
 })
 `,
-    }))
+        },
+        // 20.18's lines are `debug`, kept in `log.records` only once `DEBUG` opens them.
+        { ...process.env, DEBUG: 'abide:mcp' },
+    ))
 }, 30_000)
 
 afterAll(() => {
@@ -202,6 +211,27 @@ test('an MCP call is answered through the app, refusals included — 20.10', asy
         await mcp('tools/call', { name: 'get_invoices_listInvoices' })
     ).result as { content: { text: string }[] }
     expect(JSON.parse(read.content[0]?.text as string)).toEqual([{ id: 1 }])
+})
+
+// 20.18 — EVERY TOOL CALL WRITES ONE LINE ON `abide:mcp`, naming the tool and its status, a refused
+// call and a call to a tool not published included. THE REVERT: drop the `logCall` in `#called`
+// and neither published call writes a line; drop the one before `mcpFailure` and the missing one
+// writes none.
+test('every tool call writes one debug line on abide:mcp — 20.18', async () => {
+    await mcp('tools/call', { name: 'get_invoices_stamped' })
+    await mcp('tools/call', { name: 'post_invoices_guarded', arguments: {} })
+    await mcp('tools/call', { name: 'get_invoices_nowhere' })
+    const lines = (await (
+        await Bun.fetch(`${base}/invoices/traced`)
+    ).json()) as string[]
+    const calls = lines.filter(
+        (line) =>
+            line.startsWith('call get_invoices_stamped ') ||
+            line.startsWith('call post_invoices_guarded '),
+    )
+    expect(calls.at(-2)).toMatch(/^call get_invoices_stamped 200 \d+\.\dms$/)
+    expect(calls.at(-1)).toMatch(/^call post_invoices_guarded 401 \d+\.\dms$/)
+    expect(lines).toContain('call get_invoices_nowhere 404 0.0ms')
 })
 
 // 16.13 — THE MCP ENDPOINT IS GATED ON `Origin` AS A MUTATION IS. A tool call runs its handler with

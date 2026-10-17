@@ -1312,6 +1312,11 @@ where that schema is an object, and MUST declare none otherwise.
 20.17 A `tools/call` that `/__abide/mcp` answers for a tool declaring an `outputSchema` MUST carry
 the value as `structuredContent` beside its text, and a refused call MUST carry none.
 
+20.18 Every tool call the MCP surface answers MUST write one `debug` line on `abide:mcp` naming the
+tool, the status it was answered with and how long it took, whether `/__abide/mcp` or a `Toolbox`
+made the call — a call naming a tool it does not publish answered 404, and one whose answer threw
+500.
+
 # 21. Generated headers
 
 21.1 Every response MUST carry `x-content-type-options: nosniff`.
@@ -3121,3 +3126,7 @@ and the bridge MUST say once each tool the site asked for that the visitor did n
 
 44.31 A bridge stopped by `SIGTERM`, `SIGINT` or `SIGHUP` MUST end every Claude Code run it started
 before it exits.
+
+44.32 A conversation MUST write one `debug` line on `abide:assistant` when its events end, naming
+its stop reason, the transcript's length, the tool calls it made, its usage and how long it took,
+and naming it `unfinished` where it ended without a `done`.
