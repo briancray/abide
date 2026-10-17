@@ -25,21 +25,29 @@ import type { TestCase } from '../rows/index.ts'
 // in `afterAll`, which a stopped file never reaches — so each suite leads a group of its own and
 // the group is what is signaled. Its own group is also why a Ctrl-C at this runner's terminal is
 // passed on rather than reaching the suites directly.
+//
+// INSTALLED WITH THE FIRST SUITE rather than on import: a process that only reads this module's
+// parser has no suite to pass a signal on to, and is not this module's to exit.
 const LIVE = new Set<Bun.Subprocess>()
-for (const [signal, code] of [
-    ['SIGTERM', 143],
-    ['SIGINT', 130],
-] as const)
-    process.on(signal, () => {
-        for (const child of LIVE) {
-            try {
-                process.kill(-child.pid, 'SIGINT')
-            } catch {
-                // The group emptied between its suite ending and this signal.
+let passingSignals = false
+function passSignalsOn(): void {
+    if (passingSignals) return
+    passingSignals = true
+    for (const [signal, code] of [
+        ['SIGTERM', 143],
+        ['SIGINT', 130],
+    ] as const)
+        process.on(signal, () => {
+            for (const child of LIVE) {
+                try {
+                    process.kill(-child.pid, 'SIGINT')
+                } catch {
+                    // The group emptied between its suite ending and this signal.
+                }
             }
-        }
-        process.exit(code)
-    })
+            process.exit(code)
+        })
+}
 
 export type Suite = {
     file: string
@@ -63,10 +71,20 @@ function unescapeXml(value: string): string {
         .replaceAll('&amp;', '&')
 }
 
-/** One `Suite` per `<testsuite>` in a JUnit report, bun's or playwright's. */
+/**
+ * One `Suite` per top-level `<testsuite>` in a JUnit report, bun's or playwright's.
+ *
+ * A NESTED `<testsuite>` IS A `describe`, not a file: bun writes one inside its file's suite, whose
+ * own counts already include it, so its cases join the file's and its counts are not added again.
+ */
 export function parseJUnit(xml: string): Suite[] {
     const suites: Suite[] = []
+    // How many `<testsuite>`s are open where the next one starts.
+    let depth = 0
     for (const block of xml.split('<testsuite ').slice(1)) {
+        const nested = depth > 0
+        // This one opens, and every `</testsuite>` before the next one closes.
+        depth += 2 - block.split('</testsuite>').length
         const head = block.slice(0, block.indexOf('>'))
         const cases: TestCase[] = []
         for (const entry of block.split('<testcase ').slice(1)) {
@@ -80,6 +98,11 @@ export function parseJUnit(xml: string): Suite[] {
                 skipped: /<skipped\b/.test(entry),
                 failure: failure ? unescapeXml(failure[1] ?? '') : null,
             })
+        }
+        const enclosing = suites[suites.length - 1]
+        if (nested && enclosing !== undefined) {
+            for (const one of cases) enclosing.cases.push(one)
+            continue
         }
         suites.push({
             file: attribute(head, 'name'),
@@ -127,6 +150,7 @@ export async function runSuite(spec: {
 }): Promise<{ suites: Suite[]; milliseconds: number }> {
     const report = `${tmpdir()}/abide-suite-${crypto.randomUUID()}.xml`
     const pointed = spec.reportTo(report)
+    passSignalsOn()
     const startedAt = Bun.nanoseconds()
     const child = Bun.spawn({
         cmd: [...spec.command, ...pointed.args],
