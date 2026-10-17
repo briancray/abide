@@ -907,8 +907,8 @@ test('a second call with the same source does not restart the pump', async () =>
     }
     const source = arriving()
 
-    const make = (made: Document, item: { data: unknown }): Node[] => {
-        const row = made.createElement('li')
+    const make = (parent: Node, item: { data: unknown }): Node[] => {
+        const row = (parent.ownerDocument as Document).createElement('li')
         row.textContent = String(item.data)
         return [row]
     }
@@ -1135,8 +1135,8 @@ test('a list arriving in place of a stream stops the stream', async () => {
         await held
         yield 'c'
     }
-    const make = (made: Document, item: { data: unknown }): Node[] => {
-        const row = made.createElement('li')
+    const make = (parent: Node, item: { data: unknown }): Node[] => {
+        const row = (parent.ownerDocument as Document).createElement('li')
         row.textContent = String(item.data)
         return [row]
     }
@@ -1187,8 +1187,8 @@ test('a list stopped while its source is quiet returns the source at once — 12
             },
         }),
     }
-    const make = (made: Document, item: { data: unknown }): Node[] => {
-        const row = made.createElement('li')
+    const make = (parent: Node, item: { data: unknown }): Node[] => {
+        const row = (parent.ownerDocument as Document).createElement('li')
         row.textContent = String(item.data)
         return [row]
     }
@@ -1220,8 +1220,8 @@ test('a value a row read while it was built does not rerun the list', () => {
 
     const selected = reactive('a')
     const rows = reactive(['a', 'b'])
-    const make = (made: Document, item: { data: unknown }): Node[] => {
-        const row = made.createElement('li')
+    const make = (parent: Node, item: { data: unknown }): Node[] => {
+        const row = (parent.ownerDocument as Document).createElement('li')
         row.className = selected() === item.data ? 'danger' : ''
         return [row]
     }
@@ -1639,9 +1639,9 @@ test('a row that throws while made leaves no row unrecorded — 41.14', () => {
     const close = document.createComment(REGION_CLOSE)
     host.append(open, close)
     document.body.append(host)
-    const make = (made: Document, item: { data: unknown }): Node[] => {
+    const make = (parent: Node, item: { data: unknown }): Node[] => {
         if (item.data === 'boom') throw new Error('boom')
-        const row = made.createElement('li')
+        const row = (parent.ownerDocument as Document).createElement('li')
         row.textContent = String(item.data)
         return [row]
     }

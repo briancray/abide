@@ -679,7 +679,7 @@ test('a for row binds its item on the client too', async () => {
     // The row's functions bind the item off the row's record: `make` and `update` its value, and the
     // listener reads the record when it runs (32.67). None of them is the page's `rows`.
     expect(client).toContain(
-        'const ls0_make = (__document, __row, __at) => {\n    const rows = __row.data',
+        'const ls0_make = (__parent, __row, __at) => {\n    const rows = __row.data',
     )
     expect(client).toContain('const __c1_0 = rows.name')
     expect(client).toContain('const __v1_0 = rows.name')
@@ -1642,7 +1642,7 @@ test('a region made once is parsed, and one made once a row is built', async () 
         once.indexOf('const rg0_a0_build'),
         once.indexOf('const rg0_a0_build') + 200,
     )
-    expect(page).toContain('__markupNodes(__document')
+    expect(page).toContain('__markupNodes(__parent')
     expect(page).not.toContain('createElement')
     // The arm inside the row: built.
     expect(once).toContain('__document.createElement("b")')

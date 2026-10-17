@@ -138,8 +138,10 @@ function listCase(
 
             const a = host(seed)
             const builders = {
-                make: (made: Document, row: { data: unknown }): Node[] => {
-                    const item = made.createElement('li')
+                make: (parent: Node, row: { data: unknown }): Node[] => {
+                    const item = (
+                        parent.ownerDocument as Document
+                    ).createElement('li')
                     const datum = row.data as Datum
                     item.setAttribute('data-id', String(datum.id))
                     item.textContent = datum.label

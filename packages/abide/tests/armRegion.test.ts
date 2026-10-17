@@ -14,7 +14,7 @@ type Counted = {
     mounts: number
     stops: number
     arm: () => {
-        build: (document: Document) => Node[]
+        build: (parent: Node) => Node[]
         mount: (root: Region) => Scope
     }
 }
@@ -25,9 +25,9 @@ function counted(tag: string): Counted {
         mounts: 0,
         stops: 0,
         arm: () => ({
-            build: (document) => {
+            build: (parent) => {
                 counts.builds += 1
-                return [document.createElement(tag)]
+                return [(parent.ownerDocument as Document).createElement(tag)]
             },
             mount: () => {
                 counts.mounts += 1

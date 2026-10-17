@@ -1965,6 +1965,9 @@ reading layout, querying its descendants or calling `focus()` acts on a connecte
 
 32.69 `bind:element` on a component MUST be a build error.
 
+32.70 Markup the client parses for a slot holding a value branded by `raw`, a `{#if}` arm or a
+`{#for}` row MUST be parsed as the document's parser parses it inside the element it goes into.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`

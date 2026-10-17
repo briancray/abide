@@ -244,7 +244,7 @@ export function emitClient(
     let fills = contributed
     if (applied !== '' || builds) {
         const build = builds
-            ? `function __build(__document) {\n    ${emitMaker(page, lowering)}\n}\n`
+            ? `function __build(__parent) {\n    ${emitMaker(page, lowering)}\n}\n`
             : ''
         // THE HEAD GOES BEFORE THE FILL, so the guard is written out where there is one to apply.
         fills +=
@@ -453,7 +453,7 @@ function clientComponent(
     const fill =
         sink.positions.length === 0
             ? ''
-            : `function __build(__document) {\n    ${emitMaker(sink, lowering)}\n}
+            : `function __build(__parent) {\n    ${emitMaker(sink, lowering)}\n}
 ${lowering.use('fillEmpty')}(${REGION_ROOT}, __build)\n`
     const captured = sink.defersSetup
         ? `const ${SHARE_AT} = ${lowering.use('currentShare')}()\n`
@@ -837,7 +837,9 @@ const WRITES = {
 // instance OPENS (`shareScope`): a page that shares nothing still carries this for a child that does.
 const SHARE_AT = '__shareAt'
 
-// The document a region's maker is handed and builds its nodes from.
+// The parent a region's maker is handed, which its nodes are made for and go into (`parseMarkup`).
+const PARENT = '__parent'
+// The document a built region makes its nodes with, read off `PARENT` once a build.
 const DOCUMENT = '__document'
 
 // A run's anchors while it holds markup (32.30), as the JS string literals a built run parses with.
@@ -845,9 +847,9 @@ const RAW_OPEN_MARKUP = JSON.stringify(anchorMarkup(RAW_OPEN))
 const RAW_CLOSE_MARKUP = JSON.stringify(anchorMarkup(RAW_CLOSE))
 
 /**
- * The body of the function that makes a region's nodes from a `__document`.
+ * The body of the function that makes a region's nodes for a `__parent`.
  *
- * WHAT MAKES A REGION'S NODES, as the body of a function taking the region's `__document`: the
+ * WHAT MAKES A REGION'S NODES, as the body of a function taking the region's `__parent`: the
  * row, the arm, the slot's fallback, the caller's children and the page that fills itself are all
  * made the same way. BUILT from the positions the markup walk placed (`emitBuild`) — or, where the
  * region holds content only the parser makes right (`isParserOwned`), PARSED from the very markup
@@ -868,7 +870,7 @@ function emitMaker(
     let parsed = !sink.repeated
     for (const at of sink.positions) parsed ||= at.parserOwned
     if (parsed)
-        return `return ${lowering.use('markupNodes')}(${DOCUMENT}, ${markup()})`
+        return `return ${lowering.use('markupNodes')}(${PARENT}, ${markup()})`
     return emitBuild(sink, anchored, lowering)
 }
 
@@ -903,7 +905,10 @@ function emitMaker(
  * (`fillEmpty`), and a component or a slot is the same pair filled by the child.
  */
 function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
-    const lines: string[] = ['const __built = []']
+    const lines: string[] = [
+        `const ${DOCUMENT} = ${PARENT}.ownerDocument`,
+        'const __built = []',
+    ]
     if (anchored)
         lines.push(
             `__built.push(${DOCUMENT}.createComment(${JSON.stringify(ROW_OPEN)}))`,
@@ -1000,7 +1005,7 @@ function builtRun(
         return lines
     }
     lines.push(
-        `if (${raw.join(' || ')}) for (const __made of ${lowering.use('markupNodes')}(${DOCUMENT}, ${RAW_OPEN_MARKUP} + ${markup.join(' + ')} + ${RAW_CLOSE_MARKUP})) ${into(at, '__made')}`,
+        `if (${raw.join(' || ')}) for (const __made of ${lowering.use('markupNodes')}(${at.within === null ? PARENT : at.within.name}, ${RAW_OPEN_MARKUP} + ${markup.join(' + ')} + ${RAW_CLOSE_MARKUP})) ${into(at, '__made')}`,
     )
     if (!at.blank) {
         lines.push(`else ${make(whole)}`)
@@ -1075,7 +1080,7 @@ function emitFillable(
     const lowering = region.lowering
     const filled = emitRegion(sink, region.nested())
     region.helpers.push(
-        `function ${name}_build(__document) {\n    ${emitMaker(sink, lowering)}\n}`,
+        `function ${name}_build(__parent) {\n    ${emitMaker(sink, lowering)}\n}`,
     )
     region.helpers.push(
         mountFunction(
@@ -1339,7 +1344,7 @@ function emitArms(
                 : arm === 1 && caught !== undefined
                   ? caught
                   : ''
-        const builders = `const ${own}_build = function (__document) {\n${emitMaker(sink, lowering)}\n}\n${mountFunction(own, REGION_ROOT, body, `${fillRegion}(${REGION_ROOT}, ${own}_build)`, lowering, sink.defersSetup, setup !== null)}`
+        const builders = `const ${own}_build = function (__parent) {\n${emitMaker(sink, lowering)}\n}\n${mountFunction(own, REGION_ROOT, body, `${fillRegion}(${REGION_ROOT}, ${own}_build)`, lowering, sink.defersSetup, setup !== null)}`
         if (local === '') {
             helpers.push(
                 `${builders}\nconst ${own}_arm = { build: ${own}_build, mount: ${own}_mount }`,
@@ -1425,7 +1430,7 @@ function emitList(
     // MADE FROM THE ITEM'S VALUE: every slot reading the item alone is written before the row is
     // inserted, so making a row writes the document once per node (32.67).
     const valued = `const ${item} = ${ROW_ROOT}.data`
-    const make = `const ${name}_make = (__document, ${ROW_ROOT}, ${at}) => {\n    ${valued}\n    ${emitMaker(row, lowering, () => rowMarkup(row, !single, lowering, CLIENT_LANE), !single)}\n}`
+    const make = `const ${name}_make = (__parent, ${ROW_ROOT}, ${at}) => {\n    ${valued}\n    ${emitMaker(row, lowering, () => rowMarkup(row, !single, lowering, CLIENT_LANE), !single)}\n}`
     const walk = rowRegion.body()
     // A PATTERN READ OFF THE RECORD is read through one picker a name, the list's rather than the
     // row's, so a row allocates nothing for it.
@@ -1450,7 +1455,7 @@ function emitList(
             // rebuilds whole: a node that refused is the row disagreeing, and re-making it is the
             // answer the page does not have.
             opened,
-            `${lowering.use('replaceRow')}(${ROW_ROOT}, ${name}_make(${ROW_ROOT}.node.ownerDocument, ${ROW_ROOT}, ${at}))`,
+            `${lowering.use('replaceRow')}(${ROW_ROOT}, ${name}_make, ${at})`,
             lowering,
             row.defersSetup,
             block.setup !== null,

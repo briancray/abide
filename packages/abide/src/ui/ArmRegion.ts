@@ -17,7 +17,7 @@ import { Scope, type Stoppable } from './Scope.ts'
 
 /** One arm: what makes its nodes, and what binds them. A `build` of `undefined` makes none. */
 export type Arm = {
-    build: ((document: Document) => Node[]) | undefined
+    build: ((parent: Node) => Node[]) | undefined
     mount: (root: Region) => Stoppable | undefined
 }
 

@@ -86,7 +86,7 @@ export function isEmptyRegion(region: Region): boolean {
  */
 export function fillRegion(
     region: Region,
-    build?: (document: Document) => Node[],
+    build?: (parent: Node) => Node[],
 ): void {
     // THE PARENT IS READ BEFORE ANYTHING IS REMOVED, and the removal only happens if there is
     // one. Written as an unguarded removal followed by a `?.`-guarded insert, a region whose
@@ -101,7 +101,7 @@ export function fillRegion(
     if (build === undefined) return
     beginLayer(LAYER_FILL)
     try {
-        const made = build(region.close.ownerDocument as Document)
+        const made = build(parent)
         for (const one of made) parent.insertBefore(one, region.close)
     } finally {
         endLayer(LAYER_FILL)
@@ -119,7 +119,7 @@ export function fillRegion(
  */
 export function fillEmpty(
     region: Region,
-    build?: (document: Document) => Node[],
+    build?: (parent: Node) => Node[],
 ): boolean {
     if (!isEmptyRegion(region)) return false
     fillRegion(region, build)

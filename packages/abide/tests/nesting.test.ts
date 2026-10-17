@@ -1374,6 +1374,47 @@ const html = '<b>hi</b>'
     expect(differed).toEqual([])
 })
 
+// 32.70 — WHAT THE CLIENT PARSES INSIDE AN `<svg>` IS SVG. A template's own children are HTML, so a
+// `<circle>` parsed there alone is an `HTMLUnknownElement` that draws nothing where it lands, and
+// the server's paint — parsed by the document, inside the `<svg>` — hid it until the first write.
+// Two flips write each region away and back (and grow the list twice), so the last element is one
+// the client made, and it is compared with the painted first, namespace included (`shapeOf`).
+//
+// THE REVERT, verified 2026-10-17: parse every markup at the template's top level in `parseMarkup`
+// (drop the wrapper), and all three report their element back as HTML.
+const SVG_SHAPES: [string, string][] = [
+    ['a raw value', '{raw(on ? \'<circle r="1"/>\' : \'<rect width="1"/>\')}'],
+    ['a row', '{#for r of rows}<circle r={r}/>{/for}'],
+    ['an arm', '{#if on}<circle r="1"/>{:else}<rect width="1"/>{/if}'],
+]
+
+test('a region the client makes inside an svg is the svg the server would have written', async () => {
+    const differed: string[] = []
+    for (const [what, body] of SVG_SHAPES) {
+        const source = `<script>
+import { reactive, raw } from '@abide/abide'
+
+let on = reactive(true)
+let rows = reactive([1])
+</script>
+
+<svg id="drawn">${body}</svg>
+<button id="flip" onclick={() => { on = !on; rows = [...rows, 1] }}>flip</button>`
+
+        await mountPage(source)
+        const drawn = document.querySelector('#drawn') as Element
+        const painted = shapeOf(drawn.firstElementChild ?? undefined)
+        click('#flip')
+        click('#flip')
+        const made = shapeOf(drawn.lastElementChild ?? undefined)
+        if (painted !== made)
+            differed.push(
+                `${what}\n      painted ${painted}\n      made    ${made}`,
+            )
+    }
+    expect(differed).toEqual([])
+})
+
 // A REGION AT A ROW'S TOP LEVEL FILLS LATER THAN THE ROW IS MADE. A row the browser builds is its
 // anchor, an empty `{#if}` pair and its `<span>` — the arm's `<b>` goes between the pair on the
 // row's MOUNT, after `make` handed its nodes over. A row held as the array `make` returned never

@@ -171,7 +171,9 @@ test('filling a region that is not in a document is refused, not silent', async 
 
     let said = ''
     try {
-        fillRegion(region, (made) => [made.createElement('b')])
+        fillRegion(region, (parent) => [
+            (parent.ownerDocument as Document).createElement('b'),
+        ])
     } catch (thrown) {
         said = (thrown as Error).message
     }

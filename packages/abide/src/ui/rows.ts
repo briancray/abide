@@ -69,11 +69,11 @@ export type Row = {
  */
 export type RowBuilders = {
     /**
-     * A row's nodes, BUILT in the document the list stands in — handed over by the reconcile
-     * rather than found by the row, which is the one place a row's document is decided. Every slot
+     * A row's nodes, BUILT for the parent the list stands in — handed over by the reconcile rather
+     * than found by the row, which is the one place a row's document and namespace are decided. Every slot
      * reading the item alone is written here, before the nodes are inserted.
      */
-    make: (document: Document, row: Row, at: number) => Node[]
+    make: (parent: Node, row: Row, at: number) => Node[]
     mount: (row: Row, at: number) => Scope
     /** 32.67 — rewrites, from `row.data`, the slots `make` wrote from the item alone. */
     update: (row: Row, at: number) => void
@@ -172,15 +172,20 @@ export function rowsIn(region: Region, anchored: boolean): ChildNode[] {
 }
 
 /**
- * Rebuilds a row in place from `next`, keeping its record.
+ * Rebuilds a row in place with `make`, keeping its record.
  *
  * 41.10 — a row that cannot be hydrated is rebuilt: the fresh nodes go where the row stood and the
  * row's record takes the new first node, so the reconcile still reaches all of it.
  */
-export function replaceRow(row: Row, next: Node[]): void {
+export function replaceRow(
+    row: Row,
+    make: RowBuilders['make'],
+    at: number,
+): void {
     const first = row.node
     const parent = first.parentNode
     if (parent === null) return
+    const next = make(parent, row, at)
     for (const node of next) parent.insertBefore(node, first)
     removeRow(first)
     row.node = next[0] as ChildNode
@@ -201,7 +206,7 @@ export function makeRow(
     // 14.8 — set up ONCE for the row, and the same builders make it and mount it.
     const builders = setUp(row, at)
     row.update = builders.update
-    const nodes = builders.make(parent.ownerDocument as Document, row, at)
+    const nodes = builders.make(parent, row, at)
     for (const node of nodes) parent.insertBefore(node, before)
     row.node = nodes[0] as ChildNode
     row.scope = builders.mount(row, at)

@@ -60,7 +60,7 @@ export function textToMarkup(text: Text, markup: string): RawRun {
     const open = document.createComment(RAW_OPEN)
     const close = document.createComment(RAW_CLOSE)
     parent.insertBefore(open, text)
-    parent.insertBefore(parseMarkup(text, markup), text)
+    parent.insertBefore(parseMarkup(parent, markup), text)
     parent.replaceChild(close, text)
     return new RawRun(open, close, markup)
 }
@@ -70,7 +70,7 @@ export function refillRun(run: RawRun, markup: string): void {
     const parent = run.close.parentNode
     if (parent === null) throw detached()
     clearRun(run)
-    parent.insertBefore(parseMarkup(run.close, markup), run.close)
+    parent.insertBefore(parseMarkup(parent, markup), run.close)
     run.html = markup
 }
 

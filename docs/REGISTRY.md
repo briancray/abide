@@ -527,7 +527,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- |
 | `{expr}` | Reactive text, escaped. | 32.1, 32.23 |
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
-| `{raw(...)}` | Raw HTML. | 32.2, 32.25, 32.26, 32.30, 32.31 |
+| `{raw(...)}` | Raw HTML. | 32.2, 32.25, 32.26, 32.30, 32.31, 32.70 |
 | `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37 |
 | `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3 |
@@ -547,15 +547,15 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.24, 32.26, 32.30, 32.31 |
+| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.24, 32.26, 32.30, 32.31, 32.70 |
 | `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.24 |
 
 ### Control flow
 
 | Spelling | Branches | Meaning | Rules |
 | --- | --- | --- | --- |
-| `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.12, 32.21, 32.63, 32.64, 32.65, 41.24 |
-| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. | 32.13, 32.14, 32.15, 32.22, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 41.8, 41.14, 41.15 |
+| `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 32.12, 32.21, 32.63, 32.64, 32.65, 32.70, 41.24 |
+| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. | 32.13, 32.14, 32.15, 32.22, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 41.8, 41.14, 41.15 |
 | `{#try}` | `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16, 32.56, 32.63, 32.64 |
 
 ### Components
