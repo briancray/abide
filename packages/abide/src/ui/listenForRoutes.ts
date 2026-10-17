@@ -36,6 +36,9 @@ export function listenForRoutes(router: Router): () => void {
     // mounted: the browser's own restoration runs before that page exists.
     const onPop = (): void => {
         if (router.match(location.pathname) === undefined) {
+            // The bar already stands at the entry being loaded, so the `pagehide` this reload
+            // fires would write the departed page's scroll into it: the listeners go first.
+            listening.abort()
             location.reload()
             return
         }
