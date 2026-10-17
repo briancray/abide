@@ -1941,6 +1941,7 @@ each one a list holds under 32.62.
 
 32.62 A `bind:value` on a `<select multiple>` MUST hold a list: each option is selected where the list
 holds its value as text, and a change MUST write the values of the selected options, in order.
+On any `<select>`, an option added after the value was written MUST be selected where it holds it.
 
 32.63 A `{#if}`, `{#for}`, `{#try}` or `{#component Name(pattern)}` not closed by its own close tag
 before the end of the file, or before the close tag of the element it was opened in, MUST be a build

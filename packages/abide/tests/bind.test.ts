@@ -285,3 +285,35 @@ test('bind:value on a select multiple holds the selected values — 32.62', asyn
     flushSync()
     expect(out()).toBe('b,c')
 })
+
+const LATE = `<script>
+import { reactive } from '@abide/abide'
+
+let size = reactive(2)
+let tags = reactive(['b'])
+let sizes = reactive([1])
+let letters = reactive(['a'])
+</script>
+
+<select id="size" bind:value={size}>{#for one of sizes}<option value={one}>{one}</option>{/for}</select>
+<select id="tags" multiple bind:value={tags}>{#for one of letters}<option>{one}</option>{/for}</select>
+<button id="grow" onclick={() => ((sizes = [1, 2]), (letters = ['a', 'b']))}>grow</button>`
+
+// 32.62 — AN OPTION THAT ARRIVES AFTER THE VALUE IS SELECTED WHEN IT IS THE VALUE: the value's
+// watch reads no option, so nothing else wakes for one. THE REVERT: drop `chooseOnNewOptions` from
+// `bindValue`; the select stays on `1` and the multiple one selects nothing.
+test('an option that arrives after the value is selected — 32.62', async () => {
+    await mountPage(LATE)
+    document.getElementById('grow')?.click()
+    flushSync()
+    // The observer reports on a microtask.
+    await Bun.sleep(0)
+    expect((document.getElementById('size') as HTMLSelectElement).value).toBe(
+        '2',
+    )
+    const tags = document.getElementById('tags') as HTMLSelectElement
+    expect([...tags.options].map((option) => option.selected)).toEqual([
+        false,
+        true,
+    ])
+})

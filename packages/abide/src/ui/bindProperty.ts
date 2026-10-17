@@ -68,11 +68,12 @@ function bindValue(bound: Bound, operand: unknown, scope: Scope): void {
     ) {
         // 32.62 — the list of what is selected, read and written per option.
         const select = bound as unknown as HTMLSelectElement
-        scope.watch(() => {
-            const value = boundValue(operand)
+        const choose = (value: unknown) => {
             for (const option of select.options)
                 option.selected = selectHolds(value, option.value)
-        })
+        }
+        scope.watch(() => choose(boundValue(operand)))
+        chooseOnNewOptions(select, () => choose(heldValue(operand)), scope)
         select.addEventListener('change', () => {
             const chosen: string[] = []
             for (const option of select.selectedOptions)
@@ -84,8 +85,7 @@ function bindValue(bound: Bound, operand: unknown, scope: Scope): void {
     // 32.58 — NUMERIC ONCE, NUMERIC FROM THEN ON: a blank field writes `undefined`, and the
     // keystroke after it still has to know the value was a number.
     let numeric = bound.type === 'number' || bound.type === 'range'
-    scope.watch(() => {
-        const value = boundValue(operand)
+    const show = (value: unknown) => {
         if (typeof value === 'number') numeric = true
         // 32.59 — text that already reads as the value is the reader's spelling of it: a trailing
         // decimal point or zero is mid-typing, and rewriting it to the number's own text takes the
@@ -94,7 +94,8 @@ function bindValue(bound: Bound, operand: unknown, scope: Scope): void {
             return
         const text = value === undefined || value === null ? '' : String(value)
         if (bound.value !== text) bound.value = text
-    })
+    }
+    scope.watch(() => show(boundValue(operand)))
     const write = () => {
         const typed = bound.value
         if (!numeric) {
@@ -108,6 +109,7 @@ function bindValue(bound: Bound, operand: unknown, scope: Scope): void {
     }
     // A `<select>` settles on `change`; everything else that takes text reports each keystroke.
     if (bound.tagName === 'SELECT') {
+        chooseOnNewOptions(bound, () => show(heldValue(operand)), scope)
         bound.addEventListener('change', write)
         return
     }
@@ -124,4 +126,17 @@ function bindValue(bound: Bound, operand: unknown, scope: Scope): void {
     bound.addEventListener('input', () => {
         if (!composing) write()
     })
+}
+
+// 32.62 — AN OPTION THAT ARRIVES AFTER THE VALUE IS SELECTED WHEN IT IS THE VALUE. The value's
+// watch does not read the options, so a `{#for}` that grows them later wakes nothing of its own, and
+// the select would stay on whatever the browser picked when it changed.
+function chooseOnNewOptions(
+    select: Element,
+    choose: () => void,
+    scope: Scope,
+): void {
+    const observer = new MutationObserver(choose)
+    observer.observe(select, { childList: true, subtree: true })
+    scope.stops.push(() => observer.disconnect())
 }
