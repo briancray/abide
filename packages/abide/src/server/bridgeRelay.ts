@@ -52,7 +52,7 @@ const CODE_LIFETIME = 10 * 60_000
 // How long a bridge outlives the last page watching it, so a reload does not end it.
 const IDLE_GRACE = 30_000
 /** How long a pairing whose stream dropped waits to be resumed. 44.26. */
-export const RESUME_MILLISECONDS = 30_000
+export const RESUME_MILLISECONDS = 60_000
 /** How often a pairing's stream carries a comment while it has nothing else to send. 44.27. */
 export const HEARTBEAT_MILLISECONDS = 15_000
 const HEARTBEAT = new TextEncoder().encode(EVENT_STREAM_OPENER)

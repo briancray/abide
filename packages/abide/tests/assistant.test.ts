@@ -9,6 +9,7 @@ import {
     HEARTBEAT_MILLISECONDS as BRIDGE_HEARTBEAT_MILLISECONDS,
     BRIDGE_PATH,
     RESUME_MILLISECONDS as BRIDGE_RESUME_MILLISECONDS,
+    SILENCE_MILLISECONDS,
 } from '../../bridge/src/bridge.ts'
 import { readLines } from '../../bridge/src/readLines.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
@@ -711,6 +712,15 @@ test('a dropped pairing is held, and resumed by its token with what it missed �
 // one length — apart, a bridge gives up on a pairing the site still holds, or dials one it dropped.
 test('the bridge redials for as long as the site holds a pairing', () => {
     expect(BRIDGE_RESUME_MILLISECONDS).toBe(RESUME_MILLISECONDS)
+})
+
+// A stream that dies without a FIN is noticed here at the first heartbeat that fails to write, and by
+// the bridge only once its silence passes, so the hold has to outlast the gap between the two or the
+// redial lands on a pairing already dropped. THE REVERT: a 30 second hold, which the gap equals.
+test('the site holds a silent drop past the bridge noticing it — 44.26, 44.28', () => {
+    expect(RESUME_MILLISECONDS).toBeGreaterThan(
+        SILENCE_MILLISECONDS - HEARTBEAT_MILLISECONDS,
+    )
 })
 
 // Spelled out for the same reason: apart, a bridge takes a quiet stream for a dropped one, or waits

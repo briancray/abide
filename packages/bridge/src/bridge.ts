@@ -23,11 +23,11 @@ const FIRST_REDIAL_MILLISECONDS = 250
 const LAST_REDIAL_MILLISECONDS = 8_000
 // abide's `RESUME_MILLISECONDS`, spelled out for `BRIDGE_PATH`'s reason: past it the site no longer
 // holds the pairing, and a redial is refused.
-export const RESUME_MILLISECONDS = 30_000
+export const RESUME_MILLISECONDS = 60_000
 // abide's `HEARTBEAT_MILLISECONDS`, spelled out for `BRIDGE_PATH`'s reason.
 export const HEARTBEAT_MILLISECONDS = 15_000
 // 44.28 — how long the stream may go without a line before it is taken for dropped.
-const SILENCE_MILLISECONDS = 3 * HEARTBEAT_MILLISECONDS
+export const SILENCE_MILLISECONDS = 3 * HEARTBEAT_MILLISECONDS
 
 type SiteFrame =
     | { type: 'paired'; token: string }

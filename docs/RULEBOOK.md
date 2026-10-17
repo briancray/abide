@@ -3101,9 +3101,9 @@ its lines MUST be relayed.
 carrying it was not taken by `/__abide/bridge`, or where no reply arrived within 120 seconds.
 
 44.25 A bridge whose stream from `/__abide/bridge` ends unasked MUST redial it with its pairing's
-token, each wait twice the last, until it is refused or 30 seconds have passed.
+token, each wait twice the last, until it is refused or 60 seconds have passed.
 
-44.26 `/__abide/bridge` MUST hold a pairing whose stream dropped for 30 seconds, and a `GET` bearing
+44.26 `/__abide/bridge` MUST hold a pairing whose stream dropped for 60 seconds, and a `GET` bearing
 its token within them MUST resume the stream with every frame the dropped one had not sent.
 
 44.27 `/__abide/bridge` MUST send a comment on a pairing's stream every 15 seconds for as long as
