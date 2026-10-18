@@ -1320,6 +1320,12 @@ tool, the status it was answered with and how long it took, whether `/__abide/mc
 made the call — a call naming a tool it does not publish answered 404, and one whose answer threw
 500.
 
+20.19 A tool `/__abide/mcp` lists MUST declare an `inputSchema` whose top-level `type` is `object`,
+whatever its handler's args schema declares there.
+
+20.20 A handler `/__abide/mcp` would list whose args schema can never be an object MUST refuse the
+app at boot, naming the handler.
+
 # 21. Generated headers
 
 21.1 Every response MUST carry `x-content-type-options: nosniff`.

@@ -253,6 +253,14 @@ export class McpSurface {
         handlers: Map<string, Mounted>,
         answer: (request: Request) => Promise<Response>,
     ) {
+        // 20.20 — a tool's arguments are an object, so args that can never be one are no tool.
+        for (const mounted of handlers.values()) {
+            const tool = surfaceOf(mounted, 'mcp')
+            if (tool !== undefined && toolInput(tool.schema) === undefined)
+                throw new Error(
+                    `abide: ${tool.name}'s args can never be an object, which is all an MCP tool is called with — give it object args, or \`clients: { mcp: false }\`. RULEBOOK 20.20.`,
+                )
+        }
         this.#handlers = handlers
         this.#answer = answer
     }
@@ -280,7 +288,7 @@ export class McpSurface {
             listing.push({
                 name: tool.name,
                 description: tool.description ?? '',
-                inputSchema: tool.schema ?? { type: 'object' },
+                inputSchema: toolInput(tool.schema),
                 // 20.14 — what the method promises: a `GET` is safe, and a `GET`, a `PUT` and a
                 // `DELETE` idempotent. Any other write may destroy, and nothing says it does not.
                 annotations: {
@@ -409,6 +417,32 @@ function logCall(
         status,
         `${started === undefined ? '0.0' : (performance.now() - started).toFixed(1)}ms`,
     )
+}
+
+/**
+ * `schema` as a tool's `inputSchema`, its top-level `type` `object` whatever it declared there, or
+ * `undefined` where no value it admits is an object. 20.19, 20.20.
+ */
+function toolInput(schema: unknown): object | undefined {
+    if (schema === undefined || schema === true) return { type: 'object' }
+    if (!admitsObject(schema)) return undefined
+    return { ...(schema as object), type: 'object' }
+}
+
+/** Whether a JSON Schema admits some object — its `type`, and each of `anyOf`, `oneOf` and `allOf`. */
+function admitsObject(schema: unknown): boolean {
+    if (schema === true) return true
+    if (schema === null || typeof schema !== 'object') return false
+    const { type, anyOf, oneOf, allOf } = schema as Record<string, unknown>
+    if (
+        type !== undefined &&
+        type !== 'object' &&
+        !(Array.isArray(type) && type.includes('object'))
+    )
+        return false
+    if (Array.isArray(anyOf) && !anyOf.some(admitsObject)) return false
+    if (Array.isArray(oneOf) && !oneOf.some(admitsObject)) return false
+    return !Array.isArray(allOf) || allOf.every(admitsObject)
 }
 
 /**
