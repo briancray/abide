@@ -1,7 +1,7 @@
 <script server>
 import { GET } from '@abide/abide/server'
 import type { ExampleResults } from './ExampleResults.ts'
-import { exampleDirectory } from './server/exampleDirectory.ts'
+import { exampleDirectory } from './exampleDirectory.server.ts'
 
 // What `bun run examples:results` last kept for the app, or `null` where this build never ran it.
 const resultsOf = GET(async ({ app }: { app: string }) => {

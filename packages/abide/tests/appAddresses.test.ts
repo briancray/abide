@@ -2,7 +2,7 @@
 // directory (23.21), an `index.abide` answering at its directory's path; a handler file is a `.ts`
 // there, answering at its own path (16.2); a `<script server>` declares private handlers below
 // `/__abide/handlers/` (16.70); and pages and handlers answer in one table of routes (19.1, 19.20).
-// A fence is never an address (23.15, 23.16), and `server` fences the server's graph (16.29). A
+// A fence is never an address (23.15, 23.16), and a server file is the server's alone (16.29). A
 // route's hooks run over it and what lies below it, a fenced file's at the route holding its fence
 // (37.1, 37.2, 16.72).
 
@@ -195,8 +195,8 @@ test('export * is refused from a server block and from a handler file — 34.17,
     const block = await refusal(
         compileApp(
             appFixture({
-                'billing/server/charges.ts': charges,
-                'billing/index.abide': `<script server>\nexport * from './server/charges.ts'\n</script>\n\n<p>billing</p>`,
+                'billing/lib/charges.server.ts': charges,
+                'billing/index.abide': `<script server>\nexport * from './lib/charges.server.ts'\n</script>\n\n<p>billing</p>`,
             }),
         ),
     )
@@ -205,9 +205,9 @@ test('export * is refused from a server block and from a handler file — 34.17,
         compileApp(
             appFixture({
                 'index.abide': '<p>home</p>',
-                'billing/server/charges.ts': charges,
+                'billing/lib/charges.server.ts': charges,
                 'billing/charge.ts':
-                    "import { POST } from '@abide/abide/server'\n\nexport default POST(() => 1)\nexport * from './server/charges.ts'\n",
+                    "import { POST } from '@abide/abide/server'\n\nexport default POST(() => 1)\nexport * from './lib/charges.server.ts'\n",
             }),
         ),
     )
@@ -215,22 +215,22 @@ test('export * is refused from a server block and from a handler file — 34.17,
     expect(file).toContain('billing/charge.ts')
 })
 
-// 34.20, 34.17 — a server block under a `server` or `public` directory has no route to be filed at,
-// and a server block exports nothing, `default` included.
+// 34.20, 34.17 — a server block under a `public` directory has no route to be filed at, and a
+// server block exports nothing, `default` included.
 // THE REVERTS: drop the 34.20 refusal in `appLayout`'s `refusePlace`; skip `export` in `projectShadow`'s `refuseExport`.
-test('a server block under a server directory, and one exporting default, are refused — 34.20, 34.17', async () => {
+test('a server block under a public directory, and one exporting default, are refused — 34.20, 34.17', async () => {
     const outside = await refusal(
         compileApp(
             appFixture({
                 'index.abide': '<p>home</p>',
-                'media/server/Rating.abide': SERVED(
+                'media/public/Rating.abide': SERVED(
                     'const rate = POST(() => 1)',
                 ),
             }),
         ),
     )
     expect(outside).toContain('34.20')
-    expect(outside).toContain('media/server/Rating.abide')
+    expect(outside).toContain('media/public/Rating.abide')
     const named = await refusal(
         compileApp(
             appFixture({
@@ -241,31 +241,32 @@ test('a server block under a server directory, and one exporting default, are re
     expect(named).toContain('34.17')
 })
 
-// 23.16, 23.17, 23.18, 23.22 — what the tree may not hold: a fence under another, a route in abide's
-// own namespace, a page where nothing has an address, and a file directly in an address directory
-// that is neither a `.abide` nor a handler file. THE REVERTS: drop each `refusals.at` in `appFiles`'s
-// `walk` (or `frameworkRouteRefusal`'s refusal); its build succeeds.
-test('a fence under another, a page under one, an __abide route and a stray file are refused — 23.16, 23.17, 23.18, 23.22', async () => {
+// 23.16, 23.17, 23.18, 23.22, 23.23 — what the tree may not hold: a fence under another, a route in
+// abide's own namespace, a page where nothing has an address, a file directly in an address
+// directory that is neither a `.abide`, a handler file nor a test file, and a server file outside a
+// `lib` directory. THE REVERTS: drop each `refusals.at` in `appFiles`'s `walk` (or
+// `frameworkRouteRefusal`'s refusal); its build succeeds.
+test('a fence under another, a page under one, an __abide route, a stray file and a stray server file are refused — 23.16, 23.17, 23.18, 23.22, 23.23', async () => {
     const nested = await refusal(
         compileApp(
             appFixture({
                 'index.abide': '<p>home</p>',
-                'media/server/public/format.ts': 'export const format = 1\n',
+                'media/lib/public/format.ts': 'export const format = 1\n',
             }),
         ),
     )
     expect(nested).toContain('23.16')
-    expect(nested).toContain('media/server/public')
+    expect(nested).toContain('media/lib/public')
     const hidden = await refusal(
         compileApp(
             appFixture({
                 'index.abide': '<p>home</p>',
-                'media/server/index.abide': '<p>hidden</p>',
+                'media/lib/index.abide': '<p>hidden</p>',
             }),
         ),
     )
     expect(hidden).toContain('23.18')
-    expect(hidden).toContain('media/server/index.abide')
+    expect(hidden).toContain('media/lib/index.abide')
     const framework = await refusal(
         compileApp(appFixture({ '__abide/index.abide': '<p>mine</p>' })),
     )
@@ -281,39 +282,58 @@ test('a fence under another, a page under one, an __abide route and a stray file
     expect(stray).toContain('23.22')
     expect(stray).toContain('media/notes.json')
     expect(stray).toContain('lib')
+    // 23.23 — beside a page, or under `public` where it would be answered as authored.
+    for (const file of ['media/db.server.ts', 'public/key.server.pem']) {
+        const server = await refusal(
+            compileApp(
+                appFixture({
+                    'index.abide': '<p>home</p>',
+                    [file]: 'export const db = 1\n',
+                }),
+            ),
+        )
+        expect(server).toContain('23.23')
+        expect(server).toContain(file)
+        expect(server).toContain('lib directory')
+    }
 })
 
-// 16.29 — ANYTHING UNDER A `server` DIRECTORY, AT ANY DEPTH, is refused to the browser's bundle.
-// THE REVERT: anchor `fenceServer`'s filter at the root's own `server/`; the build succeeds and the
-// secret is in the bundle.
-test('a page importing a module under a nested server directory fails the build — 16.29', async () => {
+// 16.29 — A SERVER FILE, AT ANY DEPTH, is refused to the browser's bundle, and a module it imports
+// is not (36.10): `format.ts` is in both graphs. THE REVERT: drop `fenceServer` from
+// `clientBundle`'s plugins; the build succeeds and the secret is in the bundle.
+test('a page importing a server file under a nested lib fails the build — 16.29, 36.10', async () => {
     const fixture = appFixture({
-        'media/server/secret.ts': "export const SECRET = 'hunter2'\n",
-        'media/index.abide': `<script>\nimport { SECRET } from '#src/media/server/secret.ts'\n</script>\n\n<p>{SECRET}</p>`,
+        'media/lib/format.ts':
+            'export const format = (s: string) => `[${s}]`\n',
+        'media/lib/secret.server.ts':
+            "import { format } from './format.ts'\n\nexport const SECRET = format('hunter2')\n",
+        'media/index.abide': `<script>\nimport { SECRET } from '#src/media/lib/secret.server.ts'\n</script>\n\n<p>{SECRET}</p>`,
+        'index.abide': `<script>\nimport { format } from '#src/media/lib/format.ts'\n</script>\n\n<p>{format('home')}</p>`,
     })
     const built = await buildApp(fixture)
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain('16.29')
-    expect(built.stderr).toContain('media/server/secret.ts')
+    expect(built.stderr).toContain('media/lib/secret.server.ts')
+    expect(built.stderr).not.toContain('media/lib/format.ts')
 })
 
-// 16.29 — EVERY EDGE INTO `server/`, not only a module's: a file's text (34.21) and a component
-// under it are as much the server's as a `.ts`. THE REVERT: register `fenceServer` after
-// `abideModules`; both build, the key and the component in the bundle.
-test('a page importing a server file as text, or a component under server, fails the build — 16.29', async () => {
+// 16.29 — EVERY EDGE INTO A SERVER FILE, not only a module's: a file's text (34.21) and a component
+// are as much the server's as a `.ts`. THE REVERT: register `fenceServer` after `abideModules`;
+// both build, the key and the component in the bundle.
+test('a page importing a server file as text, or a server component, fails the build — 16.29', async () => {
     for (const [file, page] of [
         [
-            'server/key.pem',
-            `<script>\nimport KEY from '#src/server/key.pem' with { type: 'text' }\n</script>\n\n<p>{KEY}</p>`,
+            'lib/key.server.pem',
+            `<script>\nimport KEY from '#src/lib/key.server.pem' with { type: 'text' }\n</script>\n\n<p>{KEY}</p>`,
         ],
         [
-            'server/Panel.abide',
-            `<script>\nimport Panel from '#src/server/Panel.abide'\n</script>\n\n<Panel/>`,
+            'lib/Panel.server.abide',
+            `<script>\nimport Panel from '#src/lib/Panel.server.abide'\n</script>\n\n<Panel/>`,
         ],
     ] as const) {
         const fixture = appFixture({
-            'server/key.pem': 'BEGIN-PRIVATE-KEY\n',
-            'server/Panel.abide': '<p>BEGIN-PRIVATE-PANEL</p>',
+            'lib/key.server.pem': 'BEGIN-PRIVATE-KEY\n',
+            'lib/Panel.server.abide': '<p>BEGIN-PRIVATE-PANEL</p>',
             'index.abide': page,
         })
         const built = await buildApp(fixture)
@@ -346,22 +366,33 @@ test('an app with a page under a rest directory builds — 23.5', async () => {
     )
 }, 60_000)
 
-// 16.29 — A DEPENDENCY'S `server` DIRECTORY FENCES NOTHING: it is the package's own layout, not the
-// app's. THE REVERT: drop `placeOf`'s `node_modules` test; the bundle refuses `kit/server`.
-test("a dependency's server directory is not the app's fence — 16.29", async () => {
-    const fixture = appFixture({
+// 16.29 — A DEPENDENCY'S SERVER FILE IS FENCED AS THE APP'S OWN IS, its name saying it wherever it
+// lies, and a `server` directory is a directory like any other. THE REVERT: skip a path under
+// `node_modules` in `fenceServer`'s load; `kit/clock.server.ts` builds into the bundle.
+test("a dependency's server file is fenced, and its server directory is not — 16.29", async () => {
+    const files = {
         'node_modules/kit/package.json': '{"name":"kit","type":"module"}',
         'node_modules/kit/server/clock.ts': 'export const TICK = 1\n',
-        'index.abide': `<script>
-import { TICK } from 'kit/server/clock.ts'
-</script>
-
-<p>{TICK}</p>`,
-    })
-    const built = await buildApp(fixture)
-    expect(built.stderr).not.toContain('RULEBOOK')
-    expect(built.exitCode).toBe(0)
-})
+        'node_modules/kit/clock.server.ts': 'export const TOCK = 2\n',
+    }
+    const directory = await buildApp(
+        appFixture({
+            ...files,
+            'index.abide': `<script>\nimport { TICK } from 'kit/server/clock.ts'\n</script>\n\n<p>{TICK}</p>`,
+        }),
+    )
+    expect(directory.stderr).not.toContain('RULEBOOK')
+    expect(directory.exitCode).toBe(0)
+    const named = await buildApp(
+        appFixture({
+            ...files,
+            'index.abide': `<script>\nimport { TOCK } from 'kit/clock.server.ts'\n</script>\n\n<p>{TOCK}</p>`,
+        }),
+    )
+    expect(named.stderr).toContain('RULEBOOK 16.29')
+    expect(named.stderr).toContain('kit/clock.server.ts')
+    expect(named.exitCode).not.toBe(0)
+}, 60_000)
 
 // 34.19, 16.70 — THE BROWSER'S MODULE CARRIES A WRAPPER PER PRIVATE HANDLER AND NONE OF THE BLOCK:
 // the same binding, unexported, over the wire — not the secret its body holds, not the hooks it
@@ -615,7 +646,7 @@ beforeAll(async () => {
         // 37.2, 37.5 — a guard over `/vault` and what is below it, and the errors there.
         'vault/layout.abide': `<script server>
 import { middleware, onError } from '@abide/abide/server'
-import { seen } from './server/seen.ts'
+import { seen } from './lib/seen.server.ts'
 
 middleware((next, { request }) =>
     request.headers.get('x-key') === 'open' ? next() : new Response('locked', { status: 401 }),
@@ -629,20 +660,20 @@ onError((error) => void seen.push(\`vault: \${(error as Error).message}\`))
     throw new Error('the vault blew up')
 })
 `,
-        'vault/server/seen.ts': 'export const seen: string[] = []\n',
+        'vault/lib/seen.server.ts': 'export const seen: string[] = []\n',
         // 30.3, 15.8 — a render calling a handler with a path parameter no address carries, and
         // painting its refusal, beside a count of the handler's runs.
         'comments/[id]/getComments.ts': `import { GET } from '@abide/abide/server'
-import { runs } from '../../server/runs.ts'
+import { runs } from '../../lib/runs.server.ts'
 
 export default GET(({ id }: { id: string }) => {
     runs.count += 1
     return [id]
 })
 `,
-        'server/runs.ts': 'export const runs = { count: 0 }\n',
+        'lib/runs.server.ts': 'export const runs = { count: 0 }\n',
         'commentRuns.ts': `import { POST } from '@abide/abide/server'
-import { runs } from './server/runs.ts'
+import { runs } from './lib/runs.server.ts'
 
 export default POST(() => runs.count)
 `,
@@ -677,7 +708,7 @@ export default GET(() => ({
         'docs/[...path]/save.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ path }: { path: string[] }) => ({ saved: path }))\n`,
         'docs/[...path]/remove.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ path }: { path: string[] }) => ({ removed: path }))\n`,
         'errors.ts': `import { GET } from '@abide/abide/server'
-import { seen } from './vault/server/seen.ts'
+import { seen } from './vault/lib/seen.server.ts'
 
 export default GET(() => [...seen])
 `,

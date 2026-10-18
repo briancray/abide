@@ -31,7 +31,6 @@ export { relative, withExtension, withoutExtension }
         files: {},
         handlers: { 'media/getGrid.ts': { scope: '/media', client: '' } },
         tables: {},
-        mounted: {},
     })
     const spellings = await import(`${dir}/lib/spellings.ts`)
     const mounted = await import(`${dir}/media/getGrid.ts${HANDLER_SUFFIX}`)

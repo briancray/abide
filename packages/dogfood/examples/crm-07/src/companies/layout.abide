@@ -1,6 +1,6 @@
 <script server>
 import { onError } from '@abide/abide/server'
-import { tracker } from './server/tracker.ts'
+import { tracker } from './lib/tracker.server.ts'
 
 onError((error) => tracker.capture(error))
 </script>

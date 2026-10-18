@@ -157,26 +157,24 @@ import '../elsewhere' with { type: 'routes' }
     expect(own).toContain('23.20')
 })
 
-// 16.29, 23.19 — A MOUNTED PACKAGE'S `server` DIRECTORY IS FENCED FROM THE BROWSER, as the app's own
-// is: its files take the position the mount gives them, and the fence reads a file's place there,
-// wherever the package lies. THE REVERT: read `placeOf` off the path below the root in
-// `fenceServer`; the module lies under `node_modules`, reads as a dependency's, and its secret is
-// bundled — the build exits 0.
-test("a mounted package's server directory is fenced from the browser — 16.29, 23.19", async () => {
+// 16.29, 23.19 — A MOUNTED PACKAGE'S SERVER FILE IS FENCED FROM THE BROWSER, as the app's own is:
+// the fence reads the file's name, wherever the package lies. THE REVERT: skip a path under
+// `node_modules` in `fenceServer`'s load; the secret is bundled — the build exits 0.
+test("a mounted package's server file is fenced from the browser — 16.29, 23.19", async () => {
     const app = appFixture({
         ...APP,
         ...KIT,
-        'node_modules/admin-kit/admin/server/secret.ts':
+        'node_modules/admin-kit/admin/lib/secret.server.ts':
             "export const SECRET = 'mounted-secret'\n",
         'node_modules/admin-kit/admin/index.abide': `<script>
-import { SECRET } from './server/secret.ts'
+import { SECRET } from './lib/secret.server.ts'
 </script>
 
 <p>{SECRET}</p>`,
     })
     const built = await buildApp(app)
     expect(built.exitCode).not.toBe(0)
-    expect(built.stderr).toContain('tools/server/secret.ts')
+    expect(built.stderr).toContain('admin-kit/admin/lib/secret.server.ts')
     expect(built.stderr).toContain('RULEBOOK 16.29')
 }, 30_000)
 

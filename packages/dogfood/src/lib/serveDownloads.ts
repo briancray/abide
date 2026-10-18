@@ -4,8 +4,8 @@
 // A rung the root layout files as middleware, so it answers addresses no route has (37.3). Each
 // page's markdown is read off the page the app renders, so the words have the one home.
 import { type Middleware, type RouteLiteral, url } from '@abide/abide'
-import { markdownOf } from '../server/markdownOf.ts'
-import { exampleArchive } from './server/exampleArchive.ts'
+import { markdownOf } from './markdownOf.server.ts'
+import { exampleArchive } from './exampleArchive.server.ts'
 import { markdownAddressOf, SECTIONS } from './sitePages.ts'
 
 const MARKDOWN = { 'content-type': 'text/markdown; charset=utf-8' }

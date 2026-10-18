@@ -10,7 +10,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HANDLERS = `import { reactive, refuse } from '@abide/abide'
 import { GET, json, page, POST, redirect, request, response, sse } from '@abide/abide/server'
-import { reported } from '../../server/reported.ts'
+import { reported } from '../../lib/reported.server.ts'
 
 export const shared = GET(reactive(() => ({ n: 1 }), { global: true, ttl: 90_500 }))
 
@@ -116,10 +116,10 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'index.abide': '<main>home</main>',
         ...handlerFiles('answers', HANDLERS),
-        'server/reported.ts': 'export const reported = { count: 0 }\n',
+        'lib/reported.server.ts': 'export const reported = { count: 0 }\n',
         'layout.abide': `<script server>
 import { onError } from '@abide/abide/server'
-import { reported } from './server/reported.ts'
+import { reported } from './lib/reported.server.ts'
 
 onError(() => {
     reported.count += 1

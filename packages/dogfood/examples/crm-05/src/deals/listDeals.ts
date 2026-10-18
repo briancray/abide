@@ -1,5 +1,5 @@
 import { GET } from '@abide/abide/server'
-import { DEALS } from './server/DEALS.ts'
+import { DEALS } from './lib/DEALS.server.ts'
 
 export default GET(
     async () => {

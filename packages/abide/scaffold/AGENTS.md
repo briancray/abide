@@ -17,7 +17,7 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
   TypeScript service do not read `.abide` files, so a clean `tsc` says nothing about them. Run
   `bun run check` after every change, and treat its warnings as bugs: several of them name a read
   that will not update when its value changes.
-- `bun run test` — runs `bun test`. `src/tests/getGreeting.test.ts` is the pattern: a test imports a
+- `bun run test` — runs `bun test`. `src/getGreeting.test.ts` is the pattern: a test imports a
   handler or a `.abide` file and calls it.
 - `bun run dev` — serves the app on a local port and rebuilds when a file changes.
 - `bun run build` then `bun run start` — the production build, and the app served from it.
@@ -32,9 +32,15 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
   scripts, the CLI and MCP alike.
 - A `.abide` cannot export. A `<script server>` in one holds that file's private handlers
   (`const save = POST(…)`), callable by that file alone, and its hooks (`onStart`, `middleware`, …).
-- A directory holds addresses and four fenced directories alone: `lib/` for components and modules,
-  `tests/` for tests, `server/` for modules the browser never loads (importing one from browser code
-  is a compile error), and `public/` for files served as they are (`src/blog/public/cover.png`
-  answers `/blog/cover.png`). Anything else beside the pages is a build error.
+- A directory holds addresses, tests, `.d.ts` declarations and two fenced directories alone: `lib/` for components and
+  modules, and `public/` for files served as they are (`src/blog/public/cover.png` answers
+  `/blog/cover.png`). Anything else beside the pages is a build error.
+- A test is a `.test.ts`, kept beside the file it tests — a page, a handler, or a module in `lib/`.
+  A browser test (playwright) is a `.test.ts` too, under `e2e/` beside `src/`: `bun test` reads
+  `src/` alone (`root` in `bunfig.toml`), so it never runs one.
+- A module the browser never loads is named `<name>.server.ts` and lives in `lib/`
+  (`src/invoices/lib/db.server.ts`); importing one from browser code is a compile error. A module it
+  imports is not fenced by it.
 - Import the app's own modules as `#src/…` (see `imports` in `package.json`).
-- A test imports `.abide` files directly: `bunfig.toml` preloads `@abide/abide/test`.
+- A test imports `.abide` files directly: `bunfig.toml` preloads `@abide/harness/abide/preload`,
+  a DOM to mount into and then `@abide/abide/test`.

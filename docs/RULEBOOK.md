@@ -115,8 +115,11 @@ REGISTRY.md because none of them is a name an app author writes.
 | sink | What 35.7 defines. |
 | implementation | Anything claiming conformance to this document. |
 | dependency's `.abide` | A `.abide` file under a `node_modules` directory or outside the app's root. |
-| fence | A `server`, `public`, `lib` or `tests` directory. |
-| handler file | A `.ts` of the app's own, neither a `.d.ts` nor a `.test.ts`, directly in a directory under no fence. |
+| fence | A `public` or `lib` directory. |
+| server file | A file named `<name>.server.<extension>`. |
+| test file | A `.test.ts` file. |
+| declaration file | A `.d.ts` file. |
+| handler file | A `.ts` of the app's own, neither a declaration file, a test file nor a server file, directly in a directory under no fence. |
 | private handler | A handler a `<script server>` declares. |
 | chapter app | The app the documentation's story has built by the end of one chapter, kept whole so a reader can download it and run it. |
 
@@ -915,7 +918,7 @@ read it.
 16.28 A browser MUST receive a generated `Rpc` wrapper carrying the method, the mount-relative address and
 the description, and MUST NOT receive the handler file or the `<script server>` that declared it.
 
-16.29 Importing a module under a `server` directory from the client graph MUST be a compile error,
+16.29 Importing a server file from the client graph MUST be a compile error,
 and MUST NOT be a silent stub.
 
 16.30 An `Rpc` returning a raw `Value` MUST transport as `application/json`.
@@ -1430,8 +1433,7 @@ segment a page below it adds.
 
 23.15 A file under a fence MUST NOT have a route.
 
-23.16 A fence under a fence MUST be a build error naming both, save a `server` directory under a
-`lib` or a `tests` directory.
+23.16 A fence under a fence MUST be a build error naming both.
 
 23.17 A route whose first segment is `__abide` MUST be a build error.
 
@@ -1447,9 +1449,12 @@ error naming the mount.
 23.21 A `.abide` of the app's own directly in a directory under no fence MUST be a page, save a
 `layout.abide`, an `error.abide` and the root's `launcher.abide`.
 
-23.22 A file of the app's own directly in a directory under no fence that is neither a `.abide` nor
-a handler file MUST be a build error naming the file and a `lib` directory, save one beside the
-`package.json` of a root that holds it, nor a `.ts`.
+23.22 A file of the app's own directly in a directory under no fence that is neither a `.abide`, a
+handler file, a test file nor a declaration file MUST be a build error naming the file and a `lib` directory, save one
+beside the `package.json` of a root that holds it, nor a `.ts`.
+
+23.23 A server file of the app's own under no `lib` directory MUST be a build error naming the file
+and a `lib` directory.
 
 # 24. Tracing
 
@@ -2101,8 +2106,8 @@ error.
 34.19 A `<script server>` block MUST be module scope run on a server alone, and the module a browser
 loads MUST NOT carry it.
 
-34.20 A `<script server>` in a `.abide` file of the app's own under a `server` or `public` directory
-MUST be a compile error.
+34.20 A `<script server>` in a `.abide` file of the app's own under a `public` directory MUST be a
+compile error.
 
 34.21 A file a script block imports `with { type: 'text' }`, a `.abide` among them, MUST be imported
 as its text and typed a `string`, on a server, in a browser and to the checker alike.
@@ -2206,8 +2211,8 @@ navigation from it MUST load the document it asks for.
 
 36.9 `NO_COLOR` MUST beat `FORCE_COLOR`.
 
-36.10 A module MUST be importable from either graph unless it lies under a `server` directory, per
-16.29.
+36.10 A module MUST be importable from either graph unless it is a server file, per 16.29,
+whatever imports it.
 
 36.11 A file under a `public` directory MUST be answered at that directory's path below the app's
 `--root` followed by its own path below that directory, rooted at the mount rather than at the
@@ -2237,7 +2242,7 @@ answered per 41.12.
 # 37. Lifecycle hooks
 
 37.1 A lifecycle hook MUST be filed at the route of the `.abide` or the handler file that called it,
-one under a `lib` or a `tests` directory at the route of the directory holding that one, and at the
+one under a `lib` directory at the route of the directory holding that one, and at the
 root route where neither did; a call MUST be read as a hook only where it names a hook the module
 imports from abide, under any name, or a member of a namespace it imports from abide.
 

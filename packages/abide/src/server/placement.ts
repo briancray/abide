@@ -3,23 +3,11 @@
 // each. The route GRAMMAR is `routePattern`'s, which the browser's router reads too; this half is the
 // build's and the server's alone, so it stays out of the client's closure.
 
-import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
-import {
-    HOLDS_SERVER,
-    RESERVED_DIRECTORIES,
-    SERVER_DIRECTORY,
-} from '#shared/RESERVED_DIRECTORIES.ts'
+import { RESERVED_DIRECTORIES } from '#shared/RESERVED_DIRECTORIES.ts'
 
 /** Where a file sits in an app, which is what it is to every reader (`placeOf`). */
-export type Place =
-    | 'address'
-    | 'server'
-    | 'public'
-    | 'lib'
-    | 'tests'
-    | 'dependency'
-    | 'skipped'
+export type Place = 'address' | 'public' | 'lib' | 'dependency' | 'skipped'
 
 /** Whether a `.abide` is a page, a layout, an error page or a component. */
 type FileKind = 'page' | 'layout' | 'error' | 'component'
@@ -50,9 +38,9 @@ export type Placement = {
  * 23.21 — WHERE IT SITS, THEN ITS NAME. Every `.abide` directly in an address directory is a page
  * but a `layout.abide`, an `error.abide` and the root's `launcher.abide`; one under a fence is a
  * component whatever it is called. 37.1 — its hooks are filed at an address's own route; under a
- * `lib` or a `tests` directory, at the route of the directory holding it, so a component an admin
- * page renders runs under the admin route's rungs; under a `server` or a `public` directory, for a
- * dependency's file, and for the launcher (38.82), at the root's.
+ * `lib` directory, at the route of the directory holding it, so a component an admin page renders
+ * runs under the admin route's rungs; under a `public` directory, for a dependency's file, and for
+ * the launcher (38.82), at the root's.
  *
  * `position` is RELATIVE TO THE APP'S ROOT: its directories are its route, so an absolute path would
  * read the machine's directories as the app's.
@@ -70,7 +58,7 @@ export function placement(relative: string, position = relative): Placement {
                   ? 'error'
                   : 'page'
         scope = routeOf(position)
-    } else if (place === 'lib' || place === 'tests') {
+    } else if (place === 'lib') {
         const parts = position.split('/')
         // The fence `placeOf` named is the first one, and its name is its place.
         scope = `/${parts.slice(0, parts.indexOf(place)).join('/')}`
@@ -92,9 +80,7 @@ export function placement(relative: string, position = relative): Placement {
  * - `dependency` — 34.24: a package's, outside the root or under `node_modules`, whose directories
  *   are its package's layout and none of the app's;
  * - `skipped` — under a dot directory, which no walk of the app enters;
- * - `server`, `public`, `lib` or `tests` — 23.15: under that fence, the nearest to the root deciding,
- *   save a `server` under a `lib` or a `tests`, which is `server` — the fence the browser's bundle
- *   is checked against (16.29) is never hidden by one above it (23.16);
+ * - `public` or `lib` — 23.15: under that fence, the nearest to the root deciding;
  * - `address` — 23.14: everywhere else, its directories the segments of its route.
  *
  * The last part is the file itself, so a path ending in `/` is a directory and every part is read.
@@ -102,20 +88,30 @@ export function placement(relative: string, position = relative): Placement {
 export function placeOf(path: string): Place {
     if (path.startsWith('../') || path.startsWith('/')) return 'dependency'
     const parts = path.split('/')
-    // A `lib` or a `tests` met first, which a `server` below it still overrides.
-    let fence: Place | undefined
     for (let index = 0; index < parts.length - 1; index += 1) {
         const part = parts[index] as string
         if (skipped(part))
-            return fence ?? (part === 'node_modules' ? 'dependency' : 'skipped')
-        if (fence !== undefined) {
-            if (part === SERVER_DIRECTORY) return 'server'
-        } else if (RESERVED_DIRECTORIES.has(part)) {
-            if (!HOLDS_SERVER.has(part)) return part as Place
-            fence = part as Place
-        }
+            return part === 'node_modules' ? 'dependency' : 'skipped'
+        if (RESERVED_DIRECTORIES.has(part)) return part as Place
     }
-    return fence ?? 'address'
+    return 'address'
+}
+
+/** 16.29 — whether `path` names a server file, `<name>.server.<extension>`, which only the server loads. */
+export function isServerFile(path: string): boolean {
+    return SERVER_FILE.test(path)
+}
+
+const SERVER_FILE = /[^/]\.server\.[^./]+$/
+
+/** Whether `path` names a test file, which is never an address nor a module the app runs. */
+export function isTestFile(path: string): boolean {
+    return path.endsWith('.test.ts')
+}
+
+/** Whether `path` names a declaration file, which the checker reads and nothing runs. */
+export function isDeclarationFile(path: string): boolean {
+    return path.endsWith('.d.ts')
 }
 
 /** Whether a walk of the app passes over the entry `name`: a dot file or directory, or `node_modules`. */
@@ -145,23 +141,3 @@ export const DIRECTORY_FILES = new Set([
     'layout.abide',
     'error.abide',
 ])
-
-/**
- * The position of the file at the absolute `path`: the one a mount gives it where a directory in
- * `mounted` holds it (23.19), its own below `root` where the root does, `undefined` otherwise.
- *
- * `mounted` is `Compilation.mounted`, a directory below the root to the position its files take —
- * directory-shaped, because a module under a mounted `server` directory is placed by it too.
- */
-export function positionOf(
-    root: string,
-    mounted: Readonly<Record<string, string>>,
-    path: string,
-): string | undefined {
-    for (const directory in mounted) {
-        const prefix = `${resolve(root, directory)}/`
-        if (path.startsWith(prefix))
-            return `${mounted[directory]}${path.slice(prefix.length)}`
-    }
-    return path.startsWith(`${root}/`) ? path.slice(root.length + 1) : undefined
-}

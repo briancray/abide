@@ -143,7 +143,7 @@ test('a second signal while stopping ends the process at once — 37.12', async 
 test('App.stop asked twice runs onStop once — 42.15', async () => {
     const mark = `${app}/twice.txt`
     await Bun.write(
-        `${app}/tests/twice.ts`,
+        `${app}/lib/twice.ts`,
         `import { createApp } from '@abide/abide/server'
 
 const app = await createApp()
@@ -153,7 +153,7 @@ await Promise.all([first, second])
 console.log(first === second)
 `,
     )
-    const ran = await spawned(['bun', `${app}/tests/twice.ts`], {
+    const ran = await spawned(['bun', `${app}/lib/twice.ts`], {
         cwd: app,
         env: { ...process.env, MARK: mark },
     })
@@ -169,7 +169,7 @@ console.log(first === second)
 test('App.stop cuts a drain past ABIDE_STOP_TIMEOUT and runs onStop — 42.17', async () => {
     const mark = `${app}/deadline.txt`
     await Bun.write(
-        `${app}/tests/deadline.ts`,
+        `${app}/lib/deadline.ts`,
         `import { createApp } from '@abide/abide/server'
 
 const app = await createApp()
@@ -187,7 +187,7 @@ console.log(await Promise.race([asked, Bun.sleep(1000).then(() => 'still pending
 process.exit(0)
 `,
     )
-    const ran = await spawned(['bun', `${app}/tests/deadline.ts`], {
+    const ran = await spawned(['bun', `${app}/lib/deadline.ts`], {
         cwd: app,
         env: { ...process.env, MARK: mark, ABIDE_STOP_TIMEOUT: '300' },
         deadline: 10_000,

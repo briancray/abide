@@ -7,16 +7,16 @@ import Section from '#src/lib/Section.abide'
 import ContactList from 'crm-01/src/contacts/lib/ContactList.abide'
 import contactListSource from 'crm-01/src/contacts/lib/ContactList.abide' with { type: 'text' }
 import listContactsSource from 'crm-01/src/contacts/listContacts.ts' with { type: 'text' }
-import contactListTestSource from 'crm-01/src/contacts/tests/ContactList.test.ts' with { type: 'text' }
+import contactListTestSource from 'crm-01/src/contacts/lib/ContactList.test.ts' with { type: 'text' }
 import PageTiming from 'crm-01/src/contacts/lib/PageTiming.abide'
 import pageTimingSource from 'crm-01/src/contacts/lib/PageTiming.abide' with { type: 'text' }
-import pageTimingTestSource from 'crm-01/src/contacts/tests/PageTiming.test.ts' with { type: 'text' }
+import pageTimingTestSource from 'crm-01/src/contacts/lib/PageTiming.test.ts' with { type: 'text' }
 import StarButton from 'crm-01/src/contacts/lib/StarButton.abide'
 import starButtonSource from 'crm-01/src/contacts/lib/StarButton.abide' with { type: 'text' }
-import starButtonTestSource from 'crm-01/src/contacts/tests/StarButton.test.ts' with { type: 'text' }
+import starButtonTestSource from 'crm-01/src/contacts/lib/StarButton.test.ts' with { type: 'text' }
 import ContactNote from 'crm-01/src/contacts/lib/ContactNote.abide'
 import contactNoteSource from 'crm-01/src/contacts/lib/ContactNote.abide' with { type: 'text' }
-import contactNoteTestSource from 'crm-01/src/contacts/tests/ContactNote.test.ts' with { type: 'text' }
+import contactNoteTestSource from 'crm-01/src/contacts/lib/ContactNote.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -43,27 +43,28 @@ bun run dev`} />
                 <tr><td><code>src/contacts/index.abide</code></td><td><code>/contacts</code></td></tr>
                 <tr><td><code>src/contacts/listContacts.ts</code></td><td><code>GET /contacts/listContacts</code>, the handler its default export declares</td></tr>
                 <tr><td><code>src/contacts/lib/ContactList.abide</code></td><td>no address: a component the pages import</td></tr>
-                <tr><td><code>src/contacts/tests/ContactList.test.ts</code></td><td>no address: what <code>bun test</code> runs</td></tr>
+                <tr><td><code>src/contacts/lib/ContactList.test.ts</code></td><td>no address: what <code>bun test</code> runs</td></tr>
             </tbody>
         </table>
 
-        <p>Code that is not an address goes in a directory that never is. The directory also
-        decides where the code runs:</p>
+        <p>Code that is not an address goes in a directory that never is, and a file's name
+        decides where it runs:</p>
 
         <table>
-            <thead><tr><th>Directory</th><th>What goes in it</th><th>Where it runs</th></tr></thead>
+            <thead><tr><th>Path</th><th>What goes in it</th><th>Where it runs</th></tr></thead>
             <tbody>
-                <tr><td><code>src/**</code></td><td>the app</td><td>both sides, unless its directory says otherwise</td></tr>
+                <tr><td><code>src/**</code></td><td>the app</td><td>both sides, unless its name says otherwise</td></tr>
                 <tr><td><code>src/**/</code></td><td>pages, layouts and handler files, routed by their path</td><td>a page on both sides; a handler on the server, with a call in its place in the browser</td></tr>
                 <tr><td><code>**/lib/**</code></td><td>components and modules</td><td>wherever they are imported</td></tr>
-                <tr><td><code>**/server/**</code></td><td>the database, secrets, anything the browser never loads</td><td>the server alone; a page importing it is a compile error</td></tr>
-                <tr><td><code>**/tests/**</code></td><td>tests</td><td><code>bun test</code>, never served</td></tr>
+                <tr><td><code>**/lib/**/&lt;name&gt;.server.&lt;extension&gt;</code></td><td>the database, secrets, anything the browser never loads</td><td>the server alone; a page importing it is a compile error</td></tr>
+                <tr><td><code>**/&lt;name&gt;.test.ts</code></td><td>tests, beside what they test</td><td><code>bun test</code>, never served</td></tr>
+                <tr><td><code>**/&lt;name&gt;.d.ts</code></td><td>types, beside what they type</td><td>nowhere; the checker reads them</td></tr>
                 <tr><td><code>**/public/**</code></td><td>files answered as they are</td><td>nowhere; each is sent at its path</td></tr>
             </tbody>
         </table>
 
         <p>Any other file beside the pages fails the build, so listing a directory lists its
-        routes. The CRM keeps its contacts in <code>src/contacts/server/CONTACTS.ts</code>, and
+        routes. The CRM keeps its contacts in <code>src/contacts/lib/CONTACTS.server.ts</code>, and
         only the handler reads it.</p>
     </Section>
 
@@ -76,7 +77,7 @@ bun run dev`} />
             files={{
                 'src/contacts/lib/ContactList.abide': contactListSource,
                 'src/contacts/listContacts.ts': listContactsSource,
-                'src/contacts/tests/ContactList.test.ts': contactListTestSource,
+                'src/contacts/lib/ContactList.test.ts': contactListTestSource,
             }}
         >
             <ContactList />
@@ -99,7 +100,7 @@ bun run dev`} />
             summary="The contacts handler takes 400 ms. Request the page the way a browser does, and compare when it is complete with when the contacts answer."
             files={{
                 'src/contacts/lib/PageTiming.abide': pageTimingSource,
-                'src/contacts/tests/PageTiming.test.ts': pageTimingTestSource,
+                'src/contacts/lib/PageTiming.test.ts': pageTimingTestSource,
             }}
         >
             <PageTiming />
@@ -126,7 +127,7 @@ bun run dev`} />
             summary="Star a contact. The button reads the value, and the click writes it."
             files={{
                 'src/contacts/lib/StarButton.abide': starButtonSource,
-                'src/contacts/tests/StarButton.test.ts': starButtonTestSource,
+                'src/contacts/lib/StarButton.test.ts': starButtonTestSource,
             }}
         >
             <StarButton />
@@ -147,7 +148,7 @@ bun run dev`} />
             summary="A note on a contact. Watch which rows say … on arrival, then type a note and save it."
             files={{
                 'src/contacts/lib/ContactNote.abide': contactNoteSource,
-                'src/contacts/tests/ContactNote.test.ts': contactNoteTestSource,
+                'src/contacts/lib/ContactNote.test.ts': contactNoteTestSource,
             }}
         >
             <ContactNote />

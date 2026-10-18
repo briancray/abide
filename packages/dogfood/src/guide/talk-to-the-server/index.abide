@@ -7,26 +7,26 @@ import Section from '#src/lib/Section.abide'
 import DealDetail from 'crm-03/src/deals/lib/DealDetail.abide'
 import dealDetailSource from 'crm-03/src/deals/lib/DealDetail.abide' with { type: 'text' }
 import getDealSource from 'crm-03/src/deals/getDeal.ts' with { type: 'text' }
-import dealDetailTestSource from 'crm-03/src/deals/tests/DealDetail.test.ts' with { type: 'text' }
+import dealDetailTestSource from 'crm-03/src/deals/lib/DealDetail.test.ts' with { type: 'text' }
 import DealNotes from 'crm-03/src/deals/lib/DealNotes.abide'
 import dealNotesSource from 'crm-03/src/deals/lib/DealNotes.abide' with { type: 'text' }
-import dealNotesTestSource from 'crm-03/src/deals/tests/DealNotes.test.ts' with { type: 'text' }
+import dealNotesTestSource from 'crm-03/src/deals/lib/DealNotes.test.ts' with { type: 'text' }
 import NewDeal from 'crm-03/src/deals/lib/NewDeal.abide'
 import newDealSource from 'crm-03/src/deals/lib/NewDeal.abide' with { type: 'text' }
 import createDealSource from 'crm-03/src/deals/createDeal.ts' with { type: 'text' }
-import newDealTestSource from 'crm-03/src/deals/tests/NewDeal.test.ts' with { type: 'text' }
+import newDealTestSource from 'crm-03/src/deals/lib/NewDeal.test.ts' with { type: 'text' }
 import DealStage from 'crm-03/src/deals/lib/DealStage.abide'
 import dealStageSource from 'crm-03/src/deals/lib/DealStage.abide' with { type: 'text' }
 import moveDealSource from 'crm-03/src/deals/moveDeal.ts' with { type: 'text' }
-import dealStageTestSource from 'crm-03/src/deals/tests/DealStage.test.ts' with { type: 'text' }
+import dealStageTestSource from 'crm-03/src/deals/lib/DealStage.test.ts' with { type: 'text' }
 import ExportDeals from 'crm-03/src/deals/lib/ExportDeals.abide'
 import exportDealsSource from 'crm-03/src/deals/lib/ExportDeals.abide' with { type: 'text' }
 import exportDealsHandlerSource from 'crm-03/src/deals/exportDeals.ts' with { type: 'text' }
-import exportDealsTestSource from 'crm-03/src/deals/tests/ExportDeals.test.ts' with { type: 'text' }
+import exportDealsTestSource from 'crm-03/src/deals/lib/ExportDeals.test.ts' with { type: 'text' }
 import Pipeline from 'crm-03/src/deals/lib/Pipeline.abide'
 import pipelineSource from 'crm-03/src/deals/lib/Pipeline.abide' with { type: 'text' }
 import listDealsSource from 'crm-03/src/deals/listDeals.ts' with { type: 'text' }
-import pipelineTestSource from 'crm-03/src/deals/tests/Pipeline.test.ts' with { type: 'text' }
+import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -64,7 +64,7 @@ import pipelineTestSource from 'crm-03/src/deals/tests/Pipeline.test.ts' with { 
             files={{
                 'src/deals/lib/DealDetail.abide': dealDetailSource,
                 'src/deals/getDeal.ts': getDealSource,
-                'src/deals/tests/DealDetail.test.ts': dealDetailTestSource,
+                'src/deals/lib/DealDetail.test.ts': dealDetailTestSource,
             }}
         >
             <DealDetail />
@@ -95,7 +95,7 @@ import pipelineTestSource from 'crm-03/src/deals/tests/Pipeline.test.ts' with { 
             summary="The notes on a deal, which only this card shows. The handler sits in the card's own server block."
             files={{
                 'src/deals/lib/DealNotes.abide': dealNotesSource,
-                'src/deals/tests/DealNotes.test.ts': dealNotesTestSource,
+                'src/deals/lib/DealNotes.test.ts': dealNotesTestSource,
             }}
         >
             <DealNotes />
@@ -137,7 +137,7 @@ import pipelineTestSource from 'crm-03/src/deals/tests/Pipeline.test.ts' with { 
             files={{
                 'src/deals/lib/NewDeal.abide': newDealSource,
                 'src/deals/createDeal.ts': createDealSource,
-                'src/deals/tests/NewDeal.test.ts': newDealTestSource,
+                'src/deals/lib/NewDeal.test.ts': newDealTestSource,
             }}
         >
             <NewDeal />
@@ -176,7 +176,7 @@ import pipelineTestSource from 'crm-03/src/deals/tests/Pipeline.test.ts' with { 
             files={{
                 'src/deals/lib/DealStage.abide': dealStageSource,
                 'src/deals/moveDeal.ts': moveDealSource,
-                'src/deals/tests/DealStage.test.ts': dealStageTestSource,
+                'src/deals/lib/DealStage.test.ts': dealStageTestSource,
             }}
         >
             <DealStage />
@@ -215,7 +215,7 @@ import pipelineTestSource from 'crm-03/src/deals/tests/Pipeline.test.ts' with { 
             files={{
                 'src/deals/lib/ExportDeals.abide': exportDealsSource,
                 'src/deals/exportDeals.ts': exportDealsHandlerSource,
-                'src/deals/tests/ExportDeals.test.ts': exportDealsTestSource,
+                'src/deals/lib/ExportDeals.test.ts': exportDealsTestSource,
             }}
         >
             <ExportDeals />
@@ -281,7 +281,7 @@ PATCH  /deals/moveDeal              deals/moveDeal.ts`} />
             files={{
                 'src/deals/lib/Pipeline.abide': pipelineSource,
                 'src/deals/listDeals.ts': listDealsSource,
-                'src/deals/tests/Pipeline.test.ts': pipelineTestSource,
+                'src/deals/lib/Pipeline.test.ts': pipelineTestSource,
             }}
         >
             <Pipeline />

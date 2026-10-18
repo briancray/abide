@@ -1,6 +1,6 @@
 import { jsonSchema } from '@abide/abide'
 import { POST } from '@abide/abide/server'
-import { DEALS } from './server/DEALS.ts'
+import { DEALS } from './lib/DEALS.server.ts'
 
 type NewDeal = { name: string; company: string; amount: number }
 

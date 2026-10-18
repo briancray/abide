@@ -52,10 +52,10 @@ export async function clientBundle(
         // tables' is not on disk to open.
         root,
         // 16.28, 16.29 — the browser's view of the server: a `<script server>` is its stand-ins and a
-        // `server/` module refuses — FENCED FIRST, before the plugin that would serve the module. 38.43
+        // server file refuses — FENCED FIRST, before the plugin that would serve the module. 38.43
         // — then the app's own, as `bunfig.toml` declares them.
         plugins: [
-            fenceServer(root, compilation.mounted),
+            fenceServer(root),
             abideModules(root, compilation),
             ...(await appPlugins(root)),
         ],

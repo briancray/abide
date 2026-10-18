@@ -8,41 +8,41 @@ import SignIn from 'crm-07/src/account/lib/SignIn.abide'
 import signInComponentSource from 'crm-07/src/account/lib/SignIn.abide' with { type: 'text' }
 import signInSource from 'crm-07/src/account/signIn.ts' with { type: 'text' }
 import signOutSource from 'crm-07/src/account/signOut.ts' with { type: 'text' }
-import signInTestSource from 'crm-07/src/account/tests/SignIn.test.ts' with { type: 'text' }
+import signInTestSource from 'crm-07/src/account/lib/SignIn.test.ts' with { type: 'text' }
 import Badge from 'crm-07/src/account/lib/Badge.abide'
 import badgeSource from 'crm-07/src/account/lib/Badge.abide' with { type: 'text' }
-import badgeTestSource from 'crm-07/src/account/tests/Badge.test.ts' with { type: 'text' }
+import badgeTestSource from 'crm-07/src/account/lib/Badge.test.ts' with { type: 'text' }
 import Density from 'crm-07/src/account/lib/Density.abide'
 import densitySource from 'crm-07/src/account/lib/Density.abide' with { type: 'text' }
-import densityTestSource from 'crm-07/src/account/tests/Density.test.ts' with { type: 'text' }
+import densityTestSource from 'crm-07/src/account/lib/Density.test.ts' with { type: 'text' }
 import ContactCard from 'crm-07/src/account/lib/ContactCard.abide'
 import contactCardSource from 'crm-07/src/account/lib/ContactCard.abide' with { type: 'text' }
 import getContactSource from 'crm-07/src/account/getContact.ts' with { type: 'text' }
-import contactCardTestSource from 'crm-07/src/account/tests/ContactCard.test.ts' with { type: 'text' }
+import contactCardTestSource from 'crm-07/src/account/lib/ContactCard.test.ts' with { type: 'text' }
 import ExportContacts from 'crm-07/src/account/lib/ExportContacts.abide'
 import exportContactsComponentSource from 'crm-07/src/account/lib/ExportContacts.abide' with { type: 'text' }
 import exportContactsSource from 'crm-07/src/account/exportContacts.ts' with { type: 'text' }
-import exportContactsTestSource from 'crm-07/src/account/tests/ExportContacts.test.ts' with { type: 'text' }
+import exportContactsTestSource from 'crm-07/src/account/lib/ExportContacts.test.ts' with { type: 'text' }
 import PartnerStatement from 'crm-07/src/account/lib/PartnerStatement.abide'
 import partnerStatementSource from 'crm-07/src/account/lib/PartnerStatement.abide' with { type: 'text' }
 import getStatementSource from 'crm-07/src/account/getStatement.ts' with { type: 'text' }
-import partnerStatementTestSource from 'crm-07/src/account/tests/PartnerStatement.test.ts' with { type: 'text' }
+import partnerStatementTestSource from 'crm-07/src/account/lib/PartnerStatement.test.ts' with { type: 'text' }
 import SalesReport from 'crm-07/src/account/lib/SalesReport.abide'
 import salesReportComponentSource from 'crm-07/src/account/lib/SalesReport.abide' with { type: 'text' }
 import salesReportSource from 'crm-07/src/account/salesReport.ts' with { type: 'text' }
-import salesReportTestSource from 'crm-07/src/account/tests/SalesReport.test.ts' with { type: 'text' }
+import salesReportTestSource from 'crm-07/src/account/lib/SalesReport.test.ts' with { type: 'text' }
 import SyncContact from 'crm-07/src/account/lib/SyncContact.abide'
 import syncContactComponentSource from 'crm-07/src/account/lib/SyncContact.abide' with { type: 'text' }
 import syncContactSource from 'crm-07/src/account/syncContact.ts' with { type: 'text' }
-import syncContactTestSource from 'crm-07/src/account/tests/SyncContact.test.ts' with { type: 'text' }
+import syncContactTestSource from 'crm-07/src/account/lib/SyncContact.test.ts' with { type: 'text' }
 import AddContact from 'crm-07/src/account/lib/AddContact.abide'
 import addContactComponentSource from 'crm-07/src/account/lib/AddContact.abide' with { type: 'text' }
 import addContactSource from 'crm-07/src/account/addContact.ts' with { type: 'text' }
-import addContactTestSource from 'crm-07/src/account/tests/AddContact.test.ts' with { type: 'text' }
+import addContactTestSource from 'crm-07/src/account/lib/AddContact.test.ts' with { type: 'text' }
 import Widget from 'crm-07/src/account/lib/Widget.abide'
 import widgetSource from 'crm-07/src/account/lib/Widget.abide' with { type: 'text' }
 import rootLayoutSource from 'crm-07/src/layout.abide' with { type: 'text' }
-import widgetTestSource from 'crm-07/src/account/tests/Widget.test.ts' with { type: 'text' }
+import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -60,7 +60,7 @@ import widgetTestSource from 'crm-07/src/account/tests/Widget.test.ts' with { ty
                 'src/account/lib/SignIn.abide': signInComponentSource,
                 'src/account/signIn.ts': signInSource,
                 'src/account/signOut.ts': signOutSource,
-                'src/account/tests/SignIn.test.ts': signInTestSource,
+                'src/account/lib/SignIn.test.ts': signInTestSource,
             }}
         >
             <SignIn />
@@ -104,7 +104,7 @@ import widgetTestSource from 'crm-07/src/account/tests/Widget.test.ts' with { ty
             files={{
                 'src/account/lib/Badge.abide': badgeSource,
                 'src/account/signIn.ts': signInSource,
-                'src/account/tests/Badge.test.ts': badgeTestSource,
+                'src/account/lib/Badge.test.ts': badgeTestSource,
             }}
         >
             <Badge />
@@ -118,7 +118,7 @@ import widgetTestSource from 'crm-07/src/account/tests/Widget.test.ts' with { ty
 
         <p>What it returns is read as <code>principal.resolved</code>, typed by
         <code>Principal</code>. Declare your fields on that interface, as the app's
-        <code>server/TEAM.ts</code> does beside the team it reads. abide's own three fields are <code>authenticated</code>, <code>expiresAt</code> and
+        <code>lib/TEAM.server.ts</code> does beside the team it reads. abide's own three fields are <code>authenticated</code>, <code>expiresAt</code> and
         <code>error</code>, and they win any collision, so a resolver cannot sign a caller in by
         returning <code>authenticated: true</code>. A resolver that throws fills
         <code>error</code> and leaves the caller signed out.</p>
@@ -136,7 +136,7 @@ import widgetTestSource from 'crm-07/src/account/tests/Widget.test.ts' with { ty
             summary="The contact list's density, kept in a cookie. Pick one and reload: the server paints the one you picked."
             files={{
                 'src/account/lib/Density.abide': densitySource,
-                'src/account/tests/Density.test.ts': densityTestSource,
+                'src/account/lib/Density.test.ts': densityTestSource,
             }}
         >
             <Density />
@@ -161,7 +161,7 @@ import widgetTestSource from 'crm-07/src/account/tests/Widget.test.ts' with { ty
             files={{
                 'src/account/lib/ContactCard.abide': contactCardSource,
                 'src/account/getContact.ts': getContactSource,
-                'src/account/tests/ContactCard.test.ts': contactCardTestSource,
+                'src/account/lib/ContactCard.test.ts': contactCardTestSource,
             }}
         >
             <ContactCard />
@@ -184,7 +184,7 @@ import widgetTestSource from 'crm-07/src/account/tests/Widget.test.ts' with { ty
             files={{
                 'src/account/lib/ExportContacts.abide': exportContactsComponentSource,
                 'src/account/exportContacts.ts': exportContactsSource,
-                'src/account/tests/ExportContacts.test.ts': exportContactsTestSource,
+                'src/account/lib/ExportContacts.test.ts': exportContactsTestSource,
             }}
         >
             <ExportContacts />
@@ -231,7 +231,7 @@ middleware(async (next) => {
             files={{
                 'src/account/lib/PartnerStatement.abide': partnerStatementSource,
                 'src/account/getStatement.ts': getStatementSource,
-                'src/account/tests/PartnerStatement.test.ts': partnerStatementTestSource,
+                'src/account/lib/PartnerStatement.test.ts': partnerStatementTestSource,
             }}
         >
             <PartnerStatement />
@@ -267,7 +267,7 @@ middleware(async (next) => {
             files={{
                 'src/account/lib/SalesReport.abide': salesReportComponentSource,
                 'src/account/salesReport.ts': salesReportSource,
-                'src/account/tests/SalesReport.test.ts': salesReportTestSource,
+                'src/account/lib/SalesReport.test.ts': salesReportTestSource,
             }}
         >
             <SalesReport />
@@ -306,7 +306,7 @@ middleware(async (next) => {
             files={{
                 'src/account/lib/SyncContact.abide': syncContactComponentSource,
                 'src/account/syncContact.ts': syncContactSource,
-                'src/account/tests/SyncContact.test.ts': syncContactTestSource,
+                'src/account/lib/SyncContact.test.ts': syncContactTestSource,
             }}
         >
             <SyncContact />
@@ -330,7 +330,7 @@ middleware(async (next) => {
             files={{
                 'src/account/lib/AddContact.abide': addContactComponentSource,
                 'src/account/addContact.ts': addContactSource,
-                'src/account/tests/AddContact.test.ts': addContactTestSource,
+                'src/account/lib/AddContact.test.ts': addContactTestSource,
             }}
         >
             <AddContact />
@@ -361,7 +361,7 @@ middleware(async (next) => {
             files={{
                 'src/account/lib/Widget.abide': widgetSource,
                 'src/layout.abide': rootLayoutSource,
-                'src/account/tests/Widget.test.ts': widgetTestSource,
+                'src/account/lib/Widget.test.ts': widgetTestSource,
             }}
         >
             <Widget />

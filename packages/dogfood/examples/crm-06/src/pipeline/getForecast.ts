@@ -1,6 +1,6 @@
 import { GET } from '@abide/abide/server'
-import { DEALS } from './server/DEALS.ts'
-import { LOADS } from './server/LOADS.ts'
+import { DEALS } from './lib/DEALS.server.ts'
+import { LOADS } from './lib/LOADS.server.ts'
 
 // How likely a deal in each stage is to close.
 const ODDS: Record<string, number> = {

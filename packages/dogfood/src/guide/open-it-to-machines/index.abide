@@ -6,29 +6,29 @@ import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 import OpenApiOperation from 'crm-09/src/assistant/lib/OpenApiOperation.abide'
 import openApiOperationSource from 'crm-09/src/assistant/lib/OpenApiOperation.abide' with { type: 'text' }
-import openApiOperationTestSource from 'crm-09/src/assistant/tests/OpenApiOperation.test.ts' with { type: 'text' }
+import openApiOperationTestSource from 'crm-09/src/assistant/lib/OpenApiOperation.test.ts' with { type: 'text' }
 import searchContactsSource from 'crm-09/src/assistant/searchContacts.ts' with { type: 'text' }
 import ModelToolCall from 'crm-09/src/assistant/lib/ModelToolCall.abide'
 import modelToolCallSource from 'crm-09/src/assistant/lib/ModelToolCall.abide' with { type: 'text' }
-import modelToolCallTestSource from 'crm-09/src/assistant/tests/ModelToolCall.test.ts' with { type: 'text' }
+import modelToolCallTestSource from 'crm-09/src/assistant/lib/ModelToolCall.test.ts' with { type: 'text' }
 import WithheldExport from 'crm-09/src/assistant/lib/WithheldExport.abide'
 import withheldExportSource from 'crm-09/src/assistant/lib/WithheldExport.abide' with { type: 'text' }
 import exportContactsSource from 'crm-09/src/assistant/exportContacts.ts' with { type: 'text' }
-import withheldExportTestSource from 'crm-09/src/assistant/tests/WithheldExport.test.ts' with { type: 'text' }
+import withheldExportTestSource from 'crm-09/src/assistant/lib/WithheldExport.test.ts' with { type: 'text' }
 import AssistantChat from 'crm-09/src/assistant/lib/AssistantChat.abide'
 import assistantChatSource from 'crm-09/src/assistant/lib/AssistantChat.abide' with { type: 'text' }
 import askAssistantSource from 'crm-09/src/assistant/askAssistant.ts' with { type: 'text' }
-import assistantChatTestSource from 'crm-09/src/assistant/tests/AssistantChat.test.ts' with { type: 'text' }
+import assistantChatTestSource from 'crm-09/src/assistant/lib/AssistantChat.test.ts' with { type: 'text' }
 import ClaudeApiRequest from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide'
 import claudeApiRequestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide' with { type: 'text' }
 import askClaudeSource from 'crm-09/src/assistant/askClaude.ts' with { type: 'text' }
 import messagesSource from 'crm-09/src/assistant/v1/messages.ts' with { type: 'text' }
-import claudeApiRequestTestSource from 'crm-09/src/assistant/tests/ClaudeApiRequest.test.ts' with { type: 'text' }
+import claudeApiRequestTestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.test.ts' with { type: 'text' }
 import ClaudeCodeBridge from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide'
 import claudeCodeBridgeSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide' with { type: 'text' }
 import bridgeSource from 'crm-09/src/assistant/bridge.ts' with { type: 'text' }
 import askClaudeCodeSource from 'crm-09/src/assistant/askClaudeCode.ts' with { type: 'text' }
-import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBridge.test.ts' with { type: 'text' }
+import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -55,7 +55,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
             files={{
                 'src/assistant/lib/OpenApiOperation.abide': openApiOperationSource,
                 'src/assistant/searchContacts.ts': searchContactsSource,
-                'src/assistant/tests/OpenApiOperation.test.ts': openApiOperationTestSource,
+                'src/assistant/lib/OpenApiOperation.test.ts': openApiOperationTestSource,
             }}
         >
             <OpenApiOperation />
@@ -91,7 +91,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
             files={{
                 'src/assistant/lib/ModelToolCall.abide': modelToolCallSource,
                 'src/assistant/searchContacts.ts': searchContactsSource,
-                'src/assistant/tests/ModelToolCall.test.ts': modelToolCallTestSource,
+                'src/assistant/lib/ModelToolCall.test.ts': modelToolCallTestSource,
             }}
         >
             <ModelToolCall />
@@ -123,7 +123,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
             files={{
                 'src/assistant/lib/WithheldExport.abide': withheldExportSource,
                 'src/assistant/exportContacts.ts': exportContactsSource,
-                'src/assistant/tests/WithheldExport.test.ts': withheldExportTestSource,
+                'src/assistant/lib/WithheldExport.test.ts': withheldExportTestSource,
             }}
         >
             <WithheldExport />
@@ -160,7 +160,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
             files={{
                 'src/assistant/lib/AssistantChat.abide': assistantChatSource,
                 'src/assistant/askAssistant.ts': askAssistantSource,
-                'src/assistant/tests/AssistantChat.test.ts': assistantChatTestSource,
+                'src/assistant/lib/AssistantChat.test.ts': assistantChatTestSource,
             }}
         >
             <AssistantChat />
@@ -204,7 +204,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
                 'src/assistant/lib/ClaudeApiRequest.abide': claudeApiRequestSource,
                 'src/assistant/askClaude.ts': askClaudeSource,
                 'src/assistant/v1/messages.ts': messagesSource,
-                'src/assistant/tests/ClaudeApiRequest.test.ts': claudeApiRequestTestSource,
+                'src/assistant/lib/ClaudeApiRequest.test.ts': claudeApiRequestTestSource,
             }}
         >
             <ClaudeApiRequest />
@@ -230,7 +230,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
                 'src/assistant/lib/ClaudeCodeBridge.abide': claudeCodeBridgeSource,
                 'src/assistant/bridge.ts': bridgeSource,
                 'src/assistant/askClaudeCode.ts': askClaudeCodeSource,
-                'src/assistant/tests/ClaudeCodeBridge.test.ts': claudeCodeBridgeTestSource,
+                'src/assistant/lib/ClaudeCodeBridge.test.ts': claudeCodeBridgeTestSource,
             }}
         >
             <ClaudeCodeBridge />

@@ -1,6 +1,6 @@
 import { jsonSchema, refuse } from '@abide/abide'
 import { PATCH } from '@abide/abide/server'
-import { DEALS } from './server/DEALS.ts'
+import { DEALS } from './lib/DEALS.server.ts'
 
 // A refusal with a name and typed data, which the page can match.
 const dealClosed = refuse.named(

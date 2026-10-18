@@ -94,12 +94,12 @@ export function scopeOf(entry: string): string {
     return entry.startsWith('@abide/abide') ? 'abide' : entry
 }
 
-const FENCES = new Set(['server', 'public', 'lib', 'tests'])
+const FENCES = new Set(['public', 'lib'])
 
 /**
  * A reference page's file, from the docs app's root: an `index.abide` in a directory named for it,
  * or a file named for it where that name is a fence and a directory of it would have no address —
- * `server` the ambient value is `src/reference/server.abide`.
+ * `lib` would be `src/reference/lib.abide`.
  */
 export function referenceFileOf(route: string): string {
     return FENCES.has(route.slice(route.lastIndexOf('/') + 1))

@@ -1,11 +1,11 @@
 // 23.14 — WHERE AN APP'S ADDRESSES ARE, read off the tree in one walk. A file directly in a directory
 // below the root is an address — a page, a layout, an error page or a handler file — and nothing
-// else is there (23.22); a fence is never one (23.15): `server` fences a graph, `public` holds files
-// answered as authored at the path of the directories above it, and `lib` and `tests` hold the rest.
-// So listing a directory lists its routes.
+// else is there but its tests (23.22); a fence is never one (23.15): `public` holds files answered as
+// authored at the path of the directories above it, and `lib` holds the rest, a server file among it
+// (23.23). So listing a directory lists its routes.
 //
-// ONE WALK for the sources, the handler files, the server and lib modules, and the public files
-// `abide build` copies and `abide dev` answers, and the refusals (23.16, 23.17, 23.18, 23.22) — each
+// ONE WALK for the sources, the handler files, the lib modules, and the public files `abide build`
+// copies and `abide dev` answers, and the refusals (23.16, 23.17, 23.18, 23.22, 23.23) — each
 // file what `placeOf` says of its path, so the walk and every reader of one path agree, and ONE SKIP
 // RULE, `skipped`, for every walk of the tree.
 //
@@ -16,12 +16,18 @@ import { type Dirent, existsSync, readdirSync } from 'node:fs' // bun has no dir
 import type { Refusals } from '#compiler/Refusals.ts'
 import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
 import {
-    HOLDS_SERVER,
     PUBLIC_DIRECTORY,
     RESERVED_DIRECTORIES,
-    SERVER_DIRECTORY,
 } from '#shared/RESERVED_DIRECTORIES.ts'
-import { DIRECTORY_FILES, placeOf, routeOf, skipped } from './placement.ts'
+import {
+    DIRECTORY_FILES,
+    isDeclarationFile,
+    isServerFile,
+    isTestFile,
+    placeOf,
+    routeOf,
+    skipped,
+} from './placement.ts'
 
 /** What one walk of the app finds, every path relative to the root. */
 type AppFiles = {
@@ -29,15 +35,15 @@ type AppFiles = {
     abide: string[]
     /** Every handler file, in path order. */
     handlers: string[]
-    /** Every module under a `server` or a `lib` directory, in path order — read for 37.13. */
+    /** Every module under a `lib` directory, in path order — read for 37.13. */
     modules: string[]
     /** Every file under a `public` directory, to the address it is answered at below the mount. */
     published: Map<string, string>
 }
 
 /**
- * The app's `.abide` sources, handler files, server and lib modules and public files, refusing a
- * tree 23.16, 23.17, 23.18 or 23.22 forbids into `refusals`, each at its path below the root.
+ * The app's `.abide` sources, handler files, lib modules and public files, refusing a tree 23.16,
+ * 23.17, 23.18, 23.22 or 23.23 forbids into `refusals`, each at its path below the root.
  *
  * A missing root is an app with nothing in it, not a fault.
  */
@@ -82,14 +88,7 @@ function walk(
         if (entry.isDirectory()) {
             let within = reserved
             if (RESERVED_DIRECTORIES.has(entry.name)) {
-                // 23.16 — `server` nests in the fences that hold code.
-                if (
-                    reserved !== undefined &&
-                    !(
-                        entry.name === SERVER_DIRECTORY &&
-                        HOLDS_SERVER.has(reserved.name)
-                    )
-                )
+                if (reserved !== undefined)
                     refusals.at(
                         path,
                         new Error(
@@ -107,17 +106,27 @@ function walk(
             )
             continue
         }
+        const place = placeOf(path)
+        if (isServerFile(path) && place !== 'lib') {
+            refusals.at(
+                path,
+                new Error(
+                    `abide: ${path} is a server file under no lib directory. Move it into a lib directory beside it. RULEBOOK 23.23.`,
+                ),
+            )
+            continue
+        }
         const abide = path.endsWith('.abide')
         if (abide) files.abide.push(path)
-        const place = placeOf(path)
         if (place === 'address') {
+            if (isTestFile(path) || isDeclarationFile(path)) continue
             if (!abide && !isModule(path)) {
                 if (packaged && relative === '' && !path.endsWith('.ts'))
                     continue
                 refusals.at(
                     path,
                     new Error(
-                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages and handler files alone. Move it into a lib directory beside it. RULEBOOK 23.22.`,
+                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages, handler files, test files and declaration files alone. Move it into a lib directory beside it. RULEBOOK 23.22.`,
                     ),
                 )
                 continue
@@ -139,21 +148,13 @@ function walk(
             )
         else if (place === 'public')
             files.published.set(path, publicAddress(path, fence.path))
-        else if ((place === 'server' || place === 'lib') && isModule(path))
-            files.modules.push(path)
+        else if (place === 'lib' && isModule(path)) files.modules.push(path)
     }
 }
 
-/**
- * Whether `path` names a module the app runs — neither a declaration nor a test: directly in an
- * address directory, a handler file rather than a stray.
- */
+/** Whether `path` names a module the app runs — neither a declaration nor a test. */
 function isModule(path: string): boolean {
-    return (
-        path.endsWith('.ts') &&
-        !path.endsWith('.d.ts') &&
-        !path.endsWith('.test.ts')
-    )
+    return path.endsWith('.ts') && !isDeclarationFile(path) && !isTestFile(path)
 }
 
 /** The refusal of `source` where `route` lies in the framework's own namespace, or `undefined`. 23.17. */
@@ -199,7 +200,8 @@ export function holdsApp(root: string): boolean {
     return !appSourcesUnder(root, '').next().done
 }
 
-// Every `.abide` under `directory`, and every handler file — a module whose place is an address.
+// Every `.abide` under `directory`, and every handler file — a module whose place is an address, and
+// no server file (23.23).
 function* appSourcesUnder(
     directory: string,
     relative: string,
@@ -217,7 +219,9 @@ function* appSourcesUnder(
             yield* appSourcesUnder(`${directory}/${entry.name}`, `${path}/`)
         else if (
             path.endsWith('.abide') ||
-            (isModule(path) && placeOf(path) === 'address')
+            (isModule(path) &&
+                !isServerFile(path) &&
+                placeOf(path) === 'address')
         )
             yield path
     }

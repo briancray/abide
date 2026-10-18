@@ -12,7 +12,7 @@ await testRows(
             section: app,
             root: 'src',
             runner: 'bun',
-            pattern: '**/tests/*.test.ts',
+            pattern: '**/*.test.ts',
         },
     ],
     Bun.fileURLToPath(new URL(`../examples/${app}`, import.meta.url)),

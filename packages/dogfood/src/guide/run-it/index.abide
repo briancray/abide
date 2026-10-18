@@ -8,25 +8,25 @@ import Retries from 'crm-08/src/ops/lib/Retries.abide'
 import retriesSource from 'crm-08/src/ops/lib/Retries.abide' with { type: 'text' }
 import getRetriesSource from 'crm-08/src/ops/getRetries.ts' with { type: 'text' }
 import envSource from 'crm-08/.env' with { type: 'text' }
-import retriesTestSource from 'crm-08/src/ops/tests/Retries.test.ts' with { type: 'text' }
+import retriesTestSource from 'crm-08/src/ops/lib/Retries.test.ts' with { type: 'text' }
 import Pool from 'crm-08/src/ops/lib/Pool.abide'
 import poolSource from 'crm-08/src/ops/lib/Pool.abide' with { type: 'text' }
 import getPoolSource from 'crm-08/src/ops/getPool.ts' with { type: 'text' }
-import poolTestSource from 'crm-08/src/ops/tests/Pool.test.ts' with { type: 'text' }
+import poolTestSource from 'crm-08/src/ops/lib/Pool.test.ts' with { type: 'text' }
 import Console from 'crm-08/src/ops/lib/Console.abide'
 import consoleSource from 'crm-08/src/ops/lib/Console.abide' with { type: 'text' }
-import consoleTestSource from 'crm-08/src/ops/tests/Console.test.ts' with { type: 'text' }
+import consoleTestSource from 'crm-08/src/ops/lib/Console.test.ts' with { type: 'text' }
 import Sync from 'crm-08/src/ops/lib/Sync.abide'
 import syncSource from 'crm-08/src/ops/lib/Sync.abide' with { type: 'text' }
 import syncContactSource from 'crm-08/src/ops/syncContact.ts' with { type: 'text' }
 import billingSource from 'crm-08/src/ops/lib/billing.ts' with { type: 'text' }
-import syncTestSource from 'crm-08/src/ops/tests/Sync.test.ts' with { type: 'text' }
+import syncTestSource from 'crm-08/src/ops/lib/Sync.test.ts' with { type: 'text' }
 import Health from 'crm-08/src/ops/lib/Health.abide'
 import healthSource from 'crm-08/src/ops/lib/Health.abide' with { type: 'text' }
-import healthTestSource from 'crm-08/src/ops/tests/Health.test.ts' with { type: 'text' }
+import healthTestSource from 'crm-08/src/ops/lib/Health.test.ts' with { type: 'text' }
 import OfflineBanner from 'crm-08/src/ops/lib/OfflineBanner.abide'
 import offlineBannerSource from 'crm-08/src/ops/lib/OfflineBanner.abide' with { type: 'text' }
-import offlineBannerTestSource from 'crm-08/src/ops/tests/OfflineBanner.test.ts' with { type: 'text' }
+import offlineBannerTestSource from 'crm-08/src/ops/lib/OfflineBanner.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -43,7 +43,7 @@ import offlineBannerTestSource from 'crm-08/src/ops/tests/OfflineBanner.test.ts'
                 'src/ops/lib/Retries.abide': retriesSource,
                 'src/ops/getRetries.ts': getRetriesSource,
                 '.env': envSource.split('\n').filter((line) => line.startsWith('RETRIES')).join('\n'),
-                'src/ops/tests/Retries.test.ts': retriesTestSource,
+                'src/ops/lib/Retries.test.ts': retriesTestSource,
             }}
         >
             <Retries />
@@ -107,7 +107,7 @@ import offlineBannerTestSource from 'crm-08/src/ops/tests/OfflineBanner.test.ts'
             files={{
                 'src/ops/lib/Pool.abide': poolSource,
                 'src/ops/getPool.ts': getPoolSource,
-                'src/ops/tests/Pool.test.ts': poolTestSource,
+                'src/ops/lib/Pool.test.ts': poolTestSource,
             }}
         >
             <Pool />
@@ -136,7 +136,7 @@ import offlineBannerTestSource from 'crm-08/src/ops/tests/OfflineBanner.test.ts'
             summary="Billing and sync each log under their own name, and DEBUG names billing. Send an invoice, then poll: only the invoice is written."
             files={{
                 'src/ops/lib/Console.abide': consoleSource,
-                'src/ops/tests/Console.test.ts': consoleTestSource,
+                'src/ops/lib/Console.test.ts': consoleTestSource,
             }}
         >
             <Console />
@@ -202,7 +202,7 @@ log.error('mailer refused', { error })`} />
                 'src/ops/lib/Sync.abide': syncSource,
                 'src/ops/syncContact.ts': syncContactSource,
                 'src/ops/lib/billing.ts': billingSource,
-                'src/ops/tests/Sync.test.ts': syncTestSource,
+                'src/ops/lib/Sync.test.ts': syncTestSource,
             }}
         >
             <Sync />
@@ -240,7 +240,7 @@ const answer = await fetch(billingUrl, { headers: trace.headers() })`} />
             summary="The load balancer in front of the CRM asks whether the database is up. The page reads the same answer through health()."
             files={{
                 'src/ops/lib/Health.abide': healthSource,
-                'src/ops/tests/Health.test.ts': healthTestSource,
+                'src/ops/lib/Health.test.ts': healthTestSource,
             }}
         >
             <Health />
@@ -274,7 +274,7 @@ const answer = await fetch(billingUrl, { headers: trace.headers() })`} />
             summary="A contact edit made on a train is not saved. Take the browser offline in DevTools' Network panel and the banner says so."
             files={{
                 'src/ops/lib/OfflineBanner.abide': offlineBannerSource,
-                'src/ops/tests/OfflineBanner.test.ts': offlineBannerTestSource,
+                'src/ops/lib/OfflineBanner.test.ts': offlineBannerTestSource,
             }}
         >
             <OfflineBanner />

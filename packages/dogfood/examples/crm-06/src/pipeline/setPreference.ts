@@ -1,5 +1,5 @@
 import { POST } from '@abide/abide/server'
-import { PREFERENCES } from './server/PREFERENCES.ts'
+import { PREFERENCES } from './lib/PREFERENCES.server.ts'
 
 /** Saves a preference. */
 export default POST(

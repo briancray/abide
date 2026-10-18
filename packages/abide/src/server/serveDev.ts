@@ -142,7 +142,6 @@ export async function serveDev(
                     files: {},
                     handlers: {},
                     tables: {},
-                    mounted: {},
                 },
                 published: new Map(),
                 failure,

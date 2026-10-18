@@ -56,7 +56,7 @@ const HANDLERS: Record<string, string> = {
 
 // Every hook, each leaving a mark a request or a script can read back.
 const APP = `import { cookies, middleware, onConfig, onError, onHealth, onStart, onStop, redirect, request, response } from '@abide/abide/server'
-import { marks } from './server/marks.ts'
+import { marks } from './lib/marks.server.ts'
 
 onConfig(() => ({ LIMIT: 5, FEATURE: false, LABEL: 'default' }))
 onHealth(() => ({ db: 'up', version: 'the app wins' }))
@@ -137,7 +137,7 @@ beforeAll(async () => {
             'layout.abide': `<script server>
 ${APP}</script>
 `,
-            'server/marks.ts': 'export const marks: string[] = []\n',
+            'lib/marks.server.ts': 'export const marks: string[] = []\n',
             'invoices/[id]/index.abide': WHERE,
         },
         // 27.8 — read by the spawned server: one that coerces, and one that will not.
@@ -337,9 +337,9 @@ test('renders twice', async () => {
 // REVERT: drop the `statusText` default from `stamp`; `exploded` reads '500 '.
 test('createApp boots inside onStart, answers with no socket, and stops inside onStop — 42, 37.4, 17.8', async () => {
     await Bun.write(
-        `${app}/tests/host.ts`,
+        `${app}/lib/host.ts`,
         `import { createApp, request } from '@abide/abide/server'
-import { marks } from '../server/marks.ts'
+import { marks } from './marks.server.ts'
 
 const app = await createApp()
 const own = await app.fetch(new Request('http://app.test/own', { method: 'POST' }))
@@ -357,7 +357,7 @@ console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.stat
     )
     expect(
         await lastLinePrinted<Record<string, unknown>>(
-            ['bun', `${app}/tests/host.ts`],
+            ['bun', `${app}/lib/host.ts`],
             { cwd: app },
         ),
     ).toEqual({
@@ -379,9 +379,9 @@ console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.stat
 // the declaration and the script exits non-zero.
 test('an App held by await using stops when its block ends — 42.14', async () => {
     await Bun.write(
-        `${app}/tests/disposed.ts`,
+        `${app}/lib/disposed.ts`,
         `import { createApp } from '@abide/abide/server'
-import { marks } from '../server/marks.ts'
+import { marks } from './marks.server.ts'
 
 {
     await using held = await createApp()
@@ -391,7 +391,7 @@ console.log(JSON.stringify(marks))
 `,
     )
     expect(
-        await lastLinePrinted<string[]>(['bun', `${app}/tests/disposed.ts`], {
+        await lastLinePrinted<string[]>(['bun', `${app}/lib/disposed.ts`], {
             cwd: app,
         }),
     ).toEqual(['before start', 'after start', 'held', 'stopped'])

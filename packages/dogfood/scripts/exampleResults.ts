@@ -35,7 +35,7 @@ async function testsOf(app: string): Promise<Record<string, TestRow>> {
 async function benchesOf(app: string): Promise<ExampleResults['benches']> {
     const benches: ExampleResults['benches'] = {}
     const root = new URL(`${app}/`, EXAMPLES)
-    for (const path of new Bun.Glob('src/**/tests/*.bench.ts').scanSync({
+    for (const path of new Bun.Glob('src/**/*.bench.ts').scanSync({
         cwd: Bun.fileURLToPath(root),
     })) {
         const { priced } = (await import(new URL(path, root).href)) as {

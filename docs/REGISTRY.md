@@ -650,9 +650,10 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Path | Meaning | Rules |
 | --- | --- | --- |
 | `src/**` | The app's source. | 36.10, 38.25 |
-| `**/server/**` | Source the browser never loads. | 16.29, 23.15, 23.16, 23.18, 36.10 |
-| `**/lib/**` | The app's code that is no address: components and modules, on both sides. | 23.15, 23.16, 23.18, 23.22, 37.1 |
-| `**/tests/**` | The app's tests. | 23.15, 23.16, 23.18, 23.22, 37.1, 38.109 |
+| `**/lib/**` | The app's code that is no address: components and modules. | 23.15, 23.16, 23.18, 23.22, 37.1 |
+| `**/lib/**/<name>.server.<extension>` | A server file: source the browser never loads. | 16.29, 23.23, 34.20, 36.10 |
+| `**/<name>.test.ts` | A test file: one of the app's tests, wherever it lies. | 23.22, 38.109 |
+| `**/<name>.d.ts` | A declaration file: types for the checker, wherever it lies. | 23.22 |
 | `**/public/**` | The files answered as authored, at their path below that directory. | 23.15, 23.16, 23.18, 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.18, 38.19 |
 | `src/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
 | `src/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |

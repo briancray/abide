@@ -811,16 +811,16 @@ test('a check reports what only building the whole app refuses — 16.73', async
 }, 60_000)
 
 // 38.33, 34.20 — A REFUSAL OF WHERE A FILE SITS IS A FINDING AT THAT FILE, beside every other the app
-// has: a server block under a `server` directory, and a page that does not parse. THE REVERT: refuse
+// has: a server block under a `public` directory, and a page that does not parse. THE REVERT: refuse
 // 34.20 at the app's root (`refusals.at(root, …)` in `appLayout`'s `refusePlace`), as the emit once
-// threw it; the finding names the root, not `server/Widget.abide`.
+// threw it; the finding names the root, not `public/Widget.abide`.
 test('a check reports a 34.20 refusal at its file beside a parse refusal — 38.33, 34.20', async () => {
     const found = await checkApp(
         appFixture({
             'index.abide': '<p>home</p>',
             'broken/index.abide':
                 '{#component row({ label })}<li>{label}</li>{/component}',
-            'server/Widget.abide': `<script server>
+            'public/Widget.abide': `<script server>
 const answer = 42
 </script>
 
@@ -831,7 +831,7 @@ const answer = 42
         diagnosis.message.includes('34.20'),
     )
     expect(placed.length).toBe(1)
-    expect(placed[0]?.path).toEndWith('/server/Widget.abide')
+    expect(placed[0]?.path).toEndWith('/public/Widget.abide')
     expect(found.some((diagnosis) => diagnosis.message.includes('32.39'))).toBe(
         true,
     )
@@ -864,14 +864,14 @@ test('a check reports an emit refusal beside a parse refusal — 38.33, 16.73', 
 test('a check reports a tree refusal at its file beside the type errors — 38.33, 23.18', async () => {
     const stray = appFixture({
         'index.abide': '<script>\nconst label: string = 5\n</script>\n',
-        'media/server/index.abide': '<p>stray</p>',
+        'media/lib/index.abide': '<p>stray</p>',
     })
     const found = await checkApp(stray)
     const tree = found.filter((diagnosis) =>
         diagnosis.message.includes('23.18'),
     )
     expect(tree.length).toBe(1)
-    expect(tree[0]?.path).toEndWith('media/server/index.abide')
+    expect(tree[0]?.path).toEndWith('media/lib/index.abide')
     expect(found.some((diagnosis) => diagnosis.code === 2322)).toBe(true)
 }, 60_000)
 

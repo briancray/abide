@@ -23,7 +23,6 @@ export function servedModules(
         files: {},
         handlers: {},
         tables: {},
-        mounted: {},
     }
     for (const [name, compiled] of Object.entries(files))
         compilation.files[name] = {

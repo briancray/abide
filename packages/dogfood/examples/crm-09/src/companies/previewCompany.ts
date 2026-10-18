@@ -1,6 +1,6 @@
 import { GET, notFound, page, render } from '@abide/abide/server'
 import CompanySheet from './lib/CompanySheet.abide'
-import { COMPANIES } from './server/COMPANIES.ts'
+import { COMPANIES } from './lib/COMPANIES.server.ts'
 
 /** Answers at /companies/previewCompany: an account sheet, as its own page. */
 export default GET(

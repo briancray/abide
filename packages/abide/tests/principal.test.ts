@@ -5,7 +5,7 @@ import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, POST, principal } from '@abide/abide/server'
-import { RESOLVED } from '#src/server/RESOLVED.ts'
+import { RESOLVED } from '#src/lib/RESOLVED.server.ts'
 
 export const signIn = POST(async ({ name }: { name: string }) => {
     await principal.set({ name })
@@ -45,10 +45,10 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'index.abide': PAGE,
         ...handlerFiles('session', HANDLERS),
-        'server/RESOLVED.ts': RESOLVED,
+        'lib/RESOLVED.server.ts': RESOLVED,
         // 26.4 — an app answer that tries to claim the baseline's fields.
         'layout.abide': `<script server>
-import { onPrincipal } from '@abide/abide/server'\nimport { RESOLVED } from '#src/server/RESOLVED.ts'\n\nonPrincipal((claims) => {\n    RESOLVED.count += 1\n    return { ...(claims as object), role: 'admin', authenticated: 'spoofed' }\n})\n</script>
+import { onPrincipal } from '@abide/abide/server'\nimport { RESOLVED } from '#src/lib/RESOLVED.server.ts'\n\nonPrincipal((claims) => {\n    RESOLVED.count += 1\n    return { ...(claims as object), role: 'admin', authenticated: 'spoofed' }\n})\n</script>
 `,
     }))
 }, 30_000)

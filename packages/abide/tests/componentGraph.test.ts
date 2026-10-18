@@ -2,7 +2,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs' // bun has no sync mkdtemp/symlink/rm of its own
 import { tmpdir } from 'node:os' // bun exposes no temp-directory helper of its own
 import { compileApp } from '#compiler/compileApp.ts'
-import { placement, placeOf } from '#server/placement.ts'
+import { isServerFile, placement, placeOf } from '#server/placement.ts'
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'
@@ -160,10 +160,11 @@ test('a .abide directly in an address directory is a page, and one under lib is 
 
 // 23.22, 16.73 — AN ADDRESS DIRECTORY HOLDS ADDRESSES AND NOTHING ELSE: a `.ts` there is a handler
 // file, held to exporting a handler as its default alone, and any other file is refused by name
-// with where it goes. The same files under `lib/` or `tests/` are the app's to keep.
+// with where it goes. A test file and a declaration file are kept there, and the rest under `lib/`.
 //
 // THE REVERTS: drop the `refuse` for a file neither `.abide` nor a handler file in `appTree`'s
-// walk; the four strays build, 0 of 4 refused where 4 are due. Or skip the non-default export check
+// walk; the two strays build, 0 of 2 refused where 2 are due. Or drop `isDeclarationFile` from the
+// walk's skip; `media/types.d.ts` is refused under 23.22. Or skip the non-default export check
 // in `handlersUnder`; `helpers.ts` builds, a module answering at `/media/helpers` with no handler.
 test('a file in an address directory that is no page or handler file is a build error — 23.22, 16.73', async () => {
     const helpers = await compiledTree({
@@ -176,8 +177,6 @@ test('a file in an address directory that is no page or handler file is a build 
     const STRAYS: Record<string, string> = {
         'notes.md': '# notes\n',
         'styles.css': 'p { color: red }\n',
-        'x.test.ts': 'export {}\n',
-        'types.d.ts': 'export type Id = string\n',
     }
     for (const [name, text] of Object.entries(STRAYS)) {
         const { refused } = await compiledTree({ [`media/${name}`]: text })
@@ -188,56 +187,55 @@ test('a file in an address directory that is no page or handler file is a build 
     const kept: Record<string, string> = {
         'media/lib/helpers.ts':
             'export const twice = (n: number): number => n * 2\n',
-        'media/tests/helpers.ts':
-            'export const twice = (n: number): number => n * 2\n',
+        // 23.22 — a test file beside the page it tests, as under `lib/`.
+        'media/index.test.ts': 'export {}\n',
+        // 23.22 — a declaration file beside the page it types.
+        'media/types.d.ts': 'export type Id = string\n',
+        'media/lib/types.d.ts': 'export type Id = string\n',
+        'media/lib/helpers.test.ts': 'export {}\n',
     }
-    for (const [name, text] of Object.entries(STRAYS)) {
+    for (const [name, text] of Object.entries(STRAYS))
         kept[`media/lib/${name}`] = text
-        kept[`media/tests/${name}`] = text
-    }
     expect(await compiledTree(kept)).toEqual({ routes: ['/'], refused: '' })
 })
 
-// 23.16, 23.18 — A FENCE HOLDS NO FENCE AND NO ADDRESS: `lib/tests/` would be a second answer to
+// 23.16, 23.18 — A FENCE HOLDS NO FENCE AND NO ADDRESS: `lib/public/` would be a second answer to
 // what `lib/` already fenced, and an `index.abide` under `lib/` names a route that nothing there
 // has. Both are refused naming the file, rather than one silently going unrouted.
 //
 // THE REVERTS: drop the 23.16 `refuse` for a reserved directory under another in `appTree`'s walk;
-// `lib/tests/` builds. Or drop the `DIRECTORY_FILES` arm; `lib/index.abide` builds as a component.
+// `lib/public/` builds. Or drop the `DIRECTORY_FILES` arm; `lib/index.abide` builds as a component.
 test('a fence under a fence, and an index.abide under lib, are build errors — 23.16, 23.18', async () => {
-    const nested = await compiledTree({ 'media/lib/tests/a.ts': 'export {}\n' })
-    expect(nested.refused).toContain('media/lib/tests')
+    const nested = await compiledTree({ 'media/lib/public/a.txt': 'a' })
+    expect(nested.refused).toContain('media/lib/public')
     expect(nested.refused).toContain('RULEBOOK 23.16')
     const indexed = await compiledTree({ 'media/lib/index.abide': '<p>x</p>' })
     expect(indexed.refused).toContain('media/lib/index.abide')
     expect(indexed.refused).toContain('RULEBOOK 23.18')
 })
 
-// 23.16 — A `server` DIRECTORY NESTS IN A `lib` OR A `tests` ONE, because it fences a graph rather
-// than an address: `media/lib/server/db.ts` is server code (16.29), and `lib/public/` is still
-// refused.
+// 16.29, 23.23 — A SERVER FILE IS ITS NAME, NOT ITS DIRECTORY: `lib/db.server.ts` builds and is the
+// server's, a `server` directory is a segment like any other, and a dot directory is never walked.
 //
-// THE REVERTS: drop the `server`-under-`lib`/`tests` exemption in `appTree`'s walk; `lib/server/`
-// is refused. Or return the first fence's name in `placeOf`; `lib/server/db.ts` places as `lib`,
-// and the browser's bundle takes it.
-test('a server directory under lib or tests builds, and is server code — 23.16', async () => {
+// THE REVERTS: refuse a server file under `lib` too in `appTree`'s walk; `lib/db.server.ts` is
+// refused. Or match `server` as a directory in `isServerFile`; `server/db.ts` reads as one.
+test('a server file under lib builds, and is the server file by its name — 16.29, 23.23', async () => {
     const nested = await compiledTree({
-        'media/lib/server/db.ts': 'export const db = 1\n',
-        'media/tests/server/seed.ts': 'export const seed = 1\n',
+        'media/lib/db.server.ts': 'export const db = 1\n',
+        'media/lib/deep/key.server.pem': 'KEY',
     })
     expect(nested.refused).toBe('')
-    expect(placeOf('media/lib/server/db.ts')).toBe('server')
-    expect(placeOf('media/tests/server/seed.ts')).toBe('server')
-    expect(placeOf('media/lib/Card.abide')).toBe('lib')
-    // A dot directory is never walked, so a `server` below one fences nothing.
-    expect(placeOf('lib/.cache/server/x.ts')).toBe('lib')
-    const published = await compiledTree({ 'media/lib/public/a.txt': 'a' })
-    expect(published.refused).toContain('RULEBOOK 23.16')
+    expect(isServerFile('media/lib/db.server.ts')).toBe(true)
+    expect(isServerFile('media/lib/deep/key.server.pem')).toBe(true)
+    expect(isServerFile('media/lib/server/db.ts')).toBe(false)
+    expect(isServerFile('media/lib/.server.ts')).toBe(false)
+    expect(placeOf('media/lib/db.server.ts')).toBe('lib')
+    expect(placeOf('lib/.cache/x.ts')).toBe('lib')
 })
 
 // 37.13 — A HOOK IS CALLED IN AN ADDRESSED FILE: one in a plain module runs as the module is
 // imported, before any route is set, and never where nothing imports it. Refused naming the module
-// and the hook, under `server/` and `lib/` alike, through a namespace too; a hook's name is no hook
+// and the hook, a server file and any other under `lib/` alike, through a namespace too; a hook's name is no hook
 // where abide did not hand it to the module.
 //
 // THE REVERTS: drop the `refuseModuleHooks` call in `compileApp`; both modules build, and their
@@ -245,8 +243,8 @@ test('a server directory under lib or tests builds, and is server code — 23.16
 // called in a module importing abide; `lib/emitter.ts` is refused.
 test('a hook called in a module that is no .abide nor handler file is a build error — 37.13', async () => {
     const HOOKED = `import { middleware } from '@abide/abide/server'\n\nmiddleware((next) => next())\n`
-    const served = await compiledTree({ 'server/guard.ts': HOOKED })
-    expect(served.refused).toContain('server/guard.ts calls middleware')
+    const served = await compiledTree({ 'lib/guard.server.ts': HOOKED })
+    expect(served.refused).toContain('lib/guard.server.ts calls middleware')
     expect(served.refused).toContain('RULEBOOK 37.13')
     const library = await compiledTree({ 'media/lib/guard.ts': HOOKED })
     expect(library.refused).toContain('media/lib/guard.ts calls middleware')

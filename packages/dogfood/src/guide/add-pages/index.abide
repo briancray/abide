@@ -30,15 +30,15 @@ import slowCompanySource from 'crm-06/src/companies/lib/SlowCompany.abide' with 
 import TabTitle from 'crm-06/src/companies/lib/TabTitle.abide'
 import tabTitleSource from 'crm-06/src/companies/lib/TabTitle.abide' with { type: 'text' }
 import previewCompanySource from 'crm-06/src/companies/previewCompany.ts' with { type: 'text' }
-import companyPageTestSource from 'crm-06/src/companies/tests/CompanyPage.test.ts' with { type: 'text' }
-import companyTabsTestSource from 'crm-06/src/companies/tests/CompanyTabs.test.ts' with { type: 'text' }
-import errorPageTestSource from 'crm-06/src/companies/tests/ErrorPage.test.ts' with { type: 'text' }
-import exportButtonTestSource from 'crm-06/src/companies/tests/ExportButton.test.ts' with { type: 'text' }
-import headTestSource from 'crm-06/src/companies/tests/Head.test.ts' with { type: 'text' }
-import layoutTestSource from 'crm-06/src/companies/tests/Layout.test.ts' with { type: 'text' }
-import sheetPreviewTestSource from 'crm-06/src/companies/tests/SheetPreview.test.ts' with { type: 'text' }
-import streamingTestSource from 'crm-06/src/companies/tests/Streaming.test.ts' with { type: 'text' }
-import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.test.ts' with { type: 'text' }
+import companyPageTestSource from 'crm-06/src/companies/CompanyPage.test.ts' with { type: 'text' }
+import companyTabsTestSource from 'crm-06/src/companies/lib/CompanyTabs.test.ts' with { type: 'text' }
+import errorPageTestSource from 'crm-06/src/companies/ErrorPage.test.ts' with { type: 'text' }
+import exportButtonTestSource from 'crm-06/src/companies/lib/ExportButton.test.ts' with { type: 'text' }
+import headTestSource from 'crm-06/src/companies/Head.test.ts' with { type: 'text' }
+import layoutTestSource from 'crm-06/src/companies/Layout.test.ts' with { type: 'text' }
+import sheetPreviewTestSource from 'crm-06/src/companies/lib/SheetPreview.test.ts' with { type: 'text' }
+import streamingTestSource from 'crm-06/src/companies/Streaming.test.ts' with { type: 'text' }
+import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -77,7 +77,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.
             files={{
                 'src/companies/lib/CompanyPages.abide': companyPagesSource,
                 'src/companies/[id].abide': idPageSource,
-                'src/companies/tests/CompanyPage.test.ts': companyPageTestSource,
+                'src/companies/CompanyPage.test.ts': companyPageTestSource,
             }}
         >
             <CompanyPages />
@@ -106,7 +106,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.
             files={{
                 'src/companies/lib/CompaniesFrame.abide': companiesFrameSource,
                 'src/companies/layout.abide': layoutSource,
-                'src/companies/tests/Layout.test.ts': layoutTestSource,
+                'src/companies/Layout.test.ts': layoutTestSource,
             }}
         >
             <CompaniesFrame />
@@ -161,7 +161,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.
             summary="A company page keeps its open tab in the address, so a link can open it. Type a draft, then switch tabs: the address moves, and the draft stays."
             files={{
                 'src/companies/lib/CompanyTabs.abide': companyTabsSource,
-                'src/companies/tests/CompanyTabs.test.ts': companyTabsTestSource,
+                'src/companies/lib/CompanyTabs.test.ts': companyTabsTestSource,
             }}
         >
             <CompanyTabs />
@@ -187,7 +187,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.
                 'src/companies/lib/TransitionFrame.abide': transitionFrameSource,
                 'src/companies/index.abide': indexPageSource,
                 'src/companies/[id].abide': idPageSource,
-                'src/companies/tests/ViewTransition.test.ts': viewTransitionTestSource,
+                'src/companies/ViewTransition.test.ts': viewTransitionTestSource,
             }}
         >
             <TransitionFrame />
@@ -210,7 +210,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.
                 'src/companies/lib/TabTitle.abide': tabTitleSource,
                 'src/companies/layout.abide': layoutSource,
                 'src/companies/[id].abide': idPageSource,
-                'src/companies/tests/Head.test.ts': headTestSource,
+                'src/companies/Head.test.ts': headTestSource,
             }}
         >
             <TabTitle />
@@ -233,7 +233,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.
                 'src/companies/lib/SlowCompany.abide': slowCompanySource,
                 'src/companies/[id].abide': idPageSource,
                 'src/companies/getCompany.ts': getCompanySource,
-                'src/companies/tests/Streaming.test.ts': streamingTestSource,
+                'src/companies/Streaming.test.ts': streamingTestSource,
             }}
         >
             <SlowCompany />
@@ -265,7 +265,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.
                 'src/companies/lib/MissingCompany.abide': missingCompanySource,
                 'src/companies/error.abide': errorPageSource,
                 'src/companies/getCompany.ts': getCompanySource,
-                'src/companies/tests/ErrorPage.test.ts': errorPageTestSource,
+                'src/companies/ErrorPage.test.ts': errorPageTestSource,
             }}
         >
             <MissingCompany />
@@ -292,7 +292,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.
                 'src/companies/lib/ExportButton.abide': exportButtonSource,
                 'src/companies/exportCompanies.ts': exportCompaniesSource,
                 'src/companies/layout.abide': layoutSource,
-                'src/companies/tests/ExportButton.test.ts': exportButtonTestSource,
+                'src/companies/lib/ExportButton.test.ts': exportButtonTestSource,
             }}
         >
             <ExportButton />
@@ -313,7 +313,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/tests/ViewTransition.
                 'src/companies/lib/SheetPreview.abide': sheetPreviewSource,
                 'src/companies/previewCompany.ts': previewCompanySource,
                 'src/companies/lib/CompanySheet.abide': companySheetSource,
-                'src/companies/tests/SheetPreview.test.ts': sheetPreviewTestSource,
+                'src/companies/lib/SheetPreview.test.ts': sheetPreviewTestSource,
             }}
         >
             <SheetPreview />

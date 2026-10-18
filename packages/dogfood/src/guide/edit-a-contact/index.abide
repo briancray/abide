@@ -5,35 +5,35 @@ import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 import AddressField from 'crm-02/src/profile/lib/AddressField.abide'
 import addressFieldSource from 'crm-02/src/profile/lib/AddressField.abide' with { type: 'text' }
-import addressFieldTestSource from 'crm-02/src/profile/tests/AddressField.test.ts' with { type: 'text' }
+import addressFieldTestSource from 'crm-02/src/profile/lib/AddressField.test.ts' with { type: 'text' }
 import avatarSource from 'crm-02/src/profile/lib/Avatar.abide' with { type: 'text' }
 import CallLog from 'crm-02/src/profile/lib/CallLog.abide'
 import callLogSource from 'crm-02/src/profile/lib/CallLog.abide' with { type: 'text' }
-import callLogTestSource from 'crm-02/src/profile/tests/CallLog.test.ts' with { type: 'text' }
+import callLogTestSource from 'crm-02/src/profile/lib/CallLog.test.ts' with { type: 'text' }
 import callRowSource from 'crm-02/src/profile/lib/CallRow.abide' with { type: 'text' }
 import ContactCard from 'crm-02/src/profile/lib/ContactCard.abide'
 import contactCardSource from 'crm-02/src/profile/lib/ContactCard.abide' with { type: 'text' }
-import contactCardTestSource from 'crm-02/src/profile/tests/ContactCard.test.ts' with { type: 'text' }
+import contactCardTestSource from 'crm-02/src/profile/lib/ContactCard.test.ts' with { type: 'text' }
 import ContactFields from 'crm-02/src/profile/lib/ContactFields.abide'
 import contactFieldsSource from 'crm-02/src/profile/lib/ContactFields.abide' with { type: 'text' }
-import contactFieldsTestSource from 'crm-02/src/profile/tests/ContactFields.test.ts' with { type: 'text' }
+import contactFieldsTestSource from 'crm-02/src/profile/lib/ContactFields.test.ts' with { type: 'text' }
 import customerBadgeSource from 'crm-02/src/profile/lib/CustomerBadge.abide' with { type: 'text' }
 import FollowUp from 'crm-02/src/profile/lib/FollowUp.abide'
 import followUpSource from 'crm-02/src/profile/lib/FollowUp.abide' with { type: 'text' }
-import followUpTestSource from 'crm-02/src/profile/tests/FollowUp.test.ts' with { type: 'text' }
+import followUpTestSource from 'crm-02/src/profile/lib/FollowUp.test.ts' with { type: 'text' }
 import leadBadgeSource from 'crm-02/src/profile/lib/LeadBadge.abide' with { type: 'text' }
 import PhoneField from 'crm-02/src/profile/lib/PhoneField.abide'
 import phoneFieldSource from 'crm-02/src/profile/lib/PhoneField.abide' with { type: 'text' }
-import phoneFieldTestSource from 'crm-02/src/profile/tests/PhoneField.test.ts' with { type: 'text' }
+import phoneFieldTestSource from 'crm-02/src/profile/lib/PhoneField.test.ts' with { type: 'text' }
 import ProfileSummary from 'crm-02/src/profile/lib/ProfileSummary.abide'
 import profileSummarySource from 'crm-02/src/profile/lib/ProfileSummary.abide' with { type: 'text' }
-import profileSummaryTestSource from 'crm-02/src/profile/tests/ProfileSummary.test.ts' with { type: 'text' }
+import profileSummaryTestSource from 'crm-02/src/profile/lib/ProfileSummary.test.ts' with { type: 'text' }
 import StageBadges from 'crm-02/src/profile/lib/StageBadges.abide'
 import stageBadgesSource from 'crm-02/src/profile/lib/StageBadges.abide' with { type: 'text' }
-import stageBadgesTestSource from 'crm-02/src/profile/tests/StageBadges.test.ts' with { type: 'text' }
+import stageBadgesTestSource from 'crm-02/src/profile/lib/StageBadges.test.ts' with { type: 'text' }
 import Tags from 'crm-02/src/profile/lib/Tags.abide'
 import tagsSource from 'crm-02/src/profile/lib/Tags.abide' with { type: 'text' }
-import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 'text' }
+import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -48,7 +48,7 @@ import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 
             summary="A contact's email, with what a save would send. Type a new one."
             files={{
                 'src/profile/lib/ContactFields.abide': contactFieldsSource,
-                'src/profile/tests/ContactFields.test.ts': contactFieldsTestSource,
+                'src/profile/lib/ContactFields.test.ts': contactFieldsTestSource,
             }}
         >
             <ContactFields />
@@ -101,7 +101,7 @@ import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 
             summary="A phone number typed with punctuation. Type one in the usual way."
             files={{
                 'src/profile/lib/PhoneField.abide': phoneFieldSource,
-                'src/profile/tests/PhoneField.test.ts': phoneFieldTestSource,
+                'src/profile/lib/PhoneField.test.ts': phoneFieldTestSource,
             }}
         >
             <PhoneField />
@@ -121,7 +121,7 @@ import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 
             summary="A profile's initials and how much of it is filled in. Change the name, then add a phone."
             files={{
                 'src/profile/lib/ProfileSummary.abide': profileSummarySource,
-                'src/profile/tests/ProfileSummary.test.ts': profileSummaryTestSource,
+                'src/profile/lib/ProfileSummary.test.ts': profileSummaryTestSource,
             }}
         >
             <ProfileSummary />
@@ -146,7 +146,7 @@ import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 
             summary="A contact's city, inside its address. Type a new city."
             files={{
                 'src/profile/lib/AddressField.abide': addressFieldSource,
-                'src/profile/tests/AddressField.test.ts': addressFieldTestSource,
+                'src/profile/lib/AddressField.test.ts': addressFieldTestSource,
             }}
         >
             <AddressField />
@@ -190,7 +190,7 @@ import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 
             summary="A contact's tags. Remove one."
             files={{
                 'src/profile/lib/Tags.abide': tagsSource,
-                'src/profile/tests/Tags.test.ts': tagsTestSource,
+                'src/profile/lib/Tags.test.ts': tagsTestSource,
             }}
         >
             <Tags />
@@ -213,7 +213,7 @@ import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 
             summary="A follow-up reminder for this contact. Tick the box, then clear it."
             files={{
                 'src/profile/lib/FollowUp.abide': followUpSource,
-                'src/profile/tests/FollowUp.test.ts': followUpTestSource,
+                'src/profile/lib/FollowUp.test.ts': followUpTestSource,
             }}
         >
             <FollowUp />
@@ -234,7 +234,7 @@ import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 
             files={{
                 'src/profile/lib/ContactCard.abide': contactCardSource,
                 'src/profile/lib/Avatar.abide': avatarSource,
-                'src/profile/tests/ContactCard.test.ts': contactCardTestSource,
+                'src/profile/lib/ContactCard.test.ts': contactCardTestSource,
             }}
         >
             <ContactCard />
@@ -266,7 +266,7 @@ import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 
                 'src/profile/lib/StageBadges.abide': stageBadgesSource,
                 'src/profile/lib/LeadBadge.abide': leadBadgeSource,
                 'src/profile/lib/CustomerBadge.abide': customerBadgeSource,
-                'src/profile/tests/StageBadges.test.ts': stageBadgesTestSource,
+                'src/profile/lib/StageBadges.test.ts': stageBadgesTestSource,
             }}
         >
             <StageBadges />
@@ -295,7 +295,7 @@ import tagsTestSource from 'crm-02/src/profile/tests/Tags.test.ts' with { type: 
             files={{
                 'src/profile/lib/CallLog.abide': callLogSource,
                 'src/profile/lib/CallRow.abide': callRowSource,
-                'src/profile/tests/CallLog.test.ts': callLogTestSource,
+                'src/profile/lib/CallLog.test.ts': callLogTestSource,
             }}
         >
             <CallLog />

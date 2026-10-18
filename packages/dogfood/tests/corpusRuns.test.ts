@@ -94,7 +94,6 @@ async function appTree(session: TypeSession): Promise<{
         files: {},
         handlers: {},
         tables: {},
-        mounted: {},
     }
     for (let at = 0; at < files.length; at += 1) {
         const {

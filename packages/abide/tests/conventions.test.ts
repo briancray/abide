@@ -241,9 +241,12 @@ function exportedNames(text: string): string[] | undefined {
 test('a file exporting one thing is named after what it exports', async () => {
     const misnamed: string[] = []
     for (const { path, text } of await authored()) {
-        // A test file, a package's or a page's, is named for what it tests.
-        if (/(?:^\w+|\/src\/.*)\/tests\//.test(path)) continue
-        const name = path.slice(path.lastIndexOf('/') + 1, -'.ts'.length)
+        // A test file, a package's or an app's, is named for what it tests.
+        if (/^\w+\/tests\//.test(path) || path.endsWith('.test.ts')) continue
+        // A server file is `<name>.server.ts` (RULEBOOK 16.29), and the name is the part before.
+        const name = path
+            .slice(path.lastIndexOf('/') + 1, -'.ts'.length)
+            .replace(/\.server$/, '')
         if (ADDRESSES.has(name)) continue
         const exported = exportedNames(text)
         if (exported?.length !== 1) continue

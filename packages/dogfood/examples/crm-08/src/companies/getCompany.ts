@@ -1,5 +1,5 @@
 import { GET, notFound } from '@abide/abide/server'
-import { COMPANIES } from './server/COMPANIES.ts'
+import { COMPANIES } from './lib/COMPANIES.server.ts'
 
 /** Answers at /companies/getCompany; a company's page reads it. */
 export default GET(

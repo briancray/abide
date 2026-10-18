@@ -1,6 +1,6 @@
 import { GET } from '@abide/abide/server'
-import { DEALS } from './server/DEALS.ts'
-import { LOADS } from './server/LOADS.ts'
+import { DEALS } from './lib/DEALS.server.ts'
+import { LOADS } from './lib/LOADS.server.ts'
 
 /** The deals whose name holds the query, ignoring case. */
 export default GET(

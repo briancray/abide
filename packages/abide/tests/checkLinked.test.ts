@@ -244,10 +244,10 @@ const answer = 42
 <p>widget</p>`
     const app = appFixture({
         'index.abide': '<p>home</p>',
-        'server/Widget.abide': WIDGET,
+        'public/Widget.abide': WIDGET,
     })
     const checker = await openChecker(app)
-    const widget = `${app}/server/Widget.abide`
+    const widget = `${app}/public/Widget.abide`
     const refused = async (path: string, text: string): Promise<string[]> => {
         const said: string[] = []
         for (const diagnosis of await checkSource(checker, path, text))

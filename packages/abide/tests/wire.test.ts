@@ -40,7 +40,7 @@ export const provider: (() => void) & { pairings: typeof pairings } = Object.ass
 
 export const latch = { sendRest: (): void => {} }
 `,
-    'invoices/getInvoice.ts': `${SERVER}import { SECRET } from '#src/server/database.ts'
+    'invoices/getInvoice.ts': `${SERVER}import { SECRET } from '#src/lib/database.server.ts'
 import { notYours } from './lib/shared.ts'
 
 export default GET(async ({ id }: { id: string }) => {
@@ -139,7 +139,7 @@ afterAll(() => {
 beforeAll(async () => {
     ;({ app, base, stop } = await serveApp({
         'index.abide': PAGE,
-        'server/database.ts': `export const SECRET = '${SECRET}'\n`,
+        'lib/database.server.ts': `export const SECRET = '${SECRET}'\n`,
         ...INVOICES,
         // A handler file answers at its own path (23.14), at the root as anywhere.
         'health.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ up: true }))\n`,
@@ -249,7 +249,7 @@ async function clientBundle(): Promise<string> {
 // 16.28 — THE BROWSER GETS THE WRAPPER AND NOT THE MODULE. The handler file imports the secret,
 // the page imports the handler file, and the bundle carries the address and not the secret. THE
 // REVERT: answer the browser the file's own text in `abideModules`' handler-namespace `onLoad`; the
-// handler file is bundled as written, and its import of `server/` is 16.29's build error.
+// handler file is bundled as written, and its import of a server file is 16.29's build error.
 test('the browser bundle carries the address and none of the server module — 16.28', async () => {
     const bundle = await clientBundle()
     expect(bundle).not.toContain(SECRET)
@@ -261,7 +261,7 @@ test('the browser bundle carries the address and none of the server module — 1
 // not its secret, not the refusal its body names — the bundle carries the same, the server's render
 // ran the handler itself, and the wrapper's call answers over the wire. THE REVERT: return the
 // file's text rather than `face.client` for the browser in `abideModules`' handler-namespace
-// `onLoad`; the handler file is bundled as written, and its import of `server/` fails the build that
+// `onLoad`; the handler file is bundled as written, and its import of a server file fails the build that
 // every test here is served from (16.29).
 test('a page importing a handler file holds its wrapper, and the call answers — 16.74', async () => {
     const { handlers } = await builtCompilation(app)
@@ -289,26 +289,13 @@ test('a page importing a handler file holds its wrapper, and the call answers �
     }
 })
 
-// 16.29 — ANYTHING ELSE UNDER `server/` IS A BUILD ERROR from the client graph, never a module the
+// 16.29 — ANY OTHER SERVER FILE IS A BUILD ERROR from the client graph, never a module the
 // browser silently receives. THE REVERT: return `undefined` from the fence's `onLoad` for a path
 // with no wrapper; the build succeeds and the database module is in the bundle.
 test('a page importing server code that is not a handler does not build — 16.29', async () => {
     const leaking = appFixture({
-        'index.abide': `<script>\nimport { SECRET } from '#src/server/database.ts'\n</script>\n\n<p>{SECRET}</p>`,
-        'server/database.ts': `export const SECRET = '${SECRET}'\n`,
-    })
-    const built = await buildApp(leaking)
-    expect(built.exitCode).not.toBe(0)
-    expect(built.stderr).toContain('RULEBOOK 16.29')
-})
-
-// 16.29, 23.16 — A `server` DIRECTORY UNDER `lib/` IS FENCED AS ONE AT THE TOP IS: the `lib` above
-// it does not make it code both sides load. THE REVERT: return the first fence's name in
-// `placeOf`; the build succeeds and the database module is in the bundle.
-test('a page importing a server module under lib does not build — 16.29, 23.16', async () => {
-    const leaking = appFixture({
-        'index.abide': `<script>\nimport { SECRET } from '#src/lib/server/database.ts'\n</script>\n\n<p>{SECRET}</p>`,
-        'lib/server/database.ts': `export const SECRET = '${SECRET}'\n`,
+        'index.abide': `<script>\nimport { SECRET } from '#src/lib/database.server.ts'\n</script>\n\n<p>{SECRET}</p>`,
+        'lib/database.server.ts': `export const SECRET = '${SECRET}'\n`,
     })
     const built = await buildApp(leaking)
     expect(built.exitCode).not.toBe(0)
@@ -367,12 +354,12 @@ test('two files answering one route do not build, and both files are named — 1
 test('a handler declared any way the language allows is mounted with its method — 16.73', async () => {
     const app = appFixture({
         'index.abide': '<p>home</p>',
-        'server/shared.ts': `import { PATCH } from '@abide/abide/server'\n\nexport const touch = PATCH(() => 1)\n`,
+        'lib/shared.ts': `import { PATCH } from '@abide/abide/server'\n\nexport const touch = PATCH(() => 1)\n`,
         'later/find.ts': `import { GET } from '@abide/abide/server'\n\nconst find = GET(() => 1)\nexport default find\n`,
         'later/lookup.ts': `import { GET } from '@abide/abide/server'\n\nconst find = GET(() => 1)\nexport { find as default }\n`,
         'renamed/save.ts': `import { POST as post } from '@abide/abide/server'\n\nexport default post(() => 1)\n`,
         'spaced/replace.ts': `import * as abide from '@abide/abide/server'\n\nexport default abide.PUT(() => 1)\n`,
-        'passed/touch.ts': `export { touch as default } from '#src/server/shared.ts'\n`,
+        'passed/touch.ts': `export { touch as default } from '#src/lib/shared.ts'\n`,
         'named/named.ts': `import { DELETE } from '@abide/abide/server'\n\nconst drop = DELETE(() => 1)\nexport default drop\nexport type Dropped = { id: string }\n`,
     })
     const built = await buildApp(app)

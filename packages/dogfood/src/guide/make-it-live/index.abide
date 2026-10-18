@@ -8,28 +8,28 @@ import QuickLog from 'crm-05/src/activity/lib/QuickLog.abide'
 import quickLogSource from 'crm-05/src/activity/lib/QuickLog.abide' with { type: 'text' }
 import lastActivitySource from 'crm-05/src/activity/lib/LastActivity.abide' with { type: 'text' }
 import activitySource from 'crm-05/src/activity/lib/activity.ts' with { type: 'text' }
-import quickLogTestSource from 'crm-05/src/activity/tests/QuickLog.test.ts' with { type: 'text' }
+import quickLogTestSource from 'crm-05/src/activity/lib/QuickLog.test.ts' with { type: 'text' }
 import RecentActivity from 'crm-05/src/activity/lib/RecentActivity.abide'
 import recentActivitySource from 'crm-05/src/activity/lib/RecentActivity.abide' with { type: 'text' }
-import recentActivityTestSource from 'crm-05/src/activity/tests/RecentActivity.test.ts' with { type: 'text' }
+import recentActivityTestSource from 'crm-05/src/activity/lib/RecentActivity.test.ts' with { type: 'text' }
 import AccountFeed from 'crm-05/src/activity/lib/AccountFeed.abide'
 import accountFeedSource from 'crm-05/src/activity/lib/AccountFeed.abide' with { type: 'text' }
 import feedSource from 'crm-05/src/activity/feed.ts' with { type: 'text' }
 import logToFeedSource from 'crm-05/src/activity/logToFeed.ts' with { type: 'text' }
 import feedsSource from 'crm-05/src/activity/lib/feeds.ts' with { type: 'text' }
-import accountFeedTestSource from 'crm-05/src/activity/tests/AccountFeed.test.ts' with { type: 'text' }
+import accountFeedTestSource from 'crm-05/src/activity/lib/AccountFeed.test.ts' with { type: 'text' }
 import ActivityHistory from 'crm-05/src/activity/lib/ActivityHistory.abide'
 import activityHistorySource from 'crm-05/src/activity/lib/ActivityHistory.abide' with { type: 'text' }
 import olderActivitySource from 'crm-05/src/activity/olderActivity.ts' with { type: 'text' }
-import activityHistoryTestSource from 'crm-05/src/activity/tests/ActivityHistory.test.ts' with { type: 'text' }
+import activityHistoryTestSource from 'crm-05/src/activity/lib/ActivityHistory.test.ts' with { type: 'text' }
 import CsvExport from 'crm-05/src/activity/lib/CsvExport.abide'
 import csvExportSource from 'crm-05/src/activity/lib/CsvExport.abide' with { type: 'text' }
 import exportCsvSource from 'crm-05/src/activity/exportCsv.ts' with { type: 'text' }
-import csvExportTestSource from 'crm-05/src/activity/tests/CsvExport.test.ts' with { type: 'text' }
+import csvExportTestSource from 'crm-05/src/activity/lib/CsvExport.test.ts' with { type: 'text' }
 import Wallboard from 'crm-05/src/activity/lib/Wallboard.abide'
 import wallboardSource from 'crm-05/src/activity/lib/Wallboard.abide' with { type: 'text' }
 import tickerSource from 'crm-05/src/activity/ticker.ts' with { type: 'text' }
-import wallboardTestSource from 'crm-05/src/activity/tests/Wallboard.test.ts' with { type: 'text' }
+import wallboardTestSource from 'crm-05/src/activity/lib/Wallboard.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -48,7 +48,7 @@ import wallboardTestSource from 'crm-05/src/activity/tests/Wallboard.test.ts' wi
                 'src/activity/lib/activity.ts': activitySource,
                 'src/activity/lib/QuickLog.abide': quickLogSource,
                 'src/activity/lib/LastActivity.abide': lastActivitySource,
-                'src/activity/tests/QuickLog.test.ts': quickLogTestSource,
+                'src/activity/lib/QuickLog.test.ts': quickLogTestSource,
             }}
         >
             <QuickLog />
@@ -73,7 +73,7 @@ import wallboardTestSource from 'crm-05/src/activity/tests/Wallboard.test.ts' wi
             files={{
                 'src/activity/lib/RecentActivity.abide': recentActivitySource,
                 'src/activity/lib/activity.ts': activitySource,
-                'src/activity/tests/RecentActivity.test.ts': recentActivityTestSource,
+                'src/activity/lib/RecentActivity.test.ts': recentActivityTestSource,
             }}
         >
             <RecentActivity />
@@ -102,7 +102,7 @@ import wallboardTestSource from 'crm-05/src/activity/tests/Wallboard.test.ts' wi
                 'src/activity/lib/feeds.ts': feedsSource,
                 'src/activity/feed.ts': feedSource,
                 'src/activity/logToFeed.ts': logToFeedSource,
-                'src/activity/tests/AccountFeed.test.ts': accountFeedTestSource,
+                'src/activity/lib/AccountFeed.test.ts': accountFeedTestSource,
             }}
         >
             <AccountFeed />
@@ -149,7 +149,7 @@ import wallboardTestSource from 'crm-05/src/activity/tests/Wallboard.test.ts' wi
             files={{
                 'src/activity/lib/ActivityHistory.abide': activityHistorySource,
                 'src/activity/olderActivity.ts': olderActivitySource,
-                'src/activity/tests/ActivityHistory.test.ts': activityHistoryTestSource,
+                'src/activity/lib/ActivityHistory.test.ts': activityHistoryTestSource,
             }}
         >
             <ActivityHistory />
@@ -189,7 +189,7 @@ import wallboardTestSource from 'crm-05/src/activity/tests/Wallboard.test.ts' wi
             files={{
                 'src/activity/lib/CsvExport.abide': csvExportSource,
                 'src/activity/exportCsv.ts': exportCsvSource,
-                'src/activity/tests/CsvExport.test.ts': csvExportTestSource,
+                'src/activity/lib/CsvExport.test.ts': csvExportTestSource,
             }}
         >
             <CsvExport />
@@ -223,7 +223,7 @@ import wallboardTestSource from 'crm-05/src/activity/tests/Wallboard.test.ts' wi
             files={{
                 'src/activity/lib/Wallboard.abide': wallboardSource,
                 'src/activity/ticker.ts': tickerSource,
-                'src/activity/tests/Wallboard.test.ts': wallboardTestSource,
+                'src/activity/lib/Wallboard.test.ts': wallboardTestSource,
             }}
         >
             <Wallboard />

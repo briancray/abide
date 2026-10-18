@@ -95,7 +95,7 @@ export async function handlersUnder(
                     throw new Error(
                         each.name === 'default'
                             ? `abide: ${relative}'s default export is not declared as a handler. A handler file's default is declared by abide's \`GET(…)\` (or POST, PUT, PATCH, DELETE); anything else belongs under a lib directory. RULEBOOK 16.73.`
-                            : `abide: ${relative} exports \`${each.name}\`, and a handler file exports its handler as its default and nothing else. Move \`${each.name}\` into a module under a lib or a server directory. RULEBOOK 16.73.`,
+                            : `abide: ${relative} exports \`${each.name}\`, and a handler file exports its handler as its default and nothing else. Move \`${each.name}\` into a module under a lib directory. RULEBOOK 16.73.`,
                     )
             if (handler?.method === undefined)
                 throw new Error(

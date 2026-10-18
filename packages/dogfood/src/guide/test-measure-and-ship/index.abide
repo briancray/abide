@@ -29,14 +29,14 @@ import TopDeals from 'crm-10/src/reports/lib/TopDeals.abide'
 import topDealsSource from 'crm-10/src/reports/lib/TopDeals.abide' with { type: 'text' }
 import WonDeals from 'crm-10/src/reports/lib/WonDeals.abide'
 import wonDealsSource from 'crm-10/src/reports/lib/WonDeals.abide' with { type: 'text' }
-import closedTilesTestSource from 'crm-10/src/reports/tests/ClosedTiles.test.ts' with { type: 'text' }
-import dealsExportTestSource from 'crm-10/src/reports/tests/DealsExport.test.ts' with { type: 'text' }
-import forecastBenchSource from 'crm-10/src/reports/tests/Forecast.bench.ts' with { type: 'text' }
-import forecastTestSource from 'crm-10/src/reports/tests/Forecast.test.ts' with { type: 'text' }
-import pipelineSummaryTestSource from 'crm-10/src/reports/tests/PipelineSummary.test.ts' with { type: 'text' }
-import stageTilesTestSource from 'crm-10/src/reports/tests/StageTiles.test.ts' with { type: 'text' }
-import topDealsSpecSource from 'crm-10/src/reports/tests/TopDeals.e2e.ts' with { type: 'text' }
-import wonDealsTestSource from 'crm-10/src/reports/tests/WonDeals.test.ts' with { type: 'text' }
+import closedTilesTestSource from 'crm-10/src/reports/lib/ClosedTiles.test.ts' with { type: 'text' }
+import dealsExportTestSource from 'crm-10/src/reports/lib/DealsExport.test.ts' with { type: 'text' }
+import forecastBenchSource from 'crm-10/src/reports/lib/Forecast.bench.ts' with { type: 'text' }
+import forecastTestSource from 'crm-10/src/reports/lib/Forecast.test.ts' with { type: 'text' }
+import pipelineSummaryTestSource from 'crm-10/src/reports/lib/PipelineSummary.test.ts' with { type: 'text' }
+import stageTilesTestSource from 'crm-10/src/reports/lib/StageTiles.test.ts' with { type: 'text' }
+import topDealsSpecSource from 'crm-10/e2e/TopDeals.test.ts' with { type: 'text' }
+import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -52,7 +52,7 @@ import wonDealsTestSource from 'crm-10/src/reports/tests/WonDeals.test.ts' with 
             files={{
                 'src/reports/lib/PipelineSummary.abide': pipelineSummarySource,
                 'src/reports/getSummary.ts': getSummarySource,
-                'src/reports/tests/PipelineSummary.test.ts': pipelineSummaryTestSource,
+                'src/reports/lib/PipelineSummary.test.ts': pipelineSummaryTestSource,
             }}
         >
             <PipelineSummary />
@@ -80,8 +80,8 @@ import wonDealsTestSource from 'crm-10/src/reports/tests/WonDeals.test.ts' with 
         included. An app nobody stops leaves open whatever <code>onStart</code> opened, and the
         suite hangs with no report at all.</p>
 
-        <p>A file under <code>**/tests/**</code> has no address, so a test sits beside the feature
-        it tests and is never served.</p>
+        <p>A <code>.test.ts</code> has no address, so a test sits beside the file it tests and is
+        never served.</p>
     </Section>
 
     <Section title="A test mounts a component and counts what a click did">
@@ -93,7 +93,7 @@ import wonDealsTestSource from 'crm-10/src/reports/tests/WonDeals.test.ts' with 
             files={{
                 'src/reports/lib/ClosedTiles.abide': closedTilesSource,
                 'src/reports/lib/closedTotals.ts': closedTotalsSource,
-                'src/reports/tests/ClosedTiles.test.ts': closedTilesTestSource,
+                'src/reports/lib/ClosedTiles.test.ts': closedTilesTestSource,
             }}
         >
             <ClosedTiles />
@@ -154,7 +154,7 @@ import wonDealsTestSource from 'crm-10/src/reports/tests/WonDeals.test.ts' with 
             files={{
                 'src/reports/lib/StageTiles.abide': stageTilesSource,
                 'src/reports/lib/summarizeStage.ts': summarizeStageSource,
-                'src/reports/tests/StageTiles.test.ts': stageTilesTestSource,
+                'src/reports/lib/StageTiles.test.ts': stageTilesTestSource,
             }}
         >
             <StageTiles />
@@ -183,7 +183,7 @@ import wonDealsTestSource from 'crm-10/src/reports/tests/WonDeals.test.ts' with 
             files={{
                 'src/reports/lib/WonDeals.abide': wonDealsSource,
                 'src/reports/lib/money.ts': moneySource,
-                'src/reports/tests/WonDeals.test.ts': wonDealsTestSource,
+                'src/reports/lib/WonDeals.test.ts': wonDealsTestSource,
             }}
         >
             <WonDeals />
@@ -218,8 +218,8 @@ import wonDealsTestSource from 'crm-10/src/reports/tests/WonDeals.test.ts' with 
             files={{
                 'src/reports/lib/Forecast.abide': forecastSource,
                 'src/reports/lib/forecast.ts': forecastLogicSource,
-                'src/reports/tests/Forecast.test.ts': forecastTestSource,
-                'src/reports/tests/Forecast.bench.ts': forecastBenchSource,
+                'src/reports/lib/Forecast.test.ts': forecastTestSource,
+                'src/reports/lib/Forecast.bench.ts': forecastBenchSource,
             }}
         >
             <Forecast />
@@ -265,7 +265,7 @@ import wonDealsTestSource from 'crm-10/src/reports/tests/WonDeals.test.ts' with 
             files={{
                 'src/reports/lib/TopDeals.abide': topDealsSource,
                 'src/reports/lib/rankDeals.ts': rankDealsSource,
-                'src/reports/tests/TopDeals.e2e.ts': topDealsSpecSource,
+                'e2e/TopDeals.test.ts': topDealsSpecSource,
             }}
         >
             <TopDeals />
@@ -297,7 +297,7 @@ import wonDealsTestSource from 'crm-10/src/reports/tests/WonDeals.test.ts' with 
             files={{
                 'src/reports/lib/DealsExport.abide': dealsExportSource,
                 'src/reports/lib/dealsOf.ts': dealsOfSource,
-                'src/reports/tests/DealsExport.test.ts': dealsExportTestSource,
+                'src/reports/lib/DealsExport.test.ts': dealsExportTestSource,
             }}
         >
             <DealsExport />

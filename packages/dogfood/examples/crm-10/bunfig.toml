@@ -1,3 +1,5 @@
 # A DOM to mount into and measure, and `.abide` files as components.
 [test]
+# Bun's tests are under src; e2e holds the browser's, which playwright runs.
+root = "src"
 preload = ["@abide/harness/abide/preload"]

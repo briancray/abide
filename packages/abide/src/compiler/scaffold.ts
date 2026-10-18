@@ -34,10 +34,10 @@ const SOURCE_ALIAS = { '#src/*': ['./src/*', './src/*.ts'] }
 /**
  * 38.109, 38.119 — the starter's `bunfig.toml`: the harness's abide preload, which is a DOM a test
  * can mount into and measure, then abide's own — the app's `.abide` files imported as modules, with
- * nothing booted first.
+ * nothing booted first. Its test root is `src`, so a browser test under `e2e` is playwright's alone.
  */
 export const TEST_PRELOAD =
-    '# 38.109, 38.119 — a DOM to mount into and measure, then the app\'s `.abide` files as modules.\n[test]\npreload = ["@abide/harness/abide/preload"]\n'
+    '# 38.109, 38.119 — a DOM to mount into and measure, then the app\'s `.abide` files as modules.\n[test]\nroot = "src"\npreload = ["@abide/harness/abide/preload"]\n'
 
 // WRITTEN, NOT COPIED, beside the manifests: a packer drops a `bunfig.toml` or a `.gitignore` from
 // the tarball (`bun pm pack` both, `npm pack` the second), so neither survives as a starter file.
@@ -63,11 +63,11 @@ function filesFor(name: string): Record<string, string> {
                 },
                 // ONE ALIAS FOR THE SOURCE, and two targets for it, because an extensionless
                 // specifier is how an import is written and only bun probes for the extension:
-                // TypeScript takes an `imports` target as the exact file, so `#src/media/server/db`
+                // TypeScript takes an `imports` target as the exact file, so `#src/media/lib/db.server`
                 // alone left every name it imports `any` and the checker could not type one of
                 // them (31.3). The first target is what bun resolves, and the one a `.ts` or
-                // `.abide` specifier needs. Which side a module is on is its directory's to say
-                // (36.10), not its alias's.
+                // `.abide` specifier needs. Which side a module is on is its name's to say (36.10),
+                // not its alias's.
                 imports: SOURCE_ALIAS,
                 dependencies: { '@abide/abide': ABIDE_DEPENDENCY },
                 // `Bun`, `bun:sqlite` and the rest of the runtime a server module reaches for are

@@ -1,5 +1,4 @@
 import { relative as relativeTo } from 'node:path' // bun exposes no path helpers of its own
-import type { Compilation } from '#server/abideModules.ts'
 import { appFiles } from '#server/appTree.ts'
 import { type Placement, placement, routeOf } from '#server/placement.ts'
 import { LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
@@ -77,7 +76,6 @@ export type AppLayout = {
     errors: AppRoute[]
     /** Every public file's source path to its address. 36.11. */
     published: Map<string, string>
-    mounted: Compilation['mounted']
     /** 30.26 — every address a link may name: a page's, and a public file's. */
     addresses: string[]
     /** What the tree refuses, each at its file; a build stops naming every one. */
@@ -160,7 +158,6 @@ export async function appLayout(root: string): Promise<AppLayout> {
         routes,
         errors,
         published,
-        mounted: found.mounted,
         addresses: [...addresses].sort(),
         refused: refusals.found,
         unparsed: unparsed.found,
@@ -201,7 +198,6 @@ export async function withDependencies(
 ): Promise<{
     sources: ParsedSource[]
     handlers: HandlerFile[]
-    mounted: Compilation['mounted']
     /** 23.19 — each mounted `.abide`'s position, by its path; one at its own path is not here. */
     positions: Map<string, string>
 }> {
@@ -215,7 +211,6 @@ export async function withDependencies(
         })
     // The mounted handler files placed so far; the app's own is never mounted (23.20).
     const handled = new Set<string>()
-    const mounted: Compilation['mounted'] = {}
     const byPath = new Map<string, ParsedSource>()
     for (const source of all) byPath.set(source.path, source)
     const positions = new Map<string, string>()
@@ -258,7 +253,6 @@ export async function withDependencies(
                 continue
             }
             mountedBy.set(mount.directory, position)
-            mounted[relativeTo(root, mount.directory)] = mount.at
             for (const placed of mount.handlers) {
                 // Two mounts can overlap, one directory inside the other; a file is placed once.
                 if (handled.has(placed.path)) continue
@@ -283,7 +277,7 @@ export async function withDependencies(
             if (!byPath.has(target)) await add(target)
         }
     }
-    return { sources: all, handlers, mounted, positions }
+    return { sources: all, handlers, positions }
 }
 
 /** Whether a page or an error page has anything to paint: a template, or a head. 23.3, 35.14. */
@@ -294,8 +288,7 @@ export function paints(file: AbideFile): boolean {
 /**
  * Refuses what a source's place forbids it.
  *
- * 34.20 — a server block under a `server` or `public` directory: neither holds a component that
- * runs. 34.21 — a file imported as text that is not there, found at build rather than when its
+ * 34.20 — a server block under a `public` directory, which holds no component that runs. 34.21 — a file imported as text that is not there, found at build rather than when its
  * module first loads. 35.16 — of the files with an address, the root layout alone writes the
  * document.
  */
@@ -306,14 +299,11 @@ function refusePlace(
     refusals: Refusals,
 ): void {
     const { relative, place, kind } = placed
-    if (
-        source.file.servers.length > 0 &&
-        (place === 'server' || place === 'public')
-    )
+    if (source.file.servers.length > 0 && place === 'public')
         refusals.at(
             relative,
             new Error(
-                `abide: ${relative} has a <script server>, and it is under a ${place} directory, where nothing has an address. Move the file out of it, or the code into a module under a server directory. RULEBOOK 34.20.`,
+                `abide: ${relative} has a <script server>, and it is under a public directory, where nothing has an address. Move the file out of it, or the code into a server file under a lib directory. RULEBOOK 34.20.`,
             ),
         )
     const from = source.path.slice(0, source.path.lastIndexOf('/'))
@@ -340,7 +330,7 @@ function refusePlace(
 }
 
 /**
- * Refuses, naming the module, every module under a `server` or a `lib` directory that calls a hook.
+ * Refuses, naming the module, every module under a `lib` directory that calls a hook.
  *
  * 37.13 — a hook called in a module that is neither a `.abide` nor a handler file runs as the module
  * is imported, before any file's route is set, and not at all where nothing imports it.

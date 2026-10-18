@@ -32,8 +32,8 @@ export const EXCERPT = ' — excerpt'
 /**
  * Which side a caption names, as the spine colors it: a file path, or one of four words.
  *
- * A DIRECTORY DECIDES IT, as it decides what may import the file (16.29): under a `server`
- * directory is the server's, and everything else — a `.abide` file always — is BOTH SIDES.
+ * A FILE'S NAME DECIDES IT, as it decides what may import the file (16.29): a server file is the
+ * server's, and everything else — a `.abide` file always — is BOTH SIDES.
  */
 export function sideOf(caption: string): 'server' | 'abide' | 'browser' {
     const address = caption.replace(EXCERPT, '')
@@ -43,11 +43,10 @@ export function sideOf(caption: string): 'server' | 'abide' | 'browser' {
         address === 'shared'
     )
         return 'abide'
-    const directories = address.split('/').slice(0, -1)
     if (
         address === 'server' ||
         address === '.env' ||
-        directories.includes('server')
+        /[^/]\.server\.[^./]+$/.test(address)
     )
         return 'server'
     if (address === 'browser') return 'browser'

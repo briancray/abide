@@ -75,11 +75,6 @@ export type Compilation = {
     handlers: Record<string, HandlerFace>
     /** The build's own modules, by name below `__abide`. */
     tables: Record<string, string>
-    /**
-     * 23.19 — every directory a file mounts, by its path below the root, to the position its files
-     * take: what the browser's fence reads a mounted file's place by (16.29).
-     */
-    mounted: Record<string, string>
 }
 
 const RELATIVE_OR_SUBPATH = /^(?:\.\.?\/|#)/
