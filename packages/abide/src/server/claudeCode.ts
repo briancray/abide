@@ -42,6 +42,9 @@ export type ClaudeCodeConfig = {
     tools?: string[]
 }
 
+/** The built-in tools a pairing command grants, as the visitor would after its `--`. 44.33. */
+type PairingOptions = Pick<ClaudeCodeConfig, 'tools'>
+
 /** Whether this browser's bridge is connected, and the command that pairs one where it is not. */
 export type BridgeStatus = { paired: boolean; command: string | undefined }
 
@@ -123,12 +126,19 @@ function askingCaller(): string {
     return caller
 }
 
-/** The command that pairs a bridge with this browser, and when its code stops standing. 44.14. */
-function bridgeCommand(): { command: string; expires: number } {
+/**
+ * The command that pairs a bridge with this browser, and when its code stops standing. 44.14. The
+ * `tools` it is given are written after its `--`, so the visitor running it grants them (44.30, 44.33).
+ */
+function bridgeCommand({ tools }: PairingOptions = {}): {
+    command: string
+    expires: number
+} {
     const { code, expires } = mintCode(askingCaller())
     const site = `${appOrigin() ?? new URL(request().url).origin}${mounted('')}`
+    const grant = tools?.length ? ` -- --tools ${tools.join(',')}` : ''
     return {
-        command: `bunx @abide/bridge@${BRIDGE_VERSION} ${site} ${code}`,
+        command: `bunx @abide/bridge@${BRIDGE_VERSION} ${site} ${code}${grant}`,
         expires,
     }
 }
@@ -137,7 +147,9 @@ function bridgeCommand(): { command: string; expires: number } {
  * This browser's pairing as it changes: unpaired with the command to run, then paired the moment a
  * bridge connects, and unpaired again if it goes. 44.20.
  */
-async function* bridge(): AsyncGenerator<BridgeStatus> {
+async function* bridge(
+    options: PairingOptions = {},
+): AsyncGenerator<BridgeStatus> {
     const caller = askingCaller()
     const signal = request().signal
     // A change landing while the loop was not waiting — paused at its `yield` — stays queued, so it
@@ -156,7 +168,7 @@ async function* bridge(): AsyncGenerator<BridgeStatus> {
                 !paired &&
                 (pairing === undefined || pairing.expires <= Date.now())
             )
-                pairing = bridgeCommand()
+                pairing = bridgeCommand(options)
             const status: BridgeStatus = {
                 paired,
                 command: paired ? undefined : pairing?.command,

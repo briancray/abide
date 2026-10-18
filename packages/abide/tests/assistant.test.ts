@@ -43,6 +43,8 @@ export const bridge = GET(() => claudeCode.bridge(), { ...HIDDEN, timeout: Infin
 
 export const command = GET(() => claudeCode.bridgeCommand(), HIDDEN)
 
+export const granting = GET(() => claudeCode.bridgeCommand({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
+
 export const ask = POST(
     async function* ({ messages, via, maxTurns, config }: { messages: AssistantMessage[]; via: 'api' | 'code'; maxTurns?: number; config?: Record<string, unknown> }) {
         yield* assistant(
@@ -380,6 +382,24 @@ test('a built-in tool runs only where the site asked and the visitor granted —
     expect(
         await Promise.race([second, Bun.sleep(200).then(() => 'nothing')]),
     ).toBe('nothing')
+}, 30_000)
+
+// 44.33 — A SITE CAN WRITE THE GRANT INTO ITS COMMAND: the visitor running that command as shown gives the
+// turn the tools, and a command minted without them grants nothing. THE REVERT: drop the `--` the
+// command writes, and the bridge reads `--tools` as empty.
+test('a pairing command minted with tools grants them to the bridge it starts — 44.33', async () => {
+    const plain = await Bun.fetch(`${base}/command`, { headers: asPage('eight') })
+    expect(((await plain.json()) as { command: string }).command).not.toContain(' -- ')
+    const answer = await Bun.fetch(`${base}/granting`, { headers: asPage('eight') })
+    const { command } = (await answer.json()) as { command: string }
+    const [pairing = '', claudeArgs = ''] = command.split(' -- ')
+    expect(claudeArgs).toBe('--tools WebSearch,WebFetch')
+    await pairBridge('eight', pairing.split(' ').at(-1), claudeArgs.split(' '))
+    await events(
+        await ask('eight', 'code', 'who am I?', undefined, { tools: ['WebSearch', 'WebFetch'] }),
+    )
+    const { args } = (await Bun.file(RECORD).json()) as { args: string[] }
+    expect(args[args.indexOf('--tools') + 1]).toBe('WebSearch,WebFetch')
 }, 30_000)
 
 // 44.16 — AN OPTION THAT REACHES THE VISITOR'S MACHINE IS NOT THE SITE'S TO SET: the turn fails naming

@@ -250,6 +250,10 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/tests/ClaudeCodeBri
 
         <Code code={`bunx @abide/bridge <site> <code> -- --tools WebSearch,WebFetch`} />
 
+        <p>Pass the same <code>tools</code> to <code>claudeCode.bridge</code> or
+        <code>claudeCode.bridgeCommand</code> and the command it mints carries that grant, so a
+        visitor who runs it as shown gives the tools. One minted without them grants none.</p>
+
         <p>The visitor pairs once per visit by running a command, which dials out to the site.
         Asking with nothing paired is refused 409.</p>
 
