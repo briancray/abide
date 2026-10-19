@@ -81,7 +81,8 @@ export type PlacedNode = {
      */
     parent: string
     /**
-     * An element's FOLDED tag, for the kind check `elementHere` makes. '' for the other two kinds.
+     * An element's tag as the parser writes it, for the kind check `elementHere` makes: folded,
+     * then given back SVG's camelCase (`SVG_CASE`). '' for the other two kinds.
      */
     tag: string
     /**
@@ -114,6 +115,51 @@ export type PlacedNode = {
      */
     children: PlacedNode[]
 }
+
+// THE NAMES THE PARSER GIVES BACK SVG'S CASE, folded to the case it writes — the HTML standard's
+// adjustment table for foreign content. None is an HTML element, so one stands under an `<svg>`
+// even where the compiler cannot see it: a component's root does not know where it is invoked.
+const SVG_CASE = new Map<string, string>()
+for (const name of [
+    'altGlyph',
+    'altGlyphDef',
+    'altGlyphItem',
+    'animateColor',
+    'animateMotion',
+    'animateTransform',
+    'clipPath',
+    'feBlend',
+    'feColorMatrix',
+    'feComponentTransfer',
+    'feComposite',
+    'feConvolveMatrix',
+    'feDiffuseLighting',
+    'feDisplacementMap',
+    'feDistantLight',
+    'feDropShadow',
+    'feFlood',
+    'feFuncA',
+    'feFuncB',
+    'feFuncG',
+    'feFuncR',
+    'feGaussianBlur',
+    'feImage',
+    'feMerge',
+    'feMergeNode',
+    'feMorphology',
+    'feOffset',
+    'fePointLight',
+    'feSpecularLighting',
+    'feSpotLight',
+    'feTile',
+    'feTurbulence',
+    'foreignObject',
+    'glyphRef',
+    'linearGradient',
+    'radialGradient',
+    'textPath',
+])
+    SVG_CASE.set(name.toLowerCase(), name)
 
 /** A run of siblings being walked: the region's own root, or the inside of one element. */
 type Frame = {
@@ -202,7 +248,13 @@ export class Cursor {
      * emitted between its open and close tags and nowhere else. A void element is left at once.
      */
     element(node: ElementNode): PlacedNode {
-        const at = this.record('element', node, node.lowerTag, false, [])
+        const at = this.record(
+            'element',
+            node,
+            SVG_CASE.get(node.lowerTag) ?? node.lowerTag,
+            false,
+            [],
+        )
         this.frames.push({
             parent: at.name,
             within: at,

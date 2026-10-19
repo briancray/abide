@@ -394,14 +394,13 @@ const side = (globalThis as { armSide?: string }).armSide
     expect(html).toContain('<!--[0--><button id="act">server</button><!--]-->')
 
     side.armSide = 'client'
-    const warned: string[] = []
-    const warn = console.warn
-    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
+    let warned: string[]
     try {
-        mount()
-        flushSync()
+        warned = hydrateWarnings(() => {
+            mount()
+            flushSync()
+        })
     } finally {
-        console.warn = warn
         side.armSide = undefined
     }
     const button = document.querySelector('#act') as HTMLElement
@@ -410,8 +409,7 @@ const side = (globalThis as { armSide?: string }).armSide
     expect({
         shown: button.textContent,
         pressed: document.querySelector('#pressed')?.textContent,
-        warnings: warned.filter((line) => line.includes('abide:hydrate'))
-            .length,
+        warnings: warned.length,
     }).toEqual({ shown: 'client', pressed: 'client', warnings: 1 })
 })
 
@@ -426,20 +424,15 @@ let on = reactive(false)
 </script>
 
 <main>{#if on}<b>on</b>{:else}<i>off</i>{/if}<button id="flip" onclick={() => { on = !on }}>flip</button></main>`)
-    const warned: string[] = []
-    const warn = console.warn
-    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
-    let work: ReturnType<typeof measure>
-    try {
+    let work: ReturnType<typeof measure> | undefined
+    const warned = hydrateWarnings(() => {
         work = measure(() => {
             mount()
             flushSync()
         })
-    } finally {
-        console.warn = warn
-    }
-    expect(work.nodesCreated).toBe(0)
-    expect(warned.filter((line) => line.includes('abide:hydrate'))).toEqual([])
+    })
+    expect(work?.nodesCreated).toBe(0)
+    expect(warned).toEqual([])
     ;(document.querySelector('#flip') as HTMLElement).click()
     flushSync()
     expect(document.querySelector('b')?.textContent).toBe('on')
@@ -873,3 +866,48 @@ let rows = reactive([1])
     flushSync()
     expect(read('r2')).toEqual(['¬in & 2|', '∉x &notin', '&notin & 2'])
 })
+
+// 41.10 — THE KIND CHECK READS THE TAG THE PARSER WROTE, and inside an `<svg>` the parser gives
+// back SVG's camelCase: a `<textPath>` stands as `textPath`, so that is the tag the compiler emits
+// (`SVG_CASE`). Asking for the folded `textpath` refused the arm's whole mount, and an `{#if}`
+// inside the arm kept what the server painted forever.
+//
+// THE REVERT: emit `node.lowerTag` from `Cursor.element`. This logs `expected <textpath>`, leaves
+// the href at `#a` and reports the circle still standing.
+test('an element SVG spells in camelCase hydrates, and an {#if} past it swaps — 41.10', async () => {
+    const { mount } = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+let on = reactive(true)
+let label = reactive('a')
+</script>
+
+<main>{#if label}<svg><text><textPath href="#{label}">a</textPath></text>{#if on}<circle id="dot" r="2" />{/if}</svg>{/if}<button id="flip" onclick={() => { on = !on }}>flip</button><button id="relabel" onclick={() => { label = 'b' }}>relabel</button></main>`)
+    const warned = hydrateWarnings(() => {
+        mount()
+        flushSync()
+        expect(document.querySelector('#dot')?.localName).toBe('circle')
+        ;(document.querySelector('#relabel') as HTMLElement).click()
+        flushSync()
+        ;(document.querySelector('#flip') as HTMLElement).click()
+        flushSync()
+    })
+    expect({
+        href: document.querySelector('textPath')?.getAttribute('href'),
+        dot: document.querySelector('#dot')?.localName,
+        warned,
+    }).toEqual({ href: '#b', dot: undefined, warned: [] })
+})
+
+/** The `abide:hydrate` warnings `body` logs, with `console.warn` restored however it ends. */
+function hydrateWarnings(body: () => void): string[] {
+    const warned: string[] = []
+    const warn = console.warn
+    console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
+    try {
+        body()
+    } finally {
+        console.warn = warn
+    }
+    return warned.filter((line) => line.includes('abide:hydrate'))
+}
