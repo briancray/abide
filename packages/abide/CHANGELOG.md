@@ -1,5 +1,11 @@
 # @abide/abide
 
+## 0.110.3
+
+### Patch Changes
+
+- 804b901: the root below a mount is the bare mount, url('/') writing /docs and /docs/ redirected to it ([`9c5d3c3`](https://github.com/briancray/abide/commit/9c5d3c360c27f2d9918fb663d7aff83b22078707))
+
 ## 0.110.2
 
 ### Patch Changes
