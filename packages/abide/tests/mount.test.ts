@@ -36,6 +36,8 @@ import { url } from '@abide/abide'
             'public/fonts/face.woff2': 'a face',
             'public/robots.txt': 'User-agent: *\n',
             'invoices/getInvoice.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n`,
+            // a segment named as the mount, which an address missing the mount is mistaken for
+            'docs/getDoc.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, title: 'a doc' }), { description: 'A doc.' })\n`,
             'invoices/count.ts': `import { GET, reactive } from '@abide/abide/server'\n\nexport default GET(reactive({ open: 3 }, { global: true }))\n`,
         },
         { ...process.env, APP_URL: 'http://example.test/docs/' },
@@ -158,4 +160,27 @@ test('the root below a mount is the bare mount — 19.17', async () => {
     })
     expect(answer.status).toBe(308)
     expect(answer.headers.get('location')).toBe('/docs?from=bar')
+})
+
+// 20.10, 36.11 — AN MCP CALL IS THE REQUEST A BROWSER UNDER THE MOUNT WOULD MAKE, so it reaches the
+// handler the tool names. THE REVERT: build `callOf`'s URL from the bare address; `/docs/getDoc`
+// loses the `/docs` it never had for the mount and is asked as `/getDoc`, a 404.
+test('an MCP tool call reaches its handler under the mount — 20.10, 36.11', async () => {
+    const answer = await Bun.fetch(`${base}/docs/__abide/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'get_docs_getDoc', arguments: { id: '4' } },
+        }),
+    })
+    const called = ((await answer.json()) as Record<string, unknown>)
+        .result as { content: { text: string }[]; isError: boolean }
+    expect(called.isError).toBe(false)
+    expect(JSON.parse(called.content[0]?.text as string)).toEqual({
+        id: '4',
+        title: 'a doc',
+    })
 })

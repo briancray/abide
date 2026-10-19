@@ -15,6 +15,7 @@
 
 import { isFailed } from '#shared/Failed.ts'
 import { namedLogger } from '#shared/log.ts'
+import { mounted } from '#shared/mount.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
@@ -510,7 +511,9 @@ function callOf(
     // 38.68 — the answer is read here rather than sent on, and nothing in process decodes it.
     headers.delete('accept-encoding')
     if (call.body !== undefined) headers.set('content-type', 'application/json')
-    return new Request(new URL(call.url, asked.url), {
+    // 16.10 — under the mount, as `rpc.url` is: the app takes the mount off what it is asked, and a
+    // route whose first segment is the mount's name would lose that segment instead.
+    return new Request(new URL(mounted(call.url), asked.url), {
         method,
         headers,
         body: call.body ?? null,
