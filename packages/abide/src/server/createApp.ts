@@ -507,14 +507,14 @@ function stamp(answered: Response): Response {
 
 /**
  * The request with the mount taken off its address, where it is under the mount — or the redirect
- * to the mount's root, where it asked for the mount with no `/` after it.
+ * to the mount's root, where it asked for the mount with a `/` after it.
  *
  * 16.10 — A REQUEST UNDER THE MOUNT IS ANSWERED AS THE ADDRESS BELOW IT; one that is not — a proxy
  * that already took the prefix off — is answered as it came.
  *
- * THE MOUNT'S ROOT IS `/docs/`, as `url('/')` writes it. A document answered at `/docs` resolves a
- * relative address against `/`, which is outside the app, so the bare mount is sent to the root a
- * relative address resolves under.
+ * 19.17 — THE MOUNT'S ROOT IS `/docs`, as `url('/')` writes it, and `/docs/` is sent there so the
+ * root has one address. Every address abide writes is absolute under the mount, so none resolves
+ * against the page's.
  */
 function belowMount(request: Request): Request | Response {
     const mount = MOUNT.current()
@@ -522,10 +522,10 @@ function belowMount(request: Request): Request | Response {
     const url = new URL(request.url)
     // A PATH RATHER THAN A URL: the origin this request names is the one it reached, which behind
     // a proxy is not the one the browser asked.
-    if (url.pathname === mount)
+    if (url.pathname === `${mount}/`)
         return new Response(null, {
             status: 308,
-            headers: { location: `${mount}/${url.search}` },
+            headers: { location: `${mount}${url.search}` },
         })
     const below = unmounted(url.pathname)
     if (below === undefined || below === url.pathname) return request

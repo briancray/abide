@@ -25,10 +25,14 @@ function documentMount(): string {
     return documentMountRead
 }
 
-/** An address below the app's root, as the address it is served at. */
+/**
+ * An address below the app's root, as the address it is served at. 19.17 — the root below a mount
+ * is the bare mount, `/docs` rather than `/docs/`.
+ */
 export function mounted(address: string): string {
     const mount = MOUNT.current()
-    return mount === '' ? address : `${mount}${address}`
+    if (mount === '') return address
+    return address === '/' ? mount : `${mount}${address}`
 }
 
 /**

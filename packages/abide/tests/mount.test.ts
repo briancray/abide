@@ -13,7 +13,7 @@ import '#src/lib/face.css'
 const invoice = reactive(() => getInvoice({ id: '4' }))
 </script>
 
-<main><a id="link" href={url('/invoices/[id]', { id: 4 })}>four</a><p id="total">{invoice().total}</p></main>`
+<main><a id="home" href={url('/')}>home</a><a id="link" href={url('/invoices/[id]', { id: 4 })}>four</a><p id="total">{invoice().total}</p></main>`
 
 let base = ''
 let stop = (): void => {}
@@ -51,7 +51,7 @@ afterAll(() => {
 // is under it too. THE REVERT: leave `clientTags` on `CLIENT_ADDRESS` bare; the entry is asked for at
 // the root, where nothing of this app's is.
 test('a page under the mount loads from under it — 16.10', async () => {
-    const answer = await Bun.fetch(`${base}/docs/`)
+    const answer = await Bun.fetch(`${base}/docs`)
     expect(answer.status).toBe(200)
     const html = await answer.text()
     expect(html).toContain('<meta name="abide-mount" content="/docs">')
@@ -131,7 +131,7 @@ test('a page reads the address it is served at — 16.10, 23.4', async () => {
 // `stylesheetUnderMount` the sheet — both then name `/fonts/face.woff2`, the origin's root, where
 // nothing of this app's is.
 test('the root layout and the stylesheet name a public file under the mount — 16.10, 36.11', async () => {
-    const html = await (await Bun.fetch(`${base}/docs/`)).text()
+    const html = await (await Bun.fetch(`${base}/docs`)).text()
     expect(html).toContain(
         '<link rel="preload" href="/docs/fonts/face.woff2" as="font">',
     )
@@ -146,14 +146,16 @@ test('the root layout and the stylesheet name a public file under the mount — 
     expect(await (await Bun.fetch(resolved)).text()).toBe('a face')
 })
 
-// 16.10 — THE BARE MOUNT IS SENT TO ITS ROOT, which is where `url('/')` points: a document answered at
-// `/docs` resolves a relative address against `/`, outside the app. A path, not a URL, so a proxy's
-// origin is not the one written back. THE REVERT: drop the redirect from `belowMount`; `/docs` is a
-// 200.
-test('the bare mount is sent to its root — 16.10', async () => {
-    const answer = await Bun.fetch(`${base}/docs?from=bar`, {
+// 19.17 — THE ROOT BELOW A MOUNT IS THE BARE MOUNT: `url('/')` writes `/docs`, and `/docs/` is sent
+// there so the root has one address. A path, not a URL, so a proxy's origin is not the one written
+// back. THE REVERT: `mounted('/')` as `/docs/` and the redirect the other way; the link reads
+// `/docs/` and `/docs/` is a 200.
+test('the root below a mount is the bare mount — 19.17', async () => {
+    const html = await (await Bun.fetch(`${base}/docs`)).text()
+    expect(html).toContain('<a id="home" href="/docs">home</a>')
+    const answer = await Bun.fetch(`${base}/docs/?from=bar`, {
         redirect: 'manual',
     })
     expect(answer.status).toBe(308)
-    expect(answer.headers.get('location')).toBe('/docs/?from=bar')
+    expect(answer.headers.get('location')).toBe('/docs?from=bar')
 })

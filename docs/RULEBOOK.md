@@ -1236,8 +1236,9 @@ be refused at construction, naming its `Args` member, and the build MUST refuse 
 19.16 `route.url` MUST hold the address a page is served at, the path `APP_URL` names included, on
 the server as in the browser.
 
-19.17 A request for the path `APP_URL` names, without its trailing `/`, MUST be redirected 308 to
-that path with one, by path alone.
+19.17 The root of an app served below the path `APP_URL` names MUST be that path without a trailing
+`/`, as `url('/')` writes it, and a request for the path with one MUST be redirected 308 to it, by
+path alone.
 
 19.18 A `Schema` derived per 19.9 MUST refuse a member its type does not declare, wherever the type
 carries no index signature.
