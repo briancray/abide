@@ -38,6 +38,8 @@
 // nothing is dropped early, and the read-driven backstop in `Reactive.ts` catches up the
 // moment the clock does.
 
+import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
+
 export type Expiry = {
     /** The life of one production, in milliseconds. */
     ms: number
@@ -90,13 +92,23 @@ export function expiryFor(
  * number and has no process to hold open, so the clause is satisfied there by there being nothing
  * to satisfy. CLAUDE.md's uniformity bias is exactly this shape — one mechanism, inert on the side
  * that cannot need it.
+ *
+ * PAST WHAT `setTimeout` HOLDS — 2^31 - 1 ms, near 25 days — a delay is run after 1 ms, and a
+ * deadline that fires early finds nothing expired and re-arms: a timer a millisecond for the life of
+ * the value. So `Infinity` arms nothing, and a longer finite delay arms at the cap — early, which a
+ * deadline re-checks and re-arms from, and which a debounce or throttle window that long takes as
+ * its end.
  */
 export function armTimer(
     expiry: { timer: ReturnType<typeof setTimeout> | null },
     delay: number,
     fire: () => void,
 ): void {
-    const timer = setTimeout(fire, delay > 0 ? delay : 0)
+    if (delay === Number.POSITIVE_INFINITY) return
+    const timer = setTimeout(
+        fire,
+        delay > 0 ? Math.min(delay, LONGEST_DELAY) : 0,
+    )
     const unref = (timer as { unref?: () => void }).unref
     if (typeof unref === 'function') unref.call(timer)
     expiry.timer = timer
