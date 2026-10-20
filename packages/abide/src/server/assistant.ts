@@ -93,7 +93,7 @@ export async function* assistant(
     yield* ASSISTANT_LOG.enabled() ? traced(events, messages.length) : events
 }
 
-/** `events`, and one line on `abide:assistant` once they end, however they end. 44.32. */
+/** `events`, and one line on `abide:assistant` once they end, however they end. 44.31. */
 async function* traced(
     events: AsyncGenerator<AssistantEvent>,
     messageCount: number,

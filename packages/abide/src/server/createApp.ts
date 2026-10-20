@@ -6,6 +6,8 @@
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { FAILURE_STATUS_TEXT } from '#shared/FAILURE_STATUS_TEXT.ts'
+import { framingOf } from '#shared/framing.ts'
+import { LONGEST_DELAY } from '#shared/LONGEST_DELAY.ts'
 import { namedLogger } from '#shared/log.ts'
 import { compose } from '#shared/Middleware.ts'
 import { MOUNT, unmounted } from '#shared/mount.ts'
@@ -26,6 +28,7 @@ import {
 } from './config.ts'
 import { McpSurface } from './generatedSurfaces.ts'
 import { HOOKS, inOrder, reportUnexpected, rootRungs } from './hooks.ts'
+import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 import { installServer } from './installServer.ts'
 import { admitsMux, muxSocketOptions, upgraded } from './muxUpgrade.ts'
 import { plainAnswer } from './plainAnswer.ts'
@@ -34,11 +37,13 @@ import {
     type AnsweringApp,
     applyWritten,
     currentRequestScope,
+    holdScope,
     inReleasedScope,
     LISTENING,
     rungsTook,
     serverTiming,
 } from './requestScope.ts'
+import { heldBody } from './streamEvent.ts'
 import { testBuild } from './testBuild.ts'
 import { traceResponse } from './trace.ts'
 
@@ -299,7 +304,7 @@ export async function bootEntered(
         try {
             // 42.6 — `run`, with dispatch over it — and the headers every answer carries stamped
             // inside it, where the trace the request was answered under is still the current one.
-            // 16.22 — the scope keeps `given` too, the one request bun will raise a timeout on.
+            // 16.23 — the scope keeps `given` too, the one request bun will set a timeout on.
             return await inReleasedScope(
                 request,
                 async () => {
@@ -312,7 +317,7 @@ export async function bootEntered(
                         reportUnexpected(thrown)
                         answered = plainAnswer('internal server error', 500)
                     }
-                    const stamped = stamp(answered)
+                    const stamped = beating(stamp(answered))
                     // 28.7 — a closed namespace does not pay for the line it would have written.
                     if (REQUEST_LOG.enabled())
                         REQUEST_LOG.debug(
@@ -388,10 +393,9 @@ export async function bootEntered(
             new Promise<false>((done) => {
                 deadline = setTimeout(
                     () => done(false),
-                    // setTimeout reads anything past a signed 32-bit count as 1 ms.
                     Math.min(
                         positiveSetting('ABIDE_STOP_TIMEOUT', STOP_TIMEOUT),
-                        2 ** 31 - 1,
+                        LONGEST_DELAY,
                     ),
                 )
             }),
@@ -423,6 +427,9 @@ export async function bootEntered(
                 ...(options?.unix !== undefined
                     ? { unix: options.unix }
                     : {
+                          // 16.56 — the bound a request received whole lifts and its answer puts
+                          // back (16.23). A unix socket takes bun's own.
+                          idleTimeout: IDLE_TIMEOUT_SECONDS,
                           ...(port === undefined ? {} : { port }),
                           ...(options?.hostname === undefined
                               ? {}
@@ -503,6 +510,23 @@ function stamp(answered: Response): Response {
     const traced = traceResponse()
     if (traced !== undefined) stamped.headers.set('traceresponse', traced)
     return stamped
+}
+
+/**
+ * `answered`, beating where it is an event stream, and holding its request's scope until it ends.
+ *
+ * 16.57 — EVERY `text/event-stream`, whoever wrote it: an sse body, a followed value, a pairing's
+ * stream, a `Response` a handler built itself. 16.23 — and the hold is what keeps the last of those
+ * from being reaped once `fetch` returns, where nothing else outlives it.
+ */
+function beating(answered: Response): Response {
+    // The type first: reading `body` turns a string answer into a stream.
+    if (
+        framingOf(answered.headers.get('content-type')) !== 'sse' ||
+        answered.body === null
+    )
+        return answered
+    return new Response(heldBody(answered.body, holdScope(), true), answered)
 }
 
 /**

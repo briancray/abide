@@ -31,6 +31,7 @@ import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { Compilation } from './abideModules.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
 import type { FromWorker, ToWorker } from './devWorker.ts'
+import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 import { muxSocketOptions, sendOrClose, upgraded } from './muxUpgrade.ts'
 import { placeOf } from './placement.ts'
 import { plainAnswer } from './plainAnswer.ts'
@@ -77,7 +78,7 @@ export async function serveDev(
     options: DevOptions,
 ): Promise<Bun.Server<undefined>> {
     // 38.24, 38.35 — every request, asked of the worker there is and streamed back a chunk per read.
-    // 16.22 — a call's idle timeout raised on the request bun handed this listener.
+    // 16.23 — a request's idle timeout set on the request bun handed this listener.
     const relay = askOver((request, seconds) =>
         served?.timeout(request, seconds),
     )
@@ -302,6 +303,8 @@ export async function serveDev(
         ...(port === undefined ? {} : { port }),
         // 16.54, as `App.listen` lifts it: the worker behind this is where the ceiling is read.
         maxRequestBodySize: Number.MAX_SAFE_INTEGER,
+        // 16.56 — the bound a request received whole lifts and its answer puts back (16.23).
+        idleTimeout: IDLE_TIMEOUT_SECONDS,
         async fetch(request, listening) {
             const asked = new URL(request.url).pathname
             // THE MUX STANDS UNDER THE MOUNT, which is the app's configuration and so the worker's to

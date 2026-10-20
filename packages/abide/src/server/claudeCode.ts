@@ -6,7 +6,7 @@
 // CONFIGURED BY CLAUDE CODE'S OWN OPTION NAMES, which the bridge lays on as their flags, and only the ones
 // that shape the answer. What would give a site power over the visitor's machine — permissions,
 // directory, settings — is not an option here at all, and its built-in `tools` are a request the visitor
-// grants or does not: the bridge decides (44.15, 44.16, 44.30).
+// grants or does not: the bridge decides (44.15, 44.16, 44.29).
 
 import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
@@ -42,7 +42,7 @@ export type ClaudeCodeConfig = {
     tools?: string[]
 }
 
-/** The built-in tools a pairing command grants, as the visitor would after its `--`. 44.33. */
+/** The built-in tools a pairing command grants, as the visitor would after its `--`. 44.32. */
 type PairingOptions = Pick<ClaudeCodeConfig, 'tools'>
 
 /** Whether this browser's bridge is connected, and the command that pairs one where it is not. */
@@ -128,7 +128,7 @@ function askingCaller(): string {
 
 /**
  * The command that pairs a bridge with this browser, and when its code stops standing. 44.14. The
- * `tools` it is given are written after its `--`, so the visitor running it grants them (44.30, 44.33).
+ * `tools` it is given are written after its `--`, so the visitor running it grants them (44.29, 44.32).
  */
 function bridgeCommand({ tools }: PairingOptions = {}): {
     command: string

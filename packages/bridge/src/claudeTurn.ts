@@ -2,7 +2,7 @@
 // `assistant` yields. Claude Code runs its own loop; its tools are the site's, reached through the MCP
 // server this bridge runs on loopback, and whatever built-in tools the visitor gave this bridge.
 //
-// THE SITE ASKS, THE VISITOR GRANTS (44.15, 44.16, 44.30). Every option is Claude Code's own, by name:
+// THE SITE ASKS, THE VISITOR GRANTS (44.15, 44.16, 44.29). Every option is Claude Code's own, by name:
 // a site's is laid on as its flag where it only shapes the answer, and its `tools` are a request the
 // visitor's own `--tools` narrows. What reaches this machine — a user's settings, a project's
 // CLAUDE.md, the files around it, its shell, the web from its network — is the visitor's to give, on
@@ -133,7 +133,7 @@ function takeFlag(args: string[], spellings: string[]): string[] | undefined {
 
 /**
  * Every flag but the protocol's: the site's, then the visitor's — so theirs wins where both set one —
- * then the built-in tools both named (44.30), and no setting source where the visitor named none.
+ * then the built-in tools both named (44.29), and no setting source where the visitor named none.
  * Beside them, the tools the site asked for that the visitor did not give.
  */
 function launchFlags(
@@ -262,7 +262,7 @@ export async function claudeTurn(
                     delta?.type === 'text_delta'
                 )
                     options.report({ type: 'text', text: delta.text as string })
-                // 44.29 — the call is announced as the model starts writing it, its input once written.
+                // 44.28 — the call is announced as the model starts writing it, its input once written.
                 else if (
                     line.event?.type === 'content_block_start' &&
                     started?.type === 'tool_use'

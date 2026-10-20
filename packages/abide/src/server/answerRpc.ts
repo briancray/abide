@@ -3,7 +3,7 @@
 // args off the request, and the answer onto a response.
 //
 // WIRE-ONLY, per 16.13: the `Origin` gate on a mutation, `maxBodySize`, the `crossOrigin` preflight,
-// raising the request's idle timeout (16.22), and 19.7's coercion of the text a URL carried.
+// and 19.7's coercion of the text a URL carried.
 
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
@@ -47,9 +47,9 @@ import { type AppRung, failureOf, rungsOver } from './hooks.ts'
 import { prefers } from './prefers.ts'
 import {
     currentRequestScope,
-    LISTENING,
     rungsTook,
     timed,
+    unreap,
     writtenStatus,
 } from './requestScope.ts'
 import { type Outcome, outcomeOf, takeSeed } from './seedBuffer.ts'
@@ -265,9 +265,6 @@ export async function answerRpc(
         if (isFailed(refused)) return answered(refused)
         throw refused
     }
-    // 16.56 — where neither names one, nothing is raised and the server's own idle timeout stands.
-    const timeout = handler.timeout ?? RPC_SERVER.timeout()
-    if (timeout !== undefined) raiseTimeout(timeout)
     // 41.7 — the call a hydrating page makes for what its render already reached is answered from
     // that, and the handler is not run again (41.13).
     // 16.51 — a `HEAD` leaves the seed for the `GET` it stands in front of.
@@ -499,23 +496,25 @@ function withParameters(
 }
 
 /**
- * The request's body under the ceiling `maxBodySize` sets, or `ABIDE_MAX_REQUEST_BODY_SIZE` where it
- * is unset, or a 413 refusal past it — the request itself where neither names one.
+ * The request's body, received whole, under the ceiling `maxBodySize` sets, or
+ * `ABIDE_MAX_REQUEST_BODY_SIZE` where it is unset, or a 413 refusal past it.
  *
  * 16.54 — NO CEILING BY DEFAULT. 16.55 — read off the declared length before a byte of the body is.
  * 16.78 — EVERY BODY ABIDE READS, a handler's and `/__abide/mcp`'s and `/__abide/bridge`'s alike.
+ * 16.23 — and the request received whole once it is read, which is where its idle timeout goes off.
  */
 export async function bodyWithin(
     request: Request,
     maxBodySize: number | undefined,
-): Promise<Request | Response | Failed<'HttpError', undefined>> {
+): Promise<Response | Failed<'HttpError', undefined>> {
     const ceiling =
         maxBodySize ??
         positiveSetting('ABIDE_MAX_REQUEST_BODY_SIZE', Number.POSITIVE_INFINITY)
-    if (!Number.isFinite(ceiling)) return request
     if (Number(request.headers.get('content-length') ?? 0) > ceiling)
         return overCeiling(ceiling)
-    return bodyUnder(request, ceiling)
+    const body = await bodyUnder(request, ceiling)
+    if (!isFailed(body)) unreap(currentRequestScope())
+    return body
 }
 
 /**
@@ -530,6 +529,11 @@ async function bodyUnder(
     request: Request,
     ceiling: number,
 ): Promise<Response | Failed<'HttpError', undefined>> {
+    if (!Number.isFinite(ceiling))
+        // A blob, which a `Response` shares where it copies an `ArrayBuffer`.
+        return new Response(await request.blob(), {
+            headers: request.headers,
+        })
     const chunks: Uint8Array[] = []
     let size = 0
     if (request.body !== null)
@@ -558,37 +562,6 @@ function preflight(found: Mounted, origin: string, request: Request): Response {
     const asked = request.headers.get('access-control-request-headers')
     if (asked !== null) headers.set('access-control-allow-headers', asked)
     return new Response(null, { status: 204, headers })
-}
-
-/**
- * Raises the request's idle timeout to cover `milliseconds`, never lowering it.
- *
- * 16.22, 16.23 — the floor is the longest any handler in the request asked for. Where no socket is
- * bound there is no idle timeout to raise.
- *
- * 16.57 — `Infinity` is never reaped, which bun spells 0; any finite bound is capped at the 255
- * seconds bun's idle timeout can hold.
- *
- * FOUR SECONDS PAST THE TIMEOUT, NOT AT IT: a load that goes its timeout is refused at that moment,
- * and a stream's refusal is a frame written then (16.68). bun's sockets check an idle timeout on a
- * tick four seconds wide, so an idle timeout of the same second — or one past it — fired anywhere in
- * the tick before it and reaped the connection ahead of the frame, one stream in two under `abide
- * dev`. Four is the tick, so the refusal always goes out first.
- *
- * ON THE REQUEST THE LISTENER RECEIVED, never the one being answered: under a mount, or past a
- * rung that handed `next` its own, that is a copy, and bun's `timeout` does nothing for a request
- * it was not handed itself.
- */
-export function raiseTimeout(milliseconds: number): void {
-    const scope = currentRequestScope()
-    const received = scope?.received
-    if (scope === undefined || received === undefined) return
-    const seconds = Number.isFinite(milliseconds)
-        ? Math.min(255, Math.ceil(milliseconds / 1000) + 4)
-        : Number.POSITIVE_INFINITY
-    if (seconds <= scope.timeout) return
-    scope.timeout = seconds
-    LISTENING.timeout(received, Number.isFinite(seconds) ? seconds : 0)
 }
 
 function isForm(request: Request): boolean {

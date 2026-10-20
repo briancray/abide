@@ -122,7 +122,7 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                             const block = event.content_block
                             blocks[event.index] = block
                             partials[event.index] = ''
-                            // 44.29 — announced as the model starts writing it.
+                            // 44.28 — announced as the model starts writing it.
                             if (block.type === 'tool_use')
                                 yield {
                                     type: 'tool',

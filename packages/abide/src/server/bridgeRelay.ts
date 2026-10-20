@@ -15,11 +15,10 @@
 import { isFailed } from '#shared/Failed.ts'
 import { refuse } from '#shared/refuse.ts'
 import { answered } from './answerFailure.ts'
-import { bodyWithin, raiseTimeout } from './answerRpc.ts'
+import { bodyWithin } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
 import { Inbox } from './Inbox.ts'
 import { randomToken } from './randomToken.ts'
-import { EVENT_STREAM_OPENER } from './streamEvent.ts'
 
 /**
  * What a turn hears from the bridge, in the order the bridge posted it: an event, an MCP request, the
@@ -53,9 +52,6 @@ const CODE_LIFETIME = 10 * 60_000
 const IDLE_GRACE = 30_000
 /** How long a pairing whose stream dropped waits to be resumed. 44.26. */
 export const RESUME_MILLISECONDS = 60_000
-/** How often a pairing's stream carries a comment while it has nothing else to send. 44.27. */
-export const HEARTBEAT_MILLISECONDS = 15_000
-const HEARTBEAT = new TextEncoder().encode(EVENT_STREAM_OPENER)
 
 const CODES = new Map<string, { caller: string; expires: number }>()
 const BY_CALLER = new Map<string, Bridge>()
@@ -246,56 +242,14 @@ function resume(request: Request): Response {
 /** `bridge`'s frames as this request's stream, held for `RESUME_MILLISECONDS` once it drops. */
 function attach(bridge: Bridge, request: Request): Response {
     const frames = bridge.frames
-    // 16.57 — a pairing stays open for as long as the bridge holds it.
-    raiseTimeout(Number.POSITIVE_INFINITY)
     request.signal.addEventListener('abort', () => {
         if (bridge.frames !== frames || !BY_TOKEN.has(bridge.token)) return
         bridge.frames = frames.handOff()
         bridge.held = setTimeout(() => dropBridge(bridge), RESUME_MILLISECONDS)
     })
-    const answer = framed(
-        frames[Symbol.asyncIterator](),
-        'sse',
-        new Headers(),
-        200,
-    )
-    return new Response(
-        withHeartbeat(answer.body as ReadableStream<Uint8Array>),
-        answer,
-    )
-}
-
-// 44.27 — A COMMENT EVERY HEARTBEAT, so a bridge can tell a connection that went silent without
-// ending from a quiet one. A comment rather than a frame: a bridge reads only `data:` lines, and a
-// frame would sit in the pairing's inbox through a drop.
-function withHeartbeat(
-    body: ReadableStream<Uint8Array>,
-): ReadableStream<Uint8Array> {
-    const reader = body.getReader()
-    let beat: ReturnType<typeof setInterval> | undefined
-    return new ReadableStream<Uint8Array>({
-        start(controller) {
-            beat = setInterval(
-                () => controller.enqueue(HEARTBEAT),
-                HEARTBEAT_MILLISECONDS,
-            )
-        },
-        async pull(controller) {
-            try {
-                const next = await reader.read()
-                if (!next.done) return controller.enqueue(next.value)
-                clearInterval(beat)
-                controller.close()
-            } catch (thrown) {
-                clearInterval(beat)
-                controller.error(thrown)
-            }
-        },
-        cancel(reason) {
-            clearInterval(beat)
-            return reader.cancel(reason)
-        },
-    })
+    // 16.57 — `App.fetch` beats it, which is how a bridge tells a connection
+    // gone silent from a quiet one (44.27).
+    return framed(frames[Symbol.asyncIterator](), 'sse', new Headers(), 200)
 }
 
 type BridgeReport = {

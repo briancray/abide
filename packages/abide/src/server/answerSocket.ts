@@ -315,7 +315,7 @@ export class MuxConnection {
             upgrade.headers.get('origin'),
             upgrade.url,
         )
-        // NO `received`: an upgraded connection has no http idle timeout for 16.22 to raise.
+        // NO `received`: an upgraded connection has no http idle timeout for 16.23 to set.
         this.scope = scopeFor(
             new Request(upgrade, { signal: this.hangUp.signal }),
             undefined,
@@ -562,7 +562,7 @@ export function followAsEvents(
     let ended = false
     return new ReadableStream({
         start(controller) {
-            controller.enqueue(ENCODER.encode(EVENT_STREAM_OPENER))
+            controller.enqueue(EVENT_STREAM_OPENER)
             // Ended by the app's stop as any body it holds open is, or that stop waits on it.
             unhold = heldByApp(() => {
                 if (ended) return

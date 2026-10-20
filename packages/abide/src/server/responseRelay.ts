@@ -25,7 +25,7 @@ export type ToRelay =
     | { kind: 'pull'; id: number }
     | { kind: 'cancel'; id: number }
 
-/** What the worker's half sends: a request's idle timeout raised, and its head, each chunk, and its end. */
+/** What the worker's half sends: a request's idle timeout set, and its head, each chunk, and its end. */
 export type FromRelay =
     | { kind: 'timeout'; id: number; seconds: number }
     | {
@@ -56,8 +56,8 @@ export function describe(thrown: unknown): string {
 
 /**
  * The worker's half: answers each request the listener sends with `fetch`, and its body a chunk per
- * pull. `take` is handed every `ToRelay` message; `timeout` raises a request's idle timeout where the
- * listener holds its connection (16.22); `hangUpAll` aborts every request still being answered.
+ * pull. `take` is handed every `ToRelay` message; `timeout` sets a request's idle timeout where the
+ * listener holds its connection (16.23); `hangUpAll` aborts every request still being answered.
  */
 export function serveOver(
     channel: Channel<FromRelay>,
@@ -80,7 +80,7 @@ export function serveOver(
         number,
         { reader: ReadableStreamDefaultReader<Uint8Array>; html: boolean }
     >()
-    // 16.22 — each request built here, known by the ask it was built from.
+    // 16.23 — each request built here, known by the ask it was built from.
     const asks = new WeakMap<Request, number>()
 
     const ended = (id: number): void => {
@@ -203,7 +203,7 @@ export function serveOver(
 // and, once its head has come back, the stream the body is fed into and the pull waiting on the
 // worker's next chunk (38.35).
 type InFlight = {
-    // 16.22 — the request bun handed the listener, which is the one its idle timeout is raised on.
+    // 16.23 — the request bun handed the listener, which is the one its idle timeout is set on.
     request: Request
     headers: [string, string][]
     body: ArrayBuffer | null
@@ -223,7 +223,7 @@ type InFlight = {
  * compiles; `endAll` ends what the worker that is gone was answering.
  */
 export function askOver(
-    raiseTimeout: (request: Request, seconds: number) => void,
+    setIdleTimeout: (request: Request, seconds: number) => void,
 ) {
     let channel: Channel<ToRelay> | undefined
     const inFlight = new Map<number, InFlight>()
@@ -334,7 +334,7 @@ export function askOver(
             const waiting = inFlight.get(message.id)
             if (waiting === undefined) return
             if (message.kind === 'timeout') {
-                raiseTimeout(waiting.request, message.seconds)
+                setIdleTimeout(waiting.request, message.seconds)
                 return
             }
             if (message.kind === 'head') {

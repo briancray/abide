@@ -26,7 +26,7 @@ const LAST_REDIAL_MILLISECONDS = 8_000
 export const RESUME_MILLISECONDS = 60_000
 // abide's `HEARTBEAT_MILLISECONDS`, spelled out for `BRIDGE_PATH`'s reason.
 export const HEARTBEAT_MILLISECONDS = 15_000
-// 44.28 — how long the stream may go without a line before it is taken for dropped.
+// 44.27 — how long the stream may go without a line before it is taken for dropped.
 export const SILENCE_MILLISECONDS = 3 * HEARTBEAT_MILLISECONDS
 
 type SiteFrame =
@@ -162,7 +162,7 @@ export async function bridge(options: {
     }
 
     const turns = new Map<string, AbortController>()
-    // 44.31 — A SIGNAL ENDS THE RUNS WITH THE BRIDGE: exiting on one skips every `finally`, so a run
+    // 44.30 — A SIGNAL ENDS THE RUNS WITH THE BRIDGE: exiting on one skips every `finally`, so a run
     // still going would outlive it, orphaned.
     const signals = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 } as const
     const stopped = (signal: keyof typeof signals): void => {
@@ -296,7 +296,7 @@ export async function bridge(options: {
     try {
         let bye = false
         for (;;) {
-            // 44.28 — a stream silent past the bound is cut, and redialed as one that dropped.
+            // 44.27 — a stream silent past the bound is cut, and redialed as one that dropped.
             const silence = setTimeout(
                 () => dialed.abort(),
                 silenceMilliseconds,

@@ -17,6 +17,7 @@ import type { Principal } from '#shared/principal.ts'
 import { SCOPING, type Scope } from '#shared/reactive/scoping.ts'
 import type { RpcRequest } from '#shared/rpcRequest.ts'
 import type { McpSurface } from './generatedSurfaces.ts'
+import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 
 /** The three framings a stream is answered in. 17.6. */
 export type Framing = Framed | 'bytes'
@@ -37,12 +38,8 @@ export type RequestScope = Scope & {
     caller: string | undefined
     /** This request's one resolve of the principal. 26.14. */
     principal: Promise<Principal> | undefined
-    /**
-     * The longest `timeout` any handler that ran in this request asked for, in seconds.
-     *
-     * 16.23 — and `Infinity` for one that is never reaped (16.57).
-     */
-    timeout: number
+    /** 16.23 — whether the received request's idle timeout is off until the answer is sent. */
+    unreaped: boolean
     /** This response's nonce, minted by the `csp` rung or on the first ask. 29.3. */
     nonce: string | undefined
     /** This request's cookie jar, built on the first ask. 22.2. */
@@ -71,7 +68,7 @@ export type RequestScope = Scope & {
     /**
      * The request the listener was handed, before a mount or a rung made another.
      *
-     * 16.22 — bun raises the idle timeout only on the one it received itself.
+     * 16.23 — bun sets the idle timeout only on the one it received itself.
      */
     received: Request | undefined
     /** What a write through `response` is collected onto, for whoever answers to apply. 22.9. */
@@ -168,7 +165,7 @@ export function scopeFor(
         cookies: undefined,
         nonce: undefined,
         framing: undefined,
-        timeout: 0,
+        unreaped: false,
         caller: undefined,
         principal: undefined,
         applied: false,
@@ -216,6 +213,8 @@ export function inReleasedScope<Result>(
     received: Request | undefined = given,
 ): Promise<Result> {
     const scope = scopeFor(given, received, app)
+    // 16.23 — a request with no body is received whole as it arrives.
+    if (received?.body === null) unreap(scope)
     return STORAGE.run(scope, async () => {
         try {
             return await body()
@@ -269,6 +268,12 @@ export function heldByApp(end: () => void): () => void {
 export function releaseScope(scope: RequestScope): void {
     scope.holds -= 1
     if (scope.holds > 0) return
+    // 16.56 — answered, the connection is reaped once idle again: set before bun writes an answer
+    // that was not streamed, and as the last chunk of one that was goes out.
+    if (scope.unreaped) {
+        scope.unreaped = false
+        LISTENING.timeout(scope.received as Request, IDLE_TIMEOUT_SECONDS)
+    }
     const stops = scope.stops
     for (let at = 0; at < stops.length; at += 1) (stops[at] as () => void)()
     stops.length = 0
@@ -285,10 +290,25 @@ export function adoptRequest(given: Request): void {
 }
 
 /**
- * What `App.listen` bound, and how a call raises the idle timeout on the received request.
+ * Turns the received request's idle timeout off until its answer is sent (16.23), for a request
+ * received whole. Where no request was received there is no connection to keep.
  *
- * 42.9 — the server is for `server` to hand back. 16.22 — the timeout is raised on the server
- * bound here, or where the listener is in another process (`abide dev`), by a message to it.
+ * WHOLE, NOT ARRIVED: a body still arriving is reaped as any idle connection is (16.56), so a caller
+ * that stops sending partway is not held open for good.
+ */
+export function unreap(scope: RequestScope | undefined): void {
+    if (scope === undefined || scope.received === undefined || scope.unreaped)
+        return
+    scope.unreaped = true
+    // bun spells "never reaped" 0.
+    LISTENING.timeout(scope.received, 0)
+}
+
+/**
+ * What `App.listen` bound, and how the idle timeout is set on the received request.
+ *
+ * 42.9 — the server is for `server` to hand back. 16.23 — the timeout is set on the server bound
+ * here, or where the listener is in another process (`abide dev`), by a message to it.
  */
 export const LISTENING: {
     server: Bun.Server<unknown> | undefined

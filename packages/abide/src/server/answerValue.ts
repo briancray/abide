@@ -14,6 +14,7 @@ import {
 } from './requestScope.ts'
 import {
     EVENT_STREAM_OPENER,
+    heldBody,
     refusalFrame,
     streamEvent,
 } from './streamEvent.ts'
@@ -38,7 +39,7 @@ export async function answerValue(
     headers: Headers,
     status: number,
 ): Promise<Response> {
-    if (value instanceof Response) return value
+    if (value instanceof Response) return heldUntilSent(value)
     const framing = currentRequestScope()?.framing
     // 17.9, 17.10 — what `json` fixed: the standing value, whatever it is, and `null` for nothing.
     if (framing === 'json') {
@@ -223,8 +224,7 @@ export function bodyOf(
     const unhold = heldByApp(() => stopped())
     return new ReadableStream<Uint8Array>({
         start(controller) {
-            if (framing === 'sse')
-                controller.enqueue(ENCODER.encode(EVENT_STREAM_OPENER))
+            if (framing === 'sse') controller.enqueue(EVENT_STREAM_OPENER)
             stopped = () => {
                 if (ended) return
                 release()
@@ -288,6 +288,18 @@ export function bodyOf(
             release()
         },
     })
+}
+
+/**
+ * `answer`, holding its request's scope until its body has been read to the end.
+ *
+ * 12.5, 16.23 — A `Response` A HANDLER BUILT MAY BE A STREAM, and nothing tells a stream from a
+ * string or a blob once it is one: `body` is a `ReadableStream` either way. So every body is held,
+ * at the price of a buffered one going out chunked rather than under a `Content-Length`.
+ */
+function heldUntilSent(answer: Response): Response {
+    if (answer.body === null) return answer
+    return new Response(heldBody(answer.body, holdScope(), false), answer)
 }
 
 /**
