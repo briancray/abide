@@ -1998,7 +1998,16 @@ function refused(cell: Cell, failure: unknown): unknown {
     // had set it true, and `error` went from nothing to this. A guard that asked about
     // either is woken here or never.
     probesMoved(cell)
-    if (!cell.servable) cascade(cell)
+    if (cell.servable) return failure
+    // 7.19 — A SERVER THAT COULD NOT BE REACHED (16.79) says nothing about the value held, so the
+    // invalidated value is served again rather than lost to a read that throws, as 4.12 serves one.
+    if (
+        cell.landed &&
+        isFailedNamed(failure, 'HttpError') &&
+        (failure as Failed<string, unknown>).status === 503
+    )
+        serveAgain(cell)
+    else cascade(cell)
     return failure
 }
 
@@ -3253,7 +3262,9 @@ function settled(cell: Cell, untilStreaming = false): Promise<unknown> {
     if (untilStreaming && cell.stream !== null)
         return Promise.resolve(STREAMING)
     if (cell.servable && !busyNow(cell)) return Promise.resolve(heldValue(cell))
-    if (!cell.landed && !busyNow(cell)) {
+    // 2.8 — UNSERVED, NOT UNLANDED: an invalidated value has landed (7.8), and a reload that failed
+    // over it leaves the failure as the answer, or the await waits on a load that has ended.
+    if (!busyNow(cell)) {
         const failure = failureOf(cell)
         if (failure !== undefined) return Promise.reject(failure)
     }
@@ -3280,7 +3291,6 @@ function settled(cell: Cell, untilStreaming = false): Promise<unknown> {
                 settle(heldValue(cell))
                 return
             }
-            if (cell.landed) return
             const failure = failureOf(cell)
             if (failure !== undefined) {
                 waiter.alive = false

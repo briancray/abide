@@ -59,3 +59,14 @@ export const SOCKET_ADDRESS = `${ABIDE_ADDRESS}/socket`
  * 26.2.
  */
 export const PRINCIPAL_ADDRESS = `${ABIDE_ADDRESS}/principal`
+
+/**
+ * Where an app with `ABIDE_OFFLINE` on serves its service worker, and where every other app serves
+ * the one that removes it.
+ *
+ * 45.1, 45.9.
+ */
+export const WORKER_ADDRESS = `${ABIDE_ADDRESS}/worker.js`
+
+/** The web app manifest an app answers where it keeps its pages offline and has an icon (45.15). */
+export const APP_MANIFEST_ADDRESS = `${ABIDE_ADDRESS}/manifest.webmanifest`

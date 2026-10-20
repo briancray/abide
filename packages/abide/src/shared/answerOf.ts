@@ -81,13 +81,38 @@ async function fetched(
     streams: boolean,
     signal: AbortSignal | undefined,
 ): Promise<Answer> {
-    const response = await fetch(
-        request.url,
-        signal === undefined ? request.init : { ...request.init, signal },
-    )
+    let response: Response
+    try {
+        response = await fetch(
+            request.url,
+            signal === undefined ? request.init : { ...request.init, signal },
+        )
+    } catch (error) {
+        // An abort is the load's own ending (16.49), which the value has already answered.
+        if (signal?.aborted === true) throw error
+        // 16.79 — NO ANSWER AT ALL, as a status the app can narrow on rather than the browser's
+        // own `TypeError`, whose message differs in each.
+        return unanswered()
+    }
     // THE HANDLER SIGNED THIS CALLER IN OR OUT, and the cookie is already the browser's.
     principalRotated(response)
     return answerFrom(response, undefined, streams)
+}
+
+/** The answer a call that reached no server stands in for: an empty 503, which `answered` refuses. */
+function unanswered(): Answer {
+    return {
+        status: 503,
+        statusText: '',
+        ok: false,
+        framing: null,
+        followable: false,
+        version: undefined,
+        life: undefined,
+        text: '',
+        bytes: undefined,
+        body: undefined,
+    }
 }
 
 /**

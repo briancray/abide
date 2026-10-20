@@ -8,15 +8,19 @@
 
 import {
     ABIDE_ADDRESS,
+    APP_MANIFEST_ADDRESS,
     BRIDGE_ADDRESS,
     CLIENT_ADDRESS,
     HEALTH_ADDRESS,
     MCP_ADDRESS,
     OPENAPI_ADDRESS,
     PRIVATE_HANDLERS_ADDRESS,
+    WORKER_ADDRESS,
 } from '#shared/ADDRESSES.ts'
 import { APP_META } from '#shared/APP_META.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
+import { ICON_ADDRESSES } from '#shared/LAUNCHER_FILES.ts'
+import { OFFLINE_META } from '#shared/OFFLINE_META.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { ERROR_META } from '#shared/ERROR_META.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
@@ -49,7 +53,10 @@ import {
 import { answerBlobTagged, answerValue, contentEtag } from './answerValue.ts'
 import { answerBridge } from './bridgeRelay.ts'
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
+import { appManifest } from './appManifest.ts'
+import { answerWorker } from './answerWorker.ts'
 import { callerOrMint } from './callerOf.ts'
+import { settingOn } from './config.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
 import { noteCallInRender } from './deferredBuilds.ts'
@@ -72,6 +79,7 @@ import {
     adoptRequest,
     beginRender,
     currentRequestScope,
+    type PageRender,
     type RequestScope,
     within,
     writtenStatus,
@@ -161,6 +169,9 @@ export type AppSources = {
      */
     explained: ((thrown: unknown) => Response) | undefined
 }
+
+// 41.29 — the seed sink of a render no page hydrates: every call is left to run when it is made.
+const SEEDS_NOTHING: PageRender['seed'] = () => false
 
 /** The `Response` to one request: a handler, a surface of abide's own, a file, or a page. */
 export async function answerRequest(
@@ -338,7 +349,10 @@ async function answerMatched(
     arrive(at.href, page.pattern, params)
     // 11.32 — the page renders in a scope of its own, so what its values hold is this request's —
     // and 41.13, every call it makes is left for the browser's own call to be answered from.
-    beginRender({ seed: seedFor(caller), calls: [] })
+    // 41.29 — BUT NOT A PAGE A SCRIPT FETCHED, which nothing hydrates: its entries would answer the
+    // next call this caller makes with what the render saw, a sign-in since included.
+    const hydrated = request.headers.get('sec-fetch-dest') !== 'empty'
+    beginRender({ seed: hydrated ? seedFor(caller) : SEEDS_NOTHING, calls: [] })
     // 41.1, 35.2 — THE DOCUMENT IS THE BUILT PAGE, read whole before there is a `Response` to commit a
     // status to: a refusal the page read, or a throw, is answered by the nearest error page at its own
     // status rather than as a 200 the stream then abandons.
@@ -457,6 +471,11 @@ type ClientLane = {
     manifest: Manifest
     framework: AppSources['framework']
     head: string
+    /**
+     * 45.1, 45.9 — whether the worker saves `manifest`'s bundle and the pages register it: `abide
+     * build`'s, unless `ABIDE_OFFLINE` is off. Where not, the worker address answers the removing one.
+     */
+    offline: boolean
 }
 
 /**
@@ -476,10 +495,19 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
     ])
     // 35.6 — every page is served in abide's own document; what it carries beyond that, the root
     // `layout.abide` writes (35.15).
+    // 45.15 — installable where the pages are kept offline and the app has an icon to install by.
+    const icon = published.get(ICON_ADDRESSES.png)
+    const install =
+        icon !== undefined && settingOn('ABIDE_OFFLINE', true)
+            ? await appManifest(icon.path)
+            : undefined
     const documentOf = (modules: string[]): string =>
         intoHead(
             DEFAULT_DOCUMENT,
-            clientTags(client.manifest, modules) + client.head,
+            clientTags(client.manifest, modules) +
+                (client.offline ? `<meta name="${OFFLINE_META}">` : '') +
+                (install?.tags ?? '') +
+                client.head,
         )
     const pages: Omit<Ranked, 'segments'>[] = []
     for (const route of parts.table.routes)
@@ -517,7 +545,20 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
         errors,
         // 35.18 — marked, so the browser hydrates no page over what an error page painted.
         errorDocument: intoHead(documentOf([]), `<meta name="${ERROR_META}">`),
-        framework: client.framework,
+        framework: (pathname, request) => {
+            if (pathname === WORKER_ADDRESS)
+                return answerWorker(
+                    client.offline ? client.manifest : undefined,
+                )
+            if (pathname === APP_MANIFEST_ADDRESS && install !== undefined)
+                return new Response(install.body, {
+                    headers: {
+                        'content-type': 'application/manifest+json',
+                        'cache-control': 'no-cache',
+                    },
+                })
+            return client.framework(pathname, request)
+        },
         published,
         explained: parts.explained,
         ...mounted,

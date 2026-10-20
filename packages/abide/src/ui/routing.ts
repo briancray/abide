@@ -15,4 +15,5 @@
 // `ROUTING_SPECIFIER`. An app with no page never resolves this entry.
 
 export { listenForRoutes } from './listenForRoutes.ts'
+export { registerWorker } from './registerWorker.ts'
 export { type PageMount, type Route, Router, startRouter } from './Router.ts'

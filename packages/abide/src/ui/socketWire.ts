@@ -133,6 +133,7 @@ class Mux {
     subscriptions: Map<number, Following>
     nextId: number
     retry: number
+    retrying: ReturnType<typeof setTimeout> | undefined
 
     constructor(url: string) {
         this.url = url
@@ -140,7 +141,23 @@ class Mux {
         this.subscriptions = new Map()
         this.nextId = 1
         this.retry = RETRY_FLOOR_MS
+        this.retrying = undefined
         onPrincipalRotated(() => this.reopen(), true)
+        // 18.33 — THE BACKOFF IS FOR A SERVER THAT IS DOWN, not for a network that has just come
+        // back or a tab whose timers the browser was throttling while it was hidden.
+        addEventListener('online', () => this.redial())
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') this.redial()
+        })
+    }
+
+    /** Opens a closed socket now, in place of the retry waiting out its backoff. */
+    redial(): void {
+        if (this.socket !== null || this.subscriptions.size === 0) return
+        clearTimeout(this.retrying)
+        this.retrying = undefined
+        this.retry = RETRY_FLOOR_MS
+        this.connect()
     }
 
     /**
@@ -188,9 +205,23 @@ class Mux {
         socket.onclose = () => {
             this.socket = null
             if (this.subscriptions.size === 0) return
-            setTimeout(() => this.connect(), this.retry)
-            this.retry = Math.min(this.retry * 2, RETRY_CEILING_MS)
+            this.retryLater()
         }
+    }
+
+    /**
+     * Arms the next attempt at the backoff standing, and doubles it.
+     *
+     * 18.34 — OFFLINE, AN ATTEMPT CANNOT SUCCEED, so none is armed: the `online` event's `redial`
+     * makes the next one.
+     */
+    retryLater(): void {
+        if (!navigator.onLine) return
+        this.retrying = setTimeout(() => {
+            this.retrying = undefined
+            this.connect()
+        }, this.retry)
+        this.retry = Math.min(this.retry * 2, RETRY_CEILING_MS)
     }
 
     receive(frame: ServerFrame): void {

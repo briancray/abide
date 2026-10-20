@@ -525,7 +525,7 @@ function tableOf(
  */
 function clientTable(routes: AppRoute[], transitions: boolean): string {
     return `// Written by \`abide build\`. The addresses this app answers, and what to load for each.
-import { listenForRoutes, startRouter } from '${ROUTING_SPECIFIER}'
+import { listenForRoutes, registerWorker, startRouter } from '${ROUTING_SPECIFIER}'
 
 export const routes = [
 ${tableOf(routes)}
@@ -538,6 +538,7 @@ export function start(host: Element) {
     const router = startRouter(routes, host, ${transitions})
     listenForRoutes(router)
     const ready = router.hydrate()
+    registerWorker()
     return { router, ready }
 }
 `

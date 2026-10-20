@@ -4,6 +4,7 @@ import { ERROR_META } from '#shared/ERROR_META.ts'
 import { firstMatch, type Params, partsOf } from '#shared/matchRoute.ts'
 import { unmounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
+import { OFFLINE_SAVED } from '#shared/OFFLINE_CACHES.ts'
 import type { ShareScope } from '#shared/reactive/share.ts'
 import { arrive, route } from '#shared/route.ts'
 import { rankRoutes, type Segment } from '#shared/routePattern.ts'
@@ -255,6 +256,20 @@ export class Router {
             // whole reason the ticket is checked here rather than after the mount — and
             // `navigating` stays the newer navigation's to clear.
             if (ticket.signal.aborted) return
+            // 30.32 — OFFLINE, THE DOCUMENT LOAD BELOW CAN ONLY PAINT THE BROWSER'S ERROR PAGE over a
+            // page that works. A history step has already moved the bar, so it is left to the
+            // document.
+            if (
+                answer === undefined &&
+                !navigator.onLine &&
+                step.direction === 'push'
+            ) {
+                // 45.12 — UNLESS THE SERVICE WORKER SAVED THE PAGE, which the document load is
+                // then answered with.
+                if ((await savedOffline(target)) && !ticket.signal.aborted)
+                    location.href = target.href
+                return
+            }
             // 30.18 — A REFUSAL, A RESPONSE MIDDLEWARE ANSWERED ITSELF, or no answer at all: the
             // document asks again and paints whatever the server says. A fetch that failed —
             // offline, or a redirect to another origin that CORS will not let it follow — goes to
@@ -694,6 +709,16 @@ async function load(route: Compiled): Promise<PageModule[]> {
 /** A route's chain as `load` gives it; `undefined` where a chunk failed to load. */
 function loadOrMiss(route: Compiled): Promise<PageModule[] | undefined> {
     return load(route).catch(() => undefined)
+}
+
+/** Whether a service worker controls the page and saved `target`'s page (45.12). */
+async function savedOffline(target: URL): Promise<boolean> {
+    if (navigator.serviceWorker?.controller == null) return false
+    const saved = await caches.match(target.href, {
+        cacheName: OFFLINE_SAVED,
+        ignoreVary: true,
+    })
+    return saved !== undefined
 }
 
 /**

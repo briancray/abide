@@ -24,6 +24,7 @@ import {
     PUBLIC_DIRECTORY,
 } from './CLIENT_BUILD.ts'
 import { bundleServer, type ServedFile } from './clientBundle.ts'
+import { settingOn } from './config.ts'
 import type { Manifest } from './manifestOf.ts'
 import { namesUnder } from './namesUnder.ts'
 import { ENCODINGS } from './negotiateEncoding.ts'
@@ -137,6 +138,7 @@ export function builtSources(parts: BuildParts): Promise<AppSources> {
                 files,
                 'public, max-age=31536000, immutable',
             ),
+            offline: settingOn('ABIDE_OFFLINE', true),
         },
     })
 }

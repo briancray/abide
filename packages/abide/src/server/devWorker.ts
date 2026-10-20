@@ -128,7 +128,7 @@ const relay = serveOver(
     },
 )
 
-// 16.22 — THE LISTENER HOLDS THE CONNECTION, so the idle timeout a call raises is raised there, on
+// 16.23 — THE LISTENER HOLDS THE CONNECTION, so a request's idle timeout is set there, on
 // the request bun handed it.
 LISTENING.timeout = relay.timeout
 
@@ -239,6 +239,9 @@ async function open(
                 client: bundling.then((bundle) => ({
                     manifest: bundle.manifest,
                     head: `<script type="module" src="${RELOAD_CLIENT_ADDRESS}"></script>`,
+                    // 45.9 — a worker `abide start` registered on this origin is removed rather than
+                    // left answering a dev server from what it saved.
+                    offline: false,
                     framework: (pathname, request) =>
                         pathname === RELOAD_CLIENT_ADDRESS
                             ? new Response(RELOAD_CLIENT, {
