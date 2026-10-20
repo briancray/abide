@@ -8,7 +8,14 @@
 // attribute's name.
 import { textOf } from './Raw.ts'
 
-const SAFE_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:'])
+const SAFE_SCHEMES = new Set([
+    'http:',
+    'https:',
+    'mailto:',
+    'tel:',
+    'blob:',
+    'data:',
+])
 
 /** A URL attribute's text, or `''` where its scheme is outside the safe set. */
 export function safeUrl(value: unknown): string {

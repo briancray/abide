@@ -31,7 +31,7 @@ export function attributeText(name: string, value: unknown): string | null {
     const safe = safeUrl(text)
     if (safe !== text)
         RENDER_LOG.warning(
-            `abide: \`${name}\` was handed a URL whose scheme is not http:, https:, mailto: or tel:, and is written empty. RULEBOOK 32.20.`,
+            `abide: \`${name}\` was handed a URL whose scheme is not http:, https:, mailto:, tel:, blob: or data:, and is written empty. RULEBOOK 32.20.`,
         )
     return safe
 }
