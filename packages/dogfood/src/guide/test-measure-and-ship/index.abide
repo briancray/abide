@@ -417,6 +417,25 @@ abide bundle --out ~/Applications/CRM.app`} />
         picks an item, and the page runs unchanged.</p>
     </Section>
 
+    <Section title="Keep the CRM readable offline">
+        <Code code={`abide start
+ABIDE_OFFLINE=0 abide start`} />
+
+        <p>Each page the CRM opens is kept on the device, with the answers its handlers gave, the
+        public files it loaded and the bundle it runs, until <code>ABIDE_OFFLINE=0</code> turns
+        that off where the CRM is served. With the network gone, a page opened before loads again
+        with its data and works. One never opened says the device is offline, and a link to it
+        leaves the page you are on standing.</p>
+
+        <p>With <code>src/public/icon.png</code> beside it, each page also links a manifest, so a
+        phone can add the CRM to its home screen, which is what keeps what was saved there for
+        good.</p>
+
+        <p>A kept page shows what it showed when it was last opened, live updates stop, and a
+        change fails until the network is back. A sign-in, a sign-out or a submitted form clears
+        what was kept, and a new build replaces it. <code>abide dev</code> keeps nothing.</p>
+    </Section>
+
     <Section title="Next">
         <p>That is the CRM: contacts, deals, a live feed, pages, access, operations, machines, and
         now reports, tested and shipped. Start again from

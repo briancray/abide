@@ -538,3 +538,70 @@ test('a GET answered with a refusal is not followed — 18.24', async () => {
         globalThis.fetch = answering
     }
 })
+
+const muxSockets = (): number =>
+    sockets.filter((socket) => socket.url === MUX).length
+
+// The server going away: the stand-in's close, as a browser reports one.
+function dropMux(): void {
+    const socket = muxSocket()
+    socket.readyState = 3
+    socket.onclose?.()
+}
+
+// `navigator.onLine` as a test sets it, the browser's own taken back by `restore`.
+function goOffline(): () => void {
+    let onLine = false
+    Object.defineProperty(navigator, 'onLine', {
+        configurable: true,
+        get: () => onLine,
+    })
+    return () => {
+        onLine = true
+        delete (navigator as { onLine?: boolean }).onLine
+    }
+}
+
+// 18.33 — BACK ONLINE, THE MUX REDIALS NOW rather than when its backoff runs out. THE REVERT: drop the
+// `online` listener from `Mux`'s constructor; no socket opens until the retry's timer fires.
+test('a mux the server closed opens again at once when the browser comes online — 18.33', async () => {
+    const atlas = wire('GET', `${LIBRARY}/atlas`) as (
+        args?: unknown,
+    ) => PromiseLike<unknown>
+    await atlas()
+    await settle()
+    const before = muxSockets()
+    dropMux()
+    dispatchEvent(new Event('online'))
+    expect(`opened: ${muxSockets() - before}`).toBe('opened: 1')
+    await settle()
+})
+
+// 18.33 — A TAB SHOWN AGAIN REDIALS NOW: a hidden tab's timers are throttled. THE REVERT: drop the
+// `visibilitychange` listener; no socket opens until the retry's timer fires.
+test('a mux the server closed opens again at once when the page becomes visible — 18.33', async () => {
+    const before = muxSockets()
+    dropMux()
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(`opened: ${muxSockets() - before}`).toBe('opened: 1')
+    await settle()
+})
+
+// 18.34 — OFFLINE, THE MUX DOES NOT DIAL, and the `online` event is what dials it. THE REVERT: drop the
+// `navigator.onLine` guard from `retryLater`; a socket opens once the backoff's 250 ms run out.
+test('a mux that closed while offline is not opened again until the browser is online — 18.34', async () => {
+    const before = muxSockets()
+    const restore = goOffline()
+    try {
+        dropMux()
+        await new Promise((done) => setTimeout(done, 400))
+        expect(`opened offline: ${muxSockets() - before}`).toBe(
+            'opened offline: 0',
+        )
+    } finally {
+        restore()
+    }
+    dispatchEvent(new Event('online'))
+    expect(`opened online: ${muxSockets() - before}`).toBe('opened online: 1')
+    await settle()
+})

@@ -2,6 +2,7 @@
   "version": 1,
   "files": {
     "packages/dogfood/tests/examples.test.ts": 34501,
+    "packages/abide/tests/idleTimeout.test.ts": 17000,
     "packages/abide/tests/check.test.ts": 8456,
     "packages/abide/tests/reactive.test.ts": 7323,
     "packages/dogfood/tests/check.test.ts": 7095,

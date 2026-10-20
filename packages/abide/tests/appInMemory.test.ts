@@ -1,4 +1,4 @@
-// 16.22, 16.56, 16.57, 20.10, 42.12 — WHAT AN `App` DOES WITH A CALL, held in this process over
+// 16.23, 16.56, 20.10, 42.12 — WHAT AN `App` DOES WITH A CALL, held in this process over
 // modules already loaded (`inMemoryApp.ts`): the same `bootApp` and `appSources` every command boots
 // through, with no `abide build` and no child process ahead of it.
 
@@ -28,39 +28,50 @@ const INVOICES = {
         ),
     },
     'invoices/untimed.ts': { default: GET(() => 1) },
-    'invoices/slow.ts': { default: GET(() => 1, { timeout: 40_000 }) },
     'invoices/endless.ts': { default: GET(() => 1, { timeout: Infinity }) },
+    'invoices/settle.ts': { default: POST(({ id }: { id: number }) => id) },
 }
 
 afterAll(() => {
     LISTENING.server = undefined
 })
 
-// 16.22, 16.56, 16.57 — WHAT A CALL RAISES THE REQUEST'S IDLE TIMEOUT TO, read off a recording server:
-// nothing where no `timeout` is named, a socket tick past the seconds where one is (its refusal is
-// written at the timeout, 16.68), and bun's 0 — never reaped — for
-// `Infinity`. In process, because the idle timeout a socket was given is not observable from the
-// far end short of waiting it out. THE REVERT: fall back to 30_000 for `ABIDE_RPC_TIMEOUT`; the
-// untimed call raises to 30.
-test('a call raises the idle timeout only as far as its timeout says — 16.56, 16.57', async () => {
-    const raised: Record<string, number[]> = {}
+// 16.23, 16.56 — WHAT A CALL DOES TO THE REQUEST'S IDLE TIMEOUT, read off a recording server: off
+// once the request is received whole and back to bun's ten seconds once it is answered, whatever
+// `timeout` the handler names, and for a body read as for none. In process, because the idle timeout
+// a socket was given is not observable from the far end short of waiting it out (`idleTimeout.test.ts`
+// does). THE REVERT: drop the restore in `releaseScope`; every call reads `[0]`.
+test('a call is never reaped while answered, and reaped once idle again — 16.23, 16.56', async () => {
+    const set: Record<string, number[]> = {}
     const answered: Record<string, number> = {}
     let calling = ''
     LISTENING.server = {
         timeout: (_request: Request, seconds: number) =>
-            raised[calling]?.push(seconds),
+            set[calling]?.push(seconds),
     } as never
     await using app = await inMemoryApp(INVOICES)
-    for (const name of ['untimed', 'slow', 'endless']) {
+    for (const name of ['untimed', 'endless', 'settle']) {
         calling = name
-        raised[name] = []
+        set[name] = []
         answered[name] = (
-            await app.fetch(new Request(`http://app.test${RPC}/${name}`))
+            await app.fetch(
+                name === 'settle'
+                    ? new Request(`http://app.test${RPC}/${name}`, {
+                          method: 'POST',
+                          headers: { 'content-type': 'application/json' },
+                          body: '{"id":1}',
+                      })
+                    : new Request(`http://app.test${RPC}/${name}`),
+            )
         ).status
     }
-    expect({ raised, answered }).toEqual({
-        raised: { untimed: [], slow: [44], endless: [0] },
-        answered: { untimed: 200, slow: 200, endless: 200 },
+    expect({ set, answered }).toEqual({
+        set: {
+            untimed: [0, 10],
+            endless: [0, 10],
+            settle: [0, 10],
+        },
+        answered: { untimed: 200, endless: 200, settle: 200 },
     })
 })
 
@@ -98,23 +109,26 @@ test('an MCP call is answered by its own App, not the last one built — 20.10, 
     expect(called.isError).toBe(false)
 })
 
-// 16.22, 16.10 — THE TIMEOUT IS RAISED ON THE REQUEST THE LISTENER RECEIVED. Under a mount the app
+// 16.23, 16.10 — THE TIMEOUT IS SET ON THE REQUEST THE LISTENER RECEIVED. Under a mount the app
 // answers a copy below it, and bun's `timeout` does nothing for a request it was not handed itself.
-// THE REVERT: raise it on the request `answerRpc` answers; the recording server is handed the copy,
-// and reads `[false, 44]`.
-test('a call under a mount raises the idle timeout on the request the listener received — 16.22, 16.10', async () => {
-    const received = new Request(`http://app.test/app${RPC}/slow`)
-    const raised: [boolean, number][] = []
+// THE REVERT: open the scope with the copy as its `received` in `App.fetch`; the recording server is
+// handed the copy, and reads `[false, 0], [false, 10]`.
+test('a call under a mount sets the idle timeout on the request the listener received — 16.23, 16.10', async () => {
+    const received = new Request(`http://app.test/app${RPC}/untimed`)
+    const set: [boolean, number][] = []
     LISTENING.server = {
         timeout: (request: Request, seconds: number) =>
-            raised.push([request === received, seconds]),
+            set.push([request === received, seconds]),
     } as never
     process.env.APP_URL = 'http://app.test/app'
     try {
         await using app = await inMemoryApp(INVOICES)
         const status = (await app.fetch(received)).status
-        expect({ raised, status }).toEqual({
-            raised: [[true, 44]],
+        expect({ set, status }).toEqual({
+            set: [
+                [true, 0],
+                [true, 10],
+            ],
             status: 200,
         })
     } finally {

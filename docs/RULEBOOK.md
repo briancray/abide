@@ -83,6 +83,7 @@ These are immutable. A change to them is a change to what this document is.
 - [42. The app object](#42)
 - [43. The measurement harness](#43)
 - [44. The assistant](#44)
+- [45. Offline](#45)
 
 ## Terms
 
@@ -307,8 +308,8 @@ window held MUST start one reload when the window closes.
 
 6.2 `ttl` on a value with no producer MUST be inert.
 
-6.3 An implementation MUST hold one expiry timer per value declaring `ttl`, armed at the deadline of
-the production it serves.
+6.3 An implementation MUST hold at most one expiry timer per value declaring `ttl`, armed no later
+than the deadline of the production it serves, and none where that deadline is never reached.
 
 6.4 A `ttl` expiry timer MUST NOT hold the process open.
 
@@ -365,6 +366,9 @@ producer.
 7.17 A value `s.invalidate` marked MUST go on being served until a read or a probe runs its producer.
 
 7.18 `s.refresh` on a wired `Reactive` MUST refresh every subscriber's copy.
+
+7.19 A load over a value `s.invalidate` marked that is refused with `HttpError` at 503 MUST leave the
+value it held being served.
 
 # 8. Stores
 
@@ -897,9 +901,10 @@ declared.
 
 16.21 A throw from a `Middleware` rung MUST escape the whole onion rather than unwind through it.
 
-16.22 `timeout` MUST raise the request's idle timeout, and MUST only raise it.
+16.22 `timeout` and `ABIDE_RPC_TIMEOUT` MUST default to no bound.
 
-16.23 A request's `timeout` floor MUST be the maximum over every handler that ran in it.
+16.23 A request MUST NOT be ended by the idle timeout of the server `App.listen` or `abide dev` binds
+from when it has been received whole until its answer, a stream's last chunk included, has been sent.
 
 16.24 `crossOrigin` MUST default to false, and where it is declared abide MUST answer the `OPTIONS`
 preflight itself. An `OPTIONS` naming no `access-control-request-method` is no preflight, and MUST be
@@ -997,10 +1002,11 @@ MUST refuse with `aborted` at status 499, and MUST abort the request carrying it
 16.55 A mutation's body over the ceiling `maxBodySize` or `ABIDE_MAX_REQUEST_BODY_SIZE` sets MUST
 be refused 413, whether its length was declared or streamed.
 
-16.56 Where neither `timeout` nor `ABIDE_RPC_TIMEOUT` is set, a call MUST NOT raise the request's
-idle timeout.
+16.56 A connection to the server `App.listen` or `abide dev` binds MUST be ended once it goes 10
+seconds without a byte while no request over it is being answered.
 
-16.57 A `timeout` of `Infinity` MUST leave the request's idle timeout off.
+16.57 An answer typed `text/event-stream` MUST carry a comment every 15 seconds for as long as it is
+open.
 
 16.58 Where a handler names no `timeout`, `ABIDE_RPC_TIMEOUT` MUST be its `timeout`.
 
@@ -1068,6 +1074,9 @@ call MUST wait on that window as 5.15 has it.
 
 16.78 A body `/__abide/mcp` or `/__abide/bridge` reads over the ceiling `ABIDE_MAX_REQUEST_BODY_SIZE`
 sets MUST be refused 413, whether its length was declared or streamed.
+
+16.79 An `Rpc` call in a browser that gets no answer, and whose `signal` has not aborted, MUST refuse
+with `HttpError` at 503.
 
 # 17. Response helpers
 
@@ -1190,6 +1199,11 @@ unsent, and MUST NOT be sent the frames after it.
 
 18.32 A subscription to a `GET` naming an id its connection already follows MUST replace that one, and
 MUST NOT count toward 18.31's bound.
+
+18.33 A browser's connection to the socket mux that closed while a `GET` is followed MUST be opened
+again at once where `online` becomes true or the page becomes visible.
+
+18.34 A browser's connection to the socket mux MUST NOT be opened again while `online` is false.
 
 # 19. Mount paths and schemas
 
@@ -1715,7 +1729,7 @@ fragment it carries names.
 and no public file of the app is served at.
 
 30.27 A `navigate` whose request fails, or whose route's chunks fail to load, MUST leave the address
-to the document.
+to the document, save where 30.32 holds.
 
 30.28 A `Query` record and the args an `Rpc` carries in its URL MUST be written in one spelling: a
 member left `undefined` omitted, a list its member repeated, an empty list its name with no `=`, and
@@ -1729,6 +1743,9 @@ the document, MUST land at that scroll.
 
 30.31 A `navigate` that a later `navigate` overtakes before it mounts MUST abort the request it made
 to `middleware`.
+
+30.32 A `navigate` that is not a history step, whose request gets no answer while `online` is false,
+MUST leave the page and the address where they stand, save where 45.12 holds.
 
 # 31. Reading and writing by name
 
@@ -1826,7 +1843,7 @@ body.
 MUST NOT be built as a string.
 
 32.20 An interpolation in a URL-typed attribute MUST be scheme-checked, and a scheme outside
-`http:`, `https:`, `mailto:`, `tel:` or a relative reference MUST be dropped and warned on
+`http:`, `https:`, `mailto:`, `tel:`, `blob:`, `data:` or a relative reference MUST be dropped and warned on
 `abide:render`, naming the attribute and not the value.
 
 32.21 A control block MUST bind each reactive read and probe call in its subject once for the body.
@@ -2912,6 +2929,8 @@ adopts the page, however early its answer arrived.
 41.28 A `render` MUST let the turn's queued microtasks run between setting up a `<Name/>` whose setup
 made an `Rpc` call and building that component's markup.
 
+41.29 A `render` answering a request whose `sec-fetch-dest` is `empty` MUST NOT fill the seed buffer.
+
 # 42. The app object
 
 42.1 `createApp` MUST build the route table and compose every `Middleware` rung, per 16.14.
@@ -3091,7 +3110,7 @@ it, once, and MUST NOT pair once it has expired.
 removed when the run ends, and with no built-in tool and no setting source the visitor did not pass
 it after `--`.
 
-44.16 A bridge MUST lay each option a site sets but `tools` (44.30) on as Claude Code's flag of that
+44.16 A bridge MUST lay each option a site sets but `tools` (44.29) on as Claude Code's flag of that
 name, MUST fail a turn whose config sets any option `ClaudeCodeConfig` does not name, and MUST lay
 an option the visitor passed after `--` over the site's.
 
@@ -3123,25 +3142,72 @@ token, each wait twice the last, until it is refused or 60 seconds have passed.
 44.26 `/__abide/bridge` MUST hold a pairing whose stream dropped for 60 seconds, and a `GET` bearing
 its token within them MUST resume the stream with every frame the dropped one had not sent.
 
-44.27 `/__abide/bridge` MUST send a comment on a pairing's stream every 15 seconds for as long as
-the stream is open.
-
-44.28 A bridge whose stream from `/__abide/bridge` carries no line for 45 seconds MUST end it and
+44.27 A bridge whose stream from `/__abide/bridge` carries no line for 45 seconds MUST end it and
 redial it as 44.25 says.
 
-44.29 A `Provider` MUST yield a tool call's `tool` event when the model starts writing the call,
+44.28 A `Provider` MUST yield a tool call's `tool` event when the model starts writing the call,
 and its `input` event, with the same `id`, once the call is written.
 
-44.30 A built-in tool MUST be available to a turn only where the site's `tools` names it and the
+44.29 A built-in tool MUST be available to a turn only where the site's `tools` names it and the
 visitor's `--tools` does, MUST be approved without asking unless the visitor passed `--allowedTools`,
 and the bridge MUST say once each tool the site asked for that the visitor did not grant.
 
-44.31 A bridge stopped by `SIGTERM`, `SIGINT` or `SIGHUP` MUST end every Claude Code run it started
+44.30 A bridge stopped by `SIGTERM`, `SIGINT` or `SIGHUP` MUST end every Claude Code run it started
 before it exits.
 
-44.32 A conversation MUST write one `debug` line on `abide:assistant` when its events end, naming
+44.31 A conversation MUST write one `debug` line on `abide:assistant` when its events end, naming
 its stop reason, the transcript's length, the tool calls it made, its usage and how long it took,
 and naming it `unfinished` where it ended without a `done`.
 
-44.33 A command `claudeCode.bridgeCommand` or `claudeCode.bridge` mints with `tools` MUST grant
+44.32 A command `claudeCode.bridgeCommand` or `claudeCode.bridge` mints with `tools` MUST grant
 those built-in tools after its `--` as `--tools`, and one minted without `tools` MUST carry no `--`.
+
+# 45. Offline
+
+45.1 Where `ABIDE_OFFLINE` is on, a page `abide build` built MUST register the worker
+`ABIDE_OFFLINE` turns on, and a page `abide dev` serves MUST NOT.
+
+45.2 The worker `ABIDE_OFFLINE` turns on MUST be served below `/__abide`, and MUST be allowed the
+scope of the app's mount.
+
+45.3 The worker `ABIDE_OFFLINE` turns on MUST answer a page, and every other `GET` of the app's own
+origin, with the network's answer, and with the copy it saved of that address where the network
+gives none.
+
+45.4 The worker `ABIDE_OFFLINE` turns on MUST save only an answer of 200 that is neither a stream
+16.32 frames nor a binary 16.34 types.
+
+45.5 The worker `ABIDE_OFFLINE` turns on MUST save every file of the build's bundle as it installs.
+
+45.6 The worker `ABIDE_OFFLINE` turns on MUST answer a file of the build's bundle from what it
+saved.
+
+45.7 The worker `ABIDE_OFFLINE` turns on MUST drop everything it saved where an answer it is handed
+carries `abide-principal`, where `principal` changes in any tab, and where a form is submitted.
+
+45.8 The worker `ABIDE_OFFLINE` turns on, of a new build, MUST drop everything the one before it
+saved, and every file of the bundle the new build does not name.
+
+45.9 The address of the worker `ABIDE_OFFLINE` turns on MUST answer a worker that drops what was
+saved and unregisters itself, under `abide dev` and where `ABIDE_OFFLINE` is off.
+
+45.10 The worker `ABIDE_OFFLINE` turns on that fails to register MUST warn on `abide:hydrate`.
+
+45.11 The worker `ABIDE_OFFLINE` turns on MUST answer a page the network gives no answer for, and
+that it saved no copy of, 503 with a page saying so.
+
+45.12 A `navigate` 30.32 would leave standing MUST be left to the document where the worker
+`ABIDE_OFFLINE` turns on saved its address's page.
+
+45.13 The worker `ABIDE_OFFLINE` turns on MUST save, as it activates, the page of every window it
+then controls.
+
+45.14 `ABIDE_OFFLINE` MUST be off where `config` holds it as `false`, or as text reading `false` or
+`0` in any case, and on otherwise.
+
+45.15 Where `ABIDE_OFFLINE` is on and the app's public `/icon.png` is a PNG, every page MUST link a
+web app manifest naming the app, with the app's mount as its scope and its start, and that icon at
+the size it is drawn at.
+
+45.16 The worker `ABIDE_OFFLINE` turns on MUST leave to the network the request 30.15 makes, a
+request carrying `range`, and one accepting `text/event-stream`.

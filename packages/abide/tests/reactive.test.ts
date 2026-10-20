@@ -3250,6 +3250,38 @@ test('a keyed ttl holds one timer however many entries it reaches', () => {
     expect(`timers armed: ${armed}`).toBe('timers armed: 1')
 })
 
+// 6.3 PAST WHAT `setTimeout` HOLDS — a delay over 2^31 - 1 ms is run after 1 ms, so a deadline armed
+// at one fires, finds nothing expired, and re-arms, a thousand times a second for the life of the
+// value. `Infinity` arms nothing and thirty days arms at the cap. THE REVERT: arm the delay as
+// given in `armTimer` and both read dozens of timers in 30 ms rather than one and none.
+test('a ttl past what setTimeout holds arms one timer, not one a millisecond', async () => {
+    const realSetTimeout = globalThis.setTimeout
+    const armed: number[] = []
+    globalThis.setTimeout = ((
+        fire: () => void,
+        delay: number,
+        ...rest: unknown[]
+    ) => {
+        armed.push(delay)
+        return realSetTimeout(fire, delay, ...rest)
+    }) as typeof setTimeout
+    const read: Record<string, number[]> = {}
+    try {
+        for (const [name, ttl] of [
+            ['endless', Number.POSITIVE_INFINITY],
+            ['thirty days', 30 * 86_400_000],
+        ] as const) {
+            armed.length = 0
+            reactive(() => 1, { ttl })()
+            await Bun.sleep(30)
+            read[name] = [...armed]
+        }
+    } finally {
+        globalThis.setTimeout = realSetTimeout
+    }
+    expect(read).toEqual({ endless: [], 'thirty days': [2 ** 31 - 1] })
+})
+
 // 6.7, 6.8 AND 6.9 — WHAT THE DEADLINE ITSELF DOES, and all three are about a moment
 // nothing reads. The producer must NOT have been called (that is 6.6's job, on the read
 // that follows), the payload must be gone rather than merely unserved, and the two probes
@@ -3908,6 +3940,29 @@ test('a reload that fails over an invalidated value wakes the reader it left wai
     flushSync()
     stop()
     expect(`answered: ${answered}`).toBe('answered: the reload failed')
+})
+
+// 2.8 — AND AN AWAIT OF IT REJECTS. The value has landed and is unserved (7.8), so waiting for it to
+// land again waited on a load that had already ended. THE REVERT: gate `settled`'s two failure arms
+// on `!cell.landed`; this reads `hung`.
+test('an await of an invalidated value whose reload fails rejects with the failure', async () => {
+    let failNext = false
+    const loaded = reactive(() =>
+        failNext
+            ? Promise.reject(new Error('the reload failed'))
+            : Promise.resolve('held'),
+    )
+    expect(await loaded).toBe('held')
+    loaded.invalidate()
+    failNext = true
+    const settledAs = await Promise.race([
+        Promise.resolve(loaded).then(
+            (value) => `resolved ${value}`,
+            (error: Error) => `rejected ${error.message}`,
+        ),
+        Bun.sleep(100).then(() => 'hung'),
+    ])
+    expect(settledAs).toBe('rejected the reload failed')
 })
 
 // THE ARGUMENT SHIFT NOTHING TYPE-CHECKS. `MEMBERS` is assigned onto a prototype and is

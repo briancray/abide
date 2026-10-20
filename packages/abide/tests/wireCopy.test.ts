@@ -25,9 +25,12 @@ globalThis.WebSocket = class {
     readyState = 0
     send(): void {}
 } as unknown as typeof WebSocket
+// A browser with no route to the server: `fetch` rejects, as it does offline.
+let unreachable = false
 globalThis.fetch = (async (_url: string, init?: RequestInit) => {
     loads += 1
     asked = init
+    if (unreachable) throw new TypeError('Failed to fetch')
     return new Response(JSON.stringify(answer.body), {
         headers: {
             'content-type': 'application/json',
@@ -311,4 +314,47 @@ test('a call whose path parameter has no spelling is a ValidationError, and fetc
         )
     }
     expect(loads - before).toBe(0)
+})
+
+type Copy = (args?: unknown) => (() => unknown) & {
+    error: () => unknown
+} & PromiseLike<unknown>
+
+const outcome = (copy: PromiseLike<unknown>): Promise<string> =>
+    Promise.resolve(copy).then(
+        (value) => `served ${JSON.stringify(value)}`,
+        (error: { name?: string; status?: number }) =>
+            `threw ${error.name} ${error.status}`,
+    )
+
+// 16.79 — NO ANSWER IS A 503, not the browser's `TypeError`. THE REVERT: drop the `catch` around the
+// `fetch` in `answerOf`'s `fetched`; this reads `threw TypeError undefined`.
+test('a call that reaches no server refuses with HttpError at 503 — 16.79', async () => {
+    unreachable = true
+    try {
+        const nowhere = wire('GET', '/library/nowhere') as Copy
+        expect(await outcome(nowhere())).toBe('threw HttpError 503')
+    } finally {
+        unreachable = false
+    }
+})
+
+// 7.19 — STALE AND UNREACHABLE, THE COPY GOES ON SERVING what it held, with the 503 on `s.error`. THE
+// REVERT: drop the `serveAgain` arm from `refused`; the read throws and this reads
+// `threw HttpError 503`.
+test('a stale copy whose reload reaches no server goes on serving what it held — 7.19', async () => {
+    answer = { body: ['kept'], life: 'private, max-age=0' }
+    const offline = wire('GET', '/library/offline') as Copy
+    expect(await outcome(offline())).toBe('served ["kept"]')
+    await settle()
+    unreachable = true
+    try {
+        const before = loads
+        expect(await outcome(offline())).toBe('served ["kept"]')
+        expect(loads - before).toBe(1)
+        const error = offline().error() as { status?: number } | undefined
+        expect(`error: ${error?.status}`).toBe('error: 503')
+    } finally {
+        unreachable = false
+    }
 })

@@ -277,8 +277,8 @@ middleware(async (next) => {
         and still catches a source that has stopped. A call past it is refused
         <code>504</code>, and the rows already sent stay on the page.</p>
 
-        <p><code>timeout</code> also raises the server's idle timeout for that request, so a slow
-        handler does not have its connection closed under it. Its sibling is
+        <p>Without one, nothing is cut short: the server never closes a connection under a call it
+        is still answering, a slow handler or a quiet stream alike. Its sibling is
         <code>maxBodySize</code>: the bytes a mutation's body may carry, refused <code>413</code>
         before a declared oversize body is read.</p>
 

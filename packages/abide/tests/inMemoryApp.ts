@@ -56,6 +56,7 @@ export function inMemoryApp(
                 manifest: NO_MANIFEST,
                 head: '',
                 framework: () => undefined,
+                offline: false,
             },
             explained: undefined,
         }),

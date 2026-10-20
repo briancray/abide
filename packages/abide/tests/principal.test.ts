@@ -208,6 +208,24 @@ test("a page's read of the principal is seeded, and the browser's read is answer
     expect((await count()) - before).toBe(1)
 })
 
+// 41.29 — A PAGE A SCRIPT FETCHED SEEDS NOTHING: no page hydrates from it, and its entry would answer
+// this caller's next read of the principal with what the render resolved — a service worker saving
+// the page, then a sign-in, read back as signed out. THE REVERT: seed every render in
+// `answerRequest`; the read is `Seeded` where `Direct` is due.
+test('a page fetched by a script leaves no seed for the next read — 41.29', async () => {
+    const { principal, caller } = await signedIn()
+    const cookie = `${principal}; ${caller}`
+    await (
+        await Bun.fetch(`${base}/`, {
+            headers: { cookie, 'sec-fetch-dest': 'empty' },
+        })
+    ).text()
+    const answer = await Bun.fetch(`${base}/__abide/principal`, {
+        headers: { cookie },
+    })
+    expect(answer.headers.get('server-timing')).toStartWith('Direct;')
+})
+
 // A SIGN-IN OR SIGN-OUT A HANDLER ANSWERED SAYS SO, in a header a browser's `fetch` can read — the
 // principal cookie is `HttpOnly` and `set-cookie` is withheld from script, so nothing else on the
 // answer tells the page its `principal` moved. A read of the principal says nothing. THE REVERT:

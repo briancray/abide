@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// A SITE'S RELAY THAT MISBEHAVES ON PURPOSE, for the bridge's own failures (44.24, 44.25, 44.28). It
+// A SITE'S RELAY THAT MISBEHAVES ON PURPOSE, for the bridge's own failures (44.24, 44.25, 44.27). It
 // prints its origin, then one line per thing it saw: `resumed <authorization>` for a redial,
 // `report <line>` for each report posted.
 //

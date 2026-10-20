@@ -3,7 +3,7 @@ import { emitClient, parseAbide } from '#compiler'
 import { HOOK_NAMES } from '#compiler/hookCalls.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'
-import { attributeText, escapeStyleValue, escapeText } from '#server'
+import { attributeText, escapeStyleValue, escapeText, safeUrl } from '#server'
 import { renderDocument } from '#server/render.ts'
 import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
@@ -101,7 +101,7 @@ test('escapeText rewrites only what a parse would read', () => {
     expect(escapeText(null)).toBe('')
 })
 
-// 32.20 — a scheme outside http:, https:, mailto: or tel: is dropped. THE REVERT: return the
+// 32.20 — a scheme outside http:, https:, mailto:, tel:, blob: or data: is dropped. THE REVERT: return the
 // value unconditionally from `safeUrl`; the emitted markup then carries 1 `javascript:` href where
 // 0 is due, and this test reports it.
 test('an unsafe url scheme is dropped and a relative reference is kept', async () => {
@@ -113,6 +113,17 @@ test('an unsafe url scheme is dropped and a relative reference is kept', async (
     )
     expect(await serverOf(`<a href="https://example.com">x</a>`)).toContain(
         JSON.stringify('<a href="https://example.com">'),
+    )
+})
+
+// 32.20's set includes `blob:` and `data:` — an image a page drew itself, or one inlined, is the
+// src an <img> or an SVG <image> shows it through.
+test('a blob: or data: url is kept', () => {
+    expect(safeUrl('blob:https://example.com/0f3c')).toBe(
+        'blob:https://example.com/0f3c',
+    )
+    expect(safeUrl('data:image/png;base64,iVBORw0KGgo=')).toBe(
+        'data:image/png;base64,iVBORw0KGgo=',
     )
 })
 

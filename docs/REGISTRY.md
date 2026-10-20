@@ -134,7 +134,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `s.invalidate` | `() => void` | Drop the cache behind the value. | 7.1, 7.2, 7.3, 7.6, 7.7, 7.9, 7.10, 7.12, 7.13, 7.14, 7.15, 7.16, 7.17, 11.51 |
+| `s.invalidate` | `() => void` | Drop the cache behind the value. | 7.1, 7.2, 7.3, 7.6, 7.7, 7.9, 7.10, 7.12, 7.13, 7.14, 7.15, 7.16, 7.17, 7.19, 11.51 |
 | `s.refresh` | `() => void` | Reload while continuing to serve what is held. | 4.12, 7.1, 7.4, 7.5, 7.6, 7.11, 7.18, 11.51, 5.24 |
 
 ### Effects
@@ -209,7 +209,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27 |
+| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 16.79 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.30 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.15 |
@@ -235,7 +235,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- | --- |
 | `description` | `string` | The human description carried onto every generated surface. | 16.28 |
 | `middleware` | `Middleware<{ request: Request; args: () => Args }, Value \| Failures>[]` | The rungs run per call. | 16.11, 16.12, 16.16, 16.17, 16.18, 16.19, 16.20 |
-| `timeout` | `number` | How long the call may stay open, and the floor under the request's idle timeout. | 16.22, 16.23, 16.56, 16.57, 16.58, 16.59, 16.60, 16.61, 16.77 |
+| `timeout` | `number` | How long the call may go without progress. | 16.22, 16.58, 16.59, 16.60, 16.61, 16.77 |
 | `clients` | `Clients` | Which surfaces carry this handler. | 16.37, 20.3 |
 | `crossOrigin` | `boolean \| string[]` | Whether other origins may call it, or follow it over the mux. | 16.24, 18.2, 21.19 |
 | `maxBodySize` | `number` | The largest request body a mutation will accept, in bytes. | 16.13, 16.54, 16.55 |
@@ -249,7 +249,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `json` | `<T>(value: T) => T` | A value as JSON, fixed, with `undefined` sent as `null`. | 17.7, 17.9, 17.10 |
 | `redirect` | `(to: string, status?: RedirectStatus) => undefined` | A navigation. | 16.52, 17.3 |
 | `jsonl` | `<T>(values: Values<T>) => Values<T>` | One JSON value per line, fixed. | 16.44, 16.75, 17.6, 17.7 |
-| `sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.45, 16.75, 17.6, 17.7 |
+| `sse` | `<T>(values: Values<T>) => Values<T>` | The same machine framed as server-sent events, fixed. | 16.45, 16.57, 16.75, 17.6, 17.7 |
 | `bytes` | `(values: Values<Uint8Array>) => Values<Uint8Array>` | A stream of binary chunks, fixed. | 16.34, 16.75, 17.6, 17.7 |
 | `RedirectStatus` | `301 \| 302 \| 303 \| 307 \| 308` | The statuses a `redirect` may carry. | 17.3 |
 | `refuse` | `(status: number, message?: string) => Failed<'HttpError', undefined>` | An undeclared refusal at a status. | 15.5, 15.9, 15.10, 15.16, 15.19, 15.20, 16.40, 17.4, 17.5, 17.8 |
@@ -293,7 +293,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `access-control-allow-origin` | an rpc answer to another origin | The origin a handler admitted. | 21.19, 16.24 |
 | `allow: GET, HEAD` | a page, a public file or the bundle, asked by another method | The methods the address answers. | 15.17 |
 | `server-timing` | an rpc answer; `Middleware` and a `timing` span on any answer | The handler's duration, named `Direct`, `Seeded` from the render's run, `Cached` from a held `global` production, or `Started` to a stream's first chunk; the rungs' time; and each `timing` span. | 21.15, 21.20, 21.21, 24.6 |
-| `etag` | a `GET` answered from a `global` value | The version of the production answered. | 18.5, 18.6, 18.7, 18.9, 18.19, 18.20, 18.22, 18.23 |
+| `etag` | a `GET` answered from a `global` value | The version of the production answered. | 18.5, 18.6, 18.7, 18.9, 18.19, 18.20, 18.22, 18.23, 16.57 |
 
 # Generated surfaces
 
@@ -321,9 +321,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- | --- |
 | `assistant` | `(messages: AssistantMessage[], provider: Provider, options?: AssistantOptions) => AsyncGenerator<AssistantEvent>` | A conversation with a model, as the events it produces. | 44.1, 44.2, 44.3, 44.4, 44.21 |
 | `AssistantMessage` | `{ role: 'user' \| 'assistant'; content: string }` | One turn of the transcript a caller sends. | 44.3, 44.4 |
-| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string } \| { type: 'input'; id: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call as it starts, its input once written, its result, and the end. | 44.2, 44.11, 44.29 |
+| `AssistantEvent` | `{ type: 'text'; text: string } \| { type: 'tool'; id: string; name: string } \| { type: 'input'; id: string; input: unknown } \| { type: 'result'; id: string; text: string; failed: boolean } \| { type: 'done'; stop: string; usage: { input: number; output: number } }` | What a conversation produces: text, a tool call as it starts, its input once written, its result, and the end. | 44.2, 44.11, 44.28 |
 | `AssistantOptions` | `{ mcp?: boolean; maxTurns?: number }` | What `assistant` takes beside a provider. | 44.6, 44.8, 44.11 |
-| `Provider` | `{ run(messages: AssistantMessage[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<AssistantEvent> }` | What runs a conversation. | 44.2, 44.29 |
+| `Provider` | `{ run(messages: AssistantMessage[], tools: Toolbox, limits: { maxTurns: number; signal: AbortSignal }): AsyncGenerator<AssistantEvent> }` | What runs a conversation. | 44.2, 44.28 |
 | `Toolbox` | `{ list: ToolDefinition[]; call(name: string, input: unknown): Promise<{ text: string; failed: boolean }> }` | The app's MCP tools, called as the asker. | 44.6, 44.7 |
 | `ToolDefinition` | `{ name: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean }; outputSchema: unknown }` | A tool as the app's MCP surface lists it. | 20.14, 20.16, 20.19, 44.6 |
 
@@ -338,12 +338,12 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.24, 44.25, 44.28, 44.31 |
-| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. | 44.16, 44.30 |
-| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; expires: number }` | The command that pairs a bridge with this browser, granting the built-in tools it is given. | 44.14, 44.33 |
-| `claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.33 |
+| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.24, 44.25, 44.27, 44.30 |
+| `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. | 44.16, 44.29 |
+| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; expires: number }` | The command that pairs a bridge with this browser, granting the built-in tools it is given. | 44.14, 44.32 |
+| `claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32 |
 | `BridgeStatus` | `{ paired: boolean; command: string \| undefined }` | Whether a bridge is paired, and the command that pairs one where none is. | 44.20 |
-| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.27, 16.78 |
+| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 16.57, 16.78 |
 
 # Ambient values
 
@@ -379,7 +379,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `online` | `Reactive<boolean>` | Whether the caller can reach the app. | 23.7, 23.8 |
+| `online` | `Reactive<boolean>` | Whether the caller can reach the app. | 23.7, 23.8, 18.33, 18.34 |
 
 ## `reachable`
 
@@ -465,13 +465,13 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `abide:principal` | `debug` `warning` | A principal set or cleared. | 28.8 |
 | `abide:health` | `warning` | An `onHealth` that threw or answered a non-object. | 25.2, 28.8 |
 | `abide:mcp` | `debug` `warning` | A handler withheld from MCP, a tool call answered, or a tool published with no description. | 20.3, 20.9, 20.18, 28.8 |
-| `abide:assistant` | `debug` | One line per conversation, once it ends. | 44.32 |
+| `abide:assistant` | `debug` | One line per conversation, once it ends. | 44.31 |
 | `abide:openapi` | `warning` | A handler whose schema had no JSON Schema export. | 20.11, 28.8 |
 | `abide:render` | `warning` | An `error.abide` that itself failed. | 28.8 |
 | `abide:refuse` | `warning` | A message formatter that threw. | 15.13, 28.8 |
 | `abide:reactive` | `warning` | A failed revalidation over a value still being served. | 4.12, 28.8 |
 | `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. | 12.6, 28.8 |
-| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. | 28.8, 41.10, 41.15, 41.24 |
+| `abide:hydrate` / `abide:navigate` | `warning` | The browser lane. | 28.8, 41.10, 41.15, 41.24, 45.10 |
 
 ## `csp`
 
@@ -500,7 +500,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27, 30.29, 30.30, 30.31 |
+| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27, 30.29, 30.30, 30.31, 30.32, 45.12 |
 
 # `.abide` files
 
@@ -606,7 +606,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4 |
-| `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11 |
+| `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29 |
 
 ## Sinks
 
@@ -633,10 +633,11 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `ABIDE_PRINCIPAL_TTL` | `number` | The principal cookie's life, in ms. | 26.15, 26.16 |
 | `ABIDE_APP_TOKEN` | `string \| null` | The bearer the remote CLI sends. | 36.6 |
 | `ABIDE_APP_URL` | `string \| null` | Names an app somewhere else, for the remote CLI. | 36.6 |
-| `ABIDE_RPC_TIMEOUT` | `number` | The default ms a call may go without progress. | 16.22, 16.56, 16.58 |
+| `ABIDE_RPC_TIMEOUT` | `number` | The default ms a call may go without progress. | 16.22, 16.58 |
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55, 16.78 |
 | `ABIDE_MAX_SOCKET_MESSAGE_SIZE` | `number` | The ceiling on a frame received over the socket mux, in bytes. | 18.28 |
 | `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` | `number` | How many values one connection to the socket mux may follow. | 18.31, 18.32 |
+| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16 |
 | `ABIDE_STOP_TIMEOUT` | `number` | How long `App.stop` drains, in ms. | 42.17, 42.18 |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
 | `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |
@@ -657,7 +658,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `**/public/**` | The files answered as authored, at their path below that directory. | 23.15, 23.16, 23.18, 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.18, 38.19 |
 | `src/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
 | `src/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
-| `src/public/icon.png` · `src/public/icon.icns` | The files answered at `/icon.png` and `/icon.icns`, and the desktop app's icon. | 36.11, 38.79 |
+| `src/public/icon.png` · `src/public/icon.icns` | The files answered at `/icon.png` and `/icon.icns`, and the desktop app's icon. | 36.11, 38.79, 45.15 |
 | `src/**/` | A directory of the app's, a segment of the route of every file directly in it. | 23.14, 23.17, 23.22 |
 | `**/index.abide` | The page at its directory's route. | 19.1, 23.3, 23.4, 23.14, 23.18 |
 | `**/<name>.abide` | The page at its directory's route and then `<name>`. | 19.1, 23.3, 23.4, 23.14, 23.21 |
@@ -706,7 +707,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
 | `App.fetch` | `(request: Request) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6 |
 | `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 11.38 |
-| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 18.28, 18.29, 18.30 |
+| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30 |
 | `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4 |
 | `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
 
@@ -829,7 +830,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, and where each hook is filed. | 38.108 |
-| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97 |
+| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97 |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94 |
 | `abide start [--port <n>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110 |
 | `abide [--url <origin>] [--port <n>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.53, 38.54, 38.55, 38.58, 38.59, 38.60, 38.62 |

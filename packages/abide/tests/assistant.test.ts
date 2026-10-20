@@ -14,14 +14,11 @@ import {
 import { readLines } from '../../bridge/src/readLines.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
 import type { ClaudeCodeConfig } from '../src/server/claudeCode.ts'
-import {
-    answerBridge,
-    HEARTBEAT_MILLISECONDS,
-    mintCode,
-    RESUME_MILLISECONDS,
-} from '../src/server/bridgeRelay.ts'
+import { mintCode, RESUME_MILLISECONDS } from '../src/server/bridgeRelay.ts'
+import { HEARTBEAT_MILLISECONDS } from '../src/server/HEARTBEAT_MILLISECONDS.ts'
 import { BRIDGE_ADDRESS } from '../src/shared/ADDRESSES.ts'
 import { handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
+import { inMemoryApp } from './inMemoryApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const FIXTURES = new URL('./fixtures/assistant/', import.meta.url).pathname
@@ -252,11 +249,11 @@ async function eventsUntilTool(answer: Response): Promise<unknown[]> {
     return found
 }
 
-// 44.29 — A CALL IS ANNOUNCED AS THE MODEL STARTS WRITING IT. Both models start `post_invoices_whoami`
+// 44.28 — A CALL IS ANNOUNCED AS THE MODEL STARTS WRITING IT. Both models start `post_invoices_whoami`
 // and never finish writing it, so the `tool` is all a page can have seen, and no `input` follows. THE
 // REVERTS: yield `tool` at `content_block_stop` in `claudeApi`, or report it from the finished
 // `assistant` line in the bridge, and that provider yields nothing for two seconds.
-test('a tool call is announced before its input is written — 44.29', async () => {
+test('a tool call is announced before its input is written — 44.28', async () => {
     const started = [
         { type: 'tool', id: 'toolu_1', name: 'post_invoices_whoami' },
     ]
@@ -354,12 +351,12 @@ test('Claude Code runs alone, over the whole transcript as one message — 44.5,
     expect(await Bun.file(record.configPath).exists()).toBe(false)
 }, 30_000)
 
-// 44.15, 44.30 — THE SITE ASKS, THE VISITOR GRANTS: a built-in tool is the turn's only where both named
+// 44.15, 44.29 — THE SITE ASKS, THE VISITOR GRANTS: a built-in tool is the turn's only where both named
 // it, approved as granted, and the bridge says once what it was asked for and not given; an option the
 // visitor set outranks the site's. THE REVERTS: lay the site's `tools` on unfiltered, and `--tools`
 // reads `WebSearch,WebFetch`; lay the visitor's options before the site's, and the last `--model` is
 // `sonnet`.
-test('a built-in tool runs only where the site asked and the visitor granted — 44.15, 44.30', async () => {
+test('a built-in tool runs only where the site asked and the visitor granted — 44.15, 44.29', async () => {
     const { saysNext } = await pairBridge('six', undefined, [
         '--tools',
         'WebSearch',
@@ -384,19 +381,27 @@ test('a built-in tool runs only where the site asked and the visitor granted —
     ).toBe('nothing')
 }, 30_000)
 
-// 44.33 — A SITE CAN WRITE THE GRANT INTO ITS COMMAND: the visitor running that command as shown gives the
+// 44.32 — A SITE CAN WRITE THE GRANT INTO ITS COMMAND: the visitor running that command as shown gives the
 // turn the tools, and a command minted without them grants nothing. THE REVERT: drop the `--` the
 // command writes, and the bridge reads `--tools` as empty.
-test('a pairing command minted with tools grants them to the bridge it starts — 44.33', async () => {
-    const plain = await Bun.fetch(`${base}/command`, { headers: asPage('eight') })
-    expect(((await plain.json()) as { command: string }).command).not.toContain(' -- ')
-    const answer = await Bun.fetch(`${base}/granting`, { headers: asPage('eight') })
+test('a pairing command minted with tools grants them to the bridge it starts — 44.32', async () => {
+    const plain = await Bun.fetch(`${base}/command`, {
+        headers: asPage('eight'),
+    })
+    expect(((await plain.json()) as { command: string }).command).not.toContain(
+        ' -- ',
+    )
+    const answer = await Bun.fetch(`${base}/granting`, {
+        headers: asPage('eight'),
+    })
     const { command } = (await answer.json()) as { command: string }
     const [pairing = '', claudeArgs = ''] = command.split(' -- ')
     expect(claudeArgs).toBe('--tools WebSearch,WebFetch')
     await pairBridge('eight', pairing.split(' ').at(-1), claudeArgs.split(' '))
     await events(
-        await ask('eight', 'code', 'who am I?', undefined, { tools: ['WebSearch', 'WebFetch'] }),
+        await ask('eight', 'code', 'who am I?', undefined, {
+            tools: ['WebSearch', 'WebFetch'],
+        }),
     )
     const { args } = (await Bun.file(RECORD).json()) as { args: string[] }
     expect(args[args.indexOf('--tools') + 1]).toBe('WebSearch,WebFetch')
@@ -439,10 +444,10 @@ test('a caller hanging up kills the Claude Code run — 44.18', async () => {
     expect(alive).toBe(false)
 }, 30_000)
 
-// 44.31 — A BRIDGE STOPPED BY A SIGNAL TAKES ITS RUN WITH IT: the bridge is sent SIGTERM mid-turn. THE
+// 44.30 — A BRIDGE STOPPED BY A SIGNAL TAKES ITS RUN WITH IT: the bridge is sent SIGTERM mid-turn. THE
 // REVERT: drop the bridge's signal handlers; it exits without reaching `claudeTurn`'s `finally`, and the
 // fake, orphaned, still answers a signal 0.
-test('a bridge stopped by a signal kills its Claude Code run — 44.31', async () => {
+test('a bridge stopped by a signal kills its Claude Code run — 44.30', async () => {
     const { running } = await pairBridge('signaled')
     const answer = await ask('signaled', 'code', 'hang')
     const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
@@ -630,33 +635,37 @@ test('a bridge redials a dropped stream with its token — 44.25', async () => {
     expect(stderr).toContain('Reconnected')
 }, 30_000)
 
-// 44.28 — A STREAM THAT GOES SILENT WITHOUT ENDING IS REDIALED once the silence passes the bound: the
+// 44.27 — A STREAM THAT GOES SILENT WITHOUT ENDING IS REDIALED once the silence passes the bound: the
 // site says `paired` and then nothing, holding the connection open. THE REVERT: drop the `silence`
 // timer; the bridge reads the open stream for good and outlives the 15-second wait here.
-test('a bridge redials a stream gone silent — 44.28', async () => {
+test('a bridge redials a stream gone silent — 44.27', async () => {
     const { exitCode, stderr, saw } = await againstFakeSite('mute', 60_000, 500)
     expect(exitCode).toBe(0)
     expect(saw).toContain('resumed Bearer token-1')
     expect(stderr).toContain('Reconnected')
 }, 30_000)
 
-// 44.27 — A PAIRING'S STREAM CARRIES A COMMENT EVERY HEARTBEAT while it has nothing to send. THE
-// REVERT: answer `framed`'s body bare in `attach`; the read past the heartbeat waits for good.
-test('a pairing stream beats while it is quiet — 44.27', async () => {
+// 16.57 — A PAIRING'S STREAM CARRIES A COMMENT WHILE A READ HAS WAITED A HEARTBEAT on it, answered
+// through `App.fetch`, which beats every event stream. THE REVERT: return `stamp(answered)` bare in
+// `createApp`'s `fetch`; the read past the heartbeat waits for good.
+test('a pairing stream beats while it is quiet — 16.57', async () => {
+    await using app = await inMemoryApp({})
     jest.useFakeTimers()
     try {
         const { code } = mintCode('heartbeat')
-        const answer = (await answerBridge(
+        const answer = await app.fetch(
             new Request(`http://site${BRIDGE_ADDRESS}?code=${code}`),
-        )) as Response
+        )
         const reader = (answer.body as ReadableStream<Uint8Array>).getReader()
         const decoder = new TextDecoder()
         let read = ''
         while (!read.includes('"paired"'))
             read += decoder.decode((await reader.read()).value)
+        const waiting = reader.read().then((next) => decoder.decode(next.value))
+        await Promise.resolve()
         jest.advanceTimersByTime(HEARTBEAT_MILLISECONDS)
         const beat = await Promise.race([
-            reader.read().then((next) => decoder.decode(next.value)),
+            waiting,
             new Promise<string>((done) => setImmediate(() => done('nothing'))),
         ])
         expect(beat).toBe(':\n\n')
@@ -737,7 +746,7 @@ test('the bridge redials for as long as the site holds a pairing', () => {
 // A stream that dies without a FIN is noticed here at the first heartbeat that fails to write, and by
 // the bridge only once its silence passes, so the hold has to outlast the gap between the two or the
 // redial lands on a pairing already dropped. THE REVERT: a 30 second hold, which the gap equals.
-test('the site holds a silent drop past the bridge noticing it — 44.26, 44.28', () => {
+test('the site holds a silent drop past the bridge noticing it — 44.26, 44.27', () => {
     expect(RESUME_MILLISECONDS).toBeGreaterThan(
         SILENCE_MILLISECONDS - HEARTBEAT_MILLISECONDS,
     )

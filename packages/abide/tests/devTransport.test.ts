@@ -84,7 +84,7 @@ export default GET(() => pulled.count)
 `,
     'library/patient.ts': `import { GET } from '@abide/abide/server'
 
-export default GET(() => 1, { timeout: 40_000 })
+export default GET(() => 1)
 `,
     // A child under the request's signal, named by its pid, and an answer that never ends on its own.
     'library/spawns.ts': `import { GET, request } from '@abide/abide/server'
@@ -398,40 +398,40 @@ reader.cancel().catch(() => {})
     expect(said).toBe('child gone: true')
 }, 20_000)
 
-// 16.22 UNDER `abide dev` — THE CONNECTION IS THE LISTENER'S, and the worker answering the call has no
-// server to raise its idle timeout on: it asks the listener to, naming the request by its ask. The
-// listener's own `timeout` is recorded rather than waited out, because bun closes a pending request
-// only at about twice its 10 s idle timeout. THE REVERT: leave `LISTENING.timeout` unset in
-// `devWorker`; nothing is raised, and this reads `[]`.
-test('a call that declares a timeout raises the idle timeout under abide dev', async () => {
+// 16.23 UNDER `abide dev` — THE CONNECTION IS THE LISTENER'S, and the worker answering the call has no
+// server to set its idle timeout on: it asks the listener to, naming the request by its ask — off as
+// the call is received, and back once it is answered. The listener's own `timeout` is recorded rather
+// than waited out. THE REVERT: leave `LISTENING.timeout` unset in `devWorker`; nothing is set, and
+// this reads `[]`.
+test('a call sets the idle timeout on the listener under abide dev — 16.23', async () => {
     const dir = temporaryModule({
-        'raise.ts': `import { serveDev } from '${new URL('../src/server/serveDev.ts', import.meta.url).pathname}'
-const raised: number[] = []
+        'set.ts': `import { serveDev } from '${new URL('../src/server/serveDev.ts', import.meta.url).pathname}'
+const set: number[] = []
 const serve = Bun.serve
 Bun.serve = ((options: never) => {
     const bound = serve(options)
     const timeout = bound.timeout.bind(bound)
     bound.timeout = (request: Request, seconds: number) => {
-        raised.push(seconds)
+        set.push(seconds)
         timeout(request, seconds)
     }
     return bound
 }) as typeof Bun.serve
 const server = await serveDev({ root: process.argv[2] as string, port: 0 })
 const answered = await fetch(new URL('/library/patient', server.url))
-console.log(JSON.stringify({ status: answered.status, raised }))
+console.log(JSON.stringify({ status: answered.status, set }))
 process.exit(0)
 `,
     })
     expect(
         await lastLinePrinted<Record<string, unknown>>([
             'bun',
-            `${dir}/raise.ts`,
+            `${dir}/set.ts`,
             app,
         ]),
     ).toEqual({
         status: 200,
-        raised: [44],
+        set: [0, 10],
     })
 }, 30_000)
 

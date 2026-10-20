@@ -262,6 +262,45 @@ test('a navigation whose chunks fail to load is left to the document — 30.27',
     expect(document.querySelector('#home h1')?.textContent).toBe('Home')
 })
 
+// 30.32 — OFFLINE, THE PAGE STAYS: the request throws with `navigator.onLine` false, and the document
+// load 30.27 would make could only paint the browser's error page. THE REVERT: drop the offline arm
+// from `Router.go`; the address is handed to the document and `left` reports it.
+test('a navigation whose request fails while offline leaves the page standing — 30.32', async () => {
+    history.replaceState(null, '', '/')
+    const r = router(await pages())
+    await r.hydrate()
+    const entries = history.length
+    let left = ''
+    answering = () => {
+        throw new TypeError('Failed to fetch')
+    }
+    const assign = Object.getOwnPropertyDescriptor(location, 'href')
+    Object.defineProperty(location, 'href', {
+        configurable: true,
+        get: () => 'http://localhost/',
+        set: (to: string) => {
+            left = to
+        },
+    })
+    Object.defineProperty(navigator, 'onLine', {
+        configurable: true,
+        get: () => false,
+    })
+    try {
+        await navigate('/invoices/42')
+    } finally {
+        delete (navigator as { onLine?: boolean }).onLine
+        if (assign !== undefined)
+            Object.defineProperty(location, 'href', assign)
+        else delete (location as { href?: string }).href
+    }
+    flushSync()
+    expect(`left: '${left}'`).toBe("left: ''")
+    expect(history.length).toBe(entries)
+    expect(route.navigating()).toBe(false)
+    expect(document.querySelector('#home h1')?.textContent).toBe('Home')
+})
+
 // 23.1, 23.2, 23.6 — THE ROUTER FILLS `route`: at hydration from the address the server painted, and
 // on a navigation BEFORE the arriving page mounts, with `navigating` true for as long as its chunk
 // is loading. THE REVERT: move `arrive` after `mountFrom` in `Router.go`; the page's setup reads

@@ -192,10 +192,10 @@ test("a browser's log.named prefixes the app name the document carries — 28.4"
     expect(log.records().at(-1)?.namespace).toBe('ledger:billing')
 })
 
-// 44.32 — A CONVERSATION WRITES ONE LINE ON `abide:assistant` WHEN ITS EVENTS END, and one its caller
+// 44.31 — A CONVERSATION WRITES ONE LINE ON `abide:assistant` WHEN ITS EVENTS END, and one its caller
 // stopped reading reads `unfinished`. THE REVERT: yield the provider's events untraced in `assistant`;
 // neither conversation writes a line.
-test('a conversation writes one debug line on abide:assistant when it ends — 44.32', async () => {
+test('a conversation writes one debug line on abide:assistant when it ends — 44.31', async () => {
     process.env.DEBUG = 'abide:assistant'
     const played: AssistantEvent[] = [
         { type: 'tool', id: 't1', name: 'get_contacts' },
