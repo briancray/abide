@@ -71,6 +71,13 @@ export async function clientBundle(
         // app serves is still worth a build error.
         external: [...published.values()],
         throw: false,
+        // 36.16 — THE MODE, NOT THE ENVIRONMENT: the bundler writes in the `NODE_ENV` this process
+        // STARTED under, so the `production` `abide build` assigns once running never reached it.
+        define: {
+            'process.env.NODE_ENV': JSON.stringify(
+                mode === 'build' ? 'production' : 'development',
+            ),
+        },
         ...(mode === 'build'
             ? {
                   // 38.5 — MINIFIED, and EVERY NAME HASHED, the entry's included: chunks and assets are
