@@ -1,5 +1,18 @@
 # @abide/abide
 
+## 0.111.0
+
+### Minor Changes
+
+- f9b3789: ABIDE_OFFLINE — a built app keeps its pages and bundle in a service worker and installs as a web app, a call that reaches no server refuses 503 and a stale value goes on serving, and the socket mux redials when the browser comes back online ([`ee0428a`](https://github.com/briancray/abide/commit/ee0428a958fc70bf13eb10f2d8df2d7b8f3232df))
+
+### Patch Changes
+
+- f9b3789: a request is never reaped by the idle timeout while it is being answered, an idle connection is reaped after 10 seconds, and every event stream beats every 15 seconds ([`14eea6e`](https://github.com/briancray/abide/commit/14eea6e7ae0b72eb194c16e17ca4e7c4498baf46))
+- f9b3789: the client bundle is built in the NODE_ENV of its mode, not of the process that started the build ([`c94a975`](https://github.com/briancray/abide/commit/c94a975f38da935b0f62e52789cefe07d5e887ba))
+- 0838a38: fix: a `blob:` or `data:` URL passes the URL-attribute scheme check (RULEBOOK 32.20), so `<image href={objectUrl}>` or `<img src={dataUrl}>` shows its image instead of being written empty
+- 110aa66: a `ttl` of `Infinity`, or past the 2^31 - 1 ms `setTimeout` holds, no longer re-arms its timer every millisecond for the life of the value: `Infinity` arms none, and a longer `ttl` arms at the cap and re-arms from there
+
 ## 0.110.4
 
 ### Patch Changes
