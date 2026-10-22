@@ -1,7 +1,9 @@
+import { ASCII_WHITESPACE } from '#shared/ASCII_WHITESPACE.ts'
 import { escapeAttribute, escapeQuote } from '#shared/escapeText.ts'
 import { isEventName } from '#shared/isEventName.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
 import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
+import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import {
     type Attribute,
     bodiesOf,
@@ -90,8 +92,11 @@ export type ClassifiedAttribute = {
           kind: 'bound'
           bind: ValueBind
           reflects: 'value' | 'checked' | 'open' | undefined
-          /** 32.8 — a group member's own `value`, which the group is compared against. */
-          own: string
+          /**
+           * 32.8 — a group member's `value` attribute, which the group is compared against —
+           * `undefined` where it has none, and the input's value is then `on`.
+           */
+          own: Attribute | undefined
       }
     // 32.9 — the node itself, which a server has none of: written out it was `bind:element=""`,
     // inert and a tell. The client does not set it either; what the value takes is the element.
@@ -102,24 +107,39 @@ export type ClassifiedAttribute = {
     // 32.10, 32.19 — a member of a `class` or `style` merge group (`MergeGroup`). `group` is set on
     // the FIRST member only, where the whole group is written, which keeps the tag in the author's
     // attribute order. `toggles` is the one class or style property a directive's binding writes,
-    // and `undefined` for the author's own plain attribute — see where that is decided.
+    // or a shared group's whole value at its first member (32.71), named by the directives'
+    // classes or properties, and `undefined` for any other member — see where that is decided.
     | {
           kind: 'merged'
           group: MergeGroup | undefined
-          toggles: { write: 'class' | 'style'; name: string } | undefined
+          toggles:
+              | {
+                    write: 'class' | 'style' | 'classGroup' | 'styleGroup'
+                    name: string
+                }
+              | undefined
       }
 )
 
 /**
  * Every attribute of an element, classified, in the order the tag carries them.
  *
- * `lowering` answers `live` (`Lowering.isLive`).
+ * `lowering` answers `live` (`Lowering.isLive`), and whether a shared `class` group can move
+ * (`Lowering.readsAnItem`: a row's item read at its top level is not live, and a row's `update`
+ * writes it).
  */
 export function classifyAttributes(
     node: ElementNode,
-    lowering: { isLive(holder: object): boolean },
+    lowering: {
+        isLive(holder: object): boolean
+        readsAnItem(holder: object): boolean
+    },
 ): ClassifiedAttribute[] {
+    refuseTwoOwners(node)
     const groups = mergeGroupsOf(node)
+    const sharing: ReturnType<typeof sharingOf>[] = []
+    for (const group of groups) sharing.push(sharingOf(group, lowering))
+    const held = heldClasses(groups)
     const written = new Set<MergeGroup>()
     const classified: ClassifiedAttribute[] = []
     for (const attribute of node.attributes) {
@@ -130,33 +150,37 @@ export function classifyAttributes(
         if (group !== undefined) {
             const leads = !written.has(group)
             written.add(group)
-            // 32.10, 32.19 — THE PLAIN `style={expr}` OR `class={expr}` BESIDE A DIRECTIVE IS LEFT
-            // UNBOUND. `setAttribute` replaces the whole merged value and takes the directives'
-            // halves with it, and the two bindings then overwrite each other in whichever order
-            // they reran.
+            // 32.71 — A SHARED GROUP IS WRITTEN WHOLE AT ITS FIRST MEMBER, through `classList` or
+            // the CSSOM, as the server merged it, and moves where any member does — so a directive
+            // keeps what the plain attribute still holds without either knowing of the other.
             //
-            // ALLOWED, rather than refused. The page still RENDERS right — the server writes both
-            // halves into the one merged attribute — so the only thing a build error would buy is
-            // breaking a page that works today for a clause that is not built. What it costs is
-            // the hole: this one attribute keeps the value standing at render where 32.3 says it
-            // moves, and nothing reports that.
-            //
-            // 32.19 IS WHAT CLOSES THE `style` HALF: an interpolated `style` lowers to `style:prop`
-            // under a static name and is never built as a string, and then there is no
-            // whole-attribute write left to clobber anything. No clause spells the same road for
-            // `class`, and until one does the two share this answer.
+            // 32.10 — A STATIC PLAIN ATTRIBUTE IS LEFT UNBOUND, and so is a directive naming one of
+            // a static `class`'s classes, which is always on. The static value is never written
+            // again, and the directives write through `classList` or the CSSOM beside it.
+            const shared = sharing[groups.indexOf(group)]
+            if (shared !== undefined) {
+                classified.push({
+                    attribute,
+                    live: leads ? shared.live : live,
+                    kind: 'merged',
+                    group: leads ? group : undefined,
+                    toggles: leads
+                        ? { write: `${group.name}Group`, name: shared.names }
+                        : undefined,
+                })
+                continue
+            }
+            const name = attribute.name.slice(group.name.length + 1)
             classified.push({
                 attribute,
                 live,
                 kind: 'merged',
                 group: leads ? group : undefined,
                 toggles:
-                    attribute === group.plain
+                    attribute === group.plain ||
+                    (group.name === 'class' && held.includes(name))
                         ? undefined
-                        : {
-                              write: group.name,
-                              name: attribute.name.slice(group.name.length + 1),
-                          },
+                        : { write: group.name, name },
             })
             continue
         }
@@ -191,7 +215,7 @@ export function classifyAttributes(
                         : bind === 'group'
                           ? 'checked'
                           : bind,
-                own: staticAttribute(node, 'value') ?? 'on',
+                own: attributeOf(node, 'value'),
             })
         else if (isElementBind(attribute.lowerName))
             classified.push({ attribute, live, kind: 'element' })
@@ -294,6 +318,85 @@ function mergeGroupsOf(node: ElementNode): MergeGroup[] {
     return groups
 }
 
+/**
+ * 32.71 — for a group whose plain attribute is an expression and where some member can move, so
+ * neither half can be written without the other: whether a member is `live`, and the directives'
+ * classes or properties, which the group owns before its first write. `undefined` for any other.
+ */
+function sharingOf(
+    group: MergeGroup,
+    lowering: Parameters<typeof classifyAttributes>[1],
+): { live: boolean; names: string } | undefined {
+    if (!group.plain?.expression) return undefined
+    let live = false
+    let moves = false
+    for (const member of group.members) {
+        if (!member.expression) continue
+        if (lowering.isLive(member)) live = moves = true
+        else if (lowering.readsAnItem(member)) moves = true
+    }
+    if (!moves) return undefined
+    const names: string[] = []
+    for (const directive of group.directives)
+        names.push(directive.name.slice(group.name.length + 1))
+    return { live, names: names.join(' ') }
+}
+
+/** 32.71 — the classes a static `class` beside a `class:name` holds, each always on. */
+function heldClasses(groups: MergeGroup[]): string[] {
+    for (const group of groups)
+        if (group.name === 'class' && group.plain && !group.plain.expression)
+            return decodeCharacterReferences(
+                group.plain.value,
+                'attribute',
+            ).split(ASCII_WHITESPACE)
+    return []
+}
+
+/**
+ * 32.72 — WHAT A `bind:` WRITES IS THE BIND'S ALONE: `checked` beside `bind:checked` or
+ * `bind:group`, `value` beside `bind:value`, any `bind:name` beside `name` — and an
+ * `<option selected>` inside a `<select bind:value>`, and a `<textarea bind:value>`'s text. Two
+ * owners of one value render whichever the browser keeps and move with whichever wrote last.
+ */
+function refuseTwoOwners(node: ElementNode): void {
+    for (const attribute of node.attributes) {
+        const lower = attribute.lowerName
+        if (!lower.startsWith('bind:') || lower === 'bind:element') continue
+        const owned =
+            lower === 'bind:group' ? 'checked' : lower.slice('bind:'.length)
+        const beside = attributeOf(node, owned)
+        if (beside !== undefined)
+            throw new Error(
+                `abide: <${node.tag}> has ${attribute.name} and ${beside.name} — one value, two owners. ${attribute.name} writes ${owned} already; drop ${beside.name}. RULEBOOK 32.72.`,
+            )
+        if (owned !== 'value') continue
+        if (node.lowerTag === 'textarea' && node.children.length > 0)
+            throw new Error(
+                `abide: <${node.tag} ${attribute.name}> has text of its own — one value, two owners. The bind writes the text; drop what stands between the tags. RULEBOOK 32.72.`,
+            )
+        if (node.lowerTag === 'select' && holdsSelectedOption(node.children))
+            throw new Error(
+                `abide: <${node.tag} ${attribute.name}> has an <option selected> — one value, two owners. The bind selects the option its value holds; drop selected. RULEBOOK 32.72.`,
+            )
+    }
+}
+
+/** Whether an `<option>` with a `selected` attribute stands anywhere among `nodes`, blocks included. */
+function holdsSelectedOption(nodes: readonly TemplateNode[]): boolean {
+    for (const node of nodes) {
+        if (
+            node.kind === 'element' &&
+            node.lowerTag === 'option' &&
+            attributeOf(node, 'selected') !== undefined
+        )
+            return true
+        for (const body of bodiesOf(node))
+            if (holdsSelectedOption(body.children)) return true
+    }
+    return false
+}
+
 /** An element's attribute by its folded name, or `undefined`. */
 export function attributeOf(
     node: ElementNode,
@@ -302,14 +405,6 @@ export function attributeOf(
     for (const attribute of node.attributes)
         if (attribute.lowerName === name) return attribute
     return undefined
-}
-
-/** An attribute's static value, or `undefined` where it is absent or an expression. */
-function staticAttribute(node: ElementNode, name: string): string | undefined {
-    const attribute = attributeOf(node, name)
-    return attribute === undefined || attribute.expression
-        ? undefined
-        : attribute.value
 }
 
 /**

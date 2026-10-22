@@ -2,6 +2,7 @@
 // value standing at render into the tag, and the client binds the property where the server left it.
 
 import { afterAll, expect, test } from 'bun:test'
+import { emitClient, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, mountPage, renderPage } from './typed.ts'
@@ -316,4 +317,76 @@ test('an option that arrives after the value is selected — 32.62', async () =>
         false,
         true,
     ])
+})
+
+// 32.8 — A GROUP COMPARES AGAINST THE INPUT'S OWN VALUE WHEREVER IT COMES FROM, an expression
+// included: a radio list built from data is served with its chosen option checked, a number stays a
+// number in the group, and a value that moves rechecks its input.
+//
+// THE REVERTS: compare against `'on'` for a `value={expr}` in `boundMarkup`, and the served page
+// checks nothing — this reports `null` where `2` is due; compare against the element's `value`
+// property in `bindGroup`, and the moved value never checks `#moving` — `false` where `true` is due.
+test('bind:group compares against a value={expr} — 32.8', async () => {
+    const { html, mount } = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+let choice = reactive(2)
+const options = [{ id: 1 }, { id: 2 }, { id: 3 }]
+let size = reactive('m')
+let mine = reactive('s')
+</script>
+
+<main>{#for option of options by option.id}<input id={'o' + option.id} type="radio" name="o" value={option.id} bind:group={choice}>{/for}
+<input id="moving" type="radio" value={mine} bind:group={size}>
+<button id="move" onclick={() => { mine = 'm' }}>move</button>
+<p id="out">{typeof choice} {choice}</p></main>`)
+    expect(html.match(/id="o(\d)"[^>]* checked/)?.[1] ?? null).toBe('2')
+    mount()
+    flushSync()
+    input('o3').click()
+    flushSync()
+    expect(out()).toBe('number 3')
+    expect(input('moving').checked).toBe(false)
+    ;(document.getElementById('move') as HTMLElement).click()
+    flushSync()
+    expect(input('moving').checked).toBe(true)
+})
+
+// 32.72 — A BIND AND SOMETHING ELSE WRITING ONE VALUE IS REFUSED. The server wrote both — two
+// `value=` attributes, or two `<option selected>` — and the browser kept whichever came first, and
+// the client moved with whichever wrote last.
+//
+// THE REVERT: drop the `refuseTwoOwners` call from `classifyAttributes`, and every one of these
+// compiles.
+test('a bind beside another writer of its value is refused — 32.72', () => {
+    const refusedFor = (template: string): string => {
+        try {
+            emitClient(parseAbide(template))
+        } catch (thrown) {
+            return (thrown as Error).message
+        }
+        return 'compiled'
+    }
+    for (const template of [
+        '<input type="checkbox" bind:checked={on} checked={other}>',
+        '<input type="checkbox" bind:checked={on} checked>',
+        '<input bind:value={name} value={other}>',
+        '<input bind:value={name} value="ada">',
+        '<input type="radio" value="a" bind:group={pick} checked>',
+        '<details bind:open={open} open></details>',
+        '<select bind:value={size}><option value="s" selected>s</option></select>',
+        '<select bind:value={size}>{#if wide}<option value="l" selected={big}>l</option>{/if}</select>',
+        '<textarea bind:value={text}>draft</textarea>',
+    ])
+        expect(refusedFor(template)).toContain('RULEBOOK 32.72')
+    // NOT ONE OWNER'S VALUE: a group's `value` is what it compares against, and a select with no
+    // `selected` is the bind's alone.
+    expect(
+        refusedFor('<input type="radio" value={id} bind:group={pick}>'),
+    ).toBe('compiled')
+    expect(
+        refusedFor(
+            '<select bind:value={size}><option value="s">s</option></select>',
+        ),
+    ).toBe('compiled')
 })

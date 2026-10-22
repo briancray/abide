@@ -1224,6 +1224,15 @@ const ROW_SHAPES: [string, string][] = [
         'a class reading page state',
         '<li class:marked={mark === "m"}>{row.name}</li>',
     ],
+    // 32.71 — a `class` that can carry a directive's name, from the row and from page state.
+    [
+        'a class reading the row beside a directive',
+        '<li class="row {row.name}" class:on={row.on}>{row.name}</li>',
+    ],
+    [
+        'a class reading page state beside a directive',
+        '<li class={mark} class:m={row.on}>{row.name}</li>',
+    ],
     // Several top-level nodes, so the row carries its own anchor.
     ['several top-level nodes', '<dt>{row.name}</dt><dd>{mark}</dd>'],
     // Content only the parser makes right, which keeps the parser.

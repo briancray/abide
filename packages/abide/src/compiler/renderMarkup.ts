@@ -354,13 +354,9 @@ function renderPosition(
     // `<br>`, and a close tag written for one is markup no browser accepts.
     if (node.children.length === 0 && VOID_ELEMENTS.has(node.lowerTag))
         return parts.join(' + ')
-    // 32.61 — THE VALUE IN PLACE OF THE AUTHOR'S TEXT, led by the newline the parser drops after
-    // `<textarea>` so a value opening on one keeps it.
-    if (
-        within !== undefined &&
-        node.lowerTag === 'textarea' &&
-        node.children.length === 0
-    )
+    // 32.61 — THE VALUE AS THE TEXT, led by the newline the parser drops after `<textarea>` so a
+    // value opening on one keeps it. The author wrote none: 32.72 refuses it beside the bind.
+    if (within !== undefined && node.lowerTag === 'textarea')
         return [
             ...parts,
             `'\\n' + ${lowering.use('escapeAttribute')}(${within})`,
@@ -614,7 +610,17 @@ function boundMarkup(
         return `' value="' + ${lowering.use('escapeAttribute')}(${read}) + '"'`
     const on =
         written.bind === 'group'
-            ? `${lowering.use('groupHolds')}(${read}, ${JSON.stringify(written.own)})`
+            ? `${lowering.use('groupHolds')}(${read}, ${
+                  written.own === undefined
+                      ? "'on'"
+                      : written.own.expression
+                        ? unlandable(
+                              lowering,
+                              written.own,
+                              lowering.expression(written.own),
+                          )
+                        : JSON.stringify(written.own.value)
+              })`
             : read
     return `(${on} ? ' ${written.reflects}' : '')`
 }

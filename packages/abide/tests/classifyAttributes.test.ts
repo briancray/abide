@@ -32,6 +32,7 @@ const lowering = (node: TemplateNode & { kind: 'element' }) => ({
             if (attribute === holder) return !PROVEN.has(attribute.lowerName)
         throw new Error('asked of something that is not an attribute')
     },
+    readsAnItem: () => false,
 })
 
 const rows = (source: string) => {
@@ -124,7 +125,9 @@ test('a value bind reflects only where the property is an attribute', () => {
     ])
 })
 
-// 32.10, 32.19 — the group is written at its FIRST member, and the plain attribute is never bound.
+// 32.10, 32.19, 32.71 — the group is written at its FIRST member. A `class={expr}` beside a
+// directive SHARES the group: the whole class list is one binding there, live where any member
+// is, owning the directives' classes.
 test('a merge group is written once and bound per directive', () => {
     expect(
         rows(
@@ -137,7 +140,7 @@ test('a merge group is written once and bound per directive', () => {
             live: true,
             bound: true,
             group: 'class',
-            toggles: { write: 'class', name: 'on' },
+            toggles: { write: 'classGroup', name: 'on off' },
         },
         {
             name: 'class',
@@ -154,7 +157,7 @@ test('a merge group is written once and bound per directive', () => {
             live: false,
             bound: false,
             group: undefined,
-            toggles: { write: 'class', name: 'off' },
+            toggles: undefined,
         },
         {
             name: 'style:width',
@@ -162,6 +165,61 @@ test('a merge group is written once and bound per directive', () => {
             live: true,
             bound: true,
             group: 'style',
+            toggles: { write: 'style', name: 'width' },
+        },
+    ])
+})
+
+// 32.71 — A STATIC `class` OR `style` NEVER SHARES. It is written once by the server and never
+// again, a directive naming one of a static `class`'s classes is always on, and every other
+// directive stays `setClass` or `setStyleProperty`; a `style={expr}` shares as a `class={expr}`
+// does.
+test('a static plain attribute never shares its group', () => {
+    const plain = (source: string) =>
+        rows(source).map(({ name, bound, toggles }) => ({
+            name,
+            bound,
+            toggles,
+        }))
+    expect(plain('<p class="badge" class:on={x}>x</p>')).toEqual([
+        { name: 'class', bound: false, toggles: undefined },
+        {
+            name: 'class:on',
+            bound: true,
+            toggles: { write: 'class', name: 'on' },
+        },
+    ])
+    // A DIRECTIVE NAMING ONE OF THE STATIC CLASSES IS ALWAYS ON, so it is never bound. THE
+    // REVERT: drop `heldClasses`, and `class:on` reads bound.
+    expect(plain('<p class="badge on" class:on={x}>x</p>')).toEqual([
+        { name: 'class', bound: false, toggles: undefined },
+        { name: 'class:on', bound: false, toggles: undefined },
+    ])
+    // A `class={expr}` WHERE NOTHING IN THE GROUP MOVES does not share either: the server's
+    // value stands and nothing is bound. THE REVERT: count every `class={expr}` group as moving
+    // in `sharedGroupOf`, and both read bound.
+    const still = element('<p class={c} class:on={x}>x</p>')
+    expect(
+        classifyAttributes(still, {
+            isLive: () => false,
+            readsAnItem: () => false,
+        }).map(isBound),
+    ).toEqual([false, false])
+    // A `style={expr}` SHARES ITS GROUP as a `class={expr}` does.
+    expect(plain('<p style={s} style:width={w}>x</p>')).toEqual([
+        {
+            name: 'style',
+            bound: true,
+            toggles: { write: 'styleGroup', name: 'width' },
+        },
+        { name: 'style:width', bound: false, toggles: undefined },
+    ])
+    // A STATIC `style` NEVER SHARES: written once by the server, and the directive is a property.
+    expect(plain('<p style="color: red" style:width={w}>x</p>')).toEqual([
+        { name: 'style', bound: false, toggles: undefined },
+        {
+            name: 'style:width',
+            bound: true,
             toggles: { write: 'style', name: 'width' },
         },
     ])

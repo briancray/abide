@@ -538,6 +538,282 @@ let late = reactive(false)
     expect(work.attributesSet).toBe(0)
 })
 
+// 32.71 — A `class` THAT MOVES, BESIDE A `class:name`, KEEPS MOVING, and a class either half holds
+// stays. The server merged both into one attribute, so the page was right at render and froze on
+// the first change of `tone`: the attribute was left unbound because writing it back whole would
+// have taken the directive's class with it.
+//
+// THE REVERT: make `sharedGroupOf` answer `undefined`. `tone` then never moves — this reports
+// `badge calm overdue` where `badge loud overdue` is due — and `a` comes off with `flag` while
+// `tags` still holds it.
+test('a class beside a class: directive keeps moving, and a class either holds stays — 32.71', async () => {
+    const { html, mount } = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+let tone = reactive('calm')
+let late = reactive(true)
+let tags = reactive('a b')
+let flag = reactive(true)
+</script>
+
+<main><p id="out" class="badge {tone}" class:overdue={late}>x</p>
+<p id="held" class={tags} class:a={flag}>y</p>
+<button id="tone" onclick={() => { tone = 'loud' }}>tone</button>
+<button id="unflag" onclick={() => { flag = false }}>unflag</button>
+<button id="untag" onclick={() => { tags = 'b' }}>untag</button>
+<button id="flag" onclick={() => { flag = true }}>flag</button>
+<button id="retag" onclick={() => { tags = 'a' }}>retag</button></main>`)
+
+    expect(html).toContain('class="badge calm overdue"')
+
+    const sorted = (id: string) =>
+        [...(document.querySelector(`#${id}`) as HTMLElement).classList]
+            .sort()
+            .join(' ')
+    const click = (id: string) => {
+        ;(document.querySelector(`#${id}`) as HTMLElement).click()
+        flushSync()
+    }
+
+    // THE FIRST RUN OVER A SERVED PAGE WRITES NO CLASS: every token is there already.
+    const mountWork = measure(() => {
+        mount()
+        flushSync()
+    })
+    expect(mountWork.attributesSet).toBe(0)
+    expect(mountWork.classWrites).toBe(0)
+    expect(sorted('out')).toBe('badge calm overdue')
+
+    // ONE TOKEN OUT AND ONE IN, through the class list — never the attribute.
+    const toneWork = measure(() => click('tone'))
+    expect(sorted('out')).toBe('badge loud overdue')
+    expect(toneWork.classWrites).toBe(2)
+    expect(toneWork.attributesSet).toBe(0)
+
+    expect(sorted('held')).toBe('a b')
+    click('unflag')
+    expect(sorted('held')).toBe('a b')
+    click('untag')
+    expect(sorted('held')).toBe('b')
+    click('flag')
+    expect(sorted('held')).toBe('a b')
+    click('retag')
+    expect(sorted('held')).toBe('a')
+    click('unflag')
+    expect(sorted('held')).toBe('a')
+})
+
+// 32.71 IN A ROW, where the writes come from two places: the row's mount, and its `update` when
+// the same key takes a new item (32.67) — a function of its own, which is why who holds which
+// class is kept on the element rather than in the mount. And a row the browser BUILDS starts from
+// the merged value the server would have written.
+//
+// THE REVERT: make `sharedGroupOf` answer `undefined`; the directive's first run takes the row's own `hot`
+// off, and this reports `calm on row` where `calm hot on row` is due.
+test('a class beside a class: directive moves with its row — 32.71', async () => {
+    const { mount } = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+let hot = reactive(false)
+let rows = reactive([{ id: 'a', tone: 'calm hot', on: true }])
+</script>
+
+<main><ul>{#for row of rows by row.id}<li id={row.id} class="row {row.tone}" class:on={row.on} class:hot={hot}>x</li>{/for}</ul>
+<button id="move" onclick={() => { rows = [{ id: 'a', tone: 'loud', on: false }, { id: 'b', tone: 'calm', on: true }] }}>move</button>
+<button id="heat" onclick={() => { hot = true }}>heat</button>
+<button id="cool" onclick={() => { hot = false }}>cool</button></main>`)
+
+    mount()
+    flushSync()
+    const sorted = (id: string) =>
+        [...(document.querySelector(`#${id}`) as HTMLElement).classList]
+            .sort()
+            .join(' ')
+    const click = (id: string) => {
+        ;(document.querySelector(`#${id}`) as HTMLElement).click()
+        flushSync()
+    }
+
+    // `hot` is the row's own class, so the directive's first run, off, leaves it.
+    expect(sorted('a')).toBe('calm hot on row')
+    click('move')
+    expect(sorted('a')).toBe('loud row')
+    expect(sorted('b')).toBe('calm on row')
+    click('heat')
+    expect(sorted('a')).toBe('hot loud row')
+    expect(sorted('b')).toBe('calm hot on row')
+    click('cool')
+    expect(sorted('a')).toBe('loud row')
+    expect(sorted('b')).toBe('calm on row')
+})
+
+// 32.71 — A SHARED GROUP IS ONE WRITER, at mount and in a row's `update`: it diffs the whole
+// class list it wrote against the one it writes now, so a class moving from the directive to the
+// attribute moves nothing. The output is the same either way, which is why the work is asserted.
+//
+// THE REVERT is structural — a writer per member, the tokens and each directive apart, each
+// keeping a record of what the other holds. That design reported 2 class writes at mount and 1
+// in the `update`, where 0 and 0 are due: a directive's toggle runs whether or not it moves the
+// class, and one turning off while the attribute takes the class over writes it.
+test('a shared class group is one writer — 32.71', async () => {
+    const mounted = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+let tone = reactive('calm')
+let rows = reactive([{ id: 'a', on: reactive(false) }, { id: 'b', on: reactive(true) }])
+</script>
+
+<main><ul>{#for row of rows by row.id}<li id={row.id} class="row active {tone}" class:active={row.on()}>x</li>{/for}</ul></main>`)
+    const mountWork = measure(() => {
+        mounted.mount()
+        flushSync()
+    })
+    // The tokens are all there already.
+    expect(mountWork.classWrites).toBe(0)
+    expect(document.querySelector('#a')?.className).toContain('active')
+
+    const updated = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive([{ id: 'a', sel: true, cls: 'a' }])
+</script>
+
+<main><ul>{#for row of rows by row.id}<li id={row.id} class:sel={row.sel} class={row.cls}>x</li>{/for}</ul>
+<button id="swap" onclick={() => { rows = [{ id: 'a', sel: false, cls: 'a sel' }] }}>swap</button></main>`)
+    updated.mount()
+    flushSync()
+    const updateWork = measure(() => {
+        ;(document.querySelector('#swap') as HTMLElement).click()
+        flushSync()
+    })
+    expect(document.querySelector('#a')?.className).toBe('a sel')
+    expect(updateWork.classWrites).toBe(0)
+})
+
+// 32.71 — A LIVE GROUP'S WATCH IS THE ROW'S ONE WRITER OF IT, even where a member reads the item
+// without being live: the watch reads the item through the row's cell, so a new item reruns it,
+// and the row's `update` has nothing left to write.
+//
+// THE REVERT: drop `if (one.live) continue` from the group's arm of `rowUpdate`, and every row
+// writes its group twice — this reports 4 binding runs where 2 are due.
+test("a live class group is not written again by its row's update — 32.71", async () => {
+    const { mount } = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+let hot = reactive(false)
+let rows = reactive([{ id: 'a', tone: 'calm' }, { id: 'b', tone: 'calm' }])
+</script>
+
+<main><ul>{#for row of rows by row.id}<li class="row {row.tone}" class:hot={hot}>x</li>{/for}</ul>
+<button id="retone" onclick={() => { rows = rows.map((row) => ({ ...row, tone: 'loud' })) }}>retone</button></main>`)
+    mount()
+    flushSync()
+    const work = measure(() => {
+        ;(document.querySelector('#retone') as HTMLElement).click()
+        flushSync()
+    })
+    expect(
+        [...document.querySelectorAll('li')].map((li) => li.className),
+    ).toEqual(['row loud', 'row loud'])
+    expect(work.bindingRuns).toBe(2)
+})
+
+// 32.71 — A `style` THAT MOVES, BESIDE A `style:prop`, KEEPS MOVING, and a property either half
+// declares stays. The server merged both into one attribute, so the page was right at render and
+// froze on the first change of `look`: the attribute was left unbound because writing it back
+// whole would have taken the directive's property with it.
+//
+// THE REVERT: make `sharingOf` answer `undefined` for a `style` group. `look` then never moves —
+// this reports `red` where `blue` is due.
+test('a style beside a style: property keeps moving, and a property either holds stays — 32.71', async () => {
+    const { html, mount } = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+let look = reactive('color: red')
+let wide = reactive('10px')
+</script>
+
+<main><p id="out" style={look} style:width={wide}>x</p>
+<button id="blue" onclick={() => { look = 'color: blue; margin: 1px 2px' }}>blue</button>
+<button id="bare" onclick={() => { look = '' }}>bare</button>
+<button id="claim" onclick={() => { look = 'width: 5px' }}>claim</button>
+<button id="narrow" onclick={() => { wide = '' }}>narrow</button></main>`)
+
+    expect(html).toContain('style="color: red; ; width: 10px"')
+    const style = () => (document.querySelector('#out') as HTMLElement).style
+    const click = (id: string) => {
+        ;(document.querySelector(`#${id}`) as HTMLElement).click()
+        flushSync()
+    }
+
+    // THE FIRST RUN OVER A SERVED PAGE WRITES NOTHING: every declaration is there already.
+    const mountWork = measure(() => {
+        mount()
+        flushSync()
+    })
+    expect(mountWork.attributesSet).toBe(0)
+    expect(mountWork.styleWrites).toBe(0)
+
+    click('blue')
+    expect(style().color).toBe('blue')
+    expect(style().marginLeft).toBe('2px')
+    expect(style().width).toBe('10px')
+    // WHAT THE ATTRIBUTE DROPS COMES OFF; the directive's property stays.
+    click('bare')
+    expect(style().color).toBe('')
+    expect(style().marginTop).toBe('')
+    expect(style().width).toBe('10px')
+    // BOTH DECLARE `width`: the directive's comes later in the merged list, as on the server, and
+    // when it is emptied the attribute's still stands.
+    click('claim')
+    expect(style().width).toBe('10px')
+    click('narrow')
+    expect(style().width).toBe('5px')
+})
+
+// 32.71 — THE GROUP RESOLVES AS THE SERVER'S MERGED LIST DOES, a shorthand on one side and a
+// longhand on the other included: the attribute's declarations first, each directive's after
+// them, and a directive with no value declaring nothing.
+//
+// THE REVERT: drop the `lay` that follows an emptied directive in `setStyleGroup`. Emptying
+// `style:margin` then takes the attribute's `margin-top` off with it — this reports `''` where
+// `1px` is due.
+test('a style group resolves a shorthand beside a longhand as the server does — 32.71', async () => {
+    const { mount } = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+let look = reactive('margin-top: 1px; color: red !important')
+let gap = reactive('4px')
+</script>
+
+<main><p id="out" style={look} style:margin={gap}>x</p>
+<button id="empty" onclick={() => { gap = '' }}>empty</button>
+<button id="wide" onclick={() => { gap = '6px' }}>wide</button>
+<button id="left" onclick={() => { look = 'margin-left: 9px' }}>left</button></main>`)
+    mount()
+    flushSync()
+    const style = () => (document.querySelector('#out') as HTMLElement).style
+    const click = (id: string) => {
+        ;(document.querySelector(`#${id}`) as HTMLElement).click()
+        flushSync()
+    }
+
+    expect(style().marginTop).toBe('4px')
+    expect(style().getPropertyPriority('color')).toBe('important')
+    click('empty')
+    expect(style().marginTop).toBe('1px')
+    expect(style().marginLeft).toBe('')
+    click('wide')
+    expect(style().marginTop).toBe('6px')
+    // THE DIRECTIVE COMES LATER, so the attribute's new longhand does not win over it.
+    click('left')
+    expect(style().marginLeft).toBe('6px')
+    expect(style().color).toBe('')
+    click('empty')
+    expect(style().marginLeft).toBe('9px')
+    expect(style().marginTop).toBe('')
+})
+
 // 31.3 — AN `await` OPERAND HOLDS THE `Reactive`, WHEREVER AN `await` IS LEGAL. Every `Reactive`
 // is a promise for its own settling (1.4, 2.7), so this is the same line a `.ts` file writes and
 // it means the same thing. Lowered as a read (31.1) it would be `await total()` — what has landed,

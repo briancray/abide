@@ -15,6 +15,8 @@
 // and every `class:name` on an element is merged by the server into the single `style` or `class`
 // attribute beside the author's own, so neither of those two attributes can be written back whole
 // — the CSSOM and `classList` are what touch the one declaration or the one token a binding owns.
+// A `class={expr}` or `style={expr}` beside its directives is the same answer once more
+// (`setClassGroup`, `setStyleGroup`, 32.71): the group writes what it owns, and nothing else.
 // A list is reached through `listAt` and `updateList` alone, so its rows' shape is no caller's.
 // Nothing that finds a node by something added to the document, because a compiler may not invent
 // structure an author's CSS or queries can see.
@@ -38,6 +40,7 @@ export {
     textHere,
 } from './adoptWalk.ts'
 export { bindElement } from './bindElement.ts'
+export { bindGroup } from './bindGroup.ts'
 export { bindProperty } from './bindProperty.ts'
 export { bindSpread } from './bindSpread.ts'
 export { escapeless } from './escapeless.ts'
@@ -57,7 +60,9 @@ export { itemOf, noUpdate, replaceRow, rowCell } from './rows.ts'
 export { EMPTY_SCOPE, Scope } from './Scope.ts'
 export { setAttribute } from './setAttribute.ts'
 export { setClass } from './setClass.ts'
+export { setClassGroup } from './setClassGroup.ts'
 export { setMarkup } from './setMarkup.ts'
+export { setStyleGroup } from './setStyleGroup.ts'
 export { setStyleProperty } from './setStyleProperty.ts'
 export { setText } from './setText.ts'
 export { TryRegion } from './TryRegion.ts'

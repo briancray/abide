@@ -2003,6 +2003,15 @@ reading layout, querying its descendants or calling `focus()` acts on a connecte
 32.70 Markup the client parses for a slot holding a value branded by `raw`, a `{#if}` arm or a
 `{#for}` row MUST be parsed as the document's parser parses it inside the element it goes into.
 
+32.71 A `class` or `style` attribute beside a `class:name` or `style:prop` MUST keep moving (32.3)
+and MUST write only its own classes or declarations; a class either of them holds MUST stay on the
+element, and a style property MUST resolve as the server's merged attribute does — the attribute's
+declarations first, then each directive's in the tag's order.
+
+32.72 An element MUST be a build error where a `bind:` and something else both write its value: the
+attribute a `bind:name` names, `checked` beside `bind:group`, an `<option selected>` inside a
+`<select bind:value>`, or text inside a `<textarea bind:value>`.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`

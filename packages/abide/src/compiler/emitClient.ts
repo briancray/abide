@@ -21,6 +21,7 @@ import {
     classifyAttributes,
     isBound,
     isSingleRooted,
+    type MergeGroup,
     isSlot,
 } from './classifyTemplate.ts'
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
@@ -765,6 +766,17 @@ function elementUnits(
             )
         // 32.5, 32.7, 32.8 — THE PROPERTY AND THE VALUE, IN STEP BOTH WAYS: a watch on this
         // region's scope writes the property, and a listener writes it back.
+        // 32.8 — a group compares against the input's own value, read where the value is.
+        else if (one.kind === 'bound' && one.bind === 'group')
+            binds.push(
+                `${lowering.use('bindGroup')}(${element}, ${lowering.reference(one.attribute)}, () => (${
+                    one.own === undefined
+                        ? "'on'"
+                        : one.own.expression
+                          ? lowering.binding(one.own)
+                          : JSON.stringify(one.own.value)
+                }), ${SCOPE})`,
+            )
         else if (one.kind === 'bound')
             binds.push(
                 `${lowering.use('bindProperty')}(${element}, ${JSON.stringify(one.bind)}, ${lowering.reference(one.attribute)}, ${SCOPE})`,
@@ -796,16 +808,32 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
                           write: 'attribute' as const,
                           name: one.attribute.name,
                       }
+            // 32.71 — A SHARED GROUP IS ONE WATCH over its whole value, which wakes for any member:
+            // a directive cannot keep what the plain attribute holds from a watch of its own.
+            const group =
+                one.kind === 'merged' && writesGroup(write)
+                    ? one.group
+                    : undefined
             // 32.67 — one reading a row's item is one of the row's item watches, on a name of its
             // own because it is installed apart from the element's other attributes.
-            if (lowering.readsOwnItem(one.attribute))
-                itemWrites.push(
-                    `${SCOPE}.itemWatch(() => ${lowering.use(WRITES[write])}(__i${slot}, ${JSON.stringify(name)}, ${lowering.binding(one.attribute)}))`,
-                )
-            else
-                writes.push(
-                    `${SCOPE}.watch(() => ${lowering.use(WRITES[write])}(__a${slot}, ${JSON.stringify(name)}, ${lowering.binding(one.attribute)}))`,
-                )
+            const asItem =
+                group === undefined
+                    ? lowering.readsOwnItem(one.attribute)
+                    : groupReadsOwnItem(group, lowering)
+            const call = writeCall(
+                write,
+                asItem ? `__i${slot}` : `__a${slot}`,
+                name,
+                group === undefined
+                    ? lowering.binding(one.attribute)
+                    : groupArguments(group, (attribute) =>
+                          lowering.binding(attribute),
+                      ),
+                lowering,
+            )
+            ;(asItem ? itemWrites : writes).push(
+                `${SCOPE}.${asItem ? 'itemWatch' : 'watch'}(() => ${call})`,
+            )
         }
     }
     if (itemWrites.length > 0)
@@ -823,13 +851,26 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
 const SCOPE = '__scope'
 
 // Which runtime write each kind of attribute binding is handed to. A record rather than a chain
-// of ternaries, so a fourth kind is a row here and the call site stays one line — all three take
-// the same three arguments, which is what makes them one site at all.
+// of ternaries, so a sixth kind is a row here and the call site stays one line — all take the
+// same three arguments, which is what makes them one site at all.
 const WRITES = {
     attribute: 'setAttribute',
     class: 'setClass',
     style: 'setStyleProperty',
+    classGroup: 'setClassGroup',
+    styleGroup: 'setStyleGroup',
 } as const
+
+/** One attribute binding's write: the element, the one name it owns, and the value. */
+function writeCall(
+    write: keyof typeof WRITES,
+    element: string,
+    name: string,
+    value: string,
+    lowering: Lowering,
+): string {
+    return `${lowering.use(WRITES[write])}(${element}, ${JSON.stringify(name)}, ${value})`
+}
 
 // The share scope an instance captures for its deferred mounts (10.5), named apart from the one an
 // instance OPENS (`shareScope`): a page that shares nothing still carries this for a child that does.
@@ -1055,6 +1096,41 @@ function buildRender(lowering: Lowering): ValueRender {
         bytes: (bytes) =>
             JSON.stringify(decodeCharacterReferences(bytes, 'attribute')),
     }
+}
+
+/** 32.71 — whether a write is a shared group's whole value. */
+function writesGroup(write: keyof typeof WRITES): boolean {
+    return write === 'classGroup' || write === 'styleGroup'
+}
+
+/** 32.71 — whether a shared group is one of a row's item watches: any member is. */
+function groupReadsOwnItem(group: MergeGroup, lowering: Lowering): boolean {
+    for (const member of group.members)
+        if (member.expression && lowering.readsOwnItem(member)) return true
+    return false
+}
+
+/**
+ * 32.71 — a shared group's write arguments: the plain attribute's value, then every directive's
+ * condition or value in the order the group names them, each read by `read`. A directive with no
+ * expression is a class that is always on, or a property's own bytes.
+ */
+function groupArguments(
+    group: MergeGroup,
+    read: (attribute: Attribute) => string,
+): string {
+    const values: string[] = []
+    for (const directive of group.directives)
+        values.push(
+            directive.expression
+                ? read(directive)
+                : group.name === 'class'
+                  ? 'true'
+                  : JSON.stringify(
+                        decodeCharacterReferences(directive.value, 'attribute'),
+                    ),
+        )
+    return `${read(group.plain as Attribute)}, [${values.join(', ')}]`
 }
 
 /**
@@ -1563,6 +1639,40 @@ function rowUpdate(
             position.holder as ElementNode,
             lowering,
         )) {
+            // 32.71 — a shared group is written whole where a member moves with the item — and
+            // where none is live, as for any attribute: a live group's watch reads the item too.
+            if (
+                one.kind === 'merged' &&
+                one.group !== undefined &&
+                one.toggles !== undefined &&
+                writesGroup(one.toggles.write)
+            ) {
+                if (one.live) continue
+                for (const member of one.group.members)
+                    if (
+                        member.expression &&
+                        !lowering.isLive(member) &&
+                        lowering.readsItem(member, block)
+                    ) {
+                        own.push(
+                            writeCall(
+                                one.toggles.write,
+                                `__a${slot}`,
+                                one.toggles.name,
+                                groupArguments(one.group, (attribute) =>
+                                    unlandable(
+                                        lowering,
+                                        attribute,
+                                        lowering.expression(attribute),
+                                    ),
+                                ),
+                                lowering,
+                            ),
+                        )
+                        break
+                    }
+                continue
+            }
             if (!one.attribute.expression || one.live) continue
             if (!lowering.readsItem(one.attribute, block)) continue
             const toggles =
@@ -1576,7 +1686,13 @@ function rowUpdate(
                       : undefined
             if (toggles === undefined) continue
             own.push(
-                `${lowering.use(WRITES[toggles.write])}(__a${slot}, ${JSON.stringify(toggles.name)}, ${lowering.expression(one.attribute)})`,
+                writeCall(
+                    toggles.write,
+                    `__a${slot}`,
+                    toggles.name,
+                    lowering.expression(one.attribute),
+                    lowering,
+                ),
             )
         }
         if (own.length === 0) continue

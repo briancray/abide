@@ -8,7 +8,6 @@
 
 import {
     boundValue,
-    groupHolds,
     heldValue,
     selectHolds,
     writeBound,
@@ -20,32 +19,13 @@ type Bound = HTMLInputElement & HTMLDetailsElement
 
 export function bindProperty(
     element: Element,
-    kind: 'value' | 'checked' | 'open' | 'group',
+    kind: 'value' | 'checked' | 'open',
     operand: unknown,
     scope: Scope,
 ): void {
     const bound = element as Bound
     if (kind === 'value') {
         bindValue(bound, operand, scope)
-        return
-    }
-    if (kind === 'group') {
-        scope.watch(() => {
-            const checked = groupHolds(boundValue(operand), bound.value)
-            bound.checked = checked
-            bound.toggleAttribute('checked', checked)
-        })
-        bound.addEventListener('change', () => {
-            const standing = heldValue(operand)
-            // A checkbox group holds a list, and keeps its order; a radio group holds the one value.
-            if (Array.isArray(standing)) {
-                const next: unknown[] = []
-                for (const member of standing)
-                    if (member !== bound.value) next.push(member)
-                if (bound.checked) next.push(bound.value)
-                writeBound(operand, next)
-            } else if (bound.checked) writeBound(operand, bound.value)
-        })
         return
     }
     // `checked` on an input, `open` on a `<details>`.

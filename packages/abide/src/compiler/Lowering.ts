@@ -222,6 +222,11 @@ export class Lowering {
         }
     }
 
+    /** 32.67 — whether a position reads any row's item. */
+    readsAnItem(holder: object): boolean {
+        return this.holdsRead(holder, (read) => read.item !== -1)
+    }
+
     /** 32.67 — whether a position reads `block`'s item. */
     readsItem(holder: object, block: object): boolean {
         const item = this.itemOf(block)

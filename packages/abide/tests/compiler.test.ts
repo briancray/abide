@@ -1569,49 +1569,37 @@ test("an author's module-scope name cannot collide with a runtime import", async
     expect(thrown).toBeUndefined()
 })
 
-// THE SAME EXCEPTION ON THE SAME GROUNDS, one attribute over. A plain reactive `class={expr}`
-// beside a `class:name` is merged by the server and left unbound, because `setAttribute('class',
-// …)` replaces the whole token list and takes the directive's name with it — the two bindings
-// would then overwrite each other in whichever order they reran. No clause spells `class`'s road
-// out of it the way 32.19 does `style`'s, so the two share this answer rather than each getting
-// its own. THE REVERT: make `isBound` answer `one.live` for every `merged` member;
-// `__setAttribute` appears here.
-test('a class beside a class: directive compiles and is left unbound', async () => {
+// 32.71 — A PLAIN REACTIVE `class={expr}` BESIDE A `class:name` IS BOUND WITH IT, as one group
+// written through the class list — never through `setAttribute('class', …)`, which would replace
+// the whole token list and take the directive's class with it. THE REVERT: make `sharedGroupOf` answer `undefined`; the class is left
+// unbound and `__setClassGroup` is missing here.
+test('a class beside a class: directive writes its own tokens — 32.71', async () => {
     const both = await clientOf('<div class={c} class:on={x}>t</div>', [
         'c',
         'x',
     ])
-    expect(await refusal(Promise.resolve(both))).toBe('')
-    expect(both).toContain('__setClass')
-    expect(both).not.toContain('__setAttribute')
-    // ALONE IT IS AN ORDINARY BINDING, which is what makes the case above an exception rather
-    // than the rule.
+    expect(both).toContain('__setClassGroup(__a0, "on", c(), [x()])')
+    expect(both).not.toContain('__setAttribute(')
+    // ALONE IT IS AN ORDINARY BINDING.
     expect(await clientOf('<div class={c}>t</div>', ['c'])).toContain(
         '__setAttribute',
     )
 })
 
-// A PLAIN `style={expr}` BESIDE A `style:prop` COMPILES AND IS NOT BOUND, and this pins both
-// halves of that. The page RENDERS right \u2014 the server merges the two into one `style` attribute
-// \u2014 so refusing it would break a page that works for a clause that is not built; what it costs
-// is that this one attribute keeps the value standing at render where 32.3 says it moves.
-//
-// THE HOLE IS THE POINT OF THE TEST. `style:width` beside it still gets its binding, so the
-// assertion is not "nothing is bound here" \u2014 it is that the MERGED one is skipped and the
-// property one is not. 32.19 is what closes it, and this test is what fails when it lands.
-test('a style beside a style: property compiles and is left unbound \u2014 32.19', async () => {
+// 32.71 — A PLAIN REACTIVE `style={expr}` BESIDE A `style:prop` IS BOUND WITH IT, as one group
+// written through the CSSOM — never through `setAttribute('style', …)`, which would replace every
+// declaration and take the directive's property with it. THE REVERT: make `sharingOf` answer
+// `undefined` for a `style` group; the plain `style` is left unbound and `__setStyleGroup` is
+// missing here.
+test('a style beside a style: property writes as one group — 32.71', async () => {
     const both = await clientOf('<div style={s} style:width={w}>x</div>', [
         's',
         'w',
     ])
-    expect(await refusal(Promise.resolve(both))).toBe('')
-    // The `style:` half binds through the CSSOM, which is the write that touches one property.
-    expect(both).toContain('__setStyleProperty')
-    // The merged half gets NO whole-attribute write \u2014 that is the exception.
+    expect(both).toContain('__setStyleGroup(__a0, "width", ')
+    expect(both).not.toContain('__setStyleProperty')
     expect(both).not.toContain('__setAttribute')
-    // ALONE IT IS AN ORDINARY BINDING, which is what makes the case above an exception rather
-    // than the rule. THE REVERT: make `isBound` answer `one.live` for every `merged` member;
-    // the first assertion below is unchanged and `__setAttribute` appears in `both` too.
+    // ALONE IT IS AN ORDINARY BINDING.
     expect(await clientOf('<div style={s}>x</div>', ['s'])).toContain(
         '__setAttribute',
     )
