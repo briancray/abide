@@ -27,8 +27,8 @@ import { serveDocsApp } from './serveDocsApp.ts'
 // A CONTENT-HEAVY PAGE AND A SHORTER ONE. The op somebody waits on is the whole
 // navigation, so the pair is two real docs addresses rather than a fixture: a fixture
 // would price a page nobody reads.
-const FROM = '/values/derive-a-value-from-other-values'
-const TO = '/values/show-a-value-that-changes'
+const FROM = '/guide/make-it-live'
+const TO = '/guide/keep-it-current'
 const RUNS = 5
 
 type Row = {
@@ -105,15 +105,31 @@ try {
         const load = await traceOp(page, 'navigation-to-paint', async () => {
             await page.goto(origin + FROM, { waitUntil: 'load' })
             await page.evaluate(async () => {
-                await new Promise((resolve) =>
-                    requestAnimationFrame(() =>
-                        requestAnimationFrame(() => resolve(null)),
-                    ),
+                // THE ENTRY IS AWAITED, not looked for after a fixed number of frames. A paint
+                // entry is queued once its frame is presented, which under tracing lands frames
+                // after `load` — two frames found none at all, and the bench threw on every run.
+                const painted = await new Promise<PerformanceEntry>(
+                    (resolve, reject) => {
+                        const observer = new PerformanceObserver((list) => {
+                            const entry = list.getEntriesByName(
+                                'first-contentful-paint',
+                            )[0]
+                            if (entry === undefined) return
+                            observer.disconnect()
+                            clearTimeout(deadline)
+                            resolve(entry)
+                        })
+                        const deadline = setTimeout(() => {
+                            observer.disconnect()
+                            reject(
+                                new Error(
+                                    'no first-contentful-paint entry in 10 s',
+                                ),
+                            )
+                        }, 10_000)
+                        observer.observe({ type: 'paint', buffered: true })
+                    },
                 )
-                const painted = performance.getEntriesByName(
-                    'first-contentful-paint',
-                )[0]
-                if (!painted) throw new Error('no first-contentful-paint entry')
                 // `timeOrigin` is the navigation start for a top-level document, so
                 // the op is the whole wait: address entered, something on screen.
                 performance.measure('navigation-to-paint', {
