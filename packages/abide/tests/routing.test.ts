@@ -25,7 +25,7 @@ import {
     parseRoutePattern,
     type Segment,
 } from '#shared/routePattern.ts'
-import { applyHead } from '#ui/applyHead.ts'
+import { reconcileHead } from '#ui/reconcileHead.ts'
 import { listenForRoutes, type PageMount, startRouter } from '#ui/routing.ts'
 import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
@@ -697,9 +697,12 @@ test('a navigation replaces head contributions by key and appends the keyless �
     document.head.innerHTML =
         '<title>Home</title><meta name="description" content="home"><meta property="og:title" content="Home"><link rel="icon" href="/a.ico">'
 
-    applyHead(
-        '<title>Invoice</title><meta name="description" content="an invoice"><meta charset="utf-8"><link rel="icon" href="/a.ico">',
-    )
+    reconcileHead([
+        [
+            {},
+            '<title>Invoice</title><meta name="description" content="an invoice"><meta charset="utf-8"><link rel="icon" href="/a.ico">',
+        ],
+    ])
 
     const titles = document.head.querySelectorAll('title')
     expect(titles).toHaveLength(1)
@@ -734,11 +737,11 @@ test("a routable page's client module carries its merged head — 39.12", async 
     )
     const reads = await session.reads(`${ROOT}src/Head.abide`, file)
     const client = emitClient(file, reads, 'routed')
-    expect(client).toContain('__applyHead(')
+    expect(client).toContain('.reconcile()')
     expect(client).toContain('Second')
     expect(client).not.toContain('First')
     // A page nobody navigates to needs none of it.
-    expect(emitClient(file, reads, 'none')).not.toContain('__applyHead(')
+    expect(emitClient(file, reads, 'none')).not.toContain('.reconcile()')
 })
 
 // 39.6 — A HEAD READS THE INSTANCE, as a body slot does. `<title>{title}</title>` over a setup

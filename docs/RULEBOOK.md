@@ -2674,8 +2674,9 @@ hydration woke before it settles; it MUST throw where the component was not impo
 39.4 `<head>` contributions MUST be merged by key, and the deepest contributor MUST win. The shell's
 `<head>` MUST be the outermost contributor.
 
-39.5 A `<head>` contribution with no merge key MUST append — in tree order among the contributions
-its level mounts with, and when it mounts for a component mounted after its level.
+39.5 A `<head>` contribution with no merge key MUST append, and MUST stand in its contributors'
+order — each level's own, then its components' in the order they mounted, outermost level first — a
+component mounted after its level included.
 
 39.6 On a client navigation the incoming page's keyed `<head>` contributions MUST replace the
 outgoing page's by key, and a layout's MUST NOT move.
@@ -2709,7 +2710,7 @@ contributor has that key.
 MUST replace, in place, the one that same contributor wrote before.
 
 39.16 A `<head>` contribution with no merge key MUST be removed when the page, layout or component
-that made it leaves.
+that made it leaves, and an equal one another contributor made MUST stay.
 
 39.17 A `<script>` a `<head>` contribution writes in a browser MUST run when it is written, as the
 one a server paints does, and MUST NOT run again while the same contributor writes it unchanged.

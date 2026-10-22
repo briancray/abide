@@ -37,9 +37,6 @@ export {
     runHere,
     textHere,
 } from './adoptWalk.ts'
-// 39.6 — a module mounted into an empty region applies its own head, from inside its instance
-// (`emitClient`); only a module that carries its own markup and a `<head>` imports it.
-export { applyHead } from './applyHead.ts'
 export { bindElement } from './bindElement.ts'
 export { bindProperty } from './bindProperty.ts'
 export { bindSpread } from './bindSpread.ts'

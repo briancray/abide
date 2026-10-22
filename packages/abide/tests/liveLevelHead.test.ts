@@ -355,3 +355,40 @@ const { name } = props<{ name: string }>()
     flushSync()
     expect(contents()).toEqual(['a'])
 })
+
+// 39.14, 39.16 — A PAGE LEAVES WITH ITS LAYOUT'S `<slot/>`, AND ITS HEAD WITH IT. A slot standing
+// in a `{#if}` that closes takes the page below it out of the document; what the page keyed goes
+// back to the layout's, and what it wrote without a key leaves. The slot opening again mounts the
+// page, and its head with it.
+//
+// THE REVERT: drop the two reconciles from `Router.release`. The page's title outlives it — this
+// reports `Page` where `Layout` is due — and so does its keyless `<meta>`.
+test("a page's head leaves with its layout's slot — 39.14, 39.16", async () => {
+    await arrive(
+        `<script>
+import { reactive } from '@abide/abide'
+
+let open = reactive(true)
+;(globalThis as { setOpen?: (value: boolean) => void }).setOpen = (value) => { open = value }
+</script>
+
+<head><title>Layout</title></head>
+<div>{#if open}<slot/>{/if}</div>`,
+        `<head><title>Page</title><meta http-equiv="x-page" content="p"></head>
+<main>page</main>`,
+    )
+    const setOpen = (value: boolean): void => {
+        ;(globalThis as { setOpen?: (value: boolean) => void }).setOpen?.(value)
+        flushSync()
+    }
+    const keyless = () =>
+        document.head.querySelectorAll('meta[http-equiv="x-page"]').length
+    expect(document.title).toBe('Page')
+    expect(keyless()).toBe(1)
+    setOpen(false)
+    expect(document.title).toBe('Layout')
+    expect(keyless()).toBe(0)
+    setOpen(true)
+    expect(document.title).toBe('Page')
+    expect(keyless()).toBe(1)
+})

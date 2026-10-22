@@ -10,7 +10,6 @@ import { arrive, route } from '#shared/route.ts'
 import { rankRoutes, type Segment } from '#shared/routePattern.ts'
 import { setUpLevels } from '#shared/setUpLevels.ts'
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
-import { withdrawHead } from './applyHead.ts'
 import { LAYER_MOUNT, LAYER_NAVIGATE } from './LAYER_NAMES.ts'
 import { Level } from './Level.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
@@ -469,12 +468,9 @@ export class Router {
             // table written by hand may answer with a fresh record each call. The function a module
             // exports is the same function either way.
             const shared = this.sharedLevels(arriving)
-            // READ BEFORE THE STOP, while the leaving levels' heads read what they read on screen.
-            const leaving = Level.headsOf(
-                this.levels,
-                shared,
-                this.levels.length,
-            )
+            // RECONCILED BEFORE THE STOP, while the leaving levels' heads read what they read on
+            // screen: what the server painted for them is adopted as theirs, so it leaves with them.
+            Level.reconcile(this.levels)
             const left: Scroll = [scrollX, scrollY]
             this.stopFrom(shared)
             // The region the arriving part goes into: the page region where nothing is kept, and
@@ -495,11 +491,8 @@ export class Router {
             // outermost first; a kept layout is not mounted again, so neither is its head.
             this.mountChain(target, found, arriving, shared, into)
             // 39.14 — what the leaving levels keyed and the arriving ones did not goes back to the
-            // nearest kept layout's, else leaves.
-            withdrawHead(leaving, () => [
-                Level.headsOf(this.levels, 0, shared),
-                Level.headsOf(this.levels, shared, this.levels.length),
-            ])
+            // nearest kept layout's, else leaves; their keyless nodes leave with them (39.16).
+            Level.reconcile(this.levels)
             // 30.29 — where the entry was left, on a history step; else the top of the page, or —
             // as the browser does on a load — the fragment's element.
             if (step.scroll !== undefined)
@@ -542,11 +535,13 @@ export class Router {
     private stopFrom(at: number): void {
         for (let index = this.levels.length - 1; index >= at; index -= 1) {
             const level = this.levels[index] as Level
+            // OUT OF THE CHAIN BEFORE IT STOPS, so a slot stop it fires on the way finds it gone
+            // (`release`) and leaves the head to whoever stopped it.
+            this.levels.length = index
             // The level's head leaves whole, so none of its components withdraws its own.
             level.contributed.clear()
             level.scope?.stop()
         }
-        this.levels.length = at
     }
 
     /**
@@ -629,7 +624,11 @@ export class Router {
     private release(level: Level, at: number): void {
         if (this.levels[at] !== level) return
         level.slot = undefined
+        // 39.14, 39.16 — THE LEVELS BELOW LEAVE WITH THE SLOT'S REGION, and their head with them:
+        // reconciled first, so what the server painted for them is adopted as theirs.
+        Level.reconcile(this.levels)
         this.stopFrom(at + 1)
+        Level.reconcile(this.levels)
     }
 
     /**

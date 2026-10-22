@@ -220,9 +220,7 @@ export function emitClient(
     const registered = heads
         ? `if (${ROUTED}) ${ROUTED}.setHead(() => ${headMarkup})\n`
         : ''
-    const applied = heads
-        ? `if (${ROUTED}) ${lowering.use('applyHead')}(${ROUTED}.headMarkup()); `
-        : ''
+    const applied = heads ? `if (${ROUTED}) ${ROUTED}.reconcile(); ` : ''
     // Applied with the fill either way, so the watch's first run only subscribes: what it would
     // write is already there, from the server or from the line above.
     if (liveHeads) lines.push(`if (${ROUTED}) ${ROUTED}.followHead(${SCOPE})`)

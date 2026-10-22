@@ -117,10 +117,10 @@ export async function composePage(
  * 39.4, 39.11 — THE DEEPEST CONTRIBUTOR WINS, and the markup is in tree order — the shell's head
  * (its outermost contributor), then each level's, outermost first — so the deepest is the last.
  * Written end to end instead, a shell's or a layout's `<title>` stands ahead of its page's and a
- * browser reads the first. The compiler merges within a file (39.12) and `applyHead` across a
+ * browser reads the first. The compiler merges within a file (39.12) and `reconcileHead` across a
  * navigation; this is the same grammar across the contributors of one render.
  *
- * TOP LEVEL OF THE HEAD ONLY, as `applyHead` keys the head's children and nothing inside them.
+ * TOP LEVEL OF THE HEAD ONLY, as `reconcileHead` keys the head's children and nothing inside them.
  * The attribute is the one WRITTEN rather than decoded — a shell's escaping and the compiler's
  * agree on every key a shell and a page would plausibly share.
  *

@@ -6,7 +6,7 @@ import {
 } from '#shared/reactive/share.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
 import { type Disposer, watchTracked } from '#shared/reactive/watch.ts'
-import { applyHead, withdrawHead } from './applyHead.ts'
+import { reconciled, reconcileHead } from './reconcileHead.ts'
 import { isEmptyRegion, type Region } from './regions.ts'
 import type { Scope } from './Scope.ts'
 
@@ -43,10 +43,10 @@ export class Level {
      */
     share: ShareScope | null = null
     /**
-     * The head the components built on the client contributed while this level mounts, applied
-     * once its `mount` returns; `undefined` outside one, where a contribution applies at once.
+     * Whether a component built on the client contributed a head while this level mounts, which is
+     * reconciled once its `mount` returns; `undefined` outside one, where it is reconciled at once.
      */
-    unapplied: string | undefined = undefined
+    unapplied: boolean | undefined = undefined
     /**
      * This level's own head markup as it reads now; `undefined` for a level with no `<head>`.
      *
@@ -82,11 +82,31 @@ export class Level {
         this.share = share
     }
 
-    /** The level's head as it reads now: its own, then every component's, deepest last (39.4). */
-    headMarkup(): string {
-        let markup = this.head?.() ?? ''
-        for (const one of this.contributed) markup += one.head()
-        return markup
+    /** Reconciles the document head from the chain this level stands in (`reconcileHead`). */
+    reconcile(): void {
+        Level.reconcile(this.levels)
+    }
+
+    /**
+     * Reconciles the document head from `levels`: each level's own head, then every component's in
+     * the order they mounted, outermost first — so the deepest wins by key (39.4). Read untracked:
+     * a head read here is followed by its own watch, not by whatever wrote.
+     */
+    static reconcile(levels: Level[]): void {
+        reconcileHead(untracked(Level.chain, levels, undefined))
+    }
+
+    /** Every contributor in `levels` and the head it reads now, outermost first. */
+    static chain(
+        levels: Level[],
+        _?: undefined,
+    ): [who: object, text: string][] {
+        const chain: [object, string][] = []
+        for (const level of levels) {
+            if (level.head !== undefined) chain.push([level, level.head()])
+            for (const one of level.contributed) chain.push([one, one.head()])
+        }
+        return chain
     }
 
     /**
@@ -100,78 +120,18 @@ export class Level {
         const contribution = new HeadContribution(this, head)
         this.contributed.add(contribution)
         contribution.dispose = watchTracked(() => contribution.follow())
-        // Batched while this level mounts; applied at once by an arm or a row mounted after it,
-        // under whatever is deeper (39.4) — only the levels below, since it was added last here.
-        const text = contribution.last ?? ''
+        // Batched while this level mounts; reconciled at once for an arm or a row mounted after it.
         if (isEmptyRegion(region))
-            if (this.unapplied !== undefined) this.unapplied += text
-            else
-                applyHead(
-                    text,
-                    untracked(Level.headsOf, this.levels, this.at + 1),
-                )
+            if (this.unapplied !== undefined) this.unapplied = true
+            else this.reconcile()
         return contribution
-    }
-
-    /**
-     * Writes `text` over the `last` that `contributor` in this level wrote.
-     *
-     * 39.4 — IT YIELDS TO EVERY CONTRIBUTOR DEEPER, read as they stand at the write and untracked:
-     * the components that contributed after it, then every level below, so a layout's
-     * `<title>{site}</title>` moving does not write over the page's `<title>`, and the page's head
-     * moving wakes only the page's own watch. 39.15 — its keyless nodes replace the ones it wrote.
-     */
-    reapply(text: string, last: string, contributor: HeadContribution): void {
-        applyHead(
-            text,
-            untracked(Level.headsAfter, this, contributor),
-            last,
-            // Read only where a key `last` held is withdrawn.
-            () => untracked(Level.headsBefore, this, contributor),
-        )
-    }
-
-    /**
-     * The heads either side of `contribution` in `level` (`headsBefore`, `headsAfter`). One `level`
-     * does not hold is the level's own head (`followHead`), which stands before every component's.
-     */
-    static headsAround(
-        level: Level,
-        contribution: HeadContribution,
-    ): [string, string] {
-        return [
-            Level.headsBefore(level, contribution),
-            Level.headsAfter(level, contribution),
-        ]
-    }
-
-    /** Every level above `level`, then what stands before `contribution` in it. */
-    static headsBefore(level: Level, contribution: HeadContribution): string {
-        let outer = Level.headsOf(level.levels, 0, level.at)
-        if (!level.contributed.has(contribution)) return outer
-        outer += level.head?.() ?? ''
-        for (const one of level.contributed) {
-            if (one === contribution) break
-            outer += one.head()
-        }
-        return outer
-    }
-
-    /** What stands after `contribution` in `level`, then every level below it. */
-    static headsAfter(level: Level, contribution: HeadContribution): string {
-        let inner = ''
-        let past = !level.contributed.has(contribution)
-        for (const one of level.contributed)
-            if (past) inner += one.head()
-            else if (one === contribution) past = true
-        return inner + Level.headsOf(level.levels, level.at + 1)
     }
 
     /**
      * 39.13 — A HEAD THAT READS A VALUE FOLLOWS IT for as long as the level is mounted, which is
      * `scope`'s life. The first run only subscribes: the head it would write is already there,
      * written by the server or applied by the level's mount ahead of its fill (39.6). Followed as a
-     * component's is, by a contribution the level does not hold (`headsAround`).
+     * component's is, by a contribution the level does not hold.
      */
     followHead(scope: Scope): void {
         const own = new HeadContribution(this, this.head as () => string)
@@ -190,8 +150,8 @@ export class Level {
             values: new Map(),
             level: this,
         })
-        this.unapplied = ''
-        let unapplied: string
+        this.unapplied = false
+        let unapplied: boolean
         let result: Result
         try {
             result = run()
@@ -200,19 +160,8 @@ export class Level {
             this.unapplied = undefined
             leaveShare(back)
         }
-        // 39.4 — under whatever a level below wrote while this one was mounting: the page in a
-        // layout's `<slot/>` applied its own head ahead of the components that layout holds.
-        if (unapplied !== '')
-            applyHead(unapplied, Level.headsOf(this.levels, this.at + 1))
+        if (unapplied) this.reconcile()
         return result
-    }
-
-    /** The heads of `levels` from `from` to `to`, outermost first. */
-    static headsOf(levels: Level[], from: number, to = levels.length): string {
-        let markup = ''
-        for (let at = from; at < to; at += 1)
-            markup += (levels[at] as Level).headMarkup()
-        return markup
     }
 }
 
@@ -236,24 +185,23 @@ export class HeadContribution {
     follow(): void {
         const text = this.head()
         const last = this.last
-        if (last !== undefined && text !== last)
-            this.level.reapply(text, last, this)
         this.last = text
+        if (last !== undefined && text !== last) this.level.reconcile()
     }
 
     /**
-     * 39.14 — WITHDRAWN AS A LEAVING LEVEL'S IS, its keys going back to what stands outside it and
-     * staying where something deeper holds them. Nothing where the level is leaving too: the router
-     * withdraws the whole level once, and cleared its contributions before stopping it.
+     * 39.14 — WITHDRAWN AS A LEAVING LEVEL'S IS: the chain is reconciled without it. Adopted first
+     * where the server painted it and nothing has reconciled since, so what it painted is known to
+     * be its own. Nothing where the level is leaving too: the router reconciles the whole chain
+     * once, and cleared its contributions before stopping it.
      */
     stop(): void {
         this.dispose?.()
         const level = this.level
         if (!level.contributed.has(this)) return
-        withdrawHead(this.last ?? '', () =>
-            untracked(Level.headsAround, level, this),
-        )
+        if (!reconciled(this)) level.reconcile()
         level.contributed.delete(this)
+        level.reconcile()
     }
 }
 
