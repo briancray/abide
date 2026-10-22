@@ -1,5 +1,15 @@
 # @abide/abide
 
+## 0.112.0
+
+### Minor Changes
+
+- cabe8d1: a class or style attribute beside class: and style: directives keeps moving and writes only its own classes and declarations, and an element where a bind: and something else both write its value is a build error ([`bbbfd81`](https://github.com/briancray/abide/commit/bbbfd810d817235ddb51b8c605756187e473719e))
+
+### Patch Changes
+
+- cabe8d1: one writer owns document.head — a keyless head node stands in its contributors' order, an equal one another contributor made stays when the first leaves, and a page's head leaves with its layout's slot ([`f21f687`](https://github.com/briancray/abide/commit/f21f68742efb463f7873a6aafc4482fd572363e7))
+
 ## 0.111.0
 
 ### Minor Changes
