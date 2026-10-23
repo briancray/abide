@@ -1,5 +1,19 @@
 # @abide/abide
 
+## 0.113.0
+
+### Minor Changes
+
+- 3c32bf6: a Store may watch — each change it reports re-reads get without running the body, and the watch stops when the value is released ([`a5539eb`](https://github.com/briancray/abide/commit/a5539eb9d1673a3b4dd98c0e35cc8d8dfb8c5e96))
+- 3c32bf6: App.run takes a principal — the claims its scope resolves from through onPrincipal, with no cookie written ([`c0db93c`](https://github.com/briancray/abide/commit/c0db93cb8f41533137a7cb3f833627bebbe9d65f))
+- 3c32bf6: under bun test with the test preload, an app that declares no ABIDE_PRINCIPAL_SECRET signs in with one the preload supplies ([`db09b9d`](https://github.com/briancray/abide/commit/db09b9d3aceeffe3d385ae295601ca9158dc2b86))
+
+### Patch Changes
+
+- 3c32bf6: an element the client builds takes the namespace the parser gives it there — a component inside an svg draws — and an xlink:href it writes is XLink's; the harness counts createElementNS and setAttributeNS ([`0dd560a`](https://github.com/briancray/abide/commit/0dd560a35d54a86d8ff5d3bc7762ed6c6968c71f))
+- 3c32bf6: a Keyed holds no entry for args its gate refuses, and the gate runs once per entry rather than on every refresh ([`1560749`](https://github.com/briancray/abide/commit/1560749419b1c571130c812fb0f6c3e2bac2a021))
+- 3c32bf6: abide check takes a url literal naming one of the framework's own fetched addresses — openapi, mcp, health, principal ([`c8af3dc`](https://github.com/briancray/abide/commit/c8af3dc746766fc5cbe322dbde551b15137c7330))
+
 ## 0.112.0
 
 ### Minor Changes
