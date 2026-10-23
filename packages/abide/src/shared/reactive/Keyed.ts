@@ -262,27 +262,22 @@ class StartWindow {
 }
 
 /**
- * `body` behind the `args` gate: validate, then run the body with what the gate accepted.
- *
- * 11.27's LAST TWO STEPS as one body. The gate runs on every run of the entry — a refresh
- * re-validates — and throws the refusal, which is what a body failing already does: the entry's
- * `error` holds it and its read throws it (2.2), and the body the gate stands in front of is never
- * called. What it accepts is what the body is handed (11.68).
+ * `body` handed what the `args` gate accepted for one entry (11.68), rather than the args it was
+ * reached with.
  *
  * A STREAM STAYS A STREAM FROM CONSTRUCTION. 9.6 reads the body's KIND, so the wrapper around an
  * async generator is an async generator, or a gated keyed stream would be one only from its first
  * run.
  */
-function gated<Args>(
+function handed<Args>(
     body: (args: Args) => unknown,
-    gate: Schema<Args>,
+    accepted: Args,
 ): (args: Args) => unknown {
-    const check = (args: Args): Args => checkArgs(gate, args)
     if (isStreamBody(body))
-        return async function* (args: Args) {
-            yield* (body as (args: Args) => AsyncIterable<unknown>)(check(args))
+        return async function* () {
+            yield* (body as (args: Args) => AsyncIterable<unknown>)(accepted)
         }
-    return (args: Args): unknown => body(check(args))
+    return (): unknown => body(accepted)
 }
 
 /**
@@ -348,7 +343,7 @@ export function createKeyed<
                   (throttle ?? debounce) as number,
               )
     const lifetime = ttl === undefined ? null : new Lifetime(ttl)
-    const entryBody = heldOnce(gate === undefined ? body : gated(body, gate))
+    const entryBody = heldOnce(body)
     // 11.27, 11.29 — the defaults are applied before the key is taken, so the entry is one for a
     // call that wrote them and one that left them to the parameter. Read once, here: a body with
     // none pays a `null` test per reach.
@@ -385,9 +380,32 @@ export function createKeyed<
             if (failedTransiently(standing)) standing.refresh()
             return standing
         }
+        // 11.27's VALIDATE, ONCE PER ENTRY AND BEFORE IT IS FILED: a refused `Args` is answered by a
+        // value holding the refusal (2.2) that no map keeps, so args nobody should have sent never
+        // take a place among the entries — on a `global` value, a place nothing but `invalidate`
+        // would take back (11.35). Built with none of the options: a `store` would restore a value
+        // over the refusal and watch for an entry nothing releases.
+        let run: (args: Args) => unknown = entryBody
+        if (gate !== undefined) {
+            let accepted: Args
+            try {
+                accepted = checkArgs(gate, args)
+            } catch (refusal) {
+                return createReactive<Stored, Accepted, Failures>(
+                    `${label}(${key})`,
+                    () => {
+                        throw refusal
+                    },
+                    args,
+                    undefined,
+                    undefined,
+                )
+            }
+            run = handed(entryBody, accepted)
+        }
         const created = createReactive<Stored, Accepted, Failures>(
             `${label}(${key})`,
-            entryBody as (args: unknown) => unknown,
+            run as (args: unknown) => unknown,
             args,
             undefined,
             entryOptions as ReactiveOptions<Accepted, Stored, Failures>,

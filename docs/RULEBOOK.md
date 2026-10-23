@@ -641,6 +641,9 @@ start again when the load ends.
 11.71 An unkeyed `reactive` with a `store`, built on a server outside every request, MUST NOT run
 the `store`'s `get` before it is reached.
 
+11.72 A `Keyed` MUST NOT hold an entry for an `Args` its `args` gate refuses, and the gate MUST run
+once per entry.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.

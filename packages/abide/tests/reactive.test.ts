@@ -3004,11 +3004,12 @@ test('a keyed entry is not busy because a value its body read is', async () => {
 // ── `args`: the gate on a keyed value's args (RULEBOOK 9.4, 11.26, 11.28, 11.40, 11.41) ──
 
 // THE BODY IS WHERE THE PRIVILEGED CALL IS, so a refused `Args` must never reach it — and the
-// refusal is still an ENTRY, under the key taken before the gate ran (11.26), so a second reach
-// of the same bad args joins it rather than refusing again (1.8).
+// refusal is NO ENTRY (11.72): args nobody should have sent would otherwise each hold a place, and
+// on a `global` value hold it for the life of the process.
 //
-// THE REVERT is building entries from the ungated body: `body runs: 1` and nothing refused.
-test('an args gate refuses before the body runs, and the refusal is the entry for that key', () => {
+// THE REVERTS: build entries from the ungated body, and `body runs: 1` with nothing refused. Or
+// file the refusal under its key, and `entries: 1` where 0 are due.
+test('an args gate refuses before the body runs, and the refusal is no entry — 11.72', () => {
     let runs = 0
     const invoice = reactive(
         (args: { id: number }) => {
@@ -3037,8 +3038,61 @@ test('an args gate refuses before the body runs, and the refusal is the entry fo
     expect(`read threw: ${(thrown as Error).name}`).toBe(
         'read threw: ValidationError',
     )
-    expect(invoice({ id: -1 })).toBe(refused)
+    expect(`entries: ${invoice.entries.size}`).toBe('entries: 0')
     expect(invoice({ id: 4 })()).toBe(8)
+})
+
+// 11.72 — A REFUSAL IS BUILT WITH NONE OF THE VALUE'S OPTIONS: a `store` holding a value for the
+// refused args would be restored over the refusal, and its read would answer what the gate refused.
+//
+// THE REVERT: build the refusal with the entry's options, and `read: 99` where the
+// ValidationError is due, with a watch nothing stops.
+test('a refused args reads its refusal, not a value its store holds — 11.72', () => {
+    let watches = 0
+    const invoice = reactive((args: { id: number }) => args.id * 2, {
+        args: (value: unknown) => {
+            if ((value as { id: number }).id < 0)
+                throw new Error('id must not be negative')
+            return value as { id: number }
+        },
+        store: () => ({
+            get: () => 99,
+            set: () => {},
+            watch: () => {
+                watches += 1
+                return () => {}
+            },
+        }),
+    })
+    let read: unknown
+    try {
+        read = invoice({ id: -1 })()
+    } catch (error) {
+        read = (error as Error).name
+    }
+    expect(`read: ${read}, watches: ${watches}`).toBe(
+        'read: ValidationError, watches: 0',
+    )
+})
+
+// 11.72 — THE GATE RUNS ONCE PER ENTRY, not once per run of it: the args an entry was filed under
+// do not change, so a refresh hands the body what the gate accepted the first time.
+//
+// THE REVERT is gating the body itself, as each run's wrapper: `gate runs: 3` where 1 is due.
+test('a refresh does not run the args gate again — 11.72', async () => {
+    let gateRuns = 0
+    const invoice = reactive((args: { id: number }) => args.id * 2, {
+        args: (value: unknown) => {
+            gateRuns += 1
+            return value as { id: number }
+        },
+    })
+    const entry = invoice({ id: 4 })
+    expect(entry()).toBe(8)
+    entry.refresh()
+    await turns()
+    expect(entry()).toBe(8)
+    expect(`gate runs: ${gateRuns}`).toBe('gate runs: 1')
 })
 
 // 11.28 AND 11.68: THE GATE DOES NOT DECIDE THE ENTRY, AND THE BODY GETS WHAT IT RETURNED. Two
@@ -3086,7 +3140,7 @@ test('args on a value with no parameter refuses at construction', () => {
 // wrapping the body in a plain function would quietly make every gated stream a value holding a
 // generator.
 //
-// THE REVERT is `gated` wrapping every body in a plain function: `eu()` is the generator object
+// THE REVERT is `handed` wrapping every body in a plain function: `eu()` is the generator object
 // rather than `['eu-1']`.
 test('an args gate on a keyed stream keeps it a stream, and refuses before it starts', async () => {
     let started = 0
