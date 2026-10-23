@@ -16,6 +16,7 @@
 import { type Failed, isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { HandlerRoute } from './HandlerRoute.ts'
+import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
 import { compose, type Middleware } from './Middleware.ts'
 import { principalRotated } from './principalRotated.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
@@ -442,7 +443,7 @@ export function declare(method: Method): Declare {
                 if (RPC_SERVER.raw !== null)
                     return RPC_SERVER.raw(
                         new Request(
-                            new URL(asked.url, 'http://app.internal'),
+                            new URL(asked.url, IN_PROCESS_ORIGIN),
                             given,
                         ),
                     )

@@ -69,7 +69,7 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
             <tbody>
                 <tr><td><code>App</code></td><td>what <code>createApp</code> hands back, to a test, a script or a host</td></tr>
                 <tr><td><code>App.fetch</code></td><td>one request, through the whole app, in this process</td></tr>
-                <tr><td><code>App.run</code></td><td>runs a function inside one request's scope, so two reads of one key load once</td></tr>
+                <tr><td><code>App.run</code></td><td>runs a function inside one request's scope, so two reads of one key load once, signed in as the <code>principal</code> claims you give it</td></tr>
                 <tr><td><code>App.listen</code></td><td>binds the socket, for a test that needs a real <code>WebSocket</code></td></tr>
                 <tr><td><code>App.stop</code></td><td>drains what is in flight, then runs <code>onStop</code></td></tr>
                 <tr><td><code>App[Symbol.asyncDispose]</code></td><td><code>stop</code>, under the name <code>await using</code> calls</td></tr>

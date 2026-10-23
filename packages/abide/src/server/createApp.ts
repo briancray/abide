@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs' // bun exposes no sync existence check of i
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { FAILURE_STATUS_TEXT } from '#shared/FAILURE_STATUS_TEXT.ts'
 import { framingOf } from '#shared/framing.ts'
+import { IN_PROCESS_ORIGIN } from '#shared/IN_PROCESS_ORIGIN.ts'
 import { LONGEST_DELAY } from '#shared/LONGEST_DELAY.ts'
 import { namedLogger } from '#shared/log.ts'
 import { compose } from '#shared/Middleware.ts'
@@ -32,6 +33,7 @@ import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 import { installServer } from './installServer.ts'
 import { admitsMux, muxSocketOptions, upgraded } from './muxUpgrade.ts'
 import { plainAnswer } from './plainAnswer.ts'
+import { presumePrincipal } from './principal.ts'
 import { realOrAsGiven } from './realOrAsGiven.ts'
 import {
     type AnsweringApp,
@@ -60,7 +62,7 @@ export interface App {
     fetch(request: Request): Promise<Response>
     run<Result>(
         fn: () => Result | Promise<Result>,
-        options?: { request?: Request },
+        options?: { request?: Request; principal?: Record<string, unknown> },
     ): Promise<Result>
     listen(options?: {
         port?: number
@@ -289,11 +291,21 @@ export async function bootEntered(
     let stopping = false
     let bound: Bun.Server<unknown> | undefined
 
-    const run = async <Result>(
-        fn: () => Result | Promise<Result>,
-        options?: { request?: Request },
-    ): Promise<Result> =>
-        inReleasedScope(options?.request, async () => await fn(), answering)
+    const run: App['run'] = async (fn, options) => {
+        const claims = options?.principal
+        // 42.19 — a principal is a request's, so one given alone is given a request to be.
+        const request =
+            options?.request ??
+            (claims === undefined ? undefined : new Request(IN_PROCESS_ORIGIN))
+        return inReleasedScope(
+            request,
+            async () => {
+                if (claims !== undefined) presumePrincipal(claims)
+                return await fn()
+            },
+            answering,
+        )
+    }
 
     const fetch = async (given: Request): Promise<Response> => {
         if (stopping) return plainAnswer('the app is stopping', 503)

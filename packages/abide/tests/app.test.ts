@@ -335,10 +335,14 @@ test('renders twice', async () => {
 // 17.8 — IN PROCESS IS WHERE A REASON PHRASE IS OURS TO GIVE: over a socket bun writes one into the
 // status line itself, but a `Response` handed straight back reads '' until `stamp` names it. THE
 // REVERT: drop the `statusText` default from `stamp`; `exploded` reads '500 '.
+//
+// 42.19 — A RUN GIVEN A PRINCIPAL IS SIGNED IN AS IT, with no request given and no principal cookie written.
+// THE REVERT: drop `presumePrincipal` from `run`; `presumed` reads 'false undefined false'.
 test('createApp boots inside onStart, answers with no socket, and stops inside onStop — 42, 37.4, 17.8', async () => {
     await Bun.write(
         `${app}/lib/host.ts`,
-        `import { createApp, request } from '@abide/abide/server'
+        `import { principal } from '@abide/abide'
+import { createApp, request, response } from '@abide/abide/server'
 import { marks } from './marks.server.ts'
 
 const app = await createApp()
@@ -351,8 +355,12 @@ try {
 } catch (thrown) {
     outside = (thrown as Error).message.includes('22.1') ? 'threw' : 'wrong throw'
 }
+const presumed = await app.run(async () => {
+    const resolved = (await principal.resolved) as { authenticated: boolean; id?: string }
+    return \`\${resolved.authenticated} \${resolved.id} \${response().headers.getSetCookie().some((cookie) => cookie.startsWith('abide-principal='))}\`
+}, { principal: { id: 'ada' } })
 await app.stop()
-console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.status} \${exploded.statusText}\`, inRequest, outside, marks }))
+console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.status} \${exploded.statusText}\`, inRequest, outside, presumed, marks }))
 `,
     )
     expect(
@@ -365,6 +373,7 @@ console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.stat
         exploded: '500 Internal Server Error',
         inRequest: 'http://app.test/x',
         outside: 'threw',
+        presumed: 'true ada false',
         marks: [
             'before start',
             'after start',

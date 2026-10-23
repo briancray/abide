@@ -6,6 +6,7 @@
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
 import { MCP_ADDRESS, OPENAPI_ADDRESS } from '#shared/ADDRESSES.ts'
+import { IN_PROCESS_ORIGIN } from '#shared/IN_PROCESS_ORIGIN.ts'
 import { banner } from './banner.ts'
 import { type App, type AppHandle, enterApp } from './createApp.ts'
 import { stopOnSignalOrFault } from './faultPolicy.ts'
@@ -494,7 +495,7 @@ async function surfaceAt(
     const booted = await booting(host, app, given)
     if (typeof booted === 'number') return booted
     return (init) =>
-        booted.fetch(new Request(`http://abide.local${address}`, init))
+        booted.fetch(new Request(`${IN_PROCESS_ORIGIN}${address}`, init))
 }
 
 /**

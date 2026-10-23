@@ -196,6 +196,20 @@ function resolvePrincipal(): Promise<Principal> {
 }
 
 /**
+ * This request's principal, resolved from `claims` as a sealed cookie's are, with no cookie written.
+ *
+ * 42.19 — `App.run`'s `principal`, which is why it throws where `principal.set` does.
+ */
+export function presumePrincipal(claims: Record<string, unknown>): void {
+    const scope = within('App.run principal')
+    if (!isRecord(claims))
+        throw new Error(
+            'abide: App.run takes a principal of claims, as principal.set does. RULEBOOK 26.11.',
+        )
+    scope.principal = documentOf(claims, Date.now() + ttl())
+}
+
+/**
  * Signs this caller in with `claims`, sealing them into the cookie.
  *
  * 26.8, 26.21 — AUTHENTICATES THIS CALLER, before the headers are out, leaving `caller` where it

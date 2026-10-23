@@ -78,7 +78,8 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
         <code>ABIDE_PRINCIPAL_TTL</code> milliseconds, a week unless you set it. The chapter app
         keeps a development secret in its <code>.env</code>, so set your own wherever the app is
         deployed. A comma-separated list rotates a secret in: the first signs, and every one
-        verifies.</p>
+        verifies. Under <code>bun test</code> an app that sets no secret is given one, so a test
+        signs in from a fresh clone.</p>
 
         <table>
             <thead><tr><th>Read</th><th>What it is</th></tr></thead>
@@ -115,6 +116,10 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
         stays small, and a rename shows on the next request rather than at the next sign-in.
         Filed in any handler file or <code>.abide</code>, it resolves the caller for every
         route.</p>
+
+        <p>A test signs in without the cookie. <code>app.run(fn, &#123; principal: &#123; id: 'theo' &#125; &#125;)</code>
+        hands those claims to <code>onPrincipal</code> as a sealed cookie's are, and the card's
+        test reads the member they name.</p>
 
         <p>What it returns is read as <code>principal.resolved</code>, typed by
         <code>Principal</code>. Declare your fields on that interface, as the app's
