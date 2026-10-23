@@ -1,4 +1,6 @@
 import { attributeText } from '#shared/attributeText.ts'
+import { FOREIGN_ATTRIBUTES } from '#shared/FOREIGN_ATTRIBUTES.ts'
+import { HTML_NAMESPACE } from '#shared/INTEGRATION_POINTS.ts'
 import { WORK } from '#shared/WORK.ts'
 
 /**
@@ -33,5 +35,27 @@ export function setAttribute(
         if (element.hasAttribute(name)) element.removeAttribute(name)
         return
     }
-    if (element.getAttribute(name) !== next) element.setAttribute(name, next)
+    const standing = element.getAttribute(name)
+    if (standing === next) return
+    if (standing === null) addAttribute(element, name, next)
+    else element.setAttribute(name, next)
+}
+
+/**
+ * Writes an attribute `element` does not hold yet, in the namespace the parser gives it there.
+ *
+ * 32.70 — an `xlink:href` on an SVG element is XLink's (`FOREIGN_ATTRIBUTES`), and one
+ * `setAttribute` makes has none, so a `<use>` it names draws nothing. Only an attribute's CREATION
+ * decides its namespace: `setAttribute` and `getAttribute` find a standing one by its qualified
+ * name, whatever namespace it is in.
+ */
+export function addAttribute(
+    element: Element,
+    name: string,
+    text: string,
+): void {
+    const space = FOREIGN_ATTRIBUTES.get(name)
+    if (space === undefined || element.namespaceURI === HTML_NAMESPACE)
+        element.setAttribute(name, text)
+    else element.setAttributeNS(space, name, text)
 }

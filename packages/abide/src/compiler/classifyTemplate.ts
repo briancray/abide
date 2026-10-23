@@ -532,11 +532,11 @@ export function isSingleRooted(children: TemplateNode[]): boolean {
     )
 }
 
-// CONTENT ONLY THE PARSER MAKES RIGHT, which is what a row the browser BUILDS cannot reproduce with
-// `createElement` and `appendChild`: an `<svg>` or `<math>` subtree lives in another namespace (and
-// the parser fixes the case of `linearGradient`), a raw-text element's contents are not decoded
-// the way body text is, and a `<template>`'s children go into its `content`. A row that touches any
-// of it is left to the parser — the general path, as the fallback it is.
+// CONTENT A ROW THE BROWSER BUILDS LEAVES TO THE PARSER: an `<svg>` or `<math>` that opens its
+// namespace inside the row (a build only carries one in, off the parent it goes into — 32.70), a
+// raw-text element's contents, which are not decoded the way body text is, and a `<template>`'s
+// children, which go into its `content`. A row that touches any of it is left to the parser — the
+// general path, as the fallback it is.
 const PARSER_OWNED = new Set([
     'svg',
     'math',

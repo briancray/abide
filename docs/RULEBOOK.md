@@ -2001,7 +2001,9 @@ reading layout, querying its descendants or calling `focus()` acts on a connecte
 32.69 `bind:element` on a component MUST be a build error.
 
 32.70 Markup the client parses for a slot holding a value branded by `raw`, a `{#if}` arm or a
-`{#for}` row MUST be parsed as the document's parser parses it inside the element it goes into.
+`{#for}` row MUST be parsed as the document's parser parses it inside the element it goes into, and
+an element the client builds — a component's own, or children a caller hands one — MUST take the
+namespace the document's parser gives it there, as MUST an attribute the client writes on it.
 
 32.71 A `class` or `style` attribute beside a `class:name` or `style:prop` MUST keep moving (32.3)
 and MUST write only its own classes or declarations; a class either of them holds MUST stay on the

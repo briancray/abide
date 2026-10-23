@@ -7,6 +7,11 @@ import {
 } from '#shared/ANCHORS.ts'
 import { anchorMarkup } from '#shared/anchorMarkup.ts'
 import { CHILDREN } from '#shared/CHILDREN.ts'
+import { FOREIGN_ATTRIBUTES } from '#shared/FOREIGN_ATTRIBUTES.ts'
+import {
+    HTML_NAMESPACE,
+    INTEGRATION_POINTS,
+} from '#shared/INTEGRATION_POINTS.ts'
 import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import {
@@ -880,6 +885,9 @@ const SHARE_AT = '__shareAt'
 const PARENT = '__parent'
 // The document a built region makes its nodes with, read off `PARENT` once a build.
 const DOCUMENT = '__document'
+// The namespace a built region's top-level elements take, read off `PARENT` once a build.
+const SPACE = '__space'
+const HTML_SPACE = JSON.stringify(HTML_NAMESPACE)
 
 // A run's anchors while it holds markup (32.30), as the JS string literals a built run parses with.
 const RAW_OPEN_MARKUP = JSON.stringify(anchorMarkup(RAW_OPEN))
@@ -942,17 +950,29 @@ function emitMaker(
  *
  * A NESTED REGION IS AN EMPTY ANCHOR PAIR, filled by its own machinery on the mount's first run
  * (`fillEmpty`), and a component or a slot is the same pair filled by the child.
+ *
+ * 32.70 — AN ELEMENT IS BUILT IN THE NAMESPACE THE PARSER WOULD GIVE IT, read off the parent it goes
+ * into (`namespaceUnder`) rather than decided here: a component's root does not know it is invoked
+ * inside an `<svg>`, and a `<g>` made with `createElement` is an HTML element that draws nothing.
+ * Read once a build, and again only below an `<annotation-xml>`, which reads its children as HTML by
+ * the encoding it declares; below any other integration point (`INTEGRATION_POINTS`) a child is
+ * HTML's, and everywhere else it takes its parent's. `createElementNS` with
+ * HTML's namespace costs what `createElement` does (Chromium, 2026-10-22), and a build that makes
+ * no top-level element reads none.
  */
 function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
     const lines: string[] = [
         `const ${DOCUMENT} = ${PARENT}.ownerDocument`,
         'const __built = []',
     ]
+    let readsSpace = false
     if (anchored)
         lines.push(
             `__built.push(${DOCUMENT}.createComment(${JSON.stringify(ROW_OPEN)}))`,
         )
     const render = buildRender(lowering)
+    // The expression each built element's namespace was, for its children to take.
+    const spaceOf = new Map<PlacedNode, string>()
     const into = (at: PlacedNode, node: string): string =>
         at.within === null
             ? `__built.push(${node})`
@@ -975,8 +995,19 @@ function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
             for (const line of builtRun(at, lowering, into)) lines.push(line)
             continue
         }
+        const within = at.within
+        const space =
+            within === null
+                ? SPACE
+                : INTEGRATION_POINTS.has(within.tag)
+                  ? HTML_SPACE
+                  : within.tag === 'annotation-xml'
+                    ? `${lowering.use('namespaceUnder')}(${within.name})`
+                    : (spaceOf.get(within) ?? SPACE)
+        if (space === SPACE) readsSpace = true
+        spaceOf.set(at, space)
         lines.push(
-            `const ${at.name} = ${DOCUMENT}.createElement(${JSON.stringify(at.tag)})`,
+            `const ${at.name} = ${DOCUMENT}.createElementNS(${space}, ${JSON.stringify(at.tag)})`,
         )
         for (const one of classifyAttributes(
             at.holder as ElementNode,
@@ -984,7 +1015,13 @@ function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
         )) {
             const value = builtAttribute(one, lowering, render)
             if (value === null) continue
-            const set = `${at.name}.setAttribute(${JSON.stringify(one.kind === 'merged' ? one.group?.name : one.attribute.name)}, `
+            const name =
+                one.kind === 'merged' ? one.group?.name : one.attribute.name
+            // 32.70 — one the parser would put in a namespace is written in it (`addAttribute`).
+            const set =
+                name !== undefined && FOREIGN_ATTRIBUTES.has(name)
+                    ? `${lowering.use('addAttribute')}(${at.name}, ${JSON.stringify(name)}, `
+                    : `${at.name}.setAttribute(${JSON.stringify(name)}, `
             // 32.37 — a whole-value attribute may be absent, which the server wrote as nothing.
             lines.push(
                 one.kind === 'dynamic'
@@ -994,6 +1031,12 @@ function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
         }
         lines.push(into(at, at.name))
     }
+    if (readsSpace)
+        lines.splice(
+            1,
+            0,
+            `const ${SPACE} = ${lowering.use('namespaceUnder')}(${PARENT})`,
+        )
     lines.push('return __built')
     return lines.join('\n    ')
 }

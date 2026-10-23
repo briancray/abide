@@ -1644,10 +1644,10 @@ test('a region made once is parsed, and one made once a row is built', async () 
     expect(page).toContain('__markupNodes(__parent')
     expect(page).not.toContain('createElement')
     // The arm inside the row: built.
-    expect(once).toContain('__document.createElement("b")')
+    expect(once).toContain('__document.createElementNS(__space, "b")')
     // A component's own arm: built, because the component can stand in a row.
     const invoked = emitClient(file, answer, 'invoked')
-    expect(invoked).toContain('__document.createElement("p")')
+    expect(invoked).toContain('__document.createElementNS(__space, "p")')
 })
 
 // 39.1 THROUGH A COMPONENT IN THE HEAD. A child invoked inside `<head>` is called from the HEAD

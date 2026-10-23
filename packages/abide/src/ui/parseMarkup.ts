@@ -1,3 +1,8 @@
+import {
+    HTML_NAMESPACE,
+    INTEGRATION_POINTS,
+} from '#shared/INTEGRATION_POINTS.ts'
+
 // MARKUP PARSED IN THE DOCUMENT `parent` BELONGS TO, not the global one. A page mounted into a second
 // document (an example `<iframe>`) parsed its `{#if}` arms in the right one and its `{#for}` rows in
 // the page's while the two were separate copies of this; one copy is one answer.
@@ -9,26 +14,22 @@ const TEMPLATES = new WeakMap<Document, HTMLTemplateElement>()
 const SVG = 'http://www.w3.org/2000/svg'
 const MATHML = 'http://www.w3.org/1998/Math/MathML'
 
-// The foreign elements whose children the parser reads as HTML again — the integration points —
-// so markup going into one parses the way it would at the template's own top level.
-const INTEGRATION_POINTS = new Set([
-    'foreignObject',
-    'desc',
-    'title',
-    'mi',
-    'mo',
-    'mn',
-    'ms',
-    'mtext',
-])
-
-/** Whether the parser reads `element`'s children as HTML again, though it is SVG or MathML. */
-function isIntegrationPoint(element: Element): boolean {
-    if (INTEGRATION_POINTS.has(element.localName)) return true
+/**
+ * The namespace an element the parser makes inside `parent` takes: SVG's or MathML's under an
+ * element of either, and HTML's under anything else — an HTML element, a document, a fragment, and
+ * an integration point (`INTEGRATION_POINTS`), whose children the parser reads as HTML again.
+ */
+export function namespaceUnder(parent: Node): string {
+    const element = parent as Element
+    const space = element.namespaceURI
+    if (space !== SVG && space !== MATHML) return HTML_NAMESPACE
+    if (INTEGRATION_POINTS.has(element.localName)) return HTML_NAMESPACE
     // The HTML standard makes an `<annotation-xml>` one only by the encoding it declares.
-    if (element.localName !== 'annotation-xml') return false
+    if (element.localName !== 'annotation-xml') return space
     const encoding = element.getAttribute('encoding')?.toLowerCase()
     return encoding === 'text/html' || encoding === 'application/xhtml+xml'
+        ? HTML_NAMESPACE
+        : space
 }
 
 /**
@@ -48,14 +49,8 @@ export function parseMarkup(parent: Node, markup: string): DocumentFragment {
         template = document.createElement('template')
         TEMPLATES.set(document, template)
     }
-    const space = (parent as Element).namespaceURI
-    const wrapper =
-        (space !== SVG && space !== MATHML) ||
-        isIntegrationPoint(parent as Element)
-            ? undefined
-            : space === SVG
-              ? 'svg'
-              : 'math'
+    const space = namespaceUnder(parent)
+    const wrapper = space === HTML_NAMESPACE ? undefined : space === SVG ? 'svg' : 'math'
     if (wrapper === undefined) {
         template.innerHTML = markup
         return template.content

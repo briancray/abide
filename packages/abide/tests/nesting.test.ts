@@ -1424,6 +1424,84 @@ let rows = reactive([1])
     expect(differed).toEqual([])
 })
 
+// 32.70 — AND WHAT IT BUILDS THERE. A component's root does not know it is invoked inside an
+// `<svg>`, so a row or an arm that grows one built its `<g>` with `createElement`: an HTML element
+// that draws nothing, though the one the server painted beside it drew. The same for children a
+// caller hands a component that slots them into an `<svg>`. What a build makes takes the namespace
+// of the parent it goes into, and an integration point's children are HTML again — checked against
+// what is due rather than the paint, because happy-dom's parser keeps a `<foreignObject>`'s
+// children SVG.
+//
+// THE REVERTS, verified 2026-10-22: build every element with `createElement` in `emitBuild`, and
+// all four report an HTML `<g>`; give every child its parent's namespace, integration points
+// included, and the `<div>` is built SVG.
+const SPRITE = `<script>
+import { props } from '@abide/abide'
+
+const { r } = props<{ r: number }>()
+</script>
+
+<g class="sprite"><circle r={r}/><text>{r}</text></g>`
+const COMPONENT_SVG_SHAPES: [string, string][] = [
+    ['a row', '{#for r of rows}<Sprite r={r}/>{/for}'],
+    ['a keyed row', '{#for r, at of rows by at}<Sprite r={r}/>{/for}'],
+    ['an arm', '{#if on}<Sprite r={1}/>{:else}<Sprite r={2}/>{/if}'],
+    [
+        'slotted children',
+        '{#for r of rows}<Holder><circle r={r}/></Holder>{/for}',
+    ],
+]
+
+test('a component the client builds inside an svg is the svg the server would have written', async () => {
+    const differed: string[] = []
+    for (const [what, body] of COMPONENT_SVG_SHAPES) {
+        await mountPage(
+            `<script>
+import { reactive } from '@abide/abide'
+import Holder from './Holder.abide'
+import Sprite from './Sprite.abide'
+
+let on = reactive(true)
+let rows = reactive([1])
+</script>
+
+<svg id="drawn">${body}</svg>
+<button id="flip" onclick={() => { on = !on; rows = [...rows, 1] }}>flip</button>`,
+            { Sprite: SPRITE, Holder: '<g><slot/></g>' },
+        )
+        const drawn = document.querySelector('#drawn') as Element
+        const painted = shapeOf(drawn.firstElementChild ?? undefined)
+        click('#flip')
+        click('#flip')
+        const made = shapeOf(drawn.lastElementChild ?? undefined)
+        if (painted !== made)
+            differed.push(
+                `${what}\n      painted ${painted}\n      made    ${made}`,
+            )
+    }
+    expect(differed).toEqual([])
+
+    await mountPage(
+        `<script>
+import { reactive } from '@abide/abide'
+import Card from './Card.abide'
+
+let rows = reactive([1])
+</script>
+
+<svg id="drawn">{#for r of rows}<Card/>{/for}</svg>
+<button id="flip" onclick={() => { rows = [...rows, 1] }}>flip</button>`,
+        {
+            Card: '<g><foreignObject><div><b>html</b></div></foreignObject></g>',
+        },
+    )
+    click('#flip')
+    const made = document.querySelector('#drawn')?.lastElementChild
+    expect(shapeOf(made ?? undefined)).toBe(
+        'http://www.w3.org/2000/svg:g(http://www.w3.org/2000/svg:foreignObject(div(b(#text"html"))))',
+    )
+})
+
 // A REGION AT A ROW'S TOP LEVEL FILLS LATER THAN THE ROW IS MADE. A row the browser builds is its
 // anchor, an empty `{#if}` pair and its `<span>` — the arm's `<b>` goes between the pair on the
 // row's MOUNT, after `make` handed its nodes over. A row held as the array `make` returned never

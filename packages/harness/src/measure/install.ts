@@ -82,6 +82,7 @@ const DECLARED: [interfaceName: string, member: string, role: Role][] = [
     ['Document', 'prepend', 'insertArgs'],
     ['Document', 'replaceChildren', 'replaceChildren'],
     ['Element', 'setAttribute', 'attribute'],
+    ['Element', 'setAttributeNS', 'attribute'],
     ['Element', 'removeAttribute', 'attribute'],
     ['Element', 'toggleAttribute', 'attribute'],
     ['Element', 'className', 'attribute'],
@@ -91,13 +92,14 @@ const DECLARED: [interfaceName: string, member: string, role: Role][] = [
     // happy-dom gives `HTMLTemplateElement` its OWN `innerHTML`, which shadows the one
     // above — so a `template.innerHTML` write reaches no patched member, the
     // outermost-only guard never engages, and the parse's internal `createElementNS`
-    // surfaces as the `refused` throw instead. The compiled arm makes every row from a
+    // calls are counted as creates of their own instead. The compiled arm makes every row from a
     // template, so that is the whole arm. Chromium has no own descriptor here and the
     // installer shadows, which is how the two lists stay identical.
     ['HTMLTemplateElement', 'innerHTML', 'html'],
     ['Element', 'outerHTML', 'html'],
     ['CharacterData', 'data', 'data'],
     ['Document', 'createElement', 'create'],
+    ['Document', 'createElementNS', 'create'],
     ['Document', 'createTextNode', 'create'],
     ['Document', 'createComment', 'create'],
     ['Document', 'importNode', 'create'],
@@ -127,7 +129,6 @@ const DECLARED: [interfaceName: string, member: string, role: Role][] = [
     ['Node', 'normalize', 'refused'],
     ['Node', 'nodeValue', 'refused'],
     ['Element', 'insertAdjacentText', 'refused'],
-    ['Element', 'setAttributeNS', 'refused'],
     ['Element', 'removeAttributeNS', 'refused'],
     ['Element', 'setAttributeNode', 'refused'],
     ['Element', 'removeAttributeNode', 'refused'],
@@ -138,7 +139,6 @@ const DECLARED: [interfaceName: string, member: string, role: Role][] = [
     ['CharacterData', 'replaceData', 'refused'],
     ['Text', 'splitText', 'refused'],
     ['Document', 'write', 'refused'],
-    ['Document', 'createElementNS', 'refused'],
 ]
 
 /** A fresh `Work` with every counted row at 0 and the three published rows at `null`. */

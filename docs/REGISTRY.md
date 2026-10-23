@@ -529,7 +529,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `{expr}` | Reactive text, escaped. | 32.1, 32.23 |
 | formatting whitespace | What a run of whitespace renders as. | 33.17, 33.18 |
 | `{raw(...)}` | Raw HTML. | 32.2, 32.25, 32.26, 32.30, 32.31, 32.70 |
-| `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37, 32.71 |
+| `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37, 32.70, 32.71 |
 | `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3, 32.71 |
 | `bind:value` | Two-way bind on an element. | 5.16, 32.5, 32.58, 32.59, 32.60, 32.61, 32.62, 32.72 |
@@ -564,10 +564,10 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Spelling | Meaning | Rules |
 | --- | --- | --- |
 | `{#component Name(pattern)}` | An inline component. | 32.39, 32.40, 32.41, 32.42, 32.43, 32.44, 32.45, 32.46, 32.47, 32.48, 32.49, 32.50, 32.51, 32.52, 32.53, 32.54, 32.55, 32.63, 32.64 |
-| `<Name/>` | A component invocation. | 32.17, 32.34, 32.35, 32.36, 33.19, 33.21, 41.24, 41.28 |
+| `<Name/>` | A component invocation. | 32.17, 32.34, 32.35, 32.36, 32.70, 33.19, 33.21, 41.24, 41.28 |
 | `<slot/>` | The position children render into. | 32.18 |
 | `<slot>fallback</slot>` | Renders children, or a fallback. | 32.18 |
-| `<Tag>…</Tag>` | Children passed to a component's slot. | 32.18 |
+| `<Tag>…</Tag>` | Children passed to a component's slot. | 32.18, 32.70 |
 
 ## Props
 

@@ -4,6 +4,7 @@
 
 import { spreadEntries } from '#shared/spread.ts'
 import type { Scope } from './Scope.ts'
+import { addAttribute } from './setAttribute.ts'
 
 /** Keeps an element's spread attributes and `on<event>` listeners written as the value changes. */
 export function bindSpread(
@@ -19,8 +20,9 @@ export function bindSpread(
         const next = new Set<string>()
         for (const [name, text] of spreadEntries(read(), explicit, wanted)) {
             next.add(name)
-            if (element.getAttribute(name) !== text)
-                element.setAttribute(name, text)
+            const standing = element.getAttribute(name)
+            if (standing === null) addAttribute(element, name, text)
+            else if (standing !== text) element.setAttribute(name, text)
         }
         for (const name of written)
             if (!next.has(name)) element.removeAttribute(name)

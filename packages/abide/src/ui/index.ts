@@ -48,7 +48,7 @@ export { escapeless } from './escapeless.ts'
 export { contributeHead } from './Level.ts'
 export { listAt, updateList } from './List.ts'
 export { warnMismatch } from './Mismatch.ts'
-export { markupNodes } from './parseMarkup.ts'
+export { markupNodes, namespaceUnder } from './parseMarkup.ts'
 export {
     fillEmpty,
     fillRegion,
@@ -58,7 +58,7 @@ export {
 export { rowKeyOf } from './rowKeyOf.ts'
 export { itemOf, noUpdate, replaceRow, rowCell } from './rows.ts'
 export { EMPTY_SCOPE, Scope } from './Scope.ts'
-export { setAttribute } from './setAttribute.ts'
+export { addAttribute, setAttribute } from './setAttribute.ts'
 export { setClass } from './setClass.ts'
 export { setClassGroup } from './setClassGroup.ts'
 export { setMarkup } from './setMarkup.ts'
