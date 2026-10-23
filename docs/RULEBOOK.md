@@ -1734,8 +1734,8 @@ the page shown, and MUST NOT where only its query or fragment does.
 30.25 A `navigate` that does not remount the page MUST NOT move the scroll, except to the element a
 fragment it carries names.
 
-30.26 `abide check` MUST refuse a `url` literal that no page route of the app (23.3) is filed under
-and no public file of the app is served at.
+30.26 `abide check` MUST refuse a `url` literal that no page route of the app (23.3) is filed under,
+no public file of the app is served at, and that is none of the four addresses 21.4 names.
 
 30.27 A `navigate` whose request fails, or whose route's chunks fail to load, MUST leave the address
 to the document, save where 30.32 holds.

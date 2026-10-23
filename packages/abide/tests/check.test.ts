@@ -73,9 +73,11 @@ const good = url('/routed/[id]/[...rest]', { id: 1, rest: ['s', 2] })
 const home = url('/')
 const stale = url('/routed/[id]', { id: 1 })
 const face = url('/fonts/face.woff2')
+const tools = url('/__abide/mcp')
+const client = url('/__abide/client')
 </script>
 
-<a href={good}>{home}</a><a href={stale}>stale</a><a href={face}>face</a>`
+<a href={good}>{home}</a><a href={stale}>stale</a><a href={face}>face</a><a href={tools}>{client}</a>`
 
 // 34.18 — a plain `let` the setup writes, beside one only a handler writes and one that is a
 // `reactive`: the first is the leak, and the other two are not.
@@ -454,15 +456,20 @@ test('route.params in a page is typed by its own route — 23.9', () => {
 // page left behind when its route grew a rest segment, and it built an address the server answers
 // from another page. THE REVERTS: drop the `Routes` declaration `diagnose` registers; `url` takes
 // any literal and the stale one goes unreported, 0 findings where 1 is due. Or drop the public files
-// from `routesDeclaration`; `/fonts/face.woff2` is refused too, 2 where 1 is due.
-test('url refuses a literal no page or public file is at — 30.26', () => {
+// from `routesDeclaration`; `/fonts/face.woff2` is refused too, 3 where 2 are due. Or drop
+// `FRAMEWORK_ROUTES`; `/__abide/mcp` is refused too, 3 where 2 are due. `/__abide/client` is no
+// address an app fetches, and stays refused.
+test('url refuses a literal no page, public file or framework address is at — 30.26', () => {
     expect(
         inFile('linked/index.abide').map(({ line, column, code }) => ({
             line,
             column,
             code,
         })),
-    ).toEqual([{ ...place(LINKED, "'/routed/[id]'"), code: 2345 }])
+    ).toEqual([
+        { ...place(LINKED, "'/routed/[id]'"), code: 2345 },
+        { ...place(LINKED, "'/__abide/client'"), code: 2345 },
+    ])
 })
 
 // 27.13 — `Config` IS WIDENED BY WHAT `onConfig`'S DEFAULTS RETURN, with no declaration written.

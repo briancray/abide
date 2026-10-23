@@ -1,6 +1,12 @@
 import { relative as relativeTo } from 'node:path' // bun exposes no path helpers of its own
 import { appFiles } from '#server/appTree.ts'
 import { type Placement, placement, routeOf } from '#server/placement.ts'
+import {
+    HEALTH_ADDRESS,
+    MCP_ADDRESS,
+    OPENAPI_ADDRESS,
+    PRINCIPAL_ADDRESS,
+} from '#shared/ADDRESSES.ts'
 import { LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
 import {
     coversRoute,
@@ -76,7 +82,7 @@ export type AppLayout = {
     errors: AppRoute[]
     /** Every public file's source path to its address. 36.11. */
     published: Map<string, string>
-    /** 30.26 — every address a link may name: a page's, and a public file's. */
+    /** 30.26 — every address a link may name: a page's, a public file's, and 21.4's four. */
     addresses: string[]
     /** What the tree refuses, each at its file; a build stops naming every one. */
     refused: Diagnosis[]
@@ -150,6 +156,7 @@ export async function appLayout(root: string): Promise<AppLayout> {
     const addresses = new Set<string>()
     for (const route of routes) addresses.add(route.pattern)
     for (const address of published.values()) addresses.add(address)
+    for (const address of FETCHED_ADDRESSES) addresses.add(address)
     return {
         root,
         sources,
@@ -164,6 +171,14 @@ export async function appLayout(root: string): Promise<AppLayout> {
         resolve,
     }
 }
+
+// 30.26, 21.4 — the framework's own addresses an app fetches, which every app answers at.
+const FETCHED_ADDRESSES = [
+    OPENAPI_ADDRESS,
+    MCP_ADDRESS,
+    HEALTH_ADDRESS,
+    PRINCIPAL_ADDRESS,
+]
 
 /** The file at each of `paths`, read. The reads overlap. */
 function textsAt(

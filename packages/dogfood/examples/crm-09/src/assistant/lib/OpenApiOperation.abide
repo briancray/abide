@@ -1,11 +1,11 @@
 <script>
-import { reactive, type RouteLiteral, url } from '@abide/abide'
+import { reactive, url } from '@abide/abide'
 
 type Operation = { description: string; parameters: object[] }
 let operation = reactive('')
 
 async function readDocument() {
-    const answer = await fetch(url('/__abide/openapi.json' as RouteLiteral))
+    const answer = await fetch(url('/__abide/openapi.json'))
     const document: { paths: Record<string, { get: Operation }> } =
         await answer.json()
     for (const [path, { get }] of Object.entries(document.paths))

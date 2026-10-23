@@ -1,5 +1,5 @@
 <script>
-import { reactive, type RouteLiteral, url } from '@abide/abide'
+import { reactive, url } from '@abide/abide'
 
 let tool = reactive('—')
 let description = reactive('—')
@@ -7,7 +7,7 @@ let answer = reactive('—')
 
 // One JSON-RPC message to the app's MCP endpoint, as a model's client sends it.
 async function ask(method: string, params: object) {
-    const reply = await fetch(url('/__abide/mcp' as RouteLiteral), {
+    const reply = await fetch(url('/__abide/mcp'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
