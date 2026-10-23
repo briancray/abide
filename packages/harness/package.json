@@ -1,6 +1,6 @@
 {
     "name": "@abide/harness",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "type": "module",
     "description": "Ratios against hand-written code, counts of the work an op did, and gates whose revert can be run — three measurement lanes for anything that renders, on bun",
     "license": "MIT",
@@ -55,7 +55,7 @@
     },
     "peerDependencies": {
         "@playwright/test": "^1.64.0",
-        "@abide/abide": ">=0.112.0"
+        "@abide/abide": ">=0.113.0"
     },
     "peerDependenciesMeta": {
         "@playwright/test": {
