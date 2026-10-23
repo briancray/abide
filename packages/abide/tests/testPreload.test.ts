@@ -31,8 +31,15 @@ const { label } = props<{ label: string }>()
 
 export default GET(() => 'thing')
 `,
+        'src/media/signIn.ts': `import { principal } from '@abide/abide'
+import { POST } from '@abide/abide/server'
+
+export default POST(async () => {
+    await principal.set({ id: 'ada' })
+})
+`,
         'src/media/tests/badge.test.ts': `import { expect, test } from 'bun:test'
-import { render } from '@abide/abide/server'
+import { createApp, render } from '@abide/abide/server'
 import Badge from '../lib/Badge.abide'
 import getThing from '../getThing.ts'
 
@@ -41,13 +48,22 @@ test('the component and the handler are the modules the app compiles', async () 
     expect(html).toContain('<span id="badge">live</span>')
     expect(getThing.method).toBe('GET')
 })
+
+test('a sign-in seals with no secret the app declared', async () => {
+    await using app = await createApp()
+    const answer = await app.fetch(new Request('http://app.test/media/signIn', { method: 'POST' }))
+    expect(answer.headers.getSetCookie().some((cookie) => cookie.startsWith('abide-principal='))).toBe(true)
+})
 `,
     })
 }
 
 // THE REVERT, which is the fixture without its preload: bun's own file loader answers the import with
 // the file's path, and the same run fails on `Badge is not a function` — exit 1, `0 pass`.
-test('a test under the preload imports a .abide and a handler file of the app — 38.109', async () => {
+//
+// 38.120 — AND A SIGN-IN SEALS, though the fixture declares no `ABIDE_PRINCIPAL_SECRET`. THE REVERT:
+// drop the secret from `preload.ts`; `principal.set` throws, the sign-in answers 500, and `1 pass`.
+test('a test under the preload imports a .abide and a handler file of the app, and signs in — 38.109, 38.120', async () => {
     // Both runs at once: each is its own app and its own process.
     const [ran, unloaded] = await Promise.all([
         spawned(['bun', 'test', './src/media/tests/badge.test.ts'], {
@@ -57,7 +73,7 @@ test('a test under the preload imports a .abide and a handler file of the app �
             cwd: app(undefined),
         }),
     ])
-    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+    expect(`${ran.exitCode} ${ran.stderr.includes('2 pass')}`, ran.stderr).toBe(
         '0 true',
     )
     expect(unloaded.exitCode).not.toBe(0)

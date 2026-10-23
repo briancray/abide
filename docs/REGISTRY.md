@@ -629,7 +629,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.4 |
 | `APP_VERSION` | `string` | The version beside that name. | 27.3 |
 | `APP_DATA_DIR` | `string` | The platform's per-user data directory. | 27.3, 36.4 |
-| `ABIDE_PRINCIPAL_SECRET` | `string \| null` | What seals the principal cookie. | 26.11, 36.5 |
+| `ABIDE_PRINCIPAL_SECRET` | `string \| null` | What seals the principal cookie. | 26.11, 36.5, 38.120 |
 | `ABIDE_PRINCIPAL_TTL` | `number` | The principal cookie's life, in ms. | 26.15, 26.16 |
 | `ABIDE_APP_TOKEN` | `string \| null` | The bearer the remote CLI sends. | 36.6 |
 | `ABIDE_APP_URL` | `string \| null` | Names an app somewhere else, for the remote CLI. | 36.6 |

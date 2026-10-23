@@ -2672,6 +2672,10 @@ it, MUST hydrate it there with that component's browser module, and MUST run eve
 hydration woke before it settles; it MUST throw where the component was not imported from a
 `.abide` and bound, or where the process has no DOM.
 
+38.120 Under `bun test` with `@abide/abide/test` preloaded, an app that declares no
+`ABIDE_PRINCIPAL_SECRET` MUST seal and verify the principal cookie with a secret the preload
+supplies, and `abide start` MUST NOT supply that secret.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

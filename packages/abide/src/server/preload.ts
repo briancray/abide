@@ -5,7 +5,12 @@
 // one place that runs first. The build is `createApp`'s own under `bun test` (42.16), so a test that
 // boots the app afterwards reuses it rather than building twice.
 
+import { addDerived } from './config.ts'
 import { appRoot, servedBuild } from './createApp.ts'
+
+// 38.120 — a sign-in seals under test where the app declared no secret: derived, so the app's
+// `onConfig` default and the env both still win (27.2), where an env value would beat the default.
+addDerived({ ABIDE_PRINCIPAL_SECRET: 'abide-test-principal-secret' })
 
 const root = appRoot(undefined)
 // A run from a directory that holds no app preloads nothing — nor from a workspace's root, whose

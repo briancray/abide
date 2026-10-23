@@ -49,6 +49,16 @@ export interface Config {
     APP_DATA_DIR: string
 }
 
+// What a preload derives beside 27.3's three — the test preload's principal secret (38.120). Declared
+// above `config`, which resolves as it is built — and so is invalidated by an addition.
+const ADDED: Record<string, string> = {}
+
+/** Adds `values` to the derived layer, so every `onConfig` default and the env still win (27.2). */
+export function addDerived(values: Record<string, string>): void {
+    Object.assign(ADDED, values)
+    config.invalidate()
+}
+
 /** The resolved configuration: abide's derived values, then `onConfig`'s defaults, then the env. */
 export const config = reactive(resolve, { global: true })
 
@@ -100,7 +110,8 @@ function coerce(text: string, standing: unknown): unknown {
 }
 
 /**
- * The app's name, version and data directory, off its own `package.json` and the platform.
+ * The app's name, version and data directory, off its own `package.json` and the platform, and
+ * what `addDerived` added.
  *
  * 27.3 — a layer under the other two, so a config or an environment that carries one wins.
  */
@@ -108,6 +119,7 @@ function derived(): Record<string, string> {
     const manifest = APP_PACKAGE.current
     const name = manifest.name ?? 'app'
     return {
+        ...ADDED,
         APP_NAME: name,
         APP_VERSION: manifest.version ?? '0.0.0',
         // 36.4 — A PATH, and never created: an app that wants the directory makes it.
