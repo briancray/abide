@@ -18,6 +18,7 @@ import {
 } from './assistant.ts'
 import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
 import {
+    followSignIn,
     mintCode,
     openTurn,
     pairedBridge,
@@ -27,6 +28,7 @@ import { callerOf } from './callerOf.ts'
 import { appOrigin } from './config.ts'
 import { mcpFailure } from './generatedSurfaces.ts'
 import { Inbox } from './Inbox.ts'
+import { signedInAs } from './principal.ts'
 import { request } from './requestScope.ts'
 
 /** The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. */
@@ -52,12 +54,12 @@ export type BridgeStatus = { paired: boolean; command: string | undefined }
 function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
     return {
         async *run(messages, tools, { maxTurns, signal }) {
-            const bridge = pairedBridge(askingCaller())
-            // 44.13 — nothing paired is the page's cue to show the command.
+            const bridge = pairedBridge(askingCaller(), signedInAs())
+            // 44.13, 44.33 — nothing paired by this sign-in is the page's cue to show the command.
             if (bridge === undefined)
                 throw refuse(
                     409,
-                    'No Claude Code is paired with this browser. claudeCode.bridgeCommand() is the command that pairs one.',
+                    'No Claude Code is paired with this browser as the one signed in. claudeCode.bridgeCommand() is the command that pairs one.',
                 )
             const turn = openTurn(bridge)
             bridge.frames.push({
@@ -130,11 +132,20 @@ function askingCaller(): string {
  * The command that pairs a bridge with this browser, and when its code stops standing. 44.14. The
  * `tools` it is given are written after its `--`, so the visitor running it grants them (44.29, 44.32).
  */
-function bridgeCommand({ tools }: PairingOptions = {}): {
+function bridgeCommand(options: PairingOptions = {}): {
     command: string
     expires: number
 } {
-    const { code, expires } = mintCode(askingCaller())
+    return commandFor(askingCaller(), signedInAs(), options)
+}
+
+/** The command pairing a bridge with `caller` signed in as `signedIn` (44.33). */
+function commandFor(
+    caller: string,
+    signedIn: string,
+    { tools }: PairingOptions,
+): { command: string; expires: number } {
+    const { code, expires } = mintCode(caller, signedIn)
     const site = `${appOrigin() ?? new URL(request().url).origin}${mounted('')}`
     const grant = tools?.length ? ` -- --tools ${tools.join(',')}` : ''
     return {
@@ -146,29 +157,50 @@ function bridgeCommand({ tools }: PairingOptions = {}): {
 /**
  * This browser's pairing as it changes: unpaired with the command to run, then paired the moment a
  * bridge connects, and unpaired again if it goes. 44.20.
+ *
+ * 44.34 — IT FOLLOWS WHOEVER SIGNS IN AT THE BROWSER, though its own request carries the cookies it
+ * opened with: a sign-in or a sign-out made since is the pairing it watches from then on, and the
+ * command it offers is that sign-in's.
  */
 async function* bridge(
     options: PairingOptions = {},
 ): AsyncGenerator<BridgeStatus> {
-    const caller = askingCaller()
+    let caller = askingCaller()
+    let signedIn = signedInAs()
     const signal = request().signal
     // A change landing while the loop was not waiting — paused at its `yield` — stays queued, so it
     // looks again; a look that finds nothing new yields nothing.
     const changes = new Inbox<undefined>()
     const waiting = changes[Symbol.asyncIterator]()
     const rouse = (): void => changes.push(undefined)
-    const unwatch = watchPairing(caller, rouse)
+    let watchingAs = ''
+    let unwatch = (): void => {}
+    let unfollow = (): void => {}
+    const follow = (now: string, next: string): void => {
+        caller = now
+        signedIn = next
+        rouse()
+    }
     signal.addEventListener('abort', rouse)
     let pairing: { command: string; expires: number } | undefined
     let said = ''
     try {
         while (!signal.aborted) {
-            const paired = pairedBridge(caller) !== undefined
+            const watching = `${caller} ${signedIn}`
+            if (watching !== watchingAs) {
+                unwatch()
+                unfollow()
+                unwatch = watchPairing(caller, signedIn, rouse)
+                unfollow = followSignIn(caller, follow)
+                watchingAs = watching
+                pairing = undefined
+            }
+            const paired = pairedBridge(caller, signedIn) !== undefined
             if (
                 !paired &&
                 (pairing === undefined || pairing.expires <= Date.now())
             )
-                pairing = bridgeCommand(options)
+                pairing = commandFor(caller, signedIn, options)
             const status: BridgeStatus = {
                 paired,
                 command: paired ? undefined : pairing?.command,
@@ -188,6 +220,7 @@ async function* bridge(
     } finally {
         signal.removeEventListener('abort', rouse)
         unwatch()
+        unfollow()
     }
 }
 

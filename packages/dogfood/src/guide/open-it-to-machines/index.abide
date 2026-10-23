@@ -257,6 +257,12 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         <p>The visitor pairs once per visit by running a command, which dials out to the site.
         Asking with nothing paired is refused 409.</p>
 
+        <p>The tools the conversation calls run as the visitor, on the sign-in their ask carried,
+        so a tool reads <code>principal</code> as any handler does. The pairing belongs to that
+        sign-in too. If someone else signs in at the same browser, their asks are refused 409
+        and the status offers them a command of their own, so nobody's turn runs on another
+        member's Claude Code.</p>
+
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
             <tbody>

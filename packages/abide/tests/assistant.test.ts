@@ -32,6 +32,30 @@ const INVOICES = `import { cookies, POST } from '@abide/abide/server'
 export default POST(() => cookies().get('who') ?? 'nobody', { description: 'Who is asking.' })
 `
 
+// Off the MCP surface, as the pairing handlers are, so no conversation here lists it as a tool.
+const SIGN_IN = `import { principal } from '@abide/abide'
+import { POST } from '@abide/abide/server'
+
+export default POST(({ id }: { id: string }) => principal.set({ id }), { clients: { mcp: false } })
+`
+
+const SIGN_OUT = `import { principal } from '@abide/abide'
+import { POST } from '@abide/abide/server'
+
+export default POST(() => principal.clear(), { clients: { mcp: false } })
+`
+
+// The claims carry an `iat` of their own, which the seal's overwrites, so the code this mints is
+// filed under the claims as a later request opens them rather than as they were handed.
+const SIGN_IN_AND_PAIR = `import { principal } from '@abide/abide'
+import { claudeCode, POST } from '@abide/abide/server'
+
+export default POST(async ({ id }: { id: string }) => {
+    await principal.set({ id, iat: 1 })
+    return claudeCode.bridgeCommand()
+}, { clients: { mcp: false } })
+`
+
 const ASK = `import { assistant, type AssistantMessage, claudeApi, claudeCode, type ClaudeCodeConfig, GET, POST } from '@abide/abide/server'
 
 const HIDDEN = { clients: { mcp: false } }
@@ -79,11 +103,15 @@ beforeAll(async () => {
         ...process.env,
         FAKE_API: printed.trim().replace(/\/$/, ''),
         FAKE_RECORD: RECORD,
+        ABIDE_PRINCIPAL_SECRET: 'assistant-test-secret',
     }
     ;({ app, base, stop } = await serveApp(
         {
             'index.abide': '<main>home</main>',
             'invoices/whoami.ts': INVOICES,
+            'account/signIn.ts': SIGN_IN,
+            'account/signInAndPair.ts': SIGN_IN_AND_PAIR,
+            'account/signOut.ts': SIGN_OUT,
             // 16.2 — three handler files at the root, each re-exporting the module's binding.
             ...handlerFiles('', ASK),
         },
@@ -104,9 +132,29 @@ afterAll(async () => {
         .catch(() => {})
 })
 
-/** The headers a page in the browser `caller` sends, signed in as `ada`. */
+// The principal cookie each browser carries, where a test signed one in (`signIn`).
+const SIGNED_IN = new Map<string, string>()
+
+/** The headers a page in the browser `caller` sends, as `ada` and as whoever `SIGNED_IN` holds. */
 function asPage(caller: string): Record<string, string> {
-    return { cookie: `who=ada; abide-caller=${caller}` }
+    const sealed = SIGNED_IN.get(caller)
+    return {
+        cookie: `who=ada; abide-caller=${caller}${sealed === undefined ? '' : `; ${sealed}`}`,
+    }
+}
+
+/** Signs `id` in at the browser `caller`, as its page would. */
+async function signIn(caller: string, id: string): Promise<void> {
+    const answer = await Bun.fetch(`${base}/account/signIn`, {
+        method: 'POST',
+        headers: { ...asPage(caller), 'content-type': 'application/json' },
+        body: JSON.stringify({ id }),
+    })
+    const [sealed] = answer.headers.getSetCookie()
+    await answer.text()
+    if (sealed === undefined)
+        throw new Error(`signIn answered ${answer.status}`)
+    SIGNED_IN.set(caller, sealed.split(';')[0] as string)
 }
 
 async function pairingCode(caller: string): Promise<string> {
@@ -175,6 +223,43 @@ function ask(
             ],
         }),
     })
+}
+
+/** The browser `caller`'s bridge status stream, one `BridgeStatus` a step. */
+async function statusOf(
+    caller: string,
+): Promise<AsyncGenerator<{ paired: boolean; command?: string }>> {
+    const answer = await Bun.fetch(`${base}/bridge`, {
+        headers: { ...asPage(caller), accept: 'application/jsonl' },
+    })
+    return (async function* () {
+        let buffered = ''
+        for await (const chunk of answer.body as ReadableStream<Uint8Array>) {
+            buffered += new TextDecoder().decode(chunk)
+            let newline = buffered.indexOf('\n')
+            while (newline !== -1) {
+                yield JSON.parse(buffered.slice(0, newline)) as {
+                    paired: boolean
+                    command?: string
+                }
+                buffered = buffered.slice(newline + 1)
+                newline = buffered.indexOf('\n')
+            }
+        }
+    })()
+}
+
+/** The next status `lines` yields, or a throw where none comes within 5 seconds. */
+async function nextStatus(
+    lines: AsyncGenerator<{ paired: boolean; command?: string }>,
+): Promise<{ paired: boolean; command?: string }> {
+    const next = await Promise.race([
+        lines.next(),
+        Bun.sleep(5_000).then(() => {
+            throw new Error('the status stream said nothing more')
+        }),
+    ])
+    return next.value as { paired: boolean; command?: string }
 }
 
 async function events(answer: Response): Promise<unknown[]> {
@@ -271,24 +356,7 @@ test('a tool call is announced before its input is written — 44.28', async () 
 // ready once a bridge connects with that command's code. THE REVERT: drop `wakeWatchers` from `pair`;
 // the stream never says ready and this times out.
 test('the bridge status turns ready the moment the bridge connects — 44.20', async () => {
-    const answer = await Bun.fetch(`${base}/bridge`, {
-        headers: { ...asPage('two'), accept: 'application/jsonl' },
-    })
-    const lines = (async function* () {
-        let buffered = ''
-        for await (const chunk of answer.body as ReadableStream<Uint8Array>) {
-            buffered += new TextDecoder().decode(chunk)
-            let newline = buffered.indexOf('\n')
-            while (newline !== -1) {
-                yield JSON.parse(buffered.slice(0, newline)) as {
-                    paired: boolean
-                    command?: string
-                }
-                buffered = buffered.slice(newline + 1)
-                newline = buffered.indexOf('\n')
-            }
-        }
-    })()
+    const lines = await statusOf('two')
     const first = (await lines.next()).value as {
         paired: boolean
         command: string
@@ -322,6 +390,94 @@ test('nothing paired refuses 409, and a pairing code pairs only once — 44.13, 
     )
     expect(again.exitCode).toBe(1)
     expect(again.stderr).toContain('403')
+}, 30_000)
+
+// 44.33 — A PAIRING IS TO WHOEVER WAS SIGNED IN WHERE ITS CODE WAS MINTED. Ada pairs her Claude Code
+// through a status stream that stays open while Bo signs in over her at the same browser, with no
+// sign-out to rotate its caller (26.9). The open stream turns to Bo's own command, Bo's ask is refused
+// as unpaired rather than run on Ada's machine, and Bo pairing his own leaves Ada's standing.
+//
+// THE REVERTS: have `pairingKey` file by `caller` alone; Ada's bridge is Bo's too, the open stream
+// stays paired through his sign-in, and `nextStatus` throws. Drop `signedInAt` from `principal.set`;
+// the stream goes on watching Ada's pairing, and `nextStatus` throws the same.
+test('a pairing answers only the sign-in that minted its code, and an open status follows a sign-in — 44.33, 44.34', async () => {
+    const done = (answer: Response) =>
+        events(answer).then((found) => found.at(-1))
+    await signIn('switch', 'ada')
+    const adas = SIGNED_IN.get('switch') as string
+    const lines = await statusOf('switch')
+    const unpaired = await nextStatus(lines)
+    await pairBridge('switch', unpaired.command?.split(' ').at(-1))
+    expect(await nextStatus(lines)).toEqual({ paired: true })
+    expect(await done(await ask('switch', 'code', 'who am I?'))).toMatchObject({
+        type: 'done',
+    })
+
+    await signIn('switch', 'bo')
+    const turned = await nextStatus(lines)
+    expect(turned.paired).toBe(false)
+    expect(turned.command).not.toBe(unpaired.command)
+    const bos = await ask('switch', 'code', 'who am I?')
+    expect(`${bos.status} ${await bos.text()}`).toStartWith('409')
+
+    await pairBridge('switch', turned.command?.split(' ').at(-1))
+    expect(await nextStatus(lines)).toEqual({ paired: true })
+    await lines.return(undefined)
+    expect(await done(await ask('switch', 'code', 'who am I?'))).toMatchObject({
+        type: 'done',
+    })
+    SIGNED_IN.set('switch', adas)
+    expect(await done(await ask('switch', 'code', 'who am I?'))).toMatchObject({
+        type: 'done',
+    })
+}, 30_000)
+
+// 44.34, 26.9 — A SIGN-OUT ROTATES THE BROWSER'S CALLER, and an open status stream follows it there:
+// the command it turns to pairs the browser the page is now, signed out. THE REVERT: drop
+// `signedInAt` from `principal.clear`; the stream goes on watching Dee's pairing and `nextStatus`
+// throws.
+test('an open status follows a sign-out to the caller it rotates to — 44.34, 26.9', async () => {
+    await signIn('leaving', 'dee')
+    const lines = await statusOf('leaving')
+    await pairBridge(
+        'leaving',
+        (await nextStatus(lines)).command?.split(' ').at(-1),
+    )
+    expect(await nextStatus(lines)).toEqual({ paired: true })
+    const out = await Bun.fetch(`${base}/account/signOut`, {
+        method: 'POST',
+        headers: asPage('leaving'),
+    })
+    await out.text()
+    const rotated = /abide-caller=([^;]+)/.exec(
+        out.headers.getSetCookie().join('\n'),
+    )?.[1] as string
+    SIGNED_IN.delete('leaving')
+    const turned = await nextStatus(lines)
+    expect(turned.paired).toBe(false)
+    await pairBridge(rotated, turned.command?.split(' ').at(-1))
+    expect(await nextStatus(lines)).toEqual({ paired: true })
+    await lines.return(undefined)
+    expect(
+        (await events(await ask(rotated, 'code', 'who am I?'))).at(-1),
+    ).toMatchObject({ type: 'done' })
+}, 30_000)
+
+// 44.33 — A CODE MINTED IN THE REQUEST THAT SIGNS IN is filed under the claims a later request opens
+// from the cookie: `iat` and `exp` are the seal's, not the claims'. THE REVERT: store the claims
+// `principal.set` was handed as they came (`asSealed` returning its argument); the ask is refused 409.
+test('a code minted where the sign-in is made pairs the sign-in its cookie carries — 44.33', async () => {
+    const answer = await Bun.fetch(`${base}/account/signInAndPair`, {
+        method: 'POST',
+        headers: { ...asPage('minted'), 'content-type': 'application/json' },
+        body: JSON.stringify({ id: 'cy' }),
+    })
+    const [sealed] = answer.headers.getSetCookie()
+    const { command } = (await answer.json()) as { command: string }
+    SIGNED_IN.set('minted', (sealed as string).split(';')[0] as string)
+    await pairBridge('minted', command.split(' ').at(-1))
+    const asked = await events(await ask('minted', 'code', 'who am I?'))
+    expect(asked.at(-1)).toMatchObject({ type: 'done' })
 }, 30_000)
 
 // 44.5, 44.15, 44.16 — CLAUDE CODE RUNS ALONE on the visitor's machine where they gave it nothing: its own
@@ -652,7 +808,7 @@ test('a pairing stream beats while it is quiet — 16.57', async () => {
     await using app = await inMemoryApp({})
     jest.useFakeTimers()
     try {
-        const { code } = mintCode('heartbeat')
+        const { code } = mintCode('heartbeat', JSON.stringify(null))
         const answer = await app.fetch(
             new Request(`http://site${BRIDGE_ADDRESS}?code=${code}`),
         )

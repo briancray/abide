@@ -8,9 +8,10 @@
 //   POST /__abide/bridge          what the bridge reports, one frame per line: a turn's events, the
 //                                 MCP requests its Claude Code made, the turn's end or failure.
 //
-// A PAIRING IS TO A BROWSER — the `abide-caller` its page carries (26.5) — for as long as the bridge's
-// stream is open, or resumable. HELD IN THIS PROCESS: an app served by several needs a visitor's requests to reach
-// the one its bridge dialed.
+// A PAIRING IS TO A BROWSER — the `abide-caller` its page carries (26.5) — and to whoever was signed
+// in there when its code was minted (44.33), for as long as the bridge's stream is open, or
+// resumable. HELD IN THIS PROCESS: an app served by several needs a visitor's requests to reach the
+// one its bridge dialed.
 
 import { isFailed } from '#shared/Failed.ts'
 import { refuse } from '#shared/refuse.ts'
@@ -35,7 +36,8 @@ export type TurnItem = {
 
 /** One paired bridge: what it is sent, and the turns it is answering. */
 export type Bridge = {
-    caller: string
+    /** The browser and the sign-in it is paired to (`pairingKey`). 44.33. */
+    key: string
     token: string
     frames: Inbox<unknown>
     turns: Map<string, Inbox<TurnItem>>
@@ -53,40 +55,68 @@ const IDLE_GRACE = 30_000
 /** How long a pairing whose stream dropped waits to be resumed. 44.26. */
 export const RESUME_MILLISECONDS = 60_000
 
-const CODES = new Map<string, { caller: string; expires: number }>()
-const BY_CALLER = new Map<string, Bridge>()
+const CODES = new Map<string, { key: string; expires: number }>()
+const BY_KEY = new Map<string, Bridge>()
 const BY_TOKEN = new Map<string, Bridge>()
 const WATCHERS = new Map<string, Set<() => void>>()
+const FOLLOWERS = new Map<
+    string,
+    Set<(caller: string, signedIn: string) => void>
+>()
+
+/**
+ * What a pairing is filed under: the browser, and who was signed in there (`signedInAs`).
+ *
+ * 44.33 — ONE PER SIGN-IN, so pairing at a browser replaces only that sign-in's own bridge, and a
+ * page watching for one sign-in neither reaches another's nor keeps it from going idle (44.22).
+ */
+function pairingKey(caller: string, signedIn: string): string {
+    return `${caller}\n${signedIn}`
+}
 
 // 44.19 — the relay answers once the app has handed out a pairing command, and never before.
 let minted = false
 
-/** A single-use pairing code for `caller`, and when it stops standing. 44.14. */
-export function mintCode(caller: string): { code: string; expires: number } {
+/** A single-use pairing code for `caller` signed in as `signedIn`, and when it stops standing. 44.14. */
+export function mintCode(
+    caller: string,
+    signedIn: string,
+): { code: string; expires: number } {
     const now = Date.now()
     for (const [code, pairing] of CODES)
         if (pairing.expires <= now) CODES.delete(code)
     const code = randomToken(12, 'base64url')
     const expires = now + CODE_LIFETIME
-    CODES.set(code, { caller, expires })
+    CODES.set(code, { key: pairingKey(caller, signedIn), expires })
     minted = true
     return { code, expires }
 }
 
-/** The bridge paired to `caller`, if its stream is open. */
-export function pairedBridge(caller: string): Bridge | undefined {
-    return BY_CALLER.get(caller)
+/** The bridge paired to `caller` signed in as `signedIn`, if its stream is open. 44.33. */
+export function pairedBridge(
+    caller: string,
+    signedIn: string,
+): Bridge | undefined {
+    return BY_KEY.get(pairingKey(caller, signedIn))
 }
 
-/** Registers `wake` to run whenever `caller`'s pairing changes; the returned function undoes it. */
-export function watchPairing(caller: string, wake: () => void): () => void {
-    let watchers = WATCHERS.get(caller)
+/**
+ * Registers `wake` to run whenever the pairing of `caller` signed in as `signedIn` changes; the
+ * returned function undoes it.
+ */
+export function watchPairing(
+    caller: string,
+    signedIn: string,
+    wake: () => void,
+): () => void {
+    const key = pairingKey(caller, signedIn)
+    let watchers = WATCHERS.get(key)
     if (watchers === undefined) {
         watchers = new Set()
-        WATCHERS.set(caller, watchers)
+        WATCHERS.set(key, watchers)
     }
     watchers.add(wake)
-    const bridge = BY_CALLER.get(caller)
+    const bridge = BY_KEY.get(key)
     if (bridge !== undefined) {
         bridge.watched = true
         if (bridge.idle !== undefined) clearTimeout(bridge.idle)
@@ -95,8 +125,8 @@ export function watchPairing(caller: string, wake: () => void): () => void {
     return () => {
         watchers.delete(wake)
         if (watchers.size > 0) return
-        WATCHERS.delete(caller)
-        armIdle(caller)
+        WATCHERS.delete(key)
+        armIdle(key)
     }
 }
 
@@ -114,15 +144,15 @@ export function openTurn(bridge: Bridge): {
         inbox,
         close: () => {
             bridge.turns.delete(id)
-            if (!WATCHERS.has(bridge.caller)) armIdle(bridge.caller)
+            if (!WATCHERS.has(bridge.key)) armIdle(bridge.key)
         },
     }
 }
 
 // 44.22 — A BRIDGE A PAGE WATCHED, THAT NO PAGE WATCHES NOW AND THAT IS ANSWERING NO TURN, is sent
 // away once the grace runs.
-function armIdle(caller: string): void {
-    const bridge = BY_CALLER.get(caller)
+function armIdle(key: string): void {
+    const bridge = BY_KEY.get(key)
     if (
         bridge === undefined ||
         !bridge.watched ||
@@ -136,8 +166,40 @@ function armIdle(caller: string): void {
     }, IDLE_GRACE)
 }
 
-function wakeWatchers(caller: string): void {
-    for (const wake of WATCHERS.get(caller) ?? []) wake()
+function wakeWatchers(key: string): void {
+    for (const wake of WATCHERS.get(key) ?? []) wake()
+}
+
+/**
+ * Registers `follow` to hear who signs in at `caller` from here on, and the caller a sign-out rotates
+ * it to (26.9); the returned function undoes it.
+ *
+ * 44.34 — A STATUS STREAM OPENED BEFORE A SIGN-IN carries the cookies it was opened with, so it hears
+ * of the new one here rather than off its own request.
+ */
+export function followSignIn(
+    caller: string,
+    follow: (caller: string, signedIn: string) => void,
+): () => void {
+    let followers = FOLLOWERS.get(caller)
+    if (followers === undefined) {
+        followers = new Set()
+        FOLLOWERS.set(caller, followers)
+    }
+    followers.add(follow)
+    return () => {
+        followers.delete(follow)
+        if (followers.size === 0) FOLLOWERS.delete(caller)
+    }
+}
+
+/** Tells every status stream at `caller` that the browser is `now`, signed in as `signedIn`. 44.34. */
+export function signedInAt(
+    caller: string,
+    now: string,
+    signedIn: string,
+): void {
+    for (const follow of FOLLOWERS.get(caller) ?? []) follow(now, signedIn)
 }
 
 function item(
@@ -161,7 +223,7 @@ function item(
 }
 
 function dropBridge(bridge: Bridge): void {
-    if (BY_CALLER.get(bridge.caller) === bridge) BY_CALLER.delete(bridge.caller)
+    if (BY_KEY.get(bridge.key) === bridge) BY_KEY.delete(bridge.key)
     BY_TOKEN.delete(bridge.token)
     if (bridge.idle !== undefined) clearTimeout(bridge.idle)
     bridge.idle = undefined
@@ -175,7 +237,7 @@ function dropBridge(bridge: Bridge): void {
     }
     bridge.turns.clear()
     bridge.frames.close()
-    wakeWatchers(bridge.caller)
+    wakeWatchers(bridge.key)
 }
 
 /** Answers `/__abide/bridge`, or `undefined` until a pairing code has been minted. 44.19. */
@@ -199,24 +261,24 @@ function pair(request: Request): Response {
                 'This pairing code was not issued here, or it has been used, or it has expired.',
             ),
         )
-    const standing = BY_CALLER.get(pairing.caller)
+    const standing = BY_KEY.get(pairing.key)
     if (standing !== undefined) {
         standing.frames.push({ type: 'bye' })
         dropBridge(standing)
     }
     const bridge: Bridge = {
-        caller: pairing.caller,
+        key: pairing.key,
         token: randomToken(24, 'base64url'),
         frames: new Inbox(),
         turns: new Map(),
-        watched: WATCHERS.has(pairing.caller),
+        watched: WATCHERS.has(pairing.key),
         idle: undefined,
         held: undefined,
     }
-    BY_CALLER.set(bridge.caller, bridge)
+    BY_KEY.set(bridge.key, bridge)
     BY_TOKEN.set(bridge.token, bridge)
     bridge.frames.push({ type: 'paired', token: bridge.token })
-    wakeWatchers(bridge.caller)
+    wakeWatchers(bridge.key)
     return attach(bridge, request)
 }
 

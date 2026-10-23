@@ -3191,6 +3191,14 @@ and naming it `unfinished` where it ended without a `done`.
 44.32 A command `claudeCode.bridgeCommand` or `claudeCode.bridge` mints with `tools` MUST grant
 those built-in tools after its `--` as `--tools`, and one minted without `tools` MUST carry no `--`.
 
+44.33 A pairing MUST be to the claims the principal was sealed with (26.11), or to none, where its
+code was minted, and `claudeCode` and `claudeCode.bridge` MUST read it as absent to a request from
+that browser carrying any other.
+
+44.34 A `claudeCode.bridge` stream MUST yield the pairing of whoever a `principal.set` or a
+`principal.clear` made at its browser since it opened signs in, at the caller 26.9 rotates it to,
+and the command it yields MUST pair that one.
+
 # 45. Offline
 
 45.1 Where `ABIDE_OFFLINE` is on, a page `abide build` built MUST register the worker

@@ -22,6 +22,9 @@ import { IDLE_TIMEOUT_SECONDS } from './IDLE_TIMEOUT_SECONDS.ts'
 /** The three framings a stream is answered in. 17.6. */
 export type Framing = Framed | 'bytes'
 
+/** A principal cookie's claims, `exp` and `iat` aside, and when it lapses. 26.11. */
+export type Sealed = { claims: Record<string, unknown>; expires: number }
+
 /** What one request, or one `App.run`, carries across every `await` its work makes. */
 export type RequestScope = Scope & {
     /**
@@ -38,6 +41,8 @@ export type RequestScope = Scope & {
     caller: string | undefined
     /** This request's one resolve of the principal. 26.14. */
     principal: Promise<Principal> | undefined
+    /** What the principal cookie opened to once read, or `null` where it held no seal. */
+    opened: Sealed | null | undefined
     /** 16.23 — whether the received request's idle timeout is off until the answer is sent. */
     unreaped: boolean
     /** This response's nonce, minted by the `csp` rung or on the first ask. 29.3. */
@@ -168,6 +173,7 @@ export function scopeFor(
         unreaped: false,
         caller: undefined,
         principal: undefined,
+        opened: undefined,
         applied: false,
         request: given,
         route: undefined,

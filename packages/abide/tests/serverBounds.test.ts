@@ -15,6 +15,9 @@ import { config } from '#server/config.ts'
 import type { BootedApp } from '#server/createApp.ts'
 import { inMemoryApp } from './inMemoryApp.ts'
 
+// Who a pairing made outside every request was minted by: no one signed in (44.33).
+const SIGNED_OUT = JSON.stringify(null)
+
 const MODULES = {
     'shelf/book.ts': {
         default: GET(({ id }: { id: number }) => ({ id, title: `book ${id}` })),
@@ -84,11 +87,11 @@ test('an MCP body over ABIDE_MAX_REQUEST_BODY_SIZE is refused 413 — 16.78', as
 // oversized post is answered 204; parse each line as it is relayed, and the bad post throws out of the
 // relay with its first line already in the turn.
 test('the bridge relay bounds its body and refuses a line that is not JSON whole — 16.78, 44.23', async () => {
-    const { code } = mintCode('bounds')
+    const { code } = mintCode('bounds', SIGNED_OUT)
     await answerBridge(
         new Request(`http://app.test/__abide/bridge?code=${code}`),
     )
-    const bridge = pairedBridge('bounds')
+    const bridge = pairedBridge('bounds', SIGNED_OUT)
     if (bridge === undefined) throw new Error('the bridge did not pair')
     const turn = openTurn(bridge)
     const post = (body: string) =>

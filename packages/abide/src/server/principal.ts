@@ -18,10 +18,11 @@ import {
 import { refuse } from '#shared/refuse.ts'
 import { declare } from '#shared/rpc.ts'
 import { mountedOwn } from './answerRpc.ts'
-import { callerOrMint, mintCaller } from './callerOf.ts'
+import { signedInAt } from './bridgeRelay.ts'
+import { callerOf, callerOrMint, mintCaller } from './callerOf.ts'
 import { config, positiveSetting } from './config.ts'
 import { HOOKS, inOrder } from './hooks.ts'
-import { within } from './requestScope.ts'
+import { type RequestScope, type Sealed, within } from './requestScope.ts'
 
 // 26.18.
 const PRINCIPAL_COOKIE = 'abide-principal'
@@ -84,9 +85,7 @@ function seal(
  *
  * 26.13 — A BAD SIGNATURE, A LAPSED SEAL AND A MALFORMED COOKIE ARE ONE ANSWER: nothing.
  */
-function unseal(
-    sealed: string | null,
-): { claims: Record<string, unknown>; expires: number } | undefined {
+function unseal(sealed: string | null): Sealed | undefined {
     if (sealed === null) return undefined
     const [header, payload, signed, ...rest] = sealed.split('.')
     // ONE HEADER IS READ, abide's own: a token naming another `alg` — `none` above all — is no seal.
@@ -182,8 +181,8 @@ async function documentOf(
 function resolvePrincipal(): Promise<Principal> {
     const scope = within('principal')
     scope.principal ??= (async () => {
-        const opened = unseal(cookies().get(PRINCIPAL_COOKIE))
-        if (opened === undefined) return ANONYMOUS
+        const opened = openedSeal(scope)
+        if (opened === null) return ANONYMOUS
         let expires = opened.expires
         const life = ttl()
         if (expires - Date.now() < life / 2 && scope.applied === false) {
@@ -206,7 +205,38 @@ export function presumePrincipal(claims: Record<string, unknown>): void {
         throw new Error(
             'abide: App.run takes a principal of claims, as principal.set does. RULEBOOK 26.11.',
         )
-    scope.principal = documentOf(claims, Date.now() + ttl())
+    const expires = Date.now() + ttl()
+    scope.principal = documentOf(claims, expires)
+    scope.opened = { claims: asSealed(claims), expires }
+}
+
+/** What this request's principal cookie opened to, read and verified once a request. */
+function openedSeal(scope: RequestScope): Sealed | null {
+    if (scope.opened === undefined)
+        scope.opened = unseal(cookies().get(PRINCIPAL_COOKIE)) ?? null
+    return scope.opened
+}
+
+/** `claims` as a later request opens them from their seal: through JSON, and `exp` and `iat` aside. */
+function asSealed(claims: Record<string, unknown>): Record<string, unknown> {
+    const { exp: _, iat: __, ...sealed } = JSON.parse(JSON.stringify(claims))
+    return sealed
+}
+
+/** Who `opened` signs in, as one string: its claims as JSON, or `null`'s. 44.33. */
+function identityOf(opened: Sealed | null): string {
+    return JSON.stringify(opened === null ? null : opened.claims)
+}
+
+/**
+ * Who this request is signed in as, as one string.
+ *
+ * 44.33 — THE CLAIMS, NOT THE RESOLVED DOCUMENT: what `onPrincipal` reads off them can change
+ * between requests, and a seal sealed again for another life (26.15) holds the same claims. Read
+ * synchronously, off the cookie, so the pairing command stays a plain call.
+ */
+export function signedInAs(): string {
+    return identityOf(openedSeal(within('claudeCode')))
 }
 
 /**
@@ -233,6 +263,11 @@ async function set(claims: Record<string, unknown>): Promise<void> {
     scope.response.headers.set(PRINCIPAL_HEADER, 'set')
     const resolved = documentOf(claims, expires)
     scope.principal = resolved
+    scope.opened = { claims: asSealed(claims), expires }
+    // 44.34 — a status stream opened before this sign-in follows it.
+    const caller = callerOf()
+    if (caller !== undefined)
+        signedInAt(caller, caller, identityOf(scope.opened))
     principalMembers().document.set(await resolved)
     PRINCIPAL_LOG.debug('set')
 }
@@ -247,8 +282,12 @@ function clear(): void {
     const scope = within('principal.clear')
     cookies().delete(PRINCIPAL_COOKIE)
     scope.response.headers.set(PRINCIPAL_HEADER, 'clear')
+    const signedOut = callerOf()
     const minted = mintCaller(scope)
     scope.principal = Promise.resolve(ANONYMOUS)
+    scope.opened = null
+    // 44.34 — and one opened before this sign-out follows it to the caller it rotated to.
+    if (signedOut !== undefined) signedInAt(signedOut, minted, identityOf(null))
     principalMembers().document.set(ANONYMOUS)
     principalMembers().caller.set(minted)
     PRINCIPAL_LOG.debug('clear')

@@ -338,10 +338,10 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.24, 44.25, 44.27, 44.30 |
+| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.24, 44.25, 44.27, 44.30, 44.33 |
 | `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. | 44.16, 44.29 |
-| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; expires: number }` | The command that pairs a bridge with this browser, granting the built-in tools it is given. | 44.14, 44.32 |
-| `claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32 |
+| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; expires: number }` | The command that pairs a bridge with this browser, granting the built-in tools it is given. | 44.14, 44.32, 44.33 |
+| `claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34 |
 | `BridgeStatus` | `{ paired: boolean; command: string \| undefined }` | Whether a bridge is paired, and the command that pairs one where none is. | 44.20 |
 | `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 16.57, 16.78 |
 
