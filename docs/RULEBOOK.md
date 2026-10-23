@@ -413,6 +413,12 @@ the value of that write standing in its place.
 
 8.19 A `Store`'s `get` answering a miss with nothing left to serve MUST land an error on `s.error`.
 
+8.20 A `Store`'s `watch` MUST be called once, where the `Reactive` is constructed, and each call of
+the function it is handed MUST run `get` again as a restore, per 8.18, and MUST NOT run the body.
+
+8.21 What a `Store`'s `watch` returns MUST be called once the `Reactive` is released: a `Keyed`
+entry evicted, or the setup or request that built it, or its `Keyed`, ended.
+
 # 9. Streams and wired values
 
 9.1 A streaming producer's `Stored` MUST be the chunks accumulated so far, materialized on the

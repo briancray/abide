@@ -318,6 +318,11 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
         store when it is built and falls back to <code>'board'</code> on a miss, and every change
         is written back. The reads and writes in the markup do not change.</p>
 
+        <p>Where the stored value can change from outside the app, such as a file another program
+        edits, the store adds <code>watch</code>. It is handed a function to call when that
+        happens, and returns the function that stops watching. The value reads <code>get</code>
+        again, and the body does not run.</p>
+
         <p>This store goes through two handlers, so the server and the browser read the same
         preference and the first paint is already right. A store over
         <code>localStorage</code> works too, but only in a browser, so the server paints the

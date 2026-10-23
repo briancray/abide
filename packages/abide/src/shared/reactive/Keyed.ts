@@ -34,6 +34,7 @@ import {
     refuseBothCaps,
     signalMoved,
     startDeferred,
+    unwatchStore,
 } from './Reactive.ts'
 import {
     detach,
@@ -46,6 +47,7 @@ import {
     type Tracked,
     trackProbe,
 } from './tracking.ts'
+import { owned, owning } from './watch.ts'
 
 /**
  * The keyed face: one `Reactive` per `Args` key, plus the probes and triggers over its entries.
@@ -353,6 +355,12 @@ export function createKeyed<
     // there were, so the key that starts loading next — search-as-you-type — never woke it. One
     // signal per `Keyed`, moved where an entry is reached and where one is released.
     const membership = newTracked()
+    // 8.21 — A `Keyed` BUILT IN A SETUP OR A REQUEST ends with it, and every store its entries
+    // watch is stopped then: the entries are the cache's, so no owner of their own stops them.
+    if (options?.store !== undefined && owning())
+        owned(() => {
+            for (const entry of entries.values()) unwatchStore(entry)
+        })
 
     function askMembership(): void {
         const reader = TRACKING.reader
@@ -367,6 +375,7 @@ export function createKeyed<
     ): void {
         entries.delete(key)
         leaveSelections(created)
+        unwatchStore(created)
         signalMoved(membership)
     }
 

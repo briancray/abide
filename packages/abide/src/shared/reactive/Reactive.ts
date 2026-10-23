@@ -75,6 +75,7 @@ export type Transformer<Accepted, Stored, Failures = never> = (
 export type Store<Stored> = {
     get: () => Stored | undefined | Promise<Stored | undefined>
     set: (value: Stored, retention: { ttl: number }) => void | Promise<void>
+    watch?: (changed: () => void) => () => void
 }
 
 /**
@@ -366,6 +367,8 @@ type Persisted = {
      * what `pending` sends next, and what 8.18 serves a re-read in place of calling `get`.
      */
     unconfirmed: unknown
+    /** What stops the store's `watch`, where it has one (8.21). */
+    unwatch: (() => void) | null
 }
 
 /**
@@ -891,6 +894,7 @@ class Cell {
                       writing: false,
                       pending: false,
                       unconfirmed: undefined,
+                      unwatch: null,
                   }
         this.by = (options?.by ?? null) as
             | string
@@ -3802,6 +3806,32 @@ function rereadStore(cell: Cell, persisted: Persisted): void {
 }
 
 /**
+ * Follows what the store says changed outside this process, re-reading it each time.
+ *
+ * 8.20 — A RE-READ, NEVER THE BODY: an edit made where the value lives is the store's news, so it
+ * is read back as a refresh of a value whose only producer is its store would read it, and 8.18
+ * still has a write the app made stand over it. 8.21 — stopped with the value: by its owner here,
+ * and by its `Keyed` through `unwatchStore` where an entry is evicted.
+ */
+function watchStore(cell: Cell, persisted: Persisted, cached: boolean): void {
+    const watch = persisted.store.watch
+    if (watch === undefined) return
+    persisted.unwatch = watch(() => {
+        rereadStore(cell, persisted)
+    })
+    if (!cached && owning()) owned(() => unwatchStore(cell.callable))
+}
+
+/** Stops the store's `watch` on `value`, once (8.21). */
+export function unwatchStore(value: unknown): void {
+    const persisted = (value as Callable)[CELL].store
+    if (persisted === null || persisted.unwatch === null) return
+    const unwatch = persisted.unwatch
+    persisted.unwatch = null
+    unwatch()
+}
+
+/**
  * Lands a store re-read, letting an unconfirmed write win.
  *
  * 8.18 IS READ ON THE WAY OUT AS WELL AS ON THE WAY IN. A write made while the `get` was in flight
@@ -4693,8 +4723,10 @@ export function createReactive<
     // (2.2, 4.14) rather than serving an `undefined` its own type says is a `Stored`.
     // 8.3 AND 8.14: a store answers first, where the value is constructed, and whatever it misses
     // falls back to what the value would have done without one.
-    if (cell.store !== null) restoreFirst(cell, cell.store, initial)
-    else if (body === null) {
+    if (cell.store !== null) {
+        restoreFirst(cell, cell.store, initial)
+        watchStore(cell, cell.store, cached)
+    } else if (body === null) {
         if (initial === undefined) landOpening(cell)
         else if (initial !== NO_INITIAL) open(cell, initial)
     } else if (deferred) cell.loading = true

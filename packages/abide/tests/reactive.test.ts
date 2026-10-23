@@ -5912,6 +5912,71 @@ test('a store miss after a ttl drop lands an error rather than going silent', as
     expect(`ready: ${value.ready()}`).toBe('ready: false')
 })
 
+// 8.20: AN EDIT MADE WHERE THE VALUE LIVES IS READ BACK, NOT PRODUCED. The store's `changed` re-reads
+// `get` and lands what it answers; the body is not what changed, and what was just read is not
+// written back to where it was read from.
+//
+// THE REVERT: have `watchStore` call `refreshOne`; the body runs and serves its own answer,
+// `value: from the body`, rather than the edit.
+test('a store that says it changed is read again, and neither runs the body nor is written — 8.20', () => {
+    let saved: string | undefined = 'first'
+    let changed = (): void => {}
+    let runs = 0
+    let sets = 0
+    const document = reactive(
+        () => {
+            runs += 1
+            return 'from the body'
+        },
+        {
+            store: {
+                get: () => saved,
+                set: () => {
+                    sets += 1
+                },
+                watch: (onChange) => {
+                    changed = onChange
+                    return () => {}
+                },
+            },
+        },
+    )
+    expect(`restored: ${document()}`).toBe('restored: first')
+    saved = 'edited elsewhere'
+    changed()
+    expect(`value: ${document()}`).toBe('value: edited elsewhere')
+    expect(`runs: ${runs}`).toBe('runs: 0')
+    expect(`sets: ${sets}`).toBe('sets: 0')
+})
+
+// 8.21: A WATCH ENDS WITH ITS VALUE. A value built in an owner stops its store's watch with the owner,
+// and a `Keyed` built in one stops every entry's — the entries are the cache's, and nothing else
+// would. A watch left open is a file handle or a listener held for nothing, and nothing a reader
+// sees says so.
+//
+// THE REVERTS: drop the `owned` from `watchStore`, and `stopped: 0,1` where `1,1` is due. Or drop
+// it from `createKeyed`, and `stopped: 1,0`.
+test('a store watch stops with the owner that built its value, keyed or not — 8.21', () => {
+    const stopped = [0, 0]
+    const watching = (slot: number) => ({
+        get: () => 'held',
+        set: () => {},
+        watch: () => () => {
+            stopped[slot] = (stopped[slot] ?? 0) + 1
+        },
+    })
+    // A setup, as a component's is collected.
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    reactive(() => 'body', { store: watching(0) })()
+    reactive((args: { id: number }) => `body ${args.id}`, {
+        store: () => watching(1),
+    })({ id: 1 })()
+    collectWatches(previous)
+    for (const stop of stops) stop()
+    expect(`stopped: ${stopped.join(',')}`).toBe('stopped: 1,1')
+})
+
 // ── `invalidate` is lazy (RULEBOOK 7.3, 7.12, 7.13, 7.14, 7.15, 7.16) ─────────────────────
 
 // 7.3 AND 7.12: A MARK, NOT A LOAD. Nothing runs at the call, subscribed or not, and the read
