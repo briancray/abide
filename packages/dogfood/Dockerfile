@@ -1,5 +1,5 @@
 # The docs app, built and served by the abide in this workspace. Build context: the repo root.
-FROM oven/bun:1.4.3
+FROM oven/bun:1.4.4
 WORKDIR /app
 COPY . .
 RUN bun install --frozen-lockfile

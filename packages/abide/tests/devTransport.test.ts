@@ -203,7 +203,8 @@ middleware(async (next, { request }) =>
 // 18.28 UNDER `abide dev` — THE FRAME LIMIT IS THE APP'S CONFIGURATION, `onConfig` included, which
 // only the worker resolves: it reports the limit on `ready` and the listener is reloaded with it.
 // THE REVERT: drop the `reload` from `serveDev`'s `ready`; the listener keeps the mebibyte it read
-// with no configuration, and the 1000-byte frame is taken — this reads 'open'.
+// with no configuration, and the 1000-byte frame is taken — this reads 'open'. 18.28 requires
+// the close, not bun's close code.
 test('a frame past an onConfig ABIDE_MAX_SOCKET_MESSAGE_SIZE closes the mux under abide dev — 18.28', async () => {
     const limited = temporaryModule({
         'index.abide': '<main>home</main>',
@@ -242,13 +243,12 @@ process.exit(0)
         { stdout: 'pipe', stderr: 'pipe' },
     )
     try {
-        expect(
-            await lastLinePrinted<number | string>([
-                'bun',
-                `${dir}/oversize.ts`,
-                await addressOf(limitedServer),
-            ]),
-        ).toBe(1006)
+        const outcome = await lastLinePrinted<number | string>([
+            'bun',
+            `${dir}/oversize.ts`,
+            await addressOf(limitedServer),
+        ])
+        expect(typeof outcome).toBe('number')
     } finally {
         limitedServer.kill()
     }

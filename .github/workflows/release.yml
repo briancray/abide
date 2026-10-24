@@ -36,7 +36,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.3
+          bun-version: 1.4.4
 
       # setup-node writes the auth-token .npmrc that `changeset publish` reads, and provides a
       # recent npm CLI for provenance generation.

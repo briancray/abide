@@ -64,7 +64,7 @@ test('an own handler file is asked of the snapshot already taken — 16.73', asy
     )
     try {
         await compileApp(app)
-        expect(snapshot).toHaveBeenCalledTimes(1)
+        expect(snapshot).toHaveBeenCalledOnce()
     } finally {
         snapshot.mockRestore()
     }
