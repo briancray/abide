@@ -62,7 +62,7 @@ function placeFrames(error: Error, frames: CallSite[]): string {
     return out
 }
 
-// A call site's column counts from 0 where the stack bun writes counts from 1.
+// A call site's line and column count from 1; a map's from 0.
 function placed(frame: CallSite): string {
     // A handler file's frames name the file the author wrote, not the face it is served as.
     const file = (frame.getFileName() ?? '<anonymous>').replace(
@@ -70,15 +70,19 @@ function placed(frame: CallSite): string {
         '',
     )
     const line = frame.getLineNumber() ?? 0
-    const column = frame.getColumnNumber() ?? 0
+    const column = frame.getColumnNumber() ?? 1
     const registered = registeredFor(file)
     if (registered !== undefined && line > 0) {
         registered.lines ??= decodeMappings(registered.mappings)
-        const place = placeAt(registered.lines, line - 1, column)
+        const place = placeAt(
+            registered.lines,
+            line - 1,
+            Math.max(column - 1, 0),
+        )
         if (place !== undefined)
             return `${registered.source}:${place[0] + 1}:${place[1] + 1}`
     }
-    return `${file}:${line}:${column + 1}`
+    return `${file}:${line}:${column}`
 }
 
 function registeredFor(path: string): Registered | undefined {

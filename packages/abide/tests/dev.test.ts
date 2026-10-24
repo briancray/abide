@@ -243,13 +243,14 @@ test('a server block importing an extensionless relative module answers — 38.4
     expect(await answer.text()).toContain('from the shared seam')
 })
 
-// 38.97 — A FRAME IN A COMPILED MODULE NAMES THE `.abide`, at the line the `new Error` is written on.
-// THE REVERT: `installSourceMaps` out of `originUnder`; the frame names `__abide/mapped/index.ts`.
+// 38.97 — A FRAME IN A COMPILED MODULE NAMES THE `.abide`, at the line and column the `new Error` is
+// written on. THE REVERT: `installSourceMaps` out of `originUnder`; the frame names
+// `__abide/mapped/index.ts`. Read a call site's column as counting from 0 and it names `:4:30`.
 test('a stack read on the server names the .abide line — 38.97', async () => {
     const stack = await (
         await Bun.fetch(`${base}/__abide/handlers/mapped/index/where`)
     ).text()
-    expect(stack).toContain('mapped/index.abide:4:')
+    expect(stack).toMatch(/mapped\/index\.abide:4:29\b/)
 })
 
 // 38.97 — THE BROWSER'S MAP READS THE `.abide`: the chunk's position of the script's own line is
