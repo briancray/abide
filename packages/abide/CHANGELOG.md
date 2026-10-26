@@ -1,5 +1,11 @@
 # @abide/abide
 
+## 0.115.0
+
+### Minor Changes
+
+- bdecaf9: offline-first calls — a kept copy stands in for the network, `synced` says whether what is held is what the producer made, a call's `offline` settles it where no answer came, and `outbox` holds the calls a browser queued until they deliver ([`28322d1`](https://github.com/briancray/abide/commit/28322d10f53305c5a3dd17823a9541f877e131eb))
+
 ## 0.114.1
 
 ### Patch Changes
