@@ -29,6 +29,7 @@ import {
 import { followAsEvents } from './answerSocket.ts'
 import { answerValue, namesEtag, sseHeaders } from './answerValue.ts'
 import { argsFor } from './argsFor.ts'
+import { OFFLINE_STALE } from './OFFLINE_STALE.ts'
 import { callerOf } from './callerOf.ts'
 import {
     argsDocumentOf,
@@ -233,6 +234,8 @@ export async function answerRpc(
     request: Request,
     // 16.38 — what paints a refusal for a request that came as a navigation.
     pages: ErrorPages,
+    // 21.22 — whether the device keeps what is answered.
+    offline: boolean,
 ): Promise<Response> {
     const pathname = url.pathname
     const origin = request.headers.get('origin')
@@ -300,6 +303,7 @@ export async function answerRpc(
         args,
         key,
         entry,
+        offline,
     )
     // A `Response` the handler built is its own — but the origin answer below is laid over it, so it
     // varies on `Origin` too (21.7), which `handlerHeaders` never reached.
@@ -350,6 +354,7 @@ async function answerOutcome(
     args: unknown,
     key: string | undefined,
     entry: unknown,
+    offline: boolean,
 ): Promise<Response> {
     const handler = found.handler
     if (!outcome.settled) return answered(failureOf(outcome.error))
@@ -380,13 +385,28 @@ async function answerOutcome(
         headers.set(VERSION_HEADER, etag)
         RPC_SERVER.served?.(handler, serving, key as string)
     }
-    // 21.8, 21.9, 21.11 — WHAT IS LEFT OF THE LIFE OF THE PRODUCTION ANSWERED, in place of `no-store`
-    // and nothing else. A `ttl` of Infinity is bounded by `invalidate` alone (11.35), which no cache
-    // downstream hears, so it keeps `no-store`.
-    if (Number.isFinite(deadline))
+    // 21.22 — A `GET` THE DEVICE KEEPS, where the worker is there to keep it: a value, not a
+    // refusal (16.40) nor a stream with no end to keep (16.32) — a generator's, or the lines a
+    // `jsonl` or an `sse` fixed.
+    const framing = currentRequestScope()?.framing
+    const kept =
+        offline &&
+        found.method === 'GET' &&
+        !isFailed(value) &&
+        !streams(value) &&
+        framing !== 'jsonl' &&
+        framing !== 'sse' &&
+        writtenStatus() < 300
+    // 21.8, 21.9, 21.11 — WHAT IS LEFT OF THE LIFE OF THE PRODUCTION ANSWERED, in place of
+    // `no-store` or ahead of 21.22's directives, and nothing else. 21.17 — a `ttl` of Infinity is
+    // bounded by `invalidate` alone (11.35), which no cache downstream hears, so it keeps the default.
+    const life = Number.isFinite(deadline)
+        ? `, max-age=${Math.max(0, Math.floor((deadline - Date.now()) / 1000))}`
+        : ''
+    if (life !== '' || kept)
         headers.set(
             'cache-control',
-            `private, max-age=${Math.max(0, Math.floor((deadline - Date.now()) / 1000))}`,
+            `private${life}${kept ? `, ${OFFLINE_STALE}` : ''}`,
         )
     // 18.19 — A READER HOLDING THIS VERSION IS TOLD SO, and sent no body.
     if (

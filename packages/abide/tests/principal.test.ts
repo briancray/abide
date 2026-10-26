@@ -1,7 +1,7 @@
 // SECTION 26 — THE PRINCIPAL, over a served app (spawned, for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { handlerFiles, serveApp } from './builtApp.ts'
+import { handlerFiles, serveApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, POST, principal } from '@abide/abide/server'
@@ -36,13 +36,14 @@ import { principal } from '@abide/abide'
 
 <main>{principal.authenticated() ? 'in' : 'out'}</main>`
 
+let app = ''
 let base = ''
 let stop = (): void => {}
 const RPC = '/session'
 
 beforeAll(async () => {
     process.env.ABIDE_PRINCIPAL_SECRET = 'new-secret,old-secret'
-    ;({ base, stop } = await serveApp({
+    ;({ app, base, stop } = await serveApp({
         'index.abide': PAGE,
         ...handlerFiles('session', HANDLERS),
         'lib/RESOLVED.server.ts': RESOLVED,
@@ -226,6 +227,48 @@ test('a page fetched by a script leaves no seed for the next read — 41.29', as
     expect(answer.headers.get('server-timing')).toStartWith('Direct;')
 })
 
+// 41.30 — A PAGE THE WORKER KEEPS CARRIES ITS EARLY CALLS, which a later open of it starts, and still
+// seeds nothing (41.29). THE REVERT: leave `callsOnly` out of `answerRequest`; the kept page carries
+// no early call, and opened later it hydrates before its data has landed.
+test('a page fetched to be kept carries its early calls and seeds nothing — 41.30, 41.29', async () => {
+    const { principal, caller } = await signedIn()
+    const cookie = `${principal}; ${caller}`
+    const page = (headers: Record<string, string>) =>
+        Bun.fetch(`${base}/`, { headers: { cookie, ...headers } }).then(
+            (answer) => answer.text(),
+        )
+    const fetched = await page({ 'sec-fetch-dest': 'empty' })
+    const kept = await page({ 'sec-fetch-dest': 'empty', 'abide-keep': '1' })
+    expect(fetched).not.toContain('"GET /__abide/principal ')
+    expect(kept).toContain('"GET /__abide/principal ')
+    const answer = await Bun.fetch(`${base}/__abide/principal`, {
+        headers: { cookie },
+    })
+    expect(answer.headers.get('server-timing')).toStartWith('Direct;')
+})
+
+// 41.29 — THE PAGE THE WORKER FETCHED FOR THE NAVIGATION IT ANSWERS IS SEEDED: it is the one that
+// hydrates, and a render that left its calls unseeded had every one asked of the handler again by
+// the page's own call. THE REVERT: drop the `KEEP_OPENED` test from `hydrated` in `answerRequest`;
+// the read is `Direct` where `Seeded` is due.
+test('a page the worker fetched for the navigation it opens is seeded — 41.29, 45.23', async () => {
+    const { principal, caller } = await signedIn()
+    const cookie = `${principal}; ${caller}`
+    await (
+        await Bun.fetch(`${base}/`, {
+            headers: {
+                cookie,
+                'sec-fetch-dest': 'empty',
+                'abide-keep': 'open',
+            },
+        })
+    ).text()
+    const answer = await Bun.fetch(`${base}/__abide/principal`, {
+        headers: { cookie },
+    })
+    expect(answer.headers.get('server-timing')).toStartWith('Seeded;')
+})
+
 // A SIGN-IN OR SIGN-OUT A HANDLER ANSWERED SAYS SO, in a header a browser's `fetch` can read — the
 // principal cookie is `HttpOnly` and `set-cookie` is withheld from script, so nothing else on the
 // answer tells the page its `principal` moved. A read of the principal says nothing. THE REVERT:
@@ -248,4 +291,45 @@ test('an answer whose handler signed the caller in or out says so — principal 
         headers: { cookie },
     })
     expect(signOut.headers.get('abide-principal')).toBe('clear')
+})
+
+// 21.24 — AND THE BROWSER'S OWN CACHE DROPS WHAT IT KEPT for the caller before, which a page kept
+// under 21.22 would otherwise hand the next one; a read drops nothing, and nor does a sign-in where
+// no worker keeps anything — the cache then holds only the build's immutable files. THE REVERT: drop
+// the `offline &&` from `stamp` in `#server/createApp.ts`; the off arm reads `"cache"` twice.
+test('a sign-in and a sign-out clear the browser cache where pages are kept offline, a read does not — 21.24', async () => {
+    const { principal, caller } = await signedIn()
+    const cookie = `${principal}; ${caller}`
+    const off = await startApp(app, { ...process.env, ABIDE_OFFLINE: '0' })
+    const said: string[] = []
+    try {
+        for (const [setting, at] of [
+            ['on', base],
+            ['off', off.base],
+        ] as const)
+            for (const [name, method] of [
+                ['signIn', 'POST'],
+                ['whoami', 'GET'],
+                ['signOut', 'POST'],
+            ] as const) {
+                const answer = await Bun.fetch(`${at}${RPC}/${name}`, {
+                    method,
+                    headers: { 'content-type': 'application/json', cookie },
+                    ...(method === 'POST' ? { body: '{"name":"grace"}' } : {}),
+                })
+                said.push(
+                    `${setting} ${name}: ${answer.headers.get('clear-site-data')}`,
+                )
+            }
+    } finally {
+        off.stop()
+    }
+    expect(said).toEqual([
+        'on signIn: "cache"',
+        'on whoami: null',
+        'on signOut: "cache"',
+        'off signIn: null',
+        'off whoami: null',
+        'off signOut: null',
+    ])
 })

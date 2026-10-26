@@ -159,7 +159,10 @@ test('a handler file answers at its path, as JSON — 16.2, 16.30', async () => 
     const answer = await Bun.fetch(`${base}${RPC}/getInvoice?id=4021`)
     expect(answer.status).toBe(200)
     expect(answer.headers.get('content-type')).toBe('application/json')
-    expect(answer.headers.get('cache-control')).toBe('private, no-store')
+    // 21.22 — the fixture is served built, where the worker is registered.
+    expect(answer.headers.get('cache-control')).toBe(
+        'private, stale-while-revalidate=604800, stale-if-error=604800',
+    )
     expect(await answer.json()).toEqual({ number: 'INV-4021', total: '$82.40' })
 
     const health = await Bun.fetch(`${base}/health`)
@@ -553,6 +556,74 @@ test('the wire takes a call the page already started, and fetches after that —
     } finally {
         window.fetch = previous
         window.__abideCalls = undefined
+    }
+})
+
+// 16.80 — A COPY'S FIRST LOAD MAY BE ANSWERED BY A KEPT COPY, every load after it asks past every
+// cache: what it asks once it holds an answer is asked because it was refreshed, invalidated or went
+// stale, and a cache below would hand back what it was dropping. A first load that got no answer
+// is still a first load. And only where the worker answers the page: anywhere else the cache below
+// is the browser's, which holds 21.22's answers a week past stale and marks none as kept. THE
+// REVERT: drop the `answeredOnce.has` test from `requestOf` in `wire`; the refresh and the read
+// after invalidate are asked `force-cache`. Drop the `controller` test; with no worker the first
+// load is asked `force-cache`.
+test('a GET is sent force-cache until the page has an answer for its args, no-cache after, and no-cache with no worker — 16.80', async () => {
+    const asked: string[] = []
+    let online = false
+    const window = globalThis as unknown as Record<string, unknown>
+    const previous = window.fetch
+    window.fetch = (async (input: string, init?: RequestInit) => {
+        asked.push(`${init?.cache} ${new URL(input, 'http://x').search}`)
+        if (!online) throw new TypeError('Failed to fetch')
+        return new Response('{"id":"1"}', {
+            headers: { 'content-type': 'application/json' },
+        })
+    }) as unknown
+    const worker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker')
+    const controlled = (controller: object | null) =>
+        Object.defineProperty(navigator, 'serviceWorker', {
+            configurable: true,
+            value: { controller },
+        })
+    try {
+        controlled({})
+        const getInvoice = wire('GET', '/rpc/getInvoice') as (args: {
+            id: string
+        }) => PromiseLike<unknown> & {
+            refresh(): void
+            invalidate(): void
+            catch(onFailed: () => void): Promise<unknown>
+        }
+        const turn = () => new Promise((done) => setTimeout(done, 0))
+        await getInvoice({ id: '1' }).catch(() => {})
+        online = true
+        asked.push('online')
+        getInvoice({ id: '1' }).refresh()
+        await turn()
+        getInvoice({ id: '1' }).refresh()
+        await turn()
+        getInvoice({ id: '1' }).invalidate()
+        await getInvoice({ id: '1' })
+        await getInvoice({ id: '2' })
+        controlled(null)
+        await getInvoice({ id: '3' })
+        // However many loads reached the copy before one was answered — a call reaching a refused
+        // value starts its own beside the refresh — each was a first load.
+        const answered = asked.indexOf('no-cache ?id=1')
+        expect(new Set(asked.slice(0, answered))).toEqual(
+            new Set(['force-cache ?id=1', 'online']),
+        )
+        expect(asked.slice(answered)).toEqual([
+            'no-cache ?id=1',
+            'no-cache ?id=1',
+            'force-cache ?id=2',
+            'no-cache ?id=3',
+        ])
+    } finally {
+        window.fetch = previous
+        if (worker === undefined)
+            delete (navigator as { serviceWorker?: unknown }).serviceWorker
+        else Object.defineProperty(navigator, 'serviceWorker', worker)
     }
 })
 

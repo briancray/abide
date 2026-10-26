@@ -8,13 +8,17 @@ import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
 import {
     heldGenerationOf,
     loadOf,
+    patchInto,
+    produceInto,
     type Reactive,
+    writtenLocally,
 } from '#shared/reactive/index.ts'
 import { PATCHES } from '#shared/reactive/PATCHES.ts'
 import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
 import { applyPatch } from '#shared/applyPatch.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
+import { undelivered, whenDelivered } from './outboxQueue.ts'
 
 const RETRY_FLOOR_MS = 250
 const RETRY_CEILING_MS = 10_000
@@ -104,9 +108,18 @@ class Following {
 
     receive(frame: ServerFrame): void {
         const copy = this.entry() as Reactive<unknown>
+        // 18.35 — A COPY WRITTEN HERE WAITS OUT THE CALLS THAT WROTE IT: what the server sends before
+        // they are delivered is the value without them, and taking it would undo what is on screen.
+        if (
+            (frame.op === 'value' || frame.op === 'patch') &&
+            writtenLocally(copy) &&
+            undelivered() !== 0
+        )
+            return
         if (frame.op === 'value') {
             this.version = frame.version
-            copy.set(frame.value)
+            // 18.10 — the server's value is the copy's producer's, not a write made here (3.11).
+            produceInto(copy, frame.value)
             this.inStep()
         } else if (frame.op === 'patch') {
             // 18.12 — WRITES MADE OVER ANOTHER VERSION WOULD LAND SOMEWHERE ELSE, and 18.21 over a
@@ -116,7 +129,7 @@ class Following {
                 copy.refresh()
             else {
                 this.version = frame.version
-                copy.patch((value) => applyPatch(value, frame.ops ?? []))
+                patchInto(copy, (value) => applyPatch(value, frame.ops ?? []))
                 this.inStep()
             }
         } else if (frame.op === 'invalidate') copy.invalidate()
@@ -246,6 +259,8 @@ function muxFor(address: string): Mux {
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
     let mux = MUXES.get(url.href)
     if (mux === undefined) {
+        // Heard from the first follow on, which is the first copy it could read again.
+        if (MUXES.size === 0) whenDelivered(readAgainWritten)
         mux = new Mux(url.href)
         MUXES.set(url.href, mux)
     }
@@ -259,6 +274,20 @@ function muxFor(address: string): Mux {
  * reconnect then names (18.9).
  */
 const FOLLOWING = new Map<string, Following>()
+
+/**
+ * Reads again every followed copy written here, once the outbox holds no call waiting.
+ *
+ * 18.35 — the server's value, with every queued call that was delivered in it and none of one it
+ * refused. Every such copy, not only one a frame was held back from: a refused call may have left
+ * the server with nothing to send.
+ */
+function readAgainWritten(): void {
+    for (const following of FOLLOWING.values()) {
+        const copy = following.entry() as Reactive<unknown>
+        if (writtenLocally(copy)) copy.refresh()
+    }
+}
 
 /**
  * Follows a loaded `GET`'s copy over the mux, raising its version and resetting its expiry.

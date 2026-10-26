@@ -605,3 +605,74 @@ test('a mux that closed while offline is not opened again until the browser is o
     expect(`opened online: ${muxSockets() - before}`).toBe('opened online: 1')
     await settle()
 })
+
+// 18.35 — A COPY WRITTEN HERE WAITS OUT THE CALLS THAT WROTE IT: a value the server sends before they
+// are delivered is the value without them, and taking it would take the edit off the screen. Once
+// the line is delivered the copy reads again, and what it reads is the server's. THE REVERT: drop the
+// `undelivered()` test from `Following.receive`; the copy takes ['dune'] and 'mine' is gone while
+// its call is still waiting.
+test('a copy written here takes nothing sent while its calls wait, and reads again once they are delivered — 18.35', async () => {
+    shelf = ['dune']
+    const stacked = wire('GET', `${LIBRARY}/stacked`) as (
+        args?: unknown,
+    ) => (() => string[]) &
+        PromiseLike<string[]> & {
+            synced(): boolean
+            patch(mutate: (held: string[]) => void): void
+        }
+    await stacked()
+    await settle()
+    const socket = muxSocket()
+    const follow = socket.sent.find(
+        (frame) => frame.address === `${LIBRARY}/stacked`,
+    ) as Sent
+    const { deliver } = await import('#ui/outboxQueue.ts')
+    const { outbox } = await import('#shared/outbox.ts')
+    const answering = globalThis.fetch
+    let reachable = false
+    globalThis.fetch = (async (input: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+            if (!reachable) return new Response(null, { status: 503 })
+            shelf = ['dune', 'mine']
+            return Response.json({ added: 'mine' })
+        }
+        return answering(input, init)
+    }) as unknown as typeof fetch
+    try {
+        const shelve = wire('POST', `${LIBRARY}/shelve`) as (
+            args: { title: string },
+            options: { offline: (args: { title: string }) => unknown },
+        ) => PromiseLike<unknown>
+        await shelve(
+            { title: 'mine' },
+            {
+                offline: (args) => {
+                    stacked().patch((held) => {
+                        held.push(args.title)
+                    })
+                    return { added: args.title }
+                },
+            },
+        )
+        await settle()
+        expect(stacked()()).toEqual(['dune', 'mine'])
+        expect(stacked().synced()).toBe(false)
+        socket.push({
+            op: 'value',
+            id: follow.id,
+            version: (follow.version as number) + 5,
+            value: ['dune'],
+        })
+        flushSync()
+        expect(stacked()()).toEqual(['dune', 'mine'])
+        reachable = true
+        deliver()
+        await settle()
+        await settle()
+        expect(outbox()).toEqual([])
+        expect(stacked()()).toEqual(['dune', 'mine'])
+        expect(stacked().synced()).toBe(true)
+    } finally {
+        globalThis.fetch = answering
+    }
+})

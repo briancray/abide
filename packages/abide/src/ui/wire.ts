@@ -17,19 +17,28 @@
 // An entry of its own (`@abide/abide/wire`) rather than a name on the runtime barrel: only a generated
 // wrapper imports it, and a page with no handler pays nothing for it.
 
-import { type Answer, answered, answerOf } from '#shared/answerOf.ts'
+import {
+    type Answer,
+    answered,
+    answerOf,
+    noAnswer,
+    unanswered,
+} from '#shared/answerOf.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import { isFailed } from '#shared/Failed.ts'
 import { answerChunks } from '#shared/framing.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
+import type { JsonValue } from '#shared/JsonValue.ts'
+import { LOAD_OFFLINE } from '#shared/LOAD_OFFLINE.ts'
 import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
-import { reactive, structural } from '#shared/reactive/index.ts'
+import { reactive, standIn, structural } from '#shared/reactive/index.ts'
 import {
     type Defaults,
     declareDefaults,
 } from '#shared/reactive/parameterDefaults.ts'
 import { declare, type Method } from '#shared/rpc.ts'
-import { rpcRequest } from '#shared/rpcRequest.ts'
+import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
+import { enqueue, undelivered } from './outboxQueue.ts'
 import { followRpc } from './socketWire.ts'
 
 /** The browser's `Rpc` for a handler: the server's declaration over a body that fetches. */
@@ -43,17 +52,89 @@ export function wire(
 ): unknown {
     // 16.9 — the handler's route, compiled once for every call through the copy.
     const route = new HandlerRoute(address)
+    // 16.80 — the requests this page has had an answer to, whose next load asks past every cache.
+    // A first load is the worker's to answer from its copy, where one answers this page: anywhere
+    // else the cache below is the browser's, which would hand back a week-stale answer as the server's.
+    const answeredOnce = new Set<string>()
+    const requestOf = (args: Record<string, unknown> | undefined) => {
+        const request = rpcRequest(method, route, args)
+        if (
+            !answeredOnce.has(request.key) &&
+            navigator.serviceWorker?.controller
+        )
+            request.init.cache = 'force-cache'
+        return request
+    }
+    // 16.81 — WHAT STANDS IN FOR A `GET`'s ANSWER, per args, as the last call reaching them gave it:
+    // a reload no call starts — a refresh, the network coming back — has no `offline` of its own.
+    const standIns = new Map<string, (args: unknown) => unknown>()
     // ONE PARAMETER, so the value is keyed by args whatever the handler declared (16.6's arity rule):
     // an unkeyed handler is reached with no args, which is one key.
     const body = (args: Record<string, unknown> | undefined) => {
-        // 16.49 — the load's own signal, set by the call starting it and read before anything awaits.
+        // 16.49, 16.81 — the load's own signal and stand-in, set by the call starting it and read
+        // before anything awaits.
         const signal = LOAD_SIGNAL.current
+        const request = requestOf(args)
+        let offline = LOAD_OFFLINE.current
+        // A reload no call started — a refresh, or the one `whenOnline` asks — that gets no answer
+        // waits before asking again, where asking at once would get none on every tick.
+        const retryIn = offline === undefined ? UNANSWERED_RETRY_MS : 0
+        if (method === 'GET') {
+            if (offline === undefined) offline = standIns.get(request.key)
+            else standIns.set(request.key, offline)
+        }
+        // A STAND-IN IS FOR A COPY HOLDING NOTHING: a reload that gets no answer over one this page
+        // already holds keeps serving it (7.4, 7.19) rather than trading it for a default.
+        const first = !answeredOnce.has(request.key)
+        // 16.82, 46.10 — a mutation that may be queued carries the key it is sent under every time.
+        const queued =
+            offline !== undefined && method !== 'GET'
+                ? queuedCall(request, address, args)
+                : undefined
+        let standing: { value: unknown } | undefined
+        if (queued !== undefined)
+            LOAD_OFFLINE.standing = standing = { value: undefined }
+        const stoodIn = (failed: Answer): unknown => {
+            const value = (offline as (args: unknown) => unknown)(args)
+            if (queued === undefined) {
+                whenOnline(args, retryIn)
+                return standIn(value)
+            }
+            return enqueue(queued, standing as { value: unknown }, value).then(
+                (kept) => (kept ? standIn(value) : answered(failed)),
+            )
+        }
+        // 16.83 — BEHIND CALLS NOT YET DELIVERED A CALL WAITS ITS TURN, rather than overtaking them.
+        if (queued !== undefined && undelivered() !== 0)
+            return Promise.resolve(stoodIn(noAnswer()))
         const settle = (answer: Answer): unknown => {
+            if (answer.ok) answeredOnce.add(request.key)
+            if (
+                offline !== undefined &&
+                unanswered(answer) &&
+                (first || queued !== undefined)
+            )
+                return stoodIn(answer)
             follow(args, answer)
+            // 16.85 — A COPY THE WORKER KEPT IS NOT THE SERVER'S ANSWER: held as written here, and
+            // asked of the network once there is one.
+            if (answer.kept) {
+                whenOnline(args, 0)
+                return standIn(answered(answer))
+            }
             return answered(answer)
         }
-        const answer = answerOf(rpcRequest(method, route, args), false, signal)
+        const answer = answerOf(request, false, signal)
         return answer instanceof Promise ? answer.then(settle) : settle(answer)
+    }
+    // 16.81, 16.85 — A COPY HOLDING A STAND-IN ASKS THE NETWORK AGAIN once there is one: now, past the
+    // landing (or `delay` past it), where the browser says it is online, and when it says so otherwise.
+    const whenOnline = (args: unknown, delay: number): void => {
+        if (method !== 'GET') return
+        const again = (): void =>
+            (value as (args: unknown) => { refresh(): void })(args).refresh()
+        if (navigator.onLine) setTimeout(again, delay)
+        else addEventListener('online', again, { once: true })
     }
     // 16.32 — A STREAMING HANDLER'S COPY IS A STREAM OF ITS OWN, whose chunks land as the answer's
     // lines arrive: collected into one value, a page reading it showed nothing until the handler's
@@ -64,11 +145,9 @@ export function wire(
         // 16.49 — read on the first line: the core's pump takes the first step inside the reach, so
         // this runs while the call that started the load still has its signal set.
         const signal = LOAD_SIGNAL.current
-        const answer = await answerOf(
-            rpcRequest(method, route, args),
-            true,
-            signal,
-        )
+        const request = requestOf(args)
+        const answer = await answerOf(request, true, signal)
+        if (answer.ok) answeredOnce.add(request.key)
         follow(args, answer)
         if (answer.body !== undefined && answer.body !== null) {
             yield* answerChunks(answer.body, answer.framing)
@@ -110,6 +189,28 @@ export function wire(
     // 16.9 — the address `rpc.url` and `rpc.raw` build on.
     rpc.address = address
     return rpc
+}
+
+/** How long a reload that got no answer waits to ask again where the browser says it is online. */
+const UNANSWERED_RETRY_MS = 5_000
+
+/** A mutation's call as the outbox keeps it, under the key it is sent with every time (46.10). */
+function queuedCall(
+    request: RpcRequest,
+    address: string,
+    args: Record<string, unknown> | undefined,
+): Parameters<typeof enqueue>[0] {
+    const id = crypto.randomUUID()
+    const headers = new Headers(request.init.headers)
+    headers.set('idempotency-key', id)
+    request.init.headers = headers
+    return {
+        id,
+        method: request.method,
+        address,
+        url: request.url,
+        args: args as Record<string, JsonValue> | undefined,
+    }
 }
 
 /**

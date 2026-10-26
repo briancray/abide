@@ -66,6 +66,7 @@ export type Keyed<
 ) => Reactive<Stored, Accepted, Failures, Produced>) & {
     busy(pattern?: Partial<Args>): boolean
     ready(pattern?: Partial<Args>): boolean
+    synced(pattern?: Partial<Args>): boolean
     refresh(pattern?: Partial<Args>): void
     invalidate(pattern?: Partial<Args>): void
     /** The entries reached so far. Not app surface — the statics and the tests read it. */
@@ -459,6 +460,14 @@ export function createKeyed<
             askMembership()
             for (const entry of entries.values())
                 if (matchesPattern(argsOf(entry), pattern) && !entry.ready())
+                    return false
+            return true
+        },
+        // 13.18 — ALL, as `ready` asks: one entry written here is one the server has not seen.
+        synced: (pattern?: Partial<Args>): boolean => {
+            askMembership()
+            for (const entry of entries.values())
+                if (matchesPattern(argsOf(entry), pattern) && !entry.synced())
                     return false
             return true
         },

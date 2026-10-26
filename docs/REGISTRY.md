@@ -128,6 +128,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `s.busy` | `() => boolean` | Work is in flight for this value. | 3.1, 3.2, 3.3, 3.4, 3.7, 3.9, 5.15, 7.5, 7.8, 11.19, 11.20, 11.21, 11.22, 11.50 |
 | `s.ready` | `() => boolean` | There is a value to serve. | 3.1, 3.2, 3.3, 3.5, 3.6, 3.8, 7.8, 11.20, 11.54, 11.58 |
 | `s.error` | `() => Failures \| undefined` | The standing refusal. | 3.1, 3.2, 3.3, 3.5, 4.10, 4.11, 4.12 |
+| `s.synced` | `() => boolean` | What is held is what the producer made. | 3.1, 3.2, 3.3, 3.10, 3.11, 3.12, 3.13 |
 | `s.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. | 3.1 |
 
 ### Triggers
@@ -149,6 +150,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- | --- |
 | `k.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to matching entries. | 13.2, 13.3, 13.12 |
 | `k.ready` | `(pattern?: Partial<Args>) => boolean` | `ready` narrowed to matching entries. | 13.11, 13.12 |
+| `k.synced` | `(pattern?: Partial<Args>) => boolean` | `synced` narrowed to matching entries. | 13.12, 13.18 |
 | `k.invalidate` | `(pattern?: Partial<Args>) => void` | `invalidate` narrowed to matching entries. | 7.2, 7.3, 13.4, 13.12 |
 | `k.refresh` | `(pattern?: Partial<Args>) => void` | `refresh` narrowed to matching entries. | 7.4, 7.5, 13.4, 13.12 |
 
@@ -167,8 +169,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Selection` | `Reactive<any, any, any, any> \| Keyed<any, any, any, any> \| Rpc<any, any, any, any> \| { tags: string[] }` | What is being asked about. | 13.1, 13.8, 13.9, 13.13, 31.14 |
-| `busy` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether any entry in the selection has work in flight. | 13.2, 13.3, 13.5, 13.12 |
+| `busy` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether any entry in the selection has work in flight. | 13.2, 13.3, 13.5, 13.12, 46.11 |
 | `ready` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection has a value to serve. | 13.3, 13.5, 13.11, 13.12 |
+| `synced` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection holds what its producer made. | 13.12, 13.18 |
 | `refresh` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.12, 13.14, 13.15, 13.16, 13.17 |
 | `invalidate` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Marks the selection stale. | 13.4, 13.6, 13.10, 13.12, 13.15, 13.17 |
 
@@ -209,7 +212,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 16.79 |
+| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal; offline?: (args: Args) => Value }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 16.79, 16.80, 16.85 |
+| `offline` | `(args: Args) => Value` | What a call settles to where a browser could not get its answer. | 16.81, 16.82, 16.83, 16.84 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.30 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.15 |
@@ -218,8 +222,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: (args?: Args) => Value, options?: RpcOptions<Args, RungFailures> & ReactiveOptions<Value, Value, Failures, Args>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | The plain-function overload, whose options build the value it becomes beside its address. | 16.1, 16.6, 16.7 |
 | `GET` | `<Value, Failures, RungFailures>(handler: Value \| PromiseLike<Value>, options?: RpcOptions<undefined, RungFailures> & ReactiveOptions<Value, Value, Failures>) => Rpc<Value, undefined, Failures \| RungFailures>` | The value overload, for what the handler owns outright. | 16.1, 16.6, 16.7 |
 | `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. | 16.2, 16.7, 16.32, 16.68, 16.76, 16.38, 16.53 |
-| `rpc.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to the handler's matching entries. | 13.2, 13.3, 13.12 |
+| `rpc.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to the handler's matching entries. | 13.2, 13.3, 13.12, 46.11 |
 | `rpc.ready` | `(pattern?: Partial<Args>) => boolean` | `ready` narrowed to the handler's matching entries. | 13.11, 13.12 |
+| `rpc.synced` | `(pattern?: Partial<Args>) => boolean` | `synced` narrowed to the handler's matching entries. | 13.12, 13.18 |
 | `rpc.invalidate` | `(pattern?: Partial<Args>) => void` | `invalidate` narrowed to the handler's matching entries. | 7.2, 7.3, 13.4, 13.12 |
 | `rpc.refresh` | `(pattern?: Partial<Args>) => void` | `refresh` narrowed to the handler's matching entries. | 7.4, 7.5, 13.4, 13.12 |
 | `rpc.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. | 16.8 |
@@ -286,6 +291,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `cache-control: no-store` | `/__abide/openapi.json`, `/__abide/mcp` | Refuses caching for an answer about the app's surfaces. | 21.4 |
 | `cache-control: public, max-age=31536000, immutable` | the built bundle | A chunk addressed by its own content hash. | 21.5 |
 | `cache-control: public, max-age=0, must-revalidate` | a file under a `public` directory | A file at an address the build never chose. | 21.12 |
+| `cache-control: private, stale-while-revalidate=604800, stale-if-error=604800` | a page, a `GET`'s answer, where `ABIDE_OFFLINE` registers its worker | The default that lets a copy kept on the device stand in for the network. | 21.22, 21.11, 21.17 |
+| `cache-control: public, max-age=0, stale-while-revalidate=604800, stale-if-error=604800` | a file under a `public` directory, where `ABIDE_OFFLINE` registers its worker | The same, for a file at an address the build never chose. | 21.23 |
+| `clear-site-data: "cache"` | an answer carrying `abide-principal`, where pages are kept offline | Drops what the browser's own cache kept for the caller signed in before. | 21.24 |
 | `etag` | a file under a `public` directory | The answered bytes, addressed by their content. | 21.13, 21.14 |
 | `referrer-policy: strict-origin-when-cross-origin` | a page | The browsers' own default, written down. | 21.6 |
 | `vary` | wherever an answer depends on a request header | Names the header the answer varied on. | 21.7 |
@@ -380,6 +388,17 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `online` | `Reactive<boolean>` | Whether the caller can reach the app. | 23.7, 23.8, 18.33, 18.34 |
+
+## `outbox`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `outbox` | `<Chosen extends Selection>(selection?: Chosen, pattern?: Partial<Args>) => QueuedCall[]` | The calls a browser has queued and not delivered, the refused ones included. | 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.14, 46.15, 46.16, 46.17, 46.20, 18.35 |
+| `rpc.outbox` | `(pattern?: Partial<Args>) => QueuedCall[]` | `outbox` narrowed to the handler's calls. | 46.1, 13.12 |
+| `QueuedCall` | `{ id: string; method: 'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'; url: string; args: Record<string, JsonValue> \| undefined; queuedAt: number; attempts: number; value: Reactive<Value, Value, Failed<string, unknown>>; retry: () => void; discard: () => void }` | One call `outbox` holds. | 46.1, 46.10 |
+| `call.value` | `Reactive<Value, Value, Failed<string, unknown>>` | The value a queued call settled. | 46.5, 46.7, 46.18, 46.19 |
+| `call.retry` | `() => void` | Sends a queued call again. | 46.6, 46.12 |
+| `call.discard` | `() => void` | Drops a queued call. | 46.13 |
 
 ## `reachable`
 
@@ -606,7 +625,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4 |
-| `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29 |
+| `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30 |
 
 ## Sinks
 
@@ -637,7 +656,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `ABIDE_MAX_REQUEST_BODY_SIZE` | `number` | The default ceiling on a mutation's body. | 16.13, 16.54, 16.55, 16.78 |
 | `ABIDE_MAX_SOCKET_MESSAGE_SIZE` | `number` | The ceiling on a frame received over the socket mux, in bytes. | 18.28 |
 | `ABIDE_MAX_SOCKET_SUBSCRIPTIONS` | `number` | How many values one connection to the socket mux may follow. | 18.31, 18.32 |
-| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16 |
+| `ABIDE_OFFLINE` | `boolean` | Whether the app keeps its pages and its bundle on the device, for when the network is gone. | 45.1, 45.2, 45.3, 45.4, 45.5, 45.6, 45.7, 45.8, 45.9, 45.10, 45.11, 45.12, 45.13, 45.14, 45.15, 45.16, 45.17, 45.18, 45.19, 45.20, 45.21, 45.22, 45.23 |
 | `ABIDE_STOP_TIMEOUT` | `number` | How long `App.stop` drains, in ms. | 42.17, 42.18 |
 | `ABIDE_MAX_STREAM_BUFFER_SIZE` | `number` | The cap on a stream transcript held in memory. | 36.18 |
 | `ABIDE_MAX_LOG_BUFFER_COUNT` | `number` | How many lines `log.records` is trimmed back to. | 28.1 |

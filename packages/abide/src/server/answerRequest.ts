@@ -26,6 +26,8 @@ import { ERROR_META } from '#shared/ERROR_META.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
+import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
+import { KEEP_OPENED } from '#shared/KEEP_OPENED.ts'
 import { health } from '#shared/health.ts'
 import { appName } from '#shared/log.ts'
 import { compose } from '#shared/Middleware.ts'
@@ -59,6 +61,7 @@ import { callerOrMint } from './callerOf.ts'
 import { settingOn } from './config.ts'
 import { compressAnswer } from './compressAnswer.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
+import { OFFLINE_STALE } from './OFFLINE_STALE.ts'
 import { noteCallInRender } from './deferredBuilds.ts'
 import { answerMcp, openApi } from './generatedSurfaces.ts'
 import { type AppRung, failureOf, rungsOver } from './hooks.ts'
@@ -84,7 +87,7 @@ import {
     within,
     writtenStatus,
 } from './requestScope.ts'
-import { seedFor } from './seedBuffer.ts'
+import { callsOnly, seedFor } from './seedBuffer.ts'
 
 // One row of the server's table the compiler writes (`SERVER_TABLE`). The loader is a dynamic import
 // so a page's markup is off the boot path until an address asks for it, which is the same reason
@@ -159,6 +162,8 @@ export type AppSources = {
     errors: RankedError[]
     /** The document the error pages are painted into. */
     errorDocument: string
+    /** 21.22, 21.23 — whether a page registers the worker `ABIDE_OFFLINE` turns on (45.1). */
+    offline: boolean
     /** Every handler, keyed by its method and address (`handlerKey`), to what answers it. 16.2. */
     handlers: Map<string, Mounted>
     /**
@@ -186,11 +191,11 @@ export async function answerRequest(
     const method = request.method === 'HEAD' ? 'GET' : request.method
 
     // 25.1, 25.3, 26.17 — the principal and the account of the app are handlers abide mounts,
-    // answered as the app's are.
+    // answered as the app's are — 21.4, save that neither is the app's to keep on the device.
     const own = OWN_HANDLERS.get(asked)
     if (own !== undefined)
         return own.method === method
-            ? answerRpc(own, {}, url, request, app)
+            ? answerRpc(own, {}, url, request, app, false)
             : methodRefused(app, asked, [own.method])
     // 20.5, 20.9, 36.7 — a surface of abide's own, or a 404 where it answers nothing.
     const surface = SURFACES.get(asked)
@@ -229,7 +234,7 @@ export async function answerRequest(
     const file = app.published.get(decodedOrKept(asked))
     if (file !== undefined)
         return readsOnly(request)
-            ? publicResponse(request, file)
+            ? publicResponse(request, file, app.offline)
             : methodRefused(app, asked, READS)
 
     // 15.16 — an address that will not percent-decode names nothing, and is the caller's fault.
@@ -312,7 +317,8 @@ async function answerMatched(
     const url = new URL(request.url)
     const asked = url.pathname
     const params = (currentRequestScope() as RequestScope).params as Params
-    if ('handler' in found) return answerRpc(found, params, url, request, app)
+    if ('handler' in found)
+        return answerRpc(found, params, url, request, app, app.offline)
     const page = found
 
     // 30.16 — THE CLIENT ROUTER ASKING, not a reader loading the page. `middleware` has already run
@@ -333,6 +339,7 @@ async function answerMatched(
     // that stored the identity answer for a reader who sent no `accept-encoding` must not hand it
     // to one who did, nor the reverse.
     const headers = new Headers(DOCUMENT_HEADERS)
+    if (app.offline) headers.set('cache-control', `private, ${OFFLINE_STALE}`)
     // THE HEADERS A `GET` WOULD CARRY, and no render for a body nobody is sent — nor a caller
     // minted for a request that never becomes a page.
     if (request.method === 'HEAD')
@@ -350,9 +357,21 @@ async function answerMatched(
     // 11.32 — the page renders in a scope of its own, so what its values hold is this request's —
     // and 41.13, every call it makes is left for the browser's own call to be answered from.
     // 41.29 — BUT NOT A PAGE A SCRIPT FETCHED, which nothing hydrates: its entries would answer the
-    // next call this caller makes with what the render saw, a sign-in since included.
-    const hydrated = request.headers.get('sec-fetch-dest') !== 'empty'
-    beginRender({ seed: hydrated ? seedFor(caller) : SEEDS_NOTHING, calls: [] })
+    // next call this caller makes with what the render saw, a sign-in since included — save the one
+    // the worker fetched for the navigation it answers, which is the page that hydrates (45.23).
+    const keep = request.headers.get(KEEP_HEADER)
+    const hydrated =
+        keep === KEEP_OPENED ||
+        request.headers.get('sec-fetch-dest') !== 'empty'
+    // 41.30 — SAVE ONE THE WORKER KEEPS, whose early calls are what a later open of it starts.
+    beginRender({
+        seed: hydrated
+            ? seedFor(caller)
+            : keep !== null
+              ? callsOnly()
+              : SEEDS_NOTHING,
+        calls: [],
+    })
     // 41.1, 35.2 — THE DOCUMENT IS THE BUILT PAGE, read whole before there is a `Response` to commit a
     // status to: a refusal the page read, or a throw, is answered by the nearest error page at its own
     // status rather than as a 200 the stream then abandons.
@@ -561,6 +580,7 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
         },
         published,
         explained: parts.explained,
+        offline: client.offline,
         ...mounted,
     }
     for (const row of sources.routes) {
@@ -738,14 +758,23 @@ function laneFailure(
  * authored, and the content-type off the extension, which is what `Bun.file` already derives
  * rather than a table kept here.
  */
-function publicResponse(request: Request, file: PublicFile): Response {
+function publicResponse(
+    request: Request,
+    file: PublicFile,
+    offline: boolean,
+): Response {
     return answerBlobTagged(
         Bun.file(file.path, { type: file.type }),
         file.etag,
         request,
         // 21.12. Revalidated every time and cached in between, which is what an unhashed name
         // earns — the etag is what makes that one conditional request rather than one transfer.
-        new Headers({ 'cache-control': 'public, max-age=0, must-revalidate' }),
+        // 21.23 — and served stale where the device keeps it, while that request is made.
+        new Headers({
+            'cache-control': offline
+                ? `public, max-age=0, ${OFFLINE_STALE}`
+                : 'public, max-age=0, must-revalidate',
+        }),
         200,
     )
 }

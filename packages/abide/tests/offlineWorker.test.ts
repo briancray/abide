@@ -39,6 +39,19 @@ type Event = {
 const page = (): Response =>
     new Response('<p>page</p>', { headers: { 'content-type': 'text/html' } })
 
+/** 21.22's default, which every page and `GET` a registered worker sees carries. */
+const KEPT = 'private, stale-while-revalidate=604800, stale-if-error=604800'
+
+/** An answer `ageSeconds` old by its `date`, under `cacheControl`. */
+const aged = (body: string, cacheControl: string, ageSeconds = 0): Response =>
+    new Response(body, {
+        headers: {
+            'content-type': 'text/plain',
+            'cache-control': cacheControl,
+            date: new Date(Date.now() - ageSeconds * 1000).toUTCString(),
+        },
+    })
+
 /**
  * The worker `manifest` names — or the removing one, for none — evaluated in a scope of its own,
  * over `stores`: the cache storage, which a second build's worker shares with the first's.
@@ -56,10 +69,15 @@ async function worker(
         typeof request === 'string'
             ? new URL(request, ORIGIN).href
             : request.url
-    const fetchIn = async (request: Request | string): Promise<Response> => {
+    const fetchIn = async (
+        request: Request | string,
+        init?: RequestInit,
+    ): Promise<Response> => {
         const asked =
-            typeof request === 'string' ? new Request(keyOf(request)) : request
-        fetched.push(asked.url)
+            typeof request === 'string'
+                ? new Request(keyOf(request), init)
+                : request
+        fetched.push(`${asked.cache} ${asked.url}`)
         return answer(asked)
     }
     const storeOf = (name: string): Map<string, Response> => {
@@ -113,6 +131,8 @@ async function worker(
     async function dispatch(
         type: string,
         init: { request?: Request; data?: unknown } = {},
+        // Told the moment the worker has answered, before what it went on to wait on settles.
+        onAnswered?: () => void,
     ): Promise<Response | undefined> {
         const waiting: Promise<unknown>[] = []
         let responded: Promise<Response> | undefined
@@ -127,6 +147,7 @@ async function worker(
             },
         })
         const response = await responded
+        onAnswered?.()
         await Promise.all(waiting)
         return response
     }
@@ -155,17 +176,20 @@ test('the bundle is saved as the worker installs, and answered from what it save
     expect(`fetched: ${offline.fetched.length - before}`).toBe('fetched: 0')
 })
 
-// 45.3 — A HANDLER'S ANSWER AND A PUBLIC FILE, SAVED AS A PAGE IS, and answered from there once the
-// network is gone; with no copy, a call fails as it would with no worker and a page says why. THE
-// REVERT: answer `Response.error()` in place of `saved` in the worker's `answer`; the read offline
-// is refused where the saved note is due.
-test("a handler's answer and a public file are saved, and answered offline — 45.3", async () => {
+// 45.3, 45.18 — A HANDLER'S ANSWER AND A PUBLIC FILE, SAVED AS A PAGE IS under 21.22's and 21.23's
+// headers, and answered from there once the network is gone; with no copy, a call fails as it would
+// with no worker and a page says why. THE REVERT: drop the `keep` from `fromNetwork`; nothing is
+// saved.
+test("a handler's answer and a public file are saved, and answered offline — 45.3, 45.18", async () => {
     let online = true
     const offline = await worker(MANIFEST, (request) => {
         if (!online) throw new TypeError('Failed to fetch')
         return new URL(request.url).pathname === '/logo.png'
-            ? new Response('png', { headers: { 'content-type': 'image/png' } })
-            : Response.json({ note: 'saved' })
+            ? aged(
+                  'png',
+                  'public, max-age=0, stale-while-revalidate=604800, stale-if-error=604800',
+              )
+            : aged('saved', KEPT)
     })
     const get = (path: string) =>
         offline.dispatch('fetch', { request: new Request(`${ORIGIN}${path}`) })
@@ -176,11 +200,217 @@ test("a handler's answer and a public file are saved, and answered offline — 4
         `${ORIGIN}/notes/getNote`,
     ])
     online = false
-    expect(await (await get('/notes/getNote'))?.json()).toEqual({
-        note: 'saved',
-    })
+    expect(await (await get('/notes/getNote'))?.text()).toBe('saved')
     expect((await get('/notes/never'))?.type).toBe('error')
     expect((await offline.navigate('/never'))?.status).toBe(503)
+})
+
+// 45.3 — AN ANSWER ITS OWN HEADER SAYS NOT TO STORE IS NOT SAVED, however much it would stand in
+// offline. THE REVERT: drop the `no-store` test from `kept`; `/private` is saved.
+test('an answer carrying no-store is not saved — 45.3', async () => {
+    const offline = await worker(MANIFEST, (request) =>
+        new URL(request.url).pathname === '/private'
+            ? aged('mine', 'private, no-store')
+            : aged('ours', KEPT),
+    )
+    for (const path of ['/private', '/shared'])
+        await offline.dispatch('fetch', {
+            request: new Request(`${ORIGIN}${path}`),
+        })
+    expect(offline.saved('abide:saved')).toEqual([`${ORIGIN}/shared`])
+})
+
+// 45.17 — A FRESH COPY IS ANSWERED AND THE NETWORK NOT ASKED. THE REVERT: drop the `life.fresh` arm
+// from the worker's `answer`; the second read is fetched, 1.
+test('a copy fresh by its max-age is answered without asking the network — 45.17', async () => {
+    const offline = await worker(MANIFEST, () =>
+        aged('tile', 'private, max-age=60'),
+    )
+    const get = () =>
+        offline.dispatch('fetch', {
+            request: new Request(`${ORIGIN}/tile`),
+        })
+    await get()
+    const before = offline.fetched.length
+    expect(await (await get())?.text()).toBe('tile')
+    expect(`fetched: ${offline.fetched.length - before}`).toBe('fetched: 0')
+})
+
+// 45.18 — A STALE COPY WITHIN stale-while-revalidate IS ANSWERED BEFORE THE NETWORK IS: a signal that
+// takes its time — the phone with one bar — opens the page at once, and the copy after it is the
+// network's. THE REVERT: drop the `life.revalidate` arm from the worker's `answer`; the read waits on
+// the network and answers `new`.
+test('a copy stale within stale-while-revalidate is answered at once, and replaced behind it — 45.18', async () => {
+    let body = 'old'
+    let slow = false
+    const order: string[] = []
+    const offline = await worker(MANIFEST, () => {
+        if (!slow) return aged(body, KEPT, 60)
+        return new Promise<Response>((resolve) =>
+            setTimeout(() => {
+                order.push('network')
+                resolve(aged(body, KEPT))
+            }, 20),
+        ) as unknown as Response
+    })
+    await offline.navigate('/')
+    body = 'new'
+    slow = true
+    const response = await offline.dispatch(
+        'fetch',
+        {
+            request: new Request(`${ORIGIN}/`, {
+                ...({ mode: 'navigate' } as RequestInit),
+            }),
+        },
+        () => order.push('answered'),
+    )
+    expect(await response?.text()).toBe('old')
+    expect(order).toEqual(['answered', 'network'])
+    const fresh = await offline.stores
+        .get('abide:saved')
+        ?.get(`${ORIGIN}/`)
+        ?.text()
+    expect(fresh).toBe('new')
+})
+// 45.18 — A force-cache CALL IS ANSWERED FROM THE COPY ALONE: the wire asks it so of a first load
+// only, and asks the network itself once it reads the copy (16.80, 16.85), so asking behind it here
+// was every kept call asked twice. A call asked default still is. THE REVERT: drop the
+// `force-cache` test from the worker's `answer`; the force-cache call is asked behind the copy, 1.
+test('a force-cache call stale within stale-while-revalidate is answered and not asked behind — 45.18', async () => {
+    const offline = await worker(MANIFEST, () => aged('kept', KEPT, 60))
+    const call = (cache: RequestCache) =>
+        offline.dispatch('fetch', {
+            request: new Request(`${ORIGIN}/data`, { cache }),
+        })
+    await call('default')
+    const said: string[] = []
+    for (const cache of ['force-cache', 'default'] as const) {
+        const before = offline.fetched.length
+        const answer = await call(cache)
+        said.push(
+            `${cache}: ${answer?.headers.has('abide-kept')} ${offline.fetched.length - before}`,
+        )
+    }
+    expect(said).toEqual(['force-cache: true 0', 'default: true 1'])
+})
+
+// 45.19 — A COPY STANDS IN FOR A NETWORK GIVING NOTHING ONLY WITHIN ITS stale-if-error, and never
+// where must-revalidate says it may not. THE REVERT: answer `saved` in the worker's `answer` catch
+// whenever there is one; the week-old copy and the must-revalidate one are both answered.
+test('a copy stands in for no network only within its stale-if-error — 45.19', async () => {
+    let online = true
+    const ages: Record<string, [string, number]> = {
+        '/recent': ['private, stale-if-error=600', 60],
+        '/old': ['private, stale-if-error=600', 6000],
+        '/strict': ['private, must-revalidate, stale-if-error=600', 60],
+    }
+    const offline = await worker(MANIFEST, (request) => {
+        if (!online) throw new TypeError('Failed to fetch')
+        const [control, age] = ages[new URL(request.url).pathname] as [
+            string,
+            number,
+        ]
+        return aged('kept', control, age)
+    })
+    const get = (path: string) =>
+        offline.dispatch('fetch', { request: new Request(`${ORIGIN}${path}`) })
+    for (const path of Object.keys(ages)) await get(path)
+    online = false
+    const said: string[] = []
+    for (const path of Object.keys(ages))
+        said.push(`${path}: ${(await get(path))?.type}`)
+    expect(said).toEqual(['/recent: default', '/old: error', '/strict: error'])
+})
+
+// 45.20 — A CALL ASKING PAST EVERY CACHE IS THE NETWORK'S ALONE: a refresh offline is refused (and
+// 7.19 serves what the copy held), never answered with the saved copy as though it were new. A
+// navigation is not one: a reload offline still opens what was saved. THE REVERT: drop the `bypass`
+// test from the worker's `answer`; the fresh copy is answered online without a fetch, and offline
+// the refresh reads `kept`.
+test('a no-cache call is answered by the network alone, a navigation still from the copy — 45.20', async () => {
+    let online = true
+    const offline = await worker(MANIFEST, () => {
+        if (!online) throw new TypeError('Failed to fetch')
+        return aged('kept', 'private, max-age=60, stale-if-error=600')
+    })
+    const refresh = () =>
+        offline.dispatch('fetch', {
+            request: new Request(`${ORIGIN}/data`, { cache: 'no-cache' }),
+        })
+    await offline.dispatch('fetch', { request: new Request(`${ORIGIN}/data`) })
+    await offline.navigate('/')
+    const before = offline.fetched.length
+    await refresh()
+    expect(`fetched: ${offline.fetched.length - before}`).toBe('fetched: 1')
+    online = false
+    expect((await refresh())?.type).toBe('error')
+    const reload = await offline.dispatch('fetch', {
+        request: new Request(`${ORIGIN}/`, {
+            cache: 'no-cache',
+            ...({ mode: 'navigate' } as RequestInit),
+        }),
+    })
+    expect(await reload?.text()).toBe('kept')
+})
+
+// 45.21 — THE NETWORK IS ASKED PAST THE BROWSER'S OWN CACHE, which keeps the same answers under the
+// same headers and would hand a revalidation the copy it means to replace: a call, a page, and the
+// open windows' pages as the worker activates. THE REVERT: pass `request` unchanged to `fetch` in
+// `fromNetwork`; the call is asked `default`.
+test('the worker asks the network with no-cache — 45.21', async () => {
+    const offline = await worker(MANIFEST, () => aged('kept', KEPT))
+    offline.scope.windows.push({ url: `${ORIGIN}/open` })
+    await offline.dispatch('activate')
+    await offline.dispatch('fetch', { request: new Request(`${ORIGIN}/data`) })
+    await offline.navigate('/')
+    expect(offline.fetched).toEqual([
+        `no-cache ${ORIGIN}/open`,
+        `no-cache ${ORIGIN}/data`,
+        `no-cache ${ORIGIN}/`,
+    ])
+})
+
+// 45.22 — A COPY KEPT SAYS SO, and when the server answered it; the network's answer says nothing. THE
+// REVERT: return `saved` in place of `marked(saved)` for a fresh copy in the worker's `answer`; the
+// second read carries no `abide-kept`.
+test('an answer from a kept copy carries abide-kept with its date — 45.22', async () => {
+    const offline = await worker(MANIFEST, () =>
+        aged('tile', 'private, max-age=60', 30),
+    )
+    const get = () =>
+        offline.dispatch('fetch', {
+            request: new Request(`${ORIGIN}/tile`),
+        })
+    const fromNetwork = await get()
+    const fromKept = await get()
+    expect(fromNetwork?.headers.get('abide-kept')).toBeNull()
+    expect(fromKept?.headers.get('abide-kept')).toBe(
+        fromKept?.headers.get('date') as string,
+    )
+    expect(await fromKept?.text()).toBe('tile')
+})
+
+// 45.23 — A PAGE IS ASKED FOR AS ONE THE WORKER KEEPS, so the server writes the early calls a later
+// open of it starts (41.30), and as `open` where the navigation opens that very answer, which then
+// hydrates from what its render seeded (41.29) — a page revalidated behind its copy, or saved as the
+// worker activates, is opened by nobody. A call is asked for as it was made. THE REVERT: drop the
+// `KEEP` header from `fromNetwork`'s page request; the navigation is asked without it. Pass `page`
+// for `opened` behind the copy in `answer`; the revalidation is asked `open`.
+test('the worker asks for a page it keeps with abide-keep, naming open where the navigation opens it — 45.23', async () => {
+    const kept: string[] = []
+    const offline = await worker(MANIFEST, (request) => {
+        kept.push(
+            `${new URL(request.url).pathname} ${request.headers.get('abide-keep')}`,
+        )
+        return aged('kept', KEPT)
+    })
+    offline.scope.windows.push({ url: `${ORIGIN}/open` })
+    await offline.dispatch('activate')
+    await offline.navigate('/')
+    await offline.navigate('/')
+    await offline.dispatch('fetch', { request: new Request(`${ORIGIN}/data`) })
+    expect(kept).toEqual(['/open 1', '/ open', '/ 1', '/data null'])
 })
 
 // 45.4 — SAVED ONLY FROM A 200 THAT IS NOT A STREAM. THE REVERT: drop the status check from `kept`;
@@ -347,6 +577,28 @@ test("a new build's worker drops what the last one saved, and saves the open pag
     )
 })
 
+// 45.4, 45.13 — AN OPEN PAGE THAT NOW REDIRECTS IS NOT SAVED as the worker activates: a redirect followed
+// would save where it led — a sign-in page, for a caller signed out since — under the address it was
+// asked at, which a navigation there offline would then open. Asked as a navigation's page is, its
+// redirect is the page's to follow, and no 200. THE REVERT: drop `redirect: 'manual'` from the
+// worker's `pageRequest`; `/open` is saved, holding the sign-in page.
+test('an open page that now redirects is not saved as the worker activates — 45.13, 45.4', async () => {
+    const redirecting = (request: Request): Response =>
+        request.redirect === 'manual'
+            ? new Response(null, {
+                  status: 302,
+                  headers: { location: `${ORIGIN}/login` },
+              })
+            : new Response('<p>sign in</p>', {
+                  headers: { 'content-type': 'text/html' },
+              })
+    const offline = await worker(MANIFEST, redirecting)
+    offline.scope.windows.push({ url: `${ORIGIN}/open` })
+    await offline.dispatch('install')
+    await offline.dispatch('activate')
+    expect(offline.saved('abide:saved')).toEqual([])
+})
+
 // 45.9 — THE WORKER THAT REMOVES ITSELF drops both stores and unregisters. THE REVERT: drop the
 // `unregister` from it; this reads `unregistered: false`.
 test('the removing worker drops what was saved and unregisters — 45.9', async () => {
@@ -432,6 +684,79 @@ test('ABIDE_OFFLINE decides the worker abide start answers, whether a page regis
         'FALSE: tag false, saving false, removing true, linked false, manifest 404',
         'yes: tag true, saving true, removing false, linked true, manifest 192x192',
         'undefined: tag true, saving true, removing false, linked true, manifest 192x192',
+    ])
+}, 60_000)
+
+// 21.22, 21.23, 21.11, 21.17 — WHERE THE WORKER IS REGISTERED, WHAT IT MAY KEEP SAYS SO in its own
+// header, for the worker and the browser's cache alike: a page, a value a `GET` answered and a public
+// file stale but servable for a week, a `ttl`'s `max-age` ahead of the same windows, and none of it
+// for a refusal, a stream or a mutation. With the worker off, every answer is as it was. THE REVERT:
+// drop the `kept` write in `answerOutcome`; `/getNote` keeps `no-store` with the worker on.
+test('a page, a GET and a public file default to stale-while-revalidate where the worker is registered — 21.22, 21.23, 21.11, 21.17', async () => {
+    const IMPORTS = `import { GET, POST, jsonl } from '@abide/abide/server'\nimport { refuse } from '@abide/abide'\n\n`
+    const app = appFixture({
+        'layout.abide':
+            '<html lang="en"><head></head><body><slot/></body></html>',
+        'index.abide': '<main>home</main>',
+        'getNote.ts': `${IMPORTS}export default GET(() => ({ note: 'kept' }))\n`,
+        'getClock.ts': `${IMPORTS}export default GET(() => ({ at: 1 }), { global: true, ttl: 90_500 })\n`,
+        'getForever.ts': `${IMPORTS}export default GET(() => ({ at: 1 }), { global: true, ttl: Infinity })\n`,
+        'getMissing.ts': `${IMPORTS}export default GET(() => refuse(404))\n`,
+        'getLines.ts': `${IMPORTS}export default GET(() => jsonl([1, 2]))\n`,
+        'addNote.ts': `${IMPORTS}export default POST(() => ({ added: true }))\n`,
+    })
+    await Bun.write(`${app}/public/logo.txt`, 'logo')
+    const built = await buildApp(app)
+    expect(built.exitCode).toBe(0)
+    const said: string[] = []
+    for (const setting of ['0', undefined]) {
+        const { base, stop } = await startApp(app, {
+            ...process.env,
+            ABIDE_OFFLINE: setting,
+        })
+        try {
+            for (const [path, method] of [
+                ['/', 'GET'],
+                ['/getNote', 'GET'],
+                ['/getClock', 'GET'],
+                ['/getForever', 'GET'],
+                ['/getMissing', 'GET'],
+                ['/getLines', 'GET'],
+                ['/addNote', 'POST'],
+                ['/logo.txt', 'GET'],
+            ] as const) {
+                const answer = await fetch(`${base}${path}`, {
+                    method,
+                    headers: { 'content-type': 'application/json' },
+                    ...(method === 'POST' ? { body: '{}' } : {}),
+                })
+                await answer.arrayBuffer()
+                said.push(
+                    `${setting} ${path}: ${answer.headers.get('cache-control')?.replace(/max-age=(?:90|89)\b/, 'max-age=<ttl>')}`,
+                )
+            }
+        } finally {
+            stop()
+        }
+    }
+    const KEPT = 'stale-while-revalidate=604800, stale-if-error=604800'
+    expect(said).toEqual([
+        '0 /: private, no-store',
+        '0 /getNote: private, no-store',
+        '0 /getClock: private, max-age=<ttl>',
+        '0 /getForever: private, no-store',
+        '0 /getMissing: private, no-store',
+        '0 /getLines: private, no-store',
+        '0 /addNote: private, no-store',
+        '0 /logo.txt: public, max-age=0, must-revalidate',
+        `undefined /: private, ${KEPT}`,
+        `undefined /getNote: private, ${KEPT}`,
+        `undefined /getClock: private, max-age=<ttl>, ${KEPT}`,
+        `undefined /getForever: private, ${KEPT}`,
+        'undefined /getMissing: private, no-store',
+        'undefined /getLines: private, no-store',
+        'undefined /addNote: private, no-store',
+        `undefined /logo.txt: public, max-age=0, ${KEPT}`,
     ])
 }, 60_000)
 

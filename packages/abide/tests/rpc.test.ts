@@ -265,6 +265,7 @@ test('every rpc carries the transport refusal in its failures — 16.8', async (
         followable: false,
         version: undefined,
         life: undefined,
+        kept: false,
         text: 'the handler threw',
         bytes: undefined,
         body: undefined,

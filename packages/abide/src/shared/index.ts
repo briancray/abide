@@ -55,6 +55,7 @@ export {
 // modules into the static closure of the entry every page imports.
 export { navigate } from './navigate.ts'
 export { online } from './online.ts'
+export { outbox, type QueuedCall } from './outbox.ts'
 export { onMenu } from './onMenu.ts'
 export { type Principal, principal } from './principal.ts'
 // EMITTED CODE'S: a prop the child writes (33.6, 33.7).
@@ -93,6 +94,7 @@ export {
     type Shared,
     type Store,
     structural,
+    synced,
     type Transformer,
     watch,
 } from './reactive/index.ts'

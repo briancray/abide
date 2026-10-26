@@ -83,6 +83,32 @@ type Entry = {
 // which is how a refresh of it is told from a call the render never made (41.12).
 const BUFFER = new Map<string, Map<object, Map<string, Entry[]>>>()
 
+/** A render's one report of each call (1.8): the call's key where it is new, `undefined` where not. */
+function reportsOnce(): (rpc: object, args: unknown) => string | undefined {
+    const reported = new Map<object, Set<string>>()
+    return (rpc, args) => {
+        const key = seedKey(args)
+        if (key === undefined) return undefined
+        let keys = reported.get(rpc)
+        if (keys === undefined) {
+            keys = new Set()
+            reported.set(rpc, keys)
+        }
+        if (keys.has(key)) return undefined
+        keys.add(key)
+        return key
+    }
+}
+
+/**
+ * 41.30 — the seed sink of a page the worker keeps: each call reported once, for the early-call
+ * script, and none of them left in the seed buffer (41.29) — the page is opened later, if at all.
+ */
+export function callsOnly(): PageRender['seed'] {
+    const firstReport = reportsOnce()
+    return (rpc, args) => firstReport(rpc, args) !== undefined
+}
+
 /**
  * The sink a page's render scope reports each call into, for one caller.
  *
@@ -91,17 +117,10 @@ const BUFFER = new Map<string, Map<object, Map<string, Entry[]>>>()
  * browser's `Rpc` joins a standing call (1.8).
  */
 export function seedFor(caller: string): PageRender['seed'] {
-    const reported = new Map<object, Set<string>>()
+    const firstReport = reportsOnce()
     return (rpc, args, reached) => {
-        const key = seedKey(args)
+        const key = firstReport(rpc, args)
         if (key === undefined) return false
-        let keys = reported.get(rpc)
-        if (keys === undefined) {
-            keys = new Set()
-            reported.set(rpc, keys)
-        }
-        if (keys.has(key)) return false
-        keys.add(key)
         const entry: Entry = {
             rpc,
             key,

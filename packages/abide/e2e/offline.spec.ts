@@ -45,7 +45,49 @@ test.beforeAll(async ({}, testInfo) => {
     mkdirSync(`${app}/about`, { recursive: true })
     mkdirSync(`${app}/never`, { recursive: true })
     mkdirSync(`${app}/note`, { recursive: true })
-    mkdirSync(`${app}/data`, { recursive: true })
+    mkdirSync(`${app}/data/lib`, { recursive: true })
+    mkdirSync(`${app}/outbox`, { recursive: true })
+    // 46 — A WRITE MADE OFFLINE, counted by the key it is sent under, so a call delivered twice says so.
+    writeFileSync(
+        `${app}/data/lib/added.ts`,
+        'export const added = new Map<string, number>()\n',
+    )
+    writeFileSync(
+        `${app}/data/addNote.ts`,
+        `import { POST, request } from '@abide/abide/server'
+import { added } from './lib/added.ts'
+
+export default POST((args: { text: string }) => {
+    const key = request().headers.get('idempotency-key') ?? ''
+    added.set(key, (added.get(key) ?? 0) + 1)
+    return { text: args.text, from: 'server' }
+})
+`,
+    )
+    writeFileSync(
+        `${app}/data/getAdded.ts`,
+        `import { GET } from '@abide/abide/server'
+import { added } from './lib/added.ts'
+
+export default GET(() => [...added.values()])
+`,
+    )
+    writeFileSync(
+        `${app}/outbox/index.abide`,
+        `<script>
+import { outbox, reactive } from '@abide/abide'
+import addNote from '#src/data/addNote.ts'
+
+let said = reactive('')
+
+async function add() {
+    const call = addNote({ text: 'hi' }, { offline: (args) => ({ text: args.text, from: 'device' }) })
+    said = JSON.stringify(await call)
+}
+</script>
+
+<main id="outboxed"><button id="add" onclick={add}>add</button><p id="said">{said}</p><p id="waiting">{outbox().length}</p><p id="kept">{outbox().map((call) => call.value().from + (call.value.synced() ? ' saved' : ' not saved')).join(',')}</p></main>`,
+    )
     writeFileSync(
         `${app}/data/getNote.ts`,
         `import { GET } from '@abide/abide/server'
@@ -54,15 +96,24 @@ export default GET(() => ({ text: 'a saved note' }))
 `,
     )
     writeFileSync(
+        `${app}/data/getTags.ts`,
+        `import { GET } from '@abide/abide/server'
+
+export default GET(() => ['kept', 'offline'])
+`,
+    )
+    writeFileSync(
         `${app}/note/index.abide`,
         `<script>
 import { reactive } from '@abide/abide'
 import getNote from '#src/data/getNote.ts'
+import getTags from '#src/data/getTags.ts'
 
 const note = reactive(() => getNote())
+const tags = getTags()
 </script>
 
-<main id="note"><p id="text">{note().text}</p></main>`,
+<main id="note"><p id="text">{note().text}</p><ul id="tags">{#for tag of tags.ready() ? tags : []}<li>{tag}</li>{/for}</ul></main>`,
     )
     writeFileSync(
         `${app}/package.json`,
@@ -222,4 +273,95 @@ test("a page's data loads again offline — 45.3", async ({ page, context }) => 
     } finally {
         await context.setOffline(false)
     }
+})
+
+// 45.18, 16.80 — A NETWORK THAT HANGS RATHER THAN FAILS opens a kept page and its data at once: the
+// server is stopped, so a connection is accepted and never answered — one bar of signal, which
+// `setOffline` cannot stand in for, since it fails a request at once. THE REVERT: drop the
+// `life.revalidate` arm from the worker's `answer`; the reload waits on the network, and `#text`
+// never shows inside the timeout.
+test('a page and its data open at once while the network hangs — 45.18', async ({
+    page,
+}) => {
+    await visit(page, '/')
+    await visit(page, '/note', ['/data/getNote'])
+    server?.kill('SIGSTOP')
+    try {
+        await page.reload({ waitUntil: 'commit', timeout: 3_000 })
+        await expect(page.locator('#text')).toHaveText('a saved note', {
+            timeout: 3_000,
+        })
+    } finally {
+        server?.kill('SIGCONT')
+    }
+})
+
+// 46.20 — A PAGE WITH NO CALL KEPT OPENS NO DATABASE: the outbox loads with every handler, and reading
+// the line there would cost every such page an IndexedDB open and read before it hydrates. THE
+// REVERT: drop the `marked()` test from `listen` in `#ui/outboxQueue.ts`; `abide-outbox` is opened.
+test('a page with a handler and no call kept opens no outbox database — 46.20', async ({
+    page,
+}) => {
+    await visit(page, '/outbox')
+    await expect(page.locator('#waiting')).toHaveText('0')
+    const opened = await page.evaluate(async () =>
+        (await indexedDB.databases()).map((database) => database.name),
+    )
+    expect(opened).not.toContain('abide-outbox')
+})
+
+// 46.2, 46.7, 46.10, 16.82 — A CALL MADE OFFLINE IS KEPT ACROSS A RELOAD, in the browser's own
+// IndexedDB, and delivered once when the network is back: the server counts one send under its key.
+// THE REVERT: keep the line in memory alone (`memoryShelf` whatever the browser has); the reload
+// shows 0 waiting and the call is never delivered. And 46.18, 46.19 — after the reload the call still
+// carries its value, rebuilt from what was kept. THE REVERT: rebuild it in `valueStanding` as
+// `reactive(() => settled)`; it reads saved.
+test('a call made offline survives a reload and is delivered once online — 46.2, 46.7', async ({
+    page,
+    context,
+}) => {
+    await visit(page, '/')
+    await visit(page, '/outbox')
+    await context.setOffline(true)
+    try {
+        await page.click('#add')
+        await expect(page.locator('#said')).toHaveText(
+            JSON.stringify({ text: 'hi', from: 'device' }),
+        )
+        await expect(page.locator('#waiting')).toHaveText('1')
+        await expect(page.locator('#kept')).toHaveText('device not saved')
+        await page.reload()
+        await expect(page.locator('#waiting')).toHaveText('1')
+        // 46.18, 46.19 — no page holds the call's value now, so the outbox rebuilds it.
+        await expect(page.locator('#kept')).toHaveText('device not saved')
+    } finally {
+        await context.setOffline(false)
+    }
+    await expect(page.locator('#waiting')).toHaveText('0')
+    const counts = (await (
+        await fetch(`${base}/data/getAdded`)
+    ).json()) as number[]
+    expect(counts).toEqual([1])
+})
+
+// 45.23, 41.30 — A PAGE OPENED FROM ITS KEPT COPY STARTS ITS CALLS EARLY, as the page it was kept from
+// did, so it hydrates with its data rather than ahead of it. THE REVERT: drop the `KEEP` header from
+// `fromNetwork`'s page request; the kept page carries no early call, and the reload hydrates before
+// the note has landed, warning that client and server disagree.
+test('a page reopened from its kept copy hydrates with its data — 45.23, 41.30', async ({
+    page,
+}) => {
+    const warned: string[] = []
+    page.on('console', (message) => {
+        if (message.text().includes('abide:hydrate'))
+            warned.push(message.text())
+    })
+    await visit(page, '/')
+    await visit(page, '/note', ['/data/getNote', '/data/getTags'])
+    // Kept by the visit above, under the header that has the server write its early calls.
+    await page.reload()
+    await expect(page.locator('#text')).toHaveText('a saved note')
+    await page.reload()
+    await expect(page.locator('#text')).toHaveText('a saved note')
+    expect(warned).toEqual([])
 })

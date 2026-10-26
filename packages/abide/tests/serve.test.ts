@@ -533,7 +533,8 @@ test('a public file revalidates against an etag off its bytes — 21.12, 21.13, 
     const etag = first.headers.get('etag')
     expect(etag).toBeTruthy()
     expect(first.headers.get('cache-control')).toBe(
-        'public, max-age=0, must-revalidate',
+        // 21.23 — the fixture is served built, where the worker is registered.
+        'public, max-age=0, stale-while-revalidate=604800, stale-if-error=604800',
     )
 
     const again = await Bun.fetch(`${base}/robots.txt`, {
@@ -595,7 +596,8 @@ test('a public file answers a range 206 with the public headers — 16.35, 21.12
     expect(ranged.headers.get('content-range')).toBe('bytes 0-9/23')
     expect(await ranged.text()).toBe('User-agent')
     expect(ranged.headers.get('cache-control')).toBe(
-        'public, max-age=0, must-revalidate',
+        // 21.23 — the fixture is served built, where the worker is registered.
+        'public, max-age=0, stale-while-revalidate=604800, stale-if-error=604800',
     )
     expect(ranged.headers.get('etag')).toBe(headers.get('etag'))
 })

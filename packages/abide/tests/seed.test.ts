@@ -278,7 +278,7 @@ test('entries under one key are taken oldest first, one a call — 41.16, 41.18'
 test('the head starts every call the page made, before its markup — 41.20', async () => {
     const html = await (await Bun.fetch(`${base}/`)).text()
     const script =
-        /<script type="application\/json">[\s\S]*?<\/script><script>\(function\(s,c\)[\s\S]*?<\/script>/.exec(
+        /<script type="application\/json">[\s\S]*?<\/script><script>\(function\(s,c,w\)[\s\S]*?<\/script>/.exec(
             html,
         )?.[0] ?? ''
     expect(script).toContain('/invoices/getInvoice?id=4021')

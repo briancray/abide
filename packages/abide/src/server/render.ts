@@ -379,8 +379,9 @@ function earlyCallScript(calls: PageCall[]): string {
 // THE RUNNER RECORDS, IT NEVER CLASSIFIES: the `Response`, and a painted call's body read to its end
 // — the one decision is `painted`, which the server made. `answerOf` reads the record as it reads an
 // answer it fetched, so no second reading of a content type lives in a string no typecheck reaches.
-// The shape is `EarlyCall`'s.
-export const EARLY_CALL_RUNNER = `(function(s,c){for(var i=0;i<c.length;i++)(function(k,u,n,h){var e=s[k]={painted:h,response:void 0,bytes:void 0};e.promise=fetch(u,n).then(function(r){return h?r.arrayBuffer().then(function(b){e.bytes=b;e.response=r}):e.response=r}).catch(function(){})})(c[i][0],c[i][1],c[i][2],c[i][3])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),JSON.parse(document.currentScript.previousElementSibling.textContent))`
+// The shape is `EarlyCall`'s. 16.80 — a page the worker answers has it answer the page's calls too,
+// which the browser alone can tell: the server cannot see whether a worker will replay this page.
+export const EARLY_CALL_RUNNER = `(function(s,c,w){for(var i=0;i<c.length;i++)(function(k,u,n,h){if(w)n.cache='force-cache';var e=s[k]={painted:h,response:void 0,bytes:void 0};e.promise=fetch(u,n).then(function(r){return h?r.arrayBuffer().then(function(b){e.bytes=b;e.response=r}):e.response=r}).catch(function(){})})(c[i][0],c[i][1],c[i][2],c[i][3])})(self.${EARLY_CALLS}||(self.${EARLY_CALLS}={}),JSON.parse(document.currentScript.previousElementSibling.textContent),(self.navigator.serviceWorker||{}).controller)`
 
 /** The early-call runner's hash, as `script-src` names it. 29.9. */
 export const EARLY_CALL_HASH = `'sha256-${new Bun.CryptoHasher('sha256').update(EARLY_CALL_RUNNER).digest('base64')}'`

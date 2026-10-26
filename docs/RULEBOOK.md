@@ -84,6 +84,7 @@ These are immutable. A change to them is a change to what this document is.
 - [43. The measurement harness](#43)
 - [44. The assistant](#44)
 - [45. Offline](#45)
+- [46. Outbox](#46)
 
 ## Terms
 
@@ -201,6 +202,14 @@ subscribe it to the value.
 3.8 A streaming producer MUST report `s.ready` true from its first chunk.
 
 3.9 A value with no producer MUST report `s.busy` false.
+
+3.10 A `set` or a `patch` on a value with a body that moves what it holds MUST make `s.synced` false.
+
+3.11 A production the value's body, or the server a copy follows, makes MUST make `s.synced` true.
+
+3.12 A value with no body MUST report `s.synced` true.
+
+3.13 A value MUST report `s.synced` false where a value it read or adopts does.
 
 # 4. Writes and gates
 
@@ -739,6 +748,9 @@ every value a mutation's `declare` built.
 13.17 A bare `invalidate` or `refresh`, or one over a set of `tags`, MUST NOT invalidate a value a
 mutation's `declare` built while its write is in flight.
 
+13.18 `synced` over a selection MUST be true where every entry in it is synced, and a bare `synced`
+where every value it sweeps is.
+
 # 14. Tracking
 
 14.1 A `Reactive` MUST be tracked only where something downstream will be rebuilt from it.
@@ -1087,6 +1099,26 @@ sets MUST be refused 413, whether its length was declared or streamed.
 16.79 An `Rpc` call in a browser that gets no answer, and whose `signal` has not aborted, MUST refuse
 with `HttpError` at 503.
 
+16.80 A `GET` call in a browser MUST be sent with `cache` `force-cache` where the page has loaded no
+answer for its args and the worker `ABIDE_OFFLINE` turns on answers the page, and with `no-cache`
+otherwise.
+
+16.81 A call in a browser given `offline` that gets no answer, or an answer at 502, 503 or 504, MUST
+settle to what `offline` returns for its args, as a write made here (3.10), save a `GET` whose copy
+already holds an answer for them.
+
+16.82 A mutation call that 16.81 settles MUST be queued in `outbox`, and MUST refuse as it was
+answered where `outbox` cannot keep it.
+
+16.83 A mutation call given `offline` MUST be queued in `outbox`, and not sent, while `outbox` holds
+a call not yet delivered.
+
+16.84 `offline` MUST be inert on a server.
+
+16.85 A call in a browser answered from a copy the worker `ABIDE_OFFLINE` turns on kept MUST settle
+as a write made here (3.10), and a `GET`'s copy that 16.81 or this settles MUST be loaded again once
+`online` is true.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
@@ -1213,6 +1245,9 @@ MUST NOT count toward 18.31's bound.
 again at once where `online` becomes true or the page becomes visible.
 
 18.34 A browser's connection to the socket mux MUST NOT be opened again while `online` is false.
+
+18.35 A subscriber's copy of a `GET` written here (3.10) MUST NOT take a value or a patch sent to it
+while `outbox` holds a call not yet delivered, and MUST read the value again once it holds none.
 
 # 19. Mount paths and schemas
 
@@ -1356,7 +1391,8 @@ app at boot, naming the handler.
 
 21.2 Every response MUST carry `traceresponse`, a refusal included.
 
-21.3 A page, an rpc answer and a refusal MUST default to `cache-control: private, no-store`.
+21.3 A page, an rpc answer and a refusal MUST default to `cache-control: private, no-store`, save
+where 21.22 has it.
 
 21.4 `/__abide/openapi.json` and `/__abide/mcp` MUST answer `cache-control: no-store`. `/__abide/health`
 and `/__abide/principal` are answered as handlers (25.3) and carry 21.3's `private, no-store`.
@@ -1374,10 +1410,11 @@ app MUST NOT be required to state the duration a second time.
 
 21.10 A write through `response` MUST override every header and the status the answer carries.
 
-21.11 The `max-age` 21.8 derives MUST replace 21.3's `no-store`, and 21.3 MUST decide the rest
-of that header.
+21.11 The `max-age` 21.8 derives MUST replace 21.3's `no-store`, or lead 21.22's directives, and the
+rest of that header MUST be the one 21.3 or 21.22 gives.
 
-21.12 A file under a `public` directory MUST answer `cache-control: public, max-age=0, must-revalidate`.
+21.12 A file under a `public` directory MUST answer `cache-control: public, max-age=0, must-revalidate`,
+save where 21.23 has it.
 
 21.13 A file under a `public` directory MUST answer an `etag` derived from its bytes.
 
@@ -1390,7 +1427,8 @@ held answered it, `Started` where it is a stream timed to its first chunk, and `
 
 21.16 The `max-age` 21.8 derives MUST be what is left of the answered production's `ttl`.
 
-21.17 A `GET` over a `global` `reactive` whose `ttl` is `Infinity` MUST keep 21.3's `no-store`.
+21.17 A `GET` over a `global` `reactive` whose `ttl` is `Infinity` MUST keep the `cache-control` 21.3
+or 21.22 gives it.
 
 21.18 A page MUST default to `content-security-policy: frame-ancestors 'none'`.
 
@@ -1400,6 +1438,17 @@ held answered it, `Started` where it is a stream timed to its first chunk, and `
 time those rungs took apart from what they wrapped.
 
 21.21 The `Direct` duration 21.15 carries MUST NOT include the time 21.20 counts.
+
+21.22 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, a page, and the answer of
+a `GET` of the app's own that is neither a refusal nor a stream 16.32 frames, MUST default to `cache-control: private,
+stale-while-revalidate=604800, stale-if-error=604800`.
+
+21.23 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, a file under a `public`
+directory MUST answer `cache-control: public, max-age=0, stale-while-revalidate=604800,
+stale-if-error=604800`.
+
+21.24 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, an answer carrying the
+`abide-principal` header 26.24 has it carry MUST carry `clear-site-data: "cache"`.
 
 # 22. Request-scoped ambients
 
@@ -2954,7 +3003,10 @@ adopts the page, however early its answer arrived.
 41.28 A `render` MUST let the turn's queued microtasks run between setting up a `<Name/>` whose setup
 made an `Rpc` call and building that component's markup.
 
-41.29 A `render` answering a request whose `sec-fetch-dest` is `empty` MUST NOT fill the seed buffer.
+41.29 A `render` answering a request whose `sec-fetch-dest` is `empty` MUST NOT fill the seed buffer,
+save one whose `abide-keep` header names `open`.
+
+41.30 A `render` answering a request carrying `abide-keep` MUST write 41.20's script.
 
 # 42. The app object
 
@@ -3207,12 +3259,11 @@ and the command it yields MUST pair that one.
 45.2 The worker `ABIDE_OFFLINE` turns on MUST be served below `/__abide`, and MUST be allowed the
 scope of the app's mount.
 
-45.3 The worker `ABIDE_OFFLINE` turns on MUST answer a page, and every other `GET` of the app's own
-origin, with the network's answer, and with the copy it saved of that address where the network
-gives none.
+45.3 The worker `ABIDE_OFFLINE` turns on MUST save an answer to a page, or to any other `GET` of the
+app's own origin, only where its `cache-control` lets a private cache store it.
 
-45.4 The worker `ABIDE_OFFLINE` turns on MUST save only an answer of 200 that is neither a stream
-16.32 frames nor a binary 16.34 types.
+45.4 The worker `ABIDE_OFFLINE` turns on MUST save only an answer of 200, to the address it asked
+rather than one a redirect led to, that is neither a stream 16.32 frames nor a binary 16.34 types.
 
 45.5 The worker `ABIDE_OFFLINE` turns on MUST save every file of the build's bundle as it installs.
 
@@ -3248,3 +3299,78 @@ the size it is drawn at.
 
 45.16 The worker `ABIDE_OFFLINE` turns on MUST leave to the network the request 30.15 makes, a
 request carrying `range`, and one accepting `text/event-stream`.
+
+45.17 The worker `ABIDE_OFFLINE` turns on MUST answer a request with the copy it saved of its address,
+and not ask the network, while that copy is fresh by its `cache-control`.
+
+45.18 The worker `ABIDE_OFFLINE` turns on MUST answer a request with the copy it saved of its address,
+and ask the network for the copy it saves next save where the request's `cache` is `force-cache`,
+while that copy is stale by no more than its `stale-while-revalidate`.
+
+45.19 The worker `ABIDE_OFFLINE` turns on MUST answer a request 45.17 and 45.18 leave to the network
+with the network's answer, and with the copy it saved of that address where the network gives none
+and that copy is stale by no more than its `stale-if-error`.
+
+45.20 The worker `ABIDE_OFFLINE` turns on MUST answer a request that is not a navigation, and whose
+`cache` is `no-cache`, `reload` or `no-store`, with the network's answer alone.
+
+45.21 The worker `ABIDE_OFFLINE` turns on MUST ask the network past the browser's own cache.
+
+45.22 The worker `ABIDE_OFFLINE` turns on MUST mark an answer it gives from a copy it saved with an
+`abide-kept` header naming that copy's `date`.
+
+45.23 The worker `ABIDE_OFFLINE` turns on MUST ask for a page it saves with an `abide-keep` header,
+naming `open` where its answer is the one a navigation opens.
+
+# 46. Outbox
+
+46.1 `outbox` MUST answer, oldest first, every call queued in it that was neither delivered nor
+discarded, narrowed to the handler a selection names and the args a pattern matches.
+
+46.2 `outbox` MUST keep its calls across a reload, in IndexedDB where the browser has it.
+
+46.3 `outbox` MUST send its calls oldest first, one at a time.
+
+46.4 A call `outbox` sends that gets no answer, or an answer at 502, 503 or 504, MUST stay in
+`outbox`, and MUST hold back the calls after it until it is sent again.
+
+46.5 A call `outbox` sends that is refused MUST stay in `outbox`, its `value` refused as the server
+refused it, and MUST NOT hold back the calls after it.
+
+46.6 A call `outbox` sends that is refused at 401 MUST hold back every call after it until
+`principal` changes or a call's `retry` is called.
+
+46.7 A call `outbox` delivers MUST leave it, and its `value` MUST take its answer as 3.11 has it.
+
+46.8 `outbox` MUST send as a page loads, where `online` becomes true, where the page becomes visible,
+and after a send that got no answer, waiting from one second to sixty, doubling.
+
+46.9 Every tab of an app MUST show one `outbox`, and one tab at a time MUST send from it.
+
+46.10 A call queued in `outbox` MUST carry one `idempotency-key` header on every send, its first
+included.
+
+46.11 `busy` over a handler MUST be true while a call `outbox` sends for it is in flight, and a bare
+`busy` while any call `outbox` sends is.
+
+46.12 A queued call's `retry` MUST send it again at once, and MUST clear its `value`'s refusal as a
+write made here (3.10).
+
+46.13 A queued call's `discard` MUST drop it from `outbox`, sent or not.
+
+46.14 `outbox` MUST ask the browser to keep the app's storage once it queues a call.
+
+46.15 On a server `outbox` MUST answer no calls.
+
+46.16 `outbox` over a selection that names no handler MUST answer no calls.
+
+46.17 Reading `outbox` MUST subscribe the reader to the calls it answers.
+
+46.18 Each call `outbox` answers MUST carry, as `value`, the `Reactive` its call settled, rebuilt from
+what was kept where the page holds none.
+
+46.19 A `value` 46.18 rebuilds MUST hold the stand-in its call settled to, where the browser could
+keep it, as a write made here (3.10).
+
+46.20 A page MUST NOT open the store 46.2 keeps `outbox` in where `outbox` held no call when it last
+changed.

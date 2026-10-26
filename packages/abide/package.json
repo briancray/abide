@@ -57,7 +57,9 @@
     "sideEffects": [
         "./src/server/**",
         "./src/shared/WORK.ts",
-        "./src/shared/reactive/Reactive.ts"
+        "./src/shared/outbox.ts",
+        "./src/shared/reactive/Reactive.ts",
+        "./src/ui/outboxQueue.ts"
     ],
     "dependencies": {
         "typescript": "^7.0.2"

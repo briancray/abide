@@ -119,11 +119,12 @@ middleware(async (next, { request: asked }) => {
 
 // 23.1 — A PAGE READS WHERE IT IS off `route`, and `online` answers true on a server (23.8).
 const WHERE = `<script>
-import { online, route } from '@abide/abide'
+import { busy, online, outbox, route } from '@abide/abide'
 </script>
 
 <main><p id="where">{route.name()}|{route.params().id}|{route.url().pathname}|{route.navigating()}|{online()}</p>
-<p id="named">{route.name.toUpperCase()}|{route.params.id}|{route.url.pathname}|{route.navigating ? 'moving' : 'still'}</p></main>`
+<p id="named">{route.name.toUpperCase()}|{route.params.id}|{route.url.pathname}|{route.navigating ? 'moving' : 'still'}</p>
+<p id="outbox">{outbox().map((call) => call.id).join(',') || 'none'}|{busy() ? 'sending' : 'idle'}</p></main>`
 
 let base = ''
 let stop = (): void => {}
@@ -479,7 +480,10 @@ test('every answer carries nosniff and traceresponse; a page its referrer policy
     expect(page.headers.get('referrer-policy')).toBe(
         'strict-origin-when-cross-origin',
     )
-    expect(page.headers.get('cache-control')).toBe('private, no-store')
+    // 21.22 — the fixture is served built, where the worker is registered.
+    expect(page.headers.get('cache-control')).toBe(
+        'private, stale-while-revalidate=604800, stale-if-error=604800',
+    )
 })
 
 // 21.18 — a page may not be framed unless the app says so. THE REVERT: drop the
@@ -539,6 +543,14 @@ test('a server-rendered page reads route and online — 23.1, 23.8', async () =>
 test('route.name, params, url and navigating are read by name — 31.16', async () => {
     const page = await (await Bun.fetch(`${base}/invoices/42`)).text()
     expect(page).toContain('/INVOICES/[ID]|42|/invoices/42|still')
+})
+
+// 46.15 — ON A SERVER THE OUTBOX ANSWERS NO CALLS, and nothing is in flight from it: both sides call
+// `outbox` by one name, and the server's has nothing to show. THE REVERT: answer a call from
+// `outbox` on a server; the page reads it where `none` is due.
+test('outbox answers no calls on a server — 46.15', async () => {
+    const page = await (await Bun.fetch(`${base}/invoices/42`)).text()
+    expect(page).toContain('<p id="outbox">none|idle</p>')
 })
 
 // 22.2, 22.3 — THE REQUEST'S COOKIES, READ AND WRITTEN, the writes collected onto the answer as one

@@ -17,7 +17,7 @@ export type RpcRequest = {
     url: string
     /** The JSON body of a mutation, or `undefined` where the args ride in the URL. */
     body: string | undefined
-    /** What `fetch` is handed: the method, the JSON content-type beside a body, and `no-cache`. */
+    /** What `fetch` is handed: the method, the JSON content-type beside a body, and its `cache`. */
     init: RequestInit
     key: string
 }
@@ -40,6 +40,7 @@ export function rpcRequest(
     method: Method,
     route: HandlerRoute | string,
     given: Record<string, unknown> | undefined,
+    cache: RequestCache = 'no-cache',
 ): RpcRequest {
     const { path, rest } = (
         typeof route === 'string' ? new HandlerRoute(route) : route
@@ -50,17 +51,20 @@ export function rpcRequest(
         const text = rest === undefined ? '' : queryText(rest)
         if (text !== '') url = `${url}?${text}`
     } else if (rest !== undefined) body = JSON.stringify(rest)
-    // 18.14 — A COPY IS ITS OWN CACHE and keeps its own `max-age`. What it asks the server is asked
-    // because it went stale or was invalidated, and the browser's HTTP cache, which hears neither,
-    // would answer it with the value it was dropping. `rpc.raw` is handed the same, under whatever
-    // `init` its caller passes. `no-cache` rather than `no-store`: a `fetch` the app writes itself to
-    // the same address still reads 21.8's `max-age`.
+    // 18.14 — A COPY IS ITS OWN CACHE and keeps its own `max-age`. What it asks the server once it
+    // holds an answer is asked because it went stale, was invalidated or refreshed, and a cache
+    // below it, which hears none of the three, would answer it with the value it was dropping — so
+    // `no-cache`. A page's first load in a page the worker answers is the browser's to switch to
+    // `force-cache` (16.80), where a kept copy is what opens the page without the network (45.18);
+    // the outbox's send asks `no-store`. `rpc.raw` is handed `no-cache`, under whatever `init` its
+    // caller passes. `no-cache` rather than `no-store`: a `fetch` the app writes itself to the same
+    // address still reads 21.8's `max-age`.
     const init: RequestInit =
         body === undefined
-            ? { method, cache: 'no-cache' }
+            ? { method, cache }
             : {
                   method,
-                  cache: 'no-cache',
+                  cache,
                   headers: { 'content-type': 'application/json' },
                   body,
               }

@@ -18,6 +18,7 @@ import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { HandlerRoute } from './HandlerRoute.ts'
 import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
 import { compose, type Middleware } from './Middleware.ts'
+import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
 import { principalRotated } from './principalRotated.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
 import {
@@ -56,8 +57,14 @@ import type { Schema } from './Schema.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
-/** What a call is handed beside its args (16.48). */
-export type CallOptions = { signal?: AbortSignal }
+/**
+ * What a call is handed beside its args: who may end its load (16.48), and what stands in for an
+ * answer a browser could not get (16.81).
+ */
+export type CallOptions<Args = unknown, Value = unknown> = {
+    signal?: AbortSignal
+    offline?(args: Args): Value
+}
 
 /**
  * A declared handler: callable for its `Reactive`, with the handler's own members and its mount.
@@ -71,8 +78,8 @@ export type CallOptions = { signal?: AbortSignal }
  */
 export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     ...args: undefined extends Args
-        ? [args?: Args, options?: CallOptions]
-        : [args: Args, options?: CallOptions]
+        ? [args?: Args, options?: CallOptions<Args, NoInfer<Value>>]
+        : [args: Args, options?: CallOptions<Args, NoInfer<Value>>]
 ) => Reactive<
     Value,
     Value,
@@ -88,6 +95,9 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
      */
     busy(pattern?: Partial<Args>): boolean
     ready(pattern?: Partial<Args>): boolean
+    synced(pattern?: Partial<Args>): boolean
+    /** 46.1 — the calls the outbox holds for this handler, narrowed by a pattern. */
+    outbox(pattern?: Partial<Args>): QueuedCall<Value>[]
     refresh(pattern?: Partial<Args>): void
     invalidate(pattern?: Partial<Args>): void
     isError<Name extends string>(
@@ -404,6 +414,7 @@ export function declare(method: Method): Declare {
                 args,
                 options?.signal,
                 rpc.timeout ?? RPC_SERVER.timeout(),
+                options?.offline as ((args: unknown) => unknown) | undefined,
             )
             RPC_SERVER.reached?.(rpc, args, reached)
             return reached
@@ -457,7 +468,8 @@ export function declare(method: Method): Declare {
         const members = rpc as unknown as Record<string, unknown>
         // 7.10, 7.18 — A TRIGGER ON A SERVER REACHES EVERY BROWSER HOLDING WHAT IT NAMES, through the
         // mux (18.3). `null` in a browser, where the trigger is the copy's own.
-        for (const name of SELECTION_MEMBERS)
+        for (const name of SELECTION_MEMBERS) {
+            if (name === 'busy') continue
             members[name] =
                 name === 'invalidate' || name === 'refresh'
                     ? (pattern?: unknown): unknown => {
@@ -466,6 +478,14 @@ export function declare(method: Method): Declare {
                           return done
                       }
                     : (pattern?: unknown): unknown => face[name](pattern)
+        }
+        // 46.11 — BUSY TOO WHILE A CALL THE OUTBOX HOLDS FOR IT IS IN FLIGHT: a queued call sent is work
+        // in flight for this handler, as a call made now is. 46.1 — and the calls it holds for it.
+        members.busy = (pattern?: unknown): boolean =>
+            (face.busy(pattern) as boolean) ||
+            sendingFor(rpc, pattern as Record<string, unknown> | undefined)
+        members.outbox = (pattern?: unknown): QueuedCall[] =>
+            outbox(rpc as never, pattern as Record<string, unknown> | undefined)
         // 21.8, 18.5 — a `GET` over a `global` value, the value it is serving for some args: a cache
         // may hold it for as long as it lives, and the mux may feed it. A request-local one is a
         // forwarder to a value built per request (11.32).

@@ -7,6 +7,7 @@
 export const SELECTION_MEMBERS = [
     'busy',
     'ready',
+    'synced',
     'refresh',
     'invalidate',
 ] as const

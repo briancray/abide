@@ -12,6 +12,7 @@ import { LONGEST_DELAY } from '#shared/LONGEST_DELAY.ts'
 import { namedLogger } from '#shared/log.ts'
 import { compose } from '#shared/Middleware.ts'
 import { MOUNT, unmounted } from '#shared/mount.ts'
+import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { servedTable } from './abideModules.ts'
 import { type AppSources, answerRequest } from './answerRequest.ts'
@@ -329,7 +330,7 @@ export async function bootEntered(
                         reportUnexpected(thrown)
                         answered = plainAnswer('internal server error', 500)
                     }
-                    const stamped = beating(stamp(answered))
+                    const stamped = beating(stamp(answered, booted.offline))
                     // 28.7 — a closed namespace does not pay for the line it would have written.
                     if (REQUEST_LOG.enabled())
                         REQUEST_LOG.debug(
@@ -494,8 +495,11 @@ export async function bootEntered(
  *
  * 22.9 — AND WHAT WAS WRITTEN THROUGH `response`, laid over every answer here and nowhere else: a
  * lane builds its answer at the written status and leaves the headers to this.
+ *
+ * 21.24 — and where the worker keeps answers (`offline`), a sign-in or a sign-out has the browser's
+ * own cache drop what it kept for the caller before, as the worker drops its copies (45.7).
  */
-function stamp(answered: Response): Response {
+function stamp(answered: Response, offline: boolean): Response {
     let stamped = answered
     try {
         stamped.headers.set('x-content-type-options', 'nosniff')
@@ -507,6 +511,8 @@ function stamp(answered: Response): Response {
     const timing = serverTiming()
     if (timing !== undefined) stamped.headers.set('server-timing', timing)
     const written = applyWritten(stamped.headers)
+    if (offline && stamped.headers.has(PRINCIPAL_HEADER))
+        stamped.headers.set('clear-site-data', '"cache"')
     const status = written !== 200 ? written : stamped.status
     // 17.8 — a failure nobody named a reason for is given its registered one.
     const statusText =

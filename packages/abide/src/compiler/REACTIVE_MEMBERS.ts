@@ -28,6 +28,7 @@ export const REACTIVE_MEMBERS: ReadonlySet<string> = new Set([
     'ready',
     'refresh',
     'set',
+    'synced',
     'watch',
     // A `Reactive` is thenable (1.4), and `catch`/`finally` derive from `then` (1.5).
     'then',

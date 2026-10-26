@@ -89,7 +89,7 @@ test("render's inline script is permitted by its hash, and is the same every tim
     const scripts: string[] = []
     for (const page of pages) {
         const html = await page.text()
-        const runner = /<script>(\(function\(s,c\)[\s\S]*?)<\/script>/.exec(
+        const runner = /<script>(\(function\(s,c,w\)[\s\S]*?)<\/script>/.exec(
             html,
         )?.[1]
         expect(runner).toBeDefined()

@@ -15,6 +15,7 @@
 
 import type { Failed } from '../Failed.ts'
 import type { Issues } from '../Issues.ts'
+import { OUTBOX_SENDING } from '../OUTBOX_SENDING.ts'
 import { RPC_SERVER } from '../RPC_SERVER.ts'
 import type { Schema } from '../Schema.ts'
 import { isReactive } from './isReactive.ts'
@@ -29,6 +30,7 @@ import {
     type ReactiveOptions,
     readyOver,
     refreshOver,
+    syncedOver,
 } from './Reactive.ts'
 import { outsideScope, scoped } from './scoped.ts'
 import { share } from './share.ts'
@@ -50,13 +52,18 @@ export {
     isStreaming,
     loadOf,
     moveItem,
+    patchInto,
+    produceInto,
     type Reactive,
     type ReactiveOptions,
+    refuseInto,
     rowItem,
     type Store,
     servedCellOf,
+    standIn,
     streamingOrSettled,
     type Transformer,
+    writtenLocally,
 } from './Reactive.ts'
 export { STREAMING } from './STREAMING.ts'
 export {
@@ -82,6 +89,7 @@ export type Selection =
     | {
           busy(): boolean
           ready(): boolean
+          synced(): boolean
           refresh(): void
           invalidate(): void
       }
@@ -477,7 +485,7 @@ function build(
 // tag arm takes none at all.
 type PatternOf<
     Chosen,
-    Member extends 'busy' | 'ready' | 'refresh' | 'invalidate',
+    Member extends 'busy' | 'ready' | 'synced' | 'refresh' | 'invalidate',
 > =
     Chosen extends Record<Member, (pattern?: infer Pattern) => unknown>
         ? Pattern
@@ -497,6 +505,9 @@ export function busy<Chosen extends Selection>(
     pattern?: PatternOf<Chosen, 'busy'>,
 ): boolean {
     const sweep = sweepOf(selection)
+    // 46.11 — a bare `busy` hears a call the outbox is sending, which no value holds.
+    if (sweep === null)
+        return busyOver(sweep) || OUTBOX_SENDING.any?.() === true
     if (sweep !== undefined) return busyOver(sweep)
     return (selection as { busy(pattern: unknown): boolean }).busy(pattern)
 }
@@ -513,6 +524,17 @@ export function ready<Chosen extends Selection>(
     const sweep = sweepOf(selection)
     if (sweep !== undefined) return readyOver(sweep)
     return (selection as { ready(pattern: unknown): boolean }).ready(pattern)
+}
+/**
+ * Whether every entry in the selection holds what its producer made — ALL, as `ready` asks (13.18).
+ */
+export function synced<Chosen extends Selection>(
+    selection?: Chosen,
+    pattern?: PatternOf<Chosen, 'synced'>,
+): boolean {
+    const sweep = sweepOf(selection)
+    if (sweep !== undefined) return syncedOver(sweep)
+    return (selection as { synced(pattern: unknown): boolean }).synced(pattern)
 }
 /**
  * Stale-while-revalidate over the selection: reloads it while serving what it holds.

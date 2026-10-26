@@ -7,6 +7,7 @@
 // ONE RECORD PER VALUE, IN A SIDE TABLE, not a field on the cell. Every value would carry the field
 // and only a called one ever fills it, so the table is what keeps a plain `reactive` paying nothing.
 
+import { LOAD_OFFLINE } from '../LOAD_OFFLINE.ts'
 import { LOAD_SIGNAL } from '../LOAD_SIGNAL.ts'
 import { aborted, refuse } from '../refuse.ts'
 // Through the barrel, for the cycle it names: rpc reaches this module ahead of the barrel.
@@ -81,13 +82,18 @@ export function callLoad(
     args: unknown,
     signal: AbortSignal | undefined,
     timeout: number | undefined,
+    // 16.81 — read by a browser's wire as its body starts, and by nothing on a server (16.84).
+    offline?: (args: unknown) => unknown,
 ): unknown {
     const ending = signal === undefined ? undefined : new AbortController()
     LOAD_SIGNAL.current = ending?.signal
+    LOAD_OFFLINE.current = offline
     let reached: unknown
     let attended: Attended | undefined
     try {
         reached = reach(args)
+        const standing = LOAD_OFFLINE.standing
+        if (standing !== undefined) standing.value = reached
         attended = ATTENDED.get(reached as object)
         // 16.62 — the callers of an aborted load stopped waiting, and this one has not.
         // 15.19 — and of one whose last answer failed transiently, which runs again here where an
@@ -101,6 +107,8 @@ export function callLoad(
             (reached as { refresh(): void }).refresh()
     } finally {
         LOAD_SIGNAL.current = undefined
+        LOAD_OFFLINE.current = undefined
+        LOAD_OFFLINE.standing = undefined
     }
     if (!isReactive(reached)) return reached
     const load = loadOf(reached)

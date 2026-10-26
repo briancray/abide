@@ -11,6 +11,7 @@ import {
     framedChunks,
     framingOf,
 } from './framing.ts'
+import { KEPT_HEADER } from './KEPT_HEADER.ts'
 import { principalRotated } from './principalRotated.ts'
 import { refuse } from './refuse.ts'
 import type { RpcRequest } from './rpcRequest.ts'
@@ -35,6 +36,8 @@ export type Answer = {
     version: number | undefined
     /** The `max-age` its `cache-control` named, in ms (18.14, 21.8). */
     life: number | undefined
+    /** 16.85 — whether the worker answered from a copy it kept rather than the network (45.22). */
+    kept: boolean
     text: string | undefined
     /**
      * A binary answer's body read to the end (16.34), set in place of `text` — a body read as text
@@ -92,7 +95,7 @@ async function fetched(
         if (signal?.aborted === true) throw error
         // 16.79 — NO ANSWER AT ALL, as a status the app can narrow on rather than the browser's
         // own `TypeError`, whose message differs in each.
-        return unanswered()
+        return noAnswer()
     }
     // THE HANDLER SIGNED THIS CALLER IN OR OUT, and the cookie is already the browser's.
     principalRotated(response)
@@ -100,7 +103,7 @@ async function fetched(
 }
 
 /** The answer a call that reached no server stands in for: an empty 503, which `answered` refuses. */
-function unanswered(): Answer {
+export function noAnswer(): Answer {
     return {
         status: 503,
         statusText: '',
@@ -109,10 +112,18 @@ function unanswered(): Answer {
         followable: false,
         version: undefined,
         life: undefined,
+        kept: false,
         text: '',
         bytes: undefined,
         body: undefined,
     }
+}
+
+/** 46.4 — no answer at all (16.79), or a gateway's: try again later. */
+export function unanswered(answer: Answer): boolean {
+    return (
+        answer.status === 502 || answer.status === 503 || answer.status === 504
+    )
 }
 
 /**
@@ -139,6 +150,7 @@ function answerFrom(
         followable: ok && !binary,
         version: versionInEtag(headers.get(VERSION_HEADER)),
         life: seconds === null ? undefined : Number(seconds[1]) * 1000,
+        kept: headers.has(KEPT_HEADER),
         text: undefined,
         bytes: undefined,
         body: undefined,

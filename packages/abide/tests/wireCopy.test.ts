@@ -17,7 +17,6 @@ let answer: { body: unknown; life: string } = {
     life: 'private, no-store',
 }
 let loads = 0
-let asked: RequestInit | undefined
 const unstubbedSocket = globalThis.WebSocket
 const unstubbedFetch = globalThis.fetch
 globalThis.WebSocket = class {
@@ -27,9 +26,8 @@ globalThis.WebSocket = class {
 } as unknown as typeof WebSocket
 // A browser with no route to the server: `fetch` rejects, as it does offline.
 let unreachable = false
-globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+globalThis.fetch = (async () => {
     loads += 1
-    asked = init
     if (unreachable) throw new TypeError('Failed to fetch')
     return new Response(JSON.stringify(answer.body), {
         headers: {
@@ -219,17 +217,6 @@ test('a copy answered max-age=0 is stale at once', async () => {
     await settle()
     await ending()
     expect(loads - before).toBe(1)
-})
-
-// THE BROWSER'S HTTP CACHE HEARS NO `invalidate`, and would answer a stale copy's reload with the
-// value it was dropping. THE REVERT: leave `cache` out of `rpcRequest`'s init; this reads `undefined`.
-test('a copy asks past the HTTP cache', async () => {
-    answer = { body: ['fresh'], life: 'private, max-age=60' }
-    const cached = wire('GET', '/library/cached') as (
-        args?: unknown,
-    ) => (() => unknown) & PromiseLike<unknown>
-    await cached()
-    expect(asked?.cache).toBe('no-cache')
 })
 
 // 11.29 — THE DEFAULTS A HANDLER'S PARAMETER WRITES REACH ITS COPY, read by the reader the server keys

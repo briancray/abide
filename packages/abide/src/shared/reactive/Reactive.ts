@@ -225,6 +225,7 @@ export type Reactive<
     busy(): boolean
     ready(): boolean
     error(): Failures | undefined
+    synced(): boolean
     /**
      * Narrows a caught error to this value's failure of that name.
      *
@@ -731,6 +732,13 @@ class Cell {
     declare tags: string[] | null
     /** Whether `declare` built this value for a mutation, which a sweep invalidates (13.16). */
     declare mutation: boolean
+    /**
+     * Whether what is held was written here since the producer last produced (3.10).
+     *
+     * Only ever true on a value with a body: a value with no producer has nothing to be out of
+     * step with (3.12). Moved by `writtenHere` and `producedAgain` alone, each owning its probe move.
+     */
+    declare local: boolean
     /** `null` on every value declaring no `store`, which is what keeps `serve` from persisting. */
     declare store: Persisted | null
     /**
@@ -881,6 +889,7 @@ class Cell {
                   : tags
         this.mutation =
             (options as { [MUTATION]?: true } | undefined)?.[MUTATION] === true
+        this.local = false
         const store = options?.store
         this.store =
             store === undefined
@@ -1518,6 +1527,9 @@ function drainPending(): void {
  * One production. A write that `identity` deems a repeat mints nothing and wakes nobody (5.2).
  */
 function produce(cell: Cell, produced: unknown): number {
+    // 3.11 — A PRODUCTION THE PRODUCER MADE puts the value back in step; one a write here made is
+    // `writtenHere`'s to report, after it lands.
+    if (cell.local && WRITING === 0) producedAgain(cell)
     // 7.9: AN ACCEPTED PRODUCTION SETTLES THE RELOAD AN INVALIDATE OWED — ahead of the gate, since
     // a write 5.2 collapses was still accepted. Left standing, the next read unserved this value
     // and reloaded over it. A look above (`OWES_ABOVE`) is not this value's mark and stays: 11.8
@@ -2048,6 +2060,13 @@ function absorb(cell: Cell, result: unknown, answered: boolean): void {
             else if (isAsyncGenerator(settled)) {
                 promoteToStream(cell, settled)
                 probesMoved(cell)
+            }
+            // 3.10 — WHAT A WRITE HERE SETTLED TO, and a body's stand-in for an answer it could not
+            // get (16.81), are held as written here rather than produced.
+            else if (!answered) acceptHere(cell, settled)
+            else if (settled instanceof StandIn) {
+                acceptHere(cell, settled.value)
+                writtenHere(cell)
             } else accept(cell, settled)
         },
         (failed) => {
@@ -2414,6 +2433,13 @@ function run(cell: Cell): void {
         promoteToStream(cell, produced)
         return
     }
+    // 16.81 — a stand-in the body could hand back at once: an answer a page started early (41.21)
+    // that the worker answered from a kept copy (16.85).
+    if (!primitive && produced instanceof StandIn) {
+        acceptHere(cell, produced.value)
+        writtenHere(cell)
+        return
+    }
     if (
         cell.bareWrite &&
         typeof (produced as PromiseLike<unknown>).then !== 'function'
@@ -2654,6 +2680,7 @@ function beginAccumulation(cell: Cell, stream: Stream): void {
  * whatever `identity` says about its last element.
  */
 function acceptChunk(cell: Cell, stream: Stream, chunk: unknown): void {
+    if (cell.local) producedAgain(cell)
     stream.chunks.push(chunk)
     cell.ordinal += 1
     // 3.8: `ready` from the first chunk, and `error` cleared by an accepted production (4.11).
@@ -3240,6 +3267,147 @@ function readyNow(cell: Cell): boolean {
     if (cell.sources.length === 0 && cell.adoption === null) return true
     PROBE_PASS += 1
     return walkReady(cell, PROBE_PASS)
+}
+
+/**
+ * Whether this value and everything it reads or adopts holds what its producer made (3.10, 3.13).
+ *
+ * `ready`'s quantifier, and for `ready`'s reason: a figure computed from a value written here is no
+ * more the producer's than that value is.
+ */
+function walkSynced(cell: Cell, pass: number): boolean {
+    if (cell.local) return false
+    const adoption = cell.adoption
+    if (cell.sources.length === 0 && adoption === null) return true
+    if (cell.probePass === pass) return true
+    cell.probePass = pass
+    if (adoption !== null && !walkSynced(adoption.source, pass)) return false
+    const sources = cell.sources
+    for (let index = 0; index < sources.length; index += 1)
+        if (!walkSynced(sources[index] as Cell, pass)) return false
+    return true
+}
+
+function syncedNow(cell: Cell): boolean {
+    if (cell.local) return false
+    if (cell.sources.length === 0 && cell.adoption === null) return true
+    PROBE_PASS += 1
+    return walkSynced(cell, PROBE_PASS)
+}
+
+/**
+ * How many writes made here are on the stack, which `produce` reads to tell one from a production.
+ *
+ * A COUNT RATHER THAN A FLAG, so a write made from inside another's gate — a `transform` writing a
+ * second value — leaves the outer one's mark standing when it returns.
+ */
+let WRITING = 0
+
+/** 3.10 — marks a value with a producer as written here, telling the guards that asked. */
+function writtenHere(cell: Cell): void {
+    if (cell.body === null || cell.local) return
+    cell.local = true
+    probesMoved(cell)
+}
+
+/** 3.11 — puts a value back in step with its producer, telling the guards that asked. */
+function producedAgain(cell: Cell): void {
+    if (!cell.local) return
+    cell.local = false
+    probesMoved(cell)
+}
+
+/** `accept`, as a write made here rather than a production. */
+function acceptHere(cell: Cell, value: unknown): unknown {
+    WRITING += 1
+    try {
+        return accept(cell, value)
+    } finally {
+        WRITING -= 1
+    }
+}
+
+/**
+ * A write over a value with a body: held as written here where it moved what is held (3.10).
+ *
+ * A WRITE THE IDENTITY GATE COLLAPSED MOVED NOTHING, so it leaves the value as in step as it was; a
+ * write that settles later is marked now, being a write here whenever it lands.
+ */
+function setOverProducer(cell: Cell, value: unknown): unknown {
+    const ordinal = cell.ordinal
+    cell.generation += 1
+    WRITING += 1
+    let answer: unknown
+    try {
+        answer = setThroughGates(cell, value)
+    } finally {
+        WRITING -= 1
+    }
+    if (
+        answer === undefined &&
+        !isReactive(value) &&
+        (cell.ordinal !== ordinal || isThenable(value))
+    )
+        writtenHere(cell)
+    return answer
+}
+
+/**
+ * What a body hands back in place of an answer it could not get: held as written here (16.81).
+ *
+ * A CLASS, so the one test that tells it from a value is `instanceof`, made only on the arm that
+ * settles a body's promise.
+ */
+class StandIn {
+    value: unknown
+    constructor(value: unknown) {
+        this.value = value
+    }
+}
+
+/** A body's stand-in for the answer it could not get, which `synced` reads false over (16.81). */
+export function standIn(value: unknown): unknown {
+    return new StandIn(value)
+}
+
+/**
+ * Writes `value` as its producer made it, putting it back in step (3.11).
+ *
+ * WHAT A FOLLOWED COPY IS SENT IS THE PRODUCER'S, whoever carries it in: the server's value
+ * arriving over the mux is a production of the copy, not a write made here (18.10).
+ */
+export function produceInto(value: Reactive<unknown>, next: unknown): void {
+    const cell = (value as unknown as Callable)[CELL]
+    // A stream's write stands over its accumulation (9.11), as `STREAM_PROTOTYPE.set` makes it.
+    if (ownStream(cell) !== null) writeStream(cell, next)
+    else {
+        cell.generation += 1
+        setThroughGates(cell, next)
+    }
+    producedAgain(cell)
+}
+
+/** `produceInto` for a patch the producer sent (18.11). */
+export function patchInto(
+    value: Reactive<unknown>,
+    mutate: (value: unknown) => void,
+): void {
+    const cell = (value as unknown as Callable)[CELL]
+    patchCell(cell, mutate)
+    producedAgain(cell)
+}
+
+/**
+ * Refuses `value` as its producer did, leaving what it holds standing (46.7): a call queued under a
+ * stand-in that the server refused once it was delivered.
+ */
+export function refuseInto(value: Reactive<unknown>, failure: unknown): void {
+    refused((value as unknown as Callable)[CELL], failure)
+}
+
+/** Whether `value` holds what was written here, without subscribing — for a caller that is not a reader. */
+export function writtenLocally(value: Reactive<unknown>): boolean {
+    return (value as unknown as Callable)[CELL].local
 }
 
 /**
@@ -4140,6 +4308,13 @@ export function readyOver(tags: string[] | null): boolean {
     return true
 }
 
+/** Whether every value in the selection is in step with its producer; a reader subscribes to it. */
+export function syncedOver(tags: string[] | null): boolean {
+    trackSignal(tags)
+    for (const cell of inReach(tags)) if (!syncedNow(cell)) return false
+    return true
+}
+
 /**
  * Invalidates every value in the selection, and what each adopts.
  *
@@ -4221,6 +4396,11 @@ const MEMBERS = {
     ready(this: Callable): boolean {
         return isReady(this[CELL])
     },
+    synced(this: Callable): boolean {
+        const cell = this[CELL]
+        probe(cell)
+        return syncedNow(cell)
+    },
     error(this: Callable): unknown {
         const cell = this[CELL]
         // 3.3 ON THE THIRD PROBE. `error` is a probe by the rulebook's own term, so a body
@@ -4239,6 +4419,7 @@ const MEMBERS = {
     isError: isFailedNamed,
     set(this: Callable, value: unknown): unknown {
         const cell = this[CELL]
+        if (cell.body !== null) return setOverProducer(cell, value)
         cell.generation += 1
         // The settled, untransformed write is the overwhelming common shape, and the
         // general path is two call frames and a thenable probe behind it. Inlined here
@@ -4257,7 +4438,9 @@ const MEMBERS = {
         return setThroughGates(cell, value)
     },
     patch(this: Callable, mutate: (value: unknown) => void): void {
-        patchCell(this[CELL], mutate)
+        const cell = this[CELL]
+        patchCell(cell, mutate)
+        writtenHere(cell)
     },
     refresh(this: Callable): void {
         eachAdopted(this[CELL], refreshOne)
@@ -4514,7 +4697,15 @@ const STREAM_PROTOTYPE = brandedPrototype({
             if (cycle !== undefined) throw cycle
             return undefined
         }
-        return writeStream(cell, value)
+        WRITING += 1
+        let answer: unknown
+        try {
+            answer = writeStream(cell, value)
+        } finally {
+            WRITING -= 1
+        }
+        if (answer === undefined) writtenHere(cell)
+        return answer
     },
 })
 
@@ -4536,7 +4727,7 @@ const ADOPTING_PROTOTYPE = brandedPrototype({
     },
     patch(this: Callable, mutate: (value: unknown) => void): void {
         const adoption = this[CELL].adoption
-        if (adoption === null) patchCell(this[CELL], mutate)
+        if (adoption === null) MEMBERS.patch.call(this, mutate)
         else (adoption.source.callable as Reactive<unknown>).patch(mutate)
     },
 })
@@ -4587,6 +4778,9 @@ const SIMPLE_PROTOTYPE = brandedPrototype({
             }
             cell.value = value
             cell.ordinal += 1
+            // 3.10 — a write over a producer is one `synced` hears. Never a production here, so no
+            // `WRITING` count: the short write does not reach `produce`.
+            if (cell.body !== null) writtenHere(cell)
             // `setDirect`, with `plain` known true by `simple`.
             cell.direct = cell.state === CLEAN
             if (cell.readers.length !== 0) markReaders(cell, DIRTY)

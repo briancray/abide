@@ -6,6 +6,9 @@
 // as bytecode (38.93), where a function has no source to read back.
 
 import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
+import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
+import { KEEP_OPENED } from '#shared/KEEP_OPENED.ts'
+import { KEPT_HEADER } from '#shared/KEPT_HEADER.ts'
 import { MOUNT, mounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
 import {
@@ -35,7 +38,7 @@ async function dropOurs(keeping) {
 }
 `
 
-// 45.3 through 45.8, and 45.13.
+// 45.3 through 45.8, 45.13, and 45.17 through 45.21.
 const SAVING = `
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -53,10 +56,11 @@ self.addEventListener('activate', (event) => {
             const cache = await caches.open(BUNDLE)
             for (const request of await cache.keys())
                 if (!FILES.has(request.url)) await cache.delete(request)
-            await self.registration.navigationPreload?.enable()
+            // A preload would ask the network for every navigation, a kept copy answered or not.
+            await self.registration.navigationPreload?.disable()
             await self.clients.claim()
             for (const client of await self.clients.matchAll({ type: 'window' }))
-                await fetch(client.url).then(
+                await fetch(pageRequest(client.url, undefined, '1')).then(
                     (response) =>
                         kept(response)
                             ? keep(new Request(client.url), response)
@@ -94,32 +98,123 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(answer(event, false))
 })
 
+// 45.17 through 45.20 — THE COPY KEPT, BY ITS OWN cache-control: fresh is answered and the network
+// not asked, stale within stale-while-revalidate is answered while the network is asked for the next
+// one — save by a request asking force-cache, a call whose wire asks again itself once it reads the
+// copy (RULEBOOK 16.80, 16.85), so asking here too would ask twice — and stale within stale-if-error
+// stands in where the network gives nothing. A request asking past every cache (a refresh, a load
+// after invalidate) is the network's alone; a navigation never is, since a reload offline would
+// otherwise be the page saying nothing was saved.
 async function answer(event, page) {
-    let response
-    try {
-        response =
-            (page ? await event.preloadResponse : undefined) ??
-            (await fetch(event.request))
-    } catch {
-        const saved = await caches.match(event.request, {
-            cacheName: SAVED,
-            ignoreVary: true,
-        })
-        return saved ?? (page ? offline() : Response.error())
+    const request = event.request
+    const bypass =
+        !page &&
+        (request.cache === 'no-cache' ||
+            request.cache === 'reload' ||
+            request.cache === 'no-store')
+    const saved = bypass
+        ? undefined
+        : await caches.match(request, { cacheName: SAVED, ignoreVary: true })
+    const life = saved === undefined ? undefined : lifeOf(saved)
+    if (life !== undefined) {
+        if (life.age < life.fresh) return marked(saved)
+        if (life.age < life.fresh + life.revalidate) {
+            if (request.cache !== 'force-cache')
+                event.waitUntil(
+                    fromNetwork(event, page, false).then(
+                        (response) => response.body?.cancel(),
+                        () => {},
+                    ),
+                )
+            return marked(saved)
+        }
     }
+    try {
+        return await fromNetwork(event, page, page)
+    } catch {
+        if (life !== undefined && life.age < life.fresh + life.error)
+            return marked(saved)
+        return page ? offline() : Response.error()
+    }
+}
+
+// 45.22 — A COPY KEPT SAYS SO, and when the server answered it, so a page tells it from the network's.
+function marked(saved) {
+    const headers = new Headers(saved.headers)
+    headers.set(KEPT, saved.headers.get('date') ?? '')
+    return new Response(saved.body, {
+        status: saved.status,
+        statusText: saved.statusText,
+        headers,
+    })
+}
+
+// A page as the worker asks for it, whether a navigation or the worker keeping an open window's:
+// past the browser's cache, as a page kept, and with its redirects left to the page — one followed
+// would be saved under the address it was asked at, holding where it led (RULEBOOK 45.4, 45.21,
+// 45.23).
+function pageRequest(url, headers, keep) {
+    const asking = new Headers(headers)
+    asking.set(KEEP, keep)
+    return new Request(url, { headers: asking, redirect: 'manual', cache: 'no-cache' })
+}
+
+// 45.21 — PAST THE BROWSER'S OWN CACHE, which holds the same answers under the same headers and would
+// hand a revalidation the copy it is replacing. A navigation's request takes no init of its own, so it
+// is asked again by address, its redirects left to the page as a navigation's are — and 45.23, as a
+// page kept, which a script's fetch is not otherwise told from (RULEBOOK 41.29, 41.30), and as the
+// page the navigation opens where opened says it is, which then hydrates from what it seeded.
+async function fromNetwork(event, page, opened) {
+    const request = event.request
+    const asked = page
+        ? pageRequest(request.url, request.headers, opened ? OPENED : '1')
+        : new Request(request, { cache: 'no-cache' })
+    const response = await fetch(asked)
     // A copy nothing reads is a tee holding every chunk, so one is cloned only to be saved.
     const copy = kept(response) ? response.clone() : undefined
     const rotated = response.headers.has(PRINCIPAL)
     event.waitUntil(
         (rotated ? caches.delete(SAVED) : Promise.resolve()).then(() =>
-            copy === undefined ? undefined : keep(event.request, copy),
+            copy === undefined ? undefined : keep(request, copy),
         ),
     )
     return response
 }
 
+// How old a kept copy is and how long each of its windows runs, in seconds; a copy with no date is
+// as old as it can be.
+function lifeOf(response) {
+    const directives = directivesOf(response)
+    const date = Date.parse(response.headers.get('date') ?? '')
+    // no-cache is never fresh; it and must-revalidate are never served stale.
+    const unfresh = directives.has('no-cache')
+    const unstale = unfresh || directives.has('must-revalidate')
+    const seconds = (name, closed) => {
+        const value = Number(directives.get(name))
+        return closed || !Number.isFinite(value) ? 0 : value
+    }
+    return {
+        age: Number.isNaN(date) ? Infinity : (Date.now() - date) / 1000,
+        fresh: seconds('max-age', unfresh),
+        revalidate: seconds('stale-while-revalidate', unstale),
+        error: seconds('stale-if-error', unstale),
+    }
+}
+
+// An answer's cache-control, by directive.
+function directivesOf(response) {
+    const directives = new Map()
+    for (const part of (response.headers.get('cache-control') ?? '').split(',')) {
+        const [name, value] = part.trim().toLowerCase().split('=')
+        directives.set(name, value)
+    }
+    return directives
+}
+
+// 45.3, 45.4 — a 200 whose cache-control lets a private cache store it, and no stream.
 function kept(response) {
     if (response.status !== 200) return false
+    if (directivesOf(response).has('no-store')) return false
     const type = response.headers.get('content-type') ?? ''
     return !STREAMED.some((streamed) => type.startsWith(streamed))
 }
@@ -178,6 +273,9 @@ export function answerWorker(manifest: Manifest | undefined): Response {
         for (const name of bundleFiles(manifest))
             paths.push(mounted(`${CLIENT_ADDRESS}/${name}`))
         script = `${CACHES}const PRINCIPAL = ${JSON.stringify(PRINCIPAL_HEADER)}
+const KEPT = ${JSON.stringify(KEPT_HEADER)}
+const KEEP = ${JSON.stringify(KEEP_HEADER)}
+const OPENED = ${JSON.stringify(KEEP_OPENED)}
 const NAVIGATION = ${JSON.stringify(NAVIGATION_HEADER)}
 // 45.4 — the types a stream 16.32 frames, which has no end to save.
 const STREAMED = ${JSON.stringify(STREAMED_TYPES)}

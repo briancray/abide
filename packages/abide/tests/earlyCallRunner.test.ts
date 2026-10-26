@@ -38,10 +38,11 @@ const ANSWERS: Record<string, () => Response> = {
 /** Runs the runner over `rows` as the head's JSON block hands them, against `answering`. */
 function runEarlyCalls(
     rows: unknown[][],
-    answering: (url: string) => Promise<Response>,
+    answering: (url: string, init: RequestInit) => Promise<Response>,
+    self: object = globalThis,
 ): void {
     new Function('self', 'fetch', 'document', EARLY_CALL_RUNNER)(
-        globalThis,
+        self,
         answering,
         {
             currentScript: {
@@ -162,4 +163,26 @@ test('a call painted in flight is read as its reader reads it, and a failed one 
         globalThis.fetch = previous
         globals[EARLY_CALLS] = undefined
     }
+})
+
+// 16.80 — A PAGE THE WORKER ANSWERS HAS IT ANSWER THE PAGE'S CALLS TOO, which only the browser can
+// tell: a page the worker replays from its copy was rendered once, for whichever fetch kept it.
+// THE REVERT: drop the runner's `if(w)n.cache='force-cache'`; the controlled page reads `no-cache`.
+test('an early call is started force-cache where a worker answers the page, and no-cache where none does — 16.80', async () => {
+    const said: string[] = []
+    for (const [name, serviceWorker] of [
+        ['worker', { controller: {} }],
+        ['none', undefined],
+    ] as const) {
+        const self: Record<string, unknown> = { navigator: { serviceWorker } }
+        runEarlyCalls(
+            [rowOf('/rpc/invoice', false)],
+            async (url, init) => {
+                said.push(`${name}: ${init.cache}`)
+                return (ANSWERS[url] as () => Response)()
+            },
+            self,
+        )
+    }
+    expect(said).toEqual(['worker: force-cache', 'none: no-cache'])
 })

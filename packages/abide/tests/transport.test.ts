@@ -484,17 +484,25 @@ test('a Blob is answered at its type and honors Range — 16.34, 16.35', async (
 })
 
 // 21.8, 21.9, 21.11 — A `GET` OVER A `global` VALUE IS CACHED FOR AS LONG AS THE VALUE LIVES, and
-// privately; one over a request-local value, one that lives until `invalidate`, and a refusal keep
-// 21.3's `no-store`, as does a mutation over one. THE REVERT: drop the `GLOBAL_GETS` read in `answerOutcome`; `shared`
+// privately; one over a request-local value and one that lives until `invalidate` keep the default,
+// 21.22's where the fixture is served built with the worker registered; a refusal keeps 21.3's
+// `no-store`, as does a mutation over one. THE REVERT: drop the `GLOBAL_GETS` read in `answerOutcome`; `shared`
 // reads `private, no-store` where a `max-age` is due.
 test('a GET over a global value answers a max-age its ttl derives — 21.8, 21.9, 21.11', async () => {
     const header = async (name: string) =>
         (await Bun.fetch(`${base}${RPC}/${name}`)).headers.get('cache-control')
-    expect(await header('shared')).toMatch(/^private, max-age=(8\d|90)$/)
-    expect(await header('sharedForever')).toBe('private, no-store')
-    expect(await header('local')).toBe('private, no-store')
+    // 21.11 — ahead of 21.22's windows, the fixture being served where the worker is registered.
+    expect(await header('shared')).toMatch(
+        /^private, max-age=(8\d|90), stale-while-revalidate=604800, stale-if-error=604800$/,
+    )
+    expect(await header('sharedForever')).toBe(
+        'private, stale-while-revalidate=604800, stale-if-error=604800',
+    )
+    expect(await header('local')).toBe(
+        'private, stale-while-revalidate=604800, stale-if-error=604800',
+    )
     expect(await header('sharedRefused?n=1')).toMatch(
-        /^private, max-age=(8\d|90)$/,
+        /^private, max-age=(8\d|90), stale-while-revalidate=604800, stale-if-error=604800$/,
     )
     expect(await header('sharedRefused?n=0')).toBe('private, no-store')
     // A MUTATION IS NEVER A CACHE ENTRY, whatever it is declared over. THE REVERT: drop the method
