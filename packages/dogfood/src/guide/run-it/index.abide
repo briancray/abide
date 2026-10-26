@@ -27,6 +27,10 @@ import healthTestSource from 'crm-08/src/ops/lib/Health.test.ts' with { type: 't
 import OfflineBanner from 'crm-08/src/ops/lib/OfflineBanner.abide'
 import offlineBannerSource from 'crm-08/src/ops/lib/OfflineBanner.abide' with { type: 'text' }
 import offlineBannerTestSource from 'crm-08/src/ops/lib/OfflineBanner.test.ts' with { type: 'text' }
+import CallLog from 'crm-08/src/ops/lib/CallLog.abide'
+import callLogSource from 'crm-08/src/ops/lib/CallLog.abide' with { type: 'text' }
+import logCallSource from 'crm-08/src/ops/logCall.ts' with { type: 'text' }
+import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
@@ -271,7 +275,7 @@ const answer = await fetch(billingUrl, { headers: trace.headers() })`} />
             id="crm-08-offline"
             app="crm-08"
             title="`online` — the connection, read by name"
-            summary="A contact edit made on a train is not saved. Take the browser offline in DevTools' Network panel and the banner says so."
+            summary="On a train the network comes and goes. Take the browser offline in DevTools' Network panel and the banner says so."
             files={{
                 'src/ops/lib/OfflineBanner.abide': offlineBannerSource,
                 'src/ops/lib/OfflineBanner.test.ts': offlineBannerTestSource,
@@ -293,6 +297,50 @@ import { online, refresh, watch } from '@abide/abide'
 
 watch(() => { if (online) refresh() })
 </script>`} />
+    </Section>
+
+    <Section title="A call logged offline is sent when the network is back">
+        <Example
+            id="crm-08-outbox"
+            app="crm-08"
+            title="`offline` — what a call settles to with no network"
+            summary="A call logged on a train should not be lost in a tunnel. Take the browser offline in DevTools' Network panel, log a call, then go back online."
+            files={{
+                'src/ops/lib/CallLog.abide': callLogSource,
+                'src/ops/logCall.ts': logCallSource,
+                'src/ops/lib/CallLog.test.ts': callLogTestSource,
+            }}
+        >
+            <CallLog />
+        </Example>
+
+        <p>A call given <code>offline</code> that gets no answer settles to what
+        <code>offline</code> returns. A mutation then waits in the outbox, kept on the device
+        through a reload, and is sent once the network answers: oldest first, one at a time, by one
+        tab for all of them. Here <code>offline</code> also adds the call to the list, so it shows
+        at once. <code>outbox</code> is asked of a selection as <code>busy</code> is, and answers a
+        list: <code>outbox(logCall)</code> is the calls waiting for that handler.</p>
+
+        <p>What is shown before the server has it says so: <code>synced()</code> is false on a value
+        written in the browser rather than made by its producer, and on anything read from one. The
+        list keeps its added call until the outbox is empty, then reads the server's again. A
+        call is sent with the same <code>idempotency-key</code> every time, and
+        <code>logCall</code> takes the browser's id, so a send whose answer was lost and is sent
+        again logs the call once.</p>
+
+        <table>
+            <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
+            <tbody>
+                <tr><td><code>outbox</code> · <code>rpc.outbox</code></td><td>the calls waiting to be sent, and the ones the server refused, over a selection</td></tr>
+                <tr><td><code>QueuedCall</code></td><td>one call in the outbox: its key, its address, its args, and how often it was sent</td></tr>
+                <tr><td><code>call.value</code></td><td>what the call settled to: its stand-in, read as unsynced, until the server answers, and its refusal as <code>error()</code>, after a reload too</td></tr>
+                <tr><td><code>call.retry</code></td><td>sends a refused call again</td></tr>
+                <tr><td><code>call.discard</code></td><td>drops a call, sent or not</td></tr>
+                <tr><td><code>s.synced</code></td><td>whether a value holds what its producer made</td></tr>
+                <tr><td><code>k.synced</code> · <code>rpc.synced</code></td><td>the same, over a keyed value's or a handler's entries</td></tr>
+                <tr><td><code>synced</code></td><td>the same, over a selection</td></tr>
+            </tbody>
+        </table>
     </Section>
 
     <Section title="Next">

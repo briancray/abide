@@ -3,7 +3,9 @@ import { online } from '@abide/abide'
 </script>
 
 {#if !online}
-    <p class="status">You are offline. Edits to contacts are not saved.</p>
+    <p class="status">
+        You are offline. Calls you log are sent once you are back.
+    </p>
 {/if}
 
 <ul class="fields">

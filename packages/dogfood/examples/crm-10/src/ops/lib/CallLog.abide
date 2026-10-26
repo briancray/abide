@@ -1,0 +1,35 @@
+<script>
+import { outbox, reactive } from '@abide/abide'
+import listCalls from '../listCalls.ts'
+import logCall from '../logCall.ts'
+
+const calls = listCalls()
+let note = reactive('')
+
+function log() {
+    const call = { id: crypto.randomUUID(), note }
+    note = ''
+    // With no network: shown at once, and sent from the outbox later.
+    logCall(call, {
+        offline: () => calls.patch((held) => held.push(call)),
+    })
+}
+</script>
+
+<div class="row">
+    <input bind:value={note} placeholder="What Grace said">
+    <button onclick={log}>Log call</button>
+</div>
+
+<ul class="fields stacked">
+    {#for call of calls.ready() ? calls : [] by call.id}
+        <li><span>call</span><strong>{call.note}</strong></li>
+    {/for}
+</ul>
+
+<ul class="tiles">
+    <li><span>waiting</span>
+        <strong>{outbox(logCall).length}</strong></li>
+    <li><span>saved</span>
+        <strong>{calls.synced() ? 'yes' : 'not yet'}</strong></li>
+</ul>

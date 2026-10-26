@@ -1,4 +1,5 @@
 <script>
+import CallLog from './lib/CallLog.abide'
 import Console from './lib/Console.abide'
 import Health from './lib/Health.abide'
 import OfflineBanner from './lib/OfflineBanner.abide'
@@ -12,6 +13,8 @@ import Sync from './lib/Sync.abide'
 <main>
     <h1>Operations</h1>
     <OfflineBanner />
+    <h2>Calls</h2>
+    <CallLog />
     <h2>Config</h2>
     <Retries />
     <h2>Database</h2>

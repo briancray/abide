@@ -122,6 +122,13 @@ export const REFERENCE: readonly {
         typeOnly: false,
     },
     {
+        route: '/reference/synced',
+        names: ['synced'],
+        entry: '@abide/abide',
+        group: 'Reactive primitives',
+        typeOnly: false,
+    },
+    {
         route: '/reference/refresh',
         names: ['refresh'],
         entry: '@abide/abide',
@@ -463,6 +470,20 @@ export const REFERENCE: readonly {
         entry: '@abide/abide',
         group: 'Ambient values',
         typeOnly: false,
+    },
+    {
+        route: '/reference/outbox',
+        names: ['outbox'],
+        entry: '@abide/abide',
+        group: 'Ambient values',
+        typeOnly: false,
+    },
+    {
+        route: '/reference/types/QueuedCall',
+        names: ['QueuedCall'],
+        entry: '@abide/abide',
+        group: 'Ambient values',
+        typeOnly: true,
     },
     {
         route: '/reference/reachable',
