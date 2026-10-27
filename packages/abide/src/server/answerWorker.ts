@@ -17,6 +17,7 @@ import {
     OFFLINE_SAVED,
 } from '#shared/OFFLINE_CACHES.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
+import { REACHED_MESSAGE } from '#shared/REACHED_MESSAGE.ts'
 import type { Manifest } from './manifestOf.ts'
 
 // What `framingOf` reads as a framed stream (16.32), and a binary's bytes (16.34), which may be one —
@@ -38,7 +39,7 @@ async function dropOurs(keeping) {
 }
 `
 
-// 45.3 through 45.8, 45.13, and 45.17 through 45.21.
+// 45.3 through 45.8, 45.13, 45.17 through 45.21, and 45.24.
 const SAVING = `
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -60,26 +61,23 @@ self.addEventListener('activate', (event) => {
             await self.registration.navigationPreload?.disable()
             await self.clients.claim()
             for (const client of await self.clients.matchAll({ type: 'window' }))
-                await fetch(pageRequest(client.url, undefined, '1')).then(
-                    (response) =>
-                        kept(response)
-                            ? keep(new Request(client.url), response)
-                            : response.body?.cancel(),
-                    () => {},
-                )
+                await keepPage(client.url)
         })(),
     )
 })
 
 self.addEventListener('message', (event) => {
-    if (event.data === 'rotated') event.waitUntil(caches.delete(SAVED))
+    if (event.data === 'rotated') event.waitUntil(dropSaved())
+    const reached = event.data?.[REACHED]
+    if (typeof reached === 'string' && reached.startsWith(\`\${self.location.origin}/\`))
+        event.waitUntil(keepReached(reached))
 })
 
 self.addEventListener('fetch', (event) => {
     const request = event.request
     if (request.mode === 'navigate') {
         if (request.method === 'GET') event.respondWith(answer(event, true))
-        else event.waitUntil(caches.delete(SAVED))
+        else event.waitUntil(dropSaved())
         return
     }
     if (request.method !== 'GET') return
@@ -132,8 +130,7 @@ async function answer(event, page) {
     try {
         return await fromNetwork(event, page, page)
     } catch {
-        if (life !== undefined && life.age < life.fresh + life.error)
-            return marked(saved)
+        if (life !== undefined && standsIn(life)) return marked(saved)
         return page ? offline() : Response.error()
     }
 }
@@ -169,16 +166,47 @@ async function fromNetwork(event, page, opened) {
     const asked = page
         ? pageRequest(request.url, request.headers, opened ? OPENED : '1')
         : new Request(request, { cache: 'no-cache' })
+    const since = drops
     const response = await fetch(asked)
     // A copy nothing reads is a tee holding every chunk, so one is cloned only to be saved.
     const copy = kept(response) ? response.clone() : undefined
-    const rotated = response.headers.has(PRINCIPAL)
-    event.waitUntil(
-        (rotated ? caches.delete(SAVED) : Promise.resolve()).then(() =>
-            copy === undefined ? undefined : keep(request, copy),
-        ),
-    )
+    event.waitUntil(keep(request, copy, since, response.headers.has(PRINCIPAL)))
     return response
+}
+
+// 45.13, 45.24 — A PAGE NO NAVIGATION ASKED FOR, kept as a page behind the one opened is: an open
+// window's as the worker activates, and an address the router reached.
+function keepPage(url) {
+    const since = drops
+    return fetch(pageRequest(url, undefined, '1')).then((response) => {
+        // Nothing reads this answer, so one 45.3 or 45.4 turns away is let go here.
+        const copy = kept(response) ? response : undefined
+        if (copy === undefined) response.body?.cancel()
+        return keep(new Request(url), copy, since, response.headers.has(PRINCIPAL))
+    }, () => {})
+}
+
+// The addresses being kept, so one reached twice before its copy lands is asked for once.
+const reaching = new Set()
+
+// 45.24 — AN ADDRESS THE ROUTER REACHED, whose page no navigation asked for, so none is saved unless
+// this asks — and only where no copy saved would stand in offline: one that would is refreshed by the
+// page's own next load, and asking on every step renders each page twice. A page kept holds no seed
+// (RULEBOOK 41.29), so what a reload paints stale is markup its calls then answer over.
+async function keepReached(url) {
+    if (reaching.has(url)) return
+    reaching.add(url)
+    try {
+        const saved = await caches.match(url, { cacheName: SAVED, ignoreVary: true })
+        if (saved === undefined || !standsIn(lifeOf(saved))) await keepPage(url)
+    } finally {
+        reaching.delete(url)
+    }
+}
+
+// 45.19 — whether a copy kept still stands in where the network gives nothing.
+function standsIn(life) {
+    return life.age < life.fresh + life.error
 }
 
 // How old a kept copy is and how long each of its windows runs, in seconds; a copy with no date is
@@ -219,9 +247,27 @@ function kept(response) {
     return !STREAMED.some((streamed) => type.startsWith(streamed))
 }
 
-async function keep(request, response) {
+// 45.7 — EVERY PAGE SAVED DROPPED, and with them every copy asked for before the drop: one asked under
+// the cookies of then would land after it holding the caller signed out since. The drop an answer's
+// own abide-principal makes is the exception, since that answer is the new caller's.
+let drops = 0
+
+function dropSaved() {
+    drops += 1
+    return caches.delete(SAVED)
+}
+
+// Saves a copy 45.3 and 45.4 let through where no drop has come since its request was asked — after
+// the drop its own answer makes where that answer rotated the principal — and cancels one where one has.
+async function keep(request, copy, since, rotated) {
+    if (rotated) {
+        await dropSaved()
+        since = drops
+    }
+    if (copy === undefined) return
+    if (since !== drops) return copy.body?.cancel()
     const cache = await caches.open(SAVED)
-    await cache.put(request, response)
+    await cache.put(request, copy)
 }
 
 function offline() {
@@ -277,6 +323,7 @@ const KEPT = ${JSON.stringify(KEPT_HEADER)}
 const KEEP = ${JSON.stringify(KEEP_HEADER)}
 const OPENED = ${JSON.stringify(KEEP_OPENED)}
 const NAVIGATION = ${JSON.stringify(NAVIGATION_HEADER)}
+const REACHED = ${JSON.stringify(REACHED_MESSAGE)}
 // 45.4 — the types a stream 16.32 frames, which has no end to save.
 const STREAMED = ${JSON.stringify(STREAMED_TYPES)}
 const OFFLINE = ${JSON.stringify(OFFLINE)}

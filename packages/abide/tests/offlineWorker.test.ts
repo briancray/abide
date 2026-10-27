@@ -58,7 +58,7 @@ const aged = (body: string, cacheControl: string, ageSeconds = 0): Response =>
  */
 async function worker(
     manifest: Manifest | undefined,
-    answer: (request: Request) => Response = page,
+    answer: (request: Request) => Response | Promise<Response> = page,
     stores = new Map<string, Map<string, Response>>(),
 ) {
     const script = await answerWorker(manifest).text()
@@ -513,6 +513,109 @@ test('the router, a range and an event stream are left to the network — 45.16'
         )
             answered.push(Object.keys(headers)[0] as string)
     expect(answered).toEqual([])
+})
+
+/** The message the router posts the worker once a navigation reaches `path` (45.24). */
+const reachedAt = (path: string) => ({ data: { reached: `${ORIGIN}${path}` } })
+
+// 45.24 — A PAGE THE ROUTER REACHES IS KEPT, so a reload of it with no network opens it rather than
+// 45.11's page: no navigation asked for it, so it is asked for as a page kept behind the one opened.
+// THE REVERT: drop the `REACHED` arm from the worker's `message`; `/farm`'s page is never asked for,
+// and the reload offline answers 503.
+test('a page the router reaches is saved, and opens offline — 45.24', async () => {
+    let networked = true
+    const asked: string[] = []
+    const offline = await worker(MANIFEST, (request) => {
+        if (!networked) throw new TypeError('offline')
+        asked.push(
+            `${request.headers.get('abide-keep')} ${request.redirect} ${request.url}`,
+        )
+        return aged('<p>farm</p>', KEPT)
+    })
+    await offline.dispatch('message', reachedAt('/farm'))
+    expect(asked).toEqual([`1 manual ${ORIGIN}/farm`])
+    networked = false
+    const reloaded = await offline.navigate('/farm')
+    expect(reloaded?.status).toBe(200)
+    expect(await reloaded?.text()).toBe('<p>farm</p>')
+})
+
+// 45.24 — ONLY WHERE NO COPY WOULD STAND IN: one 45.19 would answer with is refreshed by the page's
+// own next load, and asking on every step renders each page twice — but one past its stale-if-error
+// is asked for again. THE REVERT: drop the `standsIn` check from `keepReached`; the last step asks
+// again, 4. Skipping whatever copy is saved instead, the expired one is never replaced, 1.
+test('a page the router reaches is asked for only where no copy would stand in — 45.24', async () => {
+    let age = 604800 + 60
+    let pages = 0
+    const offline = await worker(MANIFEST, () => {
+        pages++
+        return aged('<p>farm</p>', KEPT, age)
+    })
+    await offline.dispatch('message', reachedAt('/farm'))
+    await offline.dispatch('message', reachedAt('/farm'))
+    age = 60
+    await offline.dispatch('message', reachedAt('/farm'))
+    await offline.dispatch('message', reachedAt('/farm'))
+    expect(pages).toBe(3)
+})
+
+// 45.24 — AN ADDRESS OF ANOTHER ORIGIN IS NOT ASKED FOR, whoever posted it. THE REVERT: drop the
+// origin check from the worker's `message`; the other origin's page is asked, 1.
+test('a reached address of another origin is not asked for — 45.24', async () => {
+    let pages = 0
+    const offline = await worker(MANIFEST, () => {
+        pages++
+        return aged('<p>elsewhere</p>', KEPT)
+    })
+    await offline.dispatch('message', {
+        data: { reached: 'http://elsewhere.test/farm' },
+    })
+    expect(pages).toBe(0)
+})
+
+// 45.7 — A COPY ASKED FOR BEFORE A DROP IS NOT SAVED AFTER IT: it was asked under the cookies of then,
+// and would hold the caller signed out since. THE REVERT: drop the `since !== drops` arm from `keep`;
+// `/account` is saved after the sign-out dropped everything.
+test('a page asked for before a sign-out is not saved after it — 45.7', async () => {
+    let land = (): void => {}
+    const landed = new Promise<void>((resolve) => {
+        land = resolve
+    })
+    let ask = (): void => {}
+    const asked = new Promise<void>((resolve) => {
+        ask = resolve
+    })
+    const offline = await worker(MANIFEST, () => {
+        ask()
+        return landed.then(() => aged('<p>account</p>', KEPT))
+    })
+    const reaching = offline.dispatch('message', reachedAt('/account'))
+    await asked
+    await offline.dispatch('message', { data: 'rotated' })
+    land()
+    await reaching
+    expect(offline.saved('abide:saved')).toEqual([])
+})
+
+// 45.7, 45.13, 45.24 — A PAGE KEPT BEHIND THE ONE OPENED drops the pages saved where its answer carries
+// abide-principal, as a navigation's does. THE REVERT: drop the `rotated` arm from `keep`; `/old` is
+// still saved beside `/account`.
+test('a reached page answered with abide-principal drops the pages saved before it — 45.7, 45.24', async () => {
+    let rotating = false
+    const offline = await worker(
+        MANIFEST,
+        () =>
+            new Response('<p>page</p>', {
+                headers: {
+                    'content-type': 'text/html',
+                    ...(rotating ? { [PRINCIPAL_HEADER]: 'set' } : {}),
+                },
+            }),
+    )
+    await offline.navigate('/old')
+    rotating = true
+    await offline.dispatch('message', reachedAt('/account'))
+    expect(offline.saved('abide:saved')).toEqual([`${ORIGIN}/account`])
 })
 
 // 45.7 — A SIGN-IN OR A SIGN-OUT DROPS EVERY PAGE SAVED, whichever way the worker hears of it. THE

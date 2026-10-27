@@ -127,7 +127,7 @@ const tags = getTags()
     writeFileSync(`${app}/index.abide`, HOME)
     writeFileSync(
         `${app}/about/index.abide`,
-        '<main id="about"><h1>About</h1><a id="to-home" href="/">home</a></main>',
+        '<main id="about"><h1>About</h1><a id="to-home" href="/">home</a><a id="to-tab" href="/about?tab=2">tab</a></main>',
     )
     writeFileSync(
         `${app}/never/index.abide`,
@@ -254,6 +254,38 @@ test('an offline click loads a saved page, and stays put for an unsaved one — 
         await expect(page.locator('#n')).toHaveText('1')
         await expect(page.locator('#home h1')).toHaveText('Home')
         await page.click('#to-about')
+        await expect(page.locator('#about h1')).toHaveText('About')
+    } finally {
+        await context.setOffline(false)
+    }
+})
+
+// 45.24 — A PAGE REACHED INSIDE THE APP RELOADS OFFLINE, though it was never loaded itself — by a
+// click to another route, and by one to another query of the route standing, which asks the server
+// nothing. THE REVERT: drop the `reached` call from `Router.follow`; `/about?tab=2` is never saved.
+test('a page reached by a click reloads offline — 45.24', async ({
+    page,
+    context,
+}) => {
+    const savedHere = () =>
+        expect
+            .poll(() =>
+                page.evaluate(async () => {
+                    const saved = await caches.open('abide:saved')
+                    return (await saved.match(location.href)) !== undefined
+                }),
+            )
+            .toBe(true)
+    await visit(page, '/')
+    await page.click('#to-about')
+    await expect(page.locator('#about h1')).toHaveText('About')
+    await savedHere()
+    await page.click('#to-tab')
+    await expect(page).toHaveURL(/\?tab=2$/)
+    await savedHere()
+    await context.setOffline(true)
+    try {
+        await page.reload()
         await expect(page.locator('#about h1')).toHaveText('About')
     } finally {
         await context.setOffline(false)

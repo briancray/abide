@@ -3322,6 +3322,10 @@ and that copy is stale by no more than its `stale-if-error`.
 45.23 The worker `ABIDE_OFFLINE` turns on MUST ask for a page it saves with an `abide-keep` header,
 naming `open` where its answer is the one a navigation opens.
 
+45.24 The worker `ABIDE_OFFLINE` turns on MUST save the page of an address a `navigate` reached,
+where it saved no copy of that address 45.19 would answer with, and MUST NOT save one of another
+origin.
+
 # 46. Outbox
 
 46.1 `outbox` MUST answer, oldest first, every call queued in it that was neither delivered nor

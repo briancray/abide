@@ -5,6 +5,7 @@ import { firstMatch, type Params, partsOf } from '#shared/matchRoute.ts'
 import { unmounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
 import { OFFLINE_SAVED } from '#shared/OFFLINE_CACHES.ts'
+import { REACHED_MESSAGE } from '#shared/REACHED_MESSAGE.ts'
 import type { ShareScope } from '#shared/reactive/share.ts'
 import { arrive, route } from '#shared/route.ts'
 import { rankRoutes, type Segment } from '#shared/routePattern.ts'
@@ -400,14 +401,18 @@ export class Router {
      */
     private writeAddress(target: URL, replace: boolean, left: Scroll): void {
         const full = `${target.pathname}${target.search}${target.hash}`
-        if (replace) {
-            history.replaceState(entryAt(this.index, null), '', full)
-            return
+        // A step to a fragment, or to the address standing, reaches no page the worker lacks.
+        const moved =
+            target.pathname !== location.pathname ||
+            target.search !== location.search
+        if (replace) history.replaceState(entryAt(this.index, null), '', full)
+        else {
+            this.remember(left)
+            this.index += 1
+            this.scrolls.length = this.index
+            history.pushState(entryAt(this.index, null), '', full)
         }
-        this.remember(left)
-        this.index += 1
-        this.scrolls.length = this.index
-        history.pushState(entryAt(this.index, null), '', full)
+        if (moved) reached(target)
     }
 
     /**
@@ -718,6 +723,22 @@ async function savedOffline(target: URL): Promise<boolean> {
         ignoreVary: true,
     })
     return saved !== undefined
+}
+
+/**
+ * Tells the service worker an address a navigation reached, for it to keep (45.24).
+ *
+ * POSTED AS THE ADDRESS IS WRITTEN, rather than heard from 30.15's ask: a step within the standing
+ * route asks nothing, the ask's redirect lands elsewhere than it asked, and a superseded one writes
+ * no address.
+ */
+function reached(at: URL): void {
+    const controller = navigator.serviceWorker?.controller
+    if (controller == null) return
+    // A page is kept by its address, which a fragment is no part of.
+    const address = new URL(at)
+    address.hash = ''
+    controller.postMessage({ [REACHED_MESSAGE]: address.href })
 }
 
 /**
