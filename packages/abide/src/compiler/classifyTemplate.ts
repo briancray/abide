@@ -84,10 +84,10 @@ export type ClassifiedAttribute = {
     // 32.11 — a spread's attributes, less the ones the element names itself, kept written by a
     // binding of its own.
     | { kind: 'spread'; explicit: string[] }
-    // 32.5, 32.7, 32.8 — the property and the value, kept in step both ways. `reflects` is the
-    // attribute the property's value stands at in the tag, and `undefined` where it is not an
+    // 32.5, 32.7, 32.8, 32.73 — the property and the value, kept in step both ways. `reflects` is
+    // the attribute the property's value stands at in the tag, and `undefined` where it is not an
     // attribute: a `<textarea>`'s value is its text and a `<select>`'s is its options' `selected`,
-    // which the markup writes inside the tag (32.61).
+    // which the markup writes inside the tag (32.61), and a file input's files are no markup at all.
     | {
           kind: 'bound'
           bind: ValueBind
@@ -135,7 +135,7 @@ export function classifyAttributes(
         readsAnItem(holder: object): boolean
     },
 ): ClassifiedAttribute[] {
-    refuseTwoOwners(node)
+    refuseBinds(node)
     const groups = mergeGroupsOf(node)
     const sharing: ReturnType<typeof sharingOf>[] = []
     for (const group of groups) sharing.push(sharingOf(group, lowering))
@@ -210,7 +210,8 @@ export function classifyAttributes(
                 kind: 'bound',
                 bind,
                 reflects:
-                    bind === 'value' && node.lowerTag !== 'input'
+                    bind === 'files' ||
+                    (bind === 'value' && node.lowerTag !== 'input')
                         ? undefined
                         : bind === 'group'
                           ? 'checked'
@@ -354,15 +355,22 @@ function heldClasses(groups: MergeGroup[]): string[] {
 }
 
 /**
+ * 32.74 — A `bind:` AN ELEMENT HAS NO PROPERTY FOR IS REFUSED: `bind:vlaue` would otherwise be an
+ * attribute of that name, binding nothing and saying nothing.
+ *
  * 32.72 — WHAT A `bind:` WRITES IS THE BIND'S ALONE: `checked` beside `bind:checked` or
  * `bind:group`, `value` beside `bind:value`, any `bind:name` beside `name` — and an
  * `<option selected>` inside a `<select bind:value>`, and a `<textarea bind:value>`'s text. Two
  * owners of one value render whichever the browser keeps and move with whichever wrote last.
  */
-function refuseTwoOwners(node: ElementNode): void {
+function refuseBinds(node: ElementNode): void {
     for (const attribute of node.attributes) {
         const lower = attribute.lowerName
         if (!lower.startsWith('bind:') || lower === 'bind:element') continue
+        if (valueBindOf(lower) === undefined)
+            throw new Error(
+                `abide: <${node.tag}> has ${attribute.name}, which binds nothing — an element binds ${VALUE_BINDS.join(', ')} or element. RULEBOOK 32.74.`,
+            )
         const owned =
             lower === 'bind:group' ? 'checked' : lower.slice('bind:'.length)
         const beside = attributeOf(node, owned)
@@ -468,18 +476,17 @@ function isElementBind(lowerName: string): boolean {
 /**
  * The binds that keep a property and a value in step.
  *
- * 32.5, 32.7, 32.8 — both emitters ask: the server writes the value into the tag and the client
- * binds the property.
+ * 32.5, 32.7, 32.8, 32.73 — both emitters ask: the server writes the value into the tag, where it
+ * has one, and the client binds the property.
  */
-type ValueBind = 'value' | 'checked' | 'open' | 'group'
+const VALUE_BINDS = ['value', 'checked', 'open', 'group', 'files'] as const
+type ValueBind = (typeof VALUE_BINDS)[number]
 
 /** The value bind a folded attribute name is, or `undefined` for any other attribute. */
 function valueBindOf(lowerName: string): ValueBind | undefined {
-    if (lowerName === 'bind:value') return 'value'
-    if (lowerName === 'bind:checked') return 'checked'
-    if (lowerName === 'bind:open') return 'open'
-    if (lowerName === 'bind:group') return 'group'
-    return undefined
+    if (!lowerName.startsWith('bind:')) return undefined
+    const bind = lowerName.slice('bind:'.length) as ValueBind
+    return VALUE_BINDS.includes(bind) ? bind : undefined
 }
 
 /**

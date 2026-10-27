@@ -2072,6 +2072,13 @@ declarations first, then each directive's in the tag's order.
 attribute a `bind:name` names, `checked` beside `bind:group`, an `<option selected>` inside a
 `<select bind:value>`, or text inside a `<textarea bind:value>`.
 
+32.73 `bind:files` MUST hold a list of the input's files, with or without `multiple`, MUST write the
+files picked back on change, and MUST hand the input a list written to it; the server MUST write
+nothing for it.
+
+32.74 A `bind:` on an element naming none of `value`, `checked`, `open`, `group`, `files` and
+`element` MUST be a build error.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`

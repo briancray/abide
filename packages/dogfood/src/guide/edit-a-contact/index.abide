@@ -65,6 +65,7 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
                 <tr><td><code>bind:checked</code></td><td>a checkbox, to a boolean</td></tr>
                 <tr><td><code>bind:open</code></td><td>a <code>&lt;details&gt;</code>, to whether it is open</td></tr>
                 <tr><td><code>bind:group</code></td><td>radios to one value, or checkboxes to an array of their <code>value</code>s</td></tr>
+                <tr><td><code>bind:files</code></td><td>a file input, to an array of the files picked</td></tr>
                 <tr><td><code>{'bind:value={{get, set}}'}</code></td><td>a field to a pair you write, where the value is computed</td></tr>
                 <tr><td><code>{'bind:prop={state}'}</code></td><td>a component's prop, so the child's write reaches your value</td></tr>
             </tbody>

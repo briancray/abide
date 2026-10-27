@@ -97,6 +97,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`bind:checked`',
                         '`bind:open`',
                         '`bind:group`',
+                        '`bind:files`',
                         '`bind:value={{get, set}}`',
                         '`{#if cond}`',
                         '`{#try}`',

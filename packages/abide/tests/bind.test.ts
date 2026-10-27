@@ -2,6 +2,7 @@
 // value standing at render into the tag, and the client binds the property where the server left it.
 
 import { afterAll, expect, test } from 'bun:test'
+import { File as EmulatedFile } from 'happy-dom'
 import { emitClient, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -34,6 +35,9 @@ let open = reactive(false)
 async function mounted(): Promise<string> {
     return (await mountPage(PAGE)).html
 }
+
+// the emulator's own `File`: the global is Bun's, which its `DataTransfer` does not take
+const DomFile = EmulatedFile as unknown as typeof File
 
 const input = (id: string) => document.getElementById(id) as HTMLInputElement
 const out = () => document.getElementById('out')?.textContent
@@ -389,4 +393,67 @@ test('a bind beside another writer of its value is refused — 32.72', () => {
             '<select bind:value={size}><option value="s">s</option></select>',
         ),
     ).toBe('compiled')
+})
+
+// 32.73 — A FILE INPUT'S FILES ARE A LIST, picked or written, with or without `multiple`, and the
+// server writes none of it. THE REVERT: emit `bindProperty` for `bind:files`; a pick leaves the
+// list empty, and a list written in never reaches the input. A PICK IS NOT HANDED BACK: drop
+// `holdsFiles` and the input's list is rebuilt from the one it just reported.
+test('bind:files holds the files picked, and hands the input a list written in — 32.73', async () => {
+    const { html } = await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let files = reactive([])
+</script>
+
+<input id="files" type="file" multiple bind:files={files}>
+<button id="drop" onclick={() => { files = files.slice(1) }}>drop</button>
+<button id="clear" onclick={() => { files = [] }}>clear</button>
+<p id="out">{files.length} {files.map((file) => file.name).join(',')}</p>`)
+    expect(html).toContain('<input id="files" type="file" multiple>')
+    const picker = input('files')
+    const first = new DomFile(['a'], 'a.png', { type: 'image/png' })
+    const second = new DomFile(['b'], 'b.png', { type: 'image/png' })
+    const transfer = new DataTransfer()
+    transfer.items.add(first)
+    transfer.items.add(second)
+    const picked = transfer.files
+    picker.files = picked
+    picker.dispatchEvent(new Event('change'))
+    flushSync()
+    expect(out()).toBe('2 a.png,b.png')
+    expect(picker.files).toBe(picked)
+    ;(document.getElementById('drop') as HTMLButtonElement).click()
+    flushSync()
+    expect(out()).toBe('1 b.png')
+    expect(picker.files?.length).toBe(1)
+    expect(picker.files?.[0]).toBe(second)
+    ;(document.getElementById('clear') as HTMLButtonElement).click()
+    flushSync()
+    expect(out()).toBe('0 ')
+    expect(picker.files?.length ?? 0).toBe(0)
+})
+
+// 32.74 — A `bind:` AN ELEMENT HAS NO PROPERTY FOR IS A BUILD ERROR, where it compiled to an attribute
+// that bound nothing. THE REVERT: drop the check from `refuseBinds`; `bind:file` compiles.
+test('a bind an element has no property for is refused — 32.74', () => {
+    const refusedFor = (template: string): string => {
+        try {
+            emitClient(parseAbide(template))
+        } catch (thrown) {
+            return (thrown as Error).message
+        }
+        return 'compiled'
+    }
+    for (const template of [
+        '<input type="file" bind:file={picked}>',
+        '<input bind:vlaue={name}>',
+        '<div bind:={x}></div>',
+    ])
+        expect(refusedFor(template)).toContain('RULEBOOK 32.74')
+    for (const template of [
+        '<input type="file" bind:files={picked}>',
+        '<div bind:element={node}></div>',
+    ])
+        expect(refusedFor(template)).toBe('compiled')
 })

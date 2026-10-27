@@ -40,6 +40,7 @@ export {
     textHere,
 } from './adoptWalk.ts'
 export { bindElement } from './bindElement.ts'
+export { bindFiles } from './bindFiles.ts'
 export { bindGroup } from './bindGroup.ts'
 export { bindProperty } from './bindProperty.ts'
 export { bindSpread } from './bindSpread.ts'

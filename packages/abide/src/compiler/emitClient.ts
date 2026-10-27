@@ -769,7 +769,7 @@ function elementUnits(
             handlers.push(
                 `${element}.addEventListener(${JSON.stringify(one.event)}, ${lowering.listener(one.attribute)})`,
             )
-        // 32.5, 32.7, 32.8 — THE PROPERTY AND THE VALUE, IN STEP BOTH WAYS: a watch on this
+        // 32.5, 32.7, 32.8, 32.73 — THE PROPERTY AND THE VALUE, IN STEP BOTH WAYS: a watch on this
         // region's scope writes the property, and a listener writes it back.
         // 32.8 — a group compares against the input's own value, read where the value is.
         else if (one.kind === 'bound' && one.bind === 'group')
@@ -781,6 +781,10 @@ function elementUnits(
                           ? lowering.binding(one.own)
                           : JSON.stringify(one.own.value)
                 }), ${SCOPE})`,
+            )
+        else if (one.kind === 'bound' && one.bind === 'files')
+            binds.push(
+                `${lowering.use('bindFiles')}(${element}, ${lowering.reference(one.attribute)}, ${SCOPE})`,
             )
         else if (one.kind === 'bound')
             binds.push(
