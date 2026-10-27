@@ -8,7 +8,7 @@
 
 import { framedStream } from '#shared/framing.ts'
 import { refuse } from '#shared/refuse.ts'
-import type { AssistantEvent, Provider } from './assistant.ts'
+import { blocksOf, type Provider, textOf } from './assistant.ts'
 
 /** A Messages API request body, less what abide writes, with the client's key and origin. */
 export type ClaudeApiConfig = {
@@ -80,8 +80,12 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                     input_schema: tool.inputSchema,
                 })
             const history: { role: string; content: unknown }[] = []
+            // 44.38 — each image in its place in its turn.
             for (const message of messages)
-                history.push({ role: message.role, content: message.content })
+                history.push({
+                    role: message.role,
+                    content: blocksOf(message.content),
+                })
             const usage = { input: 0, output: 0 }
             for (let turn = 1; ; turn++) {
                 const answered = await fetch(
@@ -189,28 +193,29 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                     }
                     return
                 }
-                const results = await Promise.all(
-                    called.map(
-                        async (
-                            block,
-                        ): Promise<AssistantEvent & { type: 'result' }> => ({
-                            type: 'result',
-                            id: block.id as string,
-                            ...(await tools.call(
-                                block.name as string,
-                                block.input,
-                            )),
-                        }),
-                    ),
+                const answers = await Promise.all(
+                    called.map(async (block) => ({
+                        id: block.id as string,
+                        ...(await tools.call(
+                            block.name as string,
+                            block.input,
+                        )),
+                    })),
                 )
                 const content: unknown[] = []
-                for (const result of results) {
-                    yield result
+                for (const answer of answers) {
+                    // 44.35 — the event carries the answer's words; an image goes to the model alone.
+                    yield {
+                        type: 'result',
+                        id: answer.id,
+                        text: textOf(answer.content),
+                        failed: answer.failed,
+                    }
                     content.push({
                         type: 'tool_result',
-                        tool_use_id: result.id,
-                        content: result.text,
-                        is_error: result.failed,
+                        tool_use_id: answer.id,
+                        content: blocksOf(answer.content),
+                        is_error: answer.failed,
                     })
                 }
                 // 44.12 — every result of one turn in one message.

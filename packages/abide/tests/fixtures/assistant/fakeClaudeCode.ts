@@ -16,8 +16,11 @@ const config = (await Bun.file(configPath).json()) as {
 let input = ''
 for await (const chunk of Bun.stdin.stream())
     input += new TextDecoder().decode(chunk)
-const prompt = (JSON.parse(input.trim()) as { message: { content: string } })
-    .message.content
+const prompt = (
+    JSON.parse(input.trim()) as { message: { content: { text?: string }[] } }
+).message.content
+// The prompt's words, which the cases below look for.
+const words = prompt.map((block) => block.text ?? '').join('')
 
 await Bun.write(
     process.env.FAKE_RECORD as string,
@@ -39,7 +42,7 @@ const text = (value: string): void =>
 
 print({ type: 'system', subtype: 'init' })
 text('checking')
-if (prompt.includes('hang')) await new Promise(() => {})
+if (words.includes('hang')) await new Promise(() => {})
 
 print({
     type: 'stream_event',
@@ -54,7 +57,7 @@ print({
         },
     },
 })
-if (prompt.includes('writing')) await new Promise(() => {})
+if (words.includes('writing')) await new Promise(() => {})
 print({
     type: 'assistant',
     message: {
@@ -81,7 +84,7 @@ const replied = await (
         }),
     })
 ).json()
-if (prompt.includes('record')) {
+if (words.includes('record')) {
     await Bun.write(
         process.env.FAKE_RECORD as string,
         JSON.stringify({ args, prompt, pid: process.pid, reply: replied }),

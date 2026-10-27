@@ -11,8 +11,10 @@
 import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
 import {
+    type AssistantContent,
     type AssistantEvent,
     type AssistantMessage,
+    blocksOf,
     forwardOf,
     type Provider,
 } from './assistant.ts'
@@ -65,7 +67,7 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
             bridge.frames.push({
                 type: 'turn',
                 id: turn.id,
-                prompt: foldedPrompt(messages),
+                prompt: foldedContent(messages),
                 config,
                 maxTurns,
             })
@@ -105,16 +107,34 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
     }
 }
 
-/** The transcript as the one message Claude Code is sent: earlier turns folded above the last. 44.5. */
-function foldedPrompt(messages: AssistantMessage[]): string {
-    const last = (messages.at(-1) as AssistantMessage).content
-    if (messages.length === 1) return last
-    let earlier = ''
-    for (let index = 0; index < messages.length - 1; index++) {
-        const message = messages[index] as AssistantMessage
-        earlier += `<${message.role}>\n${message.content}\n</${message.role}>\n`
+/**
+ * The transcript as the one message Claude Code is sent, as Messages API blocks: earlier turns folded
+ * above the last, and each image in its place. 44.5.
+ */
+function foldedContent(
+    messages: (AssistantMessage & { content: AssistantContent[] })[],
+): unknown[] {
+    const pieces: AssistantContent[] = []
+    let words = messages.length > 1 ? '<conversation>\n' : ''
+    const last = messages.length - 1
+    for (let index = 0; index <= last; index++) {
+        const message = messages[index] as (typeof messages)[number]
+        if (index < last) words += `<${message.role}>\n`
+        for (let at = 0; at < message.content.length; at++) {
+            const piece = message.content[at] as AssistantContent
+            if (at > 0) words += '\n'
+            if (piece.type === 'text') {
+                words += piece.text
+                continue
+            }
+            pieces.push({ type: 'text', text: words }, piece)
+            words = ''
+        }
+        if (index < last) words += `\n</${message.role}>\n`
+        if (index === last - 1) words += '</conversation>\n\n'
     }
-    return `<conversation>\n${earlier}</conversation>\n\n${last}`
+    pieces.push({ type: 'text', text: words })
+    return blocksOf(pieces)
 }
 
 /** The browser asking, which a pairing is to. 44.13. */

@@ -1385,6 +1385,13 @@ whatever its handler's args schema declares there.
 20.20 A handler `/__abide/mcp` would list whose args schema can never be an object MUST refuse the
 app at boot, naming the handler.
 
+20.21 A `tools/call` that `/__abide/mcp` answers for a call answered with an image body of a type
+44.36 names MUST carry that body as one `image` content item, base64 with its type, in place of its
+text, and MUST carry no `structuredContent`.
+
+20.22 A call to a tool declaring an `outputSchema` that is answered with an `image/*` body MUST be
+refused, its text naming the tool and the image's type, and MUST be logged per 20.18 as a 500.
+
 # 21. Generated headers
 
 21.1 Every response MUST carry `x-content-type-options: nosniff`.
@@ -3167,7 +3174,7 @@ of its own.
 each one.
 
 44.5 `claudeCode` MUST send a transcript to Claude Code as one message, its earlier turns folded
-above the last.
+above the last and each `AssistantContent` image in its place.
 
 44.6 With `mcp`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
 lists, and MUST call each as a request through the app answering the request.
@@ -3257,6 +3264,23 @@ that browser carrying any other.
 44.34 A `claudeCode.bridge` stream MUST yield the pairing of whoever a `principal.set` or a
 `principal.clear` made at its browser since it opened signs in, at the caller 26.9 rotates it to,
 and the command it yields MUST pair that one.
+
+44.35 A `Toolbox` call MUST hand as its `ToolAnswer`'s `content` the pieces `/__abide/mcp` carries
+for the same call, `claudeApi` MUST show the model those pieces as the call's result, and the
+`result` `AssistantEvent` MUST carry their words and none of their images.
+
+44.36 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
+`AssistantContent` image whose `mimeType` is none of `image/png`, `image/jpeg`, `image/gif` and
+`image/webp`.
+
+44.37 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
+`AssistantContent` image in a turn that is not the user's.
+
+44.38 `claudeApi` MUST send each `AssistantContent` image to the model as an image block, base64 with
+its type, in its place in its turn.
+
+44.39 `assistant` MUST hand a `Provider` each turn as its `AssistantContent` pieces, a turn's string
+as one text piece.
 
 # 45. Offline
 

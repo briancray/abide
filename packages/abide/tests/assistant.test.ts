@@ -13,8 +13,8 @@ import {
 } from '../../bridge/src/bridge.ts'
 import { readLines } from '../../bridge/src/readLines.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
-import type { ClaudeCodeConfig } from '../src/server/claudeCode.ts'
 import { mintCode, RESUME_MILLISECONDS } from '../src/server/bridgeRelay.ts'
+import type { ClaudeCodeConfig } from '../src/server/claudeCode.ts'
 import { HEARTBEAT_MILLISECONDS } from '../src/server/HEARTBEAT_MILLISECONDS.ts'
 import { BRIDGE_ADDRESS } from '../src/shared/ADDRESSES.ts'
 import { handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
@@ -30,6 +30,11 @@ const SERVER = new URL('../src/server', import.meta.url).pathname
 const INVOICES = `import { cookies, POST } from '@abide/abide/server'
 
 export default POST(() => cookies().get('who') ?? 'nobody', { description: 'Who is asking.' })
+`
+
+const PICTURE = `import { GET } from '@abide/abide/server'
+
+export default GET(() => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), { description: 'A picture.' })
 `
 
 // Off the MCP surface, as the pairing handlers are, so no conversation here lists it as a tool.
@@ -109,6 +114,7 @@ beforeAll(async () => {
         {
             'index.abide': '<main>home</main>',
             'invoices/whoami.ts': INVOICES,
+            'pictures/drawn.ts': PICTURE,
             'account/signIn.ts': SIGN_IN,
             'account/signInAndPair.ts': SIGN_IN_AND_PAIR,
             'account/signOut.ts': SIGN_OUT,
@@ -306,6 +312,24 @@ test('both providers play one conversation as one event sequence, tools called a
     )
 }, 30_000)
 
+// 44.35 — AN IMAGE A TOOL ANSWERS IS SHOWN THE MODEL AS ONE: the call's `tool_result` carries it as an
+// image block, base64 with its type, which the scripted API answers back; the `result` event carries the
+// answer's words, which an image has none of. THE REVERTS: drop the image arm of `blocksOf` and the model
+// is handed nothing; spread the whole answer into the event and it carries the image's bytes.
+test('claudeApi shows a tool answered image to the model as one, and the event carries no bytes — 44.35', async () => {
+    const said = await events(await ask('one', 'api', 'show me'))
+    expect(said).toContainEqual({
+        type: 'result',
+        id: 'toolu_1',
+        text: '',
+        failed: false,
+    })
+    expect(said).toContainEqual({
+        type: 'text',
+        text: `saw ${JSON.stringify({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw==' } })}`,
+    })
+}, 30_000)
+
 // 44.11 — THE LAST TURN'S TOOL CALL IS NEVER RUN. With one turn allowed, the model's call to
 // `post_invoices_whoami` is announced as it streams, but no `result` follows and the conversation ends on
 // `max_turns` rather than the `tool_use` the turn stopped for. THE REVERTS: yield `stop` as it arrived
@@ -489,13 +513,16 @@ test('Claude Code runs alone, over the whole transcript as one message — 44.5,
     await events(await ask('four', 'code', 'who am I?'))
     const record = (await Bun.file(RECORD).json()) as {
         args: string[]
-        prompt: string
+        prompt: unknown[]
         configPath: string
         config: { mcpServers: { app: { url: string } } }
     }
-    expect(record.prompt).toBe(
-        '<conversation>\n<user>\nearlier question\n</user>\n<assistant>\nearlier answer\n</assistant>\n</conversation>\n\nwho am I?',
-    )
+    expect(record.prompt).toEqual([
+        {
+            type: 'text',
+            text: '<conversation>\n<user>\nearlier question\n</user>\n<assistant>\nearlier answer\n</assistant>\n</conversation>\n\nwho am I?',
+        },
+    ])
     const after = (flag: string): string | undefined =>
         record.args[record.args.indexOf(flag) + 1]
     expect(after('--tools')).toBe('')
@@ -637,6 +664,108 @@ test('a transcript that does not end on a user turn is refused — 44.3', async 
     })
     expect(answer.status).toBe(400)
     expect(await answer.text()).toContain('44.3')
+}, 30_000)
+
+// A transcript showing an image: a question about it, the picture, beside the turns before.
+const LOOKED_AT = [
+    { role: 'user', content: 'earlier question' },
+    { role: 'assistant', content: 'earlier answer' },
+    {
+        role: 'user',
+        content: [
+            { type: 'text', text: 'what is this?' },
+            { type: 'image', data: 'iVBORw==', mimeType: 'image/png' },
+        ],
+    },
+]
+
+/** Asks over `messages` as written, through the provider `via`, as the browser `caller`. */
+function askWith(
+    caller: string,
+    via: 'api' | 'code',
+    messages: unknown[],
+): Promise<Response> {
+    return Bun.fetch(`${base}/ask`, {
+        method: 'POST',
+        headers: {
+            ...asPage(caller),
+            'content-type': 'application/json',
+            accept: 'application/jsonl',
+        },
+        body: JSON.stringify({ via, messages }),
+    })
+}
+
+// 44.36, 44.37 — AN IMAGE IS THE ASKER'S TO SHOW, AND ONE A MODEL TAKES: refused 400 before any
+// provider runs. THE REVERTS: drop the role check and the model is handed an image as its own turn;
+// drop the type check and an SVG reaches the API, which refuses it there.
+test("an image a model cannot take, or one in a turn not the user's, is refused — 44.36, 44.37", async () => {
+    const svg = await askWith('one', 'api', [
+        {
+            role: 'user',
+            content: [
+                { type: 'image', data: 'PHN2Zz4=', mimeType: 'image/svg+xml' },
+            ],
+        },
+    ])
+    expect(svg.status).toBe(400)
+    expect(await svg.text()).toContain('44.36')
+    const theirs = await askWith('one', 'api', [
+        { role: 'user', content: 'look' },
+        {
+            role: 'assistant',
+            content: [
+                { type: 'image', data: 'iVBORw==', mimeType: 'image/png' },
+            ],
+        },
+        { role: 'user', content: 'well?' },
+    ])
+    expect(theirs.status).toBe(400)
+    expect(await theirs.text()).toContain('44.37')
+}, 30_000)
+
+// 44.38 — AN IMAGE IN THE TRANSCRIPT IS SHOWN THE MODEL AS ONE, in its place in its turn: the scripted
+// API answers the last turn's content back as it came. THE REVERT: send `content` as it is and the API
+// is handed the pieces in abide's own shape, which it refuses.
+test('claudeApi shows a transcript image to the model in its place — 44.38', async () => {
+    const said = await events(await askWith('one', 'api', LOOKED_AT))
+    expect(said).toContainEqual({
+        type: 'text',
+        text: `saw ${JSON.stringify([
+            { type: 'text', text: 'what is this?' },
+            {
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: 'image/png',
+                    data: 'iVBORw==',
+                },
+            },
+        ])}`,
+    })
+}, 30_000)
+
+// 44.5 — CLAUDE CODE IS SENT ONE MESSAGE, earlier turns folded above the last and the image in its place,
+// as Messages API blocks. THE REVERT: fold the pieces to text and the
+// image is dropped from what Claude Code was sent.
+test('Claude Code is sent a transcript image in its place in the one message — 44.5', async () => {
+    await pairBridge('four')
+    await events(await askWith('four', 'code', LOOKED_AT))
+    const record = (await Bun.file(RECORD).json()) as { prompt: unknown }
+    expect(record.prompt).toEqual([
+        {
+            type: 'text',
+            text: '<conversation>\n<user>\nearlier question\n</user>\n<assistant>\nearlier answer\n</assistant>\n</conversation>\n\nwhat is this?\n',
+        },
+        {
+            type: 'image',
+            source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: 'iVBORw==',
+            },
+        },
+    ])
 }, 30_000)
 
 // 44.6, 42.12 — A TOOL IS CALLED THROUGH THE APP ANSWERING THE CONVERSATION, not whichever `App` the

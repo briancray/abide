@@ -15,8 +15,11 @@ const recorded: Provider = {
         const input = { name: 'Ada' }
         yield { type: 'tool', id: 'toolu_1', name }
         yield { type: 'input', id: 'toolu_1', input }
-        const answered = await tools.call(name, input)
-        yield { type: 'result', id: 'toolu_1', ...answered }
+        const { content, failed } = await tools.call(name, input)
+        // A search answers words, so its one piece is text.
+        const [words] = content
+        const text = words?.type === 'text' ? words.text : ''
+        yield { type: 'result', id: 'toolu_1', text, failed }
         yield { type: 'text', text: 'Ada Lovelace is at Analytical Engines.' }
         yield { type: 'done', stop: 'end_turn', usage: { input: 0, output: 0 } }
     },

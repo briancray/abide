@@ -33,6 +33,11 @@ test('the body is sent as written, with the transcript', async () => {
         max_tokens: 1024,
         system: 'Answer questions about contacts.',
         stream: true,
-        messages: [{ role: 'user', content: 'Which company is Ada at?' }],
+        messages: [
+            {
+                role: 'user',
+                content: [{ type: 'text', text: 'Which company is Ada at?' }],
+            },
+        ],
     })
 })

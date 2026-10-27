@@ -360,6 +360,13 @@ export const REFERENCE: readonly {
         typeOnly: true,
     },
     {
+        route: '/reference/types/AssistantContent',
+        names: ['AssistantContent'],
+        entry: '@abide/abide/server',
+        group: 'Assistant',
+        typeOnly: true,
+    },
+    {
         route: '/reference/types/AssistantEvent',
         names: ['AssistantEvent'],
         entry: '@abide/abide/server',
@@ -383,6 +390,13 @@ export const REFERENCE: readonly {
     {
         route: '/reference/types/Toolbox',
         names: ['Toolbox'],
+        entry: '@abide/abide/server',
+        group: 'Assistant',
+        typeOnly: true,
+    },
+    {
+        route: '/reference/types/ToolAnswer',
+        names: ['ToolAnswer'],
         entry: '@abide/abide/server',
         group: 'Assistant',
         typeOnly: true,

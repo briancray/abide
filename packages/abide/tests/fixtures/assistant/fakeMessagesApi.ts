@@ -2,6 +2,11 @@
 // and a second that answers with what the tool said. The second turn is refused 400 unless the first
 // turn's thinking block came back with its signature, as the real API refuses a tool loop without it.
 //
+// A last turn holding an image is answered at once with that turn's content as it came, blocks and all.
+//
+// A prompt holding `show me` asks for `get_pictures_drawn` instead. The second turn answers with the
+// result's content as it came back: its text blocks' words, and any other block as its JSON.
+//
 // A prompt holding `writing` starts the tool call and never finishes it: the stream stays open after the
 // call's `content_block_start`, the way a model still writing the call's input holds it.
 //
@@ -24,6 +29,33 @@ function sse(events: unknown[], held = false): Response {
     )
 }
 
+/** A turn that says `text` and ends, having used `input` and `output` tokens. */
+function said(text: string, input: number, output: number): Response {
+    return sse([
+        {
+            type: 'message_start',
+            message: { usage: { input_tokens: input, output_tokens: 1 } },
+        },
+        {
+            type: 'content_block_start',
+            index: 0,
+            content_block: { type: 'text', text: '' },
+        },
+        {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'text_delta', text },
+        },
+        { type: 'content_block_stop', index: 0 },
+        {
+            type: 'message_delta',
+            delta: { stop_reason: 'end_turn' },
+            usage: { output_tokens: output },
+        },
+        { type: 'message_stop' },
+    ])
+}
+
 type Turn = { role: string; content: unknown }
 
 const server = Bun.serve({
@@ -31,7 +63,11 @@ const server = Bun.serve({
     async fetch(request) {
         const body = (await request.json()) as { messages: Turn[] }
         const last = body.messages.at(-1) as Turn
-        if (last.content === 'writing')
+        const blocks = last.content as { type: string; text?: string }[]
+        const words = blocks.map((block) => block.text ?? '').join('')
+        if (blocks.some((block) => block.type === 'image'))
+            return said(`saw ${JSON.stringify(last.content)}`, 1, 1)
+        if (words === 'writing')
             return sse(
                 [
                     {
@@ -58,7 +94,7 @@ const server = Bun.serve({
                 ],
                 true,
             )
-        if (typeof last.content === 'string')
+        if (!blocks.some((block) => block.type === 'tool_result'))
             return sse([
                 {
                     type: 'message_start',
@@ -96,7 +132,10 @@ const server = Bun.serve({
                     content_block: {
                         type: 'tool_use',
                         id: 'toolu_1',
-                        name: 'post_invoices_whoami',
+                        name:
+                            words === 'show me'
+                                ? 'get_pictures_drawn'
+                                : 'post_invoices_whoami',
                         input: {},
                     },
                 },
@@ -114,31 +153,13 @@ const server = Bun.serve({
         if (asked.content[0]?.signature !== 'SIGNED')
             return new Response('thinking block not echoed', { status: 400 })
         const result = (
-            last.content as { type: string; content: string }[]
-        )[0] as { content: string }
-        return sse([
-            {
-                type: 'message_start',
-                message: { usage: { input_tokens: 2, output_tokens: 1 } },
-            },
-            {
-                type: 'content_block_start',
-                index: 0,
-                content_block: { type: 'text', text: '' },
-            },
-            {
-                type: 'content_block_delta',
-                index: 0,
-                delta: { type: 'text_delta', text: `saw ${result.content}` },
-            },
-            { type: 'content_block_stop', index: 0 },
-            {
-                type: 'message_delta',
-                delta: { stop_reason: 'end_turn' },
-                usage: { output_tokens: 3 },
-            },
-            { type: 'message_stop' },
-        ])
+            last.content as { type: string; content: unknown }[]
+        )[0] as { content: unknown }
+        return said(
+            `saw ${(result.content as { type: string; text?: string }[]).map((block) => (block.type === 'text' ? block.text : JSON.stringify(block))).join('')}`,
+            2,
+            3,
+        )
     },
 })
 

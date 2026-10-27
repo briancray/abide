@@ -12,11 +12,20 @@
 
 import { namedLogger } from '#shared/log.ts'
 import { refuse } from '#shared/refuse.ts'
+import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
 import { type McpReply, McpSurface } from './generatedSurfaces.ts'
 import { request, within } from './requestScope.ts'
 
-/** One turn of the transcript a caller sends. */
-export type AssistantMessage = { role: 'user' | 'assistant'; content: string }
+/** A piece of a turn: words, or an image as base64 with its type. */
+export type AssistantContent =
+    | { type: 'text'; text: string }
+    | { type: 'image'; data: string; mimeType: string }
+
+/** One turn of the transcript a caller sends: its words, or its pieces in order. */
+export type AssistantMessage = {
+    role: 'user' | 'assistant'
+    content: string | AssistantContent[]
+}
 
 /** What a conversation yields, the same from every provider. */
 export type AssistantEvent =
@@ -43,19 +52,19 @@ export type ToolDefinition = {
     outputSchema: unknown
 }
 
+/** What a tool call answered: its pieces, and whether it failed. 20.21, 44.35. */
+export type ToolAnswer = { content: AssistantContent[]; failed: boolean }
+
 /** The app's MCP tools, called as the asker. */
 export type Toolbox = {
     list: ToolDefinition[]
-    call(
-        name: string,
-        input: unknown,
-    ): Promise<{ text: string; failed: boolean }>
+    call(name: string, input: unknown): Promise<ToolAnswer>
 }
 
 /** What runs a conversation: a model's API, or something that runs its own loop. */
 export type Provider = {
     run(
-        messages: AssistantMessage[],
+        messages: (AssistantMessage & { content: AssistantContent[] })[],
         tools: Toolbox,
         limits: { maxTurns: number; signal: AbortSignal },
     ): AsyncGenerator<AssistantEvent>
@@ -81,11 +90,38 @@ export async function* assistant(
             400,
             'The transcript has to end on a user turn for the assistant to answer it. RULEBOOK 44.3.',
         )
+    // Every turn as its pieces, so a provider reads one shape: words alone are one text piece.
+    const turns: Parameters<Provider['run']>[0] = []
+    for (const message of messages) {
+        if (typeof message.content === 'string') {
+            turns.push({
+                role: message.role,
+                content: [{ type: 'text', text: message.content }],
+            })
+            continue
+        }
+        turns.push({ role: message.role, content: message.content })
+        for (const piece of message.content) {
+            if (piece?.type !== 'image') continue
+            // 44.37 — an image is the asker's to show, never a turn the model answered.
+            if (message.role !== 'user')
+                throw refuse(
+                    400,
+                    'An image can only stand in a user turn of the transcript. RULEBOOK 44.37.',
+                )
+            // 44.36.
+            if (!IMAGE_TYPES.has(piece.mimeType))
+                throw refuse(
+                    400,
+                    `An image in the transcript is ${piece.mimeType}, and a model is shown only ${[...IMAGE_TYPES].join(', ')}. RULEBOOK 44.36.`,
+                )
+        }
+    }
     const tools = toolboxOver(
         options.mcp === true ? appSurface() : NO_SURFACE,
         askerOf(request()),
     )
-    const events = provider.run(messages, tools, {
+    const events = provider.run(turns, tools, {
         maxTurns: options.maxTurns ?? MAX_TURNS,
         signal: request().signal,
     })
@@ -181,10 +217,15 @@ function toolboxOver(surface: McpSurface, asker: Request): Toolbox {
                 return await surface.call(name, input, asker)
             } catch (thrown) {
                 return {
-                    text:
-                        thrown instanceof Error
-                            ? thrown.message
-                            : String(thrown),
+                    content: [
+                        {
+                            type: 'text',
+                            text:
+                                thrown instanceof Error
+                                    ? thrown.message
+                                    : String(thrown),
+                        },
+                    ],
                     failed: true,
                 }
             }
@@ -198,4 +239,32 @@ function toolboxOver(surface: McpSurface, asker: Request): Toolbox {
         ),
     )
     return tools
+}
+
+/**
+ * Pieces as Messages API blocks, in order: text as text, an image as base64 with its type. A text of
+ * whitespace alone is left out, as the API refuses one. 44.38.
+ */
+export function blocksOf(content: AssistantContent[]): unknown[] {
+    const blocks: unknown[] = []
+    for (const piece of content)
+        if (piece.type === 'image')
+            blocks.push({
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: piece.mimeType,
+                    data: piece.data,
+                },
+            })
+        else if (/\S/.test(piece.text))
+            blocks.push({ type: 'text', text: piece.text })
+    return blocks
+}
+
+/** The words of `content`, its images left out. */
+export function textOf(content: AssistantContent[]): string {
+    let text = ''
+    for (const piece of content) if (piece.type === 'text') text += piece.text
+    return text
 }

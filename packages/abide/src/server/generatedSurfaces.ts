@@ -14,6 +14,7 @@
 // schema (19.9) as `argsDocument`.
 
 import { isFailed } from '#shared/Failed.ts'
+import { essenceOf } from '#shared/framing.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
@@ -21,9 +22,10 @@ import { parseRoutePattern } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import { answered } from './answerFailure.ts'
 import { bodyWithin, type Mounted } from './answerRpc.ts'
-import type { ToolDefinition } from './assistant.ts'
+import type { ToolAnswer, ToolDefinition } from './assistant.ts'
 import { appIdentity } from './config.ts'
 import { crossingOrigin, crossingRefusal } from './crossingOrigin.ts'
+import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
 import { MCP_PROTOCOL_VERSION } from './MCP_PROTOCOL_VERSION.ts'
 import { type Listed, surfaceOf } from './surfaceOf.ts'
 
@@ -307,16 +309,12 @@ export class McpSurface {
     }
 
     /** What calling the tool `name` as `asker` answered, a refusal or a missing tool a failed one. */
-    call(
-        name: string,
-        args: unknown,
-        asker: Request,
-    ): Promise<{ text: string; failed: boolean }> {
+    call(name: string, args: unknown, asker: Request): Promise<ToolAnswer> {
         const tool = this.#tool(name)
         if (tool === undefined) {
             logCall(String(name), 404, undefined)
             return Promise.resolve({
-                text: `No tool named ${name}.`,
+                content: [{ type: 'text', text: `No tool named ${name}.` }],
                 failed: true,
             })
         }
@@ -331,7 +329,7 @@ export class McpSurface {
         one: Published,
         args: Record<string, unknown> | undefined,
         asker: Request,
-    ): Promise<{ text: string; failed: boolean }> {
+    ): Promise<ToolAnswer> {
         // 28.7 — a closed namespace does not pay for the line it would have written.
         const started = MCP_LOG.enabled() ? performance.now() : undefined
         let answer: Response
@@ -345,10 +343,41 @@ export class McpSurface {
             }
             answer = answered(thrown)
         }
+        const mimeType = essenceOf(answer.headers.get('content-type'))
+        if (answer.status < 400 && mimeType.startsWith('image/')) {
+            // 20.22 — a tool that promised a value and answered a picture has no structured content
+            // to carry: its handler's type is wrong, and the call says so where it happened.
+            if (structured(one)) {
+                await answer.body?.cancel()
+                logCall(one.name, 500, started)
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `${one.name} declares a result schema but answered an image, ${mimeType}.`,
+                        },
+                    ],
+                    failed: true,
+                }
+            }
+            // 20.21 — AN IMAGE A MODEL IS SHOWN IS THE IMAGE, handed on as one rather than its bytes
+            // read as text, so a model looks at what a handler drew. Any other (an svg) is its text.
+            if (IMAGE_TYPES.has(mimeType)) {
+                const data = (await answer.bytes()).toBase64()
+                logCall(one.name, answer.status, started)
+                return {
+                    content: [{ type: 'image', data, mimeType }],
+                    failed: false,
+                }
+            }
+        }
         // The body is the call's too: a handler that streams has only begun when its head arrives.
         const text = await answer.text()
         logCall(one.name, answer.status, started)
-        return { text, failed: answer.status >= 400 }
+        return {
+            content: [{ type: 'text', text }],
+            failed: answer.status >= 400,
+        }
     }
 
     /** One MCP request, made as `asker`, as JSON-RPC's `result` or `error`. */
@@ -379,20 +408,25 @@ export class McpSurface {
                         `No tool named ${String(params?.name)}.`,
                     )
                 }
-                const { text, failed } = await this.#called(
+                const { content, failed } = await this.#called(
                     tool,
                     params?.arguments as Record<string, unknown> | undefined,
                     asker,
                 )
+                const [piece] = content
                 return {
                     result: {
-                        content: [{ type: 'text', text }],
+                        // 20.21 — an AssistantContent piece is already an MCP content item.
+                        content,
                         // 20.16 — the same value as structured content, where the tool declares
-                        // its shape; a refusal is not that value.
+                        // its shape; a refusal is not that value. A tool declaring one answers no
+                        // image (20.22), so its one piece is its text.
                         structuredContent:
-                            failed || !structured(tool)
+                            failed ||
+                            !structured(tool) ||
+                            piece?.type !== 'text'
                                 ? undefined
-                                : JSON.parse(text),
+                                : JSON.parse(piece.text),
                         isError: failed,
                     },
                 }

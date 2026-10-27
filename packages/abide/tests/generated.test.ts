@@ -44,6 +44,19 @@ export const tagged = POST(({ id }: { id: string }) => Response.json({ id }), {
     description: 'Back on.',
     clients: { mcp: true },
 })
+
+export const drawn = GET(() => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), {
+    description: 'A picture.',
+})
+
+export const sketched = GET(() => new Blob(['<svg/>'], { type: 'image/svg+xml' }), {
+    description: 'A drawing a model is not shown.',
+})
+
+export const charted = GET(
+    () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }) as unknown as { total: number },
+    { description: 'A chart typed as a total.' },
+)
 `
 
 let base = ''
@@ -113,12 +126,15 @@ test('the OpenAPI document is derived from the route table — 20.1, 20.6, 20.11
     const paths = Object.keys(document.paths).sort()
     expect(paths).toEqual([
         '/files/{folder}/listFiles',
+        '/invoices/charted',
+        '/invoices/drawn',
         '/invoices/getInvoice',
         '/invoices/guarded',
         '/invoices/listInvoices',
         '/invoices/pay',
         '/invoices/playlist',
         '/invoices/shout',
+        '/invoices/sketched',
         '/invoices/stamped',
         '/invoices/tagged',
     ])
@@ -160,7 +176,7 @@ test('every path parameter is declared, an optional one as required — 20.6', a
 // args as a resource; `get_invoices_listInvoices` is not a tool.
 // 16.37 — AND ONE TYPED AS RETURNING A `Response` IS NEITHER unless its `clients` puts it back:
 // `playlist` is withheld, `tagged` listed. THE REVERT: default `mcp` to true in `declaringMethod`;
-// `invoices_playlist` is listed, eight tools rather than seven.
+// `invoices_playlist` is listed, ten tools rather than nine.
 test('MCP lists every handler as a tool — 20.9', async () => {
     const init = (await mcp('initialize')).result as {
         capabilities: Record<string, unknown>
@@ -171,10 +187,13 @@ test('MCP lists every handler as a tool — 20.9', async () => {
     ).tools
     expect(tools.map((tool) => tool.name).sort()).toEqual(
         [
+            'get_invoices_charted',
+            'get_invoices_drawn',
             'get_invoices_getInvoice',
             'get_invoices_listInvoices',
             'post_invoices_guarded',
             'post_invoices_pay',
+            'get_invoices_sketched',
             'get_invoices_stamped',
             'post_invoices_shout',
             'post_invoices_tagged',
@@ -211,6 +230,67 @@ test('an MCP call is answered through the app, refusals included — 20.10', asy
         await mcp('tools/call', { name: 'get_invoices_listInvoices' })
     ).result as { content: { text: string }[] }
     expect(JSON.parse(read.content[0]?.text as string)).toEqual([{ id: 1 }])
+})
+
+// 20.21 — AN IMAGE ANSWERED IS ONE IMAGE ITEM, base64 with its type, in place of its bytes read as
+// text, and no structured content. THE REVERT: drop the image branch in `#called` and the call
+// answers its PNG's bytes as a text item.
+test('an MCP call answered with an image carries it as an image item — 20.21', async () => {
+    const called = (await mcp('tools/call', { name: 'get_invoices_drawn' }))
+        .result as {
+        content: {
+            type: string
+            data?: string
+            mimeType?: string
+            text?: string
+        }[]
+        structuredContent?: unknown
+        isError: boolean
+    }
+    expect(called.isError).toBe(false)
+    expect(called.content).toEqual([
+        { type: 'image', data: 'iVBORw==', mimeType: 'image/png' },
+    ])
+    expect(called.structuredContent).toBeUndefined()
+})
+
+// 20.21 — AN IMAGE OF A TYPE A MODEL IS NOT SHOWN IS ITS TEXT: an svg answers as a text item. THE
+// REVERT: take any `image/*` as an image in `#called` and the call answers an image item no model takes.
+test('an MCP call answered with an svg carries it as its text — 20.21', async () => {
+    const called = (await mcp('tools/call', { name: 'get_invoices_sketched' }))
+        .result as {
+        content: { type: string; text?: string }[]
+        isError: boolean
+    }
+    expect(called.isError).toBe(false)
+    expect(called.content).toEqual([{ type: 'text', text: '<svg/>' }])
+})
+
+// 20.22 — A TOOL THAT DECLARES AN `outputSchema` AND ANSWERS AN IMAGE IS REFUSED, naming the tool and
+// the type, rather than handing a client an image with no structured content. THE REVERT: drop the
+// `structured(one)` branch in `#called` and the call answers `isError: false` with an image item.
+test('a tool declaring a result schema that answers an image is refused — 20.22', async () => {
+    const listed = (await mcp('tools/list')).result as {
+        tools: { name: string; outputSchema?: { type?: string } }[]
+    }
+    expect(
+        listed.tools.find((tool) => tool.name === 'get_invoices_charted')
+            ?.outputSchema?.type,
+    ).toBe('object')
+    const called = (await mcp('tools/call', { name: 'get_invoices_charted' }))
+        .result as {
+        content: { type: string; text?: string }[]
+        structuredContent?: unknown
+        isError: boolean
+    }
+    expect(called.isError).toBe(true)
+    expect(called.content).toEqual([
+        {
+            type: 'text',
+            text: 'get_invoices_charted declares a result schema but answered an image, image/png.',
+        },
+    ])
+    expect(called.structuredContent).toBeUndefined()
 })
 
 // 20.18 — EVERY TOOL CALL WRITES ONE LINE ON `abide:mcp`, naming the tool and its status, a refused

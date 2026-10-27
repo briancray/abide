@@ -19,10 +19,10 @@ const SERVER_NAME = 'app'
 const SERVER_TOOLS = `mcp__${SERVER_NAME}`
 const TOOL_PREFIX = `${SERVER_TOOLS}__`
 
-/** What the site asks of one turn. */
+/** What the site asks of one turn: its one message, as Messages API blocks. */
 export type TurnRequest = {
     id: string
-    prompt: string
+    prompt: unknown[]
     config: ClaudeCodeConfig
     maxTurns: number
 }

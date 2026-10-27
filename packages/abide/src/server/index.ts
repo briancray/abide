@@ -27,11 +27,13 @@ export {
 } from '#shared/rpc.ts'
 // 45 — a conversation with a model, piped through a handler, and the two providers abide ships.
 export {
+    type AssistantContent,
     type AssistantEvent,
     type AssistantMessage,
     type AssistantOptions,
     assistant,
     type Provider,
+    type ToolAnswer,
     type Toolbox,
     type ToolDefinition,
 } from './assistant.ts'

@@ -43,7 +43,7 @@ const server = Bun.serve({
                         frame({
                             type: 'turn',
                             id: 'turn-1',
-                            prompt: 'record',
+                            prompt: [{ type: 'text', text: 'record' }],
                             config: {},
                             maxTurns: 5,
                         }),

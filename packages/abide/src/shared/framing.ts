@@ -33,9 +33,17 @@ export function framingOf(type: string | null | undefined): Framed | null {
 export function carriesBytes(type: string | null | undefined): boolean {
     if (type === null || type === undefined || type === '') return false
     if (framingOf(type) !== null) return false
-    const semicolon = type.indexOf(';')
-    const essence = semicolon === -1 ? type : type.slice(0, semicolon)
+    const essence = essenceOf(type)
     return essence !== 'application/json' && !essence.endsWith('+json')
+}
+
+/** A content type less its parameters, folded to lower case, as a type is compared; `''` for none. */
+export function essenceOf(type: string | null | undefined): string {
+    if (type === null || type === undefined) return ''
+    const semicolon = type.indexOf(';')
+    return (semicolon === -1 ? type : type.slice(0, semicolon))
+        .trim()
+        .toLowerCase()
 }
 
 /** One frame: an sse event's name — `message` where it named none — `id` and `data`, or a jsonl line. */
