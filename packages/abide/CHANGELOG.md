@@ -1,5 +1,17 @@
 # @abide/abide
 
+## 0.116.0
+
+### Minor Changes
+
+- c1c3924: `bind:files` — a file input's files as an array, one or many: a pick writes them, and an array written to it (one dropped, or `[]` to clear) is what the input holds. A `bind:` an element has no property for, such as `bind:file` or `bind:vlaue`, is now a build error where it compiled to an attribute that bound nothing. RULEBOOK 32.73, 32.74
+- 48cfc3e: tools answer images — a handler whose answer is a png, jpeg, gif or webp body reaches a model as the image: `/__abide/mcp` carries it as an `image` content item (so Claude Code, through a bridge, sees it), and a `Toolbox` call answers a `ToolAnswer` of `content` — the same pieces, text or image — which `claudeApi` shows the model as the call's result. Any other image type, an svg, is answered as its text. Breaking for a hand-written `Provider`: a `ToolAnswer` is `{ content, failed }` where it was `{ text, failed }`. RULEBOOK 20.21, 44.35
+- 48cfc3e: multimodal transcripts — an `AssistantMessage`'s `content` is its words or its pieces in order, each `AssistantContent` text or an image as base64 with its type. `assistant` refuses an image a model can't take or one outside a user turn, and hands a `Provider` every turn as its pieces, words alone as one text piece. `claudeApi` shows each image to the model as an image block in its place, and `claudeCode` sends the one message Claude Code is sent as Messages API blocks, each image in its place. RULEBOOK 44.5, 44.36, 44.37, 44.38, 44.39
+
+### Patch Changes
+
+- 0a78343: a page reached inside the app reloads offline — the router tells the offline worker each address a navigation reaches, and the worker keeps its page where no saved copy would stand in ([`a3975be`](https://github.com/briancray/abide/commit/a3975be224584df096fe799c6291c0dfcd80cf84))
+
 ## 0.115.0
 
 ### Minor Changes
