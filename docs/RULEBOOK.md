@@ -890,8 +890,9 @@ alone.
 options declare one.
 
 16.8 `Failures` on an `Rpc` MUST be the union of what the handler declared, what its rungs
-declared, and the undeclared `Failed` named `HttpError` per 17.4, with no data, which the transport
-may answer any call with.
+declared, the undeclared `Failed` named `HttpError` per 17.4, with no data, which the transport
+may answer any call with, and, wherever the `Schema` 19.9 derives from its `Args` is an object's,
+the undeclared `ValidationError` of 15.8 with `Issues` of the `Args` as its data.
 
 16.9 `rpc.url` MUST take the `Args`, MUST write each parameter of its route into the path, and MUST
 carry the rest in the query on a `GET` or a `DELETE` alone.

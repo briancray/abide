@@ -11,6 +11,7 @@ import {
     watch,
 } from '#shared'
 import { answered } from '#shared/answerOf.ts'
+import { validationError } from '#shared/refuse.ts'
 
 const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0))
 
@@ -190,6 +191,45 @@ test('a refusal lands on the value and narrows by name — 16.8', async () => {
         expect(path).toBe('/invoices/nope')
     }
     expect(getInvoice.isError(error, 'ValidationError')).toBe(false)
+})
+
+// 16.8, 19.9 — A HANDLER WHOSE ARGS THE ANNOTATION CHECKS CARRIES THE `ValidationError` THE WIRE
+// REFUSES THEM WITH, no `args` gate declared: the schema 19.9 derives is an object's wherever `Args` is
+// one record, and a call outside the process that does not hold to it is answered 422 before the body
+// runs. No args, a scalar, a list or a union of records derive none, and carry none. The type half is
+// the reads: `refused.data.n` only compiles where `isError` narrowed to the annotation's refusal, and
+// each `@ts-expect-error` keeps one unchecked handler's narrowing `never`. THE REVERT: drop
+// `| Annotated<Args>` from both of `Rpc`'s failure unions in `rpc.ts` — the three reads fail
+// typecheck, `.data` on `never`.
+test("a handler the annotation checks carries the wire's ValidationError — 16.8, 19.9", () => {
+    const double = POST(async ({ n }: { n: number }) => n * 2)
+    const page = GET(({ size = 10 }: { size?: number } = {}) => size)
+    const keyed = POST(reactive(({ id }: { id: string }) => id))
+    const refused: unknown = validationError<{ n: number }>({
+        n: ['must be number'],
+    })
+    const read: (string[] | undefined)[] = []
+    if (double.isError(refused, 'ValidationError')) read.push(refused.data.n)
+    if (page.isError(refused, 'ValidationError')) read.push(refused.data.size)
+    if (keyed.isError(refused, 'ValidationError')) read.push(refused.data.id)
+    expect(read).toEqual([['must be number'], undefined, undefined])
+
+    const bare = POST(async () => 1)
+    const scalar = POST(async (count: number) => count)
+    const either = POST(async (_pick: { a: number } | { b: string }) => 1)
+    const loose = POST(async (_anything: unknown) => 1)
+    if (bare.isError(refused, 'ValidationError'))
+        // @ts-expect-error no args, no schema derived, no refusal carried
+        read.push(refused.data)
+    if (scalar.isError(refused, 'ValidationError'))
+        // @ts-expect-error a scalar's schema is no object's, and the wire holds nothing to it
+        read.push(refused.data)
+    if (either.isError(refused, 'ValidationError'))
+        // @ts-expect-error a union of records derives `anyOf`, which the wire holds nothing to
+        read.push(refused.data)
+    if (loose.isError(refused, 'ValidationError'))
+        // @ts-expect-error `unknown` derives no constraint
+        read.push(refused.data)
 })
 
 // 9.6 THROUGH 16.6: a generator handler is a streaming `reactive`, so the value is every chunk.

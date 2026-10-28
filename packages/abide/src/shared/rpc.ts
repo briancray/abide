@@ -16,6 +16,7 @@
 import { type Failed, isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { HandlerRoute } from './HandlerRoute.ts'
+import type { Issues } from './Issues.ts'
 import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
 import { compose, type Middleware } from './Middleware.ts'
 import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
@@ -74,7 +75,9 @@ export type CallOptions<Args = unknown, Value = unknown> = {
  *
  * 16.8 — AND ITS FAILURES CARRY THE TRANSPORT'S `HttpError`, which no handler declares and every
  * call can be answered with: a body over `maxBodySize` (413), a closed `crossOrigin` (403), a
- * `timeout` (504), and any failure status whose body was not a `Failed`, rebuilt by `answered`.
+ * `timeout` (504), and any failure status whose body was not a `Failed`, rebuilt by `answered`. And
+ * the `ValidationError` the wire holds args to the annotation with (19.9), where `Annotated` says it
+ * derives a schema at all.
  */
 export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     ...args: undefined extends Args
@@ -83,7 +86,7 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
 ) => Reactive<
     Value,
     Value,
-    Failures | Failed<'HttpError', undefined>,
+    Failures | Failed<'HttpError', undefined> | Annotated<Args>,
     Produced
 >) & {
     method: Method
@@ -104,7 +107,7 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
         error: unknown,
         name: Name,
     ): error is Extract<
-        Failures | Failed<'HttpError', undefined>,
+        Failures | Failed<'HttpError', undefined> | Annotated<Args>,
         { name: Name }
     >
     /**
@@ -129,6 +132,35 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
      */
     guarded: boolean
 }
+
+/**
+ * The `ValidationError` the wire answers args that do not hold to the schema 19.9 derives from
+ * `Args`, and `never` where the derived schema is no object's and the wire holds nothing to it.
+ *
+ * MIRRORS `argsSchemaOf`, which reads the same `Args` off the `Rpc`'s call: an object's schema is
+ * derived for ONE record, `undefined` dropped — not a scalar, a list, a callable or a union of
+ * records (`anyOf`), and not `any`, `unknown` or `object`, which constrain nothing. `object` is told
+ * from `{}`, the one other record with no keys, by `string`, which only `{}` takes.
+ */
+type Annotated<Args> = 0 extends 1 & Args
+    ? never
+    : unknown extends Args
+      ? never
+      : Derived<Exclude<Args, undefined>>
+// `Member` is distributed over and `Whole` is not: a member that is not the whole is one arm of a union.
+type Derived<Member, Whole = Member> = Member extends
+    | readonly unknown[]
+    | ((...given: never[]) => unknown)
+    ? never
+    : Member extends object
+      ? [Whole] extends [Member]
+          ? [keyof Member] extends [never]
+              ? [string] extends [Member]
+                  ? Failed<'ValidationError', Issues<Whole>>
+                  : never
+              : Failed<'ValidationError', Issues<Whole>>
+          : never
+      : never
 
 /** Which generated surfaces carry a handler (20.1). */
 export type Clients = {
