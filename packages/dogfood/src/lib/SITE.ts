@@ -269,6 +269,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`<slot/>`',
                         '`**/error.abide`',
                         '`onError`',
+                        '`isFailed`',
                         '`allow: GET, HEAD`',
                         '`<head>`',
                         '`url`',

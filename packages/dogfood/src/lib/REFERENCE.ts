@@ -157,6 +157,13 @@ export const REFERENCE: readonly {
         typeOnly: true,
     },
     {
+        route: '/reference/isFailed',
+        names: ['isFailed'],
+        entry: '@abide/abide',
+        group: 'Reactive primitives',
+        typeOnly: false,
+    },
+    {
         route: '/reference/notFound',
         names: ['notFound'],
         entry: '@abide/abide',

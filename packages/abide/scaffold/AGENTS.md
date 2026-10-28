@@ -17,6 +17,9 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
   TypeScript service do not read `.abide` files, so a clean `tsc` says nothing about them. Run
   `bun run check` after every change, and treat its warnings as bugs: several of them name a read
   that will not update when its value changes.
+  Where the read is meant, `// abide-ignore` and the clause the warning cites, on the line above
+  (`// abide-ignore 14.15`), silences that one (RULEBOOK 14.19); a read hoisted out of its place
+  only to quiet a warning is the bug it named.
 - `bun run test` — runs `bun test`. `src/getGreeting.test.ts` is the pattern: a test imports a
   handler or a `.abide` file and calls it.
 - `bun run dev` — serves the app on a local port and rebuilds when a file changes.
@@ -44,3 +47,12 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
 - Import the app's own modules as `#src/…` (see `imports` in `package.json`).
 - A test imports `.abide` files directly: `bunfig.toml` preloads `@abide/harness/abide/preload`,
   a DOM to mount into and then `@abide/abide/test`.
+
+## Habits
+
+- Export a `Reactive` itself, never wrapped in an object: an `.abide` file reads and writes it by
+  name (RULEBOOK 31.1), and one reached through a property is left to `x()` and `x.set(v)` (31.7).
+- Model output and fetched HTML are untrusted. Never hand them to `raw()` (RULEBOOK 32.2)
+  unsanitized.
+- Settings come from `onConfig` and `config` (RULEBOOK 27.2, 27.9), which already read the
+  environment, and cookies from `cookies()` (22.2) — not `Bun.env` or a parsed `cookie` header.
