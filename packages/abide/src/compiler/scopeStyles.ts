@@ -122,6 +122,9 @@ export function namesViewTransition(css: string): boolean {
     return false
 }
 
+// Whitespace and comments ahead of a statement, which do not decide whether it is an at-rule.
+const LEADING_COMMENTS = /^(?:\s|\/\*[\s\S]*?\*\/)*/
+
 // The block at-rules that hold rules, which `scopeRules` walks into.
 const NESTING =
     /^@(media|supports|container|layer|document|starting-style|scope)\b/i
@@ -155,7 +158,7 @@ function scopeRules(css: string, attribute: string): string {
         }
         const close = matching(css, open)
         const body = css.slice(open + 1, close)
-        const trimmed = prelude.trim()
+        const trimmed = prelude.replace(LEADING_COMMENTS, '').trim()
         if (trimmed.startsWith('@'))
             out += NESTING.test(trimmed)
                 ? `${prelude}{${scopeRules(body, attribute)}}`

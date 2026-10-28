@@ -41,6 +41,19 @@ test('a comment on its own line ahead of a selector leaves the rightmost compoun
     expect(scoped('.x\n.y{x:y}')).toBe('.x\n.y[a-t]{x:y}')
 })
 
+// A COMMENT AHEAD OF AN AT-RULE does not make it a selector. THE REVERT: test the prelude for `@`
+// as written; the comment comes first, `@media (x)` is scoped as a selector, `.x` inside it is
+// copied with no token, and the `@keyframes` prelude reads `@keyframes pulse[a-t]`.
+test('a comment directly above an at-rule leaves it an at-rule — 34.4', () => {
+    const scoped = (css: string) => scopeCss(css, 'a-t')
+    expect(scoped('/* wide */\n@media (x) { .x { a: b } }')).toBe(
+        '/* wide */\n@media (x) { .x[a-t] { a: b } }',
+    )
+    expect(
+        scoped('.y{x:y}\n/* a */ /* b */\n@keyframes pulse { from { x: y } }'),
+    ).toBe('.y[a-t]{x:y}\n/* a */ /* b */\n@keyframes pulse { from { x: y } }')
+})
+
 // 34.4 REACHES A NESTED RULE. `.card { .title {…} }` is `.card .title` to a browser, so a nested
 // selector left as written styles a child component's `.title` inside the card; and a grouping
 // at-rule the walk did not know was copied whole, so `@starting-style { .x {…} }` reached every
