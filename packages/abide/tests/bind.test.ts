@@ -457,3 +457,38 @@ test('a bind an element has no property for is refused — 32.74', () => {
     ])
         expect(refusedFor(template)).toBe('compiled')
 })
+
+// 32.75 — THE BIND WRITES FIRST: an author's listener for the event a bind listens on reads the
+// operand the bind just wrote, written before the bind or after it. THE REVERT: emit an element's
+// handler units ahead of its bind units in `elementUnits`; every handler reads the value standing
+// before the event, `0  | ada | false`.
+test('an on<event> beside a bind reads the value the bind just wrote — 32.75', async () => {
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let picked = reactive([])
+let name = reactive('ada')
+let agreed = reactive(false)
+let seenFiles = reactive('')
+let seenName = reactive('')
+let seenAgreed = reactive('')
+</script>
+
+<input id="files" type="file" onchange={() => { seenFiles = picked.length + ' ' + picked.map((file) => file.name).join(',') }} bind:files={picked}>
+<input id="name" bind:value={name} oninput={() => { seenName = name }}>
+<input id="agreed" type="checkbox" onchange={() => { seenAgreed = String(agreed) }} bind:checked={agreed}>
+<p id="out">{seenFiles} | {seenName} | {seenAgreed}</p>`)
+    const transfer = new DataTransfer()
+    transfer.items.add(new DomFile(['a'], 'a.png', { type: 'image/png' }))
+    const picker = input('files')
+    picker.files = transfer.files
+    picker.dispatchEvent(new Event('change'))
+    const name = input('name')
+    name.value = 'grace'
+    name.dispatchEvent(new Event('input'))
+    const agreed = input('agreed')
+    agreed.checked = true
+    agreed.dispatchEvent(new Event('change'))
+    flushSync()
+    expect(out()).toBe('1 a.png | grace | true')
+})

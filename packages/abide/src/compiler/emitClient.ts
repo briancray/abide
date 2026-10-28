@@ -184,7 +184,6 @@ export function emitClient(
             const classified = classifyAttributes(node, lowering)
             if (!classified.some(isBound)) continue
             const units = elementUnits(element, classified, slot, lowering)
-            for (const unit of units.handlers) lines.push(unit)
             for (const unit of units.attributes) lines.push(unit)
             for (const unit of units.elements) lines.push(unit)
         }
@@ -562,7 +561,7 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
 
     for (const line of walkTo(positions, live, lowering)) chain.push(line)
 
-    // THE UNITS — text, listeners, attributes, the regions, then the node handed over. The walk
+    // THE UNITS — text, attributes and listeners, the regions, then the node handed over. The walk
     // does not depend on the order.
     // 32.68 — A `bind:element` CALLBACK RUNS LAST, so the node it is handed is whole: a child
     // component, an arm or a list inside it has built, and `form.querySelector('input')` finds an
@@ -571,7 +570,6 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
     // (`Scope.itemWatch`).
     const items: string[] = []
     const texts: string[] = []
-    const handlers: string[] = []
     const attributes: string[] = []
     const elements: string[] = []
     const regions: PlacedNode[] = []
@@ -595,13 +593,11 @@ function emitRegion(sink: Cursor, region: RegionEmission): RegionEmission {
             lowering,
         )
         for (const unit of units.items) items.push(unit)
-        for (const unit of units.handlers) handlers.push(unit)
         for (const unit of units.attributes) attributes.push(unit)
         for (const unit of units.elements) elements.push(unit)
     }
     for (const unit of items) lines.push(unit)
     for (const unit of texts) lines.push(unit)
-    for (const unit of handlers) lines.push(unit)
     for (const unit of attributes) lines.push(unit)
 
     // 32.67 — WHAT A ROW'S REGIONS AND COMPONENTS BIND reads the row's item through its cell: the
@@ -751,7 +747,6 @@ function elementUnits(
     lowering: Lowering,
 ): {
     items: string[]
-    handlers: string[]
     attributes: string[]
     elements: string[]
 } {
@@ -849,9 +844,13 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
         items.push(`const __i${slot} = ${element}\n${itemWrites.join('\n')}`)
     if (writes.length > 0)
         attributes.push(`const __a${slot} = ${element}\n${writes.join('\n')}`)
+    // 32.75 — A BIND'S LISTENER IS ADDED AHEAD OF THE AUTHOR'S, written or spread, so an
+    // `onchange` reading the operand reads what was just picked. After the attribute writes, since
+    // a bind reads what they set (`type`, for a number).
     for (const unit of binds) attributes.push(unit)
+    for (const unit of handlers) attributes.push(unit)
     for (const unit of spreads) attributes.push(unit)
-    return { items, handlers, attributes, elements }
+    return { items, attributes, elements }
 }
 
 // A region's bindings go through its SCOPE, so what replaced the region can stop them (see

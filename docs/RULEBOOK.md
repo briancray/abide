@@ -2092,6 +2092,9 @@ nothing for it.
 32.74 A `bind:` on an element naming none of `value`, `checked`, `open`, `group`, `files` and
 `element` MUST be a build error.
 
+32.75 A `bind:` on an element MUST write its operand before any `on<event>` listener on that
+element, written or spread, runs for the same event, wherever the two are written in the tag.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
