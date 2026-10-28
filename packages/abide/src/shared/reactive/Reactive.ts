@@ -1706,13 +1706,13 @@ function windowHolds(cell: Cell, cap: Cap): boolean {
 /**
  * Whether an arrival passes the window; the first landing always does.
  *
- * 5.15: the first landing goes through, having nothing to collapse against — and a debounce's
- * window is not opened by it, where a throttle's is.
+ * 5.15: the first landing goes through, having nothing to collapse against — and it opens no
+ * window, a throttle's included. 5.12: the first CHANGE is the one a throttle lets through, and a
+ * landing is not a change; a window opened here held back the first `set` after construction, so
+ * `s.set(v); s()` read the value it was built with.
  */
 function passes(cell: Cell, cap: Cap): boolean {
-    if (cell.landed) return !windowHolds(cell, cap)
-    if (cap.leading) openWindow(cell, cap)
-    return true
+    return !cell.landed || !windowHolds(cell, cap)
 }
 
 /**

@@ -2310,6 +2310,23 @@ test('a throttle lets the leading change through and holds the rest', () => {
     woken.stop()
 })
 
+// 5.12 FROM A VALUE BUILT WITH ONE: the value it is constructed with is a landing, not a change, so
+// it opens no window and the first `set` after it is the leading change. A guard that sets a
+// throttled flag and reads it back in the same turn reads what it set.
+//
+// THE REVERT, run: `passes` opening a throttle's window on the first landing reports
+// `read: false, wakes: 0, busy: true` — the set held behind a window construction opened.
+test('a throttle built with a value lets the first set through at once', () => {
+    const status = reactive({ running: false }, { throttle: WINDOW })
+    const woken = wakes(status)
+    status.set({ running: true })
+    status.set({ running: false })
+    expect(
+        `read: ${status().running}, wakes: ${woken.count()}, busy: ${status.busy()}`,
+    ).toBe('read: true, wakes: 1, busy: true')
+    woken.stop()
+})
+
 test('a debounce holds every change after the first landing', () => {
     // The value has to have LANDED before a debounce has anything to do: the first
     // production goes straight out, having no held value to be held back from.
@@ -2374,9 +2391,10 @@ test('the identity gate compares against the last production, not the last relea
 // wakes where the value really changed, which is the pairing that tells a fixed gate from
 // a dead one.
 // 5.23 — A PATCH IS CAPPED LIKE A PRODUCTION. The object changes at once, so what the window holds is
-// the wake: ten patches inside one window reach a reader once, when it closes, carrying the last.
-// THE REVERT: cascade unconditionally in `patchCell`; the reader is woken inside the window, 1 where
-// 0 are due.
+// the wake: the first of ten patches wakes a reader at once (5.12) and the other nine reach it once,
+// when the window closes, carrying the last.
+// THE REVERT: cascade unconditionally in `patchCell`; the reader is woken 10 times inside the
+// window where 1 is due.
 test('a throttle caps the wakes a run of patches makes', async () => {
     const rows = reactive([{ n: 0 }], { throttle: WINDOW })
     const woken = wakes(rows)
@@ -2384,11 +2402,11 @@ test('a throttle caps the wakes a run of patches makes', async () => {
         rows.patch((list) => {
             ;(list[0] as { n: number }).n = write
         })
-    expect(woken.count()).toBe(0)
+    expect(woken.count()).toBe(1)
     // 5.15: the window is holding a change, so the value reads as busy while it does.
     expect(rows.busy()).toBe(true)
     await sleep(AFTER_WINDOW)
-    expect(woken.count()).toBe(1)
+    expect(woken.count()).toBe(2)
     expect((rows()[0] as { n: number }).n).toBe(10)
     expect(rows.busy()).toBe(false)
     woken.stop()
@@ -5294,6 +5312,9 @@ test('a streaming run in flight does not expire', async () => {
 // of them (5.10), but a reader of the value hears at most once per window — a table re-rendered per
 // chunk of a fast stream is the cost `throttle` exists to cap.
 //
+// The chunk that lands the value opens no window, so the first chunk after it is the leading change
+// 5.12 lets through, and the five behind it are the one wake the window's close owes.
+//
 // THE REVERT is `acceptChunk` releasing every chunk whatever the cap: `wakes: 6`.
 test('throttle on a stream wakes readers once per window, and a cursor still gets every chunk', async () => {
     const feed = streamOf<number>()
@@ -5312,10 +5333,11 @@ test('throttle on a stream wakes readers once per window, and a cursor still get
         run.push(chunk)
         await turns()
     }
-    expect(`wakes: ${wakes}`).toBe('wakes: 0')
-    await sleep(AFTER_WINDOW)
     flushSync()
     expect(`wakes: ${wakes}`).toBe('wakes: 1')
+    await sleep(AFTER_WINDOW)
+    flushSync()
+    expect(`wakes: ${wakes}`).toBe('wakes: 2')
     const seen: unknown[] = []
     for (let step = 0; step < 7; step += 1)
         seen.push((await cursor.next()).value)
@@ -5327,20 +5349,23 @@ test('throttle on a stream wakes readers once per window, and a cursor still get
 // 5.18: WHAT A READER SEES IS WHAT THE WINDOW RELEASED, not the chunks it is holding — the read
 // agrees with the wake, so a value that has not been told of a chunk does not show it either.
 //
-// THE REVERT is `materialize` slicing the whole buffer: `during: 1,2`.
+// THE REVERT is `materialize` slicing the whole buffer: `during: 1,2,3`.
 test('a read of a throttled stream serves the accumulation as the last release left it', async () => {
     const feed = streamOf<number>()
     const rows = reactive(feed.body, { throttle: WINDOW })
     const run = feed.runs[0] as Run<number>
     // No read until a chunk is held: a snapshot taken earlier would answer from its cache and prove
-    // nothing about what the window has released.
+    // nothing about what the window has released. 1 lands the value and 2 is the leading change
+    // (5.12), so 3 is the first chunk a window holds.
     run.push(1)
     await turns()
     run.push(2)
     await turns()
-    expect(`during: ${rows().join(',')}`).toBe('during: 1')
+    run.push(3)
+    await turns()
+    expect(`during: ${rows().join(',')}`).toBe('during: 1,2')
     await sleep(AFTER_WINDOW)
-    expect(`after: ${rows().join(',')}`).toBe('after: 1,2')
+    expect(`after: ${rows().join(',')}`).toBe('after: 1,2,3')
 })
 
 // 5.13 ON A STREAM: a debounce releases once the chunks stop, and a close releases what it holds, so
