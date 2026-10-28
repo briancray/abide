@@ -150,6 +150,19 @@ export function scoped(
 }
 
 /**
+ * Whether the value `value` forwards to is built for the scope that is current — always, for a
+ * value that is no forwarder. Asking builds nothing, where `instanceOf` builds what it finds unbuilt.
+ */
+export function builtHere(value: unknown): boolean {
+    const filed = (value as Partial<Forwarder> | null)?.[FILED]
+    if (filed === undefined) return true
+    const scope = filed.global ? undefined : currentScope()
+    return scope === undefined
+        ? filed.home !== UNBUILT
+        : scope.instances.has(filed)
+}
+
+/**
  * Whether `value` is request-local on this server — built without `global`, outside every request.
  */
 export function isForwarder(value: unknown): boolean {

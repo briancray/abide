@@ -211,6 +211,8 @@ subscribe it to the value.
 
 3.13 A value MUST report `s.synced` false where a value it read or adopts does.
 
+3.14 A probe over a value a mutation's `declare` built MUST NOT run its body.
+
 # 4. Writes and gates
 
 4.1 `s.set` MUST accept a settled value or a load, and `reactive` MUST accept the same two.
@@ -750,6 +752,9 @@ mutation's `declare` built while its write is in flight.
 
 13.18 `synced` over a selection MUST be true where every entry in it is synced, and a bare `synced`
 where every value it sweeps is.
+
+13.19 `busy`, `ready`, `synced`, `refresh` and `invalidate` over an `Rpc` no call has reached in the
+current scope MUST answer as over a `Selection` with no entries.
 
 # 14. Tracking
 

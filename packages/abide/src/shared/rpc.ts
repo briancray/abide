@@ -50,7 +50,7 @@ import {
 import { MUTATION } from './reactive/MUTATION.ts'
 import { dropAnswered } from './reactive/Reactive.ts'
 import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
-import { isForwarder } from './reactive/scoped.ts'
+import { builtHere, isForwarder } from './reactive/scoped.ts'
 import { checkArgs } from './refuse.ts'
 import { rpcRequest } from './rpcRequest.ts'
 import type { Schema } from './Schema.ts'
@@ -307,6 +307,18 @@ type Declare = {
     ): Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Accepted>>
 }
 
+/** What a handler's selection members answer before a call has built its value: no entries' answers. */
+const UNREACHED: Record<
+    (typeof SELECTION_MEMBERS)[number],
+    (pattern?: unknown) => unknown
+> = {
+    busy: () => false,
+    ready: () => true,
+    synced: () => true,
+    refresh: () => undefined,
+    invalidate: () => undefined,
+}
+
 /** Builds the handler declarer for one method — what `GET`, `POST` and the rest are. */
 export function declare(method: Method): Declare {
     return ((handler: unknown, options?: RpcOptions): unknown => {
@@ -421,10 +433,17 @@ export function declare(method: Method): Declare {
         }
         // THE HANDLER'S OWN MEMBERS, handed the pattern. A `Keyed` narrows by it and a `Reactive`'s
         // take no argument, so one spelling serves both arms and neither is a second mechanism.
-        const face = value as Record<
+        //
+        // 13.19 — AND NOT YET BUILT, NONE OF THEM BUILDS IT: building an unkeyed value starts its body
+        // (1.7), so `save.busy()` over a server's never-called `POST(async () => …)` ran the write and
+        // reported it in flight. Until a call reaches it the handler has no entry, and answers as one
+        // with no entries does.
+        const built = value as Record<
             (typeof SELECTION_MEMBERS)[number],
             (pattern?: unknown) => unknown
         >
+        const faceHere = (): typeof built =>
+            builtHere(value) ? built : UNREACHED
         const rpc = Object.assign(call, contract, {
             method,
             description: options?.description,
@@ -473,16 +492,16 @@ export function declare(method: Method): Declare {
             members[name] =
                 name === 'invalidate' || name === 'refresh'
                     ? (pattern?: unknown): unknown => {
-                          const done = face[name](pattern)
+                          const done = faceHere()[name](pattern)
                           RPC_SERVER.broadcast?.(rpc, name, pattern)
                           return done
                       }
-                    : (pattern?: unknown): unknown => face[name](pattern)
+                    : (pattern?: unknown): unknown => faceHere()[name](pattern)
         }
         // 46.11 — BUSY TOO WHILE A CALL THE OUTBOX HOLDS FOR IT IS IN FLIGHT: a queued call sent is work
         // in flight for this handler, as a call made now is. 46.1 — and the calls it holds for it.
         members.busy = (pattern?: unknown): boolean =>
-            (face.busy(pattern) as boolean) ||
+            (faceHere().busy(pattern) as boolean) ||
             sendingFor(rpc, pattern as Record<string, unknown> | undefined)
         members.outbox = (pattern?: unknown): QueuedCall[] =>
             outbox(rpc as never, pattern as Record<string, unknown> | undefined)

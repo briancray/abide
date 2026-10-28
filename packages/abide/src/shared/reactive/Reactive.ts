@@ -3255,11 +3255,16 @@ function bringCurrent(cell: Cell): void {
     if (cell.state !== CLEAN) resolve(cell)
 }
 
-/** What every probe does before it answers: subscribes the reader (3.3), then brings `cell` current. */
+/**
+ * What every probe does before it answers: subscribes the reader (3.3), then brings `cell` current.
+ *
+ * 3.14 — A MUTATION'S VALUE IS ANSWERED AS IT STANDS: its body is the write, so bringing it current
+ * after a sweep invalidated it (13.16) sent the write again from a `save.busy()`.
+ */
 function probe(cell: Cell): void {
     const reader = TRACKING.reader
     if (reader !== null) trackProbe(cell, reader)
-    bringCurrent(cell)
+    if (!cell.mutation) bringCurrent(cell)
 }
 
 function readyNow(cell: Cell): boolean {

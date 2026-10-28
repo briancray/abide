@@ -16,7 +16,7 @@ import {
 } from '#server/requestScope.ts'
 import { flushSync, invalidate, reactive, refresh, watch } from '#shared'
 import { CELL } from '#shared/reactive/CELL.ts'
-import { GET } from '#shared/rpc.ts'
+import { GET, POST } from '#shared/rpc.ts'
 
 installServer()
 
@@ -160,6 +160,62 @@ test('a plain handler declaring global is built once, on its first call — 11.3
         })
     expect(await visit()).toBe(1)
     expect(`body runs: ${runs}`).toBe('body runs: 1')
+})
+
+// 13.19, 16.64 — A HANDLER NO CALL HAS REACHED ANSWERS AS ONE WITH NO ENTRIES, and asking builds
+// nothing: building an unkeyed value starts its body (1.7), so a `disabled={save.busy()}` ran the
+// write on every server render and painted it in flight. Asked outside every request and inside one,
+// for a mutation and a read alike. THE REVERT: have `faceHere` in `declare` answer `built` always;
+// the never-called `POST` reports busy true and ready false, and the probes have run 4 bodies where
+// 0 are due — each handler's, once outside every request and once inside one.
+test('a handler no call has reached is not busy, and asking runs nothing — 13.19, 16.64', async () => {
+    let runs = 0
+    let release = (): void => {}
+    const save = POST(async () => {
+        runs += 1
+        await new Promise<void>((done) => {
+            release = done
+        })
+        return runs
+    })
+    const feed = GET(() => {
+        runs += 1
+        return runs
+    })
+    const probes = (): string =>
+        `${save.busy()} ${save.ready()} ${save.synced()} ${feed.busy()}`
+    const outside = probes()
+    await inScope(new Request('http://app/a'), async () => {
+        const inside = probes()
+        await tick()
+        expect(`${outside} | ${inside} | body runs: ${runs}`).toBe(
+            'false true true false | false true true false | body runs: 0',
+        )
+        const call = save()
+        expect(save.busy()).toBe(true)
+        release()
+        await call
+        expect(save.busy()).toBe(false)
+    })
+    expect(`body runs: ${runs}`).toBe('body runs: 1')
+})
+
+// 3.14, 13.16 — A PROBE OVER A MUTATION A SWEEP INVALIDATED DOES NOT SEND THE WRITE AGAIN. THE REVERT:
+// have `probe` bring a mutation's cell current as it does any other; the `busy` after the `refresh`
+// reruns the handler and reads true, 2 writes where 1 is due.
+test('a probe over a mutation a sweep invalidated runs nothing — 3.14', async () => {
+    let writes = 0
+    const save = POST(async () => {
+        writes += 1
+        return writes
+    })
+    await inScope(new Request('http://app/a'), async () => {
+        await save()
+        refresh()
+        const busy = save.busy()
+        await tick()
+        expect(`busy: ${busy}, writes: ${writes}`).toBe('busy: false, writes: 1')
+    })
 })
 
 // 16.1 THROUGH 16.6 — A HANDLER THAT IS A VALUE IS FILED AS A BODY IS: one value per request, and one
