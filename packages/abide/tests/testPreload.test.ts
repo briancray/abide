@@ -129,3 +129,54 @@ test('a click rewrites the count and builds nothing', async () => {
         '0 true',
     )
 }, 90_000)
+
+// 38.119 — A MOUNTED COMPONENT'S DYNAMIC `import('#src/…')` resolves as its static one does: from the
+// file its browser module stands for, not from the namespace that module is loaded in. THE REVERT:
+// narrow the runtime's hook in `abideModules` back to relative specifiers, and the click reads "ERR
+// ResolveMessage: Cannot find package '#src' imported from /abide-client:/…/Dynamic.abide::client" —
+// exit 1, `0 pass`.
+test('a mounted component imports a #src module dynamically — 38.119', async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'dynamic-fixture',
+            type: 'module',
+            imports: { '#src/*': ['./src/*', './src/*.ts'] },
+        }),
+        'bunfig.toml': TEST_PRELOAD,
+        'src/index.abide': '<main>home</main>',
+        'src/lib/word.ts': "export const word = 'loaded'\n",
+        'src/lib/Dynamic.abide': `<script>
+import { reactive } from '@abide/abide'
+
+let out = reactive('none')
+const load = async () => {
+    try {
+        out = (await import('#src/lib/word.ts')).word
+    } catch (thrown) {
+        out = \`ERR \${thrown}\`
+    }
+}
+</script>
+
+<button id="load" onclick={load}>load</button>
+<p id="out">{out}</p>`,
+        'src/tests/Dynamic.test.ts': `import { expect, test } from 'bun:test'
+import { mount } from '@abide/harness/abide'
+import Dynamic from '../lib/Dynamic.abide'
+
+test('the click loads the module', async () => {
+    using _dynamic = await mount(Dynamic({}))
+    document.querySelector<HTMLButtonElement>('#load')?.click()
+    for (let tries = 0; tries < 100 && document.querySelector('#out')?.textContent === 'none'; tries += 1)
+        await Bun.sleep(10)
+    expect(document.querySelector('#out')?.textContent).toBe('loaded')
+})
+`,
+    })
+    const ran = await spawned(['bun', 'test', './src/tests/Dynamic.test.ts'], {
+        cwd,
+    })
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)

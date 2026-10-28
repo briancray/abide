@@ -329,10 +329,11 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
                     },
                 )
 
-            // A RELATIVE SPECIFIER A FACE IMPORTS AT RUN TIME is resolved from the file the face
-            // stands for: bun's runtime reads one from an importer in a namespace as no path at
-            // all. A bare one it resolves itself. Registered after every face, so a `.abide` is
-            // still answered as one — and NOT IN A BUNDLE, which needs it for no face it serves,
+            // A RELATIVE OR `#` SPECIFIER A FACE IMPORTS AT RUN TIME is resolved from the file the
+            // face stands for: bun's runtime reads one from an importer in a namespace as no path
+            // at all, and a `#` one, asked by `import()`, as a package. A bare one it resolves
+            // itself. Registered after every face, so a `.abide` is still answered as one — and
+            // NOT IN A BUNDLE, which needs it for no face it serves,
             // and where a hook matching every relative import in a package costs the bundle that
             // package's `sideEffects`: a two-page app grew by 12 KB, the validator one page never
             // calls moved into the chunk both pages load.
@@ -342,7 +343,7 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
                 build.onResolve({ filter: HANDLER_FACE }, (args) => ({
                     path: args.path,
                 }))
-                build.onResolve({ filter: /^\.\.?\// }, (args) =>
+                build.onResolve({ filter: RELATIVE_OR_SUBPATH }, (args) =>
                     resolving || pathOf(args.importer) === args.importer
                         ? undefined
                         : { path: resolved(args.path, args.importer) },
