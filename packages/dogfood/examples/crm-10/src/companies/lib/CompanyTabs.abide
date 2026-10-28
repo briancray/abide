@@ -9,7 +9,7 @@ let draft = reactive('')
 
 <div class="tabs">
     {#for name of TABS}
-        <button aria-selected={String(tab === name)}
+        <button aria-selected={tab === name}
             onclick={() => navigate(`?tab=${name}`, { replace: true })}
         >{name}</button>
     {/for}

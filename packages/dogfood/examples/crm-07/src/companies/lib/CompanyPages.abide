@@ -9,7 +9,7 @@ const address = reactive(() => url('/companies/[id]', { id: open }))
 
 <div class="tabs">
     {#for id of IDS}
-        <button aria-selected={String(open === id)}
+        <button aria-selected={open === id}
             onclick={() => (open = id)}>{id}</button>
     {/for}
 </div>

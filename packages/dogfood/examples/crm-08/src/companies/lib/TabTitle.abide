@@ -34,7 +34,7 @@ function followTitle(element: Element) {
 
 <div class="tabs">
     {#for page of PAGES}
-        <button aria-selected={String(open === page.address)}
+        <button aria-selected={open === page.address}
             onclick={() => (open = page.address)}>{page.label}</button>
     {/for}
 </div>

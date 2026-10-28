@@ -63,7 +63,7 @@ const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
         {#for path, index of paths}
             <button
                 role="tab"
-                aria-selected={String(open === index)}
+                aria-selected={open === index}
                 data-side={sideOf(path)}
                 data-kind={kindOf(path)}
                 onclick={() => (open = index)}

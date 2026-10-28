@@ -6,6 +6,6 @@ const { id, name } = props<{ id: string; name: string }>()
 let selected = reactive.share('selectedDeal', () => reactive(''))
 </script>
 
-<button aria-pressed={String(selected === id)} onclick={() => (selected = id)}>
+<button aria-pressed={selected === id} onclick={() => (selected = id)}>
     {name}
 </button>
