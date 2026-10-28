@@ -493,16 +493,16 @@ test('a GET over a global value answers a max-age its ttl derives — 21.8, 21.9
         (await Bun.fetch(`${base}${RPC}/${name}`)).headers.get('cache-control')
     // 21.11 — ahead of 21.22's windows, the fixture being served where the worker is registered.
     expect(await header('shared')).toMatch(
-        /^private, max-age=(8\d|90), stale-while-revalidate=604800, stale-if-error=604800$/,
+        /^private, max-age=(8\d|90), stale-while-revalidate=604800, stale-if-error=31536000$/,
     )
     expect(await header('sharedForever')).toBe(
-        'private, stale-while-revalidate=604800, stale-if-error=604800',
+        'private, stale-while-revalidate=604800, stale-if-error=31536000',
     )
     expect(await header('local')).toBe(
-        'private, stale-while-revalidate=604800, stale-if-error=604800',
+        'private, stale-while-revalidate=604800, stale-if-error=31536000',
     )
     expect(await header('sharedRefused?n=1')).toMatch(
-        /^private, max-age=(8\d|90), stale-while-revalidate=604800, stale-if-error=604800$/,
+        /^private, max-age=(8\d|90), stale-while-revalidate=604800, stale-if-error=31536000$/,
     )
     expect(await header('sharedRefused?n=0')).toBe('private, no-store')
     // A MUTATION IS NEVER A CACHE ENTRY, whatever it is declared over. THE REVERT: drop the method

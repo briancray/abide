@@ -161,7 +161,7 @@ test('a handler file answers at its path, as JSON — 16.2, 16.30', async () => 
     expect(answer.headers.get('content-type')).toBe('application/json')
     // 21.22 — the fixture is served built, where the worker is registered.
     expect(answer.headers.get('cache-control')).toBe(
-        'private, stale-while-revalidate=604800, stale-if-error=604800',
+        'private, stale-while-revalidate=604800, stale-if-error=31536000',
     )
     expect(await answer.json()).toEqual({ number: 'INV-4021', total: '$82.40' })
 

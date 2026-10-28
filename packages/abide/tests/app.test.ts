@@ -482,7 +482,7 @@ test('every answer carries nosniff and traceresponse; a page its referrer policy
     )
     // 21.22 — the fixture is served built, where the worker is registered.
     expect(page.headers.get('cache-control')).toBe(
-        'private, stale-while-revalidate=604800, stale-if-error=604800',
+        'private, stale-while-revalidate=604800, stale-if-error=31536000',
     )
 })
 

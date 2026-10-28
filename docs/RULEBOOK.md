@@ -1448,11 +1448,11 @@ time those rungs took apart from what they wrapped.
 
 21.22 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, a page, and the answer of
 a `GET` of the app's own that is neither a refusal nor a stream 16.32 frames, MUST default to `cache-control: private,
-stale-while-revalidate=604800, stale-if-error=604800`.
+stale-while-revalidate=604800, stale-if-error=31536000`.
 
 21.23 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, a file under a `public`
 directory MUST answer `cache-control: public, max-age=0, stale-while-revalidate=604800,
-stale-if-error=604800`.
+stale-if-error=31536000`.
 
 21.24 Where 45.1 has a page register the worker `ABIDE_OFFLINE` turns on, an answer carrying the
 `abide-principal` header 26.24 has it carry MUST carry `clear-site-data: "cache"`.

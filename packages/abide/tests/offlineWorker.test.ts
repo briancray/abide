@@ -40,7 +40,7 @@ const page = (): Response =>
     new Response('<p>page</p>', { headers: { 'content-type': 'text/html' } })
 
 /** 21.22's default, which every page and `GET` a registered worker sees carries. */
-const KEPT = 'private, stale-while-revalidate=604800, stale-if-error=604800'
+const KEPT = 'private, stale-while-revalidate=604800, stale-if-error=31536000'
 
 /** An answer `ageSeconds` old by its `date`, under `cacheControl`. */
 const aged = (body: string, cacheControl: string, ageSeconds = 0): Response =>
@@ -187,7 +187,7 @@ test("a handler's answer and a public file are saved, and answered offline — 4
         return new URL(request.url).pathname === '/logo.png'
             ? aged(
                   'png',
-                  'public, max-age=0, stale-while-revalidate=604800, stale-if-error=604800',
+                  'public, max-age=0, stale-while-revalidate=604800, stale-if-error=31536000',
               )
             : aged('saved', KEPT)
     })
@@ -545,7 +545,7 @@ test('a page the router reaches is saved, and opens offline — 45.24', async ()
 // is asked for again. THE REVERT: drop the `standsIn` check from `keepReached`; the last step asks
 // again, 4. Skipping whatever copy is saved instead, the expired one is never replaced, 1.
 test('a page the router reaches is asked for only where no copy would stand in — 45.24', async () => {
-    let age = 604800 + 60
+    let age = 31536000 + 60
     let pages = 0
     const offline = await worker(MANIFEST, () => {
         pages++
@@ -792,9 +792,9 @@ test('ABIDE_OFFLINE decides the worker abide start answers, whether a page regis
 
 // 21.22, 21.23, 21.11, 21.17 — WHERE THE WORKER IS REGISTERED, WHAT IT MAY KEEP SAYS SO in its own
 // header, for the worker and the browser's cache alike: a page, a value a `GET` answered and a public
-// file stale but servable for a week, a `ttl`'s `max-age` ahead of the same windows, and none of it
-// for a refusal, a stream or a mutation. With the worker off, every answer is as it was. THE REVERT:
-// drop the `kept` write in `answerOutcome`; `/getNote` keeps `no-store` with the worker on.
+// file served stale for a week while asked again and for a year where the network fails, a `ttl`'s
+// `max-age` ahead of the same windows, and none of it for a refusal, a stream or a mutation. With
+// the worker off, every answer is as it was. THE REVERT: drop the `kept` write in `answerOutcome`; `/getNote` keeps `no-store` with the worker on.
 test('a page, a GET and a public file default to stale-while-revalidate where the worker is registered — 21.22, 21.23, 21.11, 21.17', async () => {
     const IMPORTS = `import { GET, POST, jsonl } from '@abide/abide/server'\nimport { refuse } from '@abide/abide'\n\n`
     const app = appFixture({
@@ -842,7 +842,7 @@ test('a page, a GET and a public file default to stale-while-revalidate where th
             stop()
         }
     }
-    const KEPT = 'stale-while-revalidate=604800, stale-if-error=604800'
+    const KEPT = 'stale-while-revalidate=604800, stale-if-error=31536000'
     expect(said).toEqual([
         '0 /: private, no-store',
         '0 /getNote: private, no-store',

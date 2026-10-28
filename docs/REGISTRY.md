@@ -291,8 +291,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `cache-control: no-store` | `/__abide/openapi.json`, `/__abide/mcp` | Refuses caching for an answer about the app's surfaces. | 21.4 |
 | `cache-control: public, max-age=31536000, immutable` | the built bundle | A chunk addressed by its own content hash. | 21.5 |
 | `cache-control: public, max-age=0, must-revalidate` | a file under a `public` directory | A file at an address the build never chose. | 21.12 |
-| `cache-control: private, stale-while-revalidate=604800, stale-if-error=604800` | a page, a `GET`'s answer, where `ABIDE_OFFLINE` registers its worker | The default that lets a copy kept on the device stand in for the network. | 21.22, 21.11, 21.17 |
-| `cache-control: public, max-age=0, stale-while-revalidate=604800, stale-if-error=604800` | a file under a `public` directory, where `ABIDE_OFFLINE` registers its worker | The same, for a file at an address the build never chose. | 21.23 |
+| `cache-control: private, stale-while-revalidate=604800, stale-if-error=31536000` | a page, a `GET`'s answer, where `ABIDE_OFFLINE` registers its worker | The default that lets a copy kept on the device stand in for the network. | 21.22, 21.11, 21.17 |
+| `cache-control: public, max-age=0, stale-while-revalidate=604800, stale-if-error=31536000` | a file under a `public` directory, where `ABIDE_OFFLINE` registers its worker | The same, for a file at an address the build never chose. | 21.23 |
 | `clear-site-data: "cache"` | an answer carrying `abide-principal`, where pages are kept offline | Drops what the browser's own cache kept for the caller signed in before. | 21.24 |
 | `etag` | a file under a `public` directory | The answered bytes, addressed by their content. | 21.13, 21.14 |
 | `referrer-policy: strict-origin-when-cross-origin` | a page | The browsers' own default, written down. | 21.6 |

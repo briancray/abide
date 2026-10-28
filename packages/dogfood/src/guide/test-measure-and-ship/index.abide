@@ -425,14 +425,14 @@ ABIDE_OFFLINE=0 abide start`} />
         public files it loaded and the bundle it runs, until <code>ABIDE_OFFLINE=0</code> turns
         that off where the CRM is served. A kept page opens at once, however weak the signal, and
         the network is asked for the next copy behind it. With the network gone, a page opened in
-        the last week loads again with its data and works. One never opened says the device is
+        the last year loads again with its data and works. One never opened says the device is
         offline, and a link to it leaves the page you are on standing.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
             <tbody>
-                <tr><td><code>cache-control: private, stale-while-revalidate=604800, stale-if-error=604800</code></td><td>what a page and a handler's answer carry, so the device shows what it kept while it asks again</td></tr>
-                <tr><td><code>cache-control: public, max-age=0, stale-while-revalidate=604800, stale-if-error=604800</code></td><td>the same, for a public file</td></tr>
+                <tr><td><code>cache-control: private, stale-while-revalidate=604800, stale-if-error=31536000</code></td><td>what a page and a handler's answer carry, so the device shows what it kept while it asks again</td></tr>
+                <tr><td><code>cache-control: public, max-age=0, stale-while-revalidate=604800, stale-if-error=31536000</code></td><td>the same, for a public file</td></tr>
                 <tr><td><code>clear-site-data: "cache"</code></td><td>what a sign-in or a sign-out answers, so the browser forgets what it kept for the last person</td></tr>
             </tbody>
         </table>
