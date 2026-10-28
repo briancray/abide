@@ -6,7 +6,13 @@ import { File as EmulatedFile } from 'happy-dom'
 import { emitClient, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
 import { removeTemporaryModules } from './temporaryModule.ts'
-import { closeTyped, mountPage, renderPage } from './typed.ts'
+import {
+    clientOf,
+    closeTyped,
+    mountPage,
+    refusal,
+    renderPage,
+} from './typed.ts'
 
 afterAll(closeTyped)
 afterAll(removeTemporaryModules)
@@ -71,7 +77,6 @@ test('bind:value reads the property and writes it back on input — 32.5', async
     expect(out()).toStartWith('grace 40 ')
 })
 
-// 32.7 — A BOOLEAN BIND IS A BOOLEAN, both ways.
 // 32.5, 31.8 — A PATH INTO A VALUE IS WRITTEN THROUGH, as `contact.address.city = v` is: the binding
 // is handed the path's read and its write. THE REVERT: drop `boundPath` from `Lowering.reference`;
 // the binding is handed the city as a string, and what is typed never reaches the value.
@@ -91,6 +96,56 @@ let contact = reactive({ name: 'Ada', address: { city: 'London' } })
     expect(out()).toBe('Ada Paris')
 })
 
+// 32.5, 31.8 — A COMPUTED SEGMENT IS PART OF THE PATH, and its key is read when the input writes, so
+// the write lands on the entry the key names then and the read follows the key. THE REVERT: hold
+// `boundPath` to names and dots; the server writes `value=""`, and past that `#out` stays at `1 2`.
+test('bind:value through a computed key writes the entry the key names — 32.5, 31.8', async () => {
+    const { html } = await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let params = reactive({ a: 1, b: 2 })
+const sliders = [{ k: 'a' as const }, { k: 'b' as const }]
+let key = reactive<'a' | 'b'>('b')
+</script>
+
+{#for s of sliders by s.k}<input id={'f' + s.k} type="range" bind:value={params[s.k]}>{/for}
+<input id="top" type="range" bind:value={params[key]}>
+<button id="flip" onclick={() => { key = 'a' }}>flip</button>
+<p id="out">{params.a} {params.b}</p>`)
+    expect(html).toContain('id="top" type="range" value="2"')
+    input('fa').value = '7'
+    input('fa').dispatchEvent(new Event('input'))
+    flushSync()
+    expect(out()).toBe('7 2')
+    input('top').value = '9'
+    input('top').dispatchEvent(new Event('input'))
+    flushSync()
+    expect(out()).toBe('7 9')
+    document.getElementById('flip')?.click()
+    flushSync()
+    expect(input('top').value).toBe('7')
+    input('top').value = '4'
+    input('top').dispatchEvent(new Event('input'))
+    flushSync()
+    expect(out()).toBe('4 9')
+})
+
+// 32.76 — AN OPTIONAL STEP IS REFUSED, where it compiled to the read and wrote nothing back. A `?.`
+// inside a computed key is the key's own read and binds. THE REVERT: drop the `QuestionDotToken`
+// arm from `boundPath`; `params?.a` compiles.
+test('a bind through an optional step is refused — 32.76', async () => {
+    const page = (operand: string) =>
+        clientOf(`<script>
+import { reactive } from '@abide/abide'
+let params = reactive<{ a: number } | undefined>({ a: 1 })
+let keys = reactive<{ k: 'a' } | undefined>({ k: 'a' })
+</script>
+<input bind:value={${operand}}>`)
+    expect(await refusal(page('params?.a'))).toContain('RULEBOOK 32.76')
+    expect(await refusal(page('params![keys?.k ?? "a"]'))).toBe('')
+})
+
+// 32.7 — A BOOLEAN BIND IS A BOOLEAN, both ways.
 test('bind:checked and bind:open are booleans both ways — 32.7', async () => {
     await mounted()
     const box = input('subscribed')

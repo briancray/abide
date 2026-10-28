@@ -1876,7 +1876,7 @@ as a name bound to a `Reactive` is, per 31.1 to 31.7.
 component.
 
 32.5 `bind:value` MUST read the property and write it back on input or change, through the member
-path where its operand is a path into a value (31.8).
+path where its operand is a path into a value (31.8), a computed step's key read at each write.
 
 32.6 `bind:prop` on a component MUST hand the child the caller's `Reactive`, or its `{ get, set }` pair,
 as that prop's write path.
@@ -2094,6 +2094,9 @@ nothing for it.
 
 32.75 A `bind:` on an element MUST write its operand before any `on<event>` listener on that
 element, written or spread, runs for the same event, wherever the two are written in the tag.
+
+32.76 A `bind:` whose operand is a path into a value that takes an optional step (`?.`) MUST be a
+build error.
 
 # 33. Props
 

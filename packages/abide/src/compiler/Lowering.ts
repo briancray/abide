@@ -372,17 +372,17 @@ export class Lowering {
      * `contact.address.city = v` to for its set. Lowered as a read, the binding was handed the city
      * as a string and had nothing to write the typed text back into.
      *
-     * A STATIC PATH ONLY — names and dots, which carry no read of their own. `undefined` for any
-     * other operand, which `reference` lowers as it stands.
+     * A COMPUTED STEP IS EMITTED SOURCE, as 31.8's is: `params[s.k]` writes through `s.k` lowered,
+     * so the key is read when the input writes and the get reads it too — the binding follows the
+     * key. A `!` is a type and no step. `undefined` for an operand that is not a name followed by
+     * steps, which `reference` lowers as it stands — save 32.76's optional step, which is refused.
      */
     private boundPath(span: Span): string | undefined {
-        if (this.checking) return undefined
         const source = this.projection.text
         const text = source.slice(span.start, span.end)
         const from = span.start + (text.length - text.trimStart().length)
         const to = span.start + text.trimEnd().length
-        const reads = this.answer.reads
-        const read = reads[this.answer.firstRead(from)]
+        const read = this.answer.reads[this.answer.firstRead(from)]
         if (
             read === undefined ||
             read.from !== from ||
@@ -390,12 +390,41 @@ export class Lowering {
             read.item !== -1
         )
             return undefined
-        const path = source.slice(read.to, to)
-        if (!/^(\s*\.\s*[A-Za-z_$][\w$]*)+$/.test(path)) return undefined
-        const name = this.nameOf(read)
+        const tokens = tokenize(source.slice(read.to, to))
         const segments: string[] = []
-        for (const [, segment] of path.matchAll(/\.\s*([A-Za-z_$][\w$]*)/g))
-            segments.push(JSON.stringify(segment))
+        for (let at = 0; at < tokens.length; at += 1) {
+            const token = tokens[at] as Token
+            if (token.kind === SyntaxKind.ExclamationToken) continue
+            if (token.kind === SyntaxKind.QuestionDotToken)
+                throw new Error(
+                    `abide: bind:{${source.slice(from, to)}} writes through an optional step, and nothing can be written through one. Bind the path without ?., or a { get, set } pair. RULEBOOK 32.76.`,
+                )
+            if (token.kind === SyntaxKind.DotToken) {
+                at += 1
+                const step = tokens[at]
+                if (step === undefined || !/^[A-Za-z_$][\w$]*$/.test(step.text))
+                    return undefined
+                segments.push(JSON.stringify(step.text))
+                continue
+            }
+            if (token.kind !== SyntaxKind.OpenBracketToken) return undefined
+            let depth = 1
+            let close = at + 1
+            for (; close < tokens.length; close += 1) {
+                depth += nesting((tokens[close] as Token).kind)
+                if (depth === 0) break
+            }
+            if (depth > 0 || close === at + 1) return undefined
+            segments.push(
+                this.lower({
+                    start: read.to + token.end,
+                    end: read.to + (tokens[close] as Token).start,
+                }).trim(),
+            )
+            at = close
+        }
+        if (segments.length === 0) return undefined
+        const name = this.nameOf(read)
         return `{ get: () => ${this.lowerChunk({ start: from, end: to })}, set: (${STORED}) => ${name}.set(${this.use('writePath')}(${name}(), [${segments.join(', ')}], ${STORED})) }`
     }
 
