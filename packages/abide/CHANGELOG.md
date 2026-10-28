@@ -1,5 +1,12 @@
 # @abide/abide
 
+## 0.116.1
+
+### Patch Changes
+
+- 7dedb9a: the offline worker keeps an answer marked `cache-control: public` — a public file, a font a stylesheet draws with — through a sign-in, a sign-out and a form submitted, which drop only what was saved for the caller
+- 6a69393: a copy the offline worker kept stands in for a year where the network fails, rather than a week — a page, a GET's answer and a public file carry `stale-if-error=31536000`
+
 ## 0.116.0
 
 ### Minor Changes
