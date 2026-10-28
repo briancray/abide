@@ -2759,6 +2759,9 @@ hydration woke before it settles; it MUST throw where the component was not impo
 `ABIDE_PRINCIPAL_SECRET` MUST seal and verify the principal cookie with a secret the preload
 supplies, and `abide start` MUST NOT supply that secret.
 
+38.121 Under `mount`, a call the component's browser module makes to a private handler MUST be
+answered in the test's process by the handler the component's server module declares.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

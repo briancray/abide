@@ -18,6 +18,12 @@ export const TEXT_QUERY = '?text'
 export const CLIENT_QUERY = '?client'
 
 /**
+ * The file's server module, whoever asks — a browser module outside a bundle binding its private
+ * handlers (38.121), where `?component` would answer it with itself.
+ */
+export const SERVER_QUERY = '?server'
+
+/**
  * What a handler file is imported as: its own path with this after it, so the plugin can serve it
  * between the calls that file its hooks (37.1) and a browser its wrapper (16.74). A stack frame names
  * the file without it (38.97).

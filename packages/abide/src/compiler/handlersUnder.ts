@@ -16,7 +16,7 @@ import { PRIVATE_HANDLERS_ADDRESS } from '#shared/ADDRESSES.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
 import type { PlacedHandler, PlacedSource } from './appLayout.ts'
 import { declaredExports } from './declaredExports.ts'
-import { PRIVATE_EXPORT } from './projectShadow.ts'
+import { PRIVATE_EXPORT } from '#server/PRIVATE_EXPORT.ts'
 import type { Refusals } from './Refusals.ts'
 import type { Diagnosis, TypeSession } from './TypeSession.ts'
 

@@ -3,7 +3,7 @@
 // adapter that hands bun's hooks to it, because bun decides which hook asks (an `onResolve` for a
 // specifier, an `onLoad` for a path), and this decides what the answer is.
 
-import { HANDLER_SUFFIX } from './MODULE_QUERIES.ts'
+import { HANDLER_SUFFIX, SERVER_QUERY } from './MODULE_QUERIES.ts'
 
 // A VIRTUAL FACE'S PATH: its file's, with a suffix that is not a query. Both registries key a module
 // by its path whatever its namespace, and the runtime's drops a query from it — so a file's text, its
@@ -33,14 +33,15 @@ export type Face = { path: string; namespace: string }
 
 /**
  * What an import asks of a file, by its spelling: its text (`?text`), a component's stylesheet
- * (`?style`), the module it compiles to (`?component`), its browser module (`?client`), a `.abide`
- * named bare, or a module that may be a handler file.
+ * (`?style`), the module it compiles to (`?component`), its browser module (`?client`), its server
+ * module (`?server`), a `.abide` named bare, or a module that may be a handler file.
  */
 export type Asked =
     | 'text'
     | 'style'
     | 'component'
     | 'client'
+    | 'server'
     | 'abide'
     | 'handler'
 
@@ -60,6 +61,8 @@ export type HandlerFace = { scope: string; client: string }
  * - 32.17 — the module a `.abide` compiles to: in a browser's lane its browser module, else its
  *   server module — in a namespace of its own in a bundle, where bun refuses a `file` path with `..`
  *   in it, which a `[...rest]` directory writes (23.5);
+ * - 38.121 — its server module, to a browser module outside a bundle binding its private handlers,
+ *   and never in a browser's lane (16.28);
  * - 34.16 — a `.abide` named bare is a module abide did not compile asking: on a server its bound
  *   face, and in a browser the component module itself;
  * - 16.2, 16.74 — a handler file, however its import is spelled and whoever imports it — the app or a
@@ -89,6 +92,12 @@ export function faceOf(
             return lane.browser
                 ? { path: file, namespace: COMPONENT_NAMESPACE }
                 : { path: `${file}${CLIENT}`, namespace: CLIENT_NAMESPACE }
+        case 'server':
+            return lane.browser
+                ? new Error(
+                      `abide: ${realFileOf(importer)} imports ${file}${SERVER_QUERY}, the server module, into the browser. Call its handlers by name. RULEBOOK 16.28.`,
+                  )
+                : { path: file, namespace: componentNamespaceOf(lane) }
         case 'abide':
             return inBrowser || importer === `${file}${BOUND}`
                 ? component()

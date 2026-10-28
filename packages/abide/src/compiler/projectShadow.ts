@@ -1,4 +1,5 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
+import { PRIVATE_EXPORT } from '#server/PRIVATE_EXPORT.ts'
 import { isEventName } from '#shared/isEventName.ts'
 import { isComponentTag, propKeyOf } from './classifyTemplate.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
@@ -767,9 +768,6 @@ function refuseExport(source: string): void {
         previous = text
     }
 }
-
-/** The prefix a server block's bindings are re-exported under, for the build alone (16.70). */
-export const PRIVATE_EXPORT = '__handler_'
 
 /**
  * 16.70 — the `export { … }` re-exporting each name the server blocks bind under `PRIVATE_EXPORT`,

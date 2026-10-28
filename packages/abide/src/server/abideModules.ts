@@ -40,10 +40,12 @@ import {
     COMPONENT_QUERY,
     HANDLER_FACE,
     HANDLER_SUFFIX,
+    SERVER_QUERY,
     STYLE_QUERY,
     TEXT_QUERY,
 } from './MODULE_QUERIES.ts'
 import { MOUNTABLE } from './MOUNTABLE.ts'
+import { PRIVATE_EXPORT } from './PRIVATE_EXPORT.ts'
 import { realOrAsGiven } from './realOrAsGiven.ts'
 import { SERVER_TABLE } from './TABLES.ts'
 import { VIRTUAL_DIRECTORY } from './VIRTUAL_DIRECTORY.ts'
@@ -280,6 +282,7 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
             asking('style', STYLE_QUERY, abideWith(STYLE_QUERY))
             asking('component', COMPONENT_QUERY, abideWith(COMPONENT_QUERY))
             asking('client', CLIENT_QUERY, abideWith(CLIENT_QUERY))
+            asking('server', SERVER_QUERY, abideWith(SERVER_QUERY))
             asking('abide', '', /\.abide$/)
             build.onResolve(
                 { filter: new RegExp(`/${VIRTUAL_DIRECTORY}/[^/]+\\.ts$`) },
@@ -380,10 +383,16 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
             })
             build.onLoad(
                 { filter: /.*/, namespace: CLIENT_NAMESPACE },
-                (args) => ({
-                    contents: compiledAt(served, realFileOf(args.path)).client,
-                    loader: 'ts',
-                }),
+                (args) => {
+                    const path = realFileOf(args.path)
+                    return {
+                        contents: withPrivateHandlers(
+                            compiledAt(served, path).client,
+                            path,
+                        ),
+                        loader: 'ts',
+                    }
+                },
             )
             build.onLoad(
                 { filter: /.*/, namespace: BOUND_NAMESPACE },
@@ -424,6 +433,22 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
             )
         },
     }
+}
+
+// 38.121 — A BROWSER MODULE OUTSIDE A BUNDLE HOLDS EACH PRIVATE HANDLER ITSELF, bound from its file's
+// server module, where a bundle's holds the wrapper 16.28 states: no server answers the address that
+// wrapper would fetch, and a handler file's import is already the module the server mounts. Each
+// wrapper is one line of `wireLine`'s, `const <name> = __wire(…)`, and an import is hoisted, so the
+// line is swapped where it stands.
+const PRIVATE_WRAPPER = /^const ([\w$]+) = __wire\(.*$/gm
+
+function withPrivateHandlers(client: string, path: string): string {
+    const server = JSON.stringify(`${path}${SERVER_QUERY}`)
+    return client.replace(
+        PRIVATE_WRAPPER,
+        (_line, name: string) =>
+            `import { ${PRIVATE_EXPORT}${name} as ${name} } from ${server}`,
+    )
 }
 
 // AN IMPORTER IN ONE OF THIS PLUGIN'S NAMESPACES CARRIES IT in front of its path at run time — with

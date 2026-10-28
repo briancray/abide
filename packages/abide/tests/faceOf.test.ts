@@ -1,4 +1,4 @@
-// 16.2, 16.74, 20.4, 32.17, 34.4, 34.16, 34.21 — WHICH FACE AN IMPORT IS ANSWERED WITH, as one table of
+// 16.2, 16.74, 20.4, 32.17, 34.4, 34.16, 34.21, 38.121 — WHICH FACE AN IMPORT IS ANSWERED WITH, as one table of
 // lane by ask by importer against the one function that decides it (`faceOf`), with no bundle built:
 // `handlerImports.test.ts` and `mounts.test.ts` are where bun's hooks are seen to hand it the ask.
 
@@ -75,6 +75,22 @@ test('a .abide asked for its compiled module answers in its importer’s lane �
         path: CARD,
         namespace: COMPONENT_NAMESPACE,
     })
+})
+
+// THE REVERT: answer `server` as `component` is answered; the browser module the runtime was asked for
+// binds its private handlers from itself, and its row reads `Card.abide::client`.
+test('a .abide asked for its server module answers it to a server and refuses a browser — 38.121, 16.28', () => {
+    expect(face('server', CARD, `${CARD}${CLIENT}`, RUNTIME)).toEqual({
+        path: CARD,
+        namespace: 'file',
+    })
+    expect(face('server', CARD, `${CARD}${CLIENT}`, SERVER_BUNDLE)).toEqual({
+        path: CARD,
+        namespace: COMPONENT_NAMESPACE,
+    })
+    expect(face('server', CARD, PAGE, BROWSER_BUNDLE)).toContain(
+        'RULEBOOK 16.28',
+    )
 })
 
 // THE REVERT: answer a bare `.abide` with its component module from the bound face's own import too;

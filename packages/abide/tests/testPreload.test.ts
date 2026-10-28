@@ -180,3 +180,69 @@ test('the click loads the module', async () => {
         '0 true',
     )
 }, 90_000)
+
+// 38.121 — A MOUNTED COMPONENT'S CALL TO ITS PRIVATE HANDLER, made by its browser module on a click,
+// is answered by the handler: the same one the render read, so a second click counts on from the
+// first. THE REVERT: load the browser module's `client` as compiled, wrappers and all, and each call
+// fetches `/abide-client:/…/src/handlers/lib/Private/bump`, which nothing answers — the click reads
+// "ERR HttpError: Service Unavailable", exit 1, `0 pass`.
+test('a mounted component calls its private handler from a click — 38.121', async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'private-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': TEST_PRELOAD,
+        'src/index.abide': '<main>home</main>',
+        'src/lib/Private.abide': `<script server>
+import { GET, POST } from '@abide/abide/server'
+
+let count = 0
+const bump = POST(() => ++count)
+const greet = GET(() => 'hi')
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+let out = reactive('none')
+const greeting = reactive(() => greet())
+const press = async () => {
+    try {
+        out = String(await bump())
+    } catch (thrown) {
+        out = \`ERR \${thrown}\`
+    }
+}
+</script>
+
+<p id="greeting">{greeting}</p>
+<button id="bump" onclick={press}>bump</button>
+<p id="out">{out}</p>`,
+        'src/tests/Private.test.ts': `import { expect, test } from 'bun:test'
+import { mount } from '@abide/harness/abide'
+import Private from '../lib/Private.abide'
+
+async function pressed(was: string | null | undefined): Promise<string | null | undefined> {
+    document.querySelector<HTMLButtonElement>('#bump')?.click()
+    for (let tries = 0; tries < 100 && document.querySelector('#out')?.textContent === was; tries += 1)
+        await Bun.sleep(10)
+    return document.querySelector('#out')?.textContent
+}
+
+test('each click is answered by the handler', async () => {
+    using _private = await mount(Private({}))
+    expect(document.querySelector('#greeting')?.textContent).toBe('hi')
+    expect(await pressed('none')).toBe('1')
+    expect(await pressed('1')).toBe('2')
+})
+`,
+    })
+    const ran = await spawned(['bun', 'test', './src/tests/Private.test.ts'], {
+        cwd,
+    })
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
