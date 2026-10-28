@@ -15,6 +15,7 @@ import {
     OFFLINE_BUNDLE,
     OFFLINE_CACHE_PREFIX,
     OFFLINE_SAVED,
+    OFFLINE_SHARED,
 } from '#shared/OFFLINE_CACHES.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { REACHED_MESSAGE } from '#shared/REACHED_MESSAGE.ts'
@@ -31,6 +32,7 @@ const STREAMED_TYPES = [
 
 const CACHES = `const OURS = ${JSON.stringify(OFFLINE_CACHE_PREFIX)}
 const SAVED = ${JSON.stringify(OFFLINE_SAVED)}
+const SHARED = ${JSON.stringify(OFFLINE_SHARED)}
 const BUNDLE = ${JSON.stringify(OFFLINE_BUNDLE)}
 
 async function dropOurs(keeping) {
@@ -112,7 +114,7 @@ async function answer(event, page) {
             request.cache === 'no-store')
     const saved = bypass
         ? undefined
-        : await caches.match(request, { cacheName: SAVED, ignoreVary: true })
+        : await savedCopy(request)
     const life = saved === undefined ? undefined : lifeOf(saved)
     if (life !== undefined) {
         if (life.age < life.fresh) return marked(saved)
@@ -197,7 +199,7 @@ async function keepReached(url) {
     if (reaching.has(url)) return
     reaching.add(url)
     try {
-        const saved = await caches.match(url, { cacheName: SAVED, ignoreVary: true })
+        const saved = await savedCopy(url)
         if (saved === undefined || !standsIn(lifeOf(saved))) await keepPage(url)
     } finally {
         reaching.delete(url)
@@ -247,9 +249,19 @@ function kept(response) {
     return !STREAMED.some((streamed) => type.startsWith(streamed))
 }
 
+// The copy saved of an address, a caller's own ahead of one any caller may be answered.
+async function savedCopy(request) {
+    return (
+        (await caches.match(request, { cacheName: SAVED, ignoreVary: true })) ??
+        (await caches.match(request, { cacheName: SHARED, ignoreVary: true }))
+    )
+}
+
 // 45.7 — EVERY PAGE SAVED DROPPED, and with them every copy asked for before the drop: one asked under
 // the cookies of then would land after it holding the caller signed out since. The drop an answer's
-// own abide-principal makes is the exception, since that answer is the new caller's.
+// own abide-principal makes is the exception, since that answer is the new caller's. What any caller
+// may be answered is kept apart and left standing: it was never the caller's to drop, and a font
+// thrown away at sign-in is a page drawn without it offline.
 let drops = 0
 
 function dropSaved() {
@@ -259,15 +271,19 @@ function dropSaved() {
 
 // Saves a copy 45.3 and 45.4 let through where no drop has come since its request was asked — after
 // the drop its own answer makes where that answer rotated the principal — and cancels one where one has.
+// One any caller may be answered is saved whenever it was asked, since no caller's cookies made it.
 async function keep(request, copy, since, rotated) {
     if (rotated) {
         await dropSaved()
         since = drops
     }
     if (copy === undefined) return
-    if (since !== drops) return copy.body?.cancel()
-    const cache = await caches.open(SAVED)
-    await cache.put(request, copy)
+    const shared = directivesOf(copy).has('public')
+    if (!shared && since !== drops) return copy.body?.cancel()
+    // An address whose answer went public or private since leaves no copy behind for savedCopy to
+    // prefer over this one.
+    await (await caches.open(shared ? SAVED : SHARED)).delete(request)
+    await (await caches.open(shared ? SHARED : SAVED)).put(request, copy)
 }
 
 function offline() {

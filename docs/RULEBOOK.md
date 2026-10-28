@@ -3301,8 +3301,9 @@ rather than one a redirect led to, that is neither a stream 16.32 frames nor a b
 45.6 The worker `ABIDE_OFFLINE` turns on MUST answer a file of the build's bundle from what it
 saved.
 
-45.7 The worker `ABIDE_OFFLINE` turns on MUST drop everything it saved where an answer it is handed
-carries `abide-principal`, where `principal` changes in any tab, and where a form is submitted.
+45.7 The worker `ABIDE_OFFLINE` turns on MUST drop everything it saved, save an answer whose
+`cache-control` is `public`, where an answer it is handed carries `abide-principal`, where
+`principal` changes in any tab, and where a form is submitted.
 
 45.8 The worker `ABIDE_OFFLINE` turns on, of a new build, MUST drop everything the one before it
 saved, and every file of the bundle the new build does not name.

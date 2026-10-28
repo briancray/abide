@@ -195,12 +195,11 @@ test("a handler's answer and a public file are saved, and answered offline — 4
         offline.dispatch('fetch', { request: new Request(`${ORIGIN}${path}`) })
     await get('/notes/getNote')
     await get('/logo.png')
-    expect(offline.saved('abide:saved')).toEqual([
-        `${ORIGIN}/logo.png`,
-        `${ORIGIN}/notes/getNote`,
-    ])
+    expect(offline.saved('abide:saved')).toEqual([`${ORIGIN}/notes/getNote`])
+    expect(offline.saved('abide:shared')).toEqual([`${ORIGIN}/logo.png`])
     online = false
     expect(await (await get('/notes/getNote'))?.text()).toBe('saved')
+    expect(await (await get('/logo.png'))?.text()).toBe('png')
     expect((await get('/notes/never'))?.type).toBe('error')
     expect((await offline.navigate('/never'))?.status).toBe(503)
 })
@@ -654,6 +653,59 @@ test('a form submitted drops the pages saved — 45.7', async () => {
     await offline.navigate('/old')
     await offline.navigate('/signIn', 'POST')
     expect(offline.saved('abide:saved')).toEqual([])
+})
+
+// 45.7 — WHAT ANY CALLER MAY BE ANSWERED OUTLIVES EVERY DROP: a sign-in, a tab's principal changing
+// and a form submitted each drop the pages, and the font a page draws with stays, asked before a
+// drop or not, to answer offline. THE REVERT: save every copy to `SAVED` in `keep`; nothing is left
+// in `abide:shared` and the font offline is an error.
+test('a public answer is not dropped with the pages saved — 45.7', async () => {
+    let online = true
+    let rotating = false
+    const offline = await worker(MANIFEST, (request) => {
+        if (!online) throw new TypeError('Failed to fetch')
+        if (new URL(request.url).pathname === '/font.woff2')
+            return aged('font', 'public, max-age=0, stale-if-error=31536000')
+        return new Response('<p>page</p>', {
+            headers: {
+                'content-type': 'text/html',
+                ...(rotating ? { [PRINCIPAL_HEADER]: 'set' } : {}),
+            },
+        })
+    })
+    const font = () =>
+        offline.dispatch('fetch', {
+            request: new Request(`${ORIGIN}/font.woff2`),
+        })
+    await font()
+    rotating = true
+    await offline.navigate('/signed-in')
+    await offline.dispatch('message', { data: 'rotated' })
+    await offline.navigate('/signIn', 'POST')
+    expect(offline.saved('abide:saved')).toEqual([])
+    expect(offline.saved('abide:shared')).toEqual([`${ORIGIN}/font.woff2`])
+    online = false
+    expect(await (await font())?.text()).toBe('font')
+})
+
+// 45.7 — AN ADDRESS WHOSE ANSWER WENT PUBLIC LEAVES NO PRIVATE COPY to be read ahead of the public one.
+// THE REVERT: drop the `delete` from `keep`; the copy answered offline is the first, `mine`.
+test('an answer saved to one cache drops its address from the other — 45.7', async () => {
+    let online = true
+    let answers = 0
+    const offline = await worker(MANIFEST, () => {
+        if (!online) throw new TypeError('Failed to fetch')
+        answers++
+        return answers === 1
+            ? aged('mine', KEPT)
+            : aged('ours', 'public, max-age=0, stale-if-error=31536000')
+    })
+    const get = () =>
+        offline.dispatch('fetch', { request: new Request(`${ORIGIN}/notes/getNote`) })
+    await get()
+    await get()
+    online = false
+    expect(await (await get())?.text()).toBe('ours')
 })
 
 // 45.8, 45.13 — A NEW BUILD DROPS THE PAGES AND THE FILES THE OLD ONE SAVED, and saves the pages open
