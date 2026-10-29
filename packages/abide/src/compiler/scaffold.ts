@@ -35,15 +35,17 @@ const SOURCE_ALIAS = { '#src/*': ['./src/*', './src/*.ts'] }
  * 38.109, 38.119 — the starter's `bunfig.toml`: the harness's abide preload, which is a DOM a test
  * can mount into and measure, then abide's own — the app's `.abide` files imported as modules, with
  * nothing booted first. Its test root is `src`, so a browser test under `e2e` is playwright's alone.
+ * 38.122 — and no peer installed: `bun-plugin-tailwind` names `bun` as one, and an installed copy
+ * lands first on the PATH inside `bun run`, shadowing the bun that runs everything else.
  */
-export const TEST_PRELOAD =
-    '# 38.109, 38.119 — a DOM to mount into and measure, then the app\'s `.abide` files as modules.\n[test]\nroot = "src"\npreload = ["@abide/harness/abide/preload"]\n'
+export const BUNFIG =
+    '# 38.122 — a peer is not installed: an installed `bun` would shadow this one inside `bun run`.\n[install]\npeer = false\n\n# 38.109, 38.119 — a DOM to mount into and measure, then the app\'s `.abide` files as modules.\n[test]\nroot = "src"\npreload = ["@abide/harness/abide/preload"]\n'
 
 // WRITTEN, NOT COPIED, beside the manifests: a packer drops a `bunfig.toml` or a `.gitignore` from
 // the tarball (`bun pm pack` both, `npm pack` the second), so neither survives as a starter file.
 function filesFor(name: string): Record<string, string> {
     return {
-        'bunfig.toml': TEST_PRELOAD,
+        'bunfig.toml': BUNFIG,
         '.gitignore': 'node_modules\n.abide\n',
         'package.json': `${JSON.stringify(
             {

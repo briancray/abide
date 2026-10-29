@@ -5,7 +5,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
-import { TEST_PRELOAD } from '#compiler/scaffold.ts'
+import { BUNFIG } from '#compiler/scaffold.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 afterAll(removeTemporaryModules)
@@ -67,7 +67,7 @@ test('a test under the preload imports a .abide and a handler file of the app, a
     // Both runs at once: each is its own app and its own process.
     const [ran, unloaded] = await Promise.all([
         spawned(['bun', 'test', './src/media/tests/badge.test.ts'], {
-            cwd: app(TEST_PRELOAD),
+            cwd: app(BUNFIG),
         }),
         spawned(['bun', 'test', './src/media/tests/badge.test.ts'], {
             cwd: app(undefined),
@@ -91,7 +91,7 @@ test('a test mounts a component, clicks it and reads the work the click did — 
             type: 'module',
             imports: { '#src/*': './src/*' },
         }),
-        'bunfig.toml': TEST_PRELOAD,
+        'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
         'src/lib/Counter.abide': `<script>
 import { props, reactive } from '@abide/abide'
@@ -142,7 +142,7 @@ test('a mounted component imports a #src module dynamically — 38.119', async (
             type: 'module',
             imports: { '#src/*': ['./src/*', './src/*.ts'] },
         }),
-        'bunfig.toml': TEST_PRELOAD,
+        'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
         'src/lib/word.ts': "export const word = 'loaded'\n",
         'src/lib/Dynamic.abide': `<script>
@@ -193,7 +193,7 @@ test('a mounted component calls its private handler from a click — 38.121', as
             type: 'module',
             imports: { '#src/*': './src/*' },
         }),
-        'bunfig.toml': TEST_PRELOAD,
+        'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
         'src/lib/Private.abide': `<script server>
 import { GET, POST } from '@abide/abide/server'
@@ -260,7 +260,7 @@ test('a call in a test is held to the handler annotation — 15.8, 19.9, 38.121'
             type: 'module',
             imports: { '#src/*': './src/*' },
         }),
-        'bunfig.toml': TEST_PRELOAD,
+        'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
         'src/tally.ts': `import { POST } from '@abide/abide/server'
 

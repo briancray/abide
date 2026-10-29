@@ -849,7 +849,7 @@ rows a runner prints, and an adapter for an abide app.
 
 | Command | Meaning | Rules |
 | --- | --- | --- |
-| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112 |
+| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112, 38.122 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, and where each hook is filed. | 38.108 |

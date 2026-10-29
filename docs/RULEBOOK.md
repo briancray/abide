@@ -2766,6 +2766,8 @@ supplies, and `abide start` MUST NOT supply that secret.
 38.121 Under `mount`, a call the component's browser module makes to a private handler MUST be
 answered in the test's process by the handler the component's server module declares.
 
+38.122 The project `abide scaffold` writes MUST NOT install a dependency's peer dependencies.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
