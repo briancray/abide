@@ -1,5 +1,13 @@
 # @abide/abide
 
+## 0.117.1
+
+### Patch Changes
+
+- 05ba855: a ceiling naming no bench fails the run, and a bench file sits beside any code it times (RULEBOOK 23.22, 43.32-43.34) ([`d5f3d3c`](https://github.com/briancray/abide/commit/d5f3d3cc6368057f8437559aafc7113abd2b3269))
+- 05ba855: a refusal and the starter's notes say a lib/ or public/ fence may sit in any directory above the file (RULEBOOK 23.22, 23.23, 37.1) ([`d9d95df`](https://github.com/briancray/abide/commit/d9d95df07fb8cb92a295ffc9a316da9b5bc6141e))
+- 9e24653: `runBenches` (`@abide/harness/runner`) and the `harness-bench` command run every `*.bench.ts` under an app's `src`, print each arm's time and the claim between them, and fail the run where an arm goes over its `CEILINGS` entry or a ceiling names no arm (RULEBOOK 43.29-43.33); `abide scaffold` writes a `bench` script that runs it, and the starter's agent notes say to measure with the harness (RULEBOOK 38.124)
+
 ## 0.117.0
 
 ### Minor Changes
