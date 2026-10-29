@@ -171,7 +171,7 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
             <thead><tr><th>You write</th><th>Where it lands</th></tr></thead>
             <tbody>
                 <tr><td><code>{'{expr}'}</code></td><td>a text node, escaped</td></tr>
-                <tr><td><code>{'{raw(...)}'}</code></td><td>markup, unescaped: <code>raw</code> brands a string as a <code>Raw</code></td></tr>
+                <tr><td><code>{'{raw(...)}'}</code></td><td>markup, unescaped and unchecked (32.77): <code>raw</code> brands a string as a <code>Raw</code>, so hand it markup you wrote, never a model's reply or a fetched page as it came</td></tr>
                 <tr><td><code>{'name={expr}'}</code></td><td>one attribute, whole</td></tr>
                 <tr><td><code>{'name="…{expr}…"'}</code></td><td>one attribute, interpolated</td></tr>
                 <tr><td><code>{'class:name={cond}'}</code></td><td>one class, there while the condition holds</td></tr>

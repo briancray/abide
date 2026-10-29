@@ -2099,6 +2099,9 @@ element, written or spread, runs for the same event, wherever the two are writte
 32.76 A `bind:` whose operand is a path into a value that takes an optional step (`?.`) MUST be a
 build error.
 
+32.77 A slot holding a value branded by `raw` MUST write its markup as given, with no element or
+attribute in it removed and no URL in it scheme-checked.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
