@@ -7,9 +7,10 @@ import { GET } from '#server'
 import type { Mounted } from '#server/answerRpc.ts'
 import { argsFor } from '#server/argsFor.ts'
 import { collapsed } from '#server/coerceArgs.ts'
+import { derivedArgs } from '#server/derivedArgs.ts'
 import { isFailed } from '#shared/Failed.ts'
 
-const SCHEMA: Mounted['argsDocument'] & Mounted['wireArgs'] = {
+const SCHEMA: Mounted['argsDocument'] & Mounted['args'] = {
     type: 'object',
     properties: {
         id: { type: 'integer' },
@@ -18,13 +19,18 @@ const SCHEMA: Mounted['argsDocument'] & Mounted['wireArgs'] = {
     required: ['id'],
 }
 
-const found: Pick<Mounted, 'handler' | 'argsDocument' | 'wireArgs'> = {
-    handler: GET(
+// The handler as the module it is loaded through leaves it: held to the schema its annotation derives.
+function heldTo(
+    schema: Mounted['args'],
+): Pick<Mounted, 'handler' | 'argsDocument'> {
+    const handler = GET(
         (_args: { id: number; tags?: string[] }) => 1,
-    ) as Mounted['handler'],
-    argsDocument: SCHEMA,
-    wireArgs: SCHEMA,
+    ) as Mounted['handler']
+    derivedArgs(handler, schema as NonNullable<Mounted['args']>)
+    return { handler, argsDocument: SCHEMA }
 }
+
+const found = heldTo(SCHEMA)
 
 // 16.18, 38.61 — THE REVERT: keep only the last value of a repeated name in `collapsed`; `tags` reads
 // 'b' and the CLI's `tag=a tag=b` sends one.
@@ -47,7 +53,7 @@ test('text args are coerced and JSON args are not — 19.7', () => {
 })
 
 // 19.9 — ARGS THAT DO NOT HOLD TO THE ANNOTATION ARE REFUSED, thrown as the refusal answered. THE
-// REVERT: drop the `validateJson` step; the text id is handed to the handler.
+// REVERT: drop the `DERIVED_ARGS` check; the text id is handed to the handler.
 test('args that do not hold to the annotation are refused — 19.9', () => {
     let refused: unknown
     try {
@@ -69,6 +75,7 @@ test('a call that sends no args is held to the annotation — 19.9', () => {
         refused = thrown
     }
     expect(isFailed(refused) && refused.status).toBe(422)
-    const optional = { ...found, wireArgs: { ...SCHEMA, required: [] } }
-    expect(argsFor(optional, undefined, '')).toBeUndefined()
+    expect(
+        argsFor(heldTo({ ...SCHEMA, required: [] }), undefined, ''),
+    ).toBeUndefined()
 })

@@ -120,7 +120,8 @@ export function serveCompilation(root: string, compilation: Compilation): void {
     const real = realOrAsGiven(root)
     const handlerFiles = addCompilation(real, compilation, RUNTIME)
     installSourceMaps(serverMapsOf(compilation, real), real)
-    if (handlerFiles.length !== 0) Bun.plugin(handlerFilesPlugin(handlerFiles))
+    if (handlerFiles.length !== 0)
+        Bun.plugin(handlerFilesPlugin(handlerFiles, RUNTIME.handlers))
     if (registered) return
     registered = true
     Bun.plugin(modulesPlugin(RUNTIME))
@@ -132,7 +133,13 @@ export function serveCompilation(root: string, compilation: Compilation): void {
 // plugin per compilation because the filter is fixed at registration, and the runtime's `onLoad`
 // cannot fall through, so the filter names the handler files and nothing else. The face it names
 // is resolved by `modulesPlugin`, registered once.
-function handlerFilesPlugin(paths: string[]): Bun.BunPlugin {
+// 15.8, 19.9 — AND HOLDS ITS HANDLER TO THE SCHEMA ITS ANNOTATION DERIVES, once the face has built it:
+// this module is what every import of the file is answered with — the server's mount, a test's own
+// import, a component's under `mount` — so a call is held to it whoever makes it.
+function handlerFilesPlugin(
+    paths: string[],
+    faces: ReadonlyMap<string, HandlerFace>,
+): Bun.BunPlugin {
     return {
         name: 'abide-handler-files',
         setup(build) {
@@ -142,10 +149,18 @@ function handlerFilesPlugin(paths: string[]): Bun.BunPlugin {
                         `^(?:${paths.map(RegExp.escape).join('|')})$`,
                     ),
                 },
-                (args) => ({
-                    contents: `export { default } from ${JSON.stringify(`${args.path}${HANDLER_SUFFIX}`)}\n`,
-                    loader: 'js',
-                }),
+                (args) => {
+                    const face = JSON.stringify(`${args.path}${HANDLER_SUFFIX}`)
+                    const schema = faces.get(args.path)?.args
+                    return {
+                        contents:
+                            `export { default } from ${face}\n` +
+                            (schema === undefined
+                                ? ''
+                                : `import __handler from ${face}\nimport { derivedArgs as __derivedArgs } from '${SERVER_SPECIFIER}'\n__derivedArgs(__handler, ${JSON.stringify(schema)})\n`),
+                        loader: 'js',
+                    }
+                },
             )
         },
     }

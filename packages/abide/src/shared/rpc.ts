@@ -13,6 +13,7 @@
 // the call hands back a value whose body runs the onion once per args, per request, over the
 // handler's own.
 
+import { DERIVED_ARGS } from './DERIVED_ARGS.ts'
 import { type Failed, isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { HandlerRoute } from './HandlerRoute.ts'
@@ -52,7 +53,7 @@ import { MUTATION } from './reactive/MUTATION.ts'
 import { dropAnswered } from './reactive/Reactive.ts'
 import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
-import { checkArgs } from './refuse.ts'
+import { checkArgs, validationError } from './refuse.ts'
 import { rpcRequest } from './rpcRequest.ts'
 import type { Schema } from './Schema.ts'
 
@@ -161,6 +162,16 @@ type Derived<Member, Whole = Member> = Member extends
               : Failed<'ValidationError', Issues<Whole>>
           : never
       : never
+
+/**
+ * 19.9 — the issues an `Rpc`'s args leave against the schema its annotation derives, `null` where
+ * they hold: `undefined` until the module its handler is loaded through stamps it (`derivedArgs`),
+ * and so in a browser always. A function rather than the schema, so this seam never carries the
+ * validator (19.13).
+ */
+export type HeldToAnnotation = {
+    [DERIVED_ARGS]: ((args: unknown) => Issues<unknown> | null) | undefined
+}
 
 /** Which generated surfaces carry a handler (20.1). */
 export type Clients = {
@@ -440,6 +451,11 @@ export function declare(method: Method): Declare {
         }
         const call = (given?: unknown, options?: CallOptions): unknown => {
             const args = normalized(contract, given)
+            // 15.8, 19.9 — AND HELD TO ITS ANNOTATION, where the build derived a schema off it: a
+            // type an in-process caller wrote holds nothing at run time (`as never`, a value off
+            // JSON), so the call is refused as the wire refuses it rather than handed to the body.
+            const issues = rpc[DERIVED_ARGS]?.(args) ?? null
+            if (issues !== null) return reactive(() => validationError(issues))
             const route =
                 rpc.address === undefined ? undefined : routeAt(rpc.address)
             if (route?.segments !== undefined) {
@@ -487,6 +503,7 @@ export function declare(method: Method): Declare {
             maxBodySize: options?.maxBodySize,
             clients: options?.clients ?? {},
             guarded: rungs.length > 0,
+            [DERIVED_ARGS]: undefined as HeldToAnnotation[typeof DERIVED_ARGS],
             isError: isFailedNamed,
             url(args?: Record<string, unknown>): string {
                 return rpcRequest(method, routeAt(addressOf(rpc)), args).url

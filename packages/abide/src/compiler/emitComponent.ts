@@ -1,3 +1,4 @@
+import type { JsonValue } from '#shared/JsonValue.ts'
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { Cursor, placeTemplate } from './Cursor.ts'
@@ -50,6 +51,8 @@ export function emitComponent(
     route = '/',
     /** 38.97 — where given, every chunk the module is written around (`sourceMapOf`). */
     chunks?: LoweredChunk[],
+    /** 19.9 — the schema each private handler's annotation derives, by its binding. */
+    derived: Readonly<Record<string, JsonValue>> = {},
 ): string {
     // Only what the page actually uses. An emitted module carrying an import nothing calls is a
     // name the app's own tooling reports as unused, in a file nobody wrote.
@@ -91,7 +94,7 @@ export function emitComponent(
             : `${lowering.use('fileRoute')}(${JSON.stringify(route)})
 ${serverSetup.body}
 ${lowering.use('fileRoute')}(undefined)
-${privateExports(file.servers.join('\n'))}`
+${heldToAnnotations(lowering, derived)}${privateExports(file.servers.join('\n'))}`
     const setup = splitImports(lowering.scripts())
     const componentBody = setup.body
 
@@ -157,6 +160,21 @@ ${waits ? `    const ${CALLS_BEFORE} = ${lowering.use('callsInRender')}()\n` : '
 ${level}${closed}
 }
 `
+}
+
+/**
+ * 15.8, 19.9 — each private handler held to the schema its annotation derives, once its server block
+ * has built it: the module is what the server mounts and what a component under `mount` calls
+ * (38.121), so a call is held to it whoever makes it.
+ */
+function heldToAnnotations(
+    lowering: Lowering,
+    derived: Readonly<Record<string, JsonValue>>,
+): string {
+    let out = ''
+    for (const name in derived)
+        out += `${lowering.use('derivedArgs')}(${name}, ${JSON.stringify(derived[name])})\n`
+    return out
 }
 
 /**

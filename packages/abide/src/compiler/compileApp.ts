@@ -11,6 +11,7 @@ import { COMPONENT_QUERY } from '#server/MODULE_QUERIES.ts'
 import { ROUTES_TABLE, SERVER_TABLE } from '#server/TABLES.ts'
 import { VIRTUAL_DIRECTORY } from '#server/VIRTUAL_DIRECTORY.ts'
 import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
+import type { JsonValue } from '#shared/JsonValue.ts'
 import { ROUTING_SPECIFIER, WIRE_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import {
     type AppLayout,
@@ -317,6 +318,7 @@ async function emitApp(
     refuseSharedRoutes(routes, mounts, refusals)
     refuseAddressCollision(routes, mounts, layout.published, refusals)
     const standIns = standInsOf(mounts)
+    const derived = derivedOf(mounts)
     // 37.1 — every module a server block or a handler file runs in, for the boot to import before
     // `onStart`.
     const servers: string[] = []
@@ -329,6 +331,7 @@ async function emitApp(
                 entry,
                 standIns.get(entry.relative),
                 entry.text,
+                derived.get(entry.relative),
             )
         } catch (thrown) {
             refusals.at(entry.path, thrown)
@@ -368,6 +371,7 @@ async function emitApp(
             handlers[mount.source] = {
                 scope: mount.scope,
                 client: standIns.get(mount.source) ?? '',
+                args: mount.args,
             }
     if (routes.length > 0) {
         tables[ROUTES_TABLE] = clientTable(routes, transitions)
@@ -622,6 +626,21 @@ function standInsOf(mounts: Mount[]): Map<string, string> {
     const standIns = new Map<string, string>()
     for (const [source, held] of lines) standIns.set(source, wireModule(held))
     return standIns
+}
+
+/**
+ * 19.9 — the schema each private handler's annotation derives, by its binding, by source: what its
+ * server module holds it to (15.8). A handler file's is its face's (`HandlerFace`).
+ */
+function derivedOf(mounts: Mount[]): Map<string, Record<string, JsonValue>> {
+    const derived = new Map<string, Record<string, JsonValue>>()
+    for (const mount of mounts) {
+        if (!mount.private || mount.args === undefined) continue
+        const held = derived.get(mount.source) ?? {}
+        held[mount.name] = mount.args
+        derived.set(mount.source, held)
+    }
+    return derived
 }
 
 /**

@@ -124,6 +124,25 @@ export const optionallyAnnotated = GET(
     async (args?: { kind?: 'movie' | 'series'; page?: number }) => args ?? 'none',
 )
 
+let tallied = 0
+
+export const tally = POST(({ id, n }: { id: number; n: number }) => {
+    tallied += 1
+    return id + n
+})
+
+export const tallyInProcess = GET(async () => {
+    let refused = { name: '', status: 0, data: undefined as unknown }
+    try {
+        await tally({ id: 1, n: 'x' as never })
+    } catch (thrown) {
+        refused = thrown as typeof refused
+    }
+    const runsAfterRefused = tallied
+    const accepted = await tally({ id: 1, n: 2 })
+    return { refused: [refused.name, refused.status, refused.data], runsAfterRefused, accepted, runs: tallied }
+})
+
 export const releaseStream = GET(() => {
     release()
     return 'released'
@@ -241,6 +260,30 @@ test('a mutation body is held to its annotation — 19.9', async () => {
         body: '{"amount":"five"}',
     })
     expect(refused.status).toBe(422)
+})
+
+// 15.8, 19.9 — THE ANNOTATION HOLDS A CALL MADE IN PROCESS AS IT HOLDS ONE OVER THE WIRE: refused 422
+// before the body runs, with the wire's `Issues`, and good args still answered. THE REVERT: drop the
+// `DERIVED_ARGS` check from the `Rpc`'s call in `rpc.ts`; the wire still answers 422, but the call in
+// process runs the body with `n = 'x'` — `runsAfterRefused` 1 rather than 0, `runs` 2 rather than 1,
+// and no refusal caught.
+test('a call in process is held to the annotation as the wire holds it — 15.8, 19.9', async () => {
+    const wire = await Bun.fetch(`${base}${RPC}/tally`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"id":1,"n":"x"}',
+    })
+    expect(wire.status).toBe(422)
+    const wired = (await wire.json()) as { type: string; data: unknown }
+    expect(wired.type).toBe('ValidationError')
+    expect(
+        await (await Bun.fetch(`${base}${RPC}/tallyInProcess`)).json(),
+    ).toEqual({
+        refused: ['ValidationError', 422, wired.data],
+        runsAfterRefused: 0,
+        accepted: 3,
+        runs: 1,
+    })
 })
 
 // 30.28 — AN EMPTY LIST CROSSES THE URL AS ONE, spelled by the browser's own `rpcRequest` and read

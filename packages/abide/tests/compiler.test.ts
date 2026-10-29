@@ -149,7 +149,8 @@ test('the compiler is not reachable from the server seam', async () => {
     // `request`, `response` and `server` are 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the seven hooks and the
     // `fileRoute` a compiled server block files them under are 37's,
     // `trace` is 24's and `config` is 27's; `callsInRender` is what an emitted component reads
-    // around its setup (41.28); the six response helpers are 17's, `reachable` is
+    // around its setup (41.28) and `derivedArgs` what a handler's module holds it to its annotation by
+    // (19.9); the six response helpers are 17's, `reachable` is
     // 23's, and `assistant`, `claudeApi` and `claudeCode` are 45's.
     const shared = Object.keys(await import('#shared'))
     expect(Object.keys(server).sort()).toEqual(
@@ -159,6 +160,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'GET',
             'assistant',
             'callsInRender',
+            'derivedArgs',
             'claudeApi',
             'claudeCode',
             'PATCH',

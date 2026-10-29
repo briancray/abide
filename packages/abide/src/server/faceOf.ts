@@ -3,6 +3,7 @@
 // adapter that hands bun's hooks to it, because bun decides which hook asks (an `onResolve` for a
 // specifier, an `onLoad` for a path), and this decides what the answer is.
 
+import type { JsonValue } from '#shared/JsonValue.ts'
 import { HANDLER_SUFFIX, SERVER_QUERY } from './MODULE_QUERIES.ts'
 
 // A VIRTUAL FACE'S PATH: its file's, with a suffix that is not a query. Both registries key a module
@@ -45,8 +46,15 @@ export type Asked =
     | 'abide'
     | 'handler'
 
-/** One handler file, as `Compilation.handlers` holds it. */
-export type HandlerFace = { scope: string; client: string }
+/**
+ * One handler file, as `Compilation.handlers` holds it — and 19.9's schema its default's annotation
+ * derives, which the module at the file's path holds it to (`derivedArgs`).
+ */
+export type HandlerFace = {
+    scope: string
+    client: string
+    args: JsonValue | undefined
+}
 
 /**
  * The face an import of `file` is answered with, asked `asked` from `importer` in `lane` — or

@@ -2,9 +2,9 @@
 // off the wire: over http (16.2) and a `GET` followed over the socket mux (18.3). Each lane reads the
 // args off its own transport and answers a refusal in its own form.
 
+import { DERIVED_ARGS } from '#shared/DERIVED_ARGS.ts'
 import { normalized } from '#shared/reactive/argsContract.ts'
 import { validationError } from '#shared/refuse.ts'
-import { validateJson } from '#shared/validateJson.ts'
 import type { Mounted } from './answerRpc.ts'
 import { coerceArgs } from './coerceArgs.ts'
 
@@ -16,11 +16,10 @@ import { coerceArgs } from './coerceArgs.ts'
  * 19.7 — the text as the types the handler's `args` declares. 11.27 — then the defaults, ahead of
  * every key taken after it: the seed a render filed and the `global` entry standing were both filed
  * under them (11.29). 19.9 — THE WIRE HELD TO THE ANNOTATION, where no `args` schema is declared to
- * hold it. Args that did not come are held as an empty record: a schema is only derived where the
- * handler's args are a required record, so a required member missing is refused, not read off nothing.
+ * hold it — the check the handler carries (`derivedArgs`), which its in-process call makes too (15.8).
  */
 export function argsFor(
-    found: Pick<Mounted, 'handler' | 'argsDocument' | 'wireArgs'>,
+    found: Pick<Mounted, 'handler' | 'argsDocument'>,
     sent: unknown,
     query: string | undefined,
 ): unknown {
@@ -33,9 +32,7 @@ export function argsFor(
                   query,
               )
     const args = normalized(found.handler, coerced)
-    if (found.wireArgs !== undefined) {
-        const issues = validateJson(found.wireArgs, args ?? {})
-        if (issues !== null) throw validationError(issues)
-    }
+    const issues = found.handler[DERIVED_ARGS]?.(args) ?? null
+    if (issues !== null) throw validationError(issues)
     return args
 }

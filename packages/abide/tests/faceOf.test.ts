@@ -30,11 +30,22 @@ const GRID = '/app/media/getGrid.ts'
 const STAFF = '/app/staff/internal.ts'
 const MOUNTED = '/app/node_modules/kit/admin/users/list.ts'
 const HANDLERS = new Map([
-    [GRID, { scope: '/media/getGrid', client: 'export default __wire()' }],
-    [STAFF, { scope: '/staff/internal', client: '' }],
+    [
+        GRID,
+        {
+            scope: '/media/getGrid',
+            client: 'export default __wire()',
+            args: undefined,
+        },
+    ],
+    [STAFF, { scope: '/staff/internal', client: '', args: undefined }],
     [
         MOUNTED,
-        { scope: '/tools/users/list', client: 'export default __wire()' },
+        {
+            scope: '/tools/users/list',
+            client: 'export default __wire()',
+            args: undefined,
+        },
     ],
 ])
 

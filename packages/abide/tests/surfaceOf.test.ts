@@ -87,7 +87,6 @@ test('a mounted handler is projected off the handler, a row off the build — 20
         handler: hidden as Mounted['handler'],
         rungs: [],
         argsDocument: { type: 'object' },
-        wireArgs: undefined,
     }
     expect(surfaceOf(mounted, 'mcp')).toBeUndefined()
     expect(surfaceOf(mounted, 'openapi')).toEqual({
@@ -116,7 +115,6 @@ test("a Response handler's row keeps it off MCP unless its clients puts it back 
         handler: GET(() => new Response(''), { clients }) as Mounted['handler'],
         rungs: [],
         argsDocument: undefined,
-        wireArgs: undefined,
     })
     expect(surfaceOf(mountedAs({}), 'mcp')).toBeUndefined()
     expect(surfaceOf(mountedAs({ mcp: true }), 'mcp')?.path).toBe(

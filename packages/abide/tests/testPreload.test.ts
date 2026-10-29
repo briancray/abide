@@ -246,3 +246,97 @@ test('each click is answered by the handler', async () => {
         '0 true',
     )
 }, 90_000)
+
+// 15.8, 19.9 — A CALL MADE IN THE TEST'S PROCESS IS HELD TO THE ANNOTATION, with no app booted: a
+// handler file the test imports, and a private handler a mounted component calls (38.121), each
+// refused 422 with the `Issues` the wire answers with, its body never run, and good args answered.
+// THE REVERT: drop the `DERIVED_ARGS` check from the `Rpc`'s call in `rpc.ts`; the handler file's body
+// runs on `n: 'x'` and nothing is refused ("undefined undefined undefined runs 1"), and the private
+// handler's click reads "1x" — exit 1, `0 pass`.
+test('a call in a test is held to the handler annotation — 15.8, 19.9, 38.121', async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'annotated-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': TEST_PRELOAD,
+        'src/index.abide': '<main>home</main>',
+        'src/tally.ts': `import { POST } from '@abide/abide/server'
+
+const runs = globalThis as { tallied?: number }
+
+export default POST(({ id, n }: { id: number; n: number }) => {
+    runs.tallied = (runs.tallied ?? 0) + 1
+    return id + n
+})
+`,
+        'src/lib/Form.abide': `<script server>
+import { POST } from '@abide/abide/server'
+
+let saved = 0
+const save = POST(({ n }: { n: number }) => ++saved + n)
+</script>
+
+<script>
+import { reactive } from '@abide/abide'
+
+let out = reactive('none')
+const send = async (n: unknown) => {
+    try {
+        out = String(await save({ n: n as never }))
+    } catch (thrown) {
+        const refused = thrown as { name: string; status: number; data: unknown }
+        out = \`\${refused.name} \${refused.status} \${JSON.stringify(refused.data)}\`
+    }
+}
+</script>
+
+<button id="bad" onclick={() => send('x')}>bad</button>
+<button id="good" onclick={() => send(10)}>good</button>
+<p id="out">{out}</p>`,
+        'src/tests/annotated.test.ts': `import { expect, test } from 'bun:test'
+import { mount } from '@abide/harness/abide'
+import Form from '../lib/Form.abide'
+import tally from '../tally.ts'
+
+const runs = globalThis as { tallied?: number }
+const REFUSED = 'ValidationError 422 {"n":["must be number, was string"]}'
+
+test('a handler file the test imports', async () => {
+    let refused: { name?: string; status?: number; data?: unknown } = {}
+    try {
+        await tally({ id: 1, n: 'x' as never })
+    } catch (thrown) {
+        refused = thrown as typeof refused
+    }
+    expect(\`\${refused.name} \${refused.status} \${JSON.stringify(refused.data)} runs \${runs.tallied ?? 0}\`).toBe(\`\${REFUSED} runs 0\`)
+    expect(await tally({ id: 1, n: 2 })).toBe(3)
+    expect(runs.tallied).toBe(1)
+})
+
+async function pressed(id: string, was: string | null | undefined): Promise<string | null | undefined> {
+    document.querySelector<HTMLButtonElement>(id)?.click()
+    for (let tries = 0; tries < 100 && document.querySelector('#out')?.textContent === was; tries += 1)
+        await Bun.sleep(10)
+    return document.querySelector('#out')?.textContent
+}
+
+test('a private handler a mounted component calls', async () => {
+    using _form = await mount(Form({}))
+    expect(await pressed('#bad', 'none')).toBe(REFUSED)
+    // The first save's count: the refused call never ran the body.
+    expect(await pressed('#good', REFUSED)).toBe('11')
+})
+`,
+    })
+    const ran = await spawned(
+        ['bun', 'test', './src/tests/annotated.test.ts'],
+        {
+            cwd,
+        },
+    )
+    expect(`${ran.exitCode} ${ran.stderr.includes('2 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)

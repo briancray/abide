@@ -29,7 +29,13 @@ export { relative, withExtension, withoutExtension }
     })
     serveCompilation(dir, {
         files: {},
-        handlers: { 'media/getGrid.ts': { scope: '/media', client: '' } },
+        handlers: {
+            'media/getGrid.ts': {
+                scope: '/media',
+                client: '',
+                args: undefined,
+            },
+        },
         tables: {},
     })
     const spellings = await import(`${dir}/lib/spellings.ts`)

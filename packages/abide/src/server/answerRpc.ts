@@ -16,7 +16,7 @@ import type { Gated } from '#shared/reactive/argsContract.ts'
 import { deadlineOf, heldGenerationOf } from '#shared/reactive/index.ts'
 import type { Defaults } from '#shared/reactive/parameterDefaults.ts'
 import { notFound, refuse } from '#shared/refuse.ts'
-import type { Method, Rpc } from '#shared/rpc.ts'
+import type { HeldToAnnotation, Method, Rpc } from '#shared/rpc.ts'
 import { argsInURL } from '#shared/rpcRequest.ts'
 import { VERSION_HEADER } from '#shared/VERSION_HEADER.ts'
 import { versionInEtag } from '#shared/versionInEtag.ts'
@@ -118,20 +118,13 @@ export type Mounted = Mount & {
      * subscription to it both pass through (37.2, 18.26).
      */
     rungs: AppRung[]
-    handler: Rpc<unknown, unknown> & Gated<unknown>
+    handler: Rpc<unknown, unknown> & Gated<unknown> & HeldToAnnotation
     /**
      * The args' JSON Schema, probed once at mount.
      *
      * 19.7, 20.11 — a third-party schema converts itself on every probe.
      */
     argsDocument: Document | undefined
-    /**
-     * What the wire holds args to where the handler declares no `args` gate of its own.
-     *
-     * 19.9 — the annotation's schema. An in-process call already holds the type, so the handler
-     * never runs it.
-     */
-    wireArgs: JsonValue | undefined
 }
 
 /**
@@ -172,7 +165,6 @@ export function mountedOwn(
             result: undefined,
             handler: handler as Mounted['handler'],
             argsDocument: undefined,
-            wireArgs: undefined,
         },
     ]
 }
@@ -198,7 +190,7 @@ export async function mountHandlers(
     for (let at = 0; at < table.length; at += 1) {
         const mount = table[at] as Mount
         const exported = (modules[at] as Record<string, unknown>)[mount.export]
-        const handler = exported as Rpc<unknown, unknown> & Gated<unknown>
+        const handler = exported as Mounted['handler']
         const declared = argsDocumentOf(handler)
         // 16.9, 16.10 — the address `rpc.url` and `rpc.raw` build on, under the mount — and what a
         // page's render turns a call it made into the browser's request by (41.20).
@@ -210,7 +202,6 @@ export async function mountHandlers(
             rungs: rungsOver(mount.scope),
             handler,
             argsDocument: declared ?? (mount.args as Document | undefined),
-            wireArgs: declared === undefined ? mount.args : undefined,
         })
     }
     return { handlers }

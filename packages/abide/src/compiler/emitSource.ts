@@ -1,4 +1,5 @@
 import { STYLE_QUERY } from '#server/MODULE_QUERIES.ts'
+import type { JsonValue } from '#shared/JsonValue.ts'
 import type { Placement } from '#server/placement.ts'
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import { emitClient } from './emitClient.ts'
@@ -35,6 +36,8 @@ export function emitSource(
     standIns = '',
     /** 38.97 — the `.abide`'s text, where the build wants each module's source map. */
     text?: string,
+    /** 19.9 — the schema each private handler it declares derives off its annotation, by name. */
+    derived?: Readonly<Record<string, JsonValue>>,
 ): {
     server: string
     client: string
@@ -109,6 +112,7 @@ export function emitSource(
         kind !== 'component',
         source.scope,
         serverChunks,
+        derived,
     )
     const name = relative.slice(relative.lastIndexOf('/') + 1)
     const browser = withStandIns(
