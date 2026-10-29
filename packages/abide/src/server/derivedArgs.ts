@@ -37,7 +37,7 @@ const WALKING: object[] = []
  * AN `undefined` IN A LIST IS KEPT. The two encodings part there — JSON writes `null`, a URL the
  * text `undefined` — so neither is the wire's, and the schema answers the value as given.
  */
-function asSent(value: unknown): unknown {
+export function asSent(value: unknown): unknown {
     if (value === null || typeof value !== 'object' || WALKING.includes(value))
         return value
     WALKING.push(value)
