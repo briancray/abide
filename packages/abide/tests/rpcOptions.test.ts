@@ -145,6 +145,38 @@ export const tallyInProcess = GET(async () => {
     return { refused: [refused.name, refused.status, refused.data], runsAfterRefused, accepted, runs: tallied }
 })
 
+export const researched = GET(
+    ({ home, topic }: { home: string; topic?: string }) => \`\${home}:\${topic ?? '-'}\`,
+)
+
+export const featured = GET(
+    ({ category, q }: { category: string | undefined; q: string }) => \`\${category ?? '-'}:\${q}\`,
+)
+
+export const filed = POST(
+    ({ deal, tags }: { deal: { name: string; note?: string }; tags: { label: string; hint?: string }[] }) =>
+        \`\${deal.name}:\${deal.note ?? '-'}:\${tags[0]?.label}:\${tags[0]?.hint ?? '-'}\`,
+)
+
+export const undefinedInProcess = GET(async () => {
+    const answered = async (call: () => Promise<unknown>) => {
+        try {
+            return await call()
+        } catch (thrown) {
+            const refused = thrown as { name: string; status: number; data: unknown }
+            return [refused.name, refused.status, refused.data]
+        }
+    }
+    return [
+        await answered(() => researched({ home: 'h', topic: undefined })),
+        await answered(() => featured({ category: undefined, q: 'x' })),
+        await answered(() =>
+            filed({ deal: { name: 'a', note: undefined }, tags: [{ label: 'l', hint: undefined }] }),
+        ),
+        await answered(() => featured({ category: 'c', q: undefined as never })),
+    ]
+})
+
 export const releaseStream = GET(() => {
     release()
     return 'released'
@@ -286,6 +318,49 @@ test('a call in process is held to the annotation as the wire holds it — 15.8,
         accepted: 3,
         runs: 1,
     })
+})
+
+// 15.8, 19.25 — AN `undefined` MEMBER IS AN ABSENT ONE, in process as on the wire: a URL omits it
+// (30.28) and JSON drops it, so a `?:` member and a `| undefined` one, at the top of the args or inside
+// a record a body carries, are answered as the wire answers them, and a required member left
+// `undefined` is refused as the wire refuses it. THE REVERT: hand `validateJson` the args as given in
+// `derivedArgs`; the wire still answers, and each of the first three calls in process is refused 422
+// `must be string, was undefined`.
+test('an undefined member is held as the wire holds it, absent — 15.8, 19.25, 30.28', async () => {
+    const wired = async (
+        method: 'GET' | 'POST',
+        name: string,
+        args: Record<string, unknown>,
+    ): Promise<unknown> => {
+        const request = rpcRequest(method, `${RPC}/${name}`, args)
+        const answer = await Bun.fetch(`${base}${request.url}`, request.init)
+        return [answer.status, await answer.json()]
+    }
+    expect(
+        await wired('GET', 'researched', { home: 'h', topic: undefined }),
+    ).toEqual([200, 'h:-'])
+    expect(
+        await wired('GET', 'featured', { category: undefined, q: 'x' }),
+    ).toEqual([200, '-:x'])
+    expect(
+        await wired('POST', 'filed', {
+            deal: { name: 'a', note: undefined },
+            tags: [{ label: 'l', hint: undefined }],
+        }),
+    ).toEqual([200, 'a:-:l:-'])
+    const missing = (await wired('GET', 'featured', {
+        category: 'c',
+        q: undefined,
+    })) as [number, { data: unknown }]
+    expect(missing[0]).toBe(422)
+    expect(
+        await (await Bun.fetch(`${base}${RPC}/undefinedInProcess`)).json(),
+    ).toEqual([
+        'h:-',
+        '-:x',
+        'a:-:l:-',
+        ['ValidationError', 422, missing[1].data],
+    ])
 })
 
 // 30.28 — AN EMPTY LIST CROSSES THE URL AS ONE, spelled by the browser's own `rpcRequest` and read

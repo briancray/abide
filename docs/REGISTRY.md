@@ -273,7 +273,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. | 19.2, 19.3, 19.4, 19.6, 19.8, 19.9, 19.10, 19.18, 19.11, 19.12 |
+| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. | 19.2, 19.3, 19.4, 19.6, 19.8, 19.9, 19.10, 19.18, 19.25, 19.11, 19.12 |
 | `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. | — |
 | `Issues<T>` | `T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | 19.4, 19.19 |
 | `Paths<T>` | `string` | The dot-joined leaf paths of a type. | 19.5 |
