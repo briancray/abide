@@ -41,11 +41,16 @@ import { executableName } from '#server/executableName.ts'
 import { iconAccent } from '#server/iconAccent.ts'
 import { namesUnder } from '#server/namesUnder.ts'
 import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
+import { runtimeRefusal } from '#server/runtimeRefusal.ts'
 import { pathsUnder, serveBuild } from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
 import abidePackage from '../package.json' with { type: 'json' }
+
+// 38.123 — the bun this process runs on, held to abide's `engines.bun` before anything is built or
+// booted. A compiled app carries the bun `abide compile` ran on, which this held already.
+const RUNTIME_REFUSAL = runtimeRefusal(Bun.version, abidePackage.engines.bun)
 
 /** Where the app a command builds or serves is, and where its build goes — both absolute. */
 type AppDirectories = { root: string; out: string }
@@ -59,14 +64,18 @@ const DISK: Host = {
     version: abidePackage.version,
     // 38.100 — built in this process rather than a child, where nobody built it, and said on
     // stderr: the command's stdout is its own — `openapi`'s document, `mcp`'s messages.
-    app: ({ values }) =>
-        appOnDisk(directoriesOf(values), async (root, out) =>
+    app: ({ values }) => {
+        const handle = appOnDisk(directoriesOf(values), async (root, out) =>
             (await serveBuild(root, out, (root, out) =>
                 writeBuild({ root, out }, console.error),
             ))
                 ? out
                 : undefined,
-        ),
+        )
+        return RUNTIME_REFUSAL === undefined
+            ? handle
+            : { ...handle, boot: async () => RUNTIME_REFUSAL }
+    },
     source: {
         scaffold: scaffoldCommand,
         dev: inApp(dev),
@@ -645,6 +654,10 @@ function inApp<Answer>(
     body: (app: AppDirectories, given: Given) => Promise<Answer>,
 ): (given: Given) => Promise<Answer | number> {
     return async (given) => {
+        if (RUNTIME_REFUSAL !== undefined) {
+            console.error(`abide ${given.positionals[0]}: ${RUNTIME_REFUSAL}`)
+            return 1
+        }
         const app = directoriesOf(given.values)
         if (app === undefined) {
             console.error(

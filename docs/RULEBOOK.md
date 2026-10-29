@@ -2768,6 +2768,10 @@ answered in the test's process by the handler the component's server module decl
 
 38.122 The project `abide scaffold` writes MUST NOT install a dependency's peer dependencies.
 
+38.123 A command `abide` builds, checks or boots the app for MUST be refused where the bun running it
+is outside the range abide's `engines.bun` names, and the refusal MUST name that bun's version and
+the range.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
