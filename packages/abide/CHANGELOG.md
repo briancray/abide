@@ -1,5 +1,12 @@
 # @abide/abide
 
+## 0.117.2
+
+### Patch Changes
+
+- ea4e27f: a value opening at a member of a name read by name — `reactive(route.url.searchParams.get('book') ?? '')`, `reactive(name.toUpperCase())` — is now a `Reactive` the file reads and writes by name, where before `abide check` refused every write as a string assigned to the `Reactive` and the build rebound the name instead of calling `set`
+- ea4e27f: a value a `refresh({ tags })` marked while nothing read it loads when the next page adopts it — `reactive(() => getMeetings())` on a page visited after the write sends the request and serves the new answer, where it served the answer held before the write and asked nothing (RULEBOOK 13.7)
+
 ## 0.117.1
 
 ### Patch Changes
