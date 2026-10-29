@@ -700,6 +700,9 @@ holding that arm or row is removed.
 `watch`, MUST stop reading its sources once that owner stops and nothing else reads it, and MUST
 answer a later read with what its body computes then.
 
+12.15 The `Effect` values one turn wakes, a slot's own update among them, MAY run in any order,
+save where a clause orders them.
+
 # 13. Selections
 
 13.1 A `Selection` MUST be one `Reactive`, one `Keyed`, one `Rpc`, or a set of `tags`.
