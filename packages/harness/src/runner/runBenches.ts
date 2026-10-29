@@ -6,7 +6,8 @@ const milliseconds = (nanoseconds: number) =>
 /**
  * Every bench beside the code, `src/**\/*.bench.ts` under `root`, run in this process one after
  * another: each function a file exports is one bench, and its `CEILINGS` names the most each arm
- * may take, in milliseconds.
+ * may take, in milliseconds, keyed by bench and then by arm. A ceiling naming no exported bench
+ * is reported as a bench of that name with no arms.
  *
  * `only` keeps the files whose path holds it.
  */
@@ -24,7 +25,7 @@ export async function runBenches(
         arms: Record<string, number>
         /** The last arm over the first, as the harness is allowed to say it; '' for one arm. */
         claim: string
-        /** An arm over its ceiling, and a ceiling naming no arm. */
+        /** An arm over its ceiling, and a ceiling naming no arm or no bench. */
         over: string[]
     }[]
 > {
@@ -76,6 +77,20 @@ export async function runBenches(
                 over,
             })
         }
+        // 43.32 — a ceiling whose bench is not exported holds nothing, so it is reported as a bench
+        // with no arms rather than passed over.
+        for (const name of Object.keys(CEILINGS))
+            if (typeof exported[name] !== 'function')
+                benches.push({
+                    file,
+                    name,
+                    case: '',
+                    n: 0,
+                    floor: 0,
+                    arms: {},
+                    claim: '',
+                    over: [`no bench "${name}" to hold to its ceiling`],
+                })
     }
     return benches
 }

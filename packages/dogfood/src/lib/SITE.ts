@@ -467,6 +467,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`App.stop`',
                         '`App[Symbol.asyncDispose]`',
                         '`**/<name>.test.ts`',
+                        '`**/<name>.bench.ts`',
                         '`preload = ["@abide/abide/test"]`',
                         '`preload = ["@abide/harness/abide/preload"]`',
                         '`mount`',

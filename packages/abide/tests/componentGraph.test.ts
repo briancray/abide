@@ -160,12 +160,13 @@ test('a .abide directly in an address directory is a page, and one under lib is 
 
 // 23.22, 16.73 — AN ADDRESS DIRECTORY HOLDS ADDRESSES AND NOTHING ELSE: a `.ts` there is a handler
 // file, held to exporting a handler as its default alone, and any other file is refused by name
-// with where it goes. A test file and a declaration file are kept there, and the rest under `lib/`.
+// with where it goes. A test file, a bench file and a declaration file are kept there, and the rest under `lib/`.
 //
 // THE REVERTS: drop the `refuse` for a file neither `.abide` nor a handler file in `appTree`'s
 // walk; the two strays build, 0 of 2 refused where 2 are due. Or drop `isDeclarationFile` from the
-// walk's skip; `media/types.d.ts` is refused under 23.22. Or skip the non-default export check
-// in `handlersUnder`; `helpers.ts` builds, a module answering at `/media/helpers` with no handler.
+// walk's skip; `media/types.d.ts` is refused under 23.22. Or drop `isBenchFile` from it;
+// `media/index.bench.ts` is refused under 23.22 too. Or skip the non-default export check in
+// `handlersUnder`; `helpers.ts` builds, a module answering at `/media/helpers` with no handler.
 test('a file in an address directory that is no page or handler file is a build error — 23.22, 16.73', async () => {
     const helpers = await compiledTree({
         'media/helpers.ts':
@@ -189,6 +190,8 @@ test('a file in an address directory that is no page or handler file is a build 
             'export const twice = (n: number): number => n * 2\n',
         // 23.22 — a test file beside the page it tests, as under `lib/`.
         'media/index.test.ts': 'export {}\n',
+        // 23.22 — a bench file beside the code it times, as a test file is.
+        'media/index.bench.ts': 'export function priced() {}\n',
         // 23.22 — a declaration file beside the page it types.
         'media/types.d.ts': 'export type Id = string\n',
         'media/lib/types.d.ts': 'export type Id = string\n',

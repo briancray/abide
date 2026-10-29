@@ -36,8 +36,16 @@ async function benchesOf(app: string): Promise<ExampleResults['benches']> {
     const benches: ExampleResults['benches'] = {}
     for (const { file, name, over, ...figures } of await runBenches(
         Bun.fileURLToPath(new URL(`${app}/`, EXAMPLES)),
-    ))
+    )) {
+        if (over.length > 0)
+            throw new Error(`${app} ${file} ${name}: ${over.join('; ')}`)
+        // A card shows one bench a file, so a second would overwrite the first unseen.
+        if (benches[file] !== undefined)
+            throw new Error(
+                `${app} ${file} exports a second bench, ${name}, and a card shows one`,
+            )
         benches[file] = figures
+    }
     return benches
 }
 

@@ -23,6 +23,7 @@ import {
     DIRECTORY_FILES,
     isDeclarationFile,
     isServerFile,
+    isBenchFile,
     isTestFile,
     placeOf,
     routeOf,
@@ -119,14 +120,19 @@ function walk(
         const abide = path.endsWith('.abide')
         if (abide) files.abide.push(path)
         if (place === 'address') {
-            if (isTestFile(path) || isDeclarationFile(path)) continue
+            if (
+                isTestFile(path) ||
+                isBenchFile(path) ||
+                isDeclarationFile(path)
+            )
+                continue
             if (!abide && !isModule(path)) {
                 if (packaged && relative === '' && !path.endsWith('.ts'))
                     continue
                 refusals.at(
                     path,
                     new Error(
-                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages, handler files, test files and declaration files alone. Move it into a lib directory beside it. RULEBOOK 23.22.`,
+                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages, handler files, test files, bench files and declaration files alone. Move it into a lib directory beside it. RULEBOOK 23.22.`,
                     ),
                 )
                 continue
@@ -152,9 +158,14 @@ function walk(
     }
 }
 
-/** Whether `path` names a module the app runs — neither a declaration nor a test. */
+/** Whether `path` names a module the app runs — neither a declaration, a test nor a bench. */
 function isModule(path: string): boolean {
-    return path.endsWith('.ts') && !isDeclarationFile(path) && !isTestFile(path)
+    return (
+        path.endsWith('.ts') &&
+        !isDeclarationFile(path) &&
+        !isTestFile(path) &&
+        !isBenchFile(path)
+    )
 }
 
 /** The refusal of `source` where `route` lies in the framework's own namespace, or `undefined`. 23.17. */

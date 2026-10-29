@@ -247,6 +247,9 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
                 <tr><td><code>emulatedDom</code></td><td>whether this process's DOM is an emulator</td></tr>
                 <tr><td><code>time</code></td><td><code>batch</code> with <code>emulated</code> filled in, refusing to run while the counters are armed</td></tr>
                 <tr><td><code>THRESHOLDS</code></td><td>a frame and an interaction, the two lines a cost is judged against</td></tr>
+                <tr><td><code>runBenches</code></td><td>runs every bench under <code>src</code>, and reports each arm over its ceiling</td></tr>
+                <tr><td><code>CEILINGS</code></td><td>the most each arm of a bench may take, in milliseconds, by bench and then by arm</td></tr>
+                <tr><td><code>harness-bench</code></td><td>the <code>bench</code> script: <code>runBenches</code> printed, failing where a ceiling is not held</td></tr>
             </tbody>
         </table>
 
@@ -256,7 +259,8 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         inside <code>bun test</code>.</p>
 
         <p>The <code>bench</code> script is <code>harness-bench</code>, which hands
-        <code>runBenches</code> every <code>*.bench.ts</code> under <code>src</code> and prints each
+        <code>runBenches</code> every <code>*.bench.ts</code> under <code>src</code>, wherever one
+        sits beside the code it times, and prints each
         arm's time and the claim between them. A bench file's <code>CEILINGS</code> names the most
         each arm may take, in milliseconds, and the run fails where an arm takes more.</p>
     </Section>

@@ -1549,7 +1549,7 @@ error naming the mount.
 `layout.abide`, an `error.abide` and the root's `launcher.abide`.
 
 23.22 A file of the app's own directly in a directory under no fence that is neither a `.abide`, a
-handler file, a test file nor a declaration file MUST be a build error naming the file and a `lib` directory, save one
+handler file, a test file, a bench file nor a declaration file MUST be a build error naming the file and a `lib` directory, save one
 beside the `package.json` of a root that holds it, nor a `.ts`.
 
 23.23 A server file of the app's own under no `lib` directory MUST be a build error naming the file
@@ -3207,9 +3207,12 @@ runner wrote no report as `broken` rather than as a result.
 
 43.31 `runBenches` MUST report an arm whose time per operation is over its `CEILINGS` entry.
 
-43.32 `runBenches` MUST report a `CEILINGS` entry naming an arm its bench does not have.
+43.32 `runBenches` MUST report a `CEILINGS` entry naming an arm its bench does not have, and one
+naming a bench its file does not export.
 
-43.33 `harness-bench` MUST exit non-zero where `runBenches` reports a bench over a ceiling.
+43.33 `harness-bench` MUST exit non-zero where `runBenches` reports anything under 43.31 or 43.32.
+
+43.34 `runBenches` given `only` MUST run only the bench files whose path below `root` holds it.
 
 # 44. The assistant
 

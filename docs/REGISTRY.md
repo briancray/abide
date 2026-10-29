@@ -677,6 +677,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `**/lib/**` | The app's code that is no address: components and modules. | 23.15, 23.16, 23.18, 23.22, 37.1 |
 | `**/lib/**/<name>.server.<extension>` | A server file: source the browser never loads. | 16.29, 23.23, 34.20, 36.10 |
 | `**/<name>.test.ts` | A test file: one of the app's tests, wherever it lies. | 23.22, 38.109 |
+| `**/<name>.bench.ts` | A bench file: benches `bun run bench` runs, wherever it lies. | 23.22, 43.29 |
 | `**/<name>.d.ts` | A declaration file: types for the checker, wherever it lies. | 23.22 |
 | `**/public/**` | The files answered as authored, at their path below that directory. | 23.15, 23.16, 23.18, 36.11, 36.12, 36.13, 36.14, 36.15, 36.17, 21.12, 21.13, 21.14, 38.18, 38.19 |
 | `src/public/favicon.ico` | The file answered at `/favicon.ico`. | 36.11 |
@@ -831,12 +832,12 @@ rows a runner prints, and an adapter for an abide app.
 | `rowsCommand` | `<Item extends RowItem, Row>(items: Item[], run: (selected: Item[], emit: (row: Row) => void) => Promise<void>) => Promise<void>` | A runner's command line: its catalog under `--list`, else the rows of what it selects. | 43.26 |
 | `testRows` | `(suites: TestSuite[], cwd: string) => Promise<void>` | `rowsCommand` over the test files of `suites`, one `TestRow` per file. | 43.27 |
 | `TestSuite` | `{ section: string; root: string; runner: 'bun'; pattern?: string } \| { section: string; root: string; runner: 'playwright'; projects: string[]; pattern?: string }` | One directory of test files, listed under one section. | 43.27 |
-| `runBenches` | `(root: string, only?: string) => Promise<{ file: string; name: string; case: string; n: number; floor: number; arms: Record<string, number>; claim: string; over: string[] }[]>` | Every bench under `root`'s `src`, run, with each arm's time per operation and the ceilings it went over. | 43.29, 43.30, 43.31, 43.32 |
+| `runBenches` | `(root: string, only?: string) => Promise<{ file: string; name: string; case: string; n: number; floor: number; arms: Record<string, number>; claim: string; over: string[] }[]>` | Every bench under `root`'s `src`, run, with each arm's time per operation and the ceilings it went over. | 43.29, 43.30, 43.31, 43.32, 43.34 |
 | `CEILINGS` | `Record<string, Record<string, number>>` | A bench file's export naming the most each arm of each of its benches may take, in milliseconds. | 43.29, 43.31, 43.32 |
 
 | Name | Meaning | Rules |
 | --- | --- | --- |
-| `harness-bench [word]` | The command that runs `runBenches` over the directory it runs in and prints each bench. | 43.33 |
+| `harness-bench [word]` | The command that runs `runBenches` over the directory it runs in and prints each bench. | 43.33, 43.34 |
 
 ## `@abide/harness/abide` — the adapter for an abide app
 
