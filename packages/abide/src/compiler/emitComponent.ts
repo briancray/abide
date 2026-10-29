@@ -1,9 +1,9 @@
 import type { JsonValue } from '#shared/JsonValue.ts'
-import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
+import { SERVER_SPECIFIER, SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { Cursor, placeTemplate } from './Cursor.ts'
 import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
-import type { AbideFile } from './parseAbide.ts'
+import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import { privateExports } from './projectShadow.ts'
 import {
     concat,
@@ -15,7 +15,7 @@ import {
     SERVER_LANE,
 } from './renderMarkup.ts'
 import { insideShare, SETTLED_AT, shareScope } from './shareScope.ts'
-import { splitImports, withoutProps } from './splitImports.ts'
+import { importStatements, splitImports, withoutProps } from './splitImports.ts'
 import type { TemplateNode } from './TemplateNode.ts'
 
 // The name the body is bound to while a component's head contributions land (`HEADS`).
@@ -41,7 +41,8 @@ const CALLS_BEFORE = '__callsBefore'
  * `settles` IS A PAGE OR A LAYOUT, which `render` builds a level at a time (41.19): its setup runs
  * at the call and its markup is built on the first read of `head` or `body`, so the calls the
  * setup started are given the turn to answer. Every other component answers the same way only where
- * its setup made a call (41.28), and builds where it is called otherwise.
+ * its setup made a call or its markup reads a bare `busy` or `ready` (41.28), and builds where it is
+ * called otherwise.
  */
 export function emitComponent(
     file: AbideFile,
@@ -144,22 +145,51 @@ ${heldToAnnotations(lowering, derived)}${privateExports(file.servers.join('\n'))
     // made a call, and then answers as a page does, for `renderComponent` to build after the turn.
     // THE BUILD IS WRITTEN TWICE rather than always run through `__build`: the closure measured ~4%
     // a row on `bench:component`'s card under JSC, the second copy nothing but server module bytes.
-    // One with no setup cannot call, and is written once.
-    const waits = !settles && componentBody.trim() !== ''
-    const level = settles
-        ? deferred()
-        : waits
-          ? `    if (${lowering.use('callsInRender')}() !== ${CALLS_BEFORE}) {
+    // One with no setup cannot call, and is written once. One whose markup reads a bare `busy` or
+    // `ready` answers as a page does always: built where it is called, it would answer before the
+    // siblings after it had started a load, where the browser's answers once every setup has run.
+    const probes =
+        !settles &&
+        readsBareProbe(file, `${head}\n${declared}\n${body.join('\n')}`)
+    const waits = !settles && !probes && componentBody.trim() !== ''
+    const level =
+        settles || probes
+            ? deferred()
+            : waits
+              ? `    if (${lowering.use('callsInRender')}() !== ${CALLS_BEFORE}) {
 ${deferred()}
     }
 ${build}`
-          : build
+              : build
     return `${moduleImports(lowering, () => SERVER_SPECIFIER, [moduleSetup, serverSetup, setup])}
 ${moduleSetup.body === '' ? '' : `${moduleSetup.body}\n`}${serverBody}export default function Component(${lowering.takesProps() ? `${PROPS} = {}` : ''}) {
 ${waits ? `    const ${CALLS_BEFORE} = ${lowering.use('callsInRender')}()\n` : ''}${opened}${componentBody}
 ${level}${closed}
 }
 `
+}
+
+/**
+ * Whether `markup`, a component's emitted head and body, calls `busy` or `ready` with no argument,
+ * under any name the file's scripts import either by from `@abide/abide`. A member's (`s.busy()`)
+ * is not bare.
+ */
+function readsBareProbe(file: AbideFile, markup: string): boolean {
+    let names = ''
+    for (const script of scriptBodies(file))
+        for (const statement of importStatements(script))
+            if (statement.specifier === SHARED_SPECIFIER && !statement.typeOnly)
+                for (const binding of statement.bindings)
+                    if (
+                        !binding.typeOnly &&
+                        (binding.imported === 'busy' ||
+                            binding.imported === 'ready')
+                    )
+                        names += `${names === '' ? '' : '|'}${binding.local}`
+    return (
+        names !== '' &&
+        new RegExp(`(?<![\\w$.])(?:${names})\\(\\s*\\)`).test(markup)
+    )
 }
 
 /**

@@ -58,6 +58,21 @@ import getTick from '#src/totals/getTick.ts'
 
 <main><p>{getTick({ id: 'inline' }).busy() ? 'loading' : 'done'}</p></main>`
 
+// A BARE PROBE IN MARKUP reads every load in its scope, so it is built once the siblings after it
+// have been set up — as the browser's is, where every setup has run before a region chooses.
+const FLAG = `<script>
+import { busy } from '@abide/abide'
+</script>
+
+<p id="flag">{#if busy()}busy{:else}idle{/if}</p>`
+
+const FLAG_FIRST = `<script>
+import Flag from '../lib/Flag.abide'
+import Slow from '../lib/Slow.abide'
+</script>
+
+<main><Flag /><Slow /></main>`
+
 let stop = (): void => {}
 let base = ''
 
@@ -65,6 +80,8 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'index.abide': PAGE,
         'inline/index.abide': INLINE,
+        'flagfirst/index.abide': FLAG_FIRST,
+        'lib/Flag.abide': FLAG,
         'lib/Tick.abide': child('getTick', 'tick'),
         'lib/Slow.abide': child('getSlow', 'slow'),
         'lib/Grand.abide': GRAND,
@@ -131,4 +148,14 @@ test("a deferred child's head keeps its place in the tree's order — 39.4", asy
     expect(html.match(/<title>[^<]*<\/title>/g)).toEqual([
         '<title>plain</title>',
     ])
+})
+
+// 41.28 — A BARE `busy` IN A CHILD'S MARKUP ANSWERS OVER ITS LATER SIBLINGS' LOADS, as the browser's
+// does at hydration (41.27), so the arm the server paints is the one the client chooses. THE
+// REVERT: drop `probes` from `emitComponent`; `Flag` builds where it is called, before `Slow` has
+// started its call, and paints `idle` where `busy` is due — the arm hydration then rebuilds (41.24).
+test('a bare busy in a child answers over the loads its later siblings start — 41.28', async () => {
+    expect(await page('/flagfirst')).toContain(
+        '<p id="flag"><!--[0-->busy<!--]--></p>',
+    )
 })

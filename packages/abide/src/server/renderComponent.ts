@@ -30,8 +30,9 @@ export function renderComponent(
     const rendered = (
         component as (props: Record<string, () => unknown>) => Rendered
     )(props)
-    // 41.28 — A CHILD WHOSE SETUP MADE A CALL ANSWERS AS A PAGE DOES, with a `scope` and its build
-    // left for the first read, and is built after the turn where a page is being built.
+    // 41.28 — A CHILD WHOSE SETUP MADE A CALL, OR WHOSE MARKUP READS A BARE PROBE, ANSWERS AS A PAGE
+    // DOES, with a `scope` and its build left for the first read, and is built after the turn where a
+    // page is being built.
     if ('scope' in rendered) {
         const marker = deferBuild(rendered, heads, callsFrom)
         if (marker !== undefined) return marker

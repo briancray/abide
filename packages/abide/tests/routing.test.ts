@@ -1549,8 +1549,9 @@ test('a navigation to another path of the same route asks, and keeps the page �
 // reader bumped is the state, and the scope is how a remount that rebuilt the same text shows.
 //
 // THE REVERT: have `onPop` call `router.go` for every step; this reports `asked` as ['/'] where
-// [] is due, and the count back at 0.
-test('back over a fragment of the standing page neither asks nor remounts', async () => {
+// [] is due, and the count back at 0. AND 30.33's: drop `arrive` from `Router.follow`, which
+// writes `route.url`; the hash reads '' where '#setup' is due, and '' where '#install' is due below.
+test('back over a fragment of the standing page neither asks nor remounts, and moves route.url — 30.20, 30.33', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())
     await r.hydrate()
@@ -1560,9 +1561,15 @@ test('back over a fragment of the standing page neither asks nor remounts', asyn
     flushSync()
     const scope = r.levels.at(-1)?.scope
 
-    // What the browser does for `<a href="#setup">` and then Back: the entry pushed, and the bar
-    // moved back to the one before it before `popstate` is dispatched.
+    // What the browser does for Forward onto `/#setup`: the bar moved before `popstate` is
+    // dispatched. 30.33 — `route.url` follows it, and the page stands.
     history.pushState(null, '', '/#setup')
+    dispatchEvent(new PopStateEvent('popstate'))
+    await Bun.sleep(0)
+    flushSync()
+    expect(route.url().hash).toBe('#setup')
+
+    // And Back off it.
     history.replaceState(null, '', '/')
     dispatchEvent(new PopStateEvent('popstate'))
     await Bun.sleep(0)
@@ -1571,6 +1578,7 @@ test('back over a fragment of the standing page neither asks nor remounts', asyn
     expect(asked).toEqual([])
     expect(r.levels.at(-1)?.scope).toBe(scope)
     expect(document.querySelector('#home p')?.textContent).toBe('1')
+    expect(route.url().hash).toBe('')
     expect(route.url().href).toBe(location.href)
     stop()
 })
@@ -1583,7 +1591,7 @@ test('back over a fragment of the standing page neither asks nor remounts', asyn
 // THE REVERT: drop the fragment check from `go` and write `scrollTo(0, 0)` after the mount, as
 // `commit` did; the in-page link reports `asked` as ['/'] and nothing scrolled into view, and the
 // cross-route one reports [] where ['lines'] is due.
-test('a routed link with a fragment scrolls to its element, remounting nothing it shares', async () => {
+test('a routed link with a fragment scrolls to its element, remounting nothing it shares — 30.21, 30.33', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())
     await r.hydrate()
@@ -1617,6 +1625,8 @@ test('a routed link with a fragment scrolls to its element, remounting nothing i
         expect(asked).toEqual([])
         expect(r.levels.at(-1)?.scope).toBe(scope)
         expect(location.hash).toBe('#install')
+        // 30.33 — the address moved, and `route.url` with it.
+        expect(route.url().hash).toBe('#install')
         expect(scrolled).toEqual(['install'])
 
         scrolled.length = 0

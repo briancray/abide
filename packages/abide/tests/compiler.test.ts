@@ -1015,6 +1015,20 @@ test('a raw value renders as markup, from the slot spelling and from an import a
     expect(bare).toContain('<p id="slot"><!--{--><b>bold</b><!--}--></p>')
 })
 
+// 32.77 — WHAT A RAW SLOT HOLDS IS WRITTEN AS GIVEN: the scheme check 32.20 puts on a URL attribute
+// is the template's, and a `javascript:` href inside raw markup is the author's markup. THE REVERT:
+// run the html through `safeUrl`'s scheme check on its way out of `textOf`; the href is dropped.
+test('a raw slot writes its markup as given, unchecked — 32.77', async () => {
+    const out = await renderPage(`<script>
+const snippet = '<a href="javascript:go()" onclick="go()">go</a>'
+</script>
+
+<p id="slot">{raw(snippet)}</p>`)
+    expect(out).toContain(
+        '<p id="slot"><!--{--><a href="javascript:go()" onclick="go()">go</a><!--}--></p>',
+    )
+})
+
 test('the raw spelling lowers to the framework’s own name, on both sides', async () => {
     const server = await serverOf(RAW_PAGE)
     expect(server).toContain('__escapeText(__raw(snippet))')

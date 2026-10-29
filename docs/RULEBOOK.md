@@ -700,6 +700,9 @@ holding that arm or row is removed.
 `watch`, MUST stop reading its sources once that owner stops and nothing else reads it, and MUST
 answer a later read with what its body computes then.
 
+12.15 The `Effect` values one turn wakes, a slot's own update among them, MAY run in any order,
+save where a clause orders them.
+
 # 13. Selections
 
 13.1 A `Selection` MUST be one `Reactive`, one `Keyed`, one `Rpc`, or a set of `tags`.
@@ -756,6 +759,9 @@ where every value it sweeps is.
 13.19 `busy`, `ready`, `synced`, `refresh` and `invalidate` over an `Rpc` no call has reached in the
 current scope MUST answer as over a `Selection` with no entries, and reading `busy`, `ready` or
 `synced` there MUST subscribe the reader to the first call that reaches it in that scope.
+
+13.20 `refresh` over a set of `tags` MUST NOT rerun a synchronous derivation that carries none of
+them, which MUST recompute from the load it reads.
 
 # 14. Tracking
 
@@ -1819,6 +1825,9 @@ to `middleware`.
 30.32 A `navigate` that is not a history step, whose request gets no answer while `online` is false,
 MUST leave the page and the address where they stand, save where 45.12 holds.
 
+30.33 A history step under 30.20, and a `navigate` under 30.21, MUST move `route.url` to the address
+it steps to.
+
 # 31. Reading and writing by name
 
 31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
@@ -2098,6 +2107,9 @@ element, written or spread, runs for the same event, wherever the two are writte
 
 32.76 A `bind:` whose operand is a path into a value that takes an optional step (`?.`) MUST be a
 build error.
+
+32.77 A slot holding a value branded by `raw` MUST write its markup as given, with no element or
+attribute in it removed and no URL in it scheme-checked.
 
 # 33. Props
 
@@ -2766,6 +2778,12 @@ supplies, and `abide start` MUST NOT supply that secret.
 38.121 Under `mount`, a call the component's browser module makes to a private handler MUST be
 answered in the test's process by the handler the component's server module declares.
 
+38.122 The project `abide scaffold` writes MUST NOT install a dependency's peer dependencies.
+
+38.123 A command `abide` builds, checks or boots the app for MUST be refused where the bun running it
+is outside the range abide's `engines.bun` names, and the refusal MUST name that bun's version and
+the range.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -3031,12 +3049,17 @@ has answered or failed.
 adopts the page, however early its answer arrived.
 
 41.28 A `render` MUST let the turn's queued microtasks run between setting up a `<Name/>` whose setup
-made an `Rpc` call and building that component's markup.
+made an `Rpc` call, or whose markup reads a bare `busy` or `ready`, and building that component's
+markup.
 
 41.29 A `render` answering a request whose `sec-fetch-dest` is `empty` MUST NOT fill the seed buffer,
 save one whose `abide-keep` header names `open`.
 
 41.30 A `render` answering a request carrying `abide-keep` MUST write 41.20's script.
+
+41.31 On a server, a bare `busy` or `ready` MUST answer over the loads set up before its component's
+markup is built, and a load a component set up later, one only a pending value places, MAY have it
+choose another arm at hydration under 41.24.
 
 # 42. The app object
 

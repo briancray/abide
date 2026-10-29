@@ -160,7 +160,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- | --- |
 | `Disposer` | `() => void` | What tears down the previous run. | 12.1 |
 | `Effect` | `() => void \| Disposer` | What runs on change. | 12.2, 12.8, 14.6 |
-| `watch` | `(effect: Effect) => () => void` | Begins a watch over whatever the effect reads. | 12.2, 12.4, 12.5, 12.6, 12.7, 12.10, 12.13 |
+| `watch` | `(effect: Effect) => () => void` | Begins a watch over whatever the effect reads. | 12.2, 12.4, 12.5, 12.6, 12.7, 12.10, 12.13, 12.15 |
 | `watch` | `(sources: Reactive<unknown, never, unknown, unknown> \| Reactive<unknown, never, unknown, unknown>[], effect: Effect) => () => void` | The narrowed form, over named sources. | 12.3 |
 | `flushSync` | `() => void` | Ends the turn: every `Effect` a write woke runs now. | 9.10, 12.11, 12.12 |
 
@@ -169,10 +169,10 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Selection` | `Reactive<any, any, any, any> \| Keyed<any, any, any, any> \| Rpc<any, any, any, any> \| { tags: string[] }` | What is being asked about. | 13.1, 13.8, 13.9, 13.13, 31.14 |
-| `busy` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether any entry in the selection has work in flight. | 13.2, 13.3, 13.5, 13.12, 46.11 |
-| `ready` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection has a value to serve. | 13.3, 13.5, 13.11, 13.12 |
+| `busy` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether any entry in the selection has work in flight. | 13.2, 13.3, 13.5, 13.12, 41.28, 41.31, 46.11 |
+| `ready` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection has a value to serve. | 13.3, 13.5, 13.11, 13.12, 41.28, 41.31 |
 | `synced` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection holds what its producer made. | 13.12, 13.18 |
-| `refresh` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.12, 13.14, 13.15, 13.16, 13.17 |
+| `refresh` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.12, 13.14, 13.15, 13.16, 13.17, 13.20 |
 | `invalidate` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Marks the selection stale. | 13.4, 13.6, 13.10, 13.12, 13.15, 13.17 |
 
 
@@ -380,8 +380,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `route.url` | `Reactive<URL>` | Where we are, fragment included. | 23.1, 23.2, 23.3, 23.4, 30.20, 30.21, 30.23, 19.16, 31.16 |
-| `route.params` | `Reactive<Params>` | The matched route's segments. | 23.1, 23.5, 23.9, 30.23, 31.16 |
+| `route.url` | `Reactive<URL>` | Where we are, fragment included. | 23.1, 23.2, 23.3, 23.4, 30.20, 30.21, 30.23, 30.33, 19.16, 31.16 |
+| `route.params` | `Reactive<Params>` | The matched route's segments — typed by its own route in a page or a layout, and `Params` in any other file. | 23.1, 23.5, 23.9, 30.23, 31.16 |
 | `Params` | `Record<string, string \| string[]>` | What a matched route's segments are. | 23.5 |
 | `route.name` | `Reactive<string>` | The resolution path, the same under any mount path. | 23.1, 23.6, 23.14, 31.16 |
 | `route.navigating` | `Reactive<boolean>` | Whether a navigation is in flight. | 23.1, 31.16 |
@@ -571,7 +571,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.24, 32.26, 32.30, 32.31, 32.70 |
+| `raw` | `(value: unknown) => Raw` | The branding a value takes to render as markup rather than as text. | 32.2, 32.24, 32.26, 32.30, 32.31, 32.70, 32.77 |
 | `Raw` | `class Raw { html: string }` | What `raw` hands back. | 32.24 |
 
 ### Control flow
@@ -629,7 +629,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4 |
-| `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30 |
+| `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30, 41.31 |
 
 ## Sinks
 
@@ -849,20 +849,20 @@ rows a runner prints, and an adapter for an abide app.
 
 | Command | Meaning | Rules |
 | --- | --- | --- |
-| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112 |
+| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112, 38.122 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57 |
-| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105 |
-| `abide routes [--json]` | Every address the app answers, the file answering it, and where each hook is filed. | 38.108 |
-| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97 |
-| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94 |
-| `abide start [--port <n>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110 |
-| `abide [--url <origin>] [--port <n>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.53, 38.54, 38.55, 38.58, 38.59, 38.60, 38.62 |
+| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123 |
+| `abide routes [--json]` | Every address the app answers, the file answering it, and where each hook is filed. | 38.108, 38.123 |
+| `abide dev [--port <n>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123 |
+| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94, 38.123 |
+| `abide start [--port <n>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110, 38.123 |
+| `abide [--url <origin>] [--port <n>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.53, 38.54, 38.55, 38.58, 38.59, 38.60, 38.62, 38.123 |
 | `abide call <address> [args]` | One call to one handler. | 38.8, 38.61, 38.110 |
-| `abide openapi [--url <origin>]` | The OpenAPI document printed rather than served. | 38.9, 38.25, 38.110, 38.111 |
-| `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.13, 38.25, 38.110 |
+| `abide openapi [--url <origin>]` | The OpenAPI document printed rather than served. | 38.9, 38.25, 38.110, 38.111, 38.123 |
+| `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.13, 38.25, 38.110, 38.123 |
 | `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. | 38.69 |
-| `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97 |
-| `abide bundle [--out]` | A desktop app for the host platform, with a window on the app. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102 |
+| `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123 |
+| `abide bundle [--out]` | A desktop app for the host platform, with a window on the app. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |

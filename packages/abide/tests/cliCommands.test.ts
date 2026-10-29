@@ -58,7 +58,7 @@ afterAll(() => {
 
 // 38.1 — THE LAYOUT, WRITTEN, and a step already done is skipped rather than overwritten. The
 // scaffolded app then builds, which is what "a starter project" has to mean.
-test('scaffold writes a starter project, skips what is there, builds and passes its tests — 38.1, 38.42, 38.103, 38.104, 38.112, 38.119', async () => {
+test('scaffold writes a starter project, skips what is there, builds and passes its tests — 38.1, 38.42, 38.103, 38.104, 38.112, 38.119, 38.122', async () => {
     const into = temporaryModule({ 'readme.md': 'here\n' })
     const first = await spawned(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
@@ -106,6 +106,10 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
     for (const shipped of ['abide.md', 'REGISTRY.md', 'RULEBOOK.md'])
         expect(agents).toContain(`node_modules/@abide/abide/docs/${shipped}`)
     expect(await Bun.file(`${app}/CLAUDE.md`).text()).toBe('@AGENTS.md\n')
+    // 38.122 — THE REVERT: drop `[install]` from the bunfig, and `peer` is undefined.
+    expect(
+        Bun.TOML.parse(await Bun.file(`${app}/bunfig.toml`).text()),
+    ).toMatchObject({ install: { peer: false } })
     expect(
         (await Bun.file(`${app}/tsconfig.json`).json()).compilerOptions.types,
     ).toEqual(['bun'])

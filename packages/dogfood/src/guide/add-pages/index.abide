@@ -92,7 +92,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
             <tbody>
                 <tr><td><code>route.name</code></td><td>the pattern that matched, <code>/companies/[id]</code> for every company, so a log line keys on the page rather than on each address</td></tr>
                 <tr><td><code>Params</code></td><td>what the segments matched; a query string is never in it</td></tr>
-                <tr><td><code>RouteParams&lt;P&gt;</code></td><td>the type <code>route.params</code> has in a page filed under <code>P</code>, so <code>id</code> is text and a key the route lacks is an error</td></tr>
+                <tr><td><code>RouteParams&lt;P&gt;</code></td><td>the type <code>route.params</code> has in a page or layout filed under <code>P</code>, so <code>id</code> is text and a key the route lacks is an error. A component under <code>lib/</code> has no route of its own and reads the loose <code>Params</code>: pass it the value as a prop, or narrow it with <code>RouteParams&lt;'/…'&gt;</code></td></tr>
             </tbody>
         </table>
     </Section>

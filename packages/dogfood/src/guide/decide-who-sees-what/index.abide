@@ -152,9 +152,9 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
         list changes on the click. The server render reads the same cookie off the request, so a
         reload paints compact rather than flashing comfortable first.</p>
 
-        <p>The principal cookie is <code>HttpOnly</code>, so script never sees the seal. Use
-        <code>cookies()</code> for the ones that are yours: a density, a theme, a dismissed
-        banner.</p>
+        <p><code>cookies()</code> reads and writes any cookie the request carries: a density, a
+        theme, or another system's session cookie your server checks. The principal cookie is
+        <code>HttpOnly</code>, so in the browser <code>cookies()</code> never sees the seal.</p>
     </Section>
 
     <Section title="A handler decides which fields a caller may read">
