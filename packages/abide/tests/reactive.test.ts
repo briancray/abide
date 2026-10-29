@@ -5561,6 +5561,44 @@ test('an evicted keyed entry leaves every selection', async () => {
     ).toBe('still in a selection: false')
 })
 
+// 13.20 — A TAGGED SWEEP RELOADS WHAT CARRIES THE TAG, and a synchronous derivation over it that
+// carries none recomputes from the reload rather than being run beside it: the refresh itself runs
+// it 0 times, and the read after runs it once, on the new value.
+//
+// THE REVERT: give `doubled` the `stock` tag, which files it where the sweep reaches; the refresh
+// then runs it itself — `onRefresh: 1` where 0 is due.
+test('a refresh over tags reruns no synchronous derivation that carries none of them — 13.20', () => {
+    let loads = 0
+    let derivationRuns = 0
+    const stock = reactive(
+        () => {
+            loads += 1
+            return loads
+        },
+        { tags: ['stock'] },
+    )
+    const doubled = reactive(() => {
+        derivationRuns += 1
+        return stock() * 2
+    })
+    const seen: number[] = []
+    const stop = watch(() => {
+        seen.push(doubled())
+    })
+    const before = derivationRuns
+    refresh({ tags: ['stock'] })
+    const onRefresh = derivationRuns - before
+    flushSync()
+    const onRead = derivationRuns - before - onRefresh
+    stop()
+    expect({ loads, onRefresh, onRead, seen }).toEqual({
+        loads: 2,
+        onRefresh: 0,
+        onRead: 1,
+        seen: [2, 4],
+    })
+})
+
 // ── `store`: where a value lives when the process does not (RULEBOOK 8, 9.5, 11.42) ──────
 
 // A store over a plain map, with every call recorded. `answer` decides what `get` hands back —

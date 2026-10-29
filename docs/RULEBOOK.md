@@ -757,6 +757,9 @@ where every value it sweeps is.
 current scope MUST answer as over a `Selection` with no entries, and reading `busy`, `ready` or
 `synced` there MUST subscribe the reader to the first call that reaches it in that scope.
 
+13.20 `refresh` over a set of `tags` MUST NOT rerun a synchronous derivation that carries none of
+them, which MUST recompute from the load it reads.
+
 # 14. Tracking
 
 14.1 A `Reactive` MUST be tracked only where something downstream will be rebuilt from it.
