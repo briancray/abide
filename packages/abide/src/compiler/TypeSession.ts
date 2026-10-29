@@ -38,10 +38,15 @@ import { CHECKED_VALUES } from './Lowering.ts'
 import { diagnosisAt, lineOf } from './lineOf.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { projectShadow, type Span } from './projectShadow.ts'
-import { abideIn } from './reactiveTypes.ts'
+import { type Abide, abideIn, isReactiveType } from './reactiveTypes.ts'
 import type { ParsedSource, ReadSource } from './readSources.ts'
 import { readsIn, type ShadowSpans } from './readsIn.ts'
-import { CHECKED_SUFFIX, SHADOW_SUFFIX, ShadowMap } from './ShadowMap.ts'
+import {
+    CHECKED_SUFFIX,
+    mapForward,
+    SHADOW_SUFFIX,
+    ShadowMap,
+} from './ShadowMap.ts'
 import { SOURCE_SUFFIX } from './splitImports.ts'
 import { type TemplateContext, templateContext } from './templateContext.ts'
 import { templateWarnings } from './templateWarnings.ts'
@@ -711,56 +716,144 @@ export class TypeSession {
         if (queries.every((query) => query === undefined))
             return { answers, warnings }
 
-        const project = await this.currentProject(created, changed)
+        let project = await this.currentProject(created, changed)
         if (project === undefined) return { answers, warnings }
-        const checker = project.checker
-        const abide = await abideIn(project)
-
-        await Promise.all(
-            queries.map(async (query, at) => {
-                if (query === undefined) return
+        // Per source, its compiler warnings, the bindings the projection could not type
+        // (`bindingsOfReads`), and those the lowered program proved a `Reactive`.
+        const warned: Diagnosis[][] = sources.map(() => [])
+        const suspects: number[][] = sources.map(() => [])
+        const held: Set<number>[] = sources.map(() => new Set())
+        const answer = async (
+            asked: Project,
+            abide: Abide,
+            at: number,
+        ): Promise<void> => {
+            const query = queries[at]
+            if (query === undefined) return
+            const source = sources[at] as (typeof sources)[number]
+            const sourceFile = await asked.program.getSourceFile(
+                query.map.shadowPath,
+            )
+            // The shadow has to be INSIDE the opened project or the checker never reads it.
+            // Refusing loudly rather than answering nothing: no reads is a file whose every
+            // name lowers as written, which renders `[object Object]` where a value was due —
+            // a wrong page, with nothing about it saying so.
+            if (sourceFile === undefined)
+                throw new Error(
+                    `abide: ${source.path} is not inside the project ${this.tsconfig}, so no name in it can be typed (RULEBOOK 31.3). Give the app a tsconfig whose include reaches it.`,
+                )
+            const read = await readsIn(
+                asked.checker,
+                abide,
+                sourceFile,
+                query.map.shadowPath,
+                query.spans,
+                source.file,
+                held[at] as Set<number>,
+            )
+            answers[at] = read.answer
+            suspects[at] = read.suspects
+            const placed: Diagnosis[] = []
+            for (const warning of read.warnings) {
+                const offset = query.map.toSource(
+                    query.map.shadowPath,
+                    warning.at,
+                )
+                if (
+                    source.text === undefined ||
+                    !isIgnored(source.text, offset, warning.message)
+                )
+                    placed.push(
+                        diagnosisAt(
+                            source.path,
+                            source.text,
+                            offset,
+                            'warning',
+                            warning.message,
+                        ),
+                    )
+            }
+            warned[at] = placed
+        }
+        const every = queries.map((_, at) => at)
+        const first = project
+        const firstAbide = await abideIn(first)
+        await Promise.all(every.map((at) => answer(first, firstAbide, at)))
+        // 31.1 — A BINDING THE PROJECTION TYPED FROM A `Reactive` IS ASKED OF THE PROGRAM IT RUNS
+        // AS: each file holding one is lowered with what it has answered so far, and a binding that
+        // is a `Reactive` there is one in the projection too. A binding typed from one that just
+        // turned out to be a `Reactive` is asked again, until a round turns none. Nothing is asked,
+        // and no second snapshot taken, where no file holds one (`bindingsOfReads`).
+        for (;;) {
+            const asking = every.filter(
+                (at) => (suspects[at] as number[]).length > 0,
+            )
+            if (asking.length === 0) break
+            const loweredCreated: string[] = []
+            const loweredChanged: string[] = []
+            const lowered = asking.map((at) => {
                 const source = sources[at] as (typeof sources)[number]
-                const sourceFile = await project.program.getSourceFile(
-                    query.map.shadowPath,
-                )
-                // The shadow has to be INSIDE the opened project or the checker never reads it.
-                // Refusing loudly rather than answering nothing: no reads is a file whose every
-                // name lowers as written, which renders `[object Object]` where a value was due —
-                // a wrong page, with nothing about it saying so.
-                if (sourceFile === undefined)
-                    throw new Error(
-                        `abide: ${source.path} is not inside the project ${this.tsconfig}, so no name in it can be typed (RULEBOOK 31.3). Give the app a tsconfig whose include reaches it.`,
-                    )
-                const read = await readsIn(
-                    checker,
-                    abide,
-                    sourceFile,
-                    query.map.shadowPath,
-                    query.spans,
+                const query = queries[at] as { map: ShadowMap }
+                const shadow = checkedShadow(
                     source.file,
+                    answers[at] as CheckerAnswer,
                 )
-                answers[at] = read.answer
-                for (const warning of read.warnings) {
-                    const offset = query.map.toSource(
-                        query.map.shadowPath,
-                        warning.at,
-                    )
-                    if (
-                        source.text === undefined ||
-                        !isIgnored(source.text, offset, warning.message)
-                    )
-                        warnings.push(
-                            diagnosisAt(
-                                source.path,
-                                source.text,
-                                offset,
-                                'warning',
-                                warning.message,
-                            ),
-                        )
+                this.register(
+                    query.map.checkedPath,
+                    shadow.text,
+                    loweredCreated,
+                    loweredChanged,
+                )
+                this.openOutside(
+                    source.path,
+                    query.map.checkedPath,
+                    loweredChanged,
+                )
+                return {
+                    at,
+                    path: query.map.checkedPath,
+                    origins: shadow.origins,
                 }
-            }),
-        )
+            })
+            project = await this.currentProject(loweredCreated, loweredChanged)
+            if (project === undefined) return { answers, warnings }
+            const asked = project
+            const abide = await abideIn(asked)
+            const turned = new Set<number>()
+            await Promise.all(
+                lowered.map(async ({ at, path, origins }) => {
+                    const sourceFile = await asked.program.getSourceFile(path)
+                    if (sourceFile === undefined) return
+                    for (const start of suspects[at] as number[]) {
+                        const position = mapForward(origins, start)
+                        if (position === undefined) continue
+                        const symbol = await asked.checker.getSymbolAtLocation(
+                            getTouchingPropertyName(sourceFile, position),
+                        )
+                        const type =
+                            symbol === undefined
+                                ? undefined
+                                : await asked.checker.getTypeOfSymbol(symbol)
+                        if (
+                            type !== undefined &&
+                            (await isReactiveType(
+                                asked.checker,
+                                abide,
+                                type,
+                                false,
+                            ))
+                        ) {
+                            ;(held[at] as Set<number>).add(start)
+                            turned.add(at)
+                        }
+                    }
+                }),
+            )
+            if (turned.size === 0) break
+            await Promise.all([...turned].map((at) => answer(asked, abide, at)))
+            for (const at of asking) if (!turned.has(at)) suspects[at] = []
+        }
+        for (const placed of warned) warnings.push(...placed)
         return { answers, warnings }
     }
 
