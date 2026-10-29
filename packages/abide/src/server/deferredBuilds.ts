@@ -1,4 +1,5 @@
-// 41.28 — A CHILD WHOSE SETUP MADE A CALL IS BUILT AS A PAGE IS: after the turn.
+// 41.28 — A CHILD WHOSE SETUP MADE A CALL IS BUILT AS A PAGE IS: after the turn — and so is one whose
+// markup reads a bare `busy` or `ready`, which the compiler writes to answer as a page does always.
 // A component is set up where its parent's markup invokes it, so its build cannot wait inline; it is
 // left as a marker in the parent's head and body, built once the turn has run, and written in where
 // its marker stands. A child whose setup made no call builds where it stands, as before, and pays a

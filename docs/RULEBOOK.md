@@ -3049,12 +3049,17 @@ has answered or failed.
 adopts the page, however early its answer arrived.
 
 41.28 A `render` MUST let the turn's queued microtasks run between setting up a `<Name/>` whose setup
-made an `Rpc` call and building that component's markup.
+made an `Rpc` call, or whose markup reads a bare `busy` or `ready`, and building that component's
+markup.
 
 41.29 A `render` answering a request whose `sec-fetch-dest` is `empty` MUST NOT fill the seed buffer,
 save one whose `abide-keep` header names `open`.
 
 41.30 A `render` answering a request carrying `abide-keep` MUST write 41.20's script.
+
+41.31 On a server, a bare `busy` or `ready` MUST answer over the loads set up before its component's
+markup is built, and a load a component set up later, one only a pending value places, MAY have it
+choose another arm at hydration under 41.24.
 
 # 42. The app object
 

@@ -169,8 +169,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Selection` | `Reactive<any, any, any, any> \| Keyed<any, any, any, any> \| Rpc<any, any, any, any> \| { tags: string[] }` | What is being asked about. | 13.1, 13.8, 13.9, 13.13, 31.14 |
-| `busy` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether any entry in the selection has work in flight. | 13.2, 13.3, 13.5, 13.12, 46.11 |
-| `ready` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection has a value to serve. | 13.3, 13.5, 13.11, 13.12 |
+| `busy` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether any entry in the selection has work in flight. | 13.2, 13.3, 13.5, 13.12, 41.28, 41.31, 46.11 |
+| `ready` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection has a value to serve. | 13.3, 13.5, 13.11, 13.12, 41.28, 41.31 |
 | `synced` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection holds what its producer made. | 13.12, 13.18 |
 | `refresh` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.12, 13.14, 13.15, 13.16, 13.17, 13.20 |
 | `invalidate` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Marks the selection stale. | 13.4, 13.6, 13.10, 13.12, 13.15, 13.17 |
@@ -629,7 +629,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4 |
-| `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30 |
+| `render` | `(component: Component) => Promise<Uint8Array>` | What produces a document. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30, 41.31 |
 
 ## Sinks
 
