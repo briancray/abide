@@ -1,5 +1,19 @@
 # @abide/abide
 
+## 0.117.0
+
+### Minor Changes
+
+- 3bb5cc9: `abide dev`, `build`, `start`, `check`, `routes`, `compile`, `bundle`, `openapi`, `mcp` and the shell now refuse to run on a bun outside abide's `engines.bun`, naming the bun running and the range it needs (RULEBOOK 38.123)
+
+### Patch Changes
+
+- 3bb5cc9: a component whose markup reads a bare `busy()` or `ready()` is now built on the server after the turn, once the siblings after it have started their loads, so it paints the arm the browser chooses at hydration rather than one that is rebuilt (RULEBOOK 41.28, 41.31)
+- 3bb5cc9: the rulebook now states that the effects one turn wakes, a slot's own update among them, run in no guaranteed order (12.15) — a `watch` that post-processes what a sibling `{raw(...)}` slot renders cannot count on the slot having updated first
+- 3bb5cc9: markdown imported `with { type: 'text' }` into an app's `.ts` now checks as a `string` under `abide check`, as it already did in a `.abide` — no more hand-written `declare module '*.md'`
+- 3bb5cc9: the `bunfig.toml` `abide scaffold` writes now sets `[install] peer = false`, so a dependency's peer on `bun` (`bun-plugin-tailwind`'s) cannot install an older bun that shadows the system one inside `bun run` (RULEBOOK 38.122)
+- 3bb5cc9: the rulebook states three things that held but were never written down: a `raw` slot writes its markup unchecked (32.77), a fragment-only step moves `route.url` (30.33), and a `refresh` over `tags` reruns no synchronous derivation that carries none of them (13.20) — and the registry says `route.params` is `Params` outside a page or layout
+
 ## 0.116.4
 
 ### Patch Changes
