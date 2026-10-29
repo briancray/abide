@@ -1,5 +1,17 @@
 # @abide/abide
 
+## 0.116.3
+
+### Patch Changes
+
+- 9007822: A `bind:` writes its value before an `on<event>` on the same element runs — `<input type="file" bind:files={picked} onchange={use}>` hands `use` the files just picked, and an `oninput` beside `bind:value` reads the text just typed, wherever the two are written in the tag (RULEBOOK 32.75).
+- ecf1ff0: a `bind:` through a computed key writes back — `bind:value={params[key]}` and `bind:value={params[s.k]}` inside a `{#for}` write the entry the key names when the input fires, and follow the key when it changes, where they were handed the read and never wrote; a `bind:` through an optional step (`params?.a`) is now a build error (RULEBOOK 32.75) rather than a read that writes nothing
+- ee8cce7: a handler with no `args` gate whose parameter is one record now carries the `ValidationError` the wire refuses its args with — `rpc.isError(e, 'ValidationError')` narrows to it and `e.data` is `Issues<Args>`, where it narrowed to `never`. A handler with no args, a scalar, a list, a union of records or `unknown` derives no schema and still carries none
+- fe68a88: a handler no call has reached is not busy, and asking runs nothing — on a server, `save.busy()` over a never-called `POST(async () => …)` ran the write and reported it in flight; it now answers as a handler with no entries (`busy` false, `ready` and `synced` true), for a `GET` with no args as well. A probe over a mutation a `refresh()` invalidated no longer sends the write again (RULEBOOK 3.14, 13.19)
+- 874c919: under `mount` in `bun test`, a dynamic `import('#src/…')` from a component's browser module resolves as the static one does, rather than failing with "Cannot find package '#src'"
+- f60ea39: under `mount` in `bun test`, a component's browser module calling a private handler (one its `<script server>` declares) is answered by that handler in the test's process, rather than fetching an `/abide-client:/…` address and failing with 503 — as a handler file's call already was
+- 3e999ce: a throttled value lets its first change through at once — `reactive(x, { throttle })` then `s.set(v)` reads `v` back in the same turn, where the value it was built with had opened a window that held the first `set` back. RULEBOOK 5.12
+
 ## 0.116.2
 
 ### Patch Changes
