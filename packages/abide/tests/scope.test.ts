@@ -200,6 +200,49 @@ test('a handler no call has reached is not busy, and asking runs nothing — 13.
     expect(`body runs: ${runs}`).toBe('body runs: 1')
 })
 
+// 3.3, 13.19 — A READER THAT PROBED BEFORE THE FIRST CALL IS WOKEN BY IT: the unreached answer
+// subscribes it to the build of the value in its own scope, and from then it follows the value's
+// probes. Outside every request and inside one, as a `disabled={save.busy()}` reads it. THE REVERT:
+// have `builtHere` subscribe nothing — each reader stays at its first run and reads `busy` false
+// through the whole call, 1 run each where 3 are due ("false, probing ran 0" twice).
+test('a reader that probed before the first call wakes when it starts and settles — 3.3, 13.19', async () => {
+    let runs = 0
+    let release = (): void => {}
+    const slow = () =>
+        POST(async () => {
+            runs += 1
+            await new Promise<void>((done) => {
+                release = done
+            })
+        })
+    const watched = async (save: ReturnType<typeof slow>): Promise<string> => {
+        const seen: boolean[] = []
+        const stop = watch(() => {
+            seen.push(save.busy())
+        })
+        await tick()
+        const probing = runs
+        const call = save()
+        await tick()
+        release()
+        await call
+        await tick()
+        stop()
+        return `${seen.join(' ')}, probing ran ${probing}`
+    }
+    // Both declared outside every request, as a module's handlers are.
+    const home = slow()
+    const perRequest = slow()
+    const outside = await watched(home)
+    runs = 0
+    const inside = await inScope(new Request('http://app/a'), () =>
+        watched(perRequest),
+    )
+    expect(`${outside} | ${inside}`).toBe(
+        'false true false, probing ran 0 | false true false, probing ran 0',
+    )
+})
+
 // 3.14, 13.16 — A PROBE OVER A MUTATION A SWEEP INVALIDATED DOES NOT SEND THE WRITE AGAIN. THE REVERT:
 // have `probe` bring a mutation's cell current as it does any other; the `busy` after the `refresh`
 // reruns the handler and reads true, 2 writes where 1 is due.
@@ -214,7 +257,9 @@ test('a probe over a mutation a sweep invalidated runs nothing — 3.14', async 
         refresh()
         const busy = save.busy()
         await tick()
-        expect(`busy: ${busy}, writes: ${writes}`).toBe('busy: false, writes: 1')
+        expect(`busy: ${busy}, writes: ${writes}`).toBe(
+            'busy: false, writes: 1',
+        )
     })
 })
 

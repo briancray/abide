@@ -469,7 +469,7 @@ export function declare(method: Method): Declare {
         // 13.19 — AND NOT YET BUILT, NONE OF THEM BUILDS IT: building an unkeyed value starts its body
         // (1.7), so `save.busy()` over a server's never-called `POST(async () => …)` ran the write and
         // reported it in flight. Until a call reaches it the handler has no entry, and answers as one
-        // with no entries does.
+        // with no entries does — the asking reader subscribed to the call that builds it (`builtHere`).
         const built = value as Record<
             (typeof SELECTION_MEMBERS)[number],
             (pattern?: unknown) => unknown

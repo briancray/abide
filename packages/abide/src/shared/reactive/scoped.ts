@@ -15,9 +15,10 @@
 import { contractOf, type Gated } from './argsContract.ts'
 import { CELL } from './CELL.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
-import { brandedPrototype, MEMBER_KEYS } from './Reactive.ts'
+import { brandedPrototype, MEMBER_KEYS, signalMoved } from './Reactive.ts'
 import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
 import { currentScope, runInScope, SCOPING } from './scoping.ts'
+import { newTracked, TRACKING, type Tracked, trackProbe } from './tracking.ts'
 
 const UNBUILT: unique symbol = Symbol('abide.unbuilt')
 
@@ -36,11 +37,18 @@ class Filed {
     home: unknown
     make: () => unknown
     global: boolean
+    /**
+     * 3.3, 13.19 — what a probe asked before the value was built here subscribes to, moved by the
+     * build: the home's. A scope files its own in `instances` under this one as its key, and drops
+     * it with the scope.
+     */
+    unbuilt: Tracked
 
     constructor(make: () => unknown, lazy: boolean, global: boolean) {
         this.make = make
         this.home = lazy ? UNBUILT : make()
         this.global = global
+        this.unbuilt = newTracked()
     }
 }
 
@@ -56,14 +64,21 @@ type Forwarder = { [FILED]: Filed }
 function instanceOf(filed: Filed): Record<PropertyKey, unknown> {
     const scope = filed.global ? undefined : currentScope()
     if (scope === undefined) {
-        if (filed.home === UNBUILT)
+        if (filed.home === UNBUILT) {
             filed.home = runInScope(undefined, () => filed.make(), undefined)
+            signalMoved(filed.unbuilt)
+        }
         return filed.home as Record<PropertyKey, unknown>
     }
     let instance = scope.instances.get(filed)
     if (instance === undefined) {
         instance = filed.make()
         scope.instances.set(filed, instance)
+        const asked = scope.instances.get(filed.unbuilt) as Tracked | undefined
+        if (asked !== undefined) {
+            scope.instances.delete(filed.unbuilt)
+            signalMoved(asked)
+        }
     }
     return instance as Record<PropertyKey, unknown>
 }
@@ -152,14 +167,33 @@ export function scoped(
 /**
  * Whether the value `value` forwards to is built for the scope that is current — always, for a
  * value that is no forwarder. Asking builds nothing, where `instanceOf` builds what it finds unbuilt.
+ *
+ * 3.3 — AND WHERE IT IS NOT, ASKING SUBSCRIBES THE READER TO ITS BUILD: a guard that probed before
+ * the first call has no cell to hear the call start from, so `disabled={save.busy()}` stayed
+ * enabled through the whole write. One signal per value per scope, never one per entry (13.3).
  */
 export function builtHere(value: unknown): boolean {
     const filed = (value as Partial<Forwarder> | null)?.[FILED]
     if (filed === undefined) return true
     const scope = filed.global ? undefined : currentScope()
-    return scope === undefined
-        ? filed.home !== UNBUILT
-        : scope.instances.has(filed)
+    if (
+        scope === undefined
+            ? filed.home !== UNBUILT
+            : scope.instances.has(filed)
+    )
+        return true
+    const reader = TRACKING.reader
+    if (reader === null) return false
+    let asked = filed.unbuilt
+    if (scope !== undefined) {
+        asked = scope.instances.get(filed.unbuilt) as Tracked
+        if (asked === undefined) {
+            asked = newTracked()
+            scope.instances.set(filed.unbuilt, asked)
+        }
+    }
+    trackProbe(asked, reader)
+    return false
 }
 
 /**

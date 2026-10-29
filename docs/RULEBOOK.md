@@ -754,7 +754,8 @@ mutation's `declare` built while its write is in flight.
 where every value it sweeps is.
 
 13.19 `busy`, `ready`, `synced`, `refresh` and `invalidate` over an `Rpc` no call has reached in the
-current scope MUST answer as over a `Selection` with no entries.
+current scope MUST answer as over a `Selection` with no entries, and reading `busy`, `ready` or
+`synced` there MUST subscribe the reader to the first call that reaches it in that scope.
 
 # 14. Tracking
 
