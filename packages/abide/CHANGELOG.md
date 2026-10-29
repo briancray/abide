@@ -1,5 +1,12 @@
 # @abide/abide
 
+## 0.116.4
+
+### Patch Changes
+
+- f4acbfd: a handler whose args schema is derived from its type annotation (no `args` gate) now refuses bad args in process as it does over the wire — a direct call, a call from another handler or `app.run`, and every call under `mount` answer 422 `ValidationError` with the same `Issues` before the body runs, where before the body ran with the bad value
+- be88738: a reader that probed a handler before its first call wakes when the call starts — on a server and under `mount`, `disabled={save.busy()}` read before any call stayed enabled for the whole write, because the unreached answer (0.116.3) subscribed the reader to nothing. It now subscribes the reader to the first call in its scope, and still builds nothing and runs no handler (RULEBOOK 3.3, 13.19)
+
 ## 0.116.3
 
 ### Patch Changes
