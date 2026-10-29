@@ -694,6 +694,42 @@ const run = () => thing?.go()
     expect(await checkApp(loose)).toEqual([])
 }, 60_000)
 
+// 31.1, 31.4, 31.16 — A VALUE OPENING AT A READ'S MEMBER IS A `Reactive` THE FILE READS AND WRITES BY
+// NAME. In the projection `route.url.pathname` asks a `Reactive<URL>` for a member it does not declare,
+// and the error type resolves `reactive`'s overloads to a `Keyed`, so the binding was no `Reactive`.
+// THE REVERT: drop the rounds after the first in `TypeSession.classify`; each write is a string
+// assigned to the `Reactive` (TS2322, 2) and the build rebinds the name rather than calling `set`.
+test('a value opening at a read member is read and written by name — 31.1', async () => {
+    const opened = appFixture({
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                strict: true,
+                target: 'esnext',
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                noEmit: true,
+                skipLibCheck: true,
+            },
+            include: ['.'],
+        }),
+        'index.abide': `<script>
+import { reactive, route } from '@abide/abide'
+
+let name = reactive('a')
+let bookId = reactive(route.url.searchParams.get('book') ?? '')
+let shout = reactive(name.toUpperCase())
+function clear() {
+    bookId = ''
+    shout = 'B'
+}
+</script>
+<input bind:value={bookId} />
+<button onclick={clear}>{bookId.length} {shout.length}</button>`,
+    })
+    expect(await checkApp(opened)).toEqual([])
+}, 60_000)
+
 // 33.23 THROUGH `abide check` — a component typed `& Attributes<'button'>` that spreads its rest onto a
 // `<button>`: a caller's static text, a bare attribute, microdata and a typed listener are each held
 // to what a button takes, and a `type` it does not take is refused. THE REVERT: drop `Written` from

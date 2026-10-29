@@ -28,6 +28,7 @@ import {
 import {
     type Symbol as CheckedSymbol,
     type Checker,
+    SignatureKind,
     SymbolFlags,
     type Type,
     TypeFlags,
@@ -129,7 +130,9 @@ export async function readsIn(
     shadowPath: string,
     spans: ShadowSpans,
     file: AbideFile,
-): Promise<{ answer: CheckerAnswer; warnings: Finding[] }> {
+    /** Where each name the lowered program proved a `Reactive` starts (`bindingsOfReads`). */
+    held: ReadonlySet<number>,
+): Promise<{ answer: CheckerAnswer; warnings: Finding[]; suspects: number[] }> {
     // A destructuring pattern binds names this does not see, and that is 31.12's case.
     const names: Node[] = []
     const spelled = new Set<string>()
@@ -210,6 +213,12 @@ export async function readsIn(
         ),
     )
     await dropValueHolders(checker, names, reactive)
+    for (let at = 0; at < names.length; at += 1)
+        if (
+            reactive[at] === undefined &&
+            held.has((names[at] as Node).getStart())
+        )
+            reactive[at] = symbols[at]
     // 32.32 — A VALUE WHOSE `reactive(…)` DECLARES `by` keys a `{#for}` over it,
     // wherever the value is declared.
     const byValue = await Promise.all(
@@ -296,7 +305,86 @@ export async function readsIn(
         spans.scripts,
     ))
         warnings.push(warning)
-    return { answer: new CheckerAnswer(reads, statics), warnings }
+    const answer = new CheckerAnswer(reads, statics)
+    return {
+        answer,
+        warnings,
+        suspects: await bindingsOfReads(
+            checker,
+            abide,
+            names,
+            reactive,
+            answer,
+        ),
+    }
+}
+
+/**
+ * Where each binding starts whose type the projection cannot vouch for, for the lowered program to
+ * answer (`TypeSession.classify`).
+ *
+ * 31.1 — A BINDING TYPED FROM A READ IS TYPED FROM THE `Reactive` IN THE PROJECTION, and the read is
+ * of its value. `reactive(route.url.pathname)` asks a `Reactive<URL>` for a `pathname` it does not
+ * declare; the argument is the error type, which `reactive`'s overloads resolve to a `Keyed`, and
+ * the binding then lowered as no `Reactive` at all — `bookId = 'y'` rebinding the name and nothing
+ * waking. Lowered, the argument is `route.url().pathname` and the binding a `Reactive<string>`.
+ *
+ * ONLY A CALL THAT CAN HAND BACK A `Reactive` IS ASKED: an un-annotated binding, not one already,
+ * initialized by a call holding a read, to a callee one of whose signatures returns a `Reactive`.
+ * Anything else is a value however its reads are typed, and asking would cost every page that
+ * computes from one a second snapshot.
+ */
+async function bindingsOfReads(
+    checker: Checker,
+    abide: Abide,
+    names: readonly Node[],
+    reactive: readonly (CheckedSymbol | undefined)[],
+    answer: CheckerAnswer,
+): Promise<number[]> {
+    const suspects: number[] = []
+    const asked: Promise<void>[] = []
+    for (let at = 0; at < names.length; at += 1) {
+        const name = names[at] as Node
+        const declaration = name.parent
+        if (
+            reactive[at] !== undefined ||
+            !isVariableDeclaration(declaration) ||
+            declaration.type !== undefined ||
+            declaration.initializer === undefined
+        )
+            continue
+        let call: Node = declaration.initializer
+        while (TRANSPARENT.has(call.kind))
+            call = (call as unknown as { expression: Node }).expression
+        if (
+            !isCallExpression(call) ||
+            !answer.holdsRead({ start: call.getStart(), end: call.end })
+        )
+            continue
+        const callee = call.expression
+        asked.push(
+            (async () => {
+                const type = await checker.getTypeAtLocation(callee)
+                if (type === undefined) return
+                for (const signature of await checker.getSignaturesOfType(
+                    type,
+                    SignatureKind.Call,
+                )) {
+                    const returned =
+                        await checker.getReturnTypeOfSignature(signature)
+                    if (
+                        returned !== undefined &&
+                        (await isReactiveType(checker, abide, returned, false))
+                    ) {
+                        suspects.push(name.getStart())
+                        return
+                    }
+                }
+            })(),
+        )
+    }
+    await Promise.all(asked)
+    return suspects
 }
 
 /**

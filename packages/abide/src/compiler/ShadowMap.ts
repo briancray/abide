@@ -167,7 +167,7 @@ function copiedFrom(
  * markup, or a read the lowering rewrote. Runs are ascending by where they stand, not by where they
  * came from, so this is a scan.
  */
-function mapForward(
+export function mapForward(
     origins: readonly Origin[],
     position: number,
 ): number | undefined {
