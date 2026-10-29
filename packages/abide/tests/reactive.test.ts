@@ -3346,7 +3346,8 @@ test('a ttl past what setTimeout holds arms one timer, not one a millisecond', a
             armed.length = 0
             reactive(() => 1, { ttl })()
             await Bun.sleep(30)
-            read[name] = [...armed]
+            // Delays under a day are other code's timers in this process, never this ttl's.
+            read[name] = armed.filter((delay) => delay >= 86_400_000)
         }
     } finally {
         globalThis.setTimeout = realSetTimeout
