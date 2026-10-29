@@ -1819,6 +1819,9 @@ to `middleware`.
 30.32 A `navigate` that is not a history step, whose request gets no answer while `online` is false,
 MUST leave the page and the address where they stand, save where 45.12 holds.
 
+30.33 A history step under 30.20, and a `navigate` under 30.21, MUST move `route.url` to the address
+it steps to.
+
 # 31. Reading and writing by name
 
 31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
