@@ -2219,6 +2219,10 @@ function mirror(cell: Cell, inner: Cell): void {
     // 7.13 through the adoption: the re-settle a rerun of the adopter makes reaches a reload the
     // adopted value owes, rather than finding it unservable and giving up.
     if (inner.owes !== OWES_NOTHING) settleOwed(inner)
+    // 13.7 THROUGH THE ADOPTION TOO: a sweep's mark on a value nothing read is `DIRTY`, and an
+    // adoption is that value's next read. A mirror reached through a rerun finds it resolved
+    // already; the first one `adopt` runs does not, and copied the held value over the mark.
+    if (inner.state !== CLEAN) resolve(inner)
     const adopted = inner.stream
     if (adopted !== null) {
         forwardStream(cell, inner, adopted)

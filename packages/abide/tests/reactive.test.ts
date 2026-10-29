@@ -5505,6 +5505,41 @@ test('refresh over tags reloads what something reads and marks the rest', () => 
     stop()
 })
 
+// 13.7 THROUGH AN ADOPTION — A MARK IS SETTLED BY THE NEXT READ, AND ADOPTING IS ONE. A page's
+// `reactive(() => getMeetings())` reads its handler's entry by adopting it: the entry a write's
+// `refresh({ tags })` marked while no page held it is adopted by the next page to want it, and
+// that adoption has to load it rather than copy what it held over the mark.
+//
+// THE REVERT: drop `resolve(inner)` from `mirror` — `loads after the adoption: 1` where 2 are due,
+// and the adopter serves the 'old' it held.
+test('a value a tag refresh marked while nothing read it loads when it is next adopted — 13.7', async () => {
+    let answer = 'old'
+    let loads = 0
+    const meetings = reactive(
+        () => {
+            loads += 1
+            return Promise.resolve(answer)
+        },
+        { tags: ['meetings'] },
+    )
+    // The page that read it, built under its owner (12.14) and left.
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    const earlier = reactive(() => meetings)
+    collectWatches(previous)
+    expect(await earlier).toBe('old')
+    for (const stop of stops) stop()
+    answer = 'new'
+    refresh({ tags: ['meetings'] })
+    expect(`loads before a read: ${loads}`).toBe('loads before a read: 1')
+    const later = reactive(() => meetings)
+    const served = await later
+    expect(`loads after the adoption: ${loads}`).toBe(
+        'loads after the adoption: 2',
+    )
+    expect(served).toBe('new')
+})
+
 // 13.3 AND 13.9: ONE SIGNAL PER SELECTION. A guard over a tag selection subscribes to the
 // selection, not to each entry in it — so a page spinner over a hundred entries holds one edge,
 // and comes back when the loads end.

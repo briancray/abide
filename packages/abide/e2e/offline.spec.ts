@@ -47,6 +47,68 @@ test.beforeAll(async ({}, testInfo) => {
     mkdirSync(`${app}/note`, { recursive: true })
     mkdirSync(`${app}/data/lib`, { recursive: true })
     mkdirSync(`${app}/outbox`, { recursive: true })
+    mkdirSync(`${app}/meetings/new`, { recursive: true })
+    // 13.7 UNDER THE WORKER — a tagged list a write's page refreshes without reading it, and how many
+    // times the server was asked for it.
+    writeFileSync(
+        `${app}/data/lib/meetings.ts`,
+        "export const meetings: string[] = ['dune']\nexport const asked = { count: 0 }\n",
+    )
+    writeFileSync(
+        `${app}/data/getMeetings.ts`,
+        `import { GET } from '@abide/abide/server'
+import { asked, meetings } from './lib/meetings.ts'
+
+export default GET(() => {
+    asked.count += 1
+    return [...meetings]
+}, { tags: ['meetings'] })
+`,
+    )
+    writeFileSync(
+        `${app}/data/getMeetingsAsked.ts`,
+        `import { GET } from '@abide/abide/server'
+import { asked } from './lib/meetings.ts'
+
+export default GET(() => asked.count)
+`,
+    )
+    writeFileSync(
+        `${app}/data/addMeeting.ts`,
+        `import { POST } from '@abide/abide/server'
+import { meetings } from './lib/meetings.ts'
+
+export default POST((args: { title: string }) => {
+    meetings.push(args.title)
+})
+`,
+    )
+    writeFileSync(
+        `${app}/meetings/index.abide`,
+        `<script>
+import { reactive } from '@abide/abide'
+import getMeetings from '#src/data/getMeetings.ts'
+
+const meetings = reactive(() => getMeetings())
+</script>
+
+<main id="meetings"><p id="listed">{meetings.ready() ? meetings().join(',') : ''}</p><a id="to-new" href="/meetings/new">new</a></main>`,
+    )
+    writeFileSync(
+        `${app}/meetings/new/index.abide`,
+        `<script>
+import { navigate, refresh } from '@abide/abide'
+import addMeeting from '#src/data/addMeeting.ts'
+
+async function add() {
+    await addMeeting({ title: 'emma' })
+    refresh({ tags: ['meetings'] })
+    navigate('/meetings')
+}
+</script>
+
+<main id="new"><button id="add" onclick={add}>add</button></main>`,
+    )
     // 46 — A WRITE MADE OFFLINE, counted by the key it is sent under, so a call delivered twice says so.
     writeFileSync(
         `${app}/data/lib/added.ts`,
@@ -396,4 +458,27 @@ test('a page reopened from its kept copy hydrates with its data — 45.23, 41.30
     await page.reload()
     await expect(page.locator('#text')).toHaveText('a saved note')
     expect(warned).toEqual([])
+})
+
+// 13.7, 16.80, 45.20 — A LIST A WRITE'S PAGE REFRESHED WITHOUT READING IT IS ASKED OF THE NETWORK by
+// the next page to read it, though the worker holds a copy stale-while-revalidate would answer: the
+// page has an answer for it, so the reload asks `no-cache` and the worker leaves it to the network.
+// The page opened from its kept copy first, as a reload under the worker does. THE REVERT: drop
+// `resolve(inner)` from `mirror` in the reactive core; nothing is asked (0 where 1 is due) and the
+// list stays 'dune'.
+test('a tagged list refreshed while no page read it is asked of the network on the next page — 13.7, 45.20', async ({
+    page,
+}) => {
+    const asked = async (): Promise<number> =>
+        (await (await fetch(`${base}/data/getMeetingsAsked`)).json()) as number
+    await visit(page, '/')
+    await visit(page, '/meetings', ['/data/getMeetings'])
+    await page.reload()
+    await expect(page.locator('#listed')).toHaveText('dune')
+    await page.click('#to-new')
+    await expect(page.locator('#new')).toBeVisible()
+    const before = await asked()
+    await page.click('#add')
+    await expect(page.locator('#listed')).toHaveText('dune,emma')
+    expect(await asked()).toBe(before + 1)
 })
