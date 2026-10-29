@@ -9,7 +9,8 @@
         "build": "abide build",
         "start": "abide start",
         "routes": "abide routes",
-        "test": "bun test"
+        "test": "bun test",
+        "bench": "harness-bench"
     },
     "imports": {
         "#src/*": [

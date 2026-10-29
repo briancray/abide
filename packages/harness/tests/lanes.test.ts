@@ -61,7 +61,10 @@ async function subjectsInGraphOf(entry: string): Promise<string[]> {
             continue // a bare specifier that resolved to something unreadable is not an edge
         }
         const directory = file.slice(0, file.lastIndexOf('/'))
-        for (const imported of IMPORT_SCANNER.scanImports(code)) {
+        // A command's shebang (`harness-bench`) is not TypeScript, and the scanner throws on it.
+        for (const imported of IMPORT_SCANNER.scanImports(
+            code.replace(/^#!.*/, ''),
+        )) {
             try {
                 queue.push(Bun.resolveSync(imported.path, directory))
             } catch {

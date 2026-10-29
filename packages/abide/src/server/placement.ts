@@ -109,6 +109,11 @@ export function isTestFile(path: string): boolean {
     return path.endsWith('.test.ts')
 }
 
+/** Whether `path` names a bench file, which `bun run bench` reads and the app never runs. */
+export function isBenchFile(path: string): boolean {
+    return path.endsWith('.bench.ts')
+}
+
 /** Whether `path` names a declaration file, which the checker reads and nothing runs. */
 export function isDeclarationFile(path: string): boolean {
     return path.endsWith('.d.ts')

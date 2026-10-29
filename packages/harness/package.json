@@ -33,6 +33,9 @@
         "src",
         "scripts/buildInjectable.ts"
     ],
+    "bin": {
+        "harness-bench": "./src/runner/harnessBench.ts"
+    },
     "exports": {
         "./measure": "./src/measure/index.ts",
         "./preload": "./src/measure/preload.ts",

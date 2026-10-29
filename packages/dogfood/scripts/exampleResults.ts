@@ -2,8 +2,8 @@
 // Bench views read `examples/<app>/.abide/results.json`, so a page shows what the app's own files
 // reported rather than a figure in its prose. Run serially: a bench shares the machine with nothing.
 
-import { type Batched, claimOf, ratio } from '@abide/harness/report'
 import type { TestRow } from '@abide/harness/rows'
+import { runBenches } from '@abide/harness/runner'
 import type { ExampleResults } from '../src/lib/ExampleResults.ts'
 
 const EXAMPLES = new URL('../examples/', import.meta.url)
@@ -34,35 +34,17 @@ async function testsOf(app: string): Promise<Record<string, TestRow>> {
 
 async function benchesOf(app: string): Promise<ExampleResults['benches']> {
     const benches: ExampleResults['benches'] = {}
-    const root = new URL(`${app}/`, EXAMPLES)
-    for (const path of new Bun.Glob('src/**/*.bench.ts').scanSync({
-        cwd: Bun.fileURLToPath(root),
-    })) {
-        const { priced } = (await import(new URL(path, root).href)) as {
-            priced: () => Batched
-        }
-        const measured = priced()
-        const arms: Record<string, number> = {}
-        const names: string[] = []
-        for (const [name, sample] of Object.entries(measured.samples))
-            if (!name.endsWith('(A/A)')) {
-                arms[name] = sample.nanoseconds
-                names.push(name)
-            }
-        const first = measured.samples[names[0] ?? '']
-        const last = measured.samples[names[names.length - 1] ?? '']
-        benches[path] = {
-            case: measured.case,
-            n: measured.n,
-            floor: measured.floor,
-            arms,
-            claim:
-                first && last && first !== last
-                    ? `${names[names.length - 1]} against ${names[0]}: ${claimOf(
-                          ratio(last, first, { floor: measured.floor }),
-                      )}`
-                    : '',
-        }
+    for (const { file, name, over, ...figures } of await runBenches(
+        Bun.fileURLToPath(new URL(`${app}/`, EXAMPLES)),
+    )) {
+        if (over.length > 0)
+            throw new Error(`${app} ${file} ${name}: ${over.join('; ')}`)
+        // A card shows one bench a file, so a second would overwrite the first unseen.
+        if (benches[file] !== undefined)
+            throw new Error(
+                `${app} ${file} exports a second bench, ${name}, and a card shows one`,
+            )
+        benches[file] = figures
     }
     return benches
 }

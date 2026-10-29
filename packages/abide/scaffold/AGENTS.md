@@ -20,8 +20,14 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
   Where the read is meant, `// abide-ignore` and the clause the warning cites, on the line above
   (`// abide-ignore 14.15`), silences that one (RULEBOOK 14.19); a read hoisted out of its place
   only to quiet a warning is the bug it named.
-- `bun run test` — runs `bun test`. `src/getGreeting.test.ts` is the pattern: a test imports a
-  handler or a `.abide` file and calls it.
+- `bun run test` — runs `bun test`. `src/getGreeting.test.ts` is the pattern for a handler: a test
+  imports it and calls it. `src/index.test.ts` is the pattern for a page: `mount` it, then count
+  the work a click did with `measure`, both from `@abide/harness/abide` (RULEBOOK 38.119, 43.23).
+- `bun run bench` — runs `harness-bench`: every `*.bench.ts` under `src/`, kept beside the code it
+  times. Each export is a function returning `batch()` from `@abide/harness/report`, an op at two
+  sizes; a `CEILINGS` export, `{ [bench]: { [arm]: milliseconds } }`, names the most each arm may
+  take, and an arm over it, or a ceiling naming no bench or arm, fails the run (RULEBOOK 43.29,
+  43.31, 43.32, 43.33).
 - `bun run dev` — serves the app on a local port and rebuilds when a file changes.
 - `bun run build` then `bun run start` — the production build, and the app served from it.
 
@@ -35,10 +41,11 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
   scripts, the CLI and MCP alike.
 - A `.abide` cannot export. A `<script server>` in one holds that file's private handlers
   (`const save = POST(…)`), callable by that file alone, and its hooks (`onStart`, `middleware`, …).
-- A directory holds addresses, tests, `.d.ts` declarations and two fenced directories alone: `lib/` for components and
+- A directory holds addresses, tests, benches, `.d.ts` declarations and two fenced directories alone: `lib/` for components and
   modules, and `public/` for files served as they are (`src/blog/public/cover.png` answers
   `/blog/cover.png`). Anything else beside the pages is a build error.
-- A test is a `.test.ts`, kept beside the file it tests — a page, a handler, or a module in `lib/`.
+- A test is a `.test.ts`, and a bench a `.bench.ts`, kept beside the file it tests or times — a
+  page, a handler, or a module in `lib/` (RULEBOOK 23.22).
   A browser test (playwright) is a `.test.ts` too, under `e2e/` beside `src/`: `bun test` reads
   `src/` alone (`root` in `bunfig.toml`), so it never runs one.
 - A module the browser never loads is named `<name>.server.ts` and lives in `lib/`
@@ -49,6 +56,13 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
   a DOM to mount into and then `@abide/abide/test`.
 
 ## Habits
+
+- Measure with `@abide/harness`, not a hand-written timer, bench runner or Chrome DevTools Protocol
+  script. Its three lanes: `measure` from `@abide/harness/abide` is the DOM work and wakes an op
+  did, under `bun test`; `batch` from `@abide/harness/report` is time, in a bench; `traceOp` and
+  `shares` from `@abide/harness/engine` are what Chromium did, from a playwright test. The page
+  `guide/test-measure-and-ship.md` in `abide.md`, and "The measurement harness" in `REGISTRY.md`,
+  document it.
 
 - Export a `Reactive` itself, never wrapped in an object: an `.abide` file reads and writes it by
   name (RULEBOOK 31.1), and one reached through a property is left to `x()` and `x.set(v)` (31.7).

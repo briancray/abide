@@ -16,6 +16,9 @@ function pipeline(count: number): () => void {
     }
 }
 
+// The most an advance may take among 1,000 deals, in milliseconds.
+export const CEILINGS = { priced: { 'among 1,000': 1 } }
+
 /** Advancing one deal among 100, and among 1,000. */
 export function priced(): Batched {
     return batch({

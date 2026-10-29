@@ -62,6 +62,8 @@ function filesFor(name: string): Record<string, string> {
                     routes: 'abide routes',
                     // 38.112 — the starter's own test, under the 38.109 preload.
                     test: 'bun test',
+                    // 38.124 — every `*.bench.ts` under `src`, timed, and failed over its `CEILINGS`.
+                    bench: 'harness-bench',
                 },
                 // ONE ALIAS FOR THE SOURCE, and two targets for it, because an extensionless
                 // specifier is how an import is written and only bun probes for the extension:
@@ -74,7 +76,8 @@ function filesFor(name: string): Record<string, string> {
                 dependencies: { '@abide/abide': ABIDE_DEPENDENCY },
                 // `Bun`, `bun:sqlite` and the rest of the runtime a server module reaches for are
                 // typed by these, and `abide check` reports every one untyped without them. The
-                // harness is what the starter's tests measure the work a click does with (38.119).
+                // harness is what the starter's tests measure the work a click does with (38.119), and
+                // what `bench` runs (38.124).
                 devDependencies: {
                     '@abide/harness': HARNESS_DEPENDENCY,
                     '@types/bun': 'latest',
