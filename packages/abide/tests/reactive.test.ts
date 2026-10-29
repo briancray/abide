@@ -5316,9 +5316,13 @@ test('a streaming run in flight does not expire', async () => {
 // 5.12 lets through, and the five behind it are the one wake the window's close owes.
 //
 // THE REVERT is `acceptChunk` releasing every chunk whatever the cap: `wakes: 6`.
+//
+// The window is real time, and six pushes a 1 ms sleep apart overran `WINDOW` on a loaded CI runner,
+// so it closed mid-loop and released a second wake: this one is wide enough that all six land in it.
+const STREAM_WINDOW = 300
 test('throttle on a stream wakes readers once per window, and a cursor still gets every chunk', async () => {
     const feed = streamOf<number>()
-    const rows = reactive(feed.body, { throttle: WINDOW })
+    const rows = reactive(feed.body, { throttle: STREAM_WINDOW })
     const run = feed.runs[0] as Run<number>
     let wakes = 0
     const stop = watch(() => {
@@ -5335,7 +5339,7 @@ test('throttle on a stream wakes readers once per window, and a cursor still get
     }
     flushSync()
     expect(`wakes: ${wakes}`).toBe('wakes: 1')
-    await sleep(AFTER_WINDOW)
+    await sleep(STREAM_WINDOW * 2)
     flushSync()
     expect(`wakes: ${wakes}`).toBe('wakes: 2')
     const seen: unknown[] = []
