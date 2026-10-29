@@ -112,7 +112,7 @@ function walk(
             refusals.at(
                 path,
                 new Error(
-                    `abide: ${path} is a server file under no lib directory. Move it into a lib directory beside it. RULEBOOK 23.23.`,
+                    `abide: ${path} is a server file under no lib directory. Move it into a lib directory, beside it or in any directory above it. RULEBOOK 23.23.`,
                 ),
             )
             continue
@@ -132,7 +132,7 @@ function walk(
                 refusals.at(
                     path,
                     new Error(
-                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages, handler files, test files, bench files and declaration files alone. Move it into a lib directory beside it. RULEBOOK 23.22.`,
+                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages, handler files, test files, bench files and declaration files alone. Move it into a lib directory, beside it or in any directory above it. RULEBOOK 23.22.`,
                     ),
                 )
                 continue

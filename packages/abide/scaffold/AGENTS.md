@@ -42,8 +42,12 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
 - A `.abide` cannot export. A `<script server>` in one holds that file's private handlers
   (`const save = POST(…)`), callable by that file alone, and its hooks (`onStart`, `middleware`, …).
 - A directory holds addresses, tests, benches, `.d.ts` declarations and two fenced directories alone: `lib/` for components and
-  modules, and `public/` for files served as they are (`src/blog/public/cover.png` answers
-  `/blog/cover.png`). Anything else beside the pages is a build error.
+  modules, and `public/` for files served as they are. Anything else beside the pages is a build error.
+- Either fence may sit in any directory, at the root or beside the pages that use it.
+  `src/lib/` and `src/invoices/lib/` import alike (`#src/…`); the one difference is a lifecycle
+  hook a `lib/` file calls, filed at the route of the directory holding that `lib/` (RULEBOOK 37.1).
+  A `public/` file answers at the route of the directory holding it: `src/public/logo.png` answers
+  `/logo.png`, and `src/blog/public/cover.png` answers `/blog/cover.png`.
 - A test is a `.test.ts`, and a bench a `.bench.ts`, kept beside the file it tests or times — a
   page, a handler, or a module in `lib/` (RULEBOOK 23.22).
   A browser test (playwright) is a `.test.ts` too, under `e2e/` beside `src/`: `bun test` reads
