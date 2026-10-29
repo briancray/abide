@@ -252,8 +252,13 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
 
         <p><code>batch</code> throws on a duration whose op touched an emulated DOM, and on a sample
         taken in a parallel test worker. That is why the bench builds no component: it times the
-        derived value the component reads. Run a bench under <code>bun run</code>, never inside
-        <code>bun test</code>.</p>
+        derived value the component reads. Run the benches with <code>bun run bench</code>, never
+        inside <code>bun test</code>.</p>
+
+        <p>The <code>bench</code> script is <code>harness-bench</code>, which hands
+        <code>runBenches</code> every <code>*.bench.ts</code> under <code>src</code> and prints each
+        arm's time and the claim between them. A bench file's <code>CEILINGS</code> names the most
+        each arm may take, in milliseconds, and the run fails where an arm takes more.</p>
     </Section>
 
     <Section title="Find which layer a click spends its time in">

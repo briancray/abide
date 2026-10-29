@@ -2784,6 +2784,8 @@ answered in the test's process by the handler the component's server module decl
 is outside the range abide's `engines.bun` names, and the refusal MUST name that bun's version and
 the range.
 
+38.124 The project `abide scaffold` writes MUST carry a `bench` script that runs `harness-bench`.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -3197,6 +3199,17 @@ runner wrote no report as `broken` rather than as a result.
 
 43.28 The DOM `@abide/harness/preload` registers MUST leave the runtime's own `fetch`, `Request`,
 `Response`, `Headers`, `Blob`, `File`, `FormData`, `AbortController` and `AbortSignal` the globals.
+
+43.29 `runBenches` MUST run, as one bench each, every function a bench file exports other than
+`CEILINGS`.
+
+43.30 `runBenches` MUST NOT report a bench's A/A control as one of its arms.
+
+43.31 `runBenches` MUST report an arm whose time per operation is over its `CEILINGS` entry.
+
+43.32 `runBenches` MUST report a `CEILINGS` entry naming an arm its bench does not have.
+
+43.33 `harness-bench` MUST exit non-zero where `runBenches` reports a bench over a ceiling.
 
 # 44. The assistant
 

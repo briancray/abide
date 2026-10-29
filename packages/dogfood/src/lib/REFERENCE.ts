@@ -1228,6 +1228,13 @@ export const REFERENCE: readonly {
         typeOnly: true,
     },
     {
+        route: '/reference/harness-runner/runBenches',
+        names: ['runBenches'],
+        entry: '@abide/harness/runner',
+        group: 'The measurement harness',
+        typeOnly: false,
+    },
+    {
         route: '/reference/harness-abide/measure',
         names: ['measure'],
         entry: '@abide/harness/abide',

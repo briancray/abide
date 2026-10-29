@@ -824,13 +824,19 @@ rows a runner prints, and an adapter for an abide app.
 | `inScope` | `(item: RowItem, scope: string) => boolean` | Whether an item falls in a `--scope`. | 43.26 |
 | `matchesFilter` | `(item: RowItem, filter: string) => boolean` | Whether an item matches a `--filter`. | 43.26 |
 
-## `@abide/harness/runner` — runners that print rows
+## `@abide/harness/runner` — runners that print rows, and the bench runner
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `rowsCommand` | `<Item extends RowItem, Row>(items: Item[], run: (selected: Item[], emit: (row: Row) => void) => Promise<void>) => Promise<void>` | A runner's command line: its catalog under `--list`, else the rows of what it selects. | 43.26 |
 | `testRows` | `(suites: TestSuite[], cwd: string) => Promise<void>` | `rowsCommand` over the test files of `suites`, one `TestRow` per file. | 43.27 |
 | `TestSuite` | `{ section: string; root: string; runner: 'bun'; pattern?: string } \| { section: string; root: string; runner: 'playwright'; projects: string[]; pattern?: string }` | One directory of test files, listed under one section. | 43.27 |
+| `runBenches` | `(root: string, only?: string) => Promise<{ file: string; name: string; case: string; n: number; floor: number; arms: Record<string, number>; claim: string; over: string[] }[]>` | Every bench under `root`'s `src`, run, with each arm's time per operation and the ceilings it went over. | 43.29, 43.30, 43.31, 43.32 |
+| `CEILINGS` | `Record<string, Record<string, number>>` | A bench file's export naming the most each arm of each of its benches may take, in milliseconds. | 43.29, 43.31, 43.32 |
+
+| Name | Meaning | Rules |
+| --- | --- | --- |
+| `harness-bench [word]` | The command that runs `runBenches` over the directory it runs in and prints each bench. | 43.33 |
 
 ## `@abide/harness/abide` — the adapter for an abide app
 
@@ -849,7 +855,7 @@ rows a runner prints, and an adapter for an abide app.
 
 | Command | Meaning | Rules |
 | --- | --- | --- |
-| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112, 38.122 |
+| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112, 38.122, 38.124 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, and where each hook is filed. | 38.108, 38.123 |

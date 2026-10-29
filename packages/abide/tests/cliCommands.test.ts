@@ -102,6 +102,8 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
     // 38.103, 38.104 — the checker `tsc` cannot stand in for, and an agent pointed at the docs the
     // package installs with. THE REVERT: drop `check` from the scripts, or the paths from AGENTS.md.
     expect(manifest.scripts.check).toBe('abide check')
+    // 38.124 — THE REVERT: drop `bench` from the scripts.
+    expect(manifest.scripts.bench).toBe('harness-bench')
     const agents = await Bun.file(`${app}/AGENTS.md`).text()
     for (const shipped of ['abide.md', 'REGISTRY.md', 'RULEBOOK.md'])
         expect(agents).toContain(`node_modules/@abide/abide/docs/${shipped}`)
