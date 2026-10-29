@@ -326,6 +326,9 @@ const { start = 0 } = props<{ start?: number }>()
 
 <p>{start.toFixed(1)}</p>`,
         'lib/app.css': 'p { color: red }',
+        'lib/notes.md': '# notes\n',
+        'lib/notes.ts':
+            "import notes from '#src/lib/notes.md' with { type: 'text' }\n\nexport const length: number = notes.length\n",
         'lib/sum.ts': "export const sum: number = 'x'\n",
     })
     found = await checkApp(app)
@@ -437,6 +440,12 @@ test('an error lands on the name, not on an earlier echo of it — 38.3', () => 
 // `x.toFixed()` after one reports `x` as possibly null (TS18047).
 test('a write after a line with no semicolon checks as its own statement — 38.3', () => {
     expect(inFile('after-await/index.abide')).toEqual([])
+})
+
+// THE REVERT: drop `*.md` from `AMBIENT_DECLARATIONS`; the import is a module that does not exist
+// (TS2307). A `.abide` types it without the declaration, so the import is in a `.ts`.
+test('markdown imported as text is a string in a .ts — 34.21', () => {
+    expect(inFile('lib/notes.ts')).toEqual([])
 })
 
 // 23.9 — A PAGE READS WHAT ITS OWN ROUTE PROMISES: `id` is text, a rest is a list, and nothing else

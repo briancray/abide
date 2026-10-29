@@ -915,8 +915,9 @@ export class TypeSession {
             checked.push({ source, map, refusals: shadow.refusals })
         }
         // 34.6 — WHAT THE BUNDLER RESOLVES AND THE CHECKER CANNOT: a stylesheet imported for its
-        // effect. Declared in a file of its own at the app's root, which is a script, because a
-        // pattern module can only be declared outside a module.
+        // effect, and (34.21) markdown imported as text into a `.ts`, which bun's own types leave
+        // out where they declare `.txt`. Declared in a file of its own at the app's root, which is
+        // a script, because a pattern module can only be declared outside a module.
         this.register(
             `${this.canonical(within)}/${AMBIENT}`,
             AMBIENT_DECLARATIONS,
@@ -1484,6 +1485,10 @@ function routesDeclaration(addresses: readonly string[]): string {
     return `export {}\ndeclare module ${JSON.stringify(URL_SOURCE)} {\n    interface Routes {\n${keys}    }\n}\n`
 }
 const AMBIENT_DECLARATIONS = `declare module '*.css' {}
+declare module '*.md' {
+    const text: string
+    export default text
+}
 `
 
 /**
