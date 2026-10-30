@@ -1,7 +1,7 @@
 <script>
 import { reactive, url } from '@abide/abide'
 
-const PAGE = url('/companies/[id]', { id: 'hopper-and-co' })
+const PAGE = url('/companies/[id=SLUG]', { id: 'hopper-and-co' })
 
 let loads = reactive(1)
 </script>

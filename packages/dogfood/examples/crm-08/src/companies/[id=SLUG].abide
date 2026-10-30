@@ -1,6 +1,6 @@
 <script>
 import { reactive, route } from '@abide/abide'
-import getCompany from './getCompany.ts'
+import getCompany from './getCompany.handler.ts'
 import CompanyTabs from './lib/CompanyTabs.abide'
 
 const company = reactive(() => getCompany({ id: route.params.id }))

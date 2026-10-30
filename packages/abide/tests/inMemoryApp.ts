@@ -35,6 +35,7 @@ export function inMemoryApp(
             name: address.slice(address.lastIndexOf('/') + 1),
             export: 'default',
             scope: address,
+            matchers: {},
             private: false,
             ui: true,
             cli: true,

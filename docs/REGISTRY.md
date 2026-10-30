@@ -315,14 +315,14 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `/__abide/openapi.json` | `GET` | The generated OpenAPI document. | 19.21, 19.22, 20.5, 20.6, 20.7, 20.8, 20.11, 20.13, 20.15, 36.7 |
+| `/__abide/openapi.json` | `GET` | The generated OpenAPI document. | 19.21, 19.22, 20.5, 20.6, 20.7, 20.8, 20.11, 20.13, 20.15, 20.23, 36.7 |
 | `OpenApiDocument` | `JsonValue` | OpenAPI 3.1, whose schema dialect is `JsonSchema`. | 20.6 |
 
 ## MCP
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 19.21, 19.22, 20.5, 20.7, 20.8, 20.9, 20.10, 20.12, 20.13, 20.14, 20.16, 20.17, 20.19, 20.20, 20.21, 20.22, 36.7, 16.78 |
+| `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 19.21, 19.22, 20.5, 20.7, 20.8, 20.9, 20.10, 20.12, 20.13, 20.14, 20.16, 20.17, 20.19, 20.20, 20.21, 20.22, 20.23, 36.7, 16.78 |
 
 # Assistant
 
@@ -513,8 +513,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `OptionalNames<P>` | `string` | The optional segment names. | 30.4 |
 | `RestNames<P>` | `string` | The rest segment names. | 30.5 |
 | `Query` | `Record<string, unknown> \| URLSearchParams` | The query half. | 30.6, 30.28 |
-| `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| (string \| number)[] }` | What a route literal's segments accept. | 30.3, 30.4, 30.5 |
-| `RouteParams<P>` | `{ [K in RequiredNames<P>]: string } & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }` | What a page filed under `P` reads its params as. | 23.9 |
+| `ParamsOf<P>` | `& { [K in RequiredNames<P>]: string \| number } & { [K in OptionalNames<P>]?: string \| number } & { [K in RestNames<P>]?: string \| number \| (string \| number)[] }` | What a route literal's segments accept, narrowed where `abide check` declares a matcher's literals. | 30.3, 30.4, 30.5 |
+| `RouteParams<P>` | `{ [K in RequiredNames<P>]: string } & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }` | What a page filed under `P` reads its params as, narrowed where `abide check` declares a matcher's literals. | 23.9 |
 | `Routes` | `interface Routes {}` | The app's route literals and public file addresses, which `abide check` declares. | 30.26 |
 | `RouteLiteral` | `[keyof Routes] extends [never] ? string : Extract<keyof Routes, string>` | What `url` takes. | 30.26 |
 
@@ -619,9 +619,10 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | --- | --- | --- |
 | `<head>` | A page's, layout's or component's contribution to the document head. | 39.1, 39.2, 39.3, 39.4, 39.5, 39.6, 39.11, 39.12, 39.13, 39.14, 39.15, 39.16, 39.17 |
 | `view-transition-name` | What turns view transitions on, in the app's own stylesheet. | 39.7, 39.8, 39.9, 39.10, 39.18, 39.19 |
-| `[name]` | A required dynamic segment. | 16.65, 23.5, 30.3 |
-| `[[name]]` | An optional segment. | 23.5, 30.4 |
-| `[...name]` | A rest segment, terminal. | 23.5, 30.5 |
+| `[name]` | A required dynamic segment. | 16.65, 23.5, 30.3, 30.34, 30.36 |
+| `[[name]]` | An optional segment. | 23.5, 30.4, 30.34, 30.36 |
+| `[...name]` | A rest segment, terminal. | 23.5, 30.5, 30.34, 30.36 |
+| `[name=NAME]` · `[[name=NAME]]` · `[...name=NAME]` | A dynamic segment a param file's matcher decides. | 19.1, 23.26, 23.27, 30.19, 30.35, 30.36, 30.37 |
 | `/__abide/**` | Every endpoint abide controls. | 20.8 |
 
 ## `render`
@@ -684,9 +685,10 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `src/public/robots.txt` | The file answered at `/robots.txt`. | 36.11 |
 | `src/public/icon.png` · `src/public/icon.icns` | The files answered at `/icon.png` and `/icon.icns`, and the desktop app's icon. | 36.11, 38.79, 45.15 |
 | `src/**/` | A directory of the app's, a segment of the route of every file directly in it. | 23.14, 23.17, 23.22 |
-| `**/index.abide` | The page at its directory's route. | 19.1, 23.3, 23.4, 23.14, 23.18 |
-| `**/<name>.abide` | The page at its directory's route and then `<name>`. | 19.1, 23.3, 23.4, 23.14, 23.21 |
-| `**/<name>.ts` | A handler file: the handler its default export declares, at its directory's route and then `<name>`. | 16.2, 16.28, 16.73, 16.74, 19.1, 23.14, 23.22 |
+| `**/index.abide` | The page at its directory's route. | 19.1, 23.3, 23.4, 23.14, 23.18, 35.19 |
+| `**/<name>.abide` | The page at its directory's route and then `<name>`. | 19.1, 23.3, 23.4, 23.14, 23.21, 35.19 |
+| `**/<NAME>.param.ts` | A param file: the matcher a segment naming `NAME` matches by. | 23.22, 23.24, 23.25, 23.26 |
+| `**/<name>.handler.ts` | A handler file: the handler its default export declares, at its directory's route and then `<name>`. | 16.2, 16.28, 16.73, 16.74, 19.1, 23.14, 23.22 |
 | `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
 | `src/launcher.abide` | The desktop launcher, beside the root layout: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
 | `src/layout.abide` | The root layout, whose `<script server>` is the app's own, and whose `<html>` is the document its pages are served in. | 35.15, 35.16, 35.17, 37.1, 37.3, 39.4 |
@@ -859,7 +861,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112, 38.122, 38.124 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57 |
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123 |
-| `abide routes [--json]` | Every address the app answers, the file answering it, and where each hook is filed. | 38.108, 38.123 |
+| `abide routes [--json]` | Every address the app answers, the file answering it, what each matcher takes, and where each hook is filed. | 38.108, 38.123 |
 | `abide dev [--port <n>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123 |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94, 38.123 |
 | `abide start [--port <n>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110, 38.123 |

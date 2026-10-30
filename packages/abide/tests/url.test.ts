@@ -113,13 +113,15 @@ test('the document names the root mount — 16.10', () => {
 // and `%2E%2E` with it, so `/users/../edit` lands on `/edit` — another route than the one filled.
 // THE REVERT: encode the value with `encodeURIComponent` alone in `url`; the call returns
 // `/users/../edit` rather than throwing.
-test('a dot-segment value is refused rather than written — 30.19', () => {
+test('a value carrying a period is refused rather than written — 30.19, 30.34', () => {
     expect(new URL('/users/%2E%2E/edit', 'http://x').pathname).toBe('/edit')
     expect(() => url('/users/[id]/edit', { id: '..' })).toThrow('30.19')
     expect(() => url('/users/[id]/edit', { id: '.' })).toThrow('30.19')
     expect(() => url('/docs/[...path]', { path: ['a', '..', 'b'] })).toThrow(
         '30.1',
     )
-    // A dot INSIDE a value is data like any other character.
-    expect(url('/files/[name]', { name: '..rc' })).toBe('/files/..rc')
+    // 30.34 — NOR ONE CARRYING A PERIOD ANYWHERE: no param matches it, so the address would reach
+    // another route or none. THE REVERT: refuse only `.` and `..` in `encodedSegment`.
+    expect(() => url('/files/[name]', { name: '..rc' })).toThrow('30.19')
+    expect(() => url('/[home]', { home: 'favicon.ico' })).toThrow('30.19')
 })

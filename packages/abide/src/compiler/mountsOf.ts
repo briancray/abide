@@ -31,6 +31,8 @@ type DirectoryMount = {
     at: string
     files: Placed[]
     handlers: Placed[]
+    /** 23.26 — the param files under it, by path: what its own segments' matchers resolve in. */
+    params: string[]
 }
 
 /**

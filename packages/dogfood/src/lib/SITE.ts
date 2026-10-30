@@ -260,6 +260,8 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`[name]`',
                         '`[[name]]`',
                         '`[...name]`',
+                        '`[name=NAME]` · `[[name=NAME]]` · `[...name=NAME]`',
+                        '`**/<NAME>.param.ts`',
                         '`route.params`',
                         '`Params`',
                         '`RouteParams<P>`',

@@ -4,7 +4,7 @@ import { reactive, url } from '@abide/abide'
 const IDS = ['analytical-engines', 'hopper-and-co']
 
 let open = reactive('hopper-and-co')
-const address = reactive(() => url('/companies/[id]', { id: open }))
+const address = reactive(() => url('/companies/[id=SLUG]', { id: open }))
 </script>
 
 <div class="tabs">

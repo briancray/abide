@@ -514,7 +514,7 @@ function tableOf(
             (layout) => `() => import(${tableImport(layout)})`,
         )
         rows.push(
-            `    { pattern: ${JSON.stringify(route.pattern)}, load: () => import(${tableImport(route.source)}), layouts: [${wrapping.join(', ')}]${column(route)} },`,
+            `    { pattern: ${JSON.stringify(route.pattern)}, load: () => import(${tableImport(route.source)}), layouts: [${wrapping.join(', ')}], matchers: ${JSON.stringify(route.matchers)}${column(route)} },`,
         )
     }
     return rows.join('\n')

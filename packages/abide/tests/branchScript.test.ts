@@ -225,7 +225,7 @@ const inner = reactive('s')
         const answer = await session.reads(path, file)
         const { diagnoses } = await session.diagnose(
             [{ path, text: source, file, answer }],
-            { root: `${TYPED_ROOT}src`, addresses: [], handlers: [] },
+            { root: `${TYPED_ROOT}src`, addresses: [], handlers: [], routes: [] },
             false,
         )
         return diagnoses

@@ -12,26 +12,31 @@ type Parts<P extends string> = P extends `${infer Head}/${infer Tail}`
     ? Head | Parts<Tail>
     : P
 
+// 23.26 — a segment's param is named before any `=`: `[symbol=TICKER]` is `symbol`.
+type ParamName<Body extends string> = Body extends `${infer Name}=${string}`
+    ? Name
+    : Body
+
 export type RequiredNames<P extends string> =
     Parts<P> extends infer Part
         ? Part extends `[${infer Name}]`
             ? Name extends `[${string}` | `...${string}`
                 ? never
-                : Name
+                : ParamName<Name>
             : never
         : never
 
 export type OptionalNames<P extends string> =
     Parts<P> extends infer Part
         ? Part extends `[[${infer Name}]]`
-            ? Name
+            ? ParamName<Name>
             : never
         : never
 
 export type RestNames<P extends string> =
     Parts<P> extends infer Part
         ? Part extends `[...${infer Name}]`
-            ? Name
+            ? ParamName<Name>
             : never
         : never
 
@@ -56,13 +61,23 @@ export type ParamsOf<P extends string> = {
     [K in RequiredNames<P>]: string | number
 } & { [K in OptionalNames<P>]?: string | number } & {
     [K in RestNames<P>]?: string | number | (string | number)[]
-}
+} & Narrowed<P>
+
+/**
+ * 23.9, 30.3 — the params `abide check` declared for `P` beside its key: each whose matcher is an
+ * alternation of literals, as their union. Nothing where it declared none, or nothing at all.
+ */
+type Narrowed<P extends string> = P extends keyof Routes
+    ? Routes[P] extends true
+        ? unknown
+        : Routes[P]
+    : unknown
 
 /**
  * 30.26 — the route literals an app files its pages under, which `abide check` declares for the app
  * it checks. Where nothing declared them any literal is taken, so a plain `tsc` still compiles.
  */
-// biome-ignore lint/suspicious/noEmptyInterface: filled by declaration merging, per app
+// biome-ignore lint/suspicious/noEmptyInterface: filled by declaration merging, per app — each literal to `true`, or to the params it narrows (23.9)
 export interface Routes {}
 
 /** 30.26 — what `url` takes: one of the app's route literals, or any where none were declared. */
@@ -76,7 +91,9 @@ export type RouteLiteral = [keyof Routes] extends [never]
  */
 export type RouteParams<P extends string> = {
     [K in RequiredNames<P>]: string
-} & { [K in OptionalNames<P>]?: string } & { [K in RestNames<P>]: string[] }
+} & { [K in OptionalNames<P>]?: string } & {
+    [K in RestNames<P>]: string[]
+} & Narrowed<P>
 
 /**
  * An address from a route literal and its params, resolved against the mount, with an optional

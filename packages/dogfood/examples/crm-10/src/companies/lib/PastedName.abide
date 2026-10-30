@@ -1,0 +1,18 @@
+<script>
+import { reactive, url } from '@abide/abide'
+
+const PASTED = ['hopper-and-co', 'Hopper & Co']
+
+let open = reactive('Hopper & Co')
+const address = reactive(() => url('/companies/[id=SLUG]', { id: open }))
+</script>
+
+<div class="tabs">
+    {#for id of PASTED}
+        <button aria-selected={open === id}
+            onclick={() => (open = id)}>{id}</button>
+    {/for}
+</div>
+<p class="status">{address}</p>
+<iframe src={address} title="An address the company page may not take"
+    class="h-48 w-full rounded-md border border-rule"></iframe>

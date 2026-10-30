@@ -100,6 +100,8 @@ type ServerRoute = {
     // 38.28 — the modules a browser loads at this address, the page's then its layouts', as keys
     // into the manifest `manifestOf` reads.
     clientModules: string[]
+    // 23.26 — each matcher its pattern names, to the anchored source the build resolved it to.
+    matchers: Record<string, string>
 }
 
 // 35.2 — an error page, and the directory it answers for.
@@ -122,6 +124,7 @@ type Ranked = RankedError & {
  */
 type RouteRow = {
     pattern: string
+    matchers: Record<string, string>
     segments: Segment[]
     page: Ranked | undefined
     handlers: Map<Method, Mounted>
@@ -555,16 +558,22 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
             pattern: route.pattern,
             load: route.load,
             layouts: route.layouts,
+            matchers: route.matchers,
             document: documentOf(route.clientModules),
         })
     // 19.1 — the build refused two files at one route and method, so a route is one row however
-    // many methods answer at it.
+    // many methods answer at it — and 23.27 one matcher per position, so whichever file opens the
+    // row brings what every file at it would.
     const rows = new Map<string, Omit<RouteRow, 'segments'>>()
-    const rowAt = (pattern: string): Omit<RouteRow, 'segments'> => {
+    const rowAt = (
+        pattern: string,
+        matchers: Record<string, string>,
+    ): Omit<RouteRow, 'segments'> => {
         let row = rows.get(pattern)
         if (row === undefined) {
             row = {
                 pattern,
+                matchers,
                 page: undefined,
                 handlers: new Map(),
                 answers: new Map(),
@@ -573,12 +582,19 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
         }
         return row
     }
-    for (const page of rankRoutes(pages)) rowAt(page.pattern).page = page
+    for (const page of rankRoutes(pages))
+        rowAt(page.pattern, page.matchers).page = page
     for (const handler of mounted.handlers.values())
-        rowAt(handler.address).handlers.set(handler.method, handler)
+        rowAt(handler.address, handler.matchers).handlers.set(
+            handler.method,
+            handler,
+        )
     const errors: RankedError[] = []
     for (const error of parts.table.errors)
-        errors.push({ ...error, segments: parseRoutePattern(error.pattern) })
+        errors.push({
+            ...error,
+            segments: parseRoutePattern(error.pattern, error.matchers),
+        })
     errors.sort((a, b) => b.segments.length - a.segments.length)
     const sources: AppSources = {
         routes: rankRoutes([...rows.values()]),

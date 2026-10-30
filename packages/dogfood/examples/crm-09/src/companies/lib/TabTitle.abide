@@ -5,7 +5,7 @@ const PAGES = [
     { label: 'All companies', address: url('/companies') },
     {
         label: 'Hopper & Co',
-        address: url('/companies/[id]', { id: 'hopper-and-co' }),
+        address: url('/companies/[id=SLUG]', { id: 'hopper-and-co' }),
     },
 ]
 

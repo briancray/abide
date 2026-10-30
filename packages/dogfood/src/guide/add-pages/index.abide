@@ -4,7 +4,7 @@ import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
-import idPageSource from 'crm-06/src/companies/[id].abide' with { type: 'text' }
+import idPageSource from 'crm-06/src/companies/[id=SLUG].abide' with { type: 'text' }
 import errorPageSource from 'crm-06/src/companies/error.abide' with { type: 'text' }
 import exportCompaniesSource from 'crm-06/src/companies/exportCompanies.handler.ts' with { type: 'text' }
 import getCompanySource from 'crm-06/src/companies/getCompany.handler.ts' with { type: 'text' }
@@ -20,6 +20,10 @@ import companyTabsSource from 'crm-06/src/companies/lib/CompanyTabs.abide' with 
 import ExportButton from 'crm-06/src/companies/lib/ExportButton.abide'
 import exportButtonSource from 'crm-06/src/companies/lib/ExportButton.abide' with { type: 'text' }
 import MissingCompany from 'crm-06/src/companies/lib/MissingCompany.abide'
+import matcherTestSource from 'crm-06/src/companies/Matcher.test.ts' with { type: 'text' }
+import PastedName from 'crm-06/src/companies/lib/PastedName.abide'
+import pastedNameSource from 'crm-06/src/companies/lib/PastedName.abide' with { type: 'text' }
+import slugSource from 'crm-06/src/companies/SLUG.param.ts' with { type: 'text' }
 import missingCompanySource from 'crm-06/src/companies/lib/MissingCompany.abide' with { type: 'text' }
 import SheetPreview from 'crm-06/src/companies/lib/SheetPreview.abide'
 import sheetPreviewSource from 'crm-06/src/companies/lib/SheetPreview.abide' with { type: 'text' }
@@ -47,7 +51,8 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
             <thead><tr><th>File</th><th>Answers on</th></tr></thead>
             <tbody>
                 <tr><td><code>src/companies/index.abide</code></td><td><code>/companies</code></td></tr>
-                <tr><td><code>src/companies/[id].abide</code></td><td><code>/companies/hopper-and-co</code>, and every other id</td></tr>
+                <tr><td><code>src/companies/[id=SLUG].abide</code></td><td><code>/companies/hopper-and-co</code>, and every other id</td></tr>
+                <tr><td><code>src/companies/SLUG.param.ts</code></td><td>no address: it says what a segment naming <code>SLUG</code> takes</td></tr>
                 <tr><td><code>src/companies/layout.abide</code></td><td>no address: it wraps every page at <code>/companies</code> and below</td></tr>
                 <tr><td><code>src/companies/error.abide</code></td><td>no address: it answers when a page below it fails</td></tr>
                 <tr><td><code>src/companies/getCompany.handler.ts</code></td><td><code>GET /companies/getCompany</code></td></tr>
@@ -68,15 +73,15 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </table>
     </Section>
 
-    <Section title="`[id].abide` answers for every company">
+    <Section title="`[id=SLUG].abide` answers for every company">
         <Example
             id="crm-06-company-page"
             app="crm-06"
-            title="`[id].abide` — one file for every company"
+            title="`[id=SLUG].abide` — one file for every company"
             summary="Two companies, one page file. Pick one: the address changes, and the page loads the company the address names."
             files={{
                 'src/companies/lib/CompanyPages.abide': companyPagesSource,
-                'src/companies/[id].abide': idPageSource,
+                'src/companies/[id=SLUG].abide': idPageSource,
                 'src/companies/CompanyPage.test.ts': companyPageTestSource,
             }}
         >
@@ -90,11 +95,55 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
             <tbody>
-                <tr><td><code>route.name</code></td><td>the pattern that matched, <code>/companies/[id]</code> for every company, so a log line keys on the page rather than on each address</td></tr>
+                <tr><td><code>route.name</code></td><td>the pattern that matched, <code>/companies/[id=SLUG]</code> for every company, so a log line keys on the page rather than on each address</td></tr>
                 <tr><td><code>Params</code></td><td>what the segments matched; a query string is never in it</td></tr>
                 <tr><td><code>RouteParams&lt;P&gt;</code></td><td>the type <code>route.params</code> has in a page or layout filed under <code>P</code>, so <code>id</code> is text and a key the route lacks is an error. A component under <code>lib/</code> has no route of its own and reads the loose <code>Params</code>: pass it the value as a prop, or narrow it with <code>RouteParams&lt;'/…'&gt;</code></td></tr>
             </tbody>
         </table>
+    </Section>
+
+    <Section title="A param file says what an id looks like">
+        <Example
+            id="crm-06-param-matcher"
+            app="crm-06"
+            title="`SLUG.param.ts` — an address that cannot be an id never reaches the page"
+            summary="A rep pastes a company's name where its id goes. No id has a capital or a space, so no page takes the address, and nothing asks the database for it."
+            files={{
+                'src/companies/lib/PastedName.abide': pastedNameSource,
+                'src/companies/SLUG.param.ts': slugSource,
+                'src/companies/[id=SLUG].abide': idPageSource,
+                'src/companies/Matcher.test.ts': matcherTestSource,
+            }}
+        >
+            <PastedName />
+        </Example>
+
+        <p>A segment names its matcher after an <code>=</code>. <code>[id=SLUG]</code> takes a part
+        only where the whole of it, decoded, matches the <code>SLUG</code> in
+        <code>SLUG.param.ts</code>, found beside the page or in the nearest directory above it. A part
+        it refuses goes to the next route that could answer the address. The companies have none, so
+        <code>Hopper &amp; Co</code> is a 404, painted by <code>error.abide</code>.</p>
+
+        <table>
+            <thead><tr><th>Named</th><th>Matches</th></tr></thead>
+            <tbody>
+                <tr><td><code>[name=NAME]</code></td><td>one segment the matcher takes</td></tr>
+                <tr><td><code>[[name=NAME]]</code></td><td>one segment the matcher takes, or none</td></tr>
+                <tr><td><code>[...name=NAME]</code></td><td>every remaining segment, each one the matcher takes</td></tr>
+            </tbody>
+        </table>
+
+        <p>The build reads a param file without running it, so it holds one
+        <code>export const</code> named as the file, a regular expression with no flags, and no
+        import. A pattern that repeats a group that itself repeats, or that refers back to a group,
+        is refused: either can make one crafted address slow to test.</p>
+
+        <p>A segment with no matcher never takes a part with a period in it, which is why
+        <code>/favicon.ico</code> never reaches a company page. A matcher replaces that rule for its
+        segment, so one that allows a period lets <code>url</code> write one too. <code>.</code> and
+        <code>..</code> are never taken. Under <code>abide check</code>, a matcher that is a choice
+        of words, <code>/deals|notes/</code>, types the param as those words in
+        <code>route.params</code> and in <code>url</code>.</p>
     </Section>
 
     <Section title="A layout holds what the companies pages share">
@@ -127,8 +176,9 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
 
     <Section title="A link names a route, and `url` fills it in">
         <p>The list links each company with
-        <code>url('/companies/[id]', &#123; id: company.id &#125;)</code>. You write the pattern a
-        page is filed under rather than the address, and <code>url</code> fills in the segments.
+        <code>url('/companies/[id=SLUG]', &#123; id: company.id &#125;)</code>. You write the pattern a
+        page is filed under, matcher and all, rather than the address, and <code>url</code> fills in
+        the segments.
         Leaving out a required one is a compile error, and a pattern no page is filed under is
         refused by <code>abide check</code>. A query goes last:
         <code>url('/companies', &#123;&#125;, &#123; city: 'London' &#125;)</code>.</p>
@@ -186,7 +236,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
             files={{
                 'src/companies/lib/TransitionFrame.abide': transitionFrameSource,
                 'src/companies/index.abide': indexPageSource,
-                'src/companies/[id].abide': idPageSource,
+                'src/companies/[id=SLUG].abide': idPageSource,
                 'src/companies/ViewTransition.test.ts': viewTransitionTestSource,
             }}
         >
@@ -209,7 +259,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
             files={{
                 'src/companies/lib/TabTitle.abide': tabTitleSource,
                 'src/companies/layout.abide': layoutSource,
-                'src/companies/[id].abide': idPageSource,
+                'src/companies/[id=SLUG].abide': idPageSource,
                 'src/companies/Head.test.ts': headTestSource,
             }}
         >
@@ -231,8 +281,8 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
             summary="The company database takes over a second. Load the page again: the labels arrive at once, and each value fills its own hole when the company lands."
             files={{
                 'src/companies/lib/SlowCompany.abide': slowCompanySource,
-                'src/companies/[id].abide': idPageSource,
-                'src/companies/getCompany.ts': getCompanySource,
+                'src/companies/[id=SLUG].abide': idPageSource,
+                'src/companies/getCompany.handler.ts': getCompanySource,
                 'src/companies/Streaming.test.ts': streamingTestSource,
             }}
         >

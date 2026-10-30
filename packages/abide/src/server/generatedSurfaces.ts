@@ -18,7 +18,7 @@ import { essenceOf } from '#shared/framing.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
-import { parseRoutePattern } from '#shared/routePattern.ts'
+import { parseRoutePattern, type Segment } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 import { answered } from './answerFailure.ts'
 import { bodyWithin, type Mounted } from './answerRpc.ts'
@@ -134,13 +134,19 @@ function openApiOf(handlers: Map<string, Mounted>): {
         for (const segment of parseRoutePattern(each.address)) {
             if (segment.kind === 'static') continue
             inPath.add(segment.name)
+            const declared = schema?.properties?.[segment.name] ?? {
+                type: 'string',
+            }
+            // 20.23 — and what the segment takes, save a rest's: its value is the parts joined,
+            // which one part's pattern does not describe.
             const parameter: Record<string, unknown> = {
                 name: segment.name,
                 in: 'path',
                 required: true,
-                schema: schema?.properties?.[segment.name] ?? {
-                    type: 'string',
-                },
+                schema:
+                    segment.kind === 'rest'
+                        ? declared
+                        : patterned(declared, patternOf(segment, each.matchers)),
             }
             if (segment.kind === 'optional')
                 parameter.description = 'May be left out, with its segment.'
@@ -172,8 +178,11 @@ function openApiOf(handlers: Map<string, Mounted>): {
                     },
                 },
             }
-        // OpenAPI spells a parameter `{id}` where a route spells it `[id]`.
-        const path = each.address.replace(/\[+(?:\.\.\.)?([^\]]+)\]+/g, '{$1}')
+        // OpenAPI spells a parameter `{id}` where a route spells it `[id]`, and names no matcher.
+        const path = each.address.replace(
+            /\[+(?:\.\.\.)?([^\]=]+)(?:=[^\]]*)?\]+/g,
+            '{$1}',
+        )
         paths[path] ??= {}
         ;(paths[path] as Record<string, unknown>)[each.method.toLowerCase()] =
             operation
@@ -291,7 +300,9 @@ export class McpSurface {
             listing.push({
                 name: tool.name,
                 description: tool.description ?? '',
-                inputSchema: toolInput(tool.schema),
+                inputSchema: toolInput(
+                    withPathPatterns(tool.schema, tool.address, tool.matchers),
+                ),
                 // 20.14 — what the method promises: a `GET` is safe, and a `GET`, a `PUT` and a
                 // `DELETE` idempotent. Any other write may destroy, and nothing says it does not.
                 annotations: {
@@ -452,6 +463,63 @@ function logCall(
         status,
         `${started === undefined ? '0.0' : (performance.now() - started).toFixed(1)}ms`,
     )
+}
+
+/** 20.23 — the anchored pattern a segment takes a part by: its matcher's, or 30.34's default. */
+function patternOf(segment: Segment, matchers: Record<string, string>): string {
+    return segment.matcher === undefined
+        ? PERIODLESS_PATTERN
+        : (matchers[segment.matcher] ?? PERIODLESS_PATTERN)
+}
+
+const PERIODLESS_PATTERN = '^[^.]+$'
+
+/** `declared` constrained to `pattern` too: beside a pattern it declares itself, not over it. */
+function patterned(declared: unknown, pattern: string): unknown {
+    if (declared === null || typeof declared !== 'object') return { pattern }
+    return 'pattern' in declared
+        ? { allOf: [declared, { pattern }] }
+        : { ...declared, pattern }
+}
+
+/**
+ * 20.23 — `schema` with each route parameter it declares constrained to what its segment takes, a
+ * rest's on each of its items; `schema` itself where the route has no parameter it declares.
+ */
+function withPathPatterns(
+    schema: unknown,
+    address: string,
+    matchers: Record<string, string>,
+): unknown {
+    if (schema === null || typeof schema !== 'object') return schema
+    const properties = (schema as { properties?: Record<string, unknown> })
+        .properties
+    if (properties === undefined) return schema
+    const constrained: Record<string, unknown> = { ...properties }
+    let changed = false
+    for (const segment of parseRoutePattern(address)) {
+        if (segment.kind === 'static') continue
+        const declared = properties[segment.name]
+        if (declared === undefined) continue
+        const pattern = patternOf(segment, matchers)
+        constrained[segment.name] =
+            segment.kind === 'rest' &&
+            declared !== null &&
+            typeof declared === 'object' &&
+            'items' in declared
+                ? {
+                      ...declared,
+                      items: patterned(
+                          (declared as { items: unknown }).items,
+                          pattern,
+                      ),
+                  }
+                : segment.kind === 'rest'
+                  ? declared
+                  : patterned(declared, pattern)
+        changed = true
+    }
+    return changed ? { ...schema, properties: constrained } : schema
 }
 
 /**

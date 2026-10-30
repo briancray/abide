@@ -56,9 +56,16 @@ function walk(
         return prefix || at === parts.length ? {} : null
     const segment = segments[index] as Segment
     // 30.5 — A REST TAKES THE MOST THE SEGMENTS AFTER IT LEAVE, nothing included, so a handler's
-    // name after one (`/docs/[...path]/save`) is reached rather than spent on the rest.
+    // name after one (`/docs/[...path]/save`) is reached rather than spent on the rest — and 30.35,
+    // never past a part it does not accept.
     if (segment.kind === 'rest') {
-        for (let end = parts.length; end >= at; end -= 1) {
+        let furthest = at
+        while (
+            furthest < parts.length &&
+            segment.accepts.test(parts[furthest] as string)
+        )
+            furthest += 1
+        for (let end = furthest; end >= at; end -= 1) {
             const params = walk(segments, index + 1, parts, end, prefix)
             if (params !== null) {
                 params[segment.name] = parts.slice(at, end)
@@ -68,8 +75,12 @@ function walk(
         return null
     }
     const part = parts[at]
+    // 30.34, 30.35 — A PARAM TAKES A PART ITS SEGMENT ACCEPTS: the matcher it names, or, naming
+    // none, no part carrying a period, which is how a file is named — the `/favicon.ico` a browser
+    // asks every site for is no `[param]` page's to answer.
+    const takeable = part !== undefined && segment.accepts.test(part)
     if (segment.kind === 'optional') {
-        if (part !== undefined) {
+        if (takeable) {
             const taken = walk(segments, index + 1, parts, at + 1, prefix)
             if (taken !== null) {
                 taken[segment.name] = part
@@ -79,7 +90,8 @@ function walk(
         return walk(segments, index + 1, parts, at, prefix)
     }
     if (part === undefined) return null
-    if (segment.kind === 'static' && part !== segment.name) return null
+    if (segment.kind === 'static' ? part !== segment.name : !takeable)
+        return null
     const params = walk(segments, index + 1, parts, at + 1, prefix)
     if (params !== null && segment.kind === 'required')
         params[segment.name] = part

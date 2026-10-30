@@ -115,11 +115,15 @@ function handlerAt(
     address: string,
     method: string | undefined,
 ): Mount | undefined {
-    const rows: { pattern: string; mount: Mount }[] = []
+    const rows: {
+        pattern: string
+        matchers: Record<string, string>
+        mount: Mount
+    }[] = []
     for (const mount of handlers) {
         if (method !== undefined && mount.method !== method) continue
         if (mount.address === address) return mount
-        rows.push({ pattern: mount.address, mount })
+        rows.push({ pattern: mount.address, matchers: mount.matchers, mount })
     }
     return firstMatch(rankRoutes(rows), partsOf(address) ?? [])?.route.mount
 }

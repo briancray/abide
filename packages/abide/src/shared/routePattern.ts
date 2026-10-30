@@ -17,27 +17,76 @@ export type Segment = {
     kind: SegmentKind
     /** The literal text for a static segment, the param name for the other three. */
     name: string
+    /** 23.26 — the matcher a dynamic segment names after `=`, or `undefined` where it names none. */
+    matcher: string | undefined
+    /** 30.34, 30.35 — what a part must match to be taken: the matcher's, or the period default. */
+    accepts: RegExp
 }
+
+/** 30.34, 30.36 — what a segment naming no matcher takes: a part carrying no period. */
+const PERIODLESS = /^[^.]+$/
+
+// A segment naming a matcher, parsed with no table to resolve it in, takes nothing: only a route
+// table's own rows say which regex a name stands for (23.26), and a reader that only builds an
+// address or compares shapes never walks one.
+const UNRESOLVED = /(?!)/
 
 /**
  * A route literal split into its segments, each classified by kind.
  *
- * `[...rest]`, `[[optional]]`, `[required]`, or a literal. Ordered longest-first: `[[a]]` is a
- * `[a]` with another bracket round it, so testing the short form first matches both.
+ * `[...rest]`, `[[optional]]`, `[required]`, or a literal, each dynamic one optionally naming a
+ * matcher after `=`, compiled from `matchers` — each name's anchored source, as the build wrote it
+ * into the row (23.26) — where a route table hands its row's. Ordered
+ * longest-first: `[[a]]` is a `[a]` with another bracket round it, so testing the short form first
+ * matches both.
  */
-export function parseRoutePattern(pattern: string): Segment[] {
+export function parseRoutePattern(
+    pattern: string,
+    matchers?: Record<string, string>,
+): Segment[] {
     const out: Segment[] = []
     for (const raw of pattern.split('/')) {
         if (raw === '') continue
-        if (raw.startsWith('[[') && raw.endsWith(']]'))
-            out.push({ kind: 'optional', name: raw.slice(2, -2) })
-        else if (raw.startsWith('[...') && raw.endsWith(']'))
-            out.push({ kind: 'rest', name: raw.slice(4, -1) })
-        else if (raw.startsWith('[') && raw.endsWith(']'))
-            out.push({ kind: 'required', name: raw.slice(1, -1) })
-        else out.push({ kind: 'static', name: raw })
+        let kind: SegmentKind = 'static'
+        let body = raw
+        if (raw.startsWith('[[') && raw.endsWith(']]')) {
+            kind = 'optional'
+            body = raw.slice(2, -2)
+        } else if (raw.startsWith('[...') && raw.endsWith(']')) {
+            kind = 'rest'
+            body = raw.slice(4, -1)
+        } else if (raw.startsWith('[') && raw.endsWith(']')) {
+            kind = 'required'
+            body = raw.slice(1, -1)
+        }
+        const split = kind === 'static' ? -1 : body.indexOf('=')
+        const matcher = split === -1 ? undefined : body.slice(split + 1)
+        out.push({
+            kind,
+            name: split === -1 ? body : body.slice(0, split),
+            matcher,
+            accepts:
+                matcher === undefined
+                    ? PERIODLESS
+                    : matchers === undefined
+                      ? UNRESOLVED
+                      : resolvedIn(matchers, matcher, pattern),
+        })
     }
     return out
+}
+
+function resolvedIn(
+    matchers: Record<string, string>,
+    matcher: string,
+    pattern: string,
+): RegExp {
+    const source = matchers[matcher]
+    if (source === undefined)
+        throw new Error(
+            `abide: the route table's row for ${pattern} carries no matcher ${matcher}, which the build writes beside every segment naming one. RULEBOOK 23.26.`,
+        )
+    return new RegExp(source)
 }
 
 /**
@@ -99,12 +148,15 @@ export function coversRoute(outer: Segment[], route: Segment[]): boolean {
  * which page an address resolves to, so it is here with `compareRoutes` rather than written out
  * beside each table: the server's boot and the client router's start compile through one call.
  */
-export function rankRoutes<T extends { pattern: string }>(
-    rows: T[],
-): (T & { segments: Segment[] })[] {
+export function rankRoutes<
+    T extends { pattern: string; matchers?: Record<string, string> },
+>(rows: T[]): (T & { segments: Segment[] })[] {
     const ranked: (T & { segments: Segment[] })[] = []
     for (const row of rows)
-        ranked.push({ ...row, segments: parseRoutePattern(row.pattern) })
+        ranked.push({
+            ...row,
+            segments: parseRoutePattern(row.pattern, row.matchers ?? {}),
+        })
     ranked.sort((a, b) => compareRoutes(a.segments, b.segments))
     return ranked
 }

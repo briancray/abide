@@ -165,7 +165,8 @@ test('every path parameter is declared, an optional one as required — 20.6', a
             name: 'folder',
             in: 'path',
             required: true,
-            schema: { type: 'string' },
+            // 20.23 — what 30.34 has the segment take, naming no matcher.
+            schema: { type: 'string', pattern: '^[^.]+$' },
             description: 'May be left out, with its segment.',
         },
     ])

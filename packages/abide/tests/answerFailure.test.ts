@@ -38,6 +38,7 @@ test('the page lane escalates past a failing error page to text — 35.2, 35.3',
         segments: parseRoutePattern('/'),
         load: () => Promise.reject(new Error('the error page broke')),
         layouts: [],
+        matchers: {},
     }
     const answer = await inReleasedScope(
         new Request('http://app.test/missing'),

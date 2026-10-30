@@ -23,6 +23,7 @@ function row(path: string, rest: Partial<Mount> = {}): Mount {
         name: path.split('/').at(-1) as string,
         export: 'default',
         scope: `/${path}`,
+        matchers: {},
         private: false,
         ui: true,
         cli: true,
@@ -97,6 +98,7 @@ test('a mounted handler is projected off the handler, a row off the build — 20
         description: 'At run time.',
         schema: { type: 'object' },
         result: undefined,
+        matchers: {},
     })
     expect(surfaceOf(TABLE[0] as Mount, 'openapi')?.description).toBe(
         'One invoice.',

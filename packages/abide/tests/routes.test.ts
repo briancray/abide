@@ -14,7 +14,8 @@ let app = ''
 beforeAll(() => {
     app = appFixture({
         'index.abide': '<main>home</main>',
-        'media/[id].abide': `<script>
+        'media/ID.param.ts': 'export const ID = /\\d+/',
+        'media/[id=ID].abide': `<script>
 import { props } from '@abide/abide'
 
 const { params } = props<{ params: { id: string } }>()
@@ -44,30 +45,40 @@ const save = POST(() => 'saved')
 afterAll(removeTemporaryModules)
 
 // THE REVERT: answer `kind: 'handler'` for every mount in `appMap`; the private handler reads
-// `handler`, and the text loses its `(private)`.
+// `handler`, and the text loses its `(private)`. Drop `matchers` from `appMap`'s rows; the page
+// names `ID` with nothing saying what it takes.
 test('abide routes --json lists every route, the private handler marked, and every hook — 38.108', async () => {
     const ran = await spawned(['bun', BIN, 'routes', '--root', app, '--json'])
     expect(ran.exitCode, ran.stderr).toBe(0)
     expect(JSON.parse(ran.stdout)).toEqual({
         routes: [
-            { method: 'GET', address: '/', file: 'index.abide', kind: 'page' },
+            {
+                method: 'GET',
+                address: '/',
+                file: 'index.abide',
+                kind: 'page',
+                matchers: {},
+            },
             {
                 method: 'POST',
                 address: '/__abide/handlers/media/lib/Card/save',
                 file: 'media/lib/Card.abide',
                 kind: 'private',
+                matchers: {},
             },
             {
                 method: 'GET',
-                address: '/media/[id]',
-                file: 'media/[id].abide',
+                address: '/media/[id=ID]',
+                file: 'media/[id=ID].abide',
                 kind: 'page',
+                matchers: { ID: '^(?!\\.\\.?$)(?:\\d+)$' },
             },
             {
                 method: 'GET',
                 address: '/media/getGrid',
                 file: 'media/getGrid.handler.ts',
                 kind: 'handler',
+                matchers: {},
             },
         ],
         hooks: [
@@ -93,10 +104,13 @@ test('abide routes prints the same map as text — 38.108', async () => {
             'media/lib/Card.abide',
             '(private)',
         ],
-        ['GET', '/media/[id]', 'media/[id].abide'],
-        ['GET', '/media/getGrid', 'media/getGrid.ts'],
+        ['GET', '/media/[id=ID]', 'media/[id=ID].abide'],
+        ['GET', '/media/getGrid', 'media/getGrid.handler.ts'],
     ])
     expect(lines.slice(4)).toEqual([
+        '',
+        'matchers',
+        `  ID  /^(?!\\.\\.?$)(?:\\d+)$/`,
         '',
         'hooks',
         expect.stringMatching(

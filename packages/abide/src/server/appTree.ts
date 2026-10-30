@@ -1,6 +1,6 @@
 // 23.14 — WHERE AN APP'S ADDRESSES ARE, read off the tree in one walk. A file directly in a directory
 // below the root is an address — a page, a layout, an error page or a handler file — and nothing
-// else is there but its tests (23.22); a fence is never one (23.15): `public` holds files answered as
+// else is there but its tests and the param files its segments name (23.22, 23.24); a fence is never one (23.15): `public` holds files answered as
 // authored at the path of the directories above it, and `lib` holds the rest, a server file among it
 // (23.23). So listing a directory lists its routes.
 //
@@ -22,6 +22,8 @@ import {
 import {
     DIRECTORY_FILES,
     isDeclarationFile,
+    isHandlerFile,
+    isParamFile,
     isServerFile,
     isBenchFile,
     isTestFile,
@@ -36,6 +38,8 @@ type AppFiles = {
     abide: string[]
     /** Every handler file, in path order. */
     handlers: string[]
+    /** 23.24 — every param file directly in an address directory, in path order. */
+    params: string[]
     /** Every module under a `lib` directory, in path order — read for 37.13. */
     modules: string[]
     /** Every file under a `public` directory, to the address it is answered at below the mount. */
@@ -52,6 +56,7 @@ export function appFiles(root: string, refusals: Refusals): AppFiles {
     const files: AppFiles = {
         abide: [],
         handlers: [],
+        params: [],
         modules: [],
         published: new Map(),
     }
@@ -61,6 +66,7 @@ export function appFiles(root: string, refusals: Refusals): AppFiles {
     walk(root, '', undefined, files, refusals, packaged)
     files.abide.sort()
     files.handlers.sort()
+    files.params.sort()
     files.modules.sort()
     return files
 }
@@ -126,13 +132,17 @@ function walk(
                 isDeclarationFile(path)
             )
                 continue
-            if (!abide && !isModule(path)) {
+            if (isParamFile(path)) {
+                files.params.push(path)
+                continue
+            }
+            if (!abide && !isHandlerFile(path)) {
                 if (packaged && relative === '' && !path.endsWith('.ts'))
                     continue
                 refusals.at(
                     path,
                     new Error(
-                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages, handler files, test files, bench files and declaration files alone. Move it into a lib directory, beside it or in any directory above it. RULEBOOK 23.22.`,
+                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages, handler files, param files, test files, bench files and declaration files alone. ${path.endsWith('.ts') ? 'Name a handler file <name>.handler.ts, or move anything else' : 'Move it'} into a lib directory, beside it or in any directory above it. RULEBOOK 23.22.`,
                     ),
                 )
                 continue

@@ -2,6 +2,6 @@
 import { url } from '@abide/abide'
 </script>
 
-<iframe src={url('/companies/[id]', { id: 'initech' })}
+<iframe src={url('/companies/[id=SLUG]', { id: 'initech' })}
     title="A company that is not there"
     class="h-48 w-full rounded-md border border-rule"></iframe>

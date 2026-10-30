@@ -104,6 +104,16 @@ export function isServerFile(path: string): boolean {
 
 const SERVER_FILE = /[^/]\.server\.[^./]+$/
 
+/** 16.2 — whether `path` names a handler file, `<name>.handler.ts`, whose default export answers at its route. */
+export function isHandlerFile(path: string): boolean {
+    return path.endsWith('.handler.ts')
+}
+
+/** 23.24 — whether `path` names a param file, `<NAME>.param.ts`, declaring the matcher `NAME`. */
+export function isParamFile(path: string): boolean {
+    return path.endsWith('.param.ts')
+}
+
 /** Whether `path` names a test file, which is never an address nor a module the app runs. */
 export function isTestFile(path: string): boolean {
     return path.endsWith('.test.ts')

@@ -72,6 +72,8 @@ export type Mount = {
     export: string
     /** The route its hooks are filed at, which its rungs are read over (37.1, 16.72). */
     scope: string
+    /** 23.26 — each matcher its address names, to the anchored source its row is ranked with. */
+    matchers: Record<string, string>
     /** Whether it is a private handler, listed nowhere (16.71). */
     private: boolean
     /** Whether a browser is handed a wrapper for it. 20.4. */
@@ -154,6 +156,7 @@ export function mountedOwn(
             name,
             export: name,
             scope: '/',
+            matchers: {},
             private: false,
             ui: false,
             cli: false,

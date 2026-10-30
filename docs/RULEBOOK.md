@@ -121,7 +121,9 @@ REGISTRY.md because none of them is a name an app author writes.
 | server file | A file named `<name>.server.<extension>`. |
 | test file | A `.test.ts` file. |
 | declaration file | A `.d.ts` file. |
-| handler file | A `.ts` of the app's own, neither a declaration file, a test file nor a server file, directly in a directory under no fence. |
+| handler file | A file of the app's own named `<name>.handler.ts`, directly in a directory under no fence. |
+| param file | A file of the app's own named `<NAME>.param.ts`, directly in a directory under no fence. |
+| matcher | What a param file declares, and what a segment naming it matches by. |
 | private handler | A handler a `<script server>` declares. |
 | chapter app | The app the documentation's story has built by the end of one chapter, kept whole so a reader can download it and run it. |
 
@@ -1266,7 +1268,7 @@ while `outbox` holds a call not yet delivered, and MUST read the value again onc
 
 19.1 A route MUST be answered for each method by one file at most, a page answering `GET` and `HEAD`
 at its own, and a second MUST be a build error naming both files, two routes differing only in
-their parameters' names being one route.
+their parameters' names or matchers being one route.
 
 19.2 A `Schema` MUST return what it accepts.
 
@@ -1405,6 +1407,10 @@ text, and MUST carry no `structuredContent`.
 20.22 A call to a tool declaring an `outputSchema` that is answered with an `image/*` body MUST be
 refused, its text naming the tool and the image's type, and MUST be logged per 20.18 as a 500.
 
+20.23 A path parameter `/__abide/openapi.json` publishes, save a rest's, and a route parameter an MCP
+tool's input declares, a rest's on each of its items, MUST carry the pattern its segment takes a part
+by, anchored, and a matcher's name MUST be no part of the path, the operation or the tool.
+
 # 21. Generated headers
 
 21.1 Every response MUST carry `x-content-type-options: nosniff`.
@@ -1517,7 +1523,8 @@ composite.
 
 23.9 In a page or a layout, `route.params()` MUST be typed by that file's own route: a required
 segment as text, an optional one as text that may be absent, a rest as a list, and in a layout any
-segment a page below it adds.
+segment a page below it adds — under `abide check`, a page's required or optional segment whose
+matcher is an alternation of literals as the union of those literals.
 
 23.10 `reachable` MUST be true where the host answered a request, whatever the status it answered.
 
@@ -1550,11 +1557,25 @@ error naming the mount.
 `layout.abide`, an `error.abide` and the root's `launcher.abide`.
 
 23.22 A file of the app's own directly in a directory under no fence that is neither a `.abide`, a
-handler file, a test file, a bench file nor a declaration file MUST be a build error naming the file and a `lib` directory, save one
+handler file, a param file, a test file, a bench file nor a declaration file MUST be a build error naming the file and a `lib` directory, save one
 beside the `package.json` of a root that holds it, nor a `.ts`.
 
 23.23 A server file of the app's own under no `lib` directory MUST be a build error naming the file
 and a `lib` directory.
+
+23.24 A param file MUST hold one `export const`, of the name it is filed under, whose value is a
+regular expression literal carrying no flag, and anything else, an import included, MUST be a build
+error naming the file.
+
+23.25 A matcher repeating, with `*`, `+` or `{n,}`, a group that itself holds such a repetition, or
+carrying a backreference, MUST be a build error naming its file.
+
+23.26 A segment `[name=NAME]`, `[[name=NAME]]` or `[...name=NAME]` MUST name the param file `NAME.param.ts`
+in the directory holding that segment or the nearest directory above it below the root it is filed
+under, and one naming none MUST be a build error naming the segment's file and `NAME`.
+
+23.27 Two routes naming different matchers, or a matcher and none, at one parameter position after
+one static prefix MUST be a build error naming both files.
 
 # 24. Tracing
 
@@ -1742,7 +1763,8 @@ MUST NOT consume `csp.nonce`.
 30.2 `url` MUST require a params argument where the literal carries a required segment, and MUST
 make it optional otherwise.
 
-30.3 A required segment MUST map to a required key of `ParamsOf<P>`.
+30.3 A required segment MUST map to a required key of `ParamsOf<P>`, typed under `abide check` as
+23.9 types it where its matcher is an alternation of literals.
 
 30.4 An `OptionalNames<P>` segment MUST map to an optional key, and leaving one out MUST omit that
 segment.
@@ -1784,7 +1806,8 @@ on.
 
 30.18 `navigate` MUST leave an answer other than 204 to the document.
 
-30.19 `url` MUST throw where a param, or a member of a rest param, is `.` or `..`.
+30.19 `url` MUST throw where a param, or a member of a rest param, of a segment naming no matcher
+carries a `.`, and where any param or member is `.` or `..`.
 
 30.20 A history step to an address that differs from the page shown only in its fragment MUST NOT
 pass through `middleware`, and MUST NOT remount the page.
@@ -1828,6 +1851,17 @@ MUST leave the page and the address where they stand, save where 45.12 holds.
 
 30.33 A history step under 30.20, and a `navigate` under 30.21, MUST move `route.url` to the address
 it steps to.
+
+30.34 A `[param]` or an `[[optional]]` segment naming no matcher MUST NOT match a part carrying a
+`.`, and such a `[...rest]` MUST NOT take one.
+
+30.35 A segment naming a matcher MUST match a part only where the whole part, percent-decoded,
+matches it, and a `[...rest]` naming one MUST take a part only where it does.
+
+30.36 No dynamic segment MUST match a part that is `.` or `..`.
+
+30.37 An address whose part a segment refuses, by its matcher or by 30.34, MUST be matched against
+the routes 30.9 ranks after that route.
 
 # 31. Reading and writing by name
 
@@ -2733,8 +2767,9 @@ as one markdown file, in reading order.
 38.107 `onLauncher` called anywhere but `src/launcher.abide` MUST be a build error naming that file.
 
 38.108 `abide routes` MUST print every route with each method it answers and the file answering
-it, every private handler with its address and its file, and every hook with the file that filed it;
-with `--json` it MUST print the same as one JSON document.
+it, every private handler with its address and its file, every matcher a route names with the
+pattern it takes a part by, and every hook with the file that filed it; with `--json` it MUST print
+the same as one JSON document.
 
 38.109 Under `bun test` with `@abide/abide/test` preloaded, a test MUST import a `.abide` of the app as
 the module it compiles to, whether or not `createApp` has run.

@@ -14,6 +14,8 @@ type MappedRoute = {
     address: string
     file: string
     kind: 'page' | 'handler' | 'private'
+    /** 23.26 — each matcher its address names, to the anchored pattern it takes a part by. */
+    matchers: Record<string, string>
 }
 
 /** One hook call, the route it is filed at, and the file making it. */
@@ -39,6 +41,7 @@ export async function appMap(
             address: route.pattern,
             file: route.source,
             kind: 'page',
+            matchers: route.matchers,
         })
     for (const mount of app.mounts)
         routes.push({
@@ -46,6 +49,7 @@ export async function appMap(
             address: mount.address,
             file: mount.source,
             kind: mount.private ? 'private' : 'handler',
+            matchers: mount.matchers,
         })
     routes.sort((one, two) =>
         one.address === two.address
@@ -79,6 +83,17 @@ export function mapText(map: Awaited<ReturnType<typeof appMap>>): string {
         lines.push(
             `${route.method.padEnd(methods)}  ${route.address.padEnd(addresses)}  ${route.file}${route.kind === 'private' ? '  (private)' : ''}`,
         )
+    // 23.26 — each matcher once, whichever routes name it: what a part must match to be taken.
+    const matchers = new Map<string, string>()
+    for (const route of map.routes)
+        for (const name in route.matchers)
+            matchers.set(name, route.matchers[name] as string)
+    if (matchers.size > 0) {
+        lines.push('', 'matchers')
+        const names = width([...matchers.keys()])
+        for (const [name, pattern] of matchers)
+            lines.push(`  ${name.padEnd(names)}  /${pattern}/`)
+    }
     if (map.hooks.length > 0) {
         lines.push('', 'hooks')
         const hooks = width(map.hooks.map((hook) => hook.hook))

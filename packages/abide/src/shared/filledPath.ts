@@ -53,9 +53,11 @@ export function filledSegments(
 /**
  * A param value encoded as one path segment, refused where no address can carry it.
  *
- * 30.19 — A VALUE OF `.` OR `..` HAS NO SPELLING AS A SEGMENT: the URL parser collapses it as a
- * dot-segment, and `%2E` / `%2E%2E` with it, so the address would land on another route. Refused
- * rather than written, as a missing required segment is (30.3).
+ * 30.19 — A VALUE NO SEGMENT TAKES HAS NO SPELLING: one carrying a period, where the segment names no
+ * matcher to lift the default (30.34), and `.` or `..` whatever it names (30.36), which the URL
+ * parser collapses as a dot-segment, `%2E` / `%2E%2E` with it. Refused rather than written, as a
+ * missing required segment is (30.3). A named matcher is not run here: the literal says a matcher
+ * is named, and only a route table holds the regex (23.26).
  */
 function encodedSegment(
     spelled: string,
@@ -64,10 +66,14 @@ function encodedSegment(
     refused: (name: string, message: string) => unknown,
 ): string {
     const text = String(value)
-    if (text === '.' || text === '..')
+    const carried =
+        segment.matcher === undefined
+            ? !text.includes('.')
+            : text !== '.' && text !== '..'
+    if (!carried)
         throw refused(
-            name,
-            `abide: ${spelled} was given '${text}' for '${name}', and no address carries it as a segment — the URL parser resolves it to another route. RULEBOOK 30.19.`,
+            segment.name,
+            `abide: ${spelled} was given '${text}' for '${segment.name}', and no address carries ${segment.matcher === undefined ? 'a period in a param naming no matcher' : 'a dot-segment'}. RULEBOOK 30.19.`,
         )
     return encodeURIComponent(text)
 }

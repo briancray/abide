@@ -45,7 +45,7 @@ export async function handlersUnder(
     sources: readonly Source[],
     files: readonly Pick<
         PlacedHandler,
-        'path' | 'relative' | 'route' | 'scope'
+        'path' | 'relative' | 'route' | 'scope' | 'matchers'
     >[],
     refusals: Refusals,
 ): Promise<{ mounts: Mount[]; warnings: Diagnosis[] }> {
@@ -84,6 +84,7 @@ export async function handlersUnder(
             relative,
             route: address,
             scope,
+            matchers,
         } = files[at] as (typeof files)[number]
         const exported = declared[at]
         if (exported === undefined) continue
@@ -119,6 +120,7 @@ export async function handlersUnder(
                 name: address.slice(address.lastIndexOf('/') + 1),
                 export: 'default',
                 scope,
+                matchers,
                 private: false,
                 ui: handler.ui,
                 cli: handler.cli,
@@ -150,6 +152,7 @@ export async function handlersUnder(
                 name,
                 export: each.name,
                 scope,
+                matchers: {},
                 private: true,
                 ui: each.ui,
                 cli: false,

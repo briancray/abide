@@ -17,6 +17,8 @@ export type Listed = {
     schema: unknown
     /** What it answers, as JSON Schema, where its type says. 19.21. */
     result: unknown
+    /** 23.26 — each matcher its address names, to its anchored source. */
+    matchers: Record<string, string>
 }
 
 /**
@@ -50,6 +52,7 @@ export function surfaceOf(
             live === undefined ? mount.description : live.handler.description,
         schema: live === undefined ? mount.args : live.argsDocument,
         result: mount.result,
+        matchers: mount.matchers,
     }
 }
 
@@ -60,7 +63,8 @@ export function surfaceOf(
  * and dots dropped, so `/media/[id]` reads `media_id` rather than `media__id_`.
  */
 export function surfaceName(method: Method, route: string): string {
-    return `${method.toLowerCase()}${route === '/' ? '' : route.replace(/[[\].]/g, '')}`.replace(
+    // 19.1 — a matcher is no part of what a route is, so none of its name: `=NAME` goes first.
+    return `${method.toLowerCase()}${route === '/' ? '' : route.replace(/=[^\]]*/g, '').replace(/[[\].]/g, '')}`.replace(
         /[^a-zA-Z0-9-]/g,
         '_',
     )

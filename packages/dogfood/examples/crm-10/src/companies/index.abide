@@ -8,7 +8,7 @@ const companies = reactive(() => listCompanies())
 <ul class="fields">
     {#for company of companies by company.id}
         <li><span>{company.city}</span>
-            <a href={url('/companies/[id]', { id: company.id })}
+            <a href={url('/companies/[id=SLUG]', { id: company.id })}
                 style:view-transition-name="company-{company.id}"
             >{company.name}</a></li>
     {/for}

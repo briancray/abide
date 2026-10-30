@@ -643,6 +643,30 @@ test('an optional in the middle may be left out — 30.4, 35.2', () => {
     )
 })
 
+// 30.34 — NO PARAM TAKES A PART CARRYING A PERIOD: the `/favicon.ico` a browser asks every site for
+// is no `[param]` page's, and an optional left out or a rest stopped short of one still matches
+// what comes after. THE REVERT: drop `takeable` and `furthest` from `walk`; `/favicon.ico` matches
+// `[home]` and the rest takes `b.txt`.
+test('a param never takes a part carrying a period — 30.34', () => {
+    const home = parseRoutePattern('/[home]')
+    expect(matchRoute(home, '/farm')).toEqual({ home: 'farm' })
+    expect(matchRoute(home, '/favicon.ico')).toBeNull()
+    expect(matchRoute(home, '/%2E%2E')).toBeNull()
+    expect(
+        matchRoute(parseRoutePattern('/[[lang]]/[file]'), '/a.b/c'),
+    ).toBeNull()
+    expect(
+        matchRoute(parseRoutePattern('/[[lang]]/[...rest]'), '/en/a.b'),
+    ).toBeNull()
+    const files = parseRoutePattern('/files/[...path]')
+    expect(matchRoute(files, '/files/a/b')).toEqual({ path: ['a', 'b'] })
+    expect(matchRoute(files, '/files/a/b.txt')).toBeNull()
+    // A static segment is a name the app wrote, and carries what it likes.
+    expect(
+        matchRoute(parseRoutePattern('/sitemap.xml'), '/sitemap.xml'),
+    ).toEqual({})
+})
+
 // 30.9 — THE MOST SPECIFIC ROUTE WINS, and every case here is one where TWO patterns match the
 // same path, which is the only situation the order decides anything in. A table matched in the
 // wrong order renders the wrong page and says nothing, so nothing about the output can catch it.

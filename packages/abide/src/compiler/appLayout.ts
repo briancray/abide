@@ -16,6 +16,7 @@ import {
 import { abideImportsOf, componentGraph } from './componentGraph.ts'
 import type { HandlerFile } from './handlersUnder.ts'
 import { hookCalls, hooksIn } from './hookCalls.ts'
+import { type MountedTree, matchersOf } from './matchersOf.ts'
 import { mountsOf } from './mountsOf.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import { Refusals } from './Refusals.ts'
@@ -49,6 +50,8 @@ export type PlacedHandler = HandlerFile & {
     scope: string
     text: string
     hooks: string[]
+    /** 23.26 — each matcher its route names, to the anchored source the route tables carry. */
+    matchers: Record<string, string>
 }
 
 /** A page or an error page and the layouts it renders inside. */
@@ -64,6 +67,8 @@ export type AppRoute = {
      * cannot be declared twice.
      */
     layouts: string[]
+    /** 23.26 — each matcher its pattern names, to the anchored source the route tables carry. */
+    matchers: Record<string, string>
 }
 
 /** The app at a root, laid out (`appLayout`). */
@@ -105,7 +110,10 @@ export async function appLayout(root: string): Promise<AppLayout> {
     // COLLECTED, whoever asks: a layout is kept across checks (`AppChecker`), and a build adopts
     // what it found (`Refusals.adopt`).
     const refusals = new Refusals(root, true)
-    const { abide, handlers, modules, published } = appFiles(root, refusals)
+    const { abide, handlers, params, modules, published } = appFiles(
+        root,
+        refusals,
+    )
     await refuseModuleHooks(root, modules, refusals)
     const resolve = resolverIn()
     const unparsed = new Refusals(root, true)
@@ -149,10 +157,43 @@ export async function appLayout(root: string): Promise<AppLayout> {
             scope: placement(file.relative, file.position).scope,
             text,
             hooks: hooksIn([text]),
+            matchers: {},
         })
     }
     refuseStrayLauncher(sources, placedHandlers, refusals)
     const { routes, errors } = routesOf(sources, refusals)
+    // 23.26 — every routed file's matchers, a layout's among them for 23.27's sake though no table
+    // carries a layout's own.
+    const routed: {
+        path: string
+        relative: string
+        position: string
+        route: string
+    }[] = []
+    const relativeToPath = new Map<string, string>()
+    for (const source of sources) {
+        if (source.route === undefined) continue
+        relativeToPath.set(source.relative, source.path)
+        routed.push({
+            path: source.path,
+            relative: source.relative,
+            position: source.position,
+            route: source.route,
+        })
+    }
+    for (const handler of placedHandlers) routed.push(handler)
+    const matchers = await matchersOf(
+        root,
+        routed,
+        params.map((path) => `${root}/${path}`),
+        found.trees,
+        refusals,
+    )
+    for (const handler of placedHandlers)
+        handler.matchers = matchers.get(handler.path) ?? {}
+    for (const route of [...routes, ...errors])
+        route.matchers =
+            matchers.get(relativeToPath.get(route.source) ?? '') ?? {}
     const addresses = new Set<string>()
     for (const route of routes) addresses.add(route.pattern)
     for (const address of published.values()) addresses.add(address)
@@ -215,6 +256,8 @@ export async function withDependencies(
     handlers: HandlerFile[]
     /** 23.19 — each mounted `.abide`'s position, by its path; one at its own path is not here. */
     positions: Map<string, string>
+    /** 23.26 — each mounted directory, where it mounts, and the param files under it. */
+    trees: MountedTree[]
 }> {
     const all = [...parsed]
     const handlers: HandlerFile[] = []
@@ -231,6 +274,7 @@ export async function withDependencies(
     const positions = new Map<string, string>()
     // 23.20 — a directory mounts once, and by whom.
     const mountedBy = new Map<string, string>()
+    const trees: MountedTree[] = []
     const add = async (path: string): Promise<void> => {
         let text: string
         try {
@@ -455,6 +499,7 @@ function routesOf(
             pattern,
             source: source.relative,
             layouts: around,
+            matchers: {},
         })
     }
     return { routes, errors }

@@ -243,7 +243,8 @@ test('a file exporting one thing is named after what it exports', async () => {
     for (const { path, text } of await authored()) {
         // A test file, a package's or an app's, is named for what it tests.
         if (/^\w+\/tests\//.test(path) || path.endsWith('.test.ts')) continue
-        // A server file is `<name>.server.ts` (RULEBOOK 16.29), and the name is the part before.
+        // A server file is `<name>.server.ts` (RULEBOOK 16.29) and a param file `<NAME>.param.ts`
+        // (RULEBOOK 23.24), and the name is the part before.
         const name = path
             .slice(path.lastIndexOf('/') + 1, -'.ts'.length)
             .replace(/\.(?:server|param)$/, '')
