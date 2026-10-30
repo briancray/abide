@@ -1,5 +1,15 @@
 # @abide/harness
 
+## 0.3.1
+
+### Patch Changes
+
+- a9f8ad1: format the repo with abide format and bun fmt ([`d7cd46d`](https://github.com/briancray/abide/commit/d7cd46da1e0cd523631d38d923f8bb08d1f0716f))
+- Updated dependencies [a9f8ad1]
+- Updated dependencies [a9f8ad1]
+- Updated dependencies [a9f8ad1]
+  - @abide/abide@0.119.0
+
 ## 0.3.0
 
 ### Minor Changes
