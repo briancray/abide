@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import olderActivity from '../olderActivity.ts'
+import olderActivity from '../olderActivity.handler.ts'
 
 test('the first entry is in hand while the rest are still read', async () => {
     const entries = olderActivity()

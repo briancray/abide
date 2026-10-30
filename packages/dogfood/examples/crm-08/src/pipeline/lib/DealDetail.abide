@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import listDeals from '../listDeals.ts'
+import listDeals from '../listDeals.handler.ts'
 
 const deals = reactive(() => listDeals())
 const selected = reactive.share('selectedDeal', () => reactive(''))

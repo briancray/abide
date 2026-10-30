@@ -17,7 +17,7 @@ const { name } = props<{ name: string }>()
 </script>
 <p>hello {name}</p>
 `,
-    'preview.ts': `import { GET, page, render } from '@abide/abide/server'
+    'preview.handler.ts': `import { GET, page, render } from '@abide/abide/server'
 import Card from '#src/lib/Card.abide'
 
 export default GET(async ({ name }: { name: string }) =>

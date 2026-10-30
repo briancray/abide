@@ -5,9 +5,11 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { mkdirSync, symlinkSync } from 'node:fs' // bun has no sync mkdir or symlink of its own
+
 import { compileApp } from '#compiler/compileApp.ts'
 import { serveCompilation } from '#server/abideModules.ts'
 import { renderDocument } from '#server/render.ts'
+
 import { addressOf, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -37,7 +39,7 @@ let count = reactive(0)
 <button class="badge" onclick={() => { count = count + 1 }}>{shout(label)} {count}</button>
 `,
     'node_modules/kit/index.abide': '<p>the package’s own page</p>',
-    'node_modules/kit/charge.ts': `import { POST } from '@abide/abide/server'
+    'node_modules/kit/charge.handler.ts': `import { POST } from '@abide/abide/server'
 
 export default POST(({ cents }: { cents: number }) => ({ charged: cents }))
 `,
@@ -68,7 +70,7 @@ import Own from 'kit/index.abide'
 </script>
 
 <main><Badge label="hello" /><Own /></main>`,
-    'billing/charge.ts': `export { default } from 'kit/charge.ts'\n`,
+    'billing/charge.handler.ts': `export { default } from 'kit/charge.handler.ts'\n`,
 }
 
 // THE REVERTS: drop `withDependencies` from `compileApp` and the page's import of `kit/Badge.abide`
@@ -92,7 +94,7 @@ test("a package's component compiles with the app, on the app's abide, and is no
 })
 
 // THE REVERT: drop `node_modules` from `skipped` in `routePattern`; the walk reads the package's
-// `charge.ts` as one of the app's handler files and mounts it a second time, at
+// `charge.handler.ts` as one of the app's handler files and mounts it a second time, at
 // `/node_modules/kit/charge`.
 test("a package's handler is mounted where the app re-exports it, and nowhere else — 34.27, 16.2", async () => {
     const compiled = await compileApp(temporaryModule({ ...APP, ...KIT }))
@@ -103,8 +105,8 @@ test("a package's handler is mounted where the app re-exports it, and nowhere el
 
 // A LINKED PACKAGE LIES OUTSIDE THE ROOT, which is where bun resolves it to. THE REVERTS: drop the
 // real-path lookup from `TypeSession.shadowAt`, or the session config's `files`; the checker reads the
-// re-export through the link as an empty module, and refuses `billing/charge.ts` as exporting no
-// handler (16.73).
+// re-export through the link as an empty module, and refuses `billing/charge.handler.ts` as
+// exporting no handler (16.73).
 test('a linked package outside the root compiles with the app — 34.23, 34.25', async () => {
     const outside = temporaryModule(
         Object.fromEntries(

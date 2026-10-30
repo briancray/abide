@@ -68,7 +68,7 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
     for (const path of [
         'src/index.abide',
         'src/layout.abide',
-        'src/getGreeting.ts',
+        'src/getGreeting.handler.ts',
         'src/getGreeting.test.ts',
         'src/index.test.ts',
         'package.json',

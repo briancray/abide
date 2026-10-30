@@ -18,7 +18,7 @@ test('a call logged with the network is saved, and nothing waits', async () => {
 })
 
 test('a call sent twice under one id is logged once', async () => {
-    const { default: logCall } = await import('../logCall.ts')
+    const { default: logCall } = await import('../logCall.handler.ts')
     const call = { id: 'again', note: 'Asked twice' }
     await logCall(call)
     await logCall(call)

@@ -99,7 +99,7 @@ export async function handlersUnder(
                     )
             if (handler?.method === undefined)
                 throw new Error(
-                    `abide: ${relative} is a handler file — a .ts directly in an address directory — and exports no handler as its default. Export one (\`export default GET(…)\`), or move the file into a lib directory. RULEBOOK 16.73, 23.22.`,
+                    `abide: ${relative} is a handler file — a <name>.handler.ts directly in an address directory — and exports no handler as its default. Export one (\`export default GET(…)\`), or move the file into a lib directory. RULEBOOK 16.73, 23.22.`,
                 )
             const framework = frameworkRouteRefusal(address, relative)
             if (framework !== undefined) throw framework

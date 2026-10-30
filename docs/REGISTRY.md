@@ -264,9 +264,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | File | Declares | Served at | Rules |
 | --- | --- | --- | --- |
-| `users/getUser.ts` | `export default GET(…)` | `/users/getUser` | 16.2, 16.73, 19.1, 19.20, 23.14 |
-| `health.ts` | `export default GET(…)` | `/health` | 16.2, 23.14 |
-| `media/[id]/save.ts` | `export default POST(…)` | `/media/[id]/save`, `id` reaching its `Args` | 16.2, 16.65, 16.66, 16.67, 16.69 |
+| `users/getUser.handler.ts` | `export default GET(…)` | `/users/getUser` | 16.2, 16.73, 19.1, 19.20, 23.14 |
+| `health.handler.ts` | `export default GET(…)` | `/health` | 16.2, 23.14 |
+| `media/[id]/save.handler.ts` | `export default POST(…)` | `/media/[id]/save`, `id` reaching its `Args` | 16.2, 16.65, 16.66, 16.67, 16.69 |
 | `media/[id]/lib/Comments.abide` | `const addComment = POST(…)` in its `<script server>` | `/__abide/handlers/media/id/lib/Comments/addComment` | 16.70, 16.71, 16.72 |
 
 ## Schemas

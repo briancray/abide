@@ -129,8 +129,8 @@ export async function serveLanguage(
         documents.get(Bun.pathToFileURL(spelled(path)).href)?.text
 
     // An app's checker, opened on first use and kept for the session — and TOLD WHAT MOVED ON DISK,
-    // or it answers every check from the text it read when it opened: an export added to a `.ts`
-    // beside the page is "no exported member" until the editor restarts this. A project whose
+    // or it answers every check from the text it read when it opened: an export added to a `lib`
+    // module the page imports is "no exported member" until the editor restarts this. A project whose
     // tsconfig or package.json moved is opened again.
     const checkerOf = async (app: string): Promise<AppChecker> => {
         let checker = checkers.get(app)

@@ -1,5 +1,5 @@
 <script>
-import previewCompany from '../previewCompany.ts'
+import previewCompany from '../previewCompany.handler.ts'
 </script>
 
 <iframe src={previewCompany.url({ id: 'hopper-and-co' })}

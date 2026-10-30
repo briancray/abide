@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import exportContacts from '../exportContacts.ts'
+import exportContacts from '../exportContacts.handler.ts'
 import SignInAs from './SignInAs.abide'
 
 let status = reactive('')

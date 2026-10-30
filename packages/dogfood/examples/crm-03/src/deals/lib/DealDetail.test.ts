@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import getDeal from '../getDeal.ts'
+import getDeal from '../getDeal.handler.ts'
 
 test('the handler answers the deal its args name', async () => {
     const deal = await getDeal({ id: 'd2' })

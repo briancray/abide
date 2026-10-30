@@ -3,17 +3,19 @@
 // through, with no `abide build` and no child process ahead of it.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { GET, jsonSchema, POST, reactive, refuse, request } from '#server'
 import { config } from '#server/config.ts'
 import type { McpSurface } from '#server/generatedSurfaces.ts'
 import { currentRequestScope, LISTENING } from '#server/requestScope.ts'
+
 import { inMemoryApp } from './inMemoryApp.ts'
 
 const RPC = '/invoices'
 
 // Each a handler file's module, by its path (`inMemoryApp.ts`).
 const INVOICES = {
-    'invoices/getInvoice.ts': {
+    'invoices/getInvoice.handler.ts': {
         default: GET(
             reactive(
                 async ({ id }: { id: number }) => ({ id, total: id * 10 }),
@@ -27,9 +29,13 @@ const INVOICES = {
             ),
         ),
     },
-    'invoices/untimed.ts': { default: GET(() => 1) },
-    'invoices/endless.ts': { default: GET(() => 1, { timeout: Infinity }) },
-    'invoices/settle.ts': { default: POST(({ id }: { id: number }) => id) },
+    'invoices/untimed.handler.ts': { default: GET(() => 1) },
+    'invoices/endless.handler.ts': {
+        default: GET(() => 1, { timeout: Infinity }),
+    },
+    'invoices/settle.handler.ts': {
+        default: POST(({ id }: { id: number }) => id),
+    },
 }
 
 afterAll(() => {
@@ -138,7 +144,7 @@ test('a call under a mount sets the idle timeout on the request the listener rec
 })
 
 const ASKED = {
-    'asked/whoami.ts': {
+    'asked/whoami.handler.ts': {
         default: POST(
             () => request().headers.get('authorization') ?? 'nobody',
             {
@@ -146,7 +152,7 @@ const ASKED = {
             },
         ),
     },
-    'asked/guarded.ts': {
+    'asked/guarded.handler.ts': {
         default: POST(() => 'never', {
             description: 'Refused by its rung.',
             middleware: [async () => refuse(401, 'no')],
@@ -188,7 +194,7 @@ test('the MCP surface lists and calls in process, as the asker — 20.9, 20.10, 
 // REVERT: drop the catch around `callOf` in `McpSurface.#called`; the call answers 500.
 test('an MCP tool call missing a path parameter is a ValidationError tool result — 30.3, 15.8', async () => {
     await using app = await inMemoryApp({
-        'comments/[id]/thread.ts': {
+        'comments/[id]/thread.handler.ts': {
             default: GET(({ id }: { id: string }) => [id]),
         },
     })

@@ -1,7 +1,7 @@
 <script>
 import { principal, reactive } from '@abide/abide'
-import signIn from '../signIn.ts'
-import signOut from '../signOut.ts'
+import signIn from '../signIn.handler.ts'
+import signOut from '../signOut.handler.ts'
 
 let email = reactive('maya@crm.example')
 </script>

@@ -113,8 +113,8 @@ beforeAll(async () => {
         'lib/slow.ts': `await new Promise((settle) => setTimeout(settle, ${SLOW_MS}))\nexport {}\n`,
         'broken/index.abide': BROKEN,
         // 38.29, 38.68 — one answer over the floor and one under it.
-        'ledger/listRows.ts': LIST_ROWS,
-        'ledger/oneRow.ts': ONE_ROW,
+        'ledger/listRows.handler.ts': LIST_ROWS,
+        'ledger/oneRow.handler.ts': ONE_ROW,
         // ON THE SERVER ONLY, so the build still bundles it: the browser never evaluates it here.
         'lib/broken.ts': `if (typeof window === 'undefined') throw new Error('broken on purpose')\nexport {}\n`,
         // 36.11 — TWO DEPTHS, because "its path below that directory" is the clause and a flat

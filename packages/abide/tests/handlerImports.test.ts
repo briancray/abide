@@ -2,6 +2,11 @@
 // second copy has no address and throws when called. Served at run time, bun asks a plugin's
 // `onResolve` only for a specifier with an extension, so an extensionless one never reached the
 // redirect to the handler's face, and the runtime no longer redirects at resolve at all.
+//
+// NO EXTENSIONLESS `#src` SPELLING: bun reads `#src/media/getGrid.handler` against the first target of
+// `"#src/*": ["./*", "./*.ts"]` as a file with an extension and never tries the second, where
+// `#src/media/getGrid` reached `.ts` by bun's extension probing alone. A relative extensionless import
+// still probes.
 
 import { afterAll, expect, test } from 'bun:test'
 import { serveCompilation } from '#server/abideModules.ts'
@@ -19,10 +24,10 @@ test('every spelling of a handler file import is the face the server mounts — 
             type: 'module',
             imports: { '#src/*': ['./*', './*.ts'] },
         }),
-        'media/getGrid.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 42)\n`,
-        'lib/spellings.ts': `import withExtension from '#src/media/getGrid.ts'
-import withoutExtension from '#src/media/getGrid'
-import relative from '../media/getGrid'
+        'media/getGrid.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 42)\n`,
+        'lib/spellings.ts': `import withExtension from '#src/media/getGrid.handler.ts'
+import withoutExtension from '../media/getGrid.handler'
+import relative from '../media/getGrid.handler.ts'
 
 export { relative, withExtension, withoutExtension }
 `,
@@ -30,7 +35,7 @@ export { relative, withExtension, withoutExtension }
     serveCompilation(dir, {
         files: {},
         handlers: {
-            'media/getGrid.ts': {
+            'media/getGrid.handler.ts': {
                 scope: '/media',
                 client: '',
                 args: undefined,
@@ -39,7 +44,7 @@ export { relative, withExtension, withoutExtension }
         tables: {},
     })
     const spellings = await import(`${dir}/lib/spellings.ts`)
-    const mounted = await import(`${dir}/media/getGrid.ts${HANDLER_SUFFIX}`)
+    const mounted = await import(`${dir}/media/getGrid.handler.ts${HANDLER_SUFFIX}`)
     expect(spellings.withExtension).toBe(mounted.default)
     expect(spellings.withoutExtension).toBe(mounted.default)
     expect(spellings.relative).toBe(mounted.default)

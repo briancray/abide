@@ -1,6 +1,6 @@
 // 23.14 — AN APP'S ADDRESSES ARE ITS FILES' PATHS: a page is a `.abide` directly in an address
-// directory (23.21), an `index.abide` answering at its directory's path; a handler file is a `.ts`
-// there, answering at its own path (16.2); a `<script server>` declares private handlers below
+// directory (23.21), an `index.abide` answering at its directory's path; a handler file is a
+// `.handler.ts` there, answering at its own path (16.2); a `<script server>` declares private handlers below
 // `/__abide/handlers/` (16.70); and pages and handlers answer in one table of routes (19.1, 19.20).
 // A fence is never an address (23.15, 23.16), and a server file is the server's alone (16.29). A
 // route's hooks run over it and what lies below it, a fenced file's at the route holding its fence
@@ -64,7 +64,7 @@ test('an error.abide with neither template nor head answers for no page — 35.1
     expect(errors).not.toContain('media/error.abide')
 })
 
-// 23.15 — `ui` IS A DIRECTORY LIKE ANY OTHER: a page in one has an address, a `.ts` in one is a
+// 23.15 — `ui` IS A DIRECTORY LIKE ANY OTHER: a page in one has an address, a `.handler.ts` in one is a
 // handler file, and a server block may import a module from a `lib` under one. THE REVERT: add `ui`
 // back to `RESERVED_DIRECTORIES`; `/ui` has no page, and the build refuses the page under it (23.18).
 test('a ui directory is an ordinary one — 23.15', async () => {
@@ -74,7 +74,7 @@ test('a ui directory is an ordinary one — 23.15', async () => {
             'ui/index.abide': '<p>ui</p>',
             'media/ui/lib/format.ts':
                 'export const format = (n: number) => `${n}`\n',
-            'media/ui/status.ts':
+            'media/ui/status.handler.ts':
                 "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'up')\n",
             'media/index.abide': SERVED(
                 "import { format } from './ui/lib/format.ts'\n\nconst count = GET(() => format(1))",
@@ -126,13 +126,13 @@ test('a handler file answers at its path, and a private handler below /__abide/h
     const { mounts, routes } = await compileApp(
         appFixture({
             'media/[id]/index.abide': `${SERVED('const rate = POST(() => 1)')}<p>one</p>`,
-            'media/[id]/save.ts':
+            'media/[id]/save.handler.ts':
                 "import { POST } from '@abide/abide/server'\n\nexport default POST(({ id }: { id: string }) => id)\n",
-            'media/[id]/comments/addComment.ts':
+            'media/[id]/comments/addComment.handler.ts':
                 "import { POST } from '@abide/abide/server'\n\nexport default POST(({ id }: { id: string }) => id)\n",
             'admin/lib/Panel.abide': `${SERVED('const recent = GET(() => 1)')}<p>panel</p>`,
             'admin/index.abide': SERVED(''),
-            'health.ts':
+            'health.handler.ts':
                 "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1)\n",
         }),
     )
@@ -158,14 +158,14 @@ test('a page and a GET handler at one address are refused, parameter names aside
         compileApp(
             appFixture({
                 'media/[id]/save/index.abide': '<p>saving</p>',
-                'media/[slug]/save.ts':
+                'media/[slug]/save.handler.ts':
                     "import { GET } from '@abide/abide/server'\n\nexport default GET(({ slug }: { slug: string }) => slug)\n",
             }),
         ),
     )
     expect(page).toContain('19.1')
     expect(page).toContain('media/[id]/save/index.abide')
-    expect(page).toContain('media/[slug]/save.ts')
+    expect(page).toContain('media/[slug]/save.handler.ts')
 })
 
 // 16.67 — a parameter the handler's `Args` does not declare. THE REVERT: drop
@@ -176,7 +176,7 @@ test('a handler whose args do not declare its route parameter is refused — 16.
         compileApp(
             appFixture({
                 'index.abide': '<p>home</p>',
-                'media/[id]/read.ts':
+                'media/[id]/read.handler.ts':
                     "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1)\n",
             }),
         ),
@@ -206,13 +206,13 @@ test('export * is refused from a server block and from a handler file — 34.17,
             appFixture({
                 'index.abide': '<p>home</p>',
                 'billing/lib/charges.server.ts': charges,
-                'billing/charge.ts':
+                'billing/charge.handler.ts':
                     "import { POST } from '@abide/abide/server'\n\nexport default POST(() => 1)\nexport * from './lib/charges.server.ts'\n",
             }),
         ),
     )
     expect(file).toContain('16.73')
-    expect(file).toContain('billing/charge.ts')
+    expect(file).toContain('billing/charge.handler.ts')
 })
 
 // 34.20, 34.17 — a server block under a `public` directory has no route to be filed at, and a
@@ -243,8 +243,8 @@ test('a server block under a public directory, and one exporting default, are re
 
 // 23.16, 23.17, 23.18, 23.22, 23.23 — what the tree may not hold: a fence under another, a route in
 // abide's own namespace, a page where nothing has an address, a file directly in an address
-// directory that is neither a `.abide`, a handler file nor a test file, and a server file outside a
-// `lib` directory. THE REVERTS: drop each `refusals.at` in `appFiles`'s `walk` (or
+// directory that is neither a `.abide`, a handler file (`<name>.handler.ts`) nor a test file, and a
+// server file outside a `lib` directory. THE REVERTS: drop each `refusals.at` in `appFiles`'s `walk` (or
 // `frameworkRouteRefusal`'s refusal); its build succeeds.
 test('a fence under another, a page under one, an __abide route, a stray file and a stray server file are refused — 23.16, 23.17, 23.18, 23.22, 23.23', async () => {
     const nested = await refusal(
@@ -282,6 +282,18 @@ test('a fence under another, a page under one, an __abide route, a stray file an
     expect(stray).toContain('23.22')
     expect(stray).toContain('media/notes.json')
     expect(stray).toContain('lib')
+    // a `.ts` not named `.handler.ts` is no handler file, and the refusal says how to name one.
+    const module = await refusal(
+        compileApp(
+            appFixture({
+                'index.abide': '<p>home</p>',
+                'media/format.ts': 'export const format = 1\n',
+            }),
+        ),
+    )
+    expect(module).toContain('23.22')
+    expect(module).toContain('media/format.ts')
+    expect(module).toContain('<name>.handler.ts')
     // 23.23 — beside a page, or under `public` where it would be answered as authored.
     for (const file of ['media/db.server.ts', 'public/key.server.pem']) {
         const server = await refusal(
@@ -586,10 +598,10 @@ export function settingsStore(name: string) {
 test("a page reads a handler file's answer by name, typed — 16.74", async () => {
     const found = await checkApp(
         appFixture({
-            'getPolicy.ts':
+            'getPolicy.handler.ts':
                 "import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ retries: 3 }))\n",
             'index.abide': `<script>
-import getPolicy from './getPolicy.ts'
+import getPolicy from './getPolicy.handler.ts'
 
 const policy = getPolicy()
 const retries: number = policy.retries
@@ -633,9 +645,9 @@ beforeAll(async () => {
     const fixture = appFixture({
         'index.abide': '<p>home</p>',
         'media/[id]/index.abide': '<p id="page">a film</p>',
-        'media/new.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ title }: { title: string }) => ({ made: title }))\n`,
-        'media/[id]/note.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ id, note }: { id: number; note: string }) => ({ id, note }))\n`,
-        'media/[id]/read.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(({ id }: { id: number }) => ({ id, type: typeof id }))\n`,
+        'media/new.handler.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ title }: { title: string }) => ({ made: title }))\n`,
+        'media/[id]/note.handler.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ id, note }: { id: number; note: string }) => ({ id, note }))\n`,
+        'media/[id]/read.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(({ id }: { id: number }) => ({ id, type: typeof id }))\n`,
         'media/public/poster.txt': 'a poster',
         // 35.2 — an error page answers for its own route and what lies below it.
         'shelf/error.abide': '<p id="error">the shelf</p>',
@@ -655,15 +667,15 @@ onError((error) => void seen.push(\`vault: \${(error as Error).message}\`))
 </script>
 `,
         'vault/index.abide': '<p>vault</p>',
-        'vault/gold.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'gold')\n`,
-        'vault/blowUp.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => {
+        'vault/gold.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'gold')\n`,
+        'vault/blowUp.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => {
     throw new Error('the vault blew up')
 })
 `,
         'vault/lib/seen.server.ts': 'export const seen: string[] = []\n',
         // 30.3, 15.8 — a render calling a handler with a path parameter no address carries, and
         // painting its refusal, beside a count of the handler's runs.
-        'comments/[id]/getComments.ts': `import { GET } from '@abide/abide/server'
+        'comments/[id]/getComments.handler.ts': `import { GET } from '@abide/abide/server'
 import { runs } from '../../lib/runs.server.ts'
 
 export default GET(({ id }: { id: string }) => {
@@ -672,13 +684,13 @@ export default GET(({ id }: { id: string }) => {
 })
 `,
         'lib/runs.server.ts': 'export const runs = { count: 0 }\n',
-        'commentRuns.ts': `import { POST } from '@abide/abide/server'
+        'commentRuns.handler.ts': `import { POST } from '@abide/abide/server'
 import { runs } from './lib/runs.server.ts'
 
 export default POST(() => runs.count)
 `,
         'uncommented/index.abide': `<script>
-import getComments from '../comments/[id]/getComments.ts'
+import getComments from '../comments/[id]/getComments.handler.ts'
 
 const blank = getComments({ id: '' })
 </script>
@@ -697,7 +709,7 @@ middleware((next, { request }) => {
 </script>
 `,
         'lobby/index.abide': '<p>lobby</p>',
-        'lobby/badge.ts': `import { cookies, GET, request } from '@abide/abide/server'
+        'lobby/badge.handler.ts': `import { cookies, GET, request } from '@abide/abide/server'
 
 export default GET(() => ({
     header: request().headers.get('x-badge'),
@@ -705,14 +717,14 @@ export default GET(() => ({
 }))
 `,
         // 16.69 — two handlers under a rest, each answering at its own name.
-        'docs/[...path]/save.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ path }: { path: string[] }) => ({ saved: path }))\n`,
-        'docs/[...path]/remove.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ path }: { path: string[] }) => ({ removed: path }))\n`,
-        'errors.ts': `import { GET } from '@abide/abide/server'
+        'docs/[...path]/save.handler.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ path }: { path: string[] }) => ({ saved: path }))\n`,
+        'docs/[...path]/remove.handler.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ path }: { path: string[] }) => ({ removed: path }))\n`,
+        'errors.handler.ts': `import { GET } from '@abide/abide/server'
 import { seen } from './vault/lib/seen.server.ts'
 
 export default GET(() => [...seen])
 `,
-        'boom.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => {
+        'boom.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => {
     throw new Error('the root blew up')
 })
 `,
@@ -776,7 +788,7 @@ test('a parameter in the path and the query as well is refused 400 — 16.66', a
 })
 
 // 19.20 — A STATIC ROUTE THAT DOES NOT ANSWER THE METHOD LEAVES IT TO ONE THAT DOES: `GET /media/new`
-// is the page at `/media/[id]`, and `POST /media/new` the handler file `media/new.ts`. THE REVERT: stop the walk at
+// is the page at `/media/[id]`, and `POST /media/new` the handler file `media/new.handler.ts`. THE REVERT: stop the walk at
 // the first route that matches; the GET is a 405.
 test('a request reaches the most specific route answering its method — 19.20', async () => {
     const page = await Bun.fetch(`${base}/media/new`)

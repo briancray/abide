@@ -5,11 +5,11 @@ import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 import DealFeed from 'crm-04/src/pipeline/lib/DealFeed.abide'
 import dealFeedSource from 'crm-04/src/pipeline/lib/DealFeed.abide' with { type: 'text' }
-import listDealsSource from 'crm-04/src/pipeline/listDeals.ts' with { type: 'text' }
+import listDealsSource from 'crm-04/src/pipeline/listDeals.handler.ts' with { type: 'text' }
 import dealFeedTestSource from 'crm-04/src/pipeline/lib/DealFeed.test.ts' with { type: 'text' }
 import DealNote from 'crm-04/src/pipeline/lib/DealNote.abide'
 import dealNoteSource from 'crm-04/src/pipeline/lib/DealNote.abide' with { type: 'text' }
-import saveNoteSource from 'crm-04/src/pipeline/saveNote.ts' with { type: 'text' }
+import saveNoteSource from 'crm-04/src/pipeline/saveNote.handler.ts' with { type: 'text' }
 import dealNoteTestSource from 'crm-04/src/pipeline/lib/DealNote.test.ts' with { type: 'text' }
 import DealPicker from 'crm-04/src/pipeline/lib/DealPicker.abide'
 import dealPickerSource from 'crm-04/src/pipeline/lib/DealPicker.abide' with { type: 'text' }
@@ -18,28 +18,28 @@ import dealDetailSource from 'crm-04/src/pipeline/lib/DealDetail.abide' with { t
 import dealPickerTestSource from 'crm-04/src/pipeline/lib/DealPicker.test.ts' with { type: 'text' }
 import DealSearch from 'crm-04/src/pipeline/lib/DealSearch.abide'
 import dealSearchSource from 'crm-04/src/pipeline/lib/DealSearch.abide' with { type: 'text' }
-import searchDealsSource from 'crm-04/src/pipeline/searchDeals.ts' with { type: 'text' }
+import searchDealsSource from 'crm-04/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
 import dealSearchTestSource from 'crm-04/src/pipeline/lib/DealSearch.test.ts' with { type: 'text' }
 import Forecast from 'crm-04/src/pipeline/lib/Forecast.abide'
 import forecastSource from 'crm-04/src/pipeline/lib/Forecast.abide' with { type: 'text' }
-import getForecastSource from 'crm-04/src/pipeline/getForecast.ts' with { type: 'text' }
+import getForecastSource from 'crm-04/src/pipeline/getForecast.handler.ts' with { type: 'text' }
 import forecastTestSource from 'crm-04/src/pipeline/lib/Forecast.test.ts' with { type: 'text' }
 import PipelineView from 'crm-04/src/pipeline/lib/PipelineView.abide'
 import pipelineViewSource from 'crm-04/src/pipeline/lib/PipelineView.abide' with { type: 'text' }
 import preferenceStoreSource from 'crm-04/src/pipeline/lib/preferenceStore.ts' with { type: 'text' }
-import getPreferenceSource from 'crm-04/src/pipeline/getPreference.ts' with { type: 'text' }
-import setPreferenceSource from 'crm-04/src/pipeline/setPreference.ts' with { type: 'text' }
+import getPreferenceSource from 'crm-04/src/pipeline/getPreference.handler.ts' with { type: 'text' }
+import setPreferenceSource from 'crm-04/src/pipeline/setPreference.handler.ts' with { type: 'text' }
 import pipelineViewTestSource from 'crm-04/src/pipeline/lib/PipelineView.test.ts' with { type: 'text' }
 import StageBoard from 'crm-04/src/pipeline/lib/StageBoard.abide'
 import stageBoardSource from 'crm-04/src/pipeline/lib/StageBoard.abide' with { type: 'text' }
 import stageTileSource from 'crm-04/src/pipeline/lib/StageTile.abide' with { type: 'text' }
-import winDealSource from 'crm-04/src/pipeline/winDeal.ts' with { type: 'text' }
+import winDealSource from 'crm-04/src/pipeline/winDeal.handler.ts' with { type: 'text' }
 import stageBoardTestSource from 'crm-04/src/pipeline/lib/StageBoard.test.ts' with { type: 'text' }
 import StageTiles from 'crm-04/src/pipeline/lib/StageTiles.abide'
 import stageTilesSource from 'crm-04/src/pipeline/lib/StageTiles.abide' with { type: 'text' }
 import stageCountSource from 'crm-04/src/pipeline/lib/StageCount.abide' with { type: 'text' }
 import stageValueSource from 'crm-04/src/pipeline/lib/StageValue.abide' with { type: 'text' }
-import getStageSource from 'crm-04/src/pipeline/getStage.ts' with { type: 'text' }
+import getStageSource from 'crm-04/src/pipeline/getStage.handler.ts' with { type: 'text' }
 import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' with { type: 'text' }
 </script>
 
@@ -58,7 +58,7 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
                 'src/pipeline/lib/StageTiles.abide': stageTilesSource,
                 'src/pipeline/lib/StageCount.abide': stageCountSource,
                 'src/pipeline/lib/StageValue.abide': stageValueSource,
-                'src/pipeline/getStage.ts': getStageSource,
+                'src/pipeline/getStage.handler.ts': getStageSource,
                 'src/pipeline/lib/StageTiles.test.ts': stageTilesTestSource,
             }}
         >
@@ -94,7 +94,7 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
             summary="The weighted forecast, with both buttons under it. Press Reload now, then Mark stale."
             files={{
                 'src/pipeline/lib/Forecast.abide': forecastSource,
-                'src/pipeline/getForecast.ts': getForecastSource,
+                'src/pipeline/getForecast.handler.ts': getForecastSource,
                 'src/pipeline/lib/Forecast.test.ts': forecastTestSource,
             }}
         >
@@ -129,7 +129,7 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
             files={{
                 'src/pipeline/lib/StageBoard.abide': stageBoardSource,
                 'src/pipeline/lib/StageTile.abide': stageTileSource,
-                'src/pipeline/winDeal.ts': winDealSource,
+                'src/pipeline/winDeal.handler.ts': winDealSource,
                 'src/pipeline/lib/StageBoard.test.ts': stageBoardTestSource,
             }}
         >
@@ -164,7 +164,7 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
             summary="A search over the deals. Type hopper quickly, and watch the results rather than the field."
             files={{
                 'src/pipeline/lib/DealSearch.abide': dealSearchSource,
-                'src/pipeline/searchDeals.ts': searchDealsSource,
+                'src/pipeline/searchDeals.handler.ts': searchDealsSource,
                 'src/pipeline/lib/DealSearch.test.ts': dealSearchTestSource,
             }}
         >
@@ -195,7 +195,7 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
             summary="The deal list, loaded once. Updates arrive one deal at a time; apply a few."
             files={{
                 'src/pipeline/lib/DealFeed.abide': dealFeedSource,
-                'src/pipeline/listDeals.ts': listDealsSource,
+                'src/pipeline/listDeals.handler.ts': listDealsSource,
                 'src/pipeline/lib/DealFeed.test.ts': dealFeedTestSource,
             }}
         >
@@ -257,7 +257,7 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
             summary="A note on a deal, saved to the server while you type. Type a sentence quickly, and watch the saved line."
             files={{
                 'src/pipeline/lib/DealNote.abide': dealNoteSource,
-                'src/pipeline/saveNote.ts': saveNoteSource,
+                'src/pipeline/saveNote.handler.ts': saveNoteSource,
                 'src/pipeline/lib/DealNote.test.ts': dealNoteTestSource,
             }}
         >
@@ -306,8 +306,8 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
             files={{
                 'src/pipeline/lib/PipelineView.abide': pipelineViewSource,
                 'src/pipeline/lib/preferenceStore.ts': preferenceStoreSource,
-                'src/pipeline/getPreference.ts': getPreferenceSource,
-                'src/pipeline/setPreference.ts': setPreferenceSource,
+                'src/pipeline/getPreference.handler.ts': getPreferenceSource,
+                'src/pipeline/setPreference.handler.ts': setPreferenceSource,
                 'src/pipeline/lib/PipelineView.test.ts': pipelineViewTestSource,
             }}
         >

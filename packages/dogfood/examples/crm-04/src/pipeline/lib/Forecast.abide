@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import getForecast from '../getForecast.ts'
+import getForecast from '../getForecast.handler.ts'
 import { dollars } from './dollars.ts'
 
 const forecast = reactive(() => getForecast())

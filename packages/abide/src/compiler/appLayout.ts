@@ -268,6 +268,11 @@ export async function withDependencies(
                 continue
             }
             mountedBy.set(mount.directory, position)
+            trees.push({
+                directory: mount.directory,
+                at: mount.at,
+                params: mount.params,
+            })
             for (const placed of mount.handlers) {
                 // Two mounts can overlap, one directory inside the other; a file is placed once.
                 if (handled.has(placed.path)) continue
@@ -292,7 +297,7 @@ export async function withDependencies(
             if (!byPath.has(target)) await add(target)
         }
     }
-    return { sources: all, handlers, positions }
+    return { sources: all, handlers, positions, trees }
 }
 
 /** Whether a page or an error page has anything to paint: a template, or a head. 23.3, 35.14. */

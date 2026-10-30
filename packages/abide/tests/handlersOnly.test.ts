@@ -3,8 +3,10 @@
 // `.abide`; the handler file is never mounted, and both lanes answer it 404.
 
 import { afterAll, expect, spyOn, test } from 'bun:test'
+
 import { compileApp } from '#compiler/compileApp.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
+
 import { addressOf, appFixture, BIN, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -17,7 +19,7 @@ const ADDRESS = '/health/ping'
 afterAll(removeTemporaryModules)
 
 test('abide start answers an app of handlers alone — 16.2', async () => {
-    const app = appFixture({ 'health/ping.ts': HANDLER })
+    const app = appFixture({ 'health/ping.handler.ts': HANDLER })
     const built = await buildApp(app)
     expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
@@ -32,7 +34,7 @@ test('abide start answers an app of handlers alone — 16.2', async () => {
 }, 30_000)
 
 test('abide dev answers an app of handlers alone — 16.2', async () => {
-    const app = appFixture({ 'health/ping.ts': HANDLER })
+    const app = appFixture({ 'health/ping.handler.ts': HANDLER })
     const dev = Bun.spawn(['bun', BIN, 'dev', '--root', app, '--port', '0'], {
         stdout: 'pipe',
         stderr: 'pipe',
@@ -56,7 +58,7 @@ test('abide dev answers an app of handlers alone — 16.2', async () => {
 test('an own handler file is asked of the snapshot already taken — 16.73', async () => {
     const app = appFixture({
         'index.abide': '<p>home</p>',
-        'health/ping.ts': HANDLER,
+        'health/ping.handler.ts': HANDLER,
     })
     const snapshot = spyOn(
         TypeSession.prototype as unknown as { snapshot: () => unknown },

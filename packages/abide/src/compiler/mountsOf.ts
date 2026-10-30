@@ -85,6 +85,7 @@ export function mountsOf(
                 at,
                 files: found.abide.map(placed),
                 handlers: found.handlers.map(placed),
+                params: found.params.map((below) => `${directory}/${below}`),
             })
         }
     return mounts

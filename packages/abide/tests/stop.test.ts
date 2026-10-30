@@ -42,9 +42,9 @@ beforeAll(async () => {
         'layout.abide': `<script server>
 ${HOOKS}</script>
 `,
-        'probe/fault.ts': FAULT,
+        'probe/fault.handler.ts': FAULT,
         // A request that never finishes, for the drain to wait on.
-        'probe/hang.ts': `import { POST } from '@abide/abide/server'
+        'probe/hang.handler.ts': `import { POST } from '@abide/abide/server'
 
 export default POST(() => new Promise(() => {}))
 `,
@@ -203,7 +203,7 @@ process.exit(0)
 // runs out.
 test('App.stop ends a stream it is still writing — 42.11', async () => {
     const app = await inMemoryApp({
-        'feed/ticks.ts': {
+        'feed/ticks.handler.ts': {
             default: GET(async function* () {
                 let tick = 0
                 while (true) {
@@ -263,7 +263,7 @@ test('a raw call outside every request after App.stop does not reach the stopped
         return 'hello'
     })
     const app = await inMemoryApp({
-        'stopped/greeting.ts': { default: greeting },
+        'stopped/greeting.handler.ts': { default: greeting },
     })
     expect(await (await greeting.raw()).json()).toBe('hello')
     expect(answered).toBe(1)

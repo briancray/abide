@@ -62,9 +62,9 @@ beforeAll(async () => {
         }),
         'src/index.abide': '<main><h1>compiled</h1></main>',
         'src/public/robots.txt': 'User-agent: *\n',
-        'src/identity/name.ts': NAME,
-        'src/identity/fail.ts': FAIL,
-        'src/untouched/untouched.ts': UNTOUCHED,
+        'src/identity/name.handler.ts': NAME,
+        'src/identity/fail.handler.ts': FAIL,
+        'src/untouched/untouched.handler.ts': UNTOUCHED,
         'src/layout.abide': `<script server>\n${HOOKS}</script>\n`,
     })
     where = temporaryModule({})
@@ -217,7 +217,7 @@ test('run takes abide and the handlers from the executable, under its identity �
     await Bun.write(
         `${where}/script.ts`,
         `import { config } from '@abide/abide/server'
-import name from '#src/identity/name.ts'
+import name from '#src/identity/name.handler.ts'
 console.log(JSON.stringify({ configured: config().APP_NAME, handler: await name(), args: process.argv.slice(2) }))
 `,
     )
@@ -238,7 +238,7 @@ console.log(JSON.stringify({ configured: config().APP_NAME, handler: await name(
 test('an error thrown in the executable reports its source line — 38.93', async () => {
     await Bun.write(
         `${where}/failing.ts`,
-        `import fail from '#src/identity/fail.ts'
+        `import fail from '#src/identity/fail.handler.ts'
 try {
     await fail()
 } catch (error) {
@@ -252,5 +252,5 @@ try {
     expect(ran.stdout).toContain('failed in the handler')
     // The line the `throw` is written on, in the file it is written in — the frame may carry the
     // suffix of the namespace the file was loaded through.
-    expect(ran.stdout).toMatch(/identity\/fail\.ts:4:/)
+    expect(ran.stdout).toMatch(/identity\/fail\.handler\.ts:4:/)
 })

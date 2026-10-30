@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import getSummary from '../getSummary.ts'
+import getSummary from '../getSummary.handler.ts'
 
 const summary = reactive(() => getSummary())
 </script>

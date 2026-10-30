@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import listContacts from '../listContacts.ts'
+import listContacts from '../listContacts.handler.ts'
 
 // Owned, derived, loaded, and waiting for its first write.
 let draft = reactive('')

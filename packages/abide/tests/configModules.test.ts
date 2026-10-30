@@ -21,7 +21,7 @@ let app = ''
 
 beforeAll(async () => {
     app = appFixture({
-        'media/getGrid.ts': `import { config, GET, onConfig } from '@abide/abide/server'
+        'media/getGrid.handler.ts': `import { config, GET, onConfig } from '@abide/abide/server'
 
 onConfig(() => ({ RETRIES: 3 }))
 
@@ -31,7 +31,7 @@ export default GET(() => {
     return { retries, wrong }
 })
 `,
-        'media/getLabel.ts': `import { GET, onConfig } from '@abide/abide/server'
+        'media/getLabel.handler.ts': `import { GET, onConfig } from '@abide/abide/server'
 
 onConfig(() => ({ LABEL: 'grid' }))
 
@@ -59,7 +59,7 @@ test('two handler files type Config for every file that reads it — 27.13', () 
             `${relative(realpathSync(app), diagnosis.path)}:${diagnosis.line}:${diagnosis.code}`,
         )
     expect(at.sort()).toEqual([
-        'media/getGrid.ts:7:2322',
+        'media/getGrid.handler.ts:7:2322',
         'reads/index.abide:6:2322',
     ])
 })

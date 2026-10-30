@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import exportCsv from '../exportCsv.ts'
+import exportCsv from '../exportCsv.handler.ts'
 
 const csv = reactive(async () => (await exportCsv.raw()).text())
 </script>

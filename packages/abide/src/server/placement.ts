@@ -127,7 +127,7 @@ export function skipped(name: string): boolean {
 /**
  * The route a file answers at — its path below the root without its extension.
  *
- * 23.14 — `media/[id].abide` and `media/getGrid.ts` are `/media/[id]` and `/media/getGrid`; an
+ * 23.14 — `media/[id].abide` and `media/getGrid.handler.ts` are `/media/[id]` and `/media/getGrid`; an
  * `index.abide`, a `layout.abide` and an `error.abide` are their directory's.
  */
 export function routeOf(path: string): string {
@@ -138,7 +138,7 @@ export function routeOf(path: string): string {
     return `/${parts.filter((part) => part !== '').join('/')}`
 }
 
-const EXTENSION = /\.(?:abide|ts)$/
+const EXTENSION = /\.(?:abide|handler\.ts)$/
 
 /** 23.14, 23.18 — the names whose route is their directory's, and so a route's wherever they stand. */
 export const DIRECTORY_FILES = new Set([

@@ -27,19 +27,19 @@ export function release(): void {
 
 export const pulled = { count: 0 }
 `,
-    'library/books.ts': `import { GET } from '@abide/abide/server'
+    'library/books.handler.ts': `import { GET } from '@abide/abide/server'
 import { shelf } from './lib/state.ts'
 
 export default GET(shelf)
 `,
-    'library/shelve.ts': `import { POST } from '@abide/abide/server'
+    'library/shelve.handler.ts': `import { POST } from '@abide/abide/server'
 import { shelf } from './lib/state.ts'
 
 export default POST(({ title }: { title: string }) => {
     shelf.set([...shelf(), title])
 })
 `,
-    'library/held.ts': `import { GET } from '@abide/abide/server'
+    'library/held.handler.ts': `import { GET } from '@abide/abide/server'
 import { held } from './lib/state.ts'
 
 export default GET(async function* () {
@@ -48,7 +48,7 @@ export default GET(async function* () {
     yield 'second'
 })
 `,
-    'library/release.ts': `import { POST } from '@abide/abide/server'
+    'library/release.handler.ts': `import { POST } from '@abide/abide/server'
 import { release } from './lib/state.ts'
 
 export default POST(() => {
@@ -59,7 +59,7 @@ export default POST(() => {
     // \`howFar\` says how far it got. A \`Response\` of its own (16.36) rather than a generator: a
     // streaming \`reactive\` pumps its body to accumulate it (9.1) whoever reads it, and what 38.36 is
     // about is the body the connection pulls.
-    'library/count.ts': `import { GET } from '@abide/abide/server'
+    'library/count.handler.ts': `import { GET } from '@abide/abide/server'
 import { pulled } from './lib/state.ts'
 
 export default GET(
@@ -77,17 +77,17 @@ export default GET(
         ),
 )
 `,
-    'library/howFar.ts': `import { GET } from '@abide/abide/server'
+    'library/howFar.handler.ts': `import { GET } from '@abide/abide/server'
 import { pulled } from './lib/state.ts'
 
 export default GET(() => pulled.count)
 `,
-    'library/patient.ts': `import { GET } from '@abide/abide/server'
+    'library/patient.handler.ts': `import { GET } from '@abide/abide/server'
 
 export default GET(() => 1)
 `,
     // A child under the request's signal, named by its pid, and an answer that never ends on its own.
-    'library/spawns.ts': `import { GET, request } from '@abide/abide/server'
+    'library/spawns.handler.ts': `import { GET, request } from '@abide/abide/server'
 
 export default GET(async function* () {
     const child = Bun.spawn(['sleep', '60'], { signal: request().signal })
@@ -96,7 +96,7 @@ export default GET(async function* () {
 })
 `,
     // Answers anything, an upgrade included, with the status the lane admits the mux with.
-    'library/nothing.ts': `import { GET } from '@abide/abide/server'
+    'library/nothing.handler.ts': `import { GET } from '@abide/abide/server'
 
 export default GET(() => new Response(null, { status: 204 }))
 `,
@@ -214,7 +214,7 @@ import { onConfig } from '@abide/abide/server'
 onConfig(() => ({ ABIDE_MAX_SOCKET_MESSAGE_SIZE: 64 }))
 </script>
 `,
-        'books.ts': `import { GET } from '@abide/abide/server'
+        'books.handler.ts': `import { GET } from '@abide/abide/server'
 
 export default GET(() => ['dune'])
 `,
@@ -390,7 +390,7 @@ say(\`child gone: \${await gone()}\`)
 // the worker replaced on a reload, and the child it spawned left running.
 test('a reload aborts the requests the replaced worker was answering — 38.96', async () => {
     const said = await run(`${SPAWNED}
-const library = ${JSON.stringify(`${app}/library/spawns.ts`)}
+const library = ${JSON.stringify(`${app}/library/spawns.handler.ts`)}
 await Bun.write(library, await Bun.file(library).text())
 say(\`child gone: \${await gone()}\`)
 reader.cancel().catch(() => {})

@@ -7,27 +7,27 @@ import Section from '#src/lib/Section.abide'
 import OpenApiOperation from 'crm-09/src/assistant/lib/OpenApiOperation.abide'
 import openApiOperationSource from 'crm-09/src/assistant/lib/OpenApiOperation.abide' with { type: 'text' }
 import openApiOperationTestSource from 'crm-09/src/assistant/lib/OpenApiOperation.test.ts' with { type: 'text' }
-import searchContactsSource from 'crm-09/src/assistant/searchContacts.ts' with { type: 'text' }
+import searchContactsSource from 'crm-09/src/assistant/searchContacts.handler.ts' with { type: 'text' }
 import ModelToolCall from 'crm-09/src/assistant/lib/ModelToolCall.abide'
 import modelToolCallSource from 'crm-09/src/assistant/lib/ModelToolCall.abide' with { type: 'text' }
 import modelToolCallTestSource from 'crm-09/src/assistant/lib/ModelToolCall.test.ts' with { type: 'text' }
 import WithheldExport from 'crm-09/src/assistant/lib/WithheldExport.abide'
 import withheldExportSource from 'crm-09/src/assistant/lib/WithheldExport.abide' with { type: 'text' }
-import exportContactsSource from 'crm-09/src/assistant/exportContacts.ts' with { type: 'text' }
+import exportContactsSource from 'crm-09/src/assistant/exportContacts.handler.ts' with { type: 'text' }
 import withheldExportTestSource from 'crm-09/src/assistant/lib/WithheldExport.test.ts' with { type: 'text' }
 import AssistantChat from 'crm-09/src/assistant/lib/AssistantChat.abide'
 import assistantChatSource from 'crm-09/src/assistant/lib/AssistantChat.abide' with { type: 'text' }
-import askAssistantSource from 'crm-09/src/assistant/askAssistant.ts' with { type: 'text' }
+import askAssistantSource from 'crm-09/src/assistant/askAssistant.handler.ts' with { type: 'text' }
 import assistantChatTestSource from 'crm-09/src/assistant/lib/AssistantChat.test.ts' with { type: 'text' }
 import ClaudeApiRequest from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide'
 import claudeApiRequestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide' with { type: 'text' }
-import askClaudeSource from 'crm-09/src/assistant/askClaude.ts' with { type: 'text' }
-import messagesSource from 'crm-09/src/assistant/v1/messages.ts' with { type: 'text' }
+import askClaudeSource from 'crm-09/src/assistant/askClaude.handler.ts' with { type: 'text' }
+import messagesSource from 'crm-09/src/assistant/v1/messages.handler.ts' with { type: 'text' }
 import claudeApiRequestTestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.test.ts' with { type: 'text' }
 import ClaudeCodeBridge from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide'
 import claudeCodeBridgeSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide' with { type: 'text' }
-import bridgeSource from 'crm-09/src/assistant/bridge.ts' with { type: 'text' }
-import askClaudeCodeSource from 'crm-09/src/assistant/askClaudeCode.ts' with { type: 'text' }
+import bridgeSource from 'crm-09/src/assistant/bridge.handler.ts' with { type: 'text' }
+import askClaudeCodeSource from 'crm-09/src/assistant/askClaudeCode.handler.ts' with { type: 'text' }
 import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.test.ts' with { type: 'text' }
 </script>
 
@@ -39,7 +39,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
     <table>
         <thead><tr><th>Surface</th><th>Who reads it</th><th>Where</th></tr></thead>
         <tbody>
-            <tr><td><code>ui</code></td><td>a page</td><td><code>import searchContacts from './searchContacts.ts'</code></td></tr>
+            <tr><td><code>ui</code></td><td>a page</td><td><code>import searchContacts from './searchContacts.handler.ts'</code></td></tr>
             <tr><td><code>openapi</code></td><td>a generated client, an API gateway</td><td><code>/__abide/openapi.json</code></td></tr>
             <tr><td><code>mcp</code></td><td>a model</td><td><code>/__abide/mcp</code></td></tr>
             <tr><td><code>cli</code></td><td>a person or a script in a terminal</td><td><code>abide call</code></td></tr>
@@ -54,7 +54,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
             summary="A partner's integration wants the CRM's contact search as an OpenAPI operation. Read the app's document: the operation carries the handler's sentence and its typed argument."
             files={{
                 'src/assistant/lib/OpenApiOperation.abide': openApiOperationSource,
-                'src/assistant/searchContacts.ts': searchContactsSource,
+                'src/assistant/searchContacts.handler.ts': searchContactsSource,
                 'src/assistant/lib/OpenApiOperation.test.ts': openApiOperationTestSource,
             }}
         >
@@ -90,7 +90,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
             summary="A model is asked who works at Hopper. Ask the app's MCP endpoint for its tools, then call one as the model's client does."
             files={{
                 'src/assistant/lib/ModelToolCall.abide': modelToolCallSource,
-                'src/assistant/searchContacts.ts': searchContactsSource,
+                'src/assistant/searchContacts.handler.ts': searchContactsSource,
                 'src/assistant/lib/ModelToolCall.test.ts': modelToolCallTestSource,
             }}
         >
@@ -122,7 +122,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
             summary="The export button reads every contact at once, and no model needs that. Ask the MCP endpoint for its tools, then ask the export's own address."
             files={{
                 'src/assistant/lib/WithheldExport.abide': withheldExportSource,
-                'src/assistant/exportContacts.ts': exportContactsSource,
+                'src/assistant/exportContacts.handler.ts': exportContactsSource,
                 'src/assistant/lib/WithheldExport.test.ts': withheldExportTestSource,
             }}
         >
@@ -139,7 +139,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         <table>
             <thead><tr><th>Key</th><th>Set to <code>false</code></th></tr></thead>
             <tbody>
-                <tr><td><code>ui</code></td><td>No page can import the handler: the import is a compile error naming it. The stand-in in <code>v1/messages.ts</code> sets it.</td></tr>
+                <tr><td><code>ui</code></td><td>No page can import the handler: the import is a compile error naming it. The stand-in in <code>v1/messages.handler.ts</code> sets it.</td></tr>
                 <tr><td><code>openapi</code></td><td>No operation in <code>/__abide/openapi.json</code>.</td></tr>
                 <tr><td><code>mcp</code></td><td>No tool on <code>/__abide/mcp</code>, and none for the assistant.</td></tr>
                 <tr><td><code>cli</code></td><td>Not callable with <code>abide call</code>.</td></tr>
@@ -159,7 +159,7 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
             summary="A rep asks the CRM's assistant where Ada works. The model here is a recording with fixed lines; the tool call it makes runs the CRM's own search handler."
             files={{
                 'src/assistant/lib/AssistantChat.abide': assistantChatSource,
-                'src/assistant/askAssistant.ts': askAssistantSource,
+                'src/assistant/askAssistant.handler.ts': askAssistantSource,
                 'src/assistant/lib/AssistantChat.test.ts': assistantChatTestSource,
             }}
         >
@@ -204,8 +204,8 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
             summary="The assistant on Anthropic's API, its baseURL pointed at a stand-in in the CRM that answers with the body it was sent. Ask, and read the request."
             files={{
                 'src/assistant/lib/ClaudeApiRequest.abide': claudeApiRequestSource,
-                'src/assistant/askClaude.ts': askClaudeSource,
-                'src/assistant/v1/messages.ts': messagesSource,
+                'src/assistant/askClaude.handler.ts': askClaudeSource,
+                'src/assistant/v1/messages.handler.ts': messagesSource,
                 'src/assistant/lib/ClaudeApiRequest.test.ts': claudeApiRequestTestSource,
             }}
         >
@@ -230,8 +230,8 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
             summary="The assistant on whatever Claude Code is paired with this browser. Ask first and it is refused; connect, run the command in a terminal, and ask again."
             files={{
                 'src/assistant/lib/ClaudeCodeBridge.abide': claudeCodeBridgeSource,
-                'src/assistant/bridge.ts': bridgeSource,
-                'src/assistant/askClaudeCode.ts': askClaudeCodeSource,
+                'src/assistant/bridge.handler.ts': bridgeSource,
+                'src/assistant/askClaudeCode.handler.ts': askClaudeCodeSource,
                 'src/assistant/lib/ClaudeCodeBridge.test.ts': claudeCodeBridgeTestSource,
             }}
         >

@@ -57,7 +57,7 @@ export default GET(({ id }: { id: number }) => (id === 1 ? { title: 'The first r
 
 const RECORD_PAGE = `<script>
 import { reactive, route } from '@abide/abide'
-import record from '#src/records/record.ts'
+import record from '#src/records/record.handler.ts'
 
 const found = reactive(() => record({ id: Number(route.params().id) }))
 </script>
@@ -77,9 +77,9 @@ beforeAll(async () => {
         'broken/error.abide': BROKEN_ERROR,
         'tax returns/index.abide': '<main>tax returns</main>',
         'tax returns/error.abide': '<h1 id="encoded">No such return</h1>',
-        'forms/save.ts': SAVE,
-        'forms/move.ts': MOVE,
-        'records/record.ts': RECORD,
+        'forms/save.handler.ts': SAVE,
+        'forms/move.handler.ts': MOVE,
+        'records/record.handler.ts': RECORD,
         'records/[id]/index.abide': RECORD_PAGE,
         'records/error.abide': `<script>
 import { props, type Failed } from '@abide/abide'

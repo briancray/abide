@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import getGreeting from '#src/getGreeting.ts'
+import getGreeting from '#src/getGreeting.handler.ts'
 
 let count = reactive(0)
 const greeting = reactive(() => getGreeting({ name: 'world' }))

@@ -6,8 +6,8 @@ import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 import SignIn from 'crm-07/src/account/lib/SignIn.abide'
 import signInComponentSource from 'crm-07/src/account/lib/SignIn.abide' with { type: 'text' }
-import signInSource from 'crm-07/src/account/signIn.ts' with { type: 'text' }
-import signOutSource from 'crm-07/src/account/signOut.ts' with { type: 'text' }
+import signInSource from 'crm-07/src/account/signIn.handler.ts' with { type: 'text' }
+import signOutSource from 'crm-07/src/account/signOut.handler.ts' with { type: 'text' }
 import signInTestSource from 'crm-07/src/account/lib/SignIn.test.ts' with { type: 'text' }
 import Badge from 'crm-07/src/account/lib/Badge.abide'
 import badgeSource from 'crm-07/src/account/lib/Badge.abide' with { type: 'text' }
@@ -17,27 +17,27 @@ import densitySource from 'crm-07/src/account/lib/Density.abide' with { type: 't
 import densityTestSource from 'crm-07/src/account/lib/Density.test.ts' with { type: 'text' }
 import ContactCard from 'crm-07/src/account/lib/ContactCard.abide'
 import contactCardSource from 'crm-07/src/account/lib/ContactCard.abide' with { type: 'text' }
-import getContactSource from 'crm-07/src/account/getContact.ts' with { type: 'text' }
+import getContactSource from 'crm-07/src/account/getContact.handler.ts' with { type: 'text' }
 import contactCardTestSource from 'crm-07/src/account/lib/ContactCard.test.ts' with { type: 'text' }
 import ExportContacts from 'crm-07/src/account/lib/ExportContacts.abide'
 import exportContactsComponentSource from 'crm-07/src/account/lib/ExportContacts.abide' with { type: 'text' }
-import exportContactsSource from 'crm-07/src/account/exportContacts.ts' with { type: 'text' }
+import exportContactsSource from 'crm-07/src/account/exportContacts.handler.ts' with { type: 'text' }
 import exportContactsTestSource from 'crm-07/src/account/lib/ExportContacts.test.ts' with { type: 'text' }
 import PartnerStatement from 'crm-07/src/account/lib/PartnerStatement.abide'
 import partnerStatementSource from 'crm-07/src/account/lib/PartnerStatement.abide' with { type: 'text' }
-import getStatementSource from 'crm-07/src/account/getStatement.ts' with { type: 'text' }
+import getStatementSource from 'crm-07/src/account/getStatement.handler.ts' with { type: 'text' }
 import partnerStatementTestSource from 'crm-07/src/account/lib/PartnerStatement.test.ts' with { type: 'text' }
 import SalesReport from 'crm-07/src/account/lib/SalesReport.abide'
 import salesReportComponentSource from 'crm-07/src/account/lib/SalesReport.abide' with { type: 'text' }
-import salesReportSource from 'crm-07/src/account/salesReport.ts' with { type: 'text' }
+import salesReportSource from 'crm-07/src/account/salesReport.handler.ts' with { type: 'text' }
 import salesReportTestSource from 'crm-07/src/account/lib/SalesReport.test.ts' with { type: 'text' }
 import SyncContact from 'crm-07/src/account/lib/SyncContact.abide'
 import syncContactComponentSource from 'crm-07/src/account/lib/SyncContact.abide' with { type: 'text' }
-import syncContactSource from 'crm-07/src/account/syncContact.ts' with { type: 'text' }
+import syncContactSource from 'crm-07/src/account/syncContact.handler.ts' with { type: 'text' }
 import syncContactTestSource from 'crm-07/src/account/lib/SyncContact.test.ts' with { type: 'text' }
 import AddContact from 'crm-07/src/account/lib/AddContact.abide'
 import addContactComponentSource from 'crm-07/src/account/lib/AddContact.abide' with { type: 'text' }
-import addContactSource from 'crm-07/src/account/addContact.ts' with { type: 'text' }
+import addContactSource from 'crm-07/src/account/addContact.handler.ts' with { type: 'text' }
 import addContactTestSource from 'crm-07/src/account/lib/AddContact.test.ts' with { type: 'text' }
 import Widget from 'crm-07/src/account/lib/Widget.abide'
 import widgetSource from 'crm-07/src/account/lib/Widget.abide' with { type: 'text' }
@@ -58,8 +58,8 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
             summary="A team member signs in to the CRM by email, and signs out again."
             files={{
                 'src/account/lib/SignIn.abide': signInComponentSource,
-                'src/account/signIn.ts': signInSource,
-                'src/account/signOut.ts': signOutSource,
+                'src/account/signIn.handler.ts': signInSource,
+                'src/account/signOut.handler.ts': signOutSource,
                 'src/account/lib/SignIn.test.ts': signInTestSource,
             }}
         >
@@ -69,7 +69,7 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
         <p><code>principal.set(claims)</code> seals the claims into an <code>HttpOnly</code>
         cookie, and every request that carries it is that member's. <code>principal.clear()</code>
         signs them out. Both run in a handler, because the cookie is written on its answer. The
-        <code>onPrincipal</code> at the foot of <code>signIn.ts</code> is the next card's.</p>
+        <code>onPrincipal</code> at the foot of <code>signIn.handler.ts</code> is the next card's.</p>
 
         <p>The answer also tells the browser the caller changed. Every tab of the site reads
         <code>principal</code> again, so the form's own button flips with nothing passed to it.</p>
@@ -104,7 +104,7 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
             summary="The cookie holds a team member's id and nothing else. Sign in as either member and the page greets them by name and role."
             files={{
                 'src/account/lib/Badge.abide': badgeSource,
-                'src/account/signIn.ts': signInSource,
+                'src/account/signIn.handler.ts': signInSource,
                 'src/account/lib/Badge.test.ts': badgeTestSource,
             }}
         >
@@ -165,7 +165,7 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
             summary="Grace Hopper's contact card. Maya is an admin and sees the deal value; Theo is in sales and sees the rest."
             files={{
                 'src/account/lib/ContactCard.abide': contactCardSource,
-                'src/account/getContact.ts': getContactSource,
+                'src/account/getContact.handler.ts': getContactSource,
                 'src/account/lib/ContactCard.test.ts': contactCardTestSource,
             }}
         >
@@ -188,7 +188,7 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
             summary="Exporting every contact is for admins. Export signed out, as Theo, then as Maya."
             files={{
                 'src/account/lib/ExportContacts.abide': exportContactsComponentSource,
-                'src/account/exportContacts.ts': exportContactsSource,
+                'src/account/exportContacts.handler.ts': exportContactsSource,
                 'src/account/lib/ExportContacts.test.ts': exportContactsTestSource,
             }}
         >
@@ -235,7 +235,7 @@ middleware(async (next) => {
             summary="The bookkeeping partner's site reads an account statement from its own pages. Ask as the partner, then as any other site."
             files={{
                 'src/account/lib/PartnerStatement.abide': partnerStatementSource,
-                'src/account/getStatement.ts': getStatementSource,
+                'src/account/getStatement.handler.ts': getStatementSource,
                 'src/account/lib/PartnerStatement.test.ts': partnerStatementTestSource,
             }}
         >
@@ -271,7 +271,7 @@ middleware(async (next) => {
             summary="Sales by region, a row every 300 ms, under a 500 ms timeout. North runs longer than the timeout and finishes; south stops producing after its first row."
             files={{
                 'src/account/lib/SalesReport.abide': salesReportComponentSource,
-                'src/account/salesReport.ts': salesReportSource,
+                'src/account/salesReport.handler.ts': salesReportSource,
                 'src/account/lib/SalesReport.test.ts': salesReportTestSource,
             }}
         >
@@ -310,7 +310,7 @@ middleware(async (next) => {
             summary="Billing has stopped answering. Copy a contact to it twice: the first copy waits out the check, and the second is refused before it leaves."
             files={{
                 'src/account/lib/SyncContact.abide': syncContactComponentSource,
-                'src/account/syncContact.ts': syncContactSource,
+                'src/account/syncContact.handler.ts': syncContactSource,
                 'src/account/lib/SyncContact.test.ts': syncContactTestSource,
             }}
         >
@@ -334,7 +334,7 @@ middleware(async (next) => {
             summary="An integration adds contacts through the API, and expects 201 and the address of the new record."
             files={{
                 'src/account/lib/AddContact.abide': addContactComponentSource,
-                'src/account/addContact.ts': addContactSource,
+                'src/account/addContact.handler.ts': addContactSource,
                 'src/account/lib/AddContact.test.ts': addContactTestSource,
             }}
         >

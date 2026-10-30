@@ -22,7 +22,7 @@ export default GET(async ({ page = 1 }: { page?: number }) => {
 // One page leaves the member to the default and the other writes it.
 const pageCalling = (args: string): string => `<script>
 import { reactive } from '@abide/abide'
-import list from '#src/pages/list.ts'
+import list from '#src/pages/list.handler.ts'
 
 const shown = reactive(() => list(${args}))
 </script>
@@ -36,7 +36,7 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'index.abide': pageCalling('{}'),
         'written/index.abide': pageCalling('{ page: 1 }'),
-        'pages/list.ts': PAGES,
+        'pages/list.handler.ts': PAGES,
     }))
 }, 30_000)
 

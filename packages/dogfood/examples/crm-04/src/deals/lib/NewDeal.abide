@@ -1,6 +1,6 @@
 <script>
 import { type Issues, reactive } from '@abide/abide'
-import createDeal from '../createDeal.ts'
+import createDeal from '../createDeal.handler.ts'
 
 type NewDeal = { name: string; company: string; amount: number }
 

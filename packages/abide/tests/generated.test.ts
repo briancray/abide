@@ -67,7 +67,7 @@ beforeAll(async () => {
         {
             'index.abide': '<main>home</main>',
             ...handlerFiles('invoices', HANDLERS),
-            'files/[[folder]]/listFiles.ts': `import { GET } from '@abide/abide/server'
+            'files/[[folder]]/listFiles.handler.ts': `import { GET } from '@abide/abide/server'
 
 export default GET(({ folder }: { folder?: string }) => [folder ?? '/'], {
     clients: { mcp: false },

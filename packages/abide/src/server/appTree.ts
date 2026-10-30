@@ -211,8 +211,7 @@ export function holdsApp(root: string): boolean {
     return !appSourcesUnder(root, '').next().done
 }
 
-// Every `.abide` under `directory`, and every handler file — a module whose place is an address, and
-// no server file (23.23).
+// Every `.abide` under `directory`, and every handler file whose place is an address.
 function* appSourcesUnder(
     directory: string,
     relative: string,
@@ -230,9 +229,7 @@ function* appSourcesUnder(
             yield* appSourcesUnder(`${directory}/${entry.name}`, `${path}/`)
         else if (
             path.endsWith('.abide') ||
-            (isModule(path) &&
-                !isServerFile(path) &&
-                placeOf(path) === 'address')
+            (isHandlerFile(path) && placeOf(path) === 'address')
         )
             yield path
     }

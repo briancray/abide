@@ -853,12 +853,12 @@ test('a page, a GET and a public file default to stale-while-revalidate where th
         'layout.abide':
             '<html lang="en"><head></head><body><slot/></body></html>',
         'index.abide': '<main>home</main>',
-        'getNote.ts': `${IMPORTS}export default GET(() => ({ note: 'kept' }))\n`,
-        'getClock.ts': `${IMPORTS}export default GET(() => ({ at: 1 }), { global: true, ttl: 90_500 })\n`,
-        'getForever.ts': `${IMPORTS}export default GET(() => ({ at: 1 }), { global: true, ttl: Infinity })\n`,
-        'getMissing.ts': `${IMPORTS}export default GET(() => refuse(404))\n`,
-        'getLines.ts': `${IMPORTS}export default GET(() => jsonl([1, 2]))\n`,
-        'addNote.ts': `${IMPORTS}export default POST(() => ({ added: true }))\n`,
+        'getNote.handler.ts': `${IMPORTS}export default GET(() => ({ note: 'kept' }))\n`,
+        'getClock.handler.ts': `${IMPORTS}export default GET(() => ({ at: 1 }), { global: true, ttl: 90_500 })\n`,
+        'getForever.handler.ts': `${IMPORTS}export default GET(() => ({ at: 1 }), { global: true, ttl: Infinity })\n`,
+        'getMissing.handler.ts': `${IMPORTS}export default GET(() => refuse(404))\n`,
+        'getLines.handler.ts': `${IMPORTS}export default GET(() => jsonl([1, 2]))\n`,
+        'addNote.handler.ts': `${IMPORTS}export default POST(() => ({ added: true }))\n`,
     })
     await Bun.write(`${app}/public/logo.txt`, 'logo')
     const built = await buildApp(app)

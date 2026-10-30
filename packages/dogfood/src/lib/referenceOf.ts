@@ -19,7 +19,8 @@
 //   f. a table no export claims is on its `#` group's page: the CLI, the files, the template syntax.
 //
 // Only a `Name` column names an export or a member, so b, c and d read no other: a Spelling, a Path,
-// a File, a Header or a Command is written in place, and `health.ts` is a file rather than a member.
+// a File, a Header or a Command is written in place, and `health.handler.ts` is a file rather than a
+// member.
 //
 // An export's SCOPE is where REGISTRY writes it: a section whose heading names an
 // `@abide/harness/…` entry holds that entry's names, and every other section holds abide's —

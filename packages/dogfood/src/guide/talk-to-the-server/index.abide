@@ -6,26 +6,26 @@ import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 import DealDetail from 'crm-03/src/deals/lib/DealDetail.abide'
 import dealDetailSource from 'crm-03/src/deals/lib/DealDetail.abide' with { type: 'text' }
-import getDealSource from 'crm-03/src/deals/getDeal.ts' with { type: 'text' }
+import getDealSource from 'crm-03/src/deals/getDeal.handler.ts' with { type: 'text' }
 import dealDetailTestSource from 'crm-03/src/deals/lib/DealDetail.test.ts' with { type: 'text' }
 import DealNotes from 'crm-03/src/deals/lib/DealNotes.abide'
 import dealNotesSource from 'crm-03/src/deals/lib/DealNotes.abide' with { type: 'text' }
 import dealNotesTestSource from 'crm-03/src/deals/lib/DealNotes.test.ts' with { type: 'text' }
 import NewDeal from 'crm-03/src/deals/lib/NewDeal.abide'
 import newDealSource from 'crm-03/src/deals/lib/NewDeal.abide' with { type: 'text' }
-import createDealSource from 'crm-03/src/deals/createDeal.ts' with { type: 'text' }
+import createDealSource from 'crm-03/src/deals/createDeal.handler.ts' with { type: 'text' }
 import newDealTestSource from 'crm-03/src/deals/lib/NewDeal.test.ts' with { type: 'text' }
 import DealStage from 'crm-03/src/deals/lib/DealStage.abide'
 import dealStageSource from 'crm-03/src/deals/lib/DealStage.abide' with { type: 'text' }
-import moveDealSource from 'crm-03/src/deals/moveDeal.ts' with { type: 'text' }
+import moveDealSource from 'crm-03/src/deals/moveDeal.handler.ts' with { type: 'text' }
 import dealStageTestSource from 'crm-03/src/deals/lib/DealStage.test.ts' with { type: 'text' }
 import ExportDeals from 'crm-03/src/deals/lib/ExportDeals.abide'
 import exportDealsSource from 'crm-03/src/deals/lib/ExportDeals.abide' with { type: 'text' }
-import exportDealsHandlerSource from 'crm-03/src/deals/exportDeals.ts' with { type: 'text' }
+import exportDealsHandlerSource from 'crm-03/src/deals/exportDeals.handler.ts' with { type: 'text' }
 import exportDealsTestSource from 'crm-03/src/deals/lib/ExportDeals.test.ts' with { type: 'text' }
 import Pipeline from 'crm-03/src/deals/lib/Pipeline.abide'
 import pipelineSource from 'crm-03/src/deals/lib/Pipeline.abide' with { type: 'text' }
-import listDealsSource from 'crm-03/src/deals/listDeals.ts' with { type: 'text' }
+import listDealsSource from 'crm-03/src/deals/listDeals.handler.ts' with { type: 'text' }
 import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { type: 'text' }
 </script>
 
@@ -36,17 +36,17 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
     with the server.</p>
 
     <Section title="A handler file answers at its own path">
-        <p>A <code>.ts</code> file beside the pages is a handler file. Its default export is the
-        handler, and its path below <code>src</code> is the address it answers on.</p>
+        <p>A file named <code>&lt;name&gt;.handler.ts</code> beside the pages is a handler file. Its
+        default export is the handler, and its path below <code>src</code> is the address it answers on.</p>
 
         <table>
             <thead><tr><th>File below <code>src</code></th><th>Answers on</th></tr></thead>
             <tbody>
-                <tr><td><code>**/&lt;name&gt;.ts</code></td><td>its directory's route, then <code>&lt;name&gt;</code></td></tr>
-                <tr><td><code>deals/getDeal.ts</code></td><td><code>GET /deals/getDeal</code></td></tr>
-                <tr><td><code>users/getUser.ts</code></td><td><code>GET /users/getUser</code></td></tr>
-                <tr><td><code>health.ts</code></td><td><code>GET /health</code></td></tr>
-                <tr><td><code>media/[id]/save.ts</code></td><td><code>POST /media/42/save</code>, with <code>id</code> in its args</td></tr>
+                <tr><td><code>**/&lt;name&gt;.handler.ts</code></td><td>its directory's route, then <code>&lt;name&gt;</code></td></tr>
+                <tr><td><code>deals/getDeal.handler.ts</code></td><td><code>GET /deals/getDeal</code></td></tr>
+                <tr><td><code>users/getUser.handler.ts</code></td><td><code>GET /users/getUser</code></td></tr>
+                <tr><td><code>health.handler.ts</code></td><td><code>GET /health</code></td></tr>
+                <tr><td><code>media/[id]/save.handler.ts</code></td><td><code>POST /media/42/save</code>, with <code>id</code> in its args</td></tr>
                 <tr><td><code>media/[id]/lib/Comments.abide</code></td><td><code>/__abide/handlers/media/id/lib/Comments/addComment</code>, for the <code>addComment</code> its <code>&lt;script server&gt;</code> declares</td></tr>
             </tbody>
         </table>
@@ -63,7 +63,7 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
             summary="Pick a deal. The page asks the server for that one, and its fields fill in when it lands."
             files={{
                 'src/deals/lib/DealDetail.abide': dealDetailSource,
-                'src/deals/getDeal.ts': getDealSource,
+                'src/deals/getDeal.handler.ts': getDealSource,
                 'src/deals/lib/DealDetail.test.ts': dealDetailTestSource,
             }}
         >
@@ -136,7 +136,7 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
             summary="A new deal with no company and an amount of 0. Press Add deal: the server refuses it, with a message filed under each field that is wrong."
             files={{
                 'src/deals/lib/NewDeal.abide': newDealSource,
-                'src/deals/createDeal.ts': createDealSource,
+                'src/deals/createDeal.handler.ts': createDealSource,
                 'src/deals/lib/NewDeal.test.ts': newDealTestSource,
             }}
         >
@@ -175,7 +175,7 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
             summary="Move the open deal between stages, then try to move the deal already won. The server refuses, and says why."
             files={{
                 'src/deals/lib/DealStage.abide': dealStageSource,
-                'src/deals/moveDeal.ts': moveDealSource,
+                'src/deals/moveDeal.handler.ts': moveDealSource,
                 'src/deals/lib/DealStage.test.ts': dealStageTestSource,
             }}
         >
@@ -214,7 +214,7 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
             summary="Sales wants the pipeline in a spreadsheet. The link downloads every deal as a CSV file."
             files={{
                 'src/deals/lib/ExportDeals.abide': exportDealsSource,
-                'src/deals/exportDeals.ts': exportDealsHandlerSource,
+                'src/deals/exportDeals.handler.ts': exportDealsHandlerSource,
                 'src/deals/lib/ExportDeals.test.ts': exportDealsTestSource,
             }}
         >
@@ -261,11 +261,11 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
     <Section title="`abide routes` prints every address">
         <Code code={`abide routes
 GET    /deals                       deals/index.abide
-POST   /deals/createDeal            deals/createDeal.ts
-GET    /deals/exportDeals           deals/exportDeals.ts
-GET    /deals/getDeal               deals/getDeal.ts
-GET    /deals/listDeals             deals/listDeals.ts
-PATCH  /deals/moveDeal              deals/moveDeal.ts`} />
+POST   /deals/createDeal            deals/createDeal.handler.ts
+GET    /deals/exportDeals           deals/exportDeals.handler.ts
+GET    /deals/getDeal               deals/getDeal.handler.ts
+GET    /deals/listDeals             deals/listDeals.handler.ts
+PATCH  /deals/moveDeal              deals/moveDeal.handler.ts`} />
 
         <p><code>abide routes [--json]</code> prints each address, its method and the file
         answering it, with every private handler marked <code>(private)</code>. With
@@ -280,7 +280,7 @@ PATCH  /deals/moveDeal              deals/moveDeal.ts`} />
             summary="The pipeline's total. Wait for it, add a deal, then press Refresh: the old figure stays until the new one lands."
             files={{
                 'src/deals/lib/Pipeline.abide': pipelineSource,
-                'src/deals/listDeals.ts': listDealsSource,
+                'src/deals/listDeals.handler.ts': listDealsSource,
                 'src/deals/lib/Pipeline.test.ts': pipelineTestSource,
             }}
         >

@@ -1,7 +1,7 @@
 <script>
 import { reactive } from '@abide/abide'
-import askClaudeCode from '../askClaudeCode.ts'
-import bridge from '../bridge.ts'
+import askClaudeCode from '../askClaudeCode.handler.ts'
+import bridge from '../bridge.handler.ts'
 
 const QUESTION = 'Which company is Grace at?'
 

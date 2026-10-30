@@ -6,8 +6,8 @@ import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 import idPageSource from 'crm-06/src/companies/[id].abide' with { type: 'text' }
 import errorPageSource from 'crm-06/src/companies/error.abide' with { type: 'text' }
-import exportCompaniesSource from 'crm-06/src/companies/exportCompanies.ts' with { type: 'text' }
-import getCompanySource from 'crm-06/src/companies/getCompany.ts' with { type: 'text' }
+import exportCompaniesSource from 'crm-06/src/companies/exportCompanies.handler.ts' with { type: 'text' }
+import getCompanySource from 'crm-06/src/companies/getCompany.handler.ts' with { type: 'text' }
 import indexPageSource from 'crm-06/src/companies/index.abide' with { type: 'text' }
 import layoutSource from 'crm-06/src/companies/layout.abide' with { type: 'text' }
 import CompaniesFrame from 'crm-06/src/companies/lib/CompaniesFrame.abide'
@@ -29,7 +29,7 @@ import SlowCompany from 'crm-06/src/companies/lib/SlowCompany.abide'
 import slowCompanySource from 'crm-06/src/companies/lib/SlowCompany.abide' with { type: 'text' }
 import TabTitle from 'crm-06/src/companies/lib/TabTitle.abide'
 import tabTitleSource from 'crm-06/src/companies/lib/TabTitle.abide' with { type: 'text' }
-import previewCompanySource from 'crm-06/src/companies/previewCompany.ts' with { type: 'text' }
+import previewCompanySource from 'crm-06/src/companies/previewCompany.handler.ts' with { type: 'text' }
 import companyPageTestSource from 'crm-06/src/companies/CompanyPage.test.ts' with { type: 'text' }
 import companyTabsTestSource from 'crm-06/src/companies/lib/CompanyTabs.test.ts' with { type: 'text' }
 import errorPageTestSource from 'crm-06/src/companies/ErrorPage.test.ts' with { type: 'text' }
@@ -50,7 +50,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
                 <tr><td><code>src/companies/[id].abide</code></td><td><code>/companies/hopper-and-co</code>, and every other id</td></tr>
                 <tr><td><code>src/companies/layout.abide</code></td><td>no address: it wraps every page at <code>/companies</code> and below</td></tr>
                 <tr><td><code>src/companies/error.abide</code></td><td>no address: it answers when a page below it fails</td></tr>
-                <tr><td><code>src/companies/getCompany.ts</code></td><td><code>GET /companies/getCompany</code></td></tr>
+                <tr><td><code>src/companies/getCompany.handler.ts</code></td><td><code>GET /companies/getCompany</code></td></tr>
             </tbody>
         </table>
 
@@ -264,7 +264,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
             files={{
                 'src/companies/lib/MissingCompany.abide': missingCompanySource,
                 'src/companies/error.abide': errorPageSource,
-                'src/companies/getCompany.ts': getCompanySource,
+                'src/companies/getCompany.handler.ts': getCompanySource,
                 'src/companies/ErrorPage.test.ts': errorPageTestSource,
             }}
         >
@@ -290,7 +290,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
             summary="The export worker has stopped answering. Run the export: the button gets a bare 500, and the hook in the companies layout gets the reason."
             files={{
                 'src/companies/lib/ExportButton.abide': exportButtonSource,
-                'src/companies/exportCompanies.ts': exportCompaniesSource,
+                'src/companies/exportCompanies.handler.ts': exportCompaniesSource,
                 'src/companies/layout.abide': layoutSource,
                 'src/companies/lib/ExportButton.test.ts': exportButtonTestSource,
             }}
@@ -311,7 +311,7 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
             summary="A rep sends a customer a one-page account sheet. The handler renders the sheet component into a document of its own, and the frame shows it."
             files={{
                 'src/companies/lib/SheetPreview.abide': sheetPreviewSource,
-                'src/companies/previewCompany.ts': previewCompanySource,
+                'src/companies/previewCompany.handler.ts': previewCompanySource,
                 'src/companies/lib/CompanySheet.abide': companySheetSource,
                 'src/companies/lib/SheetPreview.test.ts': sheetPreviewTestSource,
             }}

@@ -1,6 +1,6 @@
 <script>
 import { reactive, url } from '@abide/abide'
-import exportContacts from '../exportContacts.ts'
+import exportContacts from '../exportContacts.handler.ts'
 
 let listed = reactive('—')
 let answers = reactive('—')

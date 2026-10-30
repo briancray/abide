@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import syncContact from '../syncContact.ts'
+import syncContact from '../syncContact.handler.ts'
 
 let status = reactive('')
 

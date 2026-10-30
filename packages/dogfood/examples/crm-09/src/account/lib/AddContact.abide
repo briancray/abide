@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import addContact from '../addContact.ts'
+import addContact from '../addContact.handler.ts'
 
 let added = reactive<{ status: number; location: string | null }>()
 

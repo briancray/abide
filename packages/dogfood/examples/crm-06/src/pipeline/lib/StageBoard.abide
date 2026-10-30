@@ -1,6 +1,6 @@
 <script>
-import getStage from '../getStage.ts'
-import winDeal from '../winDeal.ts'
+import getStage from '../getStage.handler.ts'
+import winDeal from '../winDeal.handler.ts'
 import StageTile from './StageTile.abide'
 import { STAGES } from './STAGES.ts'
 

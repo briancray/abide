@@ -85,7 +85,7 @@ Promise.reject(new Error('nobody awaited this'))
 <main id="orphan">orphaned</main>`,
         // A HANDLER TREE FROM THE START, so a handler saved later lands in a directory the checker
         // already knows.
-        'present/present.ts':
+        'present/present.handler.ts':
             "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'here')\n",
         // 38.4 — an extensionless RELATIVE import out of a server block, which the runtime takes
         // itself rather than through dev's plugin. A private handler (16.70), so the module that
@@ -470,7 +470,7 @@ test('an import saved before its module exists recovers when the module is writt
     // A HANDLER, which the app imports at boot and bun resolves itself — the shape that met it: a
     // compiled page's imports go through abide's plugin, which asks the disk every time.
     await save(
-        'present/readLate.ts',
+        'present/readLate.handler.ts',
         "import { GET } from '@abide/abide/server'\nimport { late } from '#src/lib/late'\n\nexport default GET(() => late)\n",
     )
     expect(

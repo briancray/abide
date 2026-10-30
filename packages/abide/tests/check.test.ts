@@ -6,10 +6,13 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { realpathSync } from 'node:fs' // bun exposes no realpath of its own
 import { relative } from 'node:path' // bun exposes no path helpers of its own
+
 import { spawned } from '@abide/harness/gate'
+
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
 import type { Diagnosis } from '#compiler/TypeSession.ts'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -854,7 +857,7 @@ import { shared as renamed } from '#src/lib/rows.ts'
 test('a check reports what only building the whole app refuses — 16.73', async () => {
     const stray = appFixture({
         'index.abide': '<p>hello</p>',
-        'things/answer.ts': 'export default 42\n',
+        'things/answer.handler.ts': 'export default 42\n',
     })
     const refused = (await checkApp(stray)).filter((diagnosis) =>
         diagnosis.message.includes('16.73'),
@@ -899,7 +902,7 @@ test('a check reports an emit refusal beside a parse refusal — 38.33, 16.73', 
             'index.abide': '<p>home</p>',
             'broken/index.abide':
                 '{#component row({ label })}<li>{label}</li>{/component}',
-            'things/answer.ts': 'export default 42\n',
+            'things/answer.handler.ts': 'export default 42\n',
         }),
     )
     expect(
@@ -987,16 +990,19 @@ test('a check reports an export in an imported .abide at its file — 38.33, 34.
 test('a check reports every handler file refusal at its own file — 38.33, 16.73', async () => {
     const twice = appFixture({
         'index.abide': '<p>home</p>',
-        'media/getOne.ts':
+        'media/getOne.handler.ts':
             "import { GET } from '@abide/abide/server'\n\nexport const extra = 1\nexport default GET(() => 1)\n",
-        'media/getTwo.ts':
+        'media/getTwo.handler.ts':
             "import { GET } from '@abide/abide/server'\n\nexport const more = 2\nexport default GET(() => 2)\n",
     })
     const at: string[] = []
     for (const diagnosis of await checkApp(twice))
         if (diagnosis.message.includes('16.73'))
             at.push(relative(realpathSync(twice), diagnosis.path))
-    expect(at.sort()).toEqual(['media/getOne.ts', 'media/getTwo.ts'])
+    expect(at.sort()).toEqual([
+        'media/getOne.handler.ts',
+        'media/getTwo.handler.ts',
+    ])
 }, 60_000)
 
 // 38.33, 16.39 — WHAT THE CHECKER'S READ OF A HANDLER REFUSES is a finding at the handler's file,
@@ -1010,17 +1016,17 @@ test("a check reports each 16.39 refusal at its file beside another file's — 3
 
 export const user = reactive({ name: 'Ada' })
 `,
-        'people/getProfile.ts': `import { GET } from '@abide/abide/server'
+        'people/getProfile.handler.ts': `import { GET } from '@abide/abide/server'
 import { user } from '../lib/user.ts'
 
 export default GET(() => ({ user }))
 `,
-        'people/getRows.ts': `import { GET } from '@abide/abide/server'
+        'people/getRows.handler.ts': `import { GET } from '@abide/abide/server'
 import { user } from '../lib/user.ts'
 
 export default GET(() => [{ user }])
 `,
-        'media/getTwo.ts':
+        'media/getTwo.handler.ts':
             "import { GET } from '@abide/abide/server'\n\nexport const more = 2\nexport default GET(() => 2)\n",
     })
     const at: string[] = []
@@ -1033,9 +1039,9 @@ export default GET(() => [{ user }])
                 `${relative(realpathSync(nesting), diagnosis.path)} ${diagnosis.message.includes('16.39') ? '16.39' : '16.73'}`,
             )
     expect(at.sort()).toEqual([
-        'media/getTwo.ts 16.73',
-        'people/getProfile.ts 16.39',
-        'people/getRows.ts 16.39',
+        'media/getTwo.handler.ts 16.73',
+        'people/getProfile.handler.ts 16.39',
+        'people/getRows.handler.ts 16.39',
     ])
 }, 60_000)
 
@@ -1071,7 +1077,7 @@ test('a handler returning a Reactive nested in its value is refused by path — 
 
 export const user = reactive({ name: 'Ada' })
 `,
-            'people/getUser.ts': `import { GET } from '@abide/abide/server'
+            'people/getUser.handler.ts': `import { GET } from '@abide/abide/server'
 import { user } from '../lib/user.ts'
 
 export default GET(() => user)
@@ -1079,7 +1085,7 @@ export default GET(() => user)
             ...(name === ''
                 ? {}
                 : {
-                      [`people/${name}.ts`]: `import { GET } from '@abide/abide/server'
+                      [`people/${name}.handler.ts`]: `import { GET } from '@abide/abide/server'
 import { user } from '../lib/user.ts'
 
 export default ${handler}
@@ -1096,14 +1102,14 @@ export default ${handler}
         'GET(() => ({ user, since: 1815 }))',
     )
     expect(member.length).toBe(1)
-    expect(member[0]).toContain('people/getProfile.ts')
+    expect(member[0]).toContain('people/getProfile.handler.ts')
     expect(member[0]).toContain('`default` returns a `Reactive` at `.user`')
     const item = await refusals(
         'getRows',
         'GET(async () => [{ owner: { held: user } }])',
     )
     expect(item.length).toBe(1)
-    expect(item[0]).toContain('people/getRows.ts')
+    expect(item[0]).toContain('people/getRows.handler.ts')
     expect(item[0]).toContain(
         '`default` returns a `Reactive` at `[].owner.held`',
     )

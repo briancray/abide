@@ -37,7 +37,7 @@ export default GET(async ({ id }: { id: string }) => {
 // and the static `class` — the one thing an arm bound to the other's button never writes.
 const pageOver = (handler: string) => `<script>
 import { reactive } from '@abide/abide'
-import ${handler} from '#src/data/${handler}.ts'
+import ${handler} from '#src/data/${handler}.handler.ts'
 
 const value = reactive(() => ${handler}({ id: 'one' }))
 const pressed = reactive('')
@@ -64,7 +64,7 @@ test.beforeAll(async ({}, testInfo) => {
         }),
     )
     for (const [name, text] of Object.entries(HANDLERS))
-        writeFileSync(`${app}/data/${name}.ts`, text)
+        writeFileSync(`${app}/data/${name}.handler.ts`, text)
     writeFileSync(`${app}/armed/index.abide`, pageOver('getValue'))
     writeFileSync(`${app}/slow/index.abide`, pageOver('getSlow'))
     const cli = join(REPO, 'packages/abide/bin/abide.ts')

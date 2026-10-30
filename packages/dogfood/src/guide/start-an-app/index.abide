@@ -6,7 +6,7 @@ import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 import ContactList from 'crm-01/src/contacts/lib/ContactList.abide'
 import contactListSource from 'crm-01/src/contacts/lib/ContactList.abide' with { type: 'text' }
-import listContactsSource from 'crm-01/src/contacts/listContacts.ts' with { type: 'text' }
+import listContactsSource from 'crm-01/src/contacts/listContacts.handler.ts' with { type: 'text' }
 import contactListTestSource from 'crm-01/src/contacts/lib/ContactList.test.ts' with { type: 'text' }
 import PageTiming from 'crm-01/src/contacts/lib/PageTiming.abide'
 import pageTimingSource from 'crm-01/src/contacts/lib/PageTiming.abide' with { type: 'text' }
@@ -41,7 +41,7 @@ bun run dev`} />
             <tbody>
                 <tr><td><code>src/index.abide</code></td><td><code>/</code></td></tr>
                 <tr><td><code>src/contacts/index.abide</code></td><td><code>/contacts</code></td></tr>
-                <tr><td><code>src/contacts/listContacts.ts</code></td><td><code>GET /contacts/listContacts</code>, the handler its default export declares</td></tr>
+                <tr><td><code>src/contacts/listContacts.handler.ts</code></td><td><code>GET /contacts/listContacts</code>, the handler its default export declares</td></tr>
                 <tr><td><code>src/contacts/lib/ContactList.abide</code></td><td>no address: a component the pages import</td></tr>
                 <tr><td><code>src/contacts/lib/ContactList.test.ts</code></td><td>no address: what <code>bun test</code> runs</td></tr>
             </tbody>
@@ -76,14 +76,14 @@ bun run dev`} />
             summary="The contacts page lists every contact. The list is empty until the handler answers, then fills in."
             files={{
                 'src/contacts/lib/ContactList.abide': contactListSource,
-                'src/contacts/listContacts.ts': listContactsSource,
+                'src/contacts/listContacts.handler.ts': listContactsSource,
                 'src/contacts/lib/ContactList.test.ts': contactListTestSource,
             }}
         >
             <ContactList />
         </Example>
 
-        <p><code>listContacts.ts</code> runs on the server. The list imports it like any module,
+        <p><code>listContacts.handler.ts</code> runs on the server. The list imports it like any module,
         and the browser is sent a call under the same name in its place, so there is no
         <code>fetch</code>, no route to register, and no second copy of the contact type.</p>
 

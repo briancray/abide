@@ -1,7 +1,7 @@
 <script>
 import { principal } from '@abide/abide'
-import signIn from '../signIn.ts'
-import signOut from '../signOut.ts'
+import signIn from '../signIn.handler.ts'
+import signOut from '../signOut.handler.ts'
 
 const PEOPLE = [
     { name: 'Nobody', email: '' },

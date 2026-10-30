@@ -42,16 +42,16 @@ export function filledSegments(
         }
         if (segment.kind === 'rest' && Array.isArray(value)) {
             for (const each of value)
-                address += `/${encodedSegment(spelled, segment.name, each, refused)}`
+                address += `/${encodedSegment(spelled, segment, each, refused)}`
             continue
         }
-        address += `/${encodedSegment(spelled, segment.name, value, refused)}`
+        address += `/${encodedSegment(spelled, segment, value, refused)}`
     }
     return address === '' ? '/' : address
 }
 
 /**
- * A param value encoded as one path segment; `.` and `..` are refused.
+ * A param value encoded as one path segment, refused where no address can carry it.
  *
  * 30.19 — A VALUE OF `.` OR `..` HAS NO SPELLING AS A SEGMENT: the URL parser collapses it as a
  * dot-segment, and `%2E` / `%2E%2E` with it, so the address would land on another route. Refused
@@ -59,7 +59,7 @@ export function filledSegments(
  */
 function encodedSegment(
     spelled: string,
-    name: string,
+    segment: Segment,
     value: unknown,
     refused: (name: string, message: string) => unknown,
 ): string {

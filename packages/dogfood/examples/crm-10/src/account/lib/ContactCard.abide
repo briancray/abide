@@ -1,6 +1,6 @@
 <script>
 import { principal, reactive, watch } from '@abide/abide'
-import getContact from '../getContact.ts'
+import getContact from '../getContact.handler.ts'
 import SignInAs from './SignInAs.abide'
 
 const contact = reactive(() => getContact())

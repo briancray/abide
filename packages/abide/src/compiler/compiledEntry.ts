@@ -120,7 +120,7 @@ import * as table from ${JSON.stringify(tablePath(app.root, SERVER_TABLE))}
     return `// Written by \`abide compile\`. The whole app, as what one executable holds.
 ${imports}
 // 38.56 — a file declaring handlers as a script names it through the app's one alias:
-// \`#src/invoices/getInvoice.ts\`, to the module it is.
+// \`#src/invoices/getInvoice.handler.ts\`, to the module it is.
 const declared = {}
 for (const row of table.handlers) declared[\`#src/\${row.source}\`] = row.load
 

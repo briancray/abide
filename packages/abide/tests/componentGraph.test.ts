@@ -158,23 +158,32 @@ test('a .abide directly in an address directory is a page, and one under lib is 
     expect(fenced.routes).toEqual(['/'])
 })
 
-// 23.22, 16.73 — AN ADDRESS DIRECTORY HOLDS ADDRESSES AND NOTHING ELSE: a `.ts` there is a handler
-// file, held to exporting a handler as its default alone, and any other file is refused by name
-// with where it goes. A test file, a bench file and a declaration file are kept there, and the rest under `lib/`.
+// 23.22, 16.73 — AN ADDRESS DIRECTORY HOLDS ADDRESSES AND NOTHING ELSE: a `<name>.handler.ts`
+// there is a handler file, held to exporting a handler as its default alone, and any other file —
+// a bare `.ts` among them — is refused by name with where it goes. A test file, a bench file and a
+// declaration file are kept there, and the rest under `lib/`.
 //
 // THE REVERTS: drop the `refuse` for a file neither `.abide` nor a handler file in `appTree`'s
-// walk; the two strays build, 0 of 2 refused where 2 are due. Or drop `isDeclarationFile` from the
+// walk; the three strays build, 0 of 3 refused where 3 are due. Or drop `isDeclarationFile` from the
 // walk's skip; `media/types.d.ts` is refused under 23.22. Or drop `isBenchFile` from it;
 // `media/index.bench.ts` is refused under 23.22 too. Or skip the non-default export check in
-// `handlersUnder`; `helpers.ts` builds, a module answering at `/media/helpers` with no handler.
+// `handlersUnder`; `helpers.handler.ts` builds, a module answering at `/media/helpers` with no handler.
 test('a file in an address directory that is no page or handler file is a build error — 23.22, 16.73', async () => {
     const helpers = await compiledTree({
+        'media/helpers.handler.ts':
+            'export const twice = (n: number): number => n * 2\n',
+    })
+    expect(helpers.refused).toContain('media/helpers.handler.ts')
+    expect(helpers.refused).toContain('`twice`')
+    expect(helpers.refused).toContain('RULEBOOK 16.73')
+    const bare = await compiledTree({
         'media/helpers.ts':
             'export const twice = (n: number): number => n * 2\n',
     })
-    expect(helpers.refused).toContain('media/helpers.ts')
-    expect(helpers.refused).toContain('`twice`')
-    expect(helpers.refused).toContain('RULEBOOK 16.73')
+    expect(bare.refused).toContain('media/helpers.ts')
+    expect(bare.refused).toContain('<name>.handler.ts')
+    expect(bare.refused).toContain('lib directory')
+    expect(bare.refused).toContain('RULEBOOK 23.22')
     const STRAYS: Record<string, string> = {
         'notes.md': '# notes\n',
         'styles.css': 'p { color: red }\n',
@@ -279,14 +288,14 @@ onLauncher(() => ({}))
     expect(stray.refused).toContain('media/index.abide')
     expect(stray.refused).toContain('RULEBOOK 38.107')
     const member = await compiledTree({
-        'media/getLaunch.ts': `import * as server from '@abide/abide/server'
+        'media/getLaunch.handler.ts': `import * as server from '@abide/abide/server'
 
 server.onLauncher(() => ({}))
 
 export default server.GET(() => 'ok')
 `,
     })
-    expect(member.refused).toContain('media/getLaunch.ts')
+    expect(member.refused).toContain('media/getLaunch.handler.ts')
     expect(member.refused).toContain('RULEBOOK 38.107')
     expect(await compiledTree({ 'launcher.abide': LAUNCHES })).toEqual({
         routes: ['/'],

@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import askClaude from '../askClaude.ts'
+import askClaude from '../askClaude.handler.ts'
 
 const QUESTION = 'Which company is Ada at?'
 

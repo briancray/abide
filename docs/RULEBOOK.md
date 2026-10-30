@@ -1527,8 +1527,9 @@ segment a page below it adds.
 
 23.13 `reachable` MUST ask a host that names no scheme over https, and an origin as written.
 
-23.14 A route MUST be the path of its file below the app's `--root` without its extension, and an
-`index.abide`'s, a `layout.abide`'s and an `error.abide`'s MUST be its directory's.
+23.14 A route MUST be the path of its file below the app's `--root` without its extension, a handler
+file's being `.handler.ts`, and an `index.abide`'s, a `layout.abide`'s and an `error.abide`'s MUST be
+its directory's.
 
 23.15 A file under a fence MUST NOT have a route.
 

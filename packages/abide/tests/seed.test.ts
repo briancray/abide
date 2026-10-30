@@ -25,7 +25,7 @@ export const getInvoice = GET(async ({ id }: { id: string }) => {
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import getInvoice from '#src/invoices/getInvoice.ts'
+import getInvoice from '#src/invoices/getInvoice.handler.ts'
 
 const invoice = reactive(() => getInvoice({ id: '4021' }))
 </script>
@@ -56,9 +56,9 @@ export const getLines = GET(async function* ({ id }: { id: string }) {
 
 const PAINTED = `<script>
 import { reactive } from '@abide/abide'
-import getLines from '#src/totals/getLines.ts'
-import getMissing from '#src/totals/getMissing.ts'
-import getTotal from '#src/totals/getTotal.ts'
+import getLines from '#src/totals/getLines.handler.ts'
+import getMissing from '#src/totals/getMissing.handler.ts'
+import getTotal from '#src/totals/getTotal.handler.ts'
 
 const total = reactive(() => getTotal({ id: 't' }))
 const missing = reactive(() => getMissing({ id: 'm' }))
@@ -92,7 +92,7 @@ export const getFeed = GET(async function* () {
 
 const FEED_PAGE = `<script>
 import { reactive } from '@abide/abide'
-import getFeed from '#src/feed/getFeed.ts'
+import getFeed from '#src/feed/getFeed.handler.ts'
 
 const lines = reactive(() => getFeed())
 </script>
@@ -109,7 +109,7 @@ export const art = GET(cover)
 
 const SHELF_PAGE = `<script>
 import { reactive } from '@abide/abide'
-import books from '#src/shelf/books.ts'
+import books from '#src/shelf/books.handler.ts'
 
 const shelved = reactive(() => books())
 </script>

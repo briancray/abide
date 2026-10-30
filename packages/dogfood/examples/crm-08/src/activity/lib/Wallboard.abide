@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import ticker from '../ticker.ts'
+import ticker from '../ticker.handler.ts'
 
 // A plain request, as a wallboard sends it: no `Accept` asks for events.
 const answer = reactive(async () => {

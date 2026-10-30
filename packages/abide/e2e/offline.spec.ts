@@ -115,7 +115,7 @@ async function add() {
         'export const added = new Map<string, number>()\n',
     )
     writeFileSync(
-        `${app}/data/addNote.ts`,
+        `${app}/data/addNote.handler.ts`,
         `import { POST, request } from '@abide/abide/server'
 import { added } from './lib/added.ts'
 
@@ -127,7 +127,7 @@ export default POST((args: { text: string }) => {
 `,
     )
     writeFileSync(
-        `${app}/data/getAdded.ts`,
+        `${app}/data/getAdded.handler.ts`,
         `import { GET } from '@abide/abide/server'
 import { added } from './lib/added.ts'
 
@@ -138,7 +138,7 @@ export default GET(() => [...added.values()])
         `${app}/outbox/index.abide`,
         `<script>
 import { outbox, reactive } from '@abide/abide'
-import addNote from '#src/data/addNote.ts'
+import addNote from '#src/data/addNote.handler.ts'
 
 let said = reactive('')
 
@@ -151,14 +151,14 @@ async function add() {
 <main id="outboxed"><button id="add" onclick={add}>add</button><p id="said">{said}</p><p id="waiting">{outbox().length}</p><p id="kept">{outbox().map((call) => call.value().from + (call.value.synced() ? ' saved' : ' not saved')).join(',')}</p></main>`,
     )
     writeFileSync(
-        `${app}/data/getNote.ts`,
+        `${app}/data/getNote.handler.ts`,
         `import { GET } from '@abide/abide/server'
 
 export default GET(() => ({ text: 'a saved note' }))
 `,
     )
     writeFileSync(
-        `${app}/data/getTags.ts`,
+        `${app}/data/getTags.handler.ts`,
         `import { GET } from '@abide/abide/server'
 
 export default GET(() => ['kept', 'offline'])
@@ -168,8 +168,8 @@ export default GET(() => ['kept', 'offline'])
         `${app}/note/index.abide`,
         `<script>
 import { reactive } from '@abide/abide'
-import getNote from '#src/data/getNote.ts'
-import getTags from '#src/data/getTags.ts'
+import getNote from '#src/data/getNote.handler.ts'
+import getTags from '#src/data/getTags.handler.ts'
 
 const note = reactive(() => getNote())
 const tags = getTags()

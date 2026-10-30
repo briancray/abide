@@ -22,7 +22,7 @@ const PAGE = `<main><h1>home</h1></main>`
 const IMPORTS = `import { config, cookies, GET, POST, request, response, trace } from '@abide/abide/server'\n\n`
 
 const HANDLERS: Record<string, string> = {
-    'probe/settings.ts': `${IMPORTS}export default GET(() => {
+    'probe/settings.handler.ts': `${IMPORTS}export default GET(() => {
     const resolved = config()
     return {
         limit: resolved.LIMIT,
@@ -33,18 +33,18 @@ const HANDLERS: Record<string, string> = {
     }
 })
 `,
-    'probe/remember.ts': `${IMPORTS}export default POST(() => {
+    'probe/remember.handler.ts': `${IMPORTS}export default POST(() => {
     const theme = cookies().get('theme')
     cookies().set('seen', '1')
     cookies().set('session', 'abc', { httpOnly: true })
     return theme
 })
 `,
-    'probe/seen.ts': `${IMPORTS}export default GET(() => response().headers.get('x-rung') ?? 'none')
+    'probe/seen.handler.ts': `${IMPORTS}export default GET(() => response().headers.get('x-rung') ?? 'none')
 `,
-    'probe/rewritten.ts': `${IMPORTS}export default GET(() => request().headers.get('x-rewritten') ?? 'the original')
+    'probe/rewritten.handler.ts': `${IMPORTS}export default GET(() => request().headers.get('x-rewritten') ?? 'the original')
 `,
-    'probe/traced.ts': `${IMPORTS}export default GET(() =>
+    'probe/traced.handler.ts': `${IMPORTS}export default GET(() =>
     trace.span('lookup', () => ({
         id: trace(),
         sampled: trace.sampled(),

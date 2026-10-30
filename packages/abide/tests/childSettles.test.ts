@@ -24,7 +24,7 @@ export const getSlow = GET(async ({ id }: { id: string }) => {
 
 const child = (call: string, title: string): string => `<script>
 import { reactive } from '@abide/abide'
-import call from '#src/totals/${call}.ts'
+import call from '#src/totals/${call}.handler.ts'
 import Grand from './Grand.abide'
 
 const total = reactive(() => call({ id: '${call}' }))
@@ -35,7 +35,7 @@ const total = reactive(() => call({ id: '${call}' }))
 
 const GRAND = `<script>
 import { reactive } from '@abide/abide'
-import getTick from '#src/totals/getTick.ts'
+import getTick from '#src/totals/getTick.handler.ts'
 
 const total = reactive(() => getTick({ id: 'grand' }))
 </script>
@@ -53,7 +53,7 @@ import Tick from './lib/Tick.abide'
 // A CALL MADE WHILE THE MARKUP IS BUILT, not in a setup: nothing defers it, so it is painted in
 // flight and answers a microtask after.
 const INLINE = `<script>
-import getTick from '#src/totals/getTick.ts'
+import getTick from '#src/totals/getTick.handler.ts'
 </script>
 
 <main><p>{getTick({ id: 'inline' }).busy() ? 'loading' : 'done'}</p></main>`

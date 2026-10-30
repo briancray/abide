@@ -246,7 +246,7 @@ test('a file exporting one thing is named after what it exports', async () => {
         // A server file is `<name>.server.ts` (RULEBOOK 16.29), and the name is the part before.
         const name = path
             .slice(path.lastIndexOf('/') + 1, -'.ts'.length)
-            .replace(/\.server$/, '')
+            .replace(/\.(?:server|param)$/, '')
         if (ADDRESSES.has(name)) continue
         const exported = exportedNames(text)
         if (exported?.length !== 1) continue

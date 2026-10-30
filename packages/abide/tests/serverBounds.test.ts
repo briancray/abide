@@ -19,7 +19,7 @@ import { inMemoryApp } from './inMemoryApp.ts'
 const SIGNED_OUT = JSON.stringify(null)
 
 const MODULES = {
-    'shelf/book.ts': {
+    'shelf/book.handler.ts': {
         default: GET(({ id }: { id: number }) => ({ id, title: `book ${id}` })),
     },
 }

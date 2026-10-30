@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import searchDeals from '../searchDeals.ts'
+import searchDeals from '../searchDeals.handler.ts'
 
 let q = reactive('')
 const found = reactive(() => searchDeals({ q }), { debounce: 300 })

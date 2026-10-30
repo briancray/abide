@@ -7,7 +7,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAGE = `<script>
 import { reactive, url } from '@abide/abide'
-import getInvoice from '#src/invoices/getInvoice.ts'
+import getInvoice from '#src/invoices/getInvoice.handler.ts'
 import '#src/lib/face.css'
 
 const invoice = reactive(() => getInvoice({ id: '4' }))
@@ -35,10 +35,10 @@ import { url } from '@abide/abide'
             'lib/face.css': `@font-face { font-family: Face; src: url('/fonts/face.woff2'); }\n`,
             'public/fonts/face.woff2': 'a face',
             'public/robots.txt': 'User-agent: *\n',
-            'invoices/getInvoice.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n`,
+            'invoices/getInvoice.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n`,
             // a segment named as the mount, which an address missing the mount is mistaken for
-            'docs/getDoc.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, title: 'a doc' }), { description: 'A doc.' })\n`,
-            'invoices/count.ts': `import { GET, reactive } from '@abide/abide/server'\n\nexport default GET(reactive({ open: 3 }, { global: true }))\n`,
+            'docs/getDoc.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, title: 'a doc' }), { description: 'A doc.' })\n`,
+            'invoices/count.handler.ts': `import { GET, reactive } from '@abide/abide/server'\n\nexport default GET(reactive({ open: 3 }, { global: true }))\n`,
         },
         { ...process.env, APP_URL: 'http://example.test/docs/' },
     ))

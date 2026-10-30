@@ -36,7 +36,7 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
 - A file's path below `src/` is its address. `src/invoices/index.abide` answers `/invoices`,
   `src/invoices/[id].abide` answers `/invoices/123`, and `layout.abide` wraps the pages below it;
   the outermost one writes `<html>`. Run `bun run routes` to see every address and the file behind it.
-- A `.ts` beside the pages is a handler: `src/invoices/getInvoice.ts` holds
+- A `<name>.handler.ts` beside the pages is a handler: `src/invoices/getInvoice.handler.ts` holds
   `export default GET(…)` and answers `/invoices/getInvoice`. It is the app's public API, for pages,
   scripts, the CLI and MCP alike.
 - A `.abide` cannot export. A `<script server>` in one holds that file's private handlers

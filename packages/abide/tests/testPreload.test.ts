@@ -27,11 +27,11 @@ const { label } = props<{ label: string }>()
 </script>
 
 <span id="badge">{label}</span>`,
-        'src/media/getThing.ts': `import { GET } from '@abide/abide/server'
+        'src/media/getThing.handler.ts': `import { GET } from '@abide/abide/server'
 
 export default GET(() => 'thing')
 `,
-        'src/media/signIn.ts': `import { principal } from '@abide/abide'
+        'src/media/signIn.handler.ts': `import { principal } from '@abide/abide'
 import { POST } from '@abide/abide/server'
 
 export default POST(async () => {
@@ -41,7 +41,7 @@ export default POST(async () => {
         'src/media/tests/badge.test.ts': `import { expect, test } from 'bun:test'
 import { createApp, render } from '@abide/abide/server'
 import Badge from '../lib/Badge.abide'
-import getThing from '../getThing.ts'
+import getThing from '../getThing.handler.ts'
 
 test('the component and the handler are the modules the app compiles', async () => {
     const html = new TextDecoder().decode(await render(Badge({ label: 'live' })))
@@ -262,7 +262,7 @@ test('a call in a test is held to the handler annotation — 15.8, 19.9, 38.121'
         }),
         'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
-        'src/tally.ts': `import { POST } from '@abide/abide/server'
+        'src/tally.handler.ts': `import { POST } from '@abide/abide/server'
 
 const runs = globalThis as { tallied?: number }
 
@@ -298,7 +298,7 @@ const send = async (n: unknown) => {
         'src/tests/annotated.test.ts': `import { expect, test } from 'bun:test'
 import { mount } from '@abide/harness/abide'
 import Form from '../lib/Form.abide'
-import tally from '../tally.ts'
+import tally from '../tally.handler.ts'
 
 const runs = globalThis as { tallied?: number }
 const REFUSED = 'ValidationError 422 {"n":["must be number, was string"]}'

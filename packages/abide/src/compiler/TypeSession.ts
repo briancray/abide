@@ -21,9 +21,10 @@ import {
     type Type,
 } from 'typescript/unstable/async'
 import { placeOf } from '#server/placement.ts'
+import { parseRoutePattern } from '#shared/routePattern.ts'
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReadsIn.ts'
-import type { AppLayout, PlacedSource } from './appLayout.ts'
+import type { AppLayout, AppRoute, PlacedSource } from './appLayout.ts'
 import { argsDefaultsIn } from './argsDefaultsIn.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import {
@@ -974,7 +975,7 @@ export class TypeSession {
             Partial<Pick<PlacedSource, 'kind' | 'route'>> & {
                 quiet?: boolean
             })[],
-        app: Pick<AppLayout, 'root' | 'addresses' | 'handlers'>,
+        app: Pick<AppLayout, 'root' | 'addresses' | 'handlers' | 'routes'>,
         scripts = true,
     ): Promise<{ diagnoses: Diagnosis[]; refused: Set<string> }> {
         using _held = this.hold()
@@ -1033,7 +1034,7 @@ export class TypeSession {
         // module augments one.
         this.register(
             `${this.canonical(within)}/${ROUTES_DECLARATION}`,
-            routesDeclaration(app.addresses),
+            routesDeclaration(app.addresses, app.routes),
             created,
             changed,
         )
@@ -1574,7 +1575,7 @@ const URL_SOURCE = Bun.fileURLToPath(new URL('../shared/url', import.meta.url))
 function routesDeclaration(addresses: readonly string[]): string {
     let keys = ''
     for (const route of addresses)
-        keys += `        ${JSON.stringify(route)}: true\n`
+        keys += `        ${JSON.stringify(route)}: ${narrowed.get(route) ?? 'true'}\n`
     return `export {}\ndeclare module ${JSON.stringify(URL_SOURCE)} {\n    interface Routes {\n${keys}    }\n}\n`
 }
 const AMBIENT_DECLARATIONS = `declare module '*.css' {}

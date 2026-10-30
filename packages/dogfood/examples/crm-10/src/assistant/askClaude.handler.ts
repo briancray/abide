@@ -5,7 +5,7 @@ import {
     POST,
     request,
 } from '@abide/abide/server'
-import standIn from './v1/messages.ts'
+import standIn from './v1/messages.handler.ts'
 
 export default POST(
     async function* ({ messages }: { messages: AssistantMessage[] }) {

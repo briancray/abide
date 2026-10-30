@@ -12,15 +12,15 @@ let app = ''
 beforeAll(async () => {
     app = appFixture({
         'index.abide': '<main>home</main>',
-        'greetings/hello.ts': `import { GET } from '@abide/abide/server'
+        'greetings/hello.handler.ts': `import { GET } from '@abide/abide/server'
 
 export default GET(() => 'hello')
 `,
-        'greetings/remember.ts': `import { POST } from '@abide/abide/server'
+        'greetings/remember.handler.ts': `import { POST } from '@abide/abide/server'
 
 export default POST((args: { name: string }) => args.name)
 `,
-        'greetings/add.ts': `import { POST } from '@abide/abide/server'
+        'greetings/add.handler.ts': `import { POST } from '@abide/abide/server'
 
 export default POST((args: { a: number; b: number }) => args.a + args.b, {
     description: 'Adds two numbers.',

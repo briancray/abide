@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import getStage from '../getStage.ts'
+import getStage from '../getStage.handler.ts'
 import { STAGES } from './STAGES.ts'
 
 let stage = reactive('lead')

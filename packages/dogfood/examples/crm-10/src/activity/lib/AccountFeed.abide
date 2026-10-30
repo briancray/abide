@@ -1,7 +1,7 @@
 <script>
 import { reactive } from '@abide/abide'
-import feed from '../feed.ts'
-import logToFeed from '../logToFeed.ts'
+import feed from '../feed.handler.ts'
+import logToFeed from '../logToFeed.handler.ts'
 
 const account = 'hopper-co'
 const entries = reactive(() => feed({ account }))

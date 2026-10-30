@@ -126,7 +126,7 @@ export function handlerFiles(
     const at = directory === '' ? '' : `${directory}/`
     const files: Record<string, string> = { [`${at}lib/handlers.ts`]: module }
     for (const [, name] of module.matchAll(/^export const (\w+)/gm))
-        files[`${at}${name}.ts`] =
+        files[`${at}${name}.handler.ts`] =
             `import { ${name} } from './lib/handlers.ts'\n\nexport default ${name}\n`
     return files
 }

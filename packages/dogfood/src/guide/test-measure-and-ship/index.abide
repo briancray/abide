@@ -7,7 +7,7 @@ import Section from '#src/lib/Section.abide'
 import Snippet from '#src/lib/Snippet.abide'
 import bunfigSource from 'crm-10/bunfig.toml' with { type: 'text' }
 import launcherSource from 'crm-10/src/launcher.abide' with { type: 'text' }
-import getSummarySource from 'crm-10/src/reports/getSummary.ts' with { type: 'text' }
+import getSummarySource from 'crm-10/src/reports/getSummary.handler.ts' with { type: 'text' }
 import reportsPageSource from 'crm-10/src/reports/index.abide' with { type: 'text' }
 import ClosedTiles from 'crm-10/src/reports/lib/ClosedTiles.abide'
 import closedTilesSource from 'crm-10/src/reports/lib/ClosedTiles.abide' with { type: 'text' }
@@ -51,7 +51,7 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
             summary="The reports page opens on a summary of the pipeline. Its test asks the app for the same handler the tiles read, as a request, and reads the answer the wire would carry."
             files={{
                 'src/reports/lib/PipelineSummary.abide': pipelineSummarySource,
-                'src/reports/getSummary.ts': getSummarySource,
+                'src/reports/getSummary.handler.ts': getSummarySource,
                 'src/reports/lib/PipelineSummary.test.ts': pipelineSummaryTestSource,
             }}
         >

@@ -593,9 +593,9 @@ test('a route literal is matched in the spelling its directory is filed under â€
     // `/invoices/[id]/index`.
     expect(routeOf('media/[id].abide')).toBe('/media/[id]')
     expect(routeOf('media/[id]/comments.abide')).toBe('/media/[id]/comments')
-    expect(routeOf('media/getGrid.ts')).toBe('/media/getGrid')
+    expect(routeOf('media/getGrid.handler.ts')).toBe('/media/getGrid')
     // Only the three `.abide` names are their directory's: a handler file is its own name.
-    expect(routeOf('media/index.ts')).toBe('/media/index')
+    expect(routeOf('media/index.handler.ts')).toBe('/media/index')
     expect(routeOf('admin/media/layout.abide')).toBe('/admin/media')
     expect(routeOf('admin/media/error.abide')).toBe('/admin/media')
     // A section named `pages` keeps its name.

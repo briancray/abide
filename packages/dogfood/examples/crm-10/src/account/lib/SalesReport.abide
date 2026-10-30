@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import salesReport from '../salesReport.ts'
+import salesReport from '../salesReport.handler.ts'
 
 const REGIONS = ['north', 'south']
 

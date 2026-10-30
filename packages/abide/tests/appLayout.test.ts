@@ -5,10 +5,12 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { realpathSync } from 'node:fs' // bun exposes no sync realpath of its own
+
 import { appMap } from '#compiler/appMap.ts'
 import { checkApp, checkSource } from '#compiler/checkApp.ts'
 import { openChecker } from '#compiler/compileApp.ts'
 import type { Diagnosis } from '#compiler/TypeSession.ts'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -26,7 +28,7 @@ const id: string = route.params().id
 </script>
 
 <p>{id}</p>`,
-    'node_modules/admin-kit/admin/users/list.ts': `import { GET, middleware } from '@abide/abide/server'
+    'node_modules/admin-kit/admin/users/list.handler.ts': `import { GET, middleware } from '@abide/abide/server'
 
 middleware((next) => next())
 
@@ -97,7 +99,7 @@ test("abide routes lists a mounted handler file's hooks at its mount — 38.108,
         {
             hook: 'middleware',
             route: '/tools/users/list',
-            file: 'node_modules/admin-kit/admin/users/list.ts',
+            file: 'node_modules/admin-kit/admin/users/list.handler.ts',
         },
     ])
 }, 60_000)
@@ -108,7 +110,7 @@ test("abide routes lists a mounted handler file's hooks at its mount — 38.108,
 test('a member call of an abide hook name on something else is no hook — 37.1, 38.108', async () => {
     const { hooks } = await appMap(
         appFixture({
-            'media/getGrid.ts': `import { GET } from '@abide/abide/server'
+            'media/getGrid.handler.ts': `import { GET } from '@abide/abide/server'
 
 const emitter = { onError: (_: () => void) => {} }
 emitter.onError(() => {})
@@ -127,7 +129,7 @@ export default GET(() => [1, 2])
 test('an indented top-level onConfig in a handler file types Config — 27.13', async () => {
     const found = await checkApp(
         appFixture({
-            'media/getGrid.ts': `import { config, GET, onConfig } from '@abide/abide/server'
+            'media/getGrid.handler.ts': `import { config, GET, onConfig } from '@abide/abide/server'
 
     onConfig(() => ({ RETRIES: 3 }))
 

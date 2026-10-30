@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { mount } from '@abide/harness/abide'
-import getStage from '../getStage.ts'
+import getStage from '../getStage.handler.ts'
 import StageTiles from './StageTiles.abide'
 import { LOADS } from './LOADS.server.ts'
 

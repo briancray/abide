@@ -1,7 +1,7 @@
 <script>
 import { outbox, reactive } from '@abide/abide'
-import listCalls from '../listCalls.ts'
-import logCall from '../logCall.ts'
+import listCalls from '../listCalls.handler.ts'
+import logCall from '../logCall.handler.ts'
 
 const calls = listCalls()
 let note = reactive('')

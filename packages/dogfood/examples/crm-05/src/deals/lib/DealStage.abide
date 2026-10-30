@@ -1,7 +1,7 @@
 <script>
 import { reactive } from '@abide/abide'
-import getDeal from '../getDeal.ts'
-import moveDeal from '../moveDeal.ts'
+import getDeal from '../getDeal.handler.ts'
+import moveDeal from '../moveDeal.handler.ts'
 
 let id = reactive('d2')
 let refusal = reactive('')

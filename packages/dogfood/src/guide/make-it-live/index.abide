@@ -14,21 +14,21 @@ import recentActivitySource from 'crm-05/src/activity/lib/RecentActivity.abide' 
 import recentActivityTestSource from 'crm-05/src/activity/lib/RecentActivity.test.ts' with { type: 'text' }
 import AccountFeed from 'crm-05/src/activity/lib/AccountFeed.abide'
 import accountFeedSource from 'crm-05/src/activity/lib/AccountFeed.abide' with { type: 'text' }
-import feedSource from 'crm-05/src/activity/feed.ts' with { type: 'text' }
-import logToFeedSource from 'crm-05/src/activity/logToFeed.ts' with { type: 'text' }
+import feedSource from 'crm-05/src/activity/feed.handler.ts' with { type: 'text' }
+import logToFeedSource from 'crm-05/src/activity/logToFeed.handler.ts' with { type: 'text' }
 import feedsSource from 'crm-05/src/activity/lib/feeds.ts' with { type: 'text' }
 import accountFeedTestSource from 'crm-05/src/activity/lib/AccountFeed.test.ts' with { type: 'text' }
 import ActivityHistory from 'crm-05/src/activity/lib/ActivityHistory.abide'
 import activityHistorySource from 'crm-05/src/activity/lib/ActivityHistory.abide' with { type: 'text' }
-import olderActivitySource from 'crm-05/src/activity/olderActivity.ts' with { type: 'text' }
+import olderActivitySource from 'crm-05/src/activity/olderActivity.handler.ts' with { type: 'text' }
 import activityHistoryTestSource from 'crm-05/src/activity/lib/ActivityHistory.test.ts' with { type: 'text' }
 import CsvExport from 'crm-05/src/activity/lib/CsvExport.abide'
 import csvExportSource from 'crm-05/src/activity/lib/CsvExport.abide' with { type: 'text' }
-import exportCsvSource from 'crm-05/src/activity/exportCsv.ts' with { type: 'text' }
+import exportCsvSource from 'crm-05/src/activity/exportCsv.handler.ts' with { type: 'text' }
 import csvExportTestSource from 'crm-05/src/activity/lib/CsvExport.test.ts' with { type: 'text' }
 import Wallboard from 'crm-05/src/activity/lib/Wallboard.abide'
 import wallboardSource from 'crm-05/src/activity/lib/Wallboard.abide' with { type: 'text' }
-import tickerSource from 'crm-05/src/activity/ticker.ts' with { type: 'text' }
+import tickerSource from 'crm-05/src/activity/ticker.handler.ts' with { type: 'text' }
 import wallboardTestSource from 'crm-05/src/activity/lib/Wallboard.test.ts' with { type: 'text' }
 </script>
 
@@ -100,8 +100,8 @@ import wallboardTestSource from 'crm-05/src/activity/lib/Wallboard.test.ts' with
             files={{
                 'src/activity/lib/AccountFeed.abide': accountFeedSource,
                 'src/activity/lib/feeds.ts': feedsSource,
-                'src/activity/feed.ts': feedSource,
-                'src/activity/logToFeed.ts': logToFeedSource,
+                'src/activity/feed.handler.ts': feedSource,
+                'src/activity/logToFeed.handler.ts': logToFeedSource,
                 'src/activity/lib/AccountFeed.test.ts': accountFeedTestSource,
             }}
         >
@@ -148,7 +148,7 @@ import wallboardTestSource from 'crm-05/src/activity/lib/Wallboard.test.ts' with
             summary="Hopper & Co's older activity, read from a slow archive. The list fills an entry at a time."
             files={{
                 'src/activity/lib/ActivityHistory.abide': activityHistorySource,
-                'src/activity/olderActivity.ts': olderActivitySource,
+                'src/activity/olderActivity.handler.ts': olderActivitySource,
                 'src/activity/lib/ActivityHistory.test.ts': activityHistoryTestSource,
             }}
         >
@@ -188,7 +188,7 @@ import wallboardTestSource from 'crm-05/src/activity/lib/Wallboard.test.ts' with
             summary="An account's activity as a CSV download. Each line goes into the file as its row is read."
             files={{
                 'src/activity/lib/CsvExport.abide': csvExportSource,
-                'src/activity/exportCsv.ts': exportCsvSource,
+                'src/activity/exportCsv.handler.ts': exportCsvSource,
                 'src/activity/lib/CsvExport.test.ts': csvExportTestSource,
             }}
         >
@@ -222,7 +222,7 @@ import wallboardTestSource from 'crm-05/src/activity/lib/Wallboard.test.ts' with
             summary="A wallboard by the sales floor reads today's deal moves. It sends no Accept header, and what comes back is events anyway."
             files={{
                 'src/activity/lib/Wallboard.abide': wallboardSource,
-                'src/activity/ticker.ts': tickerSource,
+                'src/activity/ticker.handler.ts': tickerSource,
                 'src/activity/lib/Wallboard.test.ts': wallboardTestSource,
             }}
         >

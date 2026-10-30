@@ -40,7 +40,7 @@ export const provider: (() => void) & { pairings: typeof pairings } = Object.ass
 
 export const latch = { sendRest: (): void => {} }
 `,
-    'invoices/getInvoice.ts': `${SERVER}import { SECRET } from '#src/lib/database.server.ts'
+    'invoices/getInvoice.handler.ts': `${SERVER}import { SECRET } from '#src/lib/database.server.ts'
 import { notYours } from './lib/shared.ts'
 
 export default GET(async ({ id }: { id: string }) => {
@@ -49,46 +49,46 @@ export default GET(async ({ id }: { id: string }) => {
     return { number: \`INV-\${id}\`, total: '$82.40' }
 })
 `,
-    'invoices/ping.ts': `${SERVER}export default GET(() => undefined)\n`,
-    'invoices/broken.ts': `${SERVER}export default GET((): string => {
+    'invoices/ping.handler.ts': `${SERVER}export default GET(() => undefined)\n`,
+    'invoices/broken.handler.ts': `${SERVER}export default GET((): string => {
     throw new Error('the database is on fire')
 })
 `,
-    'invoices/payInvoice.ts': `${SERVER}export default POST(async ({ id, amount }: { id: string; amount: number }) => ({ id, paid: amount }))\n`,
-    'invoices/created.ts': `${SERVER}export default POST(() => {
+    'invoices/payInvoice.handler.ts': `${SERVER}export default POST(async ({ id, amount }: { id: string; amount: number }) => ({ id, paid: amount }))\n`,
+    'invoices/created.handler.ts': `${SERVER}export default POST(() => {
     response().status = 201
     response().headers.set('location', '/invoices/9')
     return { id: '9' }
 })
 `,
-    'invoices/whoAsked.ts': `${SERVER}export default GET(() => request().headers.get('x-caller'))\n`,
-    'invoices/lines.ts': `${SERVER}export default GET(async function* () {
+    'invoices/whoAsked.handler.ts': `${SERVER}export default GET(() => request().headers.get('x-caller'))\n`,
+    'invoices/lines.handler.ts': `${SERVER}export default GET(async function* () {
     yield 1
 })
 `,
-    'invoices/postLines.ts': `${SERVER}export default POST(async function* () {
+    'invoices/postLines.handler.ts': `${SERVER}export default POST(async function* () {
     yield 1
 })
 `,
-    'invoices/pairing.ts': `${SERVER}import { provider } from './lib/shared.ts'
+    'invoices/pairing.handler.ts': `${SERVER}import { provider } from './lib/shared.ts'
 
 export default GET(provider.pairings)
 `,
-    'invoices/arrowLines.ts': `${SERVER}import { pairings } from './lib/shared.ts'
+    'invoices/arrowLines.handler.ts': `${SERVER}import { pairings } from './lib/shared.ts'
 
 export default GET(() => pairings())
 `,
-    'invoices/awaitedLines.ts': `${SERVER}import { pairings } from './lib/shared.ts'
+    'invoices/awaitedLines.handler.ts': `${SERVER}import { pairings } from './lib/shared.ts'
 
 export default GET(async () => pairings())
 `,
-    'invoices/pdf.ts': `${SERVER}export default GET(() => new Uint8Array([37, 80, 0, 255]))\n`,
-    'invoices/view.ts': `${SERVER}export default GET(
+    'invoices/pdf.handler.ts': `${SERVER}export default GET(() => new Uint8Array([37, 80, 0, 255]))\n`,
+    'invoices/view.handler.ts': `${SERVER}export default GET(
     () => new DataView(new Uint8Array([7, 255]).buffer),
 )
 `,
-    'invoices/csv.ts': `${SERVER}export default GET(() => new Blob(['a,b\\n'], { type: 'text/csv' }))\n`,
-    'invoices/binaryRows.ts': `${SERVER}import { latch } from './lib/shared.ts'
+    'invoices/csv.handler.ts': `${SERVER}export default GET(() => new Blob(['a,b\\n'], { type: 'text/csv' }))\n`,
+    'invoices/binaryRows.handler.ts': `${SERVER}import { latch } from './lib/shared.ts'
 
 export default GET(async function* () {
     yield new Uint8Array([1, 2])
@@ -98,7 +98,7 @@ export default GET(async function* () {
     yield new Uint8Array([255])
 })
 `,
-    'invoices/releaseRows.ts': `${SERVER}import { latch } from './lib/shared.ts'
+    'invoices/releaseRows.handler.ts': `${SERVER}import { latch } from './lib/shared.ts'
 
 export default POST(() => {
     latch.sendRest()
@@ -108,7 +108,7 @@ export default POST(() => {
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import getInvoice from '#src/invoices/getInvoice.ts'
+import getInvoice from '#src/invoices/getInvoice.handler.ts'
 
 const invoice = reactive(() => getInvoice({ id: '4021' }))
 </script>
@@ -142,8 +142,8 @@ beforeAll(async () => {
         'lib/database.server.ts': `export const SECRET = '${SECRET}'\n`,
         ...INVOICES,
         // A handler file answers at its own path (23.14), at the root as anywhere.
-        'health.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ up: true }))\n`,
-        'admin/uptime.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ days: 41 }))\n`,
+        'health.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ up: true }))\n`,
+        'admin/uptime.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ days: 41 }))\n`,
     }))
 }, 30_000)
 
@@ -260,7 +260,7 @@ test('the browser bundle carries the address and none of the server module — 1
 })
 
 // 16.74 — A PAGE IMPORTING A HANDLER FILE IS HANDED THE WRAPPER AS THAT FILE'S DEFAULT: the face the
-// build wrote for `invoices/getInvoice.ts` is one `export default __wire(…)` and none of the file —
+// build wrote for `invoices/getInvoice.handler.ts` is one `export default __wire(…)` and none of the file —
 // not its secret, not the refusal its body names — the bundle carries the same, the server's render
 // ran the handler itself, and the wrapper's call answers over the wire. THE REVERT: return the
 // file's text rather than `face.client` for the browser in `abideModules`' handler-namespace
@@ -268,7 +268,7 @@ test('the browser bundle carries the address and none of the server module — 1
 // every test here is served from (16.29).
 test('a page importing a handler file holds its wrapper, and the call answers — 16.74', async () => {
     const { handlers } = await builtCompilation(app)
-    const face = handlers['invoices/getInvoice.ts']?.client ?? ''
+    const face = handlers['invoices/getInvoice.handler.ts']?.client ?? ''
     expect(face).toContain('export default __wire("GET"')
     expect(face).not.toContain('refuse')
     const bundle = await clientBundle()
@@ -311,11 +311,11 @@ test('a page importing server code that is not a handler does not build — 16.2
 test('a handler file exporting a second name does not build, naming the file — 16.73', async () => {
     const stray = appFixture({
         'index.abide': '<p>home</p>',
-        'invoices/getInvoice.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1)\nexport const TAX_RATE = 0.2\n`,
+        'invoices/getInvoice.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1)\nexport const TAX_RATE = 0.2\n`,
     })
     const built = await buildApp(stray)
     expect(built.exitCode).not.toBe(0)
-    expect(built.stderr).toContain('invoices/getInvoice.ts exports `TAX_RATE`')
+    expect(built.stderr).toContain('invoices/getInvoice.handler.ts exports `TAX_RATE`')
     expect(built.stderr).toContain('RULEBOOK 16.73')
 })
 
@@ -340,12 +340,12 @@ test('two files answering one route do not build, and both files are named — 1
     const twice = appFixture({
         'index.abide': '<p>home</p>',
         'admin/audit.abide': '<p>audit</p>',
-        'admin/audit.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1)\n`,
+        'admin/audit.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1)\n`,
     })
     const built = await buildApp(twice)
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain('admin/audit.abide')
-    expect(built.stderr).toContain('admin/audit.ts')
+    expect(built.stderr).toContain('admin/audit.handler.ts')
 })
 
 // 16.73 — WHAT DECLARES A HANDLER IS THE CALL, NOT THE SPELLING OF THE LINE IT STANDS ON. Every
@@ -358,12 +358,12 @@ test('a handler declared any way the language allows is mounted with its method 
     const app = appFixture({
         'index.abide': '<p>home</p>',
         'lib/shared.ts': `import { PATCH } from '@abide/abide/server'\n\nexport const touch = PATCH(() => 1)\n`,
-        'later/find.ts': `import { GET } from '@abide/abide/server'\n\nconst find = GET(() => 1)\nexport default find\n`,
-        'later/lookup.ts': `import { GET } from '@abide/abide/server'\n\nconst find = GET(() => 1)\nexport { find as default }\n`,
-        'renamed/save.ts': `import { POST as post } from '@abide/abide/server'\n\nexport default post(() => 1)\n`,
-        'spaced/replace.ts': `import * as abide from '@abide/abide/server'\n\nexport default abide.PUT(() => 1)\n`,
-        'passed/touch.ts': `export { touch as default } from '#src/lib/shared.ts'\n`,
-        'named/named.ts': `import { DELETE } from '@abide/abide/server'\n\nconst drop = DELETE(() => 1)\nexport default drop\nexport type Dropped = { id: string }\n`,
+        'later/find.handler.ts': `import { GET } from '@abide/abide/server'\n\nconst find = GET(() => 1)\nexport default find\n`,
+        'later/lookup.handler.ts': `import { GET } from '@abide/abide/server'\n\nconst find = GET(() => 1)\nexport { find as default }\n`,
+        'renamed/save.handler.ts': `import { POST as post } from '@abide/abide/server'\n\nexport default post(() => 1)\n`,
+        'spaced/replace.handler.ts': `import * as abide from '@abide/abide/server'\n\nexport default abide.PUT(() => 1)\n`,
+        'passed/touch.handler.ts': `export { touch as default } from '#src/lib/shared.ts'\n`,
+        'named/named.handler.ts': `import { DELETE } from '@abide/abide/server'\n\nconst drop = DELETE(() => 1)\nexport default drop\nexport type Dropped = { id: string }\n`,
     })
     const built = await buildApp(app)
     expect(built.stderr).toBe('')
@@ -389,10 +389,10 @@ test('a handler declared any way the language allows is mounted with its method 
 test('a handler with clients.cli false, or returning a Response, is written to the table withheld from the shell — 16.37, 20.3, 38.62', async () => {
     const app = appFixture({
         'index.abide': '<p>home</p>',
-        'staff/internal.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'staff only', { clients: { cli: false } })\n`,
-        'staff/open.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'anyone')\n`,
-        'staff/raw.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async () => new Response('bytes'))\n`,
-        'staff/shown.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => new Response('{}'), { clients: { cli: true } })\n`,
+        'staff/internal.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'staff only', { clients: { cli: false } })\n`,
+        'staff/open.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'anyone')\n`,
+        'staff/raw.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async () => new Response('bytes'))\n`,
+        'staff/shown.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => new Response('{}'), { clients: { cli: true } })\n`,
     })
     const built = await buildApp(app)
     expect(built.stderr).toBe('')
@@ -414,12 +414,12 @@ test('a handler with clients.cli false, or returning a Response, is written to t
 test('a handler file whose default is not a handler does not build, naming the file — 16.73', async () => {
     const app = appFixture({
         'index.abide': '<p>home</p>',
-        'fake/count.ts': `const GET = (value: () => number) => value()\n\nexport default GET(() => 1)\n`,
+        'fake/count.handler.ts': `const GET = (value: () => number) => value()\n\nexport default GET(() => 1)\n`,
     })
     const built = await buildApp(app)
     expect(built.exitCode).not.toBe(0)
     expect(built.stderr).toContain(
-        "fake/count.ts's default export is not declared as a handler",
+        "fake/count.handler.ts's default export is not declared as a handler",
     )
     expect(built.stderr).toContain('RULEBOOK 16.73')
 })
@@ -765,7 +765,7 @@ test('a streaming mutation coalesces until its stream closes, then calls again �
 test('the build marks a handler returning an async generator as a stream in its wrapper — 16.32', async () => {
     const { handlers } = await builtCompilation(app)
     const lineOf = (name: string): string =>
-        handlers[`invoices/${name}.ts`]?.client
+        handlers[`invoices/${name}.handler.ts`]?.client
             .split('\n')
             .find((line) => line.startsWith('export default')) ?? ''
     expect(lineOf('lines')).toContain('{"stream":true}')
@@ -782,13 +782,13 @@ test('the build marks a handler returning an async generator as a stream in its 
 // the page ships a call to a handler its author withheld.
 test('a handler with clients.ui false gets no browser wrapper — 20.4', async () => {
     const HANDLERS = {
-        'staff/internal.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'staff only', { clients: { ui: false } })\n`,
-        'staff/open.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'anyone')\n`,
+        'staff/internal.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'staff only', { clients: { ui: false } })\n`,
+        'staff/open.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'anyone')\n`,
     }
     const refused = appFixture({
         'index.abide': `<script>
 import { reactive } from '@abide/abide'
-import internal from '#src/staff/internal.ts'
+import internal from '#src/staff/internal.handler.ts'
 
 const value = reactive(() => internal())
 </script>
@@ -803,7 +803,7 @@ const value = reactive(() => internal())
     const allowed = appFixture({
         'index.abide': `<script>
 import { reactive } from '@abide/abide'
-import open from '#src/staff/open.ts'
+import open from '#src/staff/open.handler.ts'
 
 const value = reactive(() => open())
 </script>

@@ -1,6 +1,6 @@
 <script>
 import { props, reactive } from '@abide/abide'
-import getStage from '../getStage.ts'
+import getStage from '../getStage.handler.ts'
 
 const { stage } = props<{ stage: string }>()
 const totals = reactive(() => getStage({ stage }))

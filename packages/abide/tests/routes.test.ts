@@ -3,7 +3,9 @@
 // document. Spawned, as an author runs it, over an app holding one of each.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
+
 import { appFixture, BIN } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -22,7 +24,7 @@ const { params } = props<{ params: { id: string } }>()
         // 37.1 — a hook a handler file calls is filed at that handler's own route, a member call
         // of abide's as much as a bare one. THE REVERT: skip a name after a `.` in `hookCalls`;
         // the middleware leaves the map.
-        'media/getGrid.ts': `import * as server from '@abide/abide/server'
+        'media/getGrid.handler.ts': `import * as server from '@abide/abide/server'
 
 server.middleware((next) => next())
 
@@ -64,7 +66,7 @@ test('abide routes --json lists every route, the private handler marked, and eve
             {
                 method: 'GET',
                 address: '/media/getGrid',
-                file: 'media/getGrid.ts',
+                file: 'media/getGrid.handler.ts',
                 kind: 'handler',
             },
         ],
@@ -72,7 +74,7 @@ test('abide routes --json lists every route, the private handler marked, and eve
             {
                 hook: 'middleware',
                 route: '/media/getGrid',
-                file: 'media/getGrid.ts',
+                file: 'media/getGrid.handler.ts',
             },
         ],
     })
@@ -98,7 +100,7 @@ test('abide routes prints the same map as text — 38.108', async () => {
         '',
         'hooks',
         expect.stringMatching(
-            /^ {2}middleware\s+\/media\/getGrid\s+media\/getGrid\.ts$/,
+            /^ {2}middleware\s+\/media\/getGrid\s+media\/getGrid\.handler\.ts$/,
         ),
     ])
 }, 30_000)

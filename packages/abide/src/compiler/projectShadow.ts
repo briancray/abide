@@ -763,7 +763,7 @@ function refuseExport(source: string): void {
         if (moved !== 0) depth += moved
         else if (depth === 0 && text === EXPORT && previous !== '.')
             throw new Error(
-                'abide: a .abide cannot export — its component is its one export. A handler another file calls is a handler file (a .ts beside the page, `export default GET(…)`); a value files share is a module under a lib directory. RULEBOOK 34.17.',
+                'abide: a .abide cannot export — its component is its one export. A handler another file calls is a handler file (a <name>.handler.ts beside the page, `export default GET(…)`); a value files share is a module under a lib directory. RULEBOOK 34.17.',
             )
         previous = text
     }

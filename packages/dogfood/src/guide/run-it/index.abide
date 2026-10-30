@@ -6,19 +6,19 @@ import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 import Retries from 'crm-08/src/ops/lib/Retries.abide'
 import retriesSource from 'crm-08/src/ops/lib/Retries.abide' with { type: 'text' }
-import getRetriesSource from 'crm-08/src/ops/getRetries.ts' with { type: 'text' }
+import getRetriesSource from 'crm-08/src/ops/getRetries.handler.ts' with { type: 'text' }
 import envSource from 'crm-08/.env' with { type: 'text' }
 import retriesTestSource from 'crm-08/src/ops/lib/Retries.test.ts' with { type: 'text' }
 import Pool from 'crm-08/src/ops/lib/Pool.abide'
 import poolSource from 'crm-08/src/ops/lib/Pool.abide' with { type: 'text' }
-import getPoolSource from 'crm-08/src/ops/getPool.ts' with { type: 'text' }
+import getPoolSource from 'crm-08/src/ops/getPool.handler.ts' with { type: 'text' }
 import poolTestSource from 'crm-08/src/ops/lib/Pool.test.ts' with { type: 'text' }
 import Console from 'crm-08/src/ops/lib/Console.abide'
 import consoleSource from 'crm-08/src/ops/lib/Console.abide' with { type: 'text' }
 import consoleTestSource from 'crm-08/src/ops/lib/Console.test.ts' with { type: 'text' }
 import Sync from 'crm-08/src/ops/lib/Sync.abide'
 import syncSource from 'crm-08/src/ops/lib/Sync.abide' with { type: 'text' }
-import syncContactSource from 'crm-08/src/ops/syncContact.ts' with { type: 'text' }
+import syncContactSource from 'crm-08/src/ops/syncContact.handler.ts' with { type: 'text' }
 import billingSource from 'crm-08/src/ops/lib/billing.ts' with { type: 'text' }
 import syncTestSource from 'crm-08/src/ops/lib/Sync.test.ts' with { type: 'text' }
 import Health from 'crm-08/src/ops/lib/Health.abide'
@@ -29,7 +29,7 @@ import offlineBannerSource from 'crm-08/src/ops/lib/OfflineBanner.abide' with { 
 import offlineBannerTestSource from 'crm-08/src/ops/lib/OfflineBanner.test.ts' with { type: 'text' }
 import CallLog from 'crm-08/src/ops/lib/CallLog.abide'
 import callLogSource from 'crm-08/src/ops/lib/CallLog.abide' with { type: 'text' }
-import logCallSource from 'crm-08/src/ops/logCall.ts' with { type: 'text' }
+import logCallSource from 'crm-08/src/ops/logCall.handler.ts' with { type: 'text' }
 import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 'text' }
 </script>
 
@@ -45,7 +45,7 @@ import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 
             summary="The CRM retries a failed call 3 times by default, and this deployment's .env says 5. The page adds one for the first try and shows 6."
             files={{
                 'src/ops/lib/Retries.abide': retriesSource,
-                'src/ops/getRetries.ts': getRetriesSource,
+                'src/ops/getRetries.handler.ts': getRetriesSource,
                 '.env': envSource.split('\n').filter((line) => line.startsWith('RETRIES')).join('\n'),
                 'src/ops/lib/Retries.test.ts': retriesTestSource,
             }}
@@ -110,7 +110,7 @@ import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 
             summary="The CRM's database pool takes a moment to connect. Reload: both times stay where the boot put them, the pool first."
             files={{
                 'src/ops/lib/Pool.abide': poolSource,
-                'src/ops/getPool.ts': getPoolSource,
+                'src/ops/getPool.handler.ts': getPoolSource,
                 'src/ops/lib/Pool.test.ts': poolTestSource,
             }}
         >
@@ -204,7 +204,7 @@ log.error('mailer refused', { error })`} />
             summary="Syncing a contact logs in the handler and again in the billing module it calls. Sync, and both lines carry the request's trace; sync again for a new one."
             files={{
                 'src/ops/lib/Sync.abide': syncSource,
-                'src/ops/syncContact.ts': syncContactSource,
+                'src/ops/syncContact.handler.ts': syncContactSource,
                 'src/ops/lib/billing.ts': billingSource,
                 'src/ops/lib/Sync.test.ts': syncTestSource,
             }}
@@ -307,7 +307,7 @@ watch(() => { if (online) refresh() })
             summary="A call logged on a train should not be lost in a tunnel. Take the browser offline in DevTools' Network panel, log a call, then go back online."
             files={{
                 'src/ops/lib/CallLog.abide': callLogSource,
-                'src/ops/logCall.ts': logCallSource,
+                'src/ops/logCall.handler.ts': logCallSource,
                 'src/ops/lib/CallLog.test.ts': callLogTestSource,
             }}
         >

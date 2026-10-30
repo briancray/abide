@@ -17,7 +17,7 @@ import type { Method } from '#shared/rpc.ts'
 
 /**
  * An `App` over `modules`, by the path below the app's root of each handler file —
- * `invoices/getInvoice.ts` — to what it exports, its handler as its default (16.73), with `rows`
+ * `invoices/getInvoice.handler.ts` — to what it exports, its handler as its default (16.73), with `rows`
  * laid over the table derived from them by address.
  */
 export function inMemoryApp(

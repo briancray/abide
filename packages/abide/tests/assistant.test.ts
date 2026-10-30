@@ -113,11 +113,11 @@ beforeAll(async () => {
     ;({ app, base, stop } = await serveApp(
         {
             'index.abide': '<main>home</main>',
-            'invoices/whoami.ts': INVOICES,
-            'pictures/drawn.ts': PICTURE,
-            'account/signIn.ts': SIGN_IN,
-            'account/signInAndPair.ts': SIGN_IN_AND_PAIR,
-            'account/signOut.ts': SIGN_OUT,
+            'invoices/whoami.handler.ts': INVOICES,
+            'pictures/drawn.handler.ts': PICTURE,
+            'account/signIn.handler.ts': SIGN_IN,
+            'account/signInAndPair.handler.ts': SIGN_IN_AND_PAIR,
+            'account/signOut.handler.ts': SIGN_OUT,
             // 16.2 — three handler files at the root, each re-exporting the module's binding.
             ...handlerFiles('', ASK),
         },

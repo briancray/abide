@@ -51,7 +51,7 @@ export type HasSegments<P extends string> = [
 
 export type Query = Record<string, unknown> | URLSearchParams
 
-/** The params a route literal takes, by segment kind. */
+/** The params a route literal takes, by segment kind, and 30.3 — narrowed where `abide check` says. */
 export type ParamsOf<P extends string> = {
     [K in RequiredNames<P>]: string | number
 } & { [K in OptionalNames<P>]?: string | number } & {

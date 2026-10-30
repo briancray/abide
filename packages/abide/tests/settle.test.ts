@@ -35,8 +35,8 @@ const LAYOUT = `<main><slot/></main>`
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import getInvoice from '#src/invoices/getInvoice.ts'
-import getSlow from '#src/invoices/getSlow.ts'
+import getInvoice from '#src/invoices/getInvoice.handler.ts'
+import getSlow from '#src/invoices/getSlow.handler.ts'
 
 const invoice = reactive(() => getInvoice({ id: '4021' }))
 const slow = reactive(() => getSlow())
@@ -51,8 +51,8 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'layout.abide': LAYOUT,
         'index.abide': PAGE,
-        'invoices/getInvoice.ts': GET_INVOICE,
-        'invoices/getSlow.ts': GET_SLOW,
+        'invoices/getInvoice.handler.ts': GET_INVOICE,
+        'invoices/getSlow.handler.ts': GET_SLOW,
     }))
 }, 30_000)
 

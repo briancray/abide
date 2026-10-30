@@ -1,6 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
-import getPool from '../getPool.ts'
+import getPool from '../getPool.handler.ts'
 
 const times = reactive(() => getPool())
 </script>

@@ -1,6 +1,6 @@
 import type { Store } from '@abide/abide'
-import getPreference from '../getPreference.ts'
-import setPreference from '../setPreference.ts'
+import getPreference from '../getPreference.handler.ts'
+import setPreference from '../setPreference.handler.ts'
 
 /** Where a preference lives between visits: both halves, or neither. */
 export function preferenceStore(name: string): Store<string> {
