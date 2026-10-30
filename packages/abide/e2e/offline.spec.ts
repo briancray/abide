@@ -55,7 +55,7 @@ test.beforeAll(async ({}, testInfo) => {
         "export const meetings: string[] = ['dune']\nexport const asked = { count: 0 }\n",
     )
     writeFileSync(
-        `${app}/data/getMeetings.ts`,
+        `${app}/data/getMeetings.handler.ts`,
         `import { GET } from '@abide/abide/server'
 import { asked, meetings } from './lib/meetings.ts'
 
@@ -66,7 +66,7 @@ export default GET(() => {
 `,
     )
     writeFileSync(
-        `${app}/data/getMeetingsAsked.ts`,
+        `${app}/data/getMeetingsAsked.handler.ts`,
         `import { GET } from '@abide/abide/server'
 import { asked } from './lib/meetings.ts'
 
@@ -74,7 +74,7 @@ export default GET(() => asked.count)
 `,
     )
     writeFileSync(
-        `${app}/data/addMeeting.ts`,
+        `${app}/data/addMeeting.handler.ts`,
         `import { POST } from '@abide/abide/server'
 import { meetings } from './lib/meetings.ts'
 
@@ -87,7 +87,7 @@ export default POST((args: { title: string }) => {
         `${app}/meetings/index.abide`,
         `<script>
 import { reactive } from '@abide/abide'
-import getMeetings from '#src/data/getMeetings.ts'
+import getMeetings from '#src/data/getMeetings.handler.ts'
 
 const meetings = reactive(() => getMeetings())
 </script>
@@ -98,7 +98,7 @@ const meetings = reactive(() => getMeetings())
         `${app}/meetings/new/index.abide`,
         `<script>
 import { navigate, refresh } from '@abide/abide'
-import addMeeting from '#src/data/addMeeting.ts'
+import addMeeting from '#src/data/addMeeting.handler.ts'
 
 async function add() {
     await addMeeting({ title: 'emma' })
