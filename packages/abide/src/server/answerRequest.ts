@@ -178,6 +178,16 @@ export type AppSources = {
 // 41.29 — the seed sink of a render no page hydrates: every call is left to run when it is made.
 const SEEDS_NOTHING: PageRender['seed'] = () => false
 
+// 35.19 — what fetch calls a navigation request's destinations, and a script's `fetch`.
+const PAGE_DESTINATIONS = new Set([
+    'document',
+    'embed',
+    'frame',
+    'iframe',
+    'object',
+    'empty',
+])
+
 /** The `Response` to one request: a handler, a surface of abide's own, a file, or a page. */
 export async function answerRequest(
     app: AppSources,
@@ -328,6 +338,17 @@ async function answerMatched(
     if (request.headers.has(NAVIGATION_HEADER))
         return new Response(null, {
             status: 204,
+            headers: { 'cache-control': 'no-store' },
+        })
+
+    // 35.19 — A REQUEST THAT CANNOT DISPLAY A PAGE, such as the `/favicon.ico` a browser asks every
+    // site for where a `[param]` page matches it: refused before setup, so no handler runs for it
+    // and no caller is minted. Bare, because an error page would set up too and nothing shows it;
+    // `no-store`, because the address answers a navigation with the page.
+    const destination = request.headers.get('sec-fetch-dest')
+    if (destination !== null && !PAGE_DESTINATIONS.has(destination))
+        return new Response(null, {
+            status: 404,
             headers: { 'cache-control': 'no-store' },
         })
 

@@ -227,6 +227,32 @@ test('a page fetched by a script leaves no seed for the next read — 41.29', as
     expect(answer.headers.get('server-timing')).toStartWith('Direct;')
 })
 
+// 35.19 — A PAGE ASKED FOR AS AN IMAGE IS NOT SET UP: Safari asks every site for `/favicon.ico` with
+// this caller's cookie, and a `[param]` page answering it ran every handler its setup calls. Nor is a
+// caller minted for one that carries none. THE REVERT: drop the `PAGE_DESTINATIONS` test from
+// `answerMatched`; the image is answered 200, `onPrincipal` runs once for it, and the cookie-less
+// one is handed a caller.
+test('a page asked for as an image is refused before its setup runs — 35.19', async () => {
+    const { principal, caller } = await signedIn()
+    const count = async (): Promise<number> =>
+        (await (await Bun.fetch(`${base}${RPC}/resolutions`)).json()) as number
+    const before = await count()
+    const image = await Bun.fetch(`${base}/`, {
+        headers: {
+            cookie: `${principal}; ${caller}`,
+            'sec-fetch-dest': 'image',
+        },
+    })
+    expect(image.status).toBe(404)
+    expect(await image.text()).toBe('')
+    expect((await count()) - before).toBe(0)
+    const anonymous = await Bun.fetch(`${base}/`, {
+        headers: { 'sec-fetch-dest': 'image' },
+    })
+    await anonymous.text()
+    expect(anonymous.headers.get('set-cookie')).toBeNull()
+})
+
 // 41.30 — A PAGE THE WORKER KEEPS CARRIES ITS EARLY CALLS, which a later open of it starts, and still
 // seeds nothing (41.29). THE REVERT: leave `callsOnly` out of `answerRequest`; the kept page carries
 // no early call, and opened later it hydrates before its data has landed.

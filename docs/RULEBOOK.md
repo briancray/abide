@@ -2322,6 +2322,9 @@ on any element is.
 35.18 A document an `error.abide` answers MUST NOT be hydrated as the page its address names, and a
 navigation from it MUST load the document it asks for.
 
+35.19 A page route MUST answer a request whose `sec-fetch-dest` names neither a destination fetch
+calls a navigation request's nor `empty` with a bodiless 404, and MUST NOT set up its page.
+
 # 36. Environment and files
 
 36.1 `PORT` MUST default to 3000, and a command's own port flag MUST override it by declaring it.
