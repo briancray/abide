@@ -1,5 +1,16 @@
 # @abide/abide
 
+## 0.118.0
+
+### Minor Changes
+
+- 1613343: Breaking: a handler file is named <name>.handler.ts (RULEBOOK 23.14, 23.22) ([`5f64c1b`](https://github.com/briancray/abide/commit/5f64c1b02dec18c6e8574a88ee46e2f7477bee71))
+- 1613343: Breaking: a route param names a matcher in a <NAME>.param.ts, and one naming none takes no part carrying a period (RULEBOOK 23.24-23.27, 30.34-30.37, 20.23) ([`db7b00d`](https://github.com/briancray/abide/commit/db7b00d07bbb8f47bc73a757356675555b276b51))
+
+### Patch Changes
+
+- 1613343: a page answers 404 to a request that cannot display it, before its setup runs (RULEBOOK 35.19) ([`7276d7c`](https://github.com/briancray/abide/commit/7276d7c41a44b5602b9dd4a779f85b3a05aa260f))
+
 ## 0.117.2
 
 ### Patch Changes
