@@ -5,6 +5,7 @@
 // twice or out of order still settles every call to the right value.
 
 import { afterAll, afterEach, expect, test } from 'bun:test'
+
 import { busy, outbox } from '#shared'
 import { deliver } from '#ui/outboxQueue.ts'
 import { wire } from '#ui/wire.ts'

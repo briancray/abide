@@ -11,6 +11,7 @@
 // answer available.
 
 import { tmpdir } from 'node:os' // bun has no temporary-directory lookup of its own
+
 import type { TestCase } from '../rows/index.ts'
 
 // A RUNNER THAT IS STOPPED STOPS ITS SUITES. SIGTERM reaches this process and nothing under it, so

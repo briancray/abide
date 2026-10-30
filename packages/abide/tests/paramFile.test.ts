@@ -3,6 +3,7 @@
 // written into what the route tables carry.
 
 import { expect, test } from 'bun:test'
+
 import { matcherOf, runawayIn } from '#compiler/paramFile.ts'
 
 const TICKER = 'holdings/TICKER.param.ts'
@@ -31,10 +32,14 @@ test('a param file declares one anchored matcher, and never a dot-segment — 23
 test('a param file holding anything but its one regex literal is refused — 23.24', () => {
     const refused = (text: string, relative = TICKER): string =>
         (matcherOf(relative, text) as Error).message
-    expect(refused("import x from './x.ts'\nexport const TICKER = /a/")).toContain('23.24')
+    expect(
+        refused("import x from './x.ts'\nexport const TICKER = /a/"),
+    ).toContain('23.24')
     expect(refused('export const TICKER = "a"')).toContain('23.24')
     expect(refused('export const TICKER = new RegExp("a")')).toContain('23.24')
-    expect(refused('export const TICKER = /a/\nexport const OTHER = /b/')).toContain('23.24')
+    expect(
+        refused('export const TICKER = /a/\nexport const OTHER = /b/'),
+    ).toContain('23.24')
     expect(refused('export const OTHER = /a/')).toContain('exports OTHER')
     expect(refused('export const TICKER = /a/i')).toContain('the flag i')
 })

@@ -13,6 +13,7 @@ import {
     writeBound,
 } from '#shared/boundValue.ts'
 import { numberFromText } from '#shared/numberFromText.ts'
+
 import type { Scope } from './Scope.ts'
 
 type Bound = HTMLInputElement & HTMLDetailsElement

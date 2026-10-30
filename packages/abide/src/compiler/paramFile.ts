@@ -9,6 +9,7 @@
 // and still never admit `.` or `..`, which the URL parser collapses into another route.
 
 import { SyntaxKind } from 'typescript/unstable/ast'
+
 import { tokenize } from './tokenize.ts'
 
 /** The name a param file declares: its file name before `.param.ts`. */

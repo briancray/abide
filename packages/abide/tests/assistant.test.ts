@@ -4,10 +4,12 @@
 // `post_invoices_whoami`, and a turn that says what it answered.
 
 import { afterAll, afterEach, beforeAll, expect, jest, test } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
+
 import {
-    HEARTBEAT_MILLISECONDS as BRIDGE_HEARTBEAT_MILLISECONDS,
     BRIDGE_PATH,
+    HEARTBEAT_MILLISECONDS as BRIDGE_HEARTBEAT_MILLISECONDS,
     RESUME_MILLISECONDS as BRIDGE_RESUME_MILLISECONDS,
     SILENCE_MILLISECONDS,
 } from '../../bridge/src/bridge.ts'

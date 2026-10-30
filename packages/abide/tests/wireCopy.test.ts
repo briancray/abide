@@ -4,9 +4,11 @@
 // how long the copy may serve what it was answered.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { flushSync, invalidate, watch } from '#shared'
 import { rowKeyOf } from '#ui/rowKeyOf.ts'
 import { wire } from '#ui/wire.ts'
+
 import { appFixture, buildApp, builtCompilation } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

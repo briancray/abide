@@ -3,9 +3,11 @@
 // not, and neither is a request-local body or a `csp` read for anything but its `nonce`.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
 import type { Diagnosis } from '#compiler/TypeSession.ts'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'

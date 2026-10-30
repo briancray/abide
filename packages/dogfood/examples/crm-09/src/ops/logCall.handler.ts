@@ -1,4 +1,5 @@
 import { POST } from '@abide/abide/server'
+
 import { type Call, calls } from './lib/calls.ts'
 
 /** Logs a call once, however often it is sent: the browser picks its id. */

@@ -4,18 +4,19 @@ import {
     isVariableDeclaration,
 } from 'typescript/unstable/ast/is'
 import {
-    type Symbol as CheckedSymbol,
     type Checker,
     ObjectFlags,
     type ObjectType,
     type Project,
     SignatureKind,
+    type Symbol as CheckedSymbol,
     type Type,
     TypeFlags,
     type TypeParameter,
     type TypeReference,
     type UnionOrIntersectionType,
 } from 'typescript/unstable/async'
+
 import { aliasedSymbol } from './aliasedSymbol.ts'
 
 // WHAT THE CHECKER SAYS A NAME HOLDS, asked by both of the session's jobs over one snapshot: the

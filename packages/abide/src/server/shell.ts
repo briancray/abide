@@ -4,9 +4,11 @@
 // is the only part that needs a terminal. A call goes over http through `remote.ts`, as any client's.
 
 import { createInterface } from 'node:readline' // bun exposes no line editor of its own
+
 import { isRecord } from '#shared/isRecord.ts'
 import { useColor } from '#shared/log.ts'
 import { paint as painted } from '#shared/paint.ts'
+
 import type { Mount } from './answerRpc.ts'
 import { LogPanel } from './LogPanel.ts'
 import { callHandler, watch } from './remote.ts'

@@ -1,5 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
+
 import askClaudeCode from '../askClaudeCode.handler.ts'
 import bridge from '../bridge.handler.ts'
 
@@ -31,18 +32,22 @@ const answer = reactive(() => {
         text-chrome">{pairing.at(-1)?.command}</pre>
 {:else}
     <div class="row">
-        <button onclick={() => { connecting = true }}>Connect</button>
+        <button onclick={() => {
+            connecting = true
+        }}>Connect</button>
     </div>
 {/if}
 
 <ul class="chat">
     <li data-speaker="you"><span>you</span><p>{QUESTION}</p></li>
 {#if answer}
-    <li><span>claude code</span><p>{answer}</p></li>
-{/if}
+        <li><span>claude code</span><p>{answer}</p></li>
+    {/if}
 </ul>
 
 <div class="row">
-    <button onclick={() => { asked += 1 }}>Ask</button>
+    <button onclick={() => {
+        asked += 1
+    }}>Ask</button>
     <span class="status">{events.error()?.message ?? ''}</span>
 </div>

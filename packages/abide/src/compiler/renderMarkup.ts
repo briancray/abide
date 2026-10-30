@@ -1,10 +1,10 @@
-import { REGION_CLOSE, REGION_OPEN, ROW_OPEN } from '#shared/ANCHORS.ts'
 import { anchorMarkup, regionMarkup } from '#shared/anchorMarkup.ts'
+import { REGION_CLOSE, REGION_OPEN, ROW_OPEN } from '#shared/ANCHORS.ts'
 import { armAnchor } from '#shared/armAnchor.ts'
 import { CHILDREN } from '#shared/CHILDREN.ts'
 import { escapeQuote } from '#shared/escapeText.ts'
 import { headKeyOf } from '#shared/headKeyOf.ts'
-import { Cursor, type PlacedNode, placeTemplate } from './Cursor.ts'
+
 import {
     attributeOf,
     type ClassifiedAttribute,
@@ -15,6 +15,7 @@ import {
     isSlot,
     type MergeGroup,
 } from './classifyTemplate.ts'
+import { Cursor, type PlacedNode, placeTemplate } from './Cursor.ts'
 import { invocationProps, passedName } from './invocationProps.ts'
 import { type Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'

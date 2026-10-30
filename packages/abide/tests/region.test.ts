@@ -7,8 +7,11 @@
 // as they would for the page the author wrote. A wrapper element breaks every one of them.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { measure } from '@abide/harness/abide'
+
 import { flushSync } from '#shared'
+
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { clientOf, closeTyped, renderPage } from './typed.ts'
 

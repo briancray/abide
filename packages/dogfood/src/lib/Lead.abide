@@ -1,6 +1,7 @@
 <script>
 // Another page's opening paragraph, as a section overview lists it (40.29).
 import { props, raw } from '@abide/abide'
+
 import { inline } from './inline.ts'
 import { pageAt } from './sitePages.ts'
 

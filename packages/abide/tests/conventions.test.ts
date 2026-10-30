@@ -9,6 +9,7 @@
 // spelling it does not is a hole in it rather than a pass.
 
 import { expect, test } from 'bun:test'
+
 import {
     CITATION,
     rulebookClauses,

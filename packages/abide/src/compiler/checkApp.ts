@@ -1,12 +1,14 @@
 import { relative } from 'node:path' // bun exposes no path helpers of its own
+
 import { type Placement, placement } from '#server/placement.ts'
+
 import type { PlacedSource } from './appLayout.ts'
 import { type AppChecker, compiled } from './compileApp.ts'
 import { abideImportsOf } from './componentGraph.ts'
 import { hooksIn } from './hookCalls.ts'
 import { parseAbide, scriptBodies } from './parseAbide.ts'
-import { Refusals } from './Refusals.ts'
 import { parseSources, readSources } from './readSources.ts'
+import { Refusals } from './Refusals.ts'
 import type { Diagnosis } from './TypeSession.ts'
 
 /**

@@ -4,6 +4,7 @@
 // served in here for `serve.test.ts`'s reason — happy-dom's preload clobbers `Response`.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

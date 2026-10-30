@@ -5,6 +5,7 @@
 
 import { escapeText, reactive } from '@abide/abide'
 import { batch, emulatedDom, type Sample } from '@abide/harness/report'
+
 import { cards, vanillaMarkup } from './renderCases.ts'
 
 const N = 1000

@@ -11,6 +11,7 @@ import {
     isObjectLiteralExpression,
     isPropertyAssignment,
 } from 'typescript/unstable/ast/is'
+
 import type { Method } from '#shared/rpc.ts'
 
 /**

@@ -3,6 +3,7 @@
 // page still renders.
 
 import { expect, test } from 'bun:test'
+
 import { sidebarGroupsOf, tabOf } from '../src/lib/siteSections.ts'
 
 test('an address is in the tab its first segment names, and the guides otherwise', () => {

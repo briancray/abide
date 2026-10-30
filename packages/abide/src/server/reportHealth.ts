@@ -7,6 +7,7 @@
 import type { Health } from '#shared/health.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { namedLogger } from '#shared/log.ts'
+
 import abidePackage from '../../package.json' with { type: 'json' }
 import { appIdentity, config } from './config.ts'
 import { HOOKS, inOrder } from './hooks.ts'

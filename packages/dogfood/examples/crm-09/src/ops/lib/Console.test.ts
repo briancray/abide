@@ -1,7 +1,9 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { createApp } from '@abide/abide/server'
 import { mount } from '@abide/harness/abide'
+
 import manifest from '../../../package.json' with { type: 'json' }
 import Console from './Console.abide'
 

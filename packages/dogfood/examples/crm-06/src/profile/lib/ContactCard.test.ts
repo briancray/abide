@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { measure, mount } from '@abide/harness/abide'
+
 import ContactCard from './ContactCard.abide'
 
 test('the avatar follows its name prop, and is not rebuilt', async () => {

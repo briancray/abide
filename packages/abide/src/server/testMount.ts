@@ -3,6 +3,7 @@
 // same two halves a page load runs, in one process, so a test can click it and read the work.
 
 import { flushSync } from '#shared/reactive/Reactive.ts'
+
 import { MOUNTABLE } from './MOUNTABLE.ts'
 import { type Component, render } from './render.ts'
 

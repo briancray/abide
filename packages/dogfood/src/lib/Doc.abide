@@ -7,7 +7,8 @@
 //
 // THE SCROLL SPY IS THE RAIL'S, bound to it rather than to `main`: on a page the reader navigated
 // to, `main` is built before the rail, and a spy installed then finds no links to mark.
-import { raw, reactive, route, url, type RouteLiteral } from '@abide/abide'
+import { raw, reactive, route, type RouteLiteral, url } from '@abide/abide'
+
 import { inline } from './inline.ts'
 import { installDocs } from './installDocs.ts'
 import { markdownAddressOf, neighborsOf, pageAt } from './sitePages.ts'
@@ -39,7 +40,7 @@ const headings = reactive.share('docHeadings', () =>
     </header>
     <div class="flow">
         <p>{raw(inline(page.lead))}</p>
-        <slot/>
+        <slot />
     </div>
     <footer>
         {#if previous}

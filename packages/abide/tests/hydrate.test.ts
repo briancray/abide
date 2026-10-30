@@ -7,9 +7,12 @@
 // moved, both of which a naive re-render would raise and neither of which changes the output.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { measure } from '@abide/harness/abide'
+
 import { emitClient, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
+
 import { removeTemporaryModules } from './temporaryModule.ts'
 import {
     clientOf,

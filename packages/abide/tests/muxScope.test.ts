@@ -4,6 +4,7 @@
 // (18.8).
 
 import { expect, test } from 'bun:test'
+
 import { Mux, type MuxConnection } from '#server/answerSocket.ts'
 import type { BootedApp } from '#server/createApp.ts'
 import { onError } from '#server/hooks.ts'
@@ -17,6 +18,7 @@ import {
 import { reactive, watch } from '#shared'
 import type { Middleware } from '#shared/Middleware.ts'
 import { GET } from '#shared/rpc.ts'
+
 import { inMemoryApp } from './inMemoryApp.ts'
 
 installServer()

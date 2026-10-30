@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { createApp } from '@abide/abide/server'
 
 // Each request is a caller of its own, as each open tab is.

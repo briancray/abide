@@ -2,9 +2,12 @@
 // value standing at render into the tag, and the client binds the property where the server left it.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { File as EmulatedFile } from 'happy-dom'
+
 import { emitClient, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
+
 import { removeTemporaryModules } from './temporaryModule.ts'
 import {
     clientOf,

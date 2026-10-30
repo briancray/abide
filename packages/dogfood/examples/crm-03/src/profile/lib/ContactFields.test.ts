@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
+
 import ContactFields from './ContactFields.abide'
 
 test('typing writes the value, and the value fills the field', async () => {

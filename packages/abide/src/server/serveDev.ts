@@ -20,6 +20,7 @@
 
 import { watch } from 'node:fs' // bun exposes no file watcher of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
+
 import {
     type AppChecker,
     compilationOf,
@@ -28,6 +29,7 @@ import {
 } from '#compiler/compileApp.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
+
 import type { Compilation } from './abideModules.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
 import type { FromWorker, ToWorker } from './devWorker.ts'
@@ -66,8 +68,7 @@ const LAST_DEV_PORT = 3099
 // An app-mux socket's data: the id the worker knows its connection by, and what `Mux.connect` reads
 // off the upgrade. `undefined` on the reload client's.
 type Carried =
-    | { connection: number; url: string; headers: [string, string][] }
-    | undefined
+    { connection: number; url: string; headers: [string, string][] } | undefined
 
 /**
  * `abide dev`'s listener, compiling the app here and serving it from a child process.

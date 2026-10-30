@@ -1,4 +1,5 @@
 import { GET } from '@abide/abide/server'
+
 import { CONTACTS } from './lib/CONTACTS.server.ts'
 
 export default GET(async () => {

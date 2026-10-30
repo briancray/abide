@@ -9,13 +9,14 @@
 // than assuming it, and a browser's is ~100 µs against bun's 41 ns.
 
 import {
-    type BatchSpec,
     batch,
+    type BatchSpec,
     claimOf,
     emulatedDom,
     ratio,
     type Sample,
 } from '@abide/harness/report'
+
 import { type ReactiveBenchRow, reactiveCases } from './reactiveCases.ts'
 
 function run(sizing?: Pick<BatchSpec, 'reps' | 'warmup'>): ReactiveBenchRow[] {

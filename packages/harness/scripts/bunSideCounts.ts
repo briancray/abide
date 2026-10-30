@@ -2,6 +2,7 @@
 // which runs on node and cannot import a lane — can compare against it rather than
 // against a second transcription of the same expectations.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
+
 import { CASES } from '../e2e/CASES.ts'
 
 GlobalRegistrator.register({ url: 'http://localhost/' })

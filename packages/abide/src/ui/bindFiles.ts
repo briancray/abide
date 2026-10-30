@@ -1,4 +1,5 @@
 import { boundValue, writeBound } from '#shared/boundValue.ts'
+
 import type { Scope } from './Scope.ts'
 
 /**

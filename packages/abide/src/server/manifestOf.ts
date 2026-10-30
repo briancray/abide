@@ -16,6 +16,7 @@
 // a preload of the same address is a second request line for bytes already on their way.
 
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
+
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import { VIRTUAL_DIRECTORY } from './VIRTUAL_DIRECTORY.ts'
 

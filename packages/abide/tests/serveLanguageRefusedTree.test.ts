@@ -3,8 +3,10 @@
 // `routesDeclaration` call `appFiles(root)` with no refusal sink; three checks open three checkers.
 
 import { afterAll, expect, spyOn, test } from 'bun:test'
+
 import { serveLanguage } from '#compiler/serveLanguage.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

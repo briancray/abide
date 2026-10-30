@@ -1,4 +1,5 @@
 import { relative } from 'node:path' // bun exposes no path helpers of its own
+
 import type { Diagnosis } from './TypeSession.ts'
 
 /**

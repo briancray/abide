@@ -13,11 +13,11 @@ const sync = log.named('sync')
 </div>
 
 <ul class="fields stacked">
-{#for record of log.records().slice(-20)}
-    {#if /:(billing|sync)$/.test(record.namespace)}
-        <li>
-            <span>{record.namespace}</span><strong>{record.message}</strong>
-        </li>
-    {/if}
-{/for}
+    {#for record of log.records().slice(-20)}
+        {#if /:(billing|sync)$/.test(record.namespace)}
+            <li>
+                <span>{record.namespace}</span><strong>{record.message}</strong>
+            </li>
+        {/if}
+    {/for}
 </ul>

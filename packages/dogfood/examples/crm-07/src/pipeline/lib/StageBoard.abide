@@ -1,8 +1,8 @@
 <script>
 import getStage from '../getStage.handler.ts'
 import winDeal from '../winDeal.handler.ts'
-import StageTile from './StageTile.abide'
 import { STAGES } from './STAGES.ts'
+import StageTile from './StageTile.abide'
 
 async function win() {
     await winDeal()
@@ -13,9 +13,9 @@ async function win() {
 </script>
 
 <ul class="tiles">
-{#for stage of STAGES}
-    <StageTile stage={stage}/>
-{/for}
+    {#for stage of STAGES}
+        <StageTile stage={stage} />
+    {/for}
 </ul>
 
 <div class="row">

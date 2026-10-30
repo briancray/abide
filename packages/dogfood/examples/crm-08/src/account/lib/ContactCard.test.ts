@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
+
 import { createApp } from '@abide/abide/server'
+
 import getContact from '../getContact.handler.ts'
 
 test('an admin reads the deal value', async () => {

@@ -3,10 +3,13 @@
 // wait bounded, so a revert fails here rather than hanging the suite.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
+
 import { GET } from '#server'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
 import { seedFor, takeSeed } from '#server/seedBuffer.ts'
+
 import { addressOf, appFixture, BIN, buildApp } from './builtApp.ts'
 import { inMemoryApp } from './inMemoryApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'

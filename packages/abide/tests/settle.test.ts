@@ -4,7 +4,9 @@
 // What is asserted is the markup the server sent, and that nothing was set up twice to get it.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { renderDocument } from '#server/render.ts'
+
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { closeTyped, serverOf } from './typed.ts'

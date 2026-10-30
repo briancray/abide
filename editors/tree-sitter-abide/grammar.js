@@ -20,108 +20,129 @@
 // around strings, template literals and comments — the one thing a regular expression cannot do.
 // It is TypeScript to anything that highlights it, a `{#for}` header aside.
 
-const HTML = require('tree-sitter-html/grammar');
+const HTML = require('tree-sitter-html/grammar')
 
 module.exports = grammar(HTML, {
-  name: 'abide',
+    name: 'abide',
 
-  externals: ($, original) => original.concat([$.code]),
+    externals: ($, original) => original.concat([$.code]),
 
-  rules: {
-    _node: ($, original) => choice(
-      original,
-      $.expression,
-      $.if_block,
-      $.for_block,
-      $.try_block,
-      $.component_block,
-    ),
+    rules: {
+        _node: ($, original) =>
+            choice(
+                original,
+                $.expression,
+                $.if_block,
+                $.for_block,
+                $.try_block,
+                $.component_block,
+            ),
 
-    expression: $ => seq('{', optional($.code), '}'),
+        expression: ($) => seq('{', optional($.code), '}'),
 
-    if_block: $ => seq(
-      $.if_start,
-      repeat($._node),
-      repeat($.else_if_clause),
-      optional($.else_clause),
-      $.if_end,
-    ),
-    if_start: $ => seq(keyword($, '{#if'), field('condition', $.code), '}'),
-    else_if_clause: $ => seq($.else_if_start, repeat($._node)),
-    else_if_start: $ => seq(
-      alias(token(seq('{:else', /\s+/, 'if')), $.block_keyword),
-      field('condition', $.code),
-      '}',
-    ),
-    else_clause: $ => seq($.else_start, repeat($._node)),
-    else_start: $ => seq(keyword($, '{:else'), '}'),
-    if_end: $ => seq(keyword($, '{/if'), '}'),
+        if_block: ($) =>
+            seq(
+                $.if_start,
+                repeat($._node),
+                repeat($.else_if_clause),
+                optional($.else_clause),
+                $.if_end,
+            ),
+        if_start: ($) =>
+            seq(keyword($, '{#if'), field('condition', $.code), '}'),
+        else_if_clause: ($) => seq($.else_if_start, repeat($._node)),
+        else_if_start: ($) =>
+            seq(
+                alias(token(seq('{:else', /\s+/, 'if')), $.block_keyword),
+                field('condition', $.code),
+                '}',
+            ),
+        else_clause: ($) => seq($.else_start, repeat($._node)),
+        else_start: ($) => seq(keyword($, '{:else'), '}'),
+        if_end: ($) => seq(keyword($, '{/if'), '}'),
 
-    for_block: $ => seq($.for_start, repeat($._node), $.for_end),
-    for_start: $ => seq(keyword($, '{#for'), field('header', $.code), '}'),
-    for_end: $ => seq(keyword($, '{/for'), '}'),
+        for_block: ($) => seq($.for_start, repeat($._node), $.for_end),
+        for_start: ($) =>
+            seq(keyword($, '{#for'), field('header', $.code), '}'),
+        for_end: ($) => seq(keyword($, '{/for'), '}'),
 
-    try_block: $ => seq(
-      $.try_start,
-      repeat($._node),
-      optional($.catch_clause),
-      optional($.finally_clause),
-      $.try_end,
-    ),
-    try_start: $ => seq(keyword($, '{#try'), '}'),
-    catch_clause: $ => seq($.catch_start, repeat($._node)),
-    catch_start: $ => seq(keyword($, '{:catch'),
-      optional(field('error', $.code)),
-      '}',
-    ),
-    finally_clause: $ => seq($.finally_start, repeat($._node)),
-    finally_start: $ => seq(keyword($, '{:finally'), '}'),
-    try_end: $ => seq(keyword($, '{/try'), '}'),
+        try_block: ($) =>
+            seq(
+                $.try_start,
+                repeat($._node),
+                optional($.catch_clause),
+                optional($.finally_clause),
+                $.try_end,
+            ),
+        try_start: ($) => seq(keyword($, '{#try'), '}'),
+        catch_clause: ($) => seq($.catch_start, repeat($._node)),
+        catch_start: ($) =>
+            seq(keyword($, '{:catch'), optional(field('error', $.code)), '}'),
+        finally_clause: ($) => seq($.finally_start, repeat($._node)),
+        finally_start: ($) => seq(keyword($, '{:finally'), '}'),
+        try_end: ($) => seq(keyword($, '{/try'), '}'),
 
-    component_block: $ => seq(
-      $.component_start,
-      repeat($._node),
-      $.component_end,
-    ),
-    component_start: $ => seq(keyword($, '{#component'),
-      field('signature', $.code),
-      '}',
-    ),
-    component_end: $ => seq(keyword($, '{/component'), '}'),
+        component_block: ($) =>
+            seq($.component_start, repeat($._node), $.component_end),
+        component_start: ($) =>
+            seq(keyword($, '{#component'), field('signature', $.code), '}'),
+        component_end: ($) => seq(keyword($, '{/component'), '}'),
 
-    attribute: $ => choice(
-      seq(
-        $.attribute_name,
-        optional(seq(
-          '=',
-          choice(
-            $.attribute_value,
-            $.quoted_attribute_value,
-            $.expression,
-          ),
-        )),
-      ),
-      $.spread,
-    ),
+        attribute: ($) =>
+            choice(
+                seq(
+                    $.attribute_name,
+                    optional(
+                        seq(
+                            '=',
+                            choice(
+                                $.attribute_value,
+                                $.quoted_attribute_value,
+                                $.expression,
+                            ),
+                        ),
+                    ),
+                ),
+                $.spread,
+            ),
 
-    spread: $ => seq('{', '...', $.code, '}'),
+        spread: ($) => seq('{', '...', $.code, '}'),
 
-    // A quoted value may hold slots: `class="badge {tone}"` (32.3).
-    quoted_attribute_value: $ => choice(
-      seq('\'', repeat(choice(alias(/[^'{]+/, $.attribute_value), $.expression)), '\''),
-      seq('"', repeat(choice(alias(/[^"{]+/, $.attribute_value), $.expression)), '"'),
-    ),
+        // A quoted value may hold slots: `class="badge {tone}"` (32.3).
+        quoted_attribute_value: ($) =>
+            choice(
+                seq(
+                    "'",
+                    repeat(
+                        choice(
+                            alias(/[^'{]+/, $.attribute_value),
+                            $.expression,
+                        ),
+                    ),
+                    "'",
+                ),
+                seq(
+                    '"',
+                    repeat(
+                        choice(
+                            alias(/[^"{]+/, $.attribute_value),
+                            $.expression,
+                        ),
+                    ),
+                    '"',
+                ),
+            ),
 
-    attribute_name: _ => /[^<>{}"'/=\s]+/,
+        attribute_name: (_) => /[^<>{}"'/=\s]+/,
 
-    attribute_value: _ => /[^<>{}"'=\s]+/,
+        attribute_value: (_) => /[^<>{}"'=\s]+/,
 
-    text: _ => /[^<>{}&\s]([^<>{}&]*[^<>{}&\s])?/,
-  },
-});
+        text: (_) => /[^<>{}&\s]([^<>{}&]*[^<>{}&\s])?/,
+    },
+})
 
 // A block's opening — `{#if`, `{:else`, `{/for` — as ONE token, brace and word together, so a `{`
 // is a slot's or a block's by the longest match rather than by a second token of lookahead.
 function keyword($, word) {
-  return alias(word, $.block_keyword);
+    return alias(word, $.block_keyword)
 }

@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { createApp } from '@abide/abide/server'
 
 test('the contacts page is complete before the contacts land', async () => {

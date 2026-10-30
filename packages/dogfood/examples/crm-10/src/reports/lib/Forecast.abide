@@ -1,5 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
+
 import { advance, type Deal, forecast } from './forecast.ts'
 
 let deals = reactive<Deal[]>([

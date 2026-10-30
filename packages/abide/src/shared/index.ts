@@ -23,11 +23,7 @@ export {
 } from './boundValue.ts'
 export { type Cookies, cookies } from './cookies.ts'
 export { csp } from './csp.ts'
-export {
-    escapeAttribute,
-    escapeStyleValue,
-    escapeText,
-} from './escapeText.ts'
+export { escapeAttribute, escapeStyleValue, escapeText } from './escapeText.ts'
 export { type Failed, isFailed } from './Failed.ts'
 // 25 — the account of the app.
 export { type Health, health } from './health.ts'

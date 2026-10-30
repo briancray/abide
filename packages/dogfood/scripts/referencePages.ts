@@ -12,8 +12,8 @@
 import { slugify } from '../src/lib/inline.ts'
 import {
     placementsOf,
-    type ReferencePage,
     referenceFileOf,
+    type ReferencePage,
     registryRows,
     scopeOf,
 } from '../src/lib/referenceOf.ts'

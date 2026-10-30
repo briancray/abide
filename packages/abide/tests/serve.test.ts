@@ -15,6 +15,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { brotliDecompressSync } from 'node:zlib' // bun decompresses gzip and zstd of its own, and no brotli
+
 import { buildApp, serveApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -145,9 +146,9 @@ beforeAll(async () => {
     if (built.exitCode !== 0)
         throw new Error(`abide build failed: ${built.stderr}`)
 
-        // `--port 0` and the address read back off stdout, rather than a number picked here: this
-        // file runs under `--parallel` beside every other one, and a fixed port is the one way a
-        // suite that passes alone fails in a batch.
+    // `--port 0` and the address read back off stdout, rather than a number picked here: this
+    // file runs under `--parallel` beside every other one, and a fixed port is the one way a
+    // suite that passes alone fails in a batch.
     ;({ base, stop } = await startApp(app))
 }, 30_000)
 

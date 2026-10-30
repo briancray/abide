@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { splitImports } from '#compiler/splitImports.ts'
 
 test('imports hoist and a dynamic import stays', () => {

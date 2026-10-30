@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { createApp } from '@abide/abide/server'
 
 test('the list and a company render inside one layout', async () => {

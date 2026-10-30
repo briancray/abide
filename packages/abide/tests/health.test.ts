@@ -3,6 +3,7 @@
 // a second declaration of the name, and `bun run typecheck` refuses this file.
 
 import { expect, test } from 'bun:test'
+
 import type { Health } from '#shared/health.ts'
 
 declare module '#shared/health.ts' {

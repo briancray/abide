@@ -1,9 +1,11 @@
 import { afterAll, expect, test } from 'bun:test'
+
 import { parseAbide } from '#compiler'
 import { classifyAttributes, isBound } from '#compiler/classifyTemplate.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'
 import { renderDocument } from '#server/render.ts'
 import { setClass } from '#ui/setClass.ts'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { closeTyped, serverOf } from './typed.ts'
 

@@ -82,7 +82,7 @@ function decoded(
     let channels = 0
     const compressed: Uint8Array[] = []
     let length = 0
-    for (let at = 8; at + 8 <= png.length; ) {
+    for (let at = 8; at + 8 <= png.length;) {
         const size = view.getUint32(at)
         const type = String.fromCharCode(...png.subarray(at + 4, at + 8))
         const body = png.subarray(at + 8, at + 8 + size)

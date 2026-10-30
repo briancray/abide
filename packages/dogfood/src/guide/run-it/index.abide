@@ -1,41 +1,42 @@
 <script>
 import { url } from '@abide/abide'
-import Code from '#src/lib/Code.abide'
-import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Section from '#src/lib/Section.abide'
-import Retries from 'crm-08/src/ops/lib/Retries.abide'
-import retriesSource from 'crm-08/src/ops/lib/Retries.abide' with { type: 'text' }
-import getRetriesSource from 'crm-08/src/ops/getRetries.handler.ts' with { type: 'text' }
 import envSource from 'crm-08/.env' with { type: 'text' }
-import retriesTestSource from 'crm-08/src/ops/lib/Retries.test.ts' with { type: 'text' }
-import Pool from 'crm-08/src/ops/lib/Pool.abide'
-import poolSource from 'crm-08/src/ops/lib/Pool.abide' with { type: 'text' }
 import getPoolSource from 'crm-08/src/ops/getPool.handler.ts' with { type: 'text' }
-import poolTestSource from 'crm-08/src/ops/lib/Pool.test.ts' with { type: 'text' }
+import getRetriesSource from 'crm-08/src/ops/getRetries.handler.ts' with { type: 'text' }
+import billingSource from 'crm-08/src/ops/lib/billing.ts' with { type: 'text' }
+import CallLog from 'crm-08/src/ops/lib/CallLog.abide'
+import callLogSource from 'crm-08/src/ops/lib/CallLog.abide' with { type: 'text' }
+import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 'text' }
 import Console from 'crm-08/src/ops/lib/Console.abide'
 import consoleSource from 'crm-08/src/ops/lib/Console.abide' with { type: 'text' }
 import consoleTestSource from 'crm-08/src/ops/lib/Console.test.ts' with { type: 'text' }
-import Sync from 'crm-08/src/ops/lib/Sync.abide'
-import syncSource from 'crm-08/src/ops/lib/Sync.abide' with { type: 'text' }
-import syncContactSource from 'crm-08/src/ops/syncContact.handler.ts' with { type: 'text' }
-import billingSource from 'crm-08/src/ops/lib/billing.ts' with { type: 'text' }
-import syncTestSource from 'crm-08/src/ops/lib/Sync.test.ts' with { type: 'text' }
 import Health from 'crm-08/src/ops/lib/Health.abide'
 import healthSource from 'crm-08/src/ops/lib/Health.abide' with { type: 'text' }
 import healthTestSource from 'crm-08/src/ops/lib/Health.test.ts' with { type: 'text' }
 import OfflineBanner from 'crm-08/src/ops/lib/OfflineBanner.abide'
 import offlineBannerSource from 'crm-08/src/ops/lib/OfflineBanner.abide' with { type: 'text' }
 import offlineBannerTestSource from 'crm-08/src/ops/lib/OfflineBanner.test.ts' with { type: 'text' }
-import CallLog from 'crm-08/src/ops/lib/CallLog.abide'
-import callLogSource from 'crm-08/src/ops/lib/CallLog.abide' with { type: 'text' }
+import Pool from 'crm-08/src/ops/lib/Pool.abide'
+import poolSource from 'crm-08/src/ops/lib/Pool.abide' with { type: 'text' }
+import poolTestSource from 'crm-08/src/ops/lib/Pool.test.ts' with { type: 'text' }
+import Retries from 'crm-08/src/ops/lib/Retries.abide'
+import retriesSource from 'crm-08/src/ops/lib/Retries.abide' with { type: 'text' }
+import retriesTestSource from 'crm-08/src/ops/lib/Retries.test.ts' with { type: 'text' }
+import Sync from 'crm-08/src/ops/lib/Sync.abide'
+import syncSource from 'crm-08/src/ops/lib/Sync.abide' with { type: 'text' }
+import syncTestSource from 'crm-08/src/ops/lib/Sync.test.ts' with { type: 'text' }
 import logCallSource from 'crm-08/src/ops/logCall.handler.ts' with { type: 'text' }
-import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 'text' }
+import syncContactSource from 'crm-08/src/ops/syncContact.handler.ts' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
     <p>Everything in this chapter lands on one page of the CRM, <code>/ops</code>, under
-    <code>src/ops</code>. Each card below is one panel of it.</p>
+        <code>src/ops</code>. Each card below is one panel of it.</p>
 
     <Section title="The deployment overrides a setting's default">
         <Example
@@ -46,7 +47,10 @@ import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 
             files={{
                 'src/ops/lib/Retries.abide': retriesSource,
                 'src/ops/getRetries.handler.ts': getRetriesSource,
-                '.env': envSource.split('\n').filter((line) => line.startsWith('RETRIES')).join('\n'),
+                '.env': envSource
+                    .split('\n')
+                    .filter((line) => line.startsWith('RETRIES'))
+                    .join('\n'),
                 'src/ops/lib/Retries.test.ts': retriesTestSource,
             }}
         >
@@ -54,10 +58,10 @@ import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 
         </Example>
 
         <p><code>onConfig</code> returns the defaults, and their types are the settings' types:
-        <code>config().RETRIES</code> is a <code>number</code> with no declaration written.
-        <code>RETRIES=5</code> arrives from <code>.env</code> as text and is coerced to the type of
-        the default it overrides, so <code>retries + 1</code> is 6, not 51. A value that will not
-        coerce, such as <code>RETRIES=lots</code>, leaves the default standing.</p>
+            <code>config().RETRIES</code> is a <code>number</code> with no declaration written.
+            <code>RETRIES=5</code> arrives from <code>.env</code> as text and is coerced to the type of
+            the default it overrides, so <code>retries + 1</code> is 6, not 51. A value that will not
+            coerce, such as <code>RETRIES=lots</code>, leaves the default standing.</p>
 
         <p>The last layer to name a setting wins:</p>
 
@@ -86,8 +90,8 @@ import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 
         </table>
 
         <p>A setting that has to be right gets a schema. <code>config</code>'s <code>schema</code>
-        is checked last, over the whole document, so it can relate two settings. Keep it loose, or
-        every setting it does not name is dropped:</p>
+            is checked last, over the whole document, so it can relate two settings. Keep it loose, or
+            every setting it does not name is dropped:</p>
 
         <Code language="ts" caption="server" code={`onConfig(() => ({ RETRIES: 3 }), {
     schema: z.looseObject({
@@ -97,9 +101,9 @@ import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 
 })`} />
 
         <p><code>config()</code> throws what <code>onConfig</code> threw, so a configuration that
-        cannot resolve stops the app from starting. <code>config</code> is a server name: a page
-        reads a setting through a handler, like <code>getRetries</code>, and a key no handler
-        returns never reaches a browser.</p>
+            cannot resolve stops the app from starting. <code>config</code> is a server name: a page
+            reads a setting through a handler, like <code>getRetries</code>, and a key no handler
+            returns never reaches a browser.</p>
     </Section>
 
     <Section title="Work at start runs before the first request">
@@ -118,18 +122,18 @@ import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 
         </Example>
 
         <p><code>onStart</code> hands you the next step. Work before <code>await start()</code>
-        finishes before the app answers anything; work after it knows the app is up. A hook that
-        throws stops the server from coming up, which is the right answer to a failed
-        migration.</p>
+            finishes before the app answers anything; work after it knows the app is up. A hook that
+            throws stops the server from coming up, which is the right answer to a failed
+            migration.</p>
 
         <p><code>onStop</code> is the mirror: <code>await stop()</code> first, then close what you
-        opened, so the pool outlives the last request that could use it. It runs on
-        <code>SIGTERM</code>, <code>Ctrl-C</code> or a crash, and a second signal ends the process
-        at once.</p>
+            opened, so the pool outlives the last request that could use it. It runs on
+            <code>SIGTERM</code>, <code>Ctrl-C</code> or a crash, and a second signal ends the process
+            at once.</p>
 
         <p>A hook is called in a page, a layout or a handler file, and returns a function that
-        removes it. The ones for the whole app go in <code>src/layout.abide</code>, the root layout,
-        whose server block the scaffold already starts with an <code>onStart</code>.</p>
+            removes it. The ones for the whole app go in <code>src/layout.abide</code>, the root layout,
+            whose server block the scaffold already starts with an <code>onStart</code>.</p>
     </Section>
 
     <Section title="Log namespaces are turned on one at a time">
@@ -147,10 +151,10 @@ import callLogTestSource from 'crm-08/src/ops/lib/CallLog.test.ts' with { type: 
         </Example>
 
         <p><code>log.named('billing')</code> returns a <code>Logger</code> under the app's name: it
-        writes as <code>crm-08:billing</code> in the downloaded app, and as
-        <code>dogfood:billing</code> on this page. <code>DEBUG</code> takes the comma and
-        wildcard list you already know: <code>DEBUG=crm-08:billing,abide:*</code>. It is read from
-        the environment on the server, and the browser gets it from the document.</p>
+            writes as <code>crm-08:billing</code> in the downloaded app, and as
+            <code>dogfood:billing</code> on this page. <code>DEBUG</code> takes the comma and
+            wildcard list you already know: <code>DEBUG=crm-08:billing,abide:*</code>. It is read from
+            the environment on the server, and the browser gets it from the document.</p>
 
         <Code language="ts" caption="shared" code={`log('sending')
 log.debug('cache table', { entries: cache.size })
@@ -159,9 +163,9 @@ log.warning('retrying', { attempt: 2 })
 log.error('mailer refused', { error })`} />
 
         <p><code>log</code>, <code>log.warning</code> and <code>log.error</code> always write.
-        <code>log.info</code> and <code>log.debug</code> write when <code>DEBUG</code> names their
-        namespace, and <code>log.enabled()</code> asks first where building the line is the
-        expensive part.</p>
+            <code>log.info</code> and <code>log.debug</code> write when <code>DEBUG</code> names their
+            namespace, and <code>log.enabled()</code> asks first where building the line is the
+            expensive part.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it is for the CRM</th></tr></thead>
@@ -176,8 +180,8 @@ log.error('mailer refused', { error })`} />
         </table>
 
         <p>abide logs under <code>abide:</code>, so <code>DEBUG=abide:*</code> turns on the
-        framework and nothing of yours. The warning namespaces are each a failure that is otherwise
-        silent, and always write:</p>
+            framework and nothing of yours. The warning namespaces are each a failure that is otherwise
+            silent, and always write:</p>
 
         <table>
             <thead><tr><th>Namespace</th><th>Levels</th><th>What it says</th></tr></thead>
@@ -213,8 +217,8 @@ log.error('mailer refused', { error })`} />
         </Example>
 
         <p>Nothing starts a trace and nothing passes it down. The billing module was handed a
-        contact id, and its line carries the trace anyway, because every log line does. A request
-        that arrives with a <code>traceparent</code> header continues that trace.</p>
+            contact id, and its line carries the trace anyway, because every log line does. A request
+            that arrives with a <code>traceparent</code> header continues that trace.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it is for the CRM</th></tr></thead>
@@ -233,7 +237,7 @@ log.error('mailer refused', { error })`} />
 const answer = await fetch(billingUrl, { headers: trace.headers() })`} />
 
         <p>With <code>timing</code>, a span joins <code>server-timing</code> under its name, so the
-        name has to be a plain token.</p>
+            name has to be a plain token.</p>
     </Section>
 
     <Section title="A load balancer reads the health check">
@@ -251,9 +255,9 @@ const answer = await fetch(billingUrl, { headers: trace.headers() })`} />
         </Example>
 
         <p><code>GET /__abide/health</code> answers without being declared, with three fields.
-        What <code>onHealth</code> returns is merged over them, and the app's fields win a
-        collision. Widen <code>Health</code> with the <code>declare module</code> block so a page
-        can read <code>account.database</code>.</p>
+            What <code>onHealth</code> returns is merged over them, and the app's fields win a
+            collision. Widen <code>Health</code> with the <code>declare module</code> block so a page
+            can read <code>account.database</code>.</p>
 
         <table>
             <thead><tr><th>Field</th><th>What it says</th></tr></thead>
@@ -265,9 +269,9 @@ const answer = await fetch(billingUrl, { headers: trace.headers() })`} />
         </table>
 
         <p><code>health</code> is a handler that takes no arguments, called the same way on both
-        sides. A reporter that throws warns on <code>abide:health</code>, and the baseline still
-        answers. The endpoint goes through the app's <code>middleware</code>, so a rung that
-        refuses callers with no credentials has to let it through.</p>
+            sides. A reporter that throws warns on <code>abide:health</code>, and the baseline still
+            answers. The endpoint goes through the app's <code>middleware</code>, so a rung that
+            refuses callers with no credentials has to let it through.</p>
     </Section>
 
     <Section title="The browser going offline is a reactive value">
@@ -285,12 +289,12 @@ const answer = await fetch(billingUrl, { headers: trace.headers() })`} />
         </Example>
 
         <p>Read <code>online</code> by name. There is no listener to attach and none to remove. In
-        the browser it follows <code>navigator.onLine</code>; on the server it is
-        <code>true</code>, since a caller being served has reached the app.</p>
+            the browser it follows <code>navigator.onLine</code>; on the server it is
+            <code>true</code>, since a caller being served has reached the app.</p>
 
         <p><code>false</code> is certain and <code>true</code> is a guess: a dead server reads as
-        online. Use it to explain a failed load, not to decide whether to try one. To catch up when
-        the connection returns, refresh what is on screen from the root layout:</p>
+            online. Use it to explain a failed load, not to decide whether to try one. To catch up when
+            the connection returns, refresh what is on screen from the root layout:</p>
 
         <Code language="abide" caption="abide" code={`<script>
 import { online, refresh, watch } from '@abide/abide'
@@ -315,18 +319,18 @@ watch(() => { if (online) refresh() })
         </Example>
 
         <p>A call given <code>offline</code> that gets no answer settles to what
-        <code>offline</code> returns. A mutation then waits in the outbox, kept on the device
-        through a reload, and is sent once the network answers: oldest first, one at a time, by one
-        tab for all of them. Here <code>offline</code> also adds the call to the list, so it shows
-        at once. <code>outbox</code> is asked of a selection as <code>busy</code> is, and answers a
-        list: <code>outbox(logCall)</code> is the calls waiting for that handler.</p>
+            <code>offline</code> returns. A mutation then waits in the outbox, kept on the device
+            through a reload, and is sent once the network answers: oldest first, one at a time, by one
+            tab for all of them. Here <code>offline</code> also adds the call to the list, so it shows
+            at once. <code>outbox</code> is asked of a selection as <code>busy</code> is, and answers a
+            list: <code>outbox(logCall)</code> is the calls waiting for that handler.</p>
 
         <p>What is shown before the server has it says so: <code>synced()</code> is false on a value
-        written in the browser rather than made by its producer, and on anything read from one. The
-        list keeps its added call until the outbox is empty, then reads the server's again. A
-        call is sent with the same <code>idempotency-key</code> every time, and
-        <code>logCall</code> takes the browser's id, so a send whose answer was lost and is sent
-        again logs the call once.</p>
+            written in the browser rather than made by its producer, and on anything read from one. The
+            list keeps its added call until the outbox is empty, then reads the server's again. A
+            call is sent with the same <code>idempotency-key</code> every time, and
+            <code>logCall</code> takes the browser's id, so a send whose answer was lost and is sent
+            again logs the call once.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -346,7 +350,7 @@ watch(() => { if (online) refresh() })
     <Section title="Next">
         <ul>
             <li><a href={url('/guide/open-it-to-machines')}>Open it to machines</a> — the CRM's
-            handlers, described to other programs</li>
+                handlers, described to other programs</li>
         </ul>
     </Section>
 </Doc>

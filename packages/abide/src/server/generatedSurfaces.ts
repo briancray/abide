@@ -20,6 +20,7 @@ import { mounted } from '#shared/mount.ts'
 import { type Reactive, reactive } from '#shared/reactive/index.ts'
 import { parseRoutePattern, type Segment } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
+
 import { answered } from './answerFailure.ts'
 import { bodyWithin, type Mounted } from './answerRpc.ts'
 import type { ToolAnswer, ToolDefinition } from './assistant.ts'
@@ -146,7 +147,10 @@ function openApiOf(handlers: Map<string, Mounted>): {
                 schema:
                     segment.kind === 'rest'
                         ? declared
-                        : patterned(declared, patternOf(segment, each.matchers)),
+                        : patterned(
+                              declared,
+                              patternOf(segment, each.matchers),
+                          ),
             }
             if (segment.kind === 'optional')
                 parameter.description = 'May be left out, with its segment.'

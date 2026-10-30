@@ -1,52 +1,53 @@
 <script>
 import { url } from '@abide/abide'
-import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Section from '#src/lib/Section.abide'
+import getForecastSource from 'crm-04/src/pipeline/getForecast.handler.ts' with { type: 'text' }
+import getPreferenceSource from 'crm-04/src/pipeline/getPreference.handler.ts' with { type: 'text' }
+import getStageSource from 'crm-04/src/pipeline/getStage.handler.ts' with { type: 'text' }
+import dealDetailSource from 'crm-04/src/pipeline/lib/DealDetail.abide' with { type: 'text' }
 import DealFeed from 'crm-04/src/pipeline/lib/DealFeed.abide'
 import dealFeedSource from 'crm-04/src/pipeline/lib/DealFeed.abide' with { type: 'text' }
-import listDealsSource from 'crm-04/src/pipeline/listDeals.handler.ts' with { type: 'text' }
 import dealFeedTestSource from 'crm-04/src/pipeline/lib/DealFeed.test.ts' with { type: 'text' }
 import DealNote from 'crm-04/src/pipeline/lib/DealNote.abide'
 import dealNoteSource from 'crm-04/src/pipeline/lib/DealNote.abide' with { type: 'text' }
-import saveNoteSource from 'crm-04/src/pipeline/saveNote.handler.ts' with { type: 'text' }
 import dealNoteTestSource from 'crm-04/src/pipeline/lib/DealNote.test.ts' with { type: 'text' }
 import DealPicker from 'crm-04/src/pipeline/lib/DealPicker.abide'
 import dealPickerSource from 'crm-04/src/pipeline/lib/DealPicker.abide' with { type: 'text' }
-import dealRowSource from 'crm-04/src/pipeline/lib/DealRow.abide' with { type: 'text' }
-import dealDetailSource from 'crm-04/src/pipeline/lib/DealDetail.abide' with { type: 'text' }
 import dealPickerTestSource from 'crm-04/src/pipeline/lib/DealPicker.test.ts' with { type: 'text' }
+import dealRowSource from 'crm-04/src/pipeline/lib/DealRow.abide' with { type: 'text' }
 import DealSearch from 'crm-04/src/pipeline/lib/DealSearch.abide'
 import dealSearchSource from 'crm-04/src/pipeline/lib/DealSearch.abide' with { type: 'text' }
-import searchDealsSource from 'crm-04/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
 import dealSearchTestSource from 'crm-04/src/pipeline/lib/DealSearch.test.ts' with { type: 'text' }
 import Forecast from 'crm-04/src/pipeline/lib/Forecast.abide'
 import forecastSource from 'crm-04/src/pipeline/lib/Forecast.abide' with { type: 'text' }
-import getForecastSource from 'crm-04/src/pipeline/getForecast.handler.ts' with { type: 'text' }
 import forecastTestSource from 'crm-04/src/pipeline/lib/Forecast.test.ts' with { type: 'text' }
 import PipelineView from 'crm-04/src/pipeline/lib/PipelineView.abide'
 import pipelineViewSource from 'crm-04/src/pipeline/lib/PipelineView.abide' with { type: 'text' }
-import preferenceStoreSource from 'crm-04/src/pipeline/lib/preferenceStore.ts' with { type: 'text' }
-import getPreferenceSource from 'crm-04/src/pipeline/getPreference.handler.ts' with { type: 'text' }
-import setPreferenceSource from 'crm-04/src/pipeline/setPreference.handler.ts' with { type: 'text' }
 import pipelineViewTestSource from 'crm-04/src/pipeline/lib/PipelineView.test.ts' with { type: 'text' }
+import preferenceStoreSource from 'crm-04/src/pipeline/lib/preferenceStore.ts' with { type: 'text' }
 import StageBoard from 'crm-04/src/pipeline/lib/StageBoard.abide'
 import stageBoardSource from 'crm-04/src/pipeline/lib/StageBoard.abide' with { type: 'text' }
-import stageTileSource from 'crm-04/src/pipeline/lib/StageTile.abide' with { type: 'text' }
-import winDealSource from 'crm-04/src/pipeline/winDeal.handler.ts' with { type: 'text' }
 import stageBoardTestSource from 'crm-04/src/pipeline/lib/StageBoard.test.ts' with { type: 'text' }
+import stageCountSource from 'crm-04/src/pipeline/lib/StageCount.abide' with { type: 'text' }
+import stageTileSource from 'crm-04/src/pipeline/lib/StageTile.abide' with { type: 'text' }
 import StageTiles from 'crm-04/src/pipeline/lib/StageTiles.abide'
 import stageTilesSource from 'crm-04/src/pipeline/lib/StageTiles.abide' with { type: 'text' }
-import stageCountSource from 'crm-04/src/pipeline/lib/StageCount.abide' with { type: 'text' }
-import stageValueSource from 'crm-04/src/pipeline/lib/StageValue.abide' with { type: 'text' }
-import getStageSource from 'crm-04/src/pipeline/getStage.handler.ts' with { type: 'text' }
 import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' with { type: 'text' }
+import stageValueSource from 'crm-04/src/pipeline/lib/StageValue.abide' with { type: 'text' }
+import listDealsSource from 'crm-04/src/pipeline/listDeals.handler.ts' with { type: 'text' }
+import saveNoteSource from 'crm-04/src/pipeline/saveNote.handler.ts' with { type: 'text' }
+import searchDealsSource from 'crm-04/src/pipeline/searchDeals.handler.ts' with { type: 'text' }
+import setPreferenceSource from 'crm-04/src/pipeline/setPreference.handler.ts' with { type: 'text' }
+import winDealSource from 'crm-04/src/pipeline/winDeal.handler.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
     <p>The pipeline lives at <code>src/pipeline</code>: deals in four stages, a forecast, a search,
-    and a few panels that all read the same deals. Each card below is one of those panels, with
-    the handler it calls and the test the app runs on it.</p>
+        and a few panels that all read the same deals. Each card below is one of those panels, with
+        the handler it calls and the test the app runs on it.</p>
 
     <Section title="A call with the same arguments is one load">
         <Example
@@ -66,21 +67,21 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
         </Example>
 
         <p>The two panels never speak to each other, and nothing is lifted into a parent. When
-        both ask for the same stage they get the same entry, so the second panel paints at once,
-        with no request. On two stages they are two entries, and each
-        pays for its own.</p>
+            both ask for the same stage they get the same entry, so the second panel paints at once,
+            with no request. On two stages they are two entries, and each
+            pays for its own.</p>
 
         <p>A body with a parameter is a keyed value: one entry per set of arguments, held. That is
-        true of a handler like <code>getStage</code>, and of <code>{'reactive((args) => …)'}</code>
-        written in a page. The arguments are its <code>Args</code>, and the key is their JSON with
-        the properties sorted, so argument order never splits an entry.</p>
+            true of a handler like <code>getStage</code>, and of <code>{'reactive((args) => …)'}</code>
+            written in a page. The arguments are its <code>Args</code>, and the key is their JSON with
+            the properties sorted, so argument order never splits an entry.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
             <tbody>
                 <tr><td><code>reactive</code> body, keyed</td><td><code>{'reactive(({ stage }) => …)'}</code> holds one entry per stage. Its body does not track what it reads; triggers reload it</td></tr>
                 <tr><td><code>k.busy</code>, <code>k.ready</code></td><td>whether any entry of a keyed value, or those a partial <code>Args</code> matches, is loading or has landed</td></tr>
-                <tr><td><code>rpc.busy</code>, <code>rpc.ready</code></td><td>the same two on a handler: <code>{'getStage.busy({ stage: \'won\' })'}</code></td></tr>
+                <tr><td><code>rpc.busy</code>, <code>rpc.ready</code></td><td>the same two on a handler: <code>{"getStage.busy({ stage: 'won' })"}</code></td></tr>
                 <tr><td><code>global</code></td><td><code>{'{ global: true }'}</code> shares one cache across every caller in the process, where the default is one per request on a server and one per tab in a browser</td></tr>
             </tbody>
         </table>
@@ -102,13 +103,13 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
         </Example>
 
         <p><code>refresh()</code> loads now and keeps the forecast on screen while it does: the
-        value is <code>busy()</code> and still <code>ready()</code>, and it swaps when the new one
-        lands. <code>invalidate()</code> loads nothing. It marks what is held as wrong, and the
-        next read fetches.</p>
+            value is <code>busy()</code> and still <code>ready()</code>, and it swaps when the new one
+            lands. <code>invalidate()</code> loads nothing. It marks what is held as wrong, and the
+            next read fetches.</p>
 
         <p>Press Mark stale and then Reload now, and the forecast blanks between the two. The
-        reload has nothing trusted to serve, so it is a first load again. Reach for one or the
-        other, not both.</p>
+            reload has nothing trusted to serve, so it is a first load again. Reach for one or the
+            other, not both.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
@@ -137,12 +138,12 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
         </Example>
 
         <p>Winning a lead moves one deal out of <code>lead</code> and into <code>won</code>. The
-        board reloads those two entries and leaves <code>qualified</code> and
-        <code>proposal</code> alone, because the argument to <code>refresh</code> is a partial
-        <code>Args</code> that picks entries out of the keyed value.</p>
+            board reloads those two entries and leaves <code>qualified</code> and
+            <code>proposal</code> alone, because the argument to <code>refresh</code> is a partial
+            <code>Args</code> that picks entries out of the keyed value.</p>
 
         <p>The triggers also come as free functions, and those take a <code>Selection</code>: the
-        set of entries to act on.</p>
+            set of entries to act on.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
@@ -151,7 +152,7 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
                 <tr><td><code>rpc.refresh</code>, <code>rpc.invalidate</code></td><td>the same two on a handler, which is what the board calls</td></tr>
                 <tr><td><code>refresh</code>, <code>invalidate</code></td><td><code>refresh(getStage)</code> is <code>getStage.refresh()</code>; with no selection they reach every load in this scope</td></tr>
                 <tr><td><code>Selection</code></td><td>a value, a keyed value, a handler, or <code>{'{ tags: [...] }'}</code></td></tr>
-                <tr><td><code>tags</code></td><td><code>{'{ tags: ({ stage }) => [`stage:${stage}`] }'}</code> labels entries, so <code>{'refresh({ tags: [\'stage:won\'] })'}</code> reaches every value about that stage, whichever handler it came from</td></tr>
+                <tr><td><code>tags</code></td><td><code>{'{ tags: ({ stage }) => [`stage:${stage}`] }'}</code> labels entries, so <code>{"refresh({ tags: ['stage:won'] })"}</code> reaches every value about that stage, whichever handler it came from</td></tr>
             </tbody>
         </table>
     </Section>
@@ -172,9 +173,9 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
         </Example>
 
         <p>Every keystroke is a new <code>q</code>, and so a new key. <code>debounce: 300</code>
-        holds the search back until the keys stop for 300 ms, so six keystrokes are one request.
-        The results already held stay on screen meanwhile, and the test counts the searches to
-        prove it.</p>
+            holds the search back until the keys stop for 300 ms, so six keystrokes are one request.
+            The results already held stay on screen meanwhile, and the test counts the searches to
+            prove it.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
@@ -203,20 +204,20 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
         </Example>
 
         <p><code>patch</code> hands you the value already held, lets you change it, and wakes what
-        reads it. One update rewrites one amount: no list refetched, no row rebuilt. The test
-        counts one text write and no nodes made or moved.</p>
+            reads it. One update rewrites one amount: no list refetched, no row rebuilt. The test
+            counts one text write and no nodes made or moved.</p>
 
         <p>The <code>by deal.id</code> on the loop keeps each row tied to its deal, so the row
-        the update names is the only one that changes.</p>
+            the update names is the only one that changes.</p>
 
         <p>Change the held value without <code>patch</code> and nothing on the page moves, because
-        no reader was told. The change shows up on the next patch, attached to the wrong
-        update.</p>
+            no reader was told. The change shows up on the next patch, attached to the wrong
+            update.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
             <tbody>
-                <tr><td><code>transform</code></td><td><code>{'{ transform: (rows) => new Map(rows.map((deal) => [deal.id, deal])) }'}</code> reshapes the list once, as it lands, so an update by id is a lookup rather than a scan. The function is a <code>Transformer</code></td></tr>
+                <tr><td><code>transform</code></td><td><code>{    '{ transform: (rows) => new Map(rows.map((deal) => [deal.id, deal])) }'}</code> reshapes the list once, as it lands, so an update by id is a lookup rather than a scan. The function is a <code>Transformer</code></td></tr>
             </tbody>
         </table>
     </Section>
@@ -238,15 +239,15 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
         </Example>
 
         <p><code>DealPicker</code> creates <code>selectedDeal</code>. Every row and the detail
-        panel ask for the same key, find that one on the way up, and never run their own build.
-        No prop runs between them.</p>
+            panel ask for the same key, find that one on the way up, and never run their own build.
+            No prop runs between them.</p>
 
         <p>Use the value <code>reactive.share</code> returns, and no other name. A value lives in
-        the component that created it and below, so two pickers on one page each get their own.
-        Where a value is one thing for the whole app, export it from a module instead.</p>
+            the component that created it and below, so two pickers on one page each get their own.
+            Where a value is one thing for the whole app, export it from a module instead.</p>
 
         <p><code>Shared</code> is an interface you widen with declaration merging to type each
-        key. It is optional: without it, the type comes from the build function.</p>
+            key. It is optional: without it, the type comes from the build function.</p>
     </Section>
 
     <Section title="`watch` runs something outside the page when a value changes">
@@ -265,13 +266,13 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
         </Example>
 
         <p><code>watch</code> runs its effect now, and again whenever a value it read changes.
-        The effect returns a <code>Disposer</code>, which runs before the next run and when the
-        component goes. Each keystroke clears the timer the one before it started, so a burst of
-        typing is one save.</p>
+            The effect returns a <code>Disposer</code>, which runs before the next run and when the
+            component goes. Each keystroke clears the timer the one before it started, so a burst of
+            typing is one save.</p>
 
         <p>The draft is read in the effect, not inside the timer: a read there happens after
-        tracking ends and subscribes to nothing. <code>saved.peek()</code> reads the saved note
-        without subscribing, so saving it does not wake the watch again.</p>
+            tracking ends and subscribes to nothing. <code>saved.peek()</code> reads the saved note
+            without subscribing, so saving it does not wake the watch again.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the pipeline</th></tr></thead>
@@ -315,25 +316,25 @@ import stageTilesTestSource from 'crm-04/src/pipeline/lib/StageTiles.test.ts' wi
         </Example>
 
         <p>A <code>Store</code> is a <code>get</code> and a <code>set</code>. The value reads the
-        store when it is built and falls back to <code>'board'</code> on a miss, and every change
-        is written back. The reads and writes in the markup do not change.</p>
+            store when it is built and falls back to <code>'board'</code> on a miss, and every change
+            is written back. The reads and writes in the markup do not change.</p>
 
         <p>Where the stored value can change from outside the app, such as a file another program
-        edits, the store adds <code>watch</code>. It is handed a function to call when that
-        happens, and returns the function that stops watching. The value reads <code>get</code>
-        again, and the body does not run.</p>
+            edits, the store adds <code>watch</code>. It is handed a function to call when that
+            happens, and returns the function that stops watching. The value reads <code>get</code>
+            again, and the body does not run.</p>
 
         <p>This store goes through two handlers, so the server and the browser read the same
-        preference and the first paint is already right. A store over
-        <code>localStorage</code> works too, but only in a browser, so the server paints the
-        fallback first. After a write, <code>set</code> invalidates the read it made, so the
-        next read asks the server rather than this tab's copy.</p>
+            preference and the first paint is already right. A store over
+            <code>localStorage</code> works too, but only in a browser, so the server paints the
+            fallback first. After a write, <code>set</code> invalidates the read it made, so the
+            next read asks the server rather than this tab's copy.</p>
     </Section>
 
     <Section title="Next">
         <ul>
             <li><a href={url('/guide/make-it-live')}>Make it live</a> — every open tab sees a
-            change as it happens</li>
+                change as it happens</li>
         </ul>
     </Section>
 </Doc>

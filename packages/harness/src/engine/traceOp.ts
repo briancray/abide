@@ -7,6 +7,7 @@
 // gated there, where the driver below can only run under `bun run bench`.
 
 import type { CDPSession, Page } from '@playwright/test'
+
 import type { Trace } from './Trace.ts'
 
 // `devtools.timeline` carries Paint and the Layout events; the `disabled-by-default`

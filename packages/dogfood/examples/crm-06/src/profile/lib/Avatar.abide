@@ -5,5 +5,8 @@ const { name } = props<{ name: string }>()
 </script>
 
 <span class="rounded-full border border-rule bg-raised px-2 py-1 font-semibold">
-    {name.split(' ').map((word) => word.charAt(0)).join('')}
+    {    name
+        .split(' ')
+        .map((word) => word.charAt(0))
+        .join('')}
 </span>

@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { createApp } from '@abide/abide/server'
 
 // A request from one browser: the cookie a page is handed on its first visit.

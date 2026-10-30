@@ -1,7 +1,9 @@
 // `sharedCases` in the reader's engine. Reports rather than asserts, like `reactive.spec.ts`, and
 // at full size only under `bun run bench` — `BENCH_SIZING`.
 import { execFileSync } from 'node:child_process'
+
 import { test } from '@playwright/test'
+
 import type { SharedRow } from '../bench/sharedRun.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 

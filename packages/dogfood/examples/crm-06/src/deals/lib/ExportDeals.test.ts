@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import exportDeals from '../exportDeals.handler.ts'
 
 test('the export answers a CSV file', async () => {

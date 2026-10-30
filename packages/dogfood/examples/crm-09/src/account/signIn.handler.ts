@@ -1,5 +1,6 @@
 import { principal, refuse } from '@abide/abide'
 import { onPrincipal, POST } from '@abide/abide/server'
+
 import { TEAM } from './lib/TEAM.server.ts'
 
 /** Seals the member's id into the cookie, and nothing else. */

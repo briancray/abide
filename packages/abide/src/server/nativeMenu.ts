@@ -2,7 +2,9 @@
 // with `onMenu`, built as an `NSMenu`.
 
 import { FFIType } from 'bun:ffi'
+
 import type { MenuRole } from '#shared/menuItem.ts'
+
 import {
     definedClass,
     type Id,

@@ -3,8 +3,10 @@
 // that distinguishes them, and it is the only reason markers might still be right somewhere.
 
 import { execFileSync } from 'node:child_process'
+
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
+
 import { type Report, reportScript } from './reportScript.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname

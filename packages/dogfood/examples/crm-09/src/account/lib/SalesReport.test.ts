@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import salesReport from '../salesReport.handler.ts'
 
 test('a report slower than the timeout runs, a row at a time', async () => {

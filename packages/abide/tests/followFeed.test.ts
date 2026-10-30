@@ -5,6 +5,7 @@
 // value per write against 1.
 
 import { expect, test } from 'bun:test'
+
 import {
     feedFromServed,
     followAsEvents,

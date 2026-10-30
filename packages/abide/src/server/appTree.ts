@@ -13,19 +13,21 @@
 // can drop them.
 
 import { type Dirent, existsSync, readdirSync } from 'node:fs' // bun has no directory listing or sync existence check of its own
+
 import type { Refusals } from '#compiler/Refusals.ts'
 import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
 import {
     PUBLIC_DIRECTORY,
     RESERVED_DIRECTORIES,
 } from '#shared/RESERVED_DIRECTORIES.ts'
+
 import {
     DIRECTORY_FILES,
+    isBenchFile,
     isDeclarationFile,
     isHandlerFile,
     isParamFile,
     isServerFile,
-    isBenchFile,
     isTestFile,
     placeOf,
     routeOf,

@@ -1,7 +1,8 @@
 <script server>
 import { GET } from '@abide/abide/server'
-import type { ExampleResults } from './ExampleResults.ts'
+
 import { exampleDirectory } from './exampleDirectory.server.ts'
+import type { ExampleResults } from './ExampleResults.ts'
 
 // What `bun run examples:results` last kept for the app, or `null` where this build never ran it.
 const resultsOf = GET(async ({ app }: { app: string }) => {
@@ -17,7 +18,8 @@ const resultsOf = GET(async ({ app }: { app: string }) => {
 // 40.5 — an example card: the component itself, running, above a tab per file it is made of. The
 // render is never a tab; it is what the example IS, and the files are what you consult about it.
 // A test or a bench file's tab renders what that file last reported, above its source.
-import { props, type RouteLiteral, raw, reactive, url } from '@abide/abide'
+import { props, raw, reactive, type RouteLiteral, url } from '@abide/abide'
+
 import { highlight, sideOf } from './highlight.ts'
 import { inline } from './inline.ts'
 
@@ -36,7 +38,11 @@ const paths = Object.keys(files)
 let open = reactive(0)
 
 const kindOf = (path: string) =>
-    path.endsWith('.test.ts') ? 'test' : path.endsWith('.bench.ts') ? 'bench' : 'file'
+    path.endsWith('.test.ts')
+        ? 'test'
+        : path.endsWith('.bench.ts')
+          ? 'bench'
+          : 'file'
 
 // Read only once a test or bench tab is open, so a card nobody inspects never asks.
 const results = reactive(() =>
@@ -58,7 +64,7 @@ const nanoseconds = (value: number) => `${value.toFixed(1)} ns`
             </span>
         {/if}
     </figcaption>
-    <div class="ex-render"><slot/></div>
+    <div class="ex-render"><slot /></div>
     <div class="ex-files" role="tablist">
         {#for path, index of paths}
             <button

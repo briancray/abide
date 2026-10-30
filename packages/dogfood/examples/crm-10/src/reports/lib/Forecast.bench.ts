@@ -1,5 +1,6 @@
 import { reactive } from '@abide/abide'
-import { type Batched, batch } from '@abide/harness/report'
+import { batch, type Batched } from '@abide/harness/report'
+
 import { advance, type Deal, forecast } from './forecast.ts'
 
 // The forecast as the card keeps it, over a pipeline of `count` deals.

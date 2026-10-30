@@ -7,12 +7,12 @@ const { company } = props<{
 </script>
 
 <html lang="en">
-<body style="margin: 0; padding: 1.25rem; background: #fff; color: #1d2a28;
+    <body style="margin: 0; padding: 1.25rem; background: #fff; color: #1d2a28;
     font: 14px/1.5 system-ui, sans-serif">
-<h1 style="margin: 0 0 0.5rem; font-size: 1.25rem">{company.name}</h1>
+        <h1 style="margin: 0 0 0.5rem; font-size: 1.25rem">{company.name}</h1>
 <table>
-    <tr><th align="left">Contact</th><td>{company.contact}</td></tr>
-    <tr><th align="left">Pipeline</th><td>{company.pipeline}</td></tr>
-</table>
-</body>
+            <tr><th align="left">Contact</th><td>{company.contact}</td></tr>
+            <tr><th align="left">Pipeline</th><td>{company.pipeline}</td></tr>
+        </table>
+    </body>
 </html>

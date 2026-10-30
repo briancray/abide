@@ -4,12 +4,14 @@
 // reaches — a sign-in, a form, a second build.
 
 import { afterAll, expect, spyOn, test } from 'bun:test'
+
 import { answerWorker } from '#server/answerWorker.ts'
 import { appManifest } from '#server/appManifest.ts'
 import type { Manifest } from '#server/manifestOf.ts'
 import { framingOf } from '#shared/framing.ts'
 import { MOUNT } from '#shared/mount.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
+
 import { appFixture, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -701,7 +703,9 @@ test('an answer saved to one cache drops its address from the other — 45.7', a
             : aged('ours', 'public, max-age=0, stale-if-error=31536000')
     })
     const get = () =>
-        offline.dispatch('fetch', { request: new Request(`${ORIGIN}/notes/getNote`) })
+        offline.dispatch('fetch', {
+            request: new Request(`${ORIGIN}/notes/getNote`),
+        })
     await get()
     await get()
     online = false

@@ -5,8 +5,10 @@
 // is. Spawned for `serve.test.ts`'s reason: happy-dom's preload clobbers `Response`.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 import { wire } from '#ui/wire.ts'
+
 import {
     appFixture,
     buildApp,
@@ -315,7 +317,9 @@ test('a handler file exporting a second name does not build, naming the file —
     })
     const built = await buildApp(stray)
     expect(built.exitCode).not.toBe(0)
-    expect(built.stderr).toContain('invoices/getInvoice.handler.ts exports `TAX_RATE`')
+    expect(built.stderr).toContain(
+        'invoices/getInvoice.handler.ts exports `TAX_RATE`',
+    )
     expect(built.stderr).toContain('RULEBOOK 16.73')
 })
 

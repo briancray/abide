@@ -8,6 +8,7 @@
 
 import { framedStream } from '#shared/framing.ts'
 import { refuse } from '#shared/refuse.ts'
+
 import { blocksOf, type Provider, textOf } from './assistant.ts'
 
 /** A Messages API request body, less what abide writes, with the client's key and origin. */

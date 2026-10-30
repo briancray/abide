@@ -1,5 +1,6 @@
 <script>
 import { principal } from '@abide/abide'
+
 import SignInAs from './SignInAs.abide'
 </script>
 

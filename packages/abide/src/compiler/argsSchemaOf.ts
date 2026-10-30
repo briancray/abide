@@ -18,6 +18,7 @@ import {
     type TypeReference,
     type UnionOrIntersectionType,
 } from 'typescript/unstable/async'
+
 import type { JsonValue } from '#shared/JsonValue.ts'
 
 type Schema = { [keyword: string]: JsonValue }

@@ -1,5 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
+
 import { topFive } from './rankDeals.ts'
 
 let by = reactive<'amount' | 'idle'>('amount')

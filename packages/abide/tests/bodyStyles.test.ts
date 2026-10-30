@@ -4,7 +4,9 @@
 // a browser is actually handed.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { parseAbide } from '#compiler'
+
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

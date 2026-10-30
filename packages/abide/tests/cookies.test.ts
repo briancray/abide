@@ -1,6 +1,7 @@
 // 22.4, 22.5, 22.8 — the browser's jar, over happy-dom's `document.cookie`.
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
+
 import { cookies, flushSync, watch } from '#shared'
 import {
     browserCookies,

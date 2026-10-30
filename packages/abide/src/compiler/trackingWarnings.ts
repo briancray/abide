@@ -14,6 +14,7 @@ import {
     isPropertyAccessExpression,
     isWhileStatement,
 } from 'typescript/unstable/ast/is'
+
 import { FUNCTIONS, TRANSPARENT } from './classifyRead.ts'
 import type { Finding } from './Finding.ts'
 import type { PositionKind, PositionTable } from './PositionTable.ts'

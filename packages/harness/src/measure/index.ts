@@ -7,7 +7,7 @@
 // `harness/report` is a FOURTH entry and is not a fourth lane: a lane is a DEPENDENCY
 // partition, and the leaf depends on nothing.
 
-import { type Batched, type BatchSpec, batch } from '../report/batch.ts'
+import { batch, type Batched, type BatchSpec } from '../report/batch.ts'
 import { emulatedDom, underBun } from '../report/environment.ts'
 import { install, isArmed } from './install.ts'
 

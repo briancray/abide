@@ -11,6 +11,7 @@
 import { mkdtemp, rm } from 'node:fs/promises' // bun exposes no temporary-directory creation or recursive removal of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary-directory path of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
+
 import { nearest } from './nearest.ts'
 
 /** What every abide app in the docs and the scaffold is written against. */
@@ -33,7 +34,10 @@ export async function writeDefaultProject(
     await Bun.write(
         tsconfig,
         JSON.stringify({
-            compilerOptions: { ...COMPILER_OPTIONS, paths: await aliasPaths(root) },
+            compilerOptions: {
+                ...COMPILER_OPTIONS,
+                paths: await aliasPaths(root),
+            },
             include: [`${root}/**/*`],
         }),
     )

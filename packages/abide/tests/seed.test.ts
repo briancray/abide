@@ -3,9 +3,11 @@
 // output cannot tell a seeded answer from a rerun, and the run count is the whole of the contract.
 
 import { afterAll, beforeAll, expect, setSystemTime, test } from 'bun:test'
+
 import { onConfig } from '#server/hooks.ts'
 import { seedFor, takeSeed } from '#server/seedBuffer.ts'
 import { reactive } from '#shared/reactive/index.ts'
+
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

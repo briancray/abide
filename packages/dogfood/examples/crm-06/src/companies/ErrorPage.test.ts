@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { createApp } from '@abide/abide/server'
 
 test('a missing company is a 404, painted by error.abide', async () => {

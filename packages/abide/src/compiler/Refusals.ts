@@ -1,4 +1,5 @@
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
+
 import { formatDiagnosis } from './formatDiagnosis.ts'
 import { diagnosisAt } from './lineOf.ts'
 import { PositionedRefusal } from './PositionedRefusal.ts'

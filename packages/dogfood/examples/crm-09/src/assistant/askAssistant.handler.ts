@@ -1,6 +1,6 @@
 import {
-    type AssistantMessage,
     assistant,
+    type AssistantMessage,
     POST,
     type Provider,
 } from '@abide/abide/server'

@@ -1,8 +1,5 @@
 <script>
 import { url } from '@abide/abide'
-import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Section from '#src/lib/Section.abide'
 import AddressField from 'crm-02/src/profile/lib/AddressField.abide'
 import addressFieldSource from 'crm-02/src/profile/lib/AddressField.abide' with { type: 'text' }
 import addressFieldTestSource from 'crm-02/src/profile/lib/AddressField.test.ts' with { type: 'text' }
@@ -34,11 +31,15 @@ import stageBadgesTestSource from 'crm-02/src/profile/lib/StageBadges.test.ts' w
 import Tags from 'crm-02/src/profile/lib/Tags.abide'
 import tagsSource from 'crm-02/src/profile/lib/Tags.abide' with { type: 'text' }
 import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 'text' }
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
     <p>The profile lives in <code>src/profile</code>, at <code>/profile</code>. Each card is one
-    of its components, with the test the app runs on it.</p>
+        of its components, with the test the app runs on it.</p>
 
     <Section title="A field and its value are one copy">
         <Example
@@ -55,9 +56,9 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
         </Example>
 
         <p><code>bind:value</code> sets the field from the value, and writes the value back on
-        <code>input</code> or <code>change</code>. There is no form model beside it and no handler
-        per field. A <code>&lt;textarea&gt;</code> and a <code>&lt;select&gt;</code> take the same
-        binding.</p>
+            <code>input</code> or <code>change</code>. There is no form model beside it and no handler
+            per field. A <code>&lt;textarea&gt;</code> and a <code>&lt;select&gt;</code> take the same
+            binding.</p>
 
         <table>
             <thead><tr><th>You write</th><th>What it binds</th></tr></thead>
@@ -74,9 +75,9 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
 
     <Section title="A reactive value is read and written by its name">
         <p><code>reactive</code> holds a value. Inside a <code>.abide</code> file its name is the
-        value: <code>email</code> in an expression reads it, and <code>email = 'a@b.co'</code>
-        writes it. The sugar sits over two explicit members, <code>s</code> and
-        <code>s.set</code>, and a <code>.ts</code> file writes those out.</p>
+            value: <code>email</code> in an expression reads it, and <code>email = 'a@b.co'</code>
+            writes it. The sugar sits over two explicit members, <code>s</code> and
+            <code>s.set</code>, and a <code>.ts</code> file writes those out.</p>
 
         <table>
             <thead><tr><th>You write</th><th>You get</th></tr></thead>
@@ -109,9 +110,9 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
         </Example>
 
         <p>The transform runs on every write, so the field shows back what was stored rather than
-        what you typed. <code>Accepted</code> is the type a write takes and <code>Stored</code> is
-        the type the transform returns. <code>Shaped</code> is everything a transform can return,
-        a refusal included, and <code>Transformer</code> is the type of the option.</p>
+            what you typed. <code>Accepted</code> is the type a write takes and <code>Stored</code> is
+            the type the transform returns. <code>Shaped</code> is everything a transform can return,
+            a refusal included, and <code>Transformer</code> is the type of the option.</p>
     </Section>
 
     <Section title="A derived value follows the fields it read">
@@ -129,14 +130,14 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
         </Example>
 
         <p>Give <code>reactive</code> a body, <code>reactive(() =&gt; …)</code>, and what the body
-        read on its last run is what reruns it. You list no dependencies. The test counts the work:
-        a phone edit walks to the count and never reaches the initials, because the initials never
-        read the phone.</p>
+            read on its last run is what reruns it. You list no dependencies. The test counts the work:
+            a phone edit walks to the count and never reaches the initials, because the initials never
+            read the phone.</p>
 
         <p>A body with a parameter, <code>reactive((args) =&gt; …)</code>, is a
-        <code>Keyed</code>: a factory holding one value per set of arguments. It is how a handler
-        is called per contact, in <a href={url('/guide/talk-to-the-server')}>Talk to the
-        server</a>.</p>
+            <code>Keyed</code>: a factory holding one value per set of arguments. It is how a handler
+            is called per contact, in <a href={url('/guide/talk-to-the-server')}>Talk to the
+                server</a>.</p>
     </Section>
 
     <Section title="A write through a path copies down the path">
@@ -154,18 +155,18 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
         </Example>
 
         <p><code>foo.bar = v</code> copies <code>contact</code>, copies its
-        <code>address</code>, sets <code>city</code>, and writes the new record back. The copy is
-        what wakes the readers: a record changed in place is the object it already was, and nothing
-        downstream has a reason to read it again.</p>
+            <code>address</code>, sets <code>city</code>, and writes the new record back. The copy is
+            what wakes the readers: a record changed in place is the object it already was, and nothing
+            downstream has a reason to read it again.</p>
 
         <p><code>foo.push(v)</code> is the same write reached through an array's mutator, once the
-        compiler lifts it (31.9). Until then, write the new array:
-        <code>tags = [...tags, tag]</code>.</p>
+            compiler lifts it (31.9). Until then, write the new array:
+            <code>tags = [...tags, tag]</code>.</p>
     </Section>
 
     <Section title="A hole in the markup follows what it reads">
         <p>A hole is <code>{'{}'}</code> around an expression, and it updates the one thing it
-        names and nothing around it.</p>
+            names and nothing around it.</p>
 
         <table>
             <thead><tr><th>You write</th><th>Where it lands</th></tr></thead>
@@ -178,7 +179,7 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
                 <tr><td><code>{'style:prop={value}'}</code></td><td>one style property</td></tr>
                 <tr><td><code>{'{...expr}'}</code></td><td>every attribute on an element, or every prop on a component</td></tr>
                 <tr><td><code>{'on<event>={fn}'}</code></td><td>a native listener, removed with its element</td></tr>
-                <tr><td><code>{'bind:element={Reactive<Element> | ((element: Element) => void | Disposer)}'}</code></td><td>the element itself, to focus or measure</td></tr>
+                <tr><td><code>{    'bind:element={Reactive<Element> | ((element: Element) => void | Disposer)}'}</code></td><td>the element itself, to focus or measure</td></tr>
             </tbody>
         </table>
     </Section>
@@ -198,12 +199,12 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
         </Example>
 
         <p><code>{'{#for item, index of list by key}'}</code> renders its body once per item, and
-        <code>by</code> says which row is which. The test removes the first tag and counts the
-        work: one row goes, and no other row's text is touched. Without <code>by</code> the rows
-        are matched by position, so the two that stay are both rewritten.</p>
+            <code>by</code> says which row is which. The test removes the first tag and counts the
+            work: one row goes, and no other row's text is touched. Without <code>by</code> the rows
+            are matched by position, so the two that stay are both rewritten.</p>
 
         <p>A list shown in more than one place can carry its key on the value instead:
-        <code>{"reactive(contacts, { by: 'id' })"}</code>.</p>
+            <code>{"reactive(contacts, { by: 'id' })"}</code>.</p>
     </Section>
 
     <Section title="A branch is in the page only while its condition holds">
@@ -221,9 +222,9 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
         </Example>
 
         <p><code>{'{#if cond}'}</code> builds the branch it takes and nothing of the one it does
-        not. Clearing the box removes the date field, and an <code>{'{:else}'}</code> branch would
-        render in its place. <code>{'{#try}'}</code> is the other block: it renders <code>{'{:catch e}'}</code>
-        in place of its whole body when rendering the body throws.</p>
+            not. Clearing the box removes the date field, and an <code>{'{:else}'}</code> branch would
+            render in its place. <code>{'{#try}'}</code> is the other block: it renders <code>{'{:catch e}'}</code>
+            in place of its whole body when rendering the body throws.</p>
     </Section>
 
     <Section title="A component reads its props live">
@@ -242,8 +243,8 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
         </Example>
 
         <p>A component is a <code>.abide</code> file, and <code>&lt;Name/&gt;</code> invokes it.
-        <code>props</code> hands back each prop as a live read of what the caller passed, so the
-        avatar follows the field and nothing is rebuilt: the test counts no node made or moved.</p>
+            <code>props</code> hands back each prop as a live read of what the caller passed, so the
+            avatar follows the field and nothing is rebuilt: the test counts no node made or moved.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -274,8 +275,8 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
         </Example>
 
         <p>A <code>&lt;style&gt;</code> block's rules require the component's scope token, and only
-        that component's markup carries it. So <code>.badge</code> in one file never reaches the
-        other's badge, and neither needs a naming convention.</p>
+            that component's markup carries it. So <code>.badge</code> in one file never reaches the
+            other's badge, and neither needs a naming convention.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -303,15 +304,15 @@ import tagsTestSource from 'crm-02/src/profile/lib/Tags.test.ts' with { type: 't
         </Example>
 
         <p>A <code>&lt;script&gt;</code> block runs each time the component is used, top to
-        bottom, so each row has its own <code>calls</code>. A <code>&lt;script module&gt;</code>
-        block runs once for the file, so both rows count up one <code>opened</code>. On a server, a
-        <code>reactive</code> in module scope is still one per request.</p>
+            bottom, so each row has its own <code>calls</code>. A <code>&lt;script module&gt;</code>
+            block runs once for the file, so both rows count up one <code>opened</code>. On a server, a
+            <code>reactive</code> in module scope is still one per request.</p>
     </Section>
 
     <Section title="Next">
         <ul>
             <li><a href={url('/guide/talk-to-the-server')}>Talk to the server</a> — load a contact
-            from a handler, and save it back</li>
+                from a handler, and save it back</li>
         </ul>
     </Section>
 </Doc>

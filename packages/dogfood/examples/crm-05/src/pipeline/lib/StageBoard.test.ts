@@ -1,8 +1,10 @@
 import { expect, test } from 'bun:test'
+
 import { mount } from '@abide/harness/abide'
-import { STAGES } from './STAGES.ts'
-import StageBoard from './StageBoard.abide'
+
 import { LOADS } from './LOADS.server.ts'
+import StageBoard from './StageBoard.abide'
+import { STAGES } from './STAGES.ts'
 
 function counted(): number[] {
     return STAGES.map((stage) => LOADS[stage] ?? 0)

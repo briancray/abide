@@ -5,6 +5,7 @@
 // side words — `server`, `browser`, `shared`, `abide` — is shown beside the language, because "browser"
 // alone says where the code runs and leaves a reader guessing between a name read by name and `s()`.
 import { props, raw } from '@abide/abide'
+
 import { highlight, sideOf } from './highlight.ts'
 
 const {

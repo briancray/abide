@@ -7,6 +7,7 @@
 // `undefined` is.
 
 import { expect, test } from 'bun:test'
+
 import { config } from '#server/config.ts'
 import { onConfig } from '#server/hooks.ts'
 

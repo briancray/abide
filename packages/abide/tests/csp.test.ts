@@ -1,7 +1,9 @@
 // SECTION 29 — `csp` as an app's rung, served by `abide start` (spawned, for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { documentNonce } from '#shared/csp.ts'
+
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

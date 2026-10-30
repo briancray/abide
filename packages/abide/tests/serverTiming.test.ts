@@ -3,7 +3,9 @@
 // handler's own rung takes 100 ms around a 100 ms body, so each duration names whose time it is.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { trace } from '#server/trace.ts'
+
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

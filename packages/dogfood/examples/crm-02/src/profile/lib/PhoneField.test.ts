@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
+
 import PhoneField from './PhoneField.abide'
 
 test('the record keeps the digits, and the field shows them back', async () => {

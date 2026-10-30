@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
+
 import { mount } from '@abide/harness/abide'
+
 import StageBadges from './StageBadges.abide'
 
 // The scope token: an attribute every rule in a `<style>` requires.

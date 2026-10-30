@@ -3,6 +3,7 @@ import { escapeAttribute, escapeQuote } from '#shared/escapeText.ts'
 import { isEventName } from '#shared/isEventName.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
 import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
+
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import {
     type Attribute,

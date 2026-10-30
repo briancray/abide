@@ -3,12 +3,14 @@
 // contributor's key: a component mounted in the level, or a level mounted below it.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { emitClient, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { flushSync } from '#shared'
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
 import { CURRENT_ROUTER } from '#shared/CURRENT_ROUTER.ts'
 import { type PageMount, startRouter } from '#ui/routing.ts'
+
 import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

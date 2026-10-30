@@ -1,5 +1,6 @@
 <script>
 import { reactive, url } from '@abide/abide'
+
 import listCompanies from './listCompanies.handler.ts'
 
 const companies = reactive(() => listCompanies())

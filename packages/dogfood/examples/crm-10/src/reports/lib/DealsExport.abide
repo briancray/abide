@@ -1,5 +1,6 @@
 <script>
 import { props } from '@abide/abide'
+
 import { dealsOf, type ExportedDeal } from './dealsOf.ts'
 
 const { deals = dealsOf(4) } = props<{ deals?: ExportedDeal[] }>()

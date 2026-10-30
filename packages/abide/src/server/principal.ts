@@ -9,14 +9,15 @@ import { cookies } from '#shared/cookies.ts'
 import { isFailed } from '#shared/Failed.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { namedLogger } from '#shared/log.ts'
-import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import {
     type PRINCIPAL,
     type Principal,
     principalMembers,
 } from '#shared/principal.ts'
+import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { refuse } from '#shared/refuse.ts'
 import { declare } from '#shared/rpc.ts'
+
 import { mountedOwn } from './answerRpc.ts'
 import { signedInAt } from './bridgeRelay.ts'
 import { callerOf, callerOrMint, mintCaller } from './callerOf.ts'

@@ -8,6 +8,7 @@
 // example running inline as a component of the page it is on.
 
 import { expect, test } from '@playwright/test'
+
 import { SECTIONS } from '../src/lib/sitePages.ts'
 
 // TWO PROJECTS, ONE BUILD: served at the root and again below `/docs` (16.10). Every address a

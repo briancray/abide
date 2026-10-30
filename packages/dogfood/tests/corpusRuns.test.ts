@@ -8,6 +8,7 @@
 // reason to run them rather than more of my own pages.
 
 import { expect, test } from 'bun:test'
+
 import {
     type AbideFile,
     type Compilation,
@@ -19,12 +20,13 @@ import {
     TypeSession,
 } from '@abide/abide/compiler'
 import { render } from '@abide/abide/server'
+
 import { privateAddress } from '../../abide/src/compiler/handlersUnder.ts'
-import { PRIVATE_EXPORT } from '../../abide/src/server/PRIVATE_EXPORT.ts'
 import { Refusals } from '../../abide/src/compiler/Refusals.ts'
 import { resolverIn } from '../../abide/src/compiler/resolverIn.ts'
 import { appFiles } from '../../abide/src/server/appTree.ts'
 import { placement, routeOf } from '../../abide/src/server/placement.ts'
+import { PRIVATE_EXPORT } from '../../abide/src/server/PRIVATE_EXPORT.ts'
 import { inScope } from '../../abide/src/server/requestScope.ts'
 import { browserCookies, COOKIES } from '../../abide/src/shared/cookies.ts'
 import { RPC_SERVER } from '../../abide/src/shared/RPC_SERVER.ts'

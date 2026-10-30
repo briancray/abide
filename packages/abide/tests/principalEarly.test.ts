@@ -5,18 +5,19 @@
 // document rather than the one the page started.
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
+
 import { HEALTH_ADDRESS, PRINCIPAL_ADDRESS } from '#shared/ADDRESSES.ts'
 import { answerOf } from '#shared/answerOf.ts'
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import { isFailed } from '#shared/Failed.ts'
 import { browserHealthReport, HEALTH } from '#shared/health.ts'
-import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import {
     BROWSER_PRINCIPAL,
     PRINCIPAL,
     principal,
     principalMembers,
 } from '#shared/principal.ts'
+import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { watch } from '#shared/reactive/index.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 

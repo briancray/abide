@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
+
 import DealPicker from './DealPicker.abide'
 
 test('picking a deal in the list shows it in the detail panel', async () => {

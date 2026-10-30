@@ -5,12 +5,15 @@
 // of the page's own value wakes one binding inside it — counted, not compared.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { measure } from '@abide/harness/abide'
+
 import { parseAbide } from '#compiler'
-import { UNCHECKED } from '#compiler/CheckerAnswer.ts'
 import { checkApp } from '#compiler/checkApp.ts'
+import { UNCHECKED } from '#compiler/CheckerAnswer.ts'
 import { compileApp } from '#compiler/compileApp.ts'
 import { flushSync } from '#shared'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage, TYPED_ROOT, typedSession } from './typed.ts'

@@ -3,13 +3,14 @@
 // were wrong — each names the number it reports with the mechanism out.
 
 import { expect, test } from 'bun:test'
+
 import { gate } from '@abide/harness/gate'
 import {
     measure,
-    PUBLISHED_WORK_KEY,
-    type PublishedWork,
     patchSet,
+    PUBLISHED_WORK_KEY,
     publishedBy,
+    type PublishedWork,
     time,
 } from '@abide/harness/measure'
 

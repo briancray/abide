@@ -4,6 +4,7 @@
 // served app does not happen to reach.
 
 import { expect, test } from 'bun:test'
+
 import { renderDocument } from '#server/render.ts'
 
 const heads = async (shell: string, head: string): Promise<string> => {

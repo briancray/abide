@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs' // bun exposes no sync existence check or read of its own
 import { dirname, posix } from 'node:path' // bun exposes no path helpers of its own
+
 import { resolvedFile } from '#server/abideModules.ts'
+
 import { nearest } from './nearest.ts'
 
 /**

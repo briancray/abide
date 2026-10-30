@@ -1,5 +1,6 @@
 <script>
 import { type Issues, reactive } from '@abide/abide'
+
 import createDeal from '../createDeal.handler.ts'
 
 type NewDeal = { name: string; company: string; amount: number }
@@ -29,7 +30,7 @@ async function add() {
 </div>
 
 <ul class="fields">
-{#for [field, messages] of Object.entries(issues)}
-    <li><span>{field}</span><strong>{messages?.[0]}</strong></li>
-{/for}
+    {#for [field, messages] of Object.entries(issues)}
+        <li><span>{field}</span><strong>{messages?.[0]}</strong></li>
+    {/for}
 </ul>

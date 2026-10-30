@@ -2,8 +2,10 @@
 // and linked stylesheet carry it (spawned, for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { compileApp } from '#compiler/compileApp.ts'
 import { namesViewTransition, scopeCss } from '#compiler/scopeStyles.ts'
+
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 

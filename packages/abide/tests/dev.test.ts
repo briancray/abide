@@ -8,7 +8,9 @@
 // runs is the more honest arm anyway. `Bun.fetch` for the same clobbering on the other side.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { decodeMappings, segmentAt } from '#server/sourceMappings.ts'
+
 import { addressOf, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 

@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
+
 import ContactNote from './ContactNote.abide'
 
 const savedNote = () => document.querySelectorAll('strong')[3]?.textContent

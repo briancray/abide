@@ -1,3 +1,4 @@
+import type { Reactive } from './Reactive.ts'
 // 1.6 — THE BRAND, READ ON ITS OWN. A `Reactive` is callable AND thenable, so every guard that
 // can meet one reads this before `typeof value === 'function'` or an `isThenable` probe.
 //
@@ -9,7 +10,6 @@
 // 2,348 bytes without it. The `Reactive` import is TYPE-ONLY and erased, which is what lets the
 // predicate keep its exact shape at no cost.
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
-import type { Reactive } from './Reactive.ts'
 
 export function isReactive(value: unknown): value is Reactive<unknown> {
     return (

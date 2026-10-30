@@ -15,13 +15,16 @@
 // what makes everything after it where the rest of the page expects it.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { measure } from '@abide/harness/abide'
+
 import { parseAbide } from '#compiler'
 import { emitSource } from '#compiler/emitSource.ts'
 import { placement } from '#server/placement.ts'
 import { flushSync } from '#shared'
 import { pageRegion } from '#ui/regions.ts'
 import type { Scope } from '#ui/Scope.ts'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import {
     clientOf,

@@ -16,9 +16,9 @@ import { contractOf, type Gated } from './argsContract.ts'
 import { CELL } from './CELL.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { brandedPrototype, MEMBER_KEYS, signalMoved } from './Reactive.ts'
-import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
 import { currentScope, runInScope, SCOPING } from './scoping.ts'
-import { newTracked, TRACKING, type Tracked, trackProbe } from './tracking.ts'
+import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
+import { newTracked, type Tracked, TRACKING, trackProbe } from './tracking.ts'
 
 const UNBUILT: unique symbol = Symbol('abide.unbuilt')
 

@@ -1,6 +1,7 @@
 <script server>
 // The docs app's own hooks; each example files its own in its own file.
 import { csp, middleware, onConfig } from '@abide/abide/server'
+
 import { serveDownloads } from '#src/lib/serveDownloads.ts'
 
 // The sign-in examples need a secret: one per process, or the deployment's.
@@ -15,43 +16,44 @@ middleware(csp({ 'frame-ancestors': ["'self'"] }))
 </script>
 
 <script>
+import { url } from '@abide/abide'
+
 import DocsNav from '#src/lib/DocsNav.abide'
 import SiteBar from '#src/lib/SiteBar.abide'
-import { url } from '@abide/abide'
 import '#src/lib/app.css'
 </script>
 
 <html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link
-        rel="preload"
-        href={url('/fonts/ibm-plex-sans.woff2')}
-        as="font"
-        type="font/woff2"
-        crossorigin
-    />
-    <link
-        rel="preload"
-        href={url('/fonts/space-grotesk.woff2')}
-        as="font"
-        type="font/woff2"
-        crossorigin
-    />
-</head>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link
+            rel="preload"
+            href={url('/fonts/ibm-plex-sans.woff2')}
+            as="font"
+            type="font/woff2"
+            crossorigin
+         />
+        <link
+            rel="preload"
+            href={url('/fonts/space-grotesk.woff2')}
+            as="font"
+            type="font/woff2"
+            crossorigin
+         />
+    </head>
 <body
-    class="grid grid-cols-[15.5rem_minmax(0,44rem)_1fr]
+        class="grid grid-cols-[15.5rem_minmax(0,44rem)_1fr]
         max-rail:grid-cols-[15.5rem_minmax(0,1fr)] max-lg:grid-cols-1
         bg-paper font-sans text-prose/6 text-ink antialiased"
->
-<a
-    class="absolute -left-1000 focus:top-2 focus:left-2 focus:z-2
+    >
+        <a
+            class="absolute -left-1000 focus:top-2 focus:left-2 focus:z-2
         focus:rounded-md focus:bg-raised focus:px-3 focus:py-2"
-    href="#content"
->Skip to content</a>
-<SiteBar/>
-<DocsNav/>
-<slot/>
-</body>
+            href="#content"
+        >Skip to content</a>
+<SiteBar />
+<DocsNav />
+<slot />
+    </body>
 </html>

@@ -4,7 +4,7 @@
 // `escapeless` in #ui is that path, and the two sitting apart is what keeps them from being
 // confused for one another.
 
-import { RAW_WRITES, Raw, textOf } from './Raw.ts'
+import { Raw, RAW_WRITES, textOf } from './Raw.ts'
 
 // The common slot holds nothing to escape, so the scan is the fast path and the rewrite is
 // the fallback: a clean string is returned as it arrived, with no allocation.

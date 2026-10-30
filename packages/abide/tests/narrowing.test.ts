@@ -3,7 +3,9 @@
 // inside a row narrows the row's item — the same page written in a `.ts` file would check.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { checkApp } from '#compiler/checkApp.ts'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

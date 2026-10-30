@@ -5,8 +5,9 @@
 // seconds bun reaps at and the fifteen a heartbeat is due by.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { IDLE_TIMEOUT_SECONDS } from '../src/server/IDLE_TIMEOUT_SECONDS.ts'
+
 import { HEARTBEAT_MILLISECONDS } from '../src/server/HEARTBEAT_MILLISECONDS.ts'
+import { IDLE_TIMEOUT_SECONDS } from '../src/server/IDLE_TIMEOUT_SECONDS.ts'
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

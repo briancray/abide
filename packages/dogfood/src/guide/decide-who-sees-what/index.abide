@@ -1,54 +1,55 @@
 <script>
 import { url } from '@abide/abide'
+import addContactSource from 'crm-07/src/account/addContact.handler.ts' with { type: 'text' }
+import exportContactsSource from 'crm-07/src/account/exportContacts.handler.ts' with { type: 'text' }
+import getContactSource from 'crm-07/src/account/getContact.handler.ts' with { type: 'text' }
+import getStatementSource from 'crm-07/src/account/getStatement.handler.ts' with { type: 'text' }
+import AddContact from 'crm-07/src/account/lib/AddContact.abide'
+import addContactComponentSource from 'crm-07/src/account/lib/AddContact.abide' with { type: 'text' }
+import addContactTestSource from 'crm-07/src/account/lib/AddContact.test.ts' with { type: 'text' }
+import Badge from 'crm-07/src/account/lib/Badge.abide'
+import badgeSource from 'crm-07/src/account/lib/Badge.abide' with { type: 'text' }
+import badgeTestSource from 'crm-07/src/account/lib/Badge.test.ts' with { type: 'text' }
+import ContactCard from 'crm-07/src/account/lib/ContactCard.abide'
+import contactCardSource from 'crm-07/src/account/lib/ContactCard.abide' with { type: 'text' }
+import contactCardTestSource from 'crm-07/src/account/lib/ContactCard.test.ts' with { type: 'text' }
+import Density from 'crm-07/src/account/lib/Density.abide'
+import densitySource from 'crm-07/src/account/lib/Density.abide' with { type: 'text' }
+import densityTestSource from 'crm-07/src/account/lib/Density.test.ts' with { type: 'text' }
+import ExportContacts from 'crm-07/src/account/lib/ExportContacts.abide'
+import exportContactsComponentSource from 'crm-07/src/account/lib/ExportContacts.abide' with { type: 'text' }
+import exportContactsTestSource from 'crm-07/src/account/lib/ExportContacts.test.ts' with { type: 'text' }
+import PartnerStatement from 'crm-07/src/account/lib/PartnerStatement.abide'
+import partnerStatementSource from 'crm-07/src/account/lib/PartnerStatement.abide' with { type: 'text' }
+import partnerStatementTestSource from 'crm-07/src/account/lib/PartnerStatement.test.ts' with { type: 'text' }
+import SalesReport from 'crm-07/src/account/lib/SalesReport.abide'
+import salesReportComponentSource from 'crm-07/src/account/lib/SalesReport.abide' with { type: 'text' }
+import salesReportTestSource from 'crm-07/src/account/lib/SalesReport.test.ts' with { type: 'text' }
+import SignIn from 'crm-07/src/account/lib/SignIn.abide'
+import signInComponentSource from 'crm-07/src/account/lib/SignIn.abide' with { type: 'text' }
+import signInTestSource from 'crm-07/src/account/lib/SignIn.test.ts' with { type: 'text' }
+import SyncContact from 'crm-07/src/account/lib/SyncContact.abide'
+import syncContactComponentSource from 'crm-07/src/account/lib/SyncContact.abide' with { type: 'text' }
+import syncContactTestSource from 'crm-07/src/account/lib/SyncContact.test.ts' with { type: 'text' }
+import Widget from 'crm-07/src/account/lib/Widget.abide'
+import widgetSource from 'crm-07/src/account/lib/Widget.abide' with { type: 'text' }
+import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type: 'text' }
+import salesReportSource from 'crm-07/src/account/salesReport.handler.ts' with { type: 'text' }
+import signInSource from 'crm-07/src/account/signIn.handler.ts' with { type: 'text' }
+import signOutSource from 'crm-07/src/account/signOut.handler.ts' with { type: 'text' }
+import syncContactSource from 'crm-07/src/account/syncContact.handler.ts' with { type: 'text' }
+import rootLayoutSource from 'crm-07/src/layout.abide' with { type: 'text' }
+
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
-import SignIn from 'crm-07/src/account/lib/SignIn.abide'
-import signInComponentSource from 'crm-07/src/account/lib/SignIn.abide' with { type: 'text' }
-import signInSource from 'crm-07/src/account/signIn.handler.ts' with { type: 'text' }
-import signOutSource from 'crm-07/src/account/signOut.handler.ts' with { type: 'text' }
-import signInTestSource from 'crm-07/src/account/lib/SignIn.test.ts' with { type: 'text' }
-import Badge from 'crm-07/src/account/lib/Badge.abide'
-import badgeSource from 'crm-07/src/account/lib/Badge.abide' with { type: 'text' }
-import badgeTestSource from 'crm-07/src/account/lib/Badge.test.ts' with { type: 'text' }
-import Density from 'crm-07/src/account/lib/Density.abide'
-import densitySource from 'crm-07/src/account/lib/Density.abide' with { type: 'text' }
-import densityTestSource from 'crm-07/src/account/lib/Density.test.ts' with { type: 'text' }
-import ContactCard from 'crm-07/src/account/lib/ContactCard.abide'
-import contactCardSource from 'crm-07/src/account/lib/ContactCard.abide' with { type: 'text' }
-import getContactSource from 'crm-07/src/account/getContact.handler.ts' with { type: 'text' }
-import contactCardTestSource from 'crm-07/src/account/lib/ContactCard.test.ts' with { type: 'text' }
-import ExportContacts from 'crm-07/src/account/lib/ExportContacts.abide'
-import exportContactsComponentSource from 'crm-07/src/account/lib/ExportContacts.abide' with { type: 'text' }
-import exportContactsSource from 'crm-07/src/account/exportContacts.handler.ts' with { type: 'text' }
-import exportContactsTestSource from 'crm-07/src/account/lib/ExportContacts.test.ts' with { type: 'text' }
-import PartnerStatement from 'crm-07/src/account/lib/PartnerStatement.abide'
-import partnerStatementSource from 'crm-07/src/account/lib/PartnerStatement.abide' with { type: 'text' }
-import getStatementSource from 'crm-07/src/account/getStatement.handler.ts' with { type: 'text' }
-import partnerStatementTestSource from 'crm-07/src/account/lib/PartnerStatement.test.ts' with { type: 'text' }
-import SalesReport from 'crm-07/src/account/lib/SalesReport.abide'
-import salesReportComponentSource from 'crm-07/src/account/lib/SalesReport.abide' with { type: 'text' }
-import salesReportSource from 'crm-07/src/account/salesReport.handler.ts' with { type: 'text' }
-import salesReportTestSource from 'crm-07/src/account/lib/SalesReport.test.ts' with { type: 'text' }
-import SyncContact from 'crm-07/src/account/lib/SyncContact.abide'
-import syncContactComponentSource from 'crm-07/src/account/lib/SyncContact.abide' with { type: 'text' }
-import syncContactSource from 'crm-07/src/account/syncContact.handler.ts' with { type: 'text' }
-import syncContactTestSource from 'crm-07/src/account/lib/SyncContact.test.ts' with { type: 'text' }
-import AddContact from 'crm-07/src/account/lib/AddContact.abide'
-import addContactComponentSource from 'crm-07/src/account/lib/AddContact.abide' with { type: 'text' }
-import addContactSource from 'crm-07/src/account/addContact.handler.ts' with { type: 'text' }
-import addContactTestSource from 'crm-07/src/account/lib/AddContact.test.ts' with { type: 'text' }
-import Widget from 'crm-07/src/account/lib/Widget.abide'
-import widgetSource from 'crm-07/src/account/lib/Widget.abide' with { type: 'text' }
-import rootLayoutSource from 'crm-07/src/layout.abide' with { type: 'text' }
-import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
     <p>Everything in this chapter is in <code>src/account</code> of the chapter app, beside
-    <code>src/contacts</code> from chapter 1. Each card shows the files it is made of, and the
-    test the app runs on them.</p>
+        <code>src/contacts</code> from chapter 1. Each card shows the files it is made of, and the
+        test the app runs on them.</p>
 
     <Section title="`principal.set` signs a caller in">
         <Example
@@ -67,19 +68,19 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
         </Example>
 
         <p><code>principal.set(claims)</code> seals the claims into an <code>HttpOnly</code>
-        cookie, and every request that carries it is that member's. <code>principal.clear()</code>
-        signs them out. Both run in a handler, because the cookie is written on its answer. The
-        <code>onPrincipal</code> at the foot of <code>signIn.handler.ts</code> is the next card's.</p>
+            cookie, and every request that carries it is that member's. <code>principal.clear()</code>
+            signs them out. Both run in a handler, because the cookie is written on its answer. The
+            <code>onPrincipal</code> at the foot of <code>signIn.handler.ts</code> is the next card's.</p>
 
         <p>The answer also tells the browser the caller changed. Every tab of the site reads
-        <code>principal</code> again, so the form's own button flips with nothing passed to it.</p>
+            <code>principal</code> again, so the form's own button flips with nothing passed to it.</p>
 
         <p>The seal is a JWT signed with <code>ABIDE_PRINCIPAL_SECRET</code>, and it lives for
-        <code>ABIDE_PRINCIPAL_TTL</code> milliseconds, a week unless you set it. The chapter app
-        keeps a development secret in its <code>.env</code>, so set your own wherever the app is
-        deployed. A comma-separated list rotates a secret in: the first signs, and every one
-        verifies. Under <code>bun test</code> an app that sets no secret is given one, so a test
-        signs in from a fresh clone.</p>
+            <code>ABIDE_PRINCIPAL_TTL</code> milliseconds, a week unless you set it. The chapter app
+            keeps a development secret in its <code>.env</code>, so set your own wherever the app is
+            deployed. A comma-separated list rotates a secret in: the first signs, and every one
+            verifies. Under <code>bun test</code> an app that sets no secret is given one, so a test
+            signs in from a fresh clone.</p>
 
         <table>
             <thead><tr><th>Read</th><th>What it is</th></tr></thead>
@@ -93,7 +94,7 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
         </table>
 
         <p>Each is a reactive value. A template reading one follows it, and on the server each
-        reads the request being answered.</p>
+            reads the request being answered.</p>
     </Section>
 
     <Section title="`onPrincipal` turns the id in the cookie into a member">
@@ -112,25 +113,25 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
         </Example>
 
         <p><code>onPrincipal</code> is handed the claims and returns your half of the caller. It
-        runs on the server, at most once per request, where the team records are. So the cookie
-        stays small, and a rename shows on the next request rather than at the next sign-in.
-        Filed in any handler file or <code>.abide</code>, it resolves the caller for every
-        route.</p>
+            runs on the server, at most once per request, where the team records are. So the cookie
+            stays small, and a rename shows on the next request rather than at the next sign-in.
+            Filed in any handler file or <code>.abide</code>, it resolves the caller for every
+            route.</p>
 
         <p>A test signs in without the cookie. <code>app.run(fn, &#123; principal: &#123; id: 'theo' &#125; &#125;)</code>
-        hands those claims to <code>onPrincipal</code> as a sealed cookie's are, and the card's
-        test reads the member they name.</p>
+            hands those claims to <code>onPrincipal</code> as a sealed cookie's are, and the card's
+            test reads the member they name.</p>
 
         <p>What it returns is read as <code>principal.resolved</code>, typed by
-        <code>Principal</code>. Declare your fields on that interface, as the app's
-        <code>lib/TEAM.server.ts</code> does beside the team it reads. abide's own three fields are <code>authenticated</code>, <code>expiresAt</code> and
-        <code>error</code>, and they win any collision, so a resolver cannot sign a caller in by
-        returning <code>authenticated: true</code>. A resolver that throws fills
-        <code>error</code> and leaves the caller signed out.</p>
+            <code>Principal</code>. Declare your fields on that interface, as the app's
+            <code>lib/TEAM.server.ts</code> does beside the team it reads. abide's own three fields are <code>authenticated</code>, <code>expiresAt</code> and
+            <code>error</code>, and they win any collision, so a resolver cannot sign a caller in by
+            returning <code>authenticated: true</code>. A resolver that throws fills
+            <code>error</code> and leaves the caller signed out.</p>
 
         <p>The tabs on this card, the deal-value card and the export card are
-        <code>lib/SignInAs.abide</code>, which
-        calls the same <code>signIn</code> handler.</p>
+            <code>lib/SignInAs.abide</code>, which
+            calls the same <code>signIn</code> handler.</p>
     </Section>
 
     <Section title="`cookies()` reads and writes a cookie on both sides">
@@ -148,13 +149,13 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
         </Example>
 
         <p><code>cookies()</code> is the request's cookies on the server and the document's in
-        the browser, as a <code>CookieMap</code>. Reading a cookie by name follows it, so the
-        list changes on the click. The server render reads the same cookie off the request, so a
-        reload paints compact rather than flashing comfortable first.</p>
+            the browser, as a <code>CookieMap</code>. Reading a cookie by name follows it, so the
+            list changes on the click. The server render reads the same cookie off the request, so a
+            reload paints compact rather than flashing comfortable first.</p>
 
         <p><code>cookies()</code> reads and writes any cookie the request carries: a density, a
-        theme, or another system's session cookie your server checks. The principal cookie is
-        <code>HttpOnly</code>, so in the browser <code>cookies()</code> never sees the seal.</p>
+            theme, or another system's session cookie your server checks. The principal cookie is
+            <code>HttpOnly</code>, so in the browser <code>cookies()</code> never sees the seal.</p>
     </Section>
 
     <Section title="A handler decides which fields a caller may read">
@@ -173,11 +174,11 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
         </Example>
 
         <p>The handler reads <code>principal.resolved</code> and leaves the field out. Hiding it in
-        the template would still send it, and anyone opening the network panel would read it.</p>
+            the template would still send it, and anyone opening the network panel would read it.</p>
 
         <p>An answer read under one member is not read again on its own when another signs in, so
-        the card watches <code>principal.resolved</code> and refreshes the contact. The test calls
-        the handler in process, under the cookie each member's sign-in left.</p>
+            the card watches <code>principal.resolved</code> and refreshes the contact. The test calls
+            the handler in process, under the cookie each member's sign-in left.</p>
     </Section>
 
     <Section title="A `middleware` rung refuses before the handler runs">
@@ -196,18 +197,18 @@ import widgetTestSource from 'crm-07/src/account/lib/Widget.test.ts' with { type
         </Example>
 
         <p>A rung is a <code>Middleware</code>: it is handed <code>next</code> and the call's
-        context, and either returns <code>next(ctx)</code> or answers in the handler's place.
-        Returning <code>refuse(403, …)</code> refuses, and neither the handler nor any rung after
-        it runs. A throw escapes every rung rather than unwinding through them.</p>
+            context, and either returns <code>next(ctx)</code> or answers in the handler's place.
+            Returning <code>refuse(403, …)</code> refuses, and neither the handler nor any rung after
+            it runs. A throw escapes every rung rather than unwinding through them.</p>
 
         <p>The rung sits on the handler, so it runs on every call: from a browser, from another
-        handler, and from a page rendering on the server. It reads arguments through
-        <code>ctx.args()</code>, which parses the body on its first call. So a rung that never asks
-        refuses a signed-out caller before their body is parsed or checked.</p>
+            handler, and from a page rendering on the server. It reads arguments through
+            <code>ctx.args()</code>, which parses the body on its first call. So a rung that never asks
+            refuses a signed-out caller before their body is parsed or checked.</p>
 
         <p>To guard a whole section, call <code>middleware(…)</code> in its
-        <code>layout.abide</code>, such as <code>src/account/admin/layout.abide</code>. That rung
-        runs over every page and handler below it, and it has the request and nothing else:</p>
+            <code>layout.abide</code>, such as <code>src/account/admin/layout.abide</code>. That rung
+            runs over every page and handler below it, and it has the request and nothing else:</p>
 
         <Code language="abide" caption="abide" code={`<script server>
 import { principal } from '@abide/abide'
@@ -223,8 +224,8 @@ middleware(async (next) => {
 <slot/>`} />
 
         <p>Filed in the root <code>src/layout.abide</code>, a rung runs before routing, over
-        every request the app answers. <code>abide routes</code> lists each rung beside the route
-        it is filed at.</p>
+            every request the app answers. <code>abide routes</code> lists each rung beside the route
+            it is filed at.</p>
     </Section>
 
     <Section title="`crossOrigin` opens one handler to a partner">
@@ -243,8 +244,8 @@ middleware(async (next) => {
         </Example>
 
         <p>The answer names the partner in <code>access-control-allow-origin</code>, and the
-        browser hands the statement only to a page from that origin. Every other handler in the
-        CRM stays same-origin, because nothing widened it.</p>
+            browser hands the statement only to a page from that origin. Every other handler in the
+            CRM stays same-origin, because nothing widened it.</p>
 
         <table>
             <thead><tr><th><code>crossOrigin</code></th><th>Who may read the answer</th></tr></thead>
@@ -256,11 +257,11 @@ middleware(async (next) => {
         </table>
 
         <p>abide answers the <code>OPTIONS</code> preflight a cross-origin <code>POST</code> sends,
-        outside every rung. On a mutation, <code>crossOrigin</code> replaces the same-origin check
-        a <code>POST</code> otherwise gets. Every rpc answer carries <code>vary: origin</code>, so
-        a cache keeps one copy per asking origin. Pages carry
-        <code>referrer-policy: strict-origin-when-cross-origin</code>, so a link off the CRM does
-        not hand another site the path a member was on.</p>
+            outside every rung. On a mutation, <code>crossOrigin</code> replaces the same-origin check
+            a <code>POST</code> otherwise gets. Every rpc answer carries <code>vary: origin</code>, so
+            a cache keeps one copy per asking origin. Pages carry
+            <code>referrer-policy: strict-origin-when-cross-origin</code>, so a link off the CRM does
+            not hand another site the path a member was on.</p>
     </Section>
 
     <Section title="`timeout` bounds how long a call may go without progress">
@@ -279,13 +280,13 @@ middleware(async (next) => {
         </Example>
 
         <p>On a handler that yields, the bound is per row. So one number lets a long report run
-        and still catches a source that has stopped. A call past it is refused
-        <code>504</code>, and the rows already sent stay on the page.</p>
+            and still catches a source that has stopped. A call past it is refused
+            <code>504</code>, and the rows already sent stay on the page.</p>
 
         <p>Without one, nothing is cut short: the server never closes a connection under a call it
-        is still answering, a slow handler or a quiet stream alike. Its sibling is
-        <code>maxBodySize</code>: the bytes a mutation's body may carry, refused <code>413</code>
-        before a declared oversize body is read.</p>
+            is still answering, a slow handler or a quiet stream alike. Its sibling is
+            <code>maxBodySize</code>: the bytes a mutation's body may carry, refused <code>413</code>
+            before a declared oversize body is read.</p>
 
         <table>
             <thead><tr><th>Setting</th><th>Default</th><th>What it bounds</th></tr></thead>
@@ -299,7 +300,7 @@ middleware(async (next) => {
         </table>
 
         <p>None of these is a rate limit. A caller sending many small, fast requests passes every
-        ceiling, and a rung keyed on <code>principal.caller</code> is where a rate limit goes.</p>
+            ceiling, and a rung keyed on <code>principal.caller</code> is where a rate limit goes.</p>
     </Section>
 
     <Section title="`reachable` refuses at once while a host is down">
@@ -318,12 +319,12 @@ middleware(async (next) => {
         </Example>
 
         <p><code>reachable</code> sends the host one <code>HEAD</code>, waits up to five seconds,
-        and holds the answer for a minute for every caller in the process. A host that is down
-        then costs one probe a minute instead of one timeout per call. Any answer counts, a
-        <code>404</code> included: the question is whether something is there to call.</p>
+            and holds the answer for a minute for every caller in the process. A host that is down
+            then costs one probe a minute instead of one timeout per call. Any answer counts, a
+            <code>404</code> included: the question is whether something is there to call.</p>
 
         <p>The answer can be a minute old. The call that follows a <code>true</code> can still
-        fail, and its failure is still the handler's to handle.</p>
+            fail, and its failure is still the handler's to handle.</p>
     </Section>
 
     <Section title="`response()` sets the status a handler answers with">
@@ -342,7 +343,7 @@ middleware(async (next) => {
         </Example>
 
         <p><code>response()</code> is the status and headers of the answer being built, before
-        the body is decided. A handler or a rung writes to it and goes on returning a value.</p>
+            the body is decided. A handler or a rung writes to it and goes on returning a value.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it is, on the server, for the request being answered</th></tr></thead>
@@ -354,7 +355,7 @@ middleware(async (next) => {
         </table>
 
         <p>On an rpc route the body is <code>ctx.args()</code>'s. A body reads once, so a rung that
-        reads <code>request().json()</code> leaves nothing for the handler.</p>
+            reads <code>request().json()</code> leaves nothing for the handler.</p>
     </Section>
 
     <Section title="`csp()` lets the app's own scripts run, and nothing else">
@@ -373,16 +374,16 @@ middleware(async (next) => {
         </Example>
 
         <p><code>csp()</code> is a rung, filed in the root layout so it covers every page. Its
-        policy admits the build's own scripts and styles, and the inline script the render writes
-        by a hash taken at build time. The widget's origin is not the app's, so the browser
-        refuses it before a request is made. The docs app serves this page under the same
-        baseline.</p>
+            policy admits the build's own scripts and styles, and the inline script the render writes
+            by a hash taken at build time. The widget's origin is not the app's, so the browser
+            refuses it before a request is made. The docs app serves this page under the same
+            baseline.</p>
 
         <p>Name a directive to replace it, such as <code>{`csp({ 'img-src': ["'self'", 'https://cdn.example'] })`}</code>
-        for avatars on a CDN. The rest stay the baseline's.</p>
+            for avatars on a CDN. The rest stay the baseline's.</p>
 
         <p>An inline script of your own reads <code>csp.nonce()</code>, the nonce this response
-        carries, in the root layout:</p>
+            carries, in the root layout:</p>
 
         <Code language="abide" caption="abide" code={`<script>
 import { csp } from '@abide/abide'
@@ -393,14 +394,14 @@ import { csp } from '@abide/abide'
 </head>`} />
 
         <p>Without <code>csp()</code>, a page is still served
-        <code>content-security-policy: frame-ancestors 'none'</code>, so no other site can frame
-        it and steer a click.</p>
+            <code>content-security-policy: frame-ancestors 'none'</code>, so no other site can frame
+            it and steer a click.</p>
     </Section>
 
     <Section title="Next">
         <ul>
             <li><a href={url('/guide/run-it')}>Run it</a> — configure the CRM, start and stop it,
-            and see what it is doing</li>
+                and see what it is doing</li>
         </ul>
     </Section>
 </Doc>

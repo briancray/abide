@@ -18,7 +18,9 @@
 // to this one rather than registering a plugin nobody asks.
 
 import { basename, dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
+
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
+
 import type { ServerTable } from './answerRequest.ts'
 import type { MountRow } from './answerRpc.ts'
 import {

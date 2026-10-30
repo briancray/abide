@@ -10,6 +10,7 @@
 
 import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
+
 import {
     type AssistantContent,
     type AssistantEvent,

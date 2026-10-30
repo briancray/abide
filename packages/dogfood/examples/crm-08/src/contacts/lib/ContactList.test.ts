@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import listContacts from '../listContacts.handler.ts'
 
 test('the handler the list reads answers with every contact', async () => {

@@ -9,6 +9,7 @@
 // layout whose segment refused it would be wrapped by a layout no address of its own reaches.
 
 import { parseRoutePattern } from '#shared/routePattern.ts'
+
 import { matcherOf } from './paramFile.ts'
 import type { Refusals } from './Refusals.ts'
 
@@ -16,7 +17,12 @@ import type { Refusals } from './Refusals.ts'
 export type MountedTree = { directory: string; at: string; params: string[] }
 
 /** A file with a route: its path, the name refusals give it, and the position it answers by. */
-type Routed = { path: string; relative: string; position: string; route: string }
+type Routed = {
+    path: string
+    relative: string
+    position: string
+    route: string
+}
 
 /**
  * Each routed file's matchers, by its path: every name its route's segments give, to the anchored
@@ -39,7 +45,10 @@ export async function matchersOf(
     for (const tree of trees) all.push(...tree.params)
     for (const path of all) {
         if (sources.has(path)) continue
-        const matcher = matcherOf(labelOf(root, path), await Bun.file(path).text())
+        const matcher = matcherOf(
+            labelOf(root, path),
+            await Bun.file(path).text(),
+        )
         if (matcher instanceof Error) {
             refusals.at(path, matcher)
             sources.set(path, undefined)
@@ -79,7 +88,8 @@ export async function matchersOf(
                 continue
             }
             const other = atPosition.get(shape)
-            if (other === undefined) atPosition.set(shape, { found, file: file.relative })
+            if (other === undefined)
+                atPosition.set(shape, { found, file: file.relative })
             else if (other.found !== found)
                 refusals.at(
                     file.path,

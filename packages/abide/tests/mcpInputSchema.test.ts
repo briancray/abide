@@ -2,6 +2,7 @@
 // client refusing one tool's refuses the whole `tools/list`, and the app reads as having none.
 
 import { expect, test } from 'bun:test'
+
 import type { Mounted } from '../src/server/answerRpc.ts'
 import { McpSurface } from '../src/server/generatedSurfaces.ts'
 

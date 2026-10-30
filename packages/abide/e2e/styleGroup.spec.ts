@@ -6,6 +6,7 @@
 // reads `a` where `"a;b"` is due.
 
 import { execFileSync } from 'node:child_process'
+
 import { expect, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname

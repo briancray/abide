@@ -5,11 +5,13 @@
 // and a throw out of `onConfig` is the value's standing error, which a read throws (27.1).
 
 import { homedir } from 'node:os' // bun exposes no home directory of its own
+
 import { isRecord } from '#shared/isRecord.ts'
 import { numberFromText } from '#shared/numberFromText.ts'
 import { reactive } from '#shared/reactive/index.ts'
 import { validationError } from '#shared/refuse.ts'
 import { runSchema } from '#shared/Schema.ts'
+
 import { appDirectories } from './appDirectories.ts'
 import { type Env, HOOKS, inOrder } from './hooks.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'

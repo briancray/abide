@@ -9,8 +9,10 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { realpathSync } from 'node:fs' // bun exposes no sync realpath of its own
 import { relative } from 'node:path' // bun exposes no path helpers of its own
+
 import { checkApp } from '#compiler/checkApp.ts'
 import type { Diagnosis } from '#compiler/TypeSession.ts'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

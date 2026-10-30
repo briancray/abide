@@ -3,10 +3,12 @@
 // node is rather than re-recognizing the scaffolding around it.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { parseAbide } from '#compiler'
 import type { PositionKind } from '#compiler/PositionTable.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
+
 import { closeTyped } from './typed.ts'
 
 afterAll(closeTyped)

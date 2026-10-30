@@ -1,8 +1,9 @@
 import { PATCHES } from '#shared/reactive/PATCHES.ts'
+
 import { LAYER_RECONCILE } from './LAYER_NAMES.ts'
 import type { List } from './List.ts'
-import { HYDRATE_LOG } from './Mismatch.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
+import { HYDRATE_LOG } from './Mismatch.ts'
 import { emptyRegion } from './regions.ts'
 import { dropRow, makeRow, moveRow, type Row, updateRow } from './rows.ts'
 

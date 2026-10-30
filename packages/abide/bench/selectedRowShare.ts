@@ -12,7 +12,9 @@
 // for each arm, read off the emitted module, beside what it cost.
 
 import { chromium } from '@playwright/test'
+
 import { LAYER_RECONCILE } from '#ui/LAYER_NAMES.ts'
+
 import { buildCompiledPage, openCompiledPage } from './buildCompiledPage.ts'
 import { median, spread } from './median.ts'
 import { milliseconds } from './milliseconds.ts'

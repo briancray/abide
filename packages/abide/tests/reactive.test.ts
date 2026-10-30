@@ -5,7 +5,9 @@
 // arm carry it, per CLAUDE.md's revert discipline.
 
 import { expect, setSystemTime, test } from 'bun:test'
+
 import { gate } from '@abide/harness/gate'
+
 import { handOnError, onError } from '#server/hooks.ts'
 import {
     busy,
@@ -22,8 +24,8 @@ import {
     watch,
     writePath,
 } from '#shared'
-import { CELL } from '#shared/reactive/CELL.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
+import { CELL } from '#shared/reactive/CELL.ts'
 import { chunksOfStream, isKeyed } from '#shared/reactive/index.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'

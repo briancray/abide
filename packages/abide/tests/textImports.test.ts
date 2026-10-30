@@ -2,9 +2,11 @@
 // in bun: on the server, in the browser's bundle, and to the checker, which types it a `string`.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { checkApp } from '#compiler/checkApp.ts'
 import { compilationOf, compileApp } from '#compiler/compileApp.ts'
 import { serveCompilation } from '#server/abideModules.ts'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 afterAll(removeTemporaryModules)

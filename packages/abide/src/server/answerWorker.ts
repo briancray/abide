@@ -19,6 +19,7 @@ import {
 } from '#shared/OFFLINE_CACHES.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { REACHED_MESSAGE } from '#shared/REACHED_MESSAGE.ts'
+
 import type { Manifest } from './manifestOf.ts'
 
 // What `framingOf` reads as a framed stream (16.32), and a binary's bytes (16.34), which may be one —

@@ -3,8 +3,10 @@
 // discipline it imposes.
 
 import { expect, test } from 'bun:test'
+
 import { inAFreshProcess } from '@abide/harness/gate'
 import { ratio, type Sample, THRESHOLDS } from '@abide/harness/report'
+
 // The clock is the batcher's, and not a name the package exports.
 import { clockResolution, nanoseconds } from '../src/report/clock.ts'
 

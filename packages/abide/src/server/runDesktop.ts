@@ -8,7 +8,9 @@
 
 import { FFIType } from 'bun:ffi'
 import { mkdir } from 'node:fs/promises' // bun exposes no directory creation of its own
+
 import { isFailed } from '#shared/Failed.ts'
+
 import {
     callBlock,
     created,
@@ -54,8 +56,7 @@ type Failure = {
 export type Desktop = {
     /** 38.82 — `src/launcher.abide`'s page, where the app has one that paints. */
     launch:
-        | (() => Promise<{ default: (props: Launch) => Component }>)
-        | undefined
+        (() => Promise<{ default: (props: Launch) => Component }>) | undefined
     /** The document the launch page renders into, its stylesheet already in its head (38.84). */
     document: string
     /** 38.101 — the app's icon as a data URL, and the accent taken from it. */

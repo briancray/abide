@@ -8,7 +8,9 @@
 // `bun run bench` — `BENCH_SIZING`.
 
 import { execFileSync } from 'node:child_process'
+
 import { test } from '@playwright/test'
+
 import type { ReactiveBenchRow } from '../bench/reactiveCases.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 

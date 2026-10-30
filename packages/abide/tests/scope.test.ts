@@ -4,14 +4,15 @@
 // these reads the right-looking value with the scoping taken out — the first request's.
 
 import { expect, test } from 'bun:test'
+
 import { installServer } from '#server/installServer.ts'
 import {
     currentRequestScope,
     holdScope,
     inScope,
-    type RequestScope,
     releaseScope,
     request,
+    type RequestScope,
     response,
 } from '#server/requestScope.ts'
 import { flushSync, invalidate, reactive, refresh, watch } from '#shared'

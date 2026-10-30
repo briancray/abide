@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
+
 import { createApp } from '@abide/abide/server'
+
 import { COMPANIES } from './lib/COMPANIES.server.ts'
 
 test('the company page takes every id the CRM has, and no name', async () => {

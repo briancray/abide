@@ -1,5 +1,6 @@
 <script server>
 import { GET } from '@abide/abide/server'
+
 import getStatement from '../getStatement.handler.ts'
 
 // Another site's browser, asking for the statement under its own origin.

@@ -1,8 +1,10 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
-import { calls } from './calls.ts'
+
 import CallLog from './CallLog.abide'
+import { calls } from './calls.ts'
 
 test('a call logged with the network is saved, and nothing waits', async () => {
     using _log = await mount(CallLog({}))

@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { measure, mount } from '@abide/harness/abide'
+
 import ClosedTiles from './ClosedTiles.abide'
 
 test('a range switch rewrites two numbers and builds nothing', async () => {

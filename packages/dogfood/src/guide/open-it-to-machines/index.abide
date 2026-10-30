@@ -1,40 +1,41 @@
 <script>
 import { url } from '@abide/abide'
+import askAssistantSource from 'crm-09/src/assistant/askAssistant.handler.ts' with { type: 'text' }
+import askClaudeSource from 'crm-09/src/assistant/askClaude.handler.ts' with { type: 'text' }
+import askClaudeCodeSource from 'crm-09/src/assistant/askClaudeCode.handler.ts' with { type: 'text' }
+import bridgeSource from 'crm-09/src/assistant/bridge.handler.ts' with { type: 'text' }
+import exportContactsSource from 'crm-09/src/assistant/exportContacts.handler.ts' with { type: 'text' }
+import AssistantChat from 'crm-09/src/assistant/lib/AssistantChat.abide'
+import assistantChatSource from 'crm-09/src/assistant/lib/AssistantChat.abide' with { type: 'text' }
+import assistantChatTestSource from 'crm-09/src/assistant/lib/AssistantChat.test.ts' with { type: 'text' }
+import ClaudeApiRequest from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide'
+import claudeApiRequestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide' with { type: 'text' }
+import claudeApiRequestTestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.test.ts' with { type: 'text' }
+import ClaudeCodeBridge from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide'
+import claudeCodeBridgeSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide' with { type: 'text' }
+import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.test.ts' with { type: 'text' }
+import ModelToolCall from 'crm-09/src/assistant/lib/ModelToolCall.abide'
+import modelToolCallSource from 'crm-09/src/assistant/lib/ModelToolCall.abide' with { type: 'text' }
+import modelToolCallTestSource from 'crm-09/src/assistant/lib/ModelToolCall.test.ts' with { type: 'text' }
+import OpenApiOperation from 'crm-09/src/assistant/lib/OpenApiOperation.abide'
+import openApiOperationSource from 'crm-09/src/assistant/lib/OpenApiOperation.abide' with { type: 'text' }
+import openApiOperationTestSource from 'crm-09/src/assistant/lib/OpenApiOperation.test.ts' with { type: 'text' }
+import WithheldExport from 'crm-09/src/assistant/lib/WithheldExport.abide'
+import withheldExportSource from 'crm-09/src/assistant/lib/WithheldExport.abide' with { type: 'text' }
+import withheldExportTestSource from 'crm-09/src/assistant/lib/WithheldExport.test.ts' with { type: 'text' }
+import searchContactsSource from 'crm-09/src/assistant/searchContacts.handler.ts' with { type: 'text' }
+import messagesSource from 'crm-09/src/assistant/v1/messages.handler.ts' with { type: 'text' }
+
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
-import OpenApiOperation from 'crm-09/src/assistant/lib/OpenApiOperation.abide'
-import openApiOperationSource from 'crm-09/src/assistant/lib/OpenApiOperation.abide' with { type: 'text' }
-import openApiOperationTestSource from 'crm-09/src/assistant/lib/OpenApiOperation.test.ts' with { type: 'text' }
-import searchContactsSource from 'crm-09/src/assistant/searchContacts.handler.ts' with { type: 'text' }
-import ModelToolCall from 'crm-09/src/assistant/lib/ModelToolCall.abide'
-import modelToolCallSource from 'crm-09/src/assistant/lib/ModelToolCall.abide' with { type: 'text' }
-import modelToolCallTestSource from 'crm-09/src/assistant/lib/ModelToolCall.test.ts' with { type: 'text' }
-import WithheldExport from 'crm-09/src/assistant/lib/WithheldExport.abide'
-import withheldExportSource from 'crm-09/src/assistant/lib/WithheldExport.abide' with { type: 'text' }
-import exportContactsSource from 'crm-09/src/assistant/exportContacts.handler.ts' with { type: 'text' }
-import withheldExportTestSource from 'crm-09/src/assistant/lib/WithheldExport.test.ts' with { type: 'text' }
-import AssistantChat from 'crm-09/src/assistant/lib/AssistantChat.abide'
-import assistantChatSource from 'crm-09/src/assistant/lib/AssistantChat.abide' with { type: 'text' }
-import askAssistantSource from 'crm-09/src/assistant/askAssistant.handler.ts' with { type: 'text' }
-import assistantChatTestSource from 'crm-09/src/assistant/lib/AssistantChat.test.ts' with { type: 'text' }
-import ClaudeApiRequest from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide'
-import claudeApiRequestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.abide' with { type: 'text' }
-import askClaudeSource from 'crm-09/src/assistant/askClaude.handler.ts' with { type: 'text' }
-import messagesSource from 'crm-09/src/assistant/v1/messages.handler.ts' with { type: 'text' }
-import claudeApiRequestTestSource from 'crm-09/src/assistant/lib/ClaudeApiRequest.test.ts' with { type: 'text' }
-import ClaudeCodeBridge from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide'
-import claudeCodeBridgeSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.abide' with { type: 'text' }
-import bridgeSource from 'crm-09/src/assistant/bridge.handler.ts' with { type: 'text' }
-import askClaudeCodeSource from 'crm-09/src/assistant/askClaudeCode.handler.ts' with { type: 'text' }
-import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridge.test.ts' with { type: 'text' }
 </script>
 
 <Doc>
     <p>A handler file already carries an address, a method, an argument type and a description.
-    That is everything an OpenAPI operation, an MCP tool and a command need, so the build derives
-    all three from the same route table the browser's calls come from.</p>
+        That is everything an OpenAPI operation, an MCP tool and a command need, so the build derives
+        all three from the same route table the browser's calls come from.</p>
 
     <table>
         <thead><tr><th>Surface</th><th>Who reads it</th><th>Where</th></tr></thead>
@@ -62,13 +63,13 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         </Example>
 
         <p>Nobody wrote the operation. The parameter is the handler's argument type and the
-        description is its <code>description</code> option, so the document cannot describe a
-        handler that is not there. A handler added is an operation published, with no step to
-        rerun.</p>
+            description is its <code>description</code> option, so the document cannot describe a
+            handler that is not there. A handler added is an operation published, with no step to
+            rerun.</p>
 
         <p>The document is OpenAPI 3.1, whose schema dialect is JSON Schema, so a handler's schema
-        is published as it is. The test reads the same document from <code>createApp</code>, in
-        process.</p>
+            is published as it is. The test reads the same document from <code>createApp</code>, in
+            process.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -98,18 +99,18 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         </Example>
 
         <p>Every handler the app publishes is a tool, a read as much as a write. The model picks a
-        tool by its <code>description</code>, the same sentence the OpenAPI operation carries, so
-        write one on every handler. A tool with none warns on <code>abide:mcp</code>, and with
-        <code>DEBUG=abide:mcp</code> every call writes a line naming the tool, its status and how
-        long it took.</p>
+            tool by its <code>description</code>, the same sentence the OpenAPI operation carries, so
+            write one on every handler. A tool with none warns on <code>abide:mcp</code>, and with
+            <code>DEBUG=abide:mcp</code> every call writes a line naming the tool, its status and how
+            long it took.</p>
 
         <p>The endpoint runs inside the app's own middleware. The rung that decides what a browser
-        may call decides what a model may call, and a declared refusal reaches the model by its
-        name, so it can tell the person why it stopped. Read on:
-        <a href={url('/guide/decide-who-sees-what')}>Who sees what</a></p>
+            may call decides what a model may call, and a declared refusal reaches the model by its
+            name, so it can tell the person why it stopped. Read on:
+            <a href={url('/guide/decide-who-sees-what')}>Who sees what</a></p>
 
         <p><code>abide mcp [--url &lt;origin&gt;]</code> serves the same tools over stdio, which is
-        what a desktop MCP client expects.</p>
+            what a desktop MCP client expects.</p>
 
         <Code code={`abide mcp --url https://crm.example`} />
     </Section>
@@ -130,11 +131,11 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         </Example>
 
         <p>The export is not a tool, and its address still answers. <code>clients</code> decides
-        what is listed, never who may call: put a rung on a handler that some callers may not
-        reach.</p>
+            what is listed, never who may call: put a rung on a handler that some callers may not
+            reach.</p>
 
         <p><code>Clients</code> has one key per surface, and each defaults to
-        <code>true</code>.</p>
+            <code>true</code>.</p>
 
         <table>
             <thead><tr><th>Key</th><th>Set to <code>false</code></th></tr></thead>
@@ -147,15 +148,15 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         </table>
 
         <p>A handler that returns a whole <code>Response</code> starts with <code>mcp</code> and
-        <code>cli</code> off, having no result type to publish. A handler declared in a
-        <code>&lt;script server&gt;</code> is on no surface at all.</p>
+            <code>cli</code> off, having no result type to publish. A handler declared in a
+            <code>&lt;script server&gt;</code> is on no surface at all.</p>
     </Section>
 
     <Section title="An assistant on the site calls the CRM's handlers">
         <Example
             id="crm-09-assistant-tools"
             app="crm-09"
-            title={"`assistant(messages, provider, { mcp: true })` — the CRM's handlers as its tools"}
+            title={    "`assistant(messages, provider, { mcp: true })` — the CRM's handlers as its tools"}
             summary="A rep asks the CRM's assistant where Ada works. The model here is a recording with fixed lines; the tool call it makes runs the CRM's own search handler."
             files={{
                 'src/assistant/lib/AssistantChat.abide': assistantChatSource,
@@ -167,18 +168,18 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         </Example>
 
         <p><code>assistant</code> has no address of its own. You yield it from a streaming handler
-        you write, so the address and the middleware are yours, and the page reads the events like
-        any stream. Read on: <a href={url('/guide/make-it-live')}>Make it live</a></p>
+            you write, so the address and the middleware are yours, and the page reads the events like
+            any stream. Read on: <a href={url('/guide/make-it-live')}>Make it live</a></p>
 
         <p><code>mcp: true</code> hands the model the tools <code>/__abide/mcp</code> lists. Each
-        call goes through the app's middleware with the asker's <code>cookie</code> and
-        <code>authorization</code> headers, so the model can do what the person asking can do and
-        nothing more. The handler sets <code>{'clients: { mcp: false }'}</code> so the assistant is
-        not one of its own tools.</p>
+            call goes through the app's middleware with the asker's <code>cookie</code> and
+            <code>authorization</code> headers, so the model can do what the person asking can do and
+            nothing more. The handler sets <code>{'clients: { mcp: false }'}</code> so the assistant is
+            not one of its own tools.</p>
 
         <p><code>assistant</code> keeps nothing between calls. The page sends the whole transcript
-        each time, so a reload or a second server answers the next turn the same way, and every
-        call pays for the transcript's tokens again.</p>
+            each time, so a reload or a second server answers the next turn the same way, and every
+            call pays for the transcript's tokens again.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -213,13 +214,13 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         </Example>
 
         <p><code>claudeApi</code> takes a Messages API request body as Anthropic documents it,
-        with the client's <code>apiKey</code> and <code>baseURL</code> beside it. Its type is
-        <code>ClaudeApiConfig</code>. abide adds <code>messages</code> and <code>stream</code>, and
-        every other field is sent as you wrote it.</p>
+            with the client's <code>apiKey</code> and <code>baseURL</code> beside it. Its type is
+            <code>ClaudeApiConfig</code>. abide adds <code>messages</code> and <code>stream</code>, and
+            every other field is sent as you wrote it.</p>
 
         <p>Leave <code>baseURL</code> out and the request goes to Anthropic. <code>claudeApi</code>
-        reads no key from the environment, so pass <code>apiKey</code> from wherever the CRM keeps
-        its secrets. Read on: <a href={url('/guide/run-it')}>Run it</a></p>
+            reads no key from the environment, so pass <code>apiKey</code> from wherever the CRM keeps
+            its secrets. Read on: <a href={url('/guide/run-it')}>Run it</a></p>
     </Section>
 
     <Section title="`claudeCode` runs on the visitor's own Claude Code">
@@ -239,31 +240,31 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         </Example>
 
         <p><code>claudeCode</code> sends the conversation to Claude Code on the asker's machine,
-        on their own sign-in and plan. Its config, <code>ClaudeCodeConfig</code>, is Claude Code's
-        own option names, each passed as its flag: <code>model</code>, <code>fallbackModel</code>,
-        <code>systemPrompt</code>, <code>appendSystemPrompt</code>, <code>effort</code>,
-        <code>maxBudgetUsd</code>, <code>betas</code> and <code>disallowedTools</code>. Permissions,
-        directories and settings are not the site's to set.</p>
+            on their own sign-in and plan. Its config, <code>ClaudeCodeConfig</code>, is Claude Code's
+            own option names, each passed as its flag: <code>model</code>, <code>fallbackModel</code>,
+            <code>systemPrompt</code>, <code>appendSystemPrompt</code>, <code>effort</code>,
+            <code>maxBudgetUsd</code>, <code>betas</code> and <code>disallowedTools</code>. Permissions,
+            directories and settings are not the site's to set.</p>
 
         <p><code>tools</code> asks for Claude Code's built-in tools, and the visitor decides.
-        A tool runs only where they granted it after the command's <code>--</code>, and the
-        bridge tells them about any it was asked for and not given. Anything else after
-        <code>--</code> goes to Claude Code as written, and overrides what the site set.</p>
+            A tool runs only where they granted it after the command's <code>--</code>, and the
+            bridge tells them about any it was asked for and not given. Anything else after
+            <code>--</code> goes to Claude Code as written, and overrides what the site set.</p>
 
         <Code code={`bunx @abide/bridge <site> <code> -- --tools WebSearch,WebFetch`} />
 
         <p>Pass the same <code>tools</code> to <code>claudeCode.bridge</code> or
-        <code>claudeCode.bridgeCommand</code> and the command it mints carries that grant, so a
-        visitor who runs it as shown gives the tools. One minted without them grants none.</p>
+            <code>claudeCode.bridgeCommand</code> and the command it mints carries that grant, so a
+            visitor who runs it as shown gives the tools. One minted without them grants none.</p>
 
         <p>The visitor pairs once per visit by running a command, which dials out to the site.
-        Asking with nothing paired is refused 409.</p>
+            Asking with nothing paired is refused 409.</p>
 
         <p>The tools the conversation calls run as the visitor, on the sign-in their ask carried,
-        so a tool reads <code>principal</code> as any handler does. The pairing belongs to that
-        sign-in too. If someone else signs in at the same browser, their asks are refused 409
-        and the status offers them a command of their own, so nobody's turn runs on another
-        member's Claude Code.</p>
+            so a tool reads <code>principal</code> as any handler does. The pairing belongs to that
+            sign-in too. If someone else signs in at the same browser, their asks are refused 409
+            and the status offers them a command of their own, so nobody's turn runs on another
+            member's Claude Code.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -280,8 +281,8 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         <Code code={`abide call assistant/searchContacts name=Ada`} />
 
         <p><code>abide call &lt;address&gt; [args]</code> takes the handler's route without its
-        leading <code>/</code>, and each argument as <code>name=value</code>. The handler's
-        argument type reads each value, and an argument it refuses names the field.</p>
+            leading <code>/</code>, and each argument as <code>name=value</code>. The handler's
+            argument type reads each value, and an argument it refuses names the field.</p>
 
         <table>
             <thead><tr><th>Exit code</th><th>Means</th></tr></thead>
@@ -293,20 +294,20 @@ import claudeCodeBridgeTestSource from 'crm-09/src/assistant/lib/ClaudeCodeBridg
         </table>
 
         <p><code>abide [--url &lt;origin&gt;] [--port &lt;n&gt;]</code> alone opens a shell on
-        the app, with every handler in scope and Tab completing addresses and argument names.</p>
+            the app, with every handler in scope and Tab completing addresses and argument names.</p>
 
         <Code code={`abide                           # a shell on the built app
 abide --url https://crm.example # a shell on a running one`} />
 
         <p>Without <code>--url</code>, the CLI reads <code>ABIDE_APP_URL</code>, then falls back
-        to the local app. <code>ABIDE_APP_TOKEN</code> is the bearer it sends, so a shell profile
-        per environment is the whole setup.</p>
+            to the local app. <code>ABIDE_APP_TOKEN</code> is the bearer it sends, so a shell profile
+            per environment is the whole setup.</p>
     </Section>
 
     <Section title="Next">
         <ul>
             <li><a href={url('/guide/test-measure-and-ship')}>Test, measure, ship</a> — prove
-            the CRM works, and ship it</li>
+                the CRM works, and ship it</li>
         </ul>
     </Section>
 </Doc>

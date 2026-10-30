@@ -8,10 +8,13 @@
 // buys is one binding run in the child and no node created anywhere, and that is what is counted.
 
 import { afterAll, expect, test } from 'bun:test'
-import { spawned } from '@abide/harness/gate'
+
 import { measure } from '@abide/harness/abide'
+import { spawned } from '@abide/harness/gate'
+
 import { emitComponent, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { closeTyped, renderPage, TYPED_ROOT, typedSession } from './typed.ts'
 

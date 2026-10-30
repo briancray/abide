@@ -1,3 +1,4 @@
+import { anchorMarkup } from '#shared/anchorMarkup.ts'
 import {
     RAW_CLOSE,
     RAW_OPEN,
@@ -5,7 +6,6 @@ import {
     REGION_OPEN,
     ROW_OPEN,
 } from '#shared/ANCHORS.ts'
-import { anchorMarkup } from '#shared/anchorMarkup.ts'
 import { CHILDREN } from '#shared/CHILDREN.ts'
 import { FOREIGN_ATTRIBUTES } from '#shared/FOREIGN_ATTRIBUTES.ts'
 import {
@@ -13,7 +13,16 @@ import {
     INTEGRATION_POINTS,
 } from '#shared/INTEGRATION_POINTS.ts'
 import { RUNTIME_SPECIFIER, SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
+
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
+import {
+    type ClassifiedAttribute,
+    classifyAttributes,
+    isBound,
+    isSingleRooted,
+    isSlot,
+    type MergeGroup,
+} from './classifyTemplate.ts'
 import {
     Cursor,
     type PlacedNode,
@@ -21,14 +30,6 @@ import {
     REGION_ROOT,
     ROW_ROOT,
 } from './Cursor.ts'
-import {
-    type ClassifiedAttribute,
-    classifyAttributes,
-    isBound,
-    isSingleRooted,
-    type MergeGroup,
-    isSlot,
-} from './classifyTemplate.ts'
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { moduleImports } from './emitComponent.ts'
 import { invocationProps, passedName } from './invocationProps.ts'
@@ -41,8 +42,8 @@ import {
 } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
-    CLIENT_LANE,
     chosenArm,
+    CLIENT_LANE,
     headSink,
     mergedValue,
     renderMarkup,
@@ -1313,7 +1314,8 @@ function emitInvocation(
     // 32.34, 32.35 — A TAG CHOOSING BY A VALUE IS AN `{#if}` WHOSE ARMS ARE COMPONENTS
     // (`ChosenRegion`): the watch reads which, and the region swaps.
     const name = region.claim('dc')
-    region.lines.push(`const ${name} = new ${lowering.use('ChosenRegion')}(${lowering.use('regionFound')}(${at.name}), ${SCOPE}, { ${props.join(', ')} }, ${SHARE_AT})
+    region.lines
+        .push(`const ${name} = new ${lowering.use('ChosenRegion')}(${lowering.use('regionFound')}(${at.name}), ${SCOPE}, { ${props.join(', ')} }, ${SHARE_AT})
 ${SCOPE}.watch(() => ${name}.show(${chosen}))`)
 }
 
@@ -1336,7 +1338,8 @@ function emitSlot(at: PlacedNode, region: RegionEmission): void {
     // THE EMPTY REGION IS THE ONE THE SERVER DID NOT PAINT — a child built in the browser (32.17)
     // or a page navigated to (30.7). Filled from whichever side owns what goes there, and then
     // mounted from the same side, so the markup and the bindings can never come from two.
-    region.lines.push(`const ${name} = ${lowering.use('regionFound')}(${at.name})
+    region.lines
+        .push(`const ${name} = ${lowering.use('regionFound')}(${at.name})
 const ${name}_kids = ${PROPS}[${JSON.stringify(CHILDREN)}] === undefined ? undefined : ${PROPS}[${JSON.stringify(CHILDREN)}]()
 ${lowering.use('fillEmpty')}(${name}, ${name}_kids === undefined ? ${name}_build : ${name}_kids.build)
 ${SCOPE}.own(${name}_kids === undefined ? ${name}_mount(${name}) : ${name}_kids.mount(${name}))`)
@@ -1384,7 +1387,8 @@ function emitBlock(
     // it takes can never change, and a watch over it is a reader that can never wake. Unproven, the
     // watch stays, and tracking decides what it reads.
     const show = `${name}.show(${take})`
-    region.lines.push(`const ${name} = new ${lowering.use('ArmRegion')}(${lowering.use('regionFound')}(${at.name}), ${SCOPE}, ${name}_arms, ${mounted})
+    region.lines
+        .push(`const ${name} = new ${lowering.use('ArmRegion')}(${lowering.use('regionFound')}(${at.name}), ${SCOPE}, ${name}_arms, ${mounted})
 ${lowering.isLiveChain(block.branches) ? `${SCOPE}.watch(() => ${show})` : show}`)
 }
 
@@ -1414,7 +1418,8 @@ function emitTry(
     )
 
     // ONE UNIT, for `emitBlock`'s reason. What the body and the catch do is `TryRegion`'s.
-    region.lines.push(`const ${name} = new ${lowering.use('TryRegion')}(${lowering.use('regionFound')}(${at.name}), ${SCOPE}, ${name}_arms)
+    region.lines
+        .push(`const ${name} = new ${lowering.use('TryRegion')}(${lowering.use('regionFound')}(${at.name}), ${SCOPE}, ${name}_arms)
 ${SCOPE}.watch(() => ${name}.follow())`)
 }
 

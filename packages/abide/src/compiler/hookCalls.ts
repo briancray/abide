@@ -1,4 +1,5 @@
 import { SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
+
 import { importStatements } from './splitImports.ts'
 import { type Token, tokenize } from './tokenize.ts'
 

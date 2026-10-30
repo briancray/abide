@@ -4,6 +4,7 @@
 // answer: a guard on `synced` that is never told it moved reads the right thing once and then nothing.
 
 import { expect, test } from 'bun:test'
+
 import { flushSync, reactive, synced, watch } from '#shared'
 import { produceInto } from '#shared/reactive/index.ts'
 

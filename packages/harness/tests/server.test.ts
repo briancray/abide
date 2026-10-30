@@ -4,6 +4,7 @@
 // trap would produce.
 
 import { expect, test } from 'bun:test'
+
 import { inAFreshProcess } from '@abide/harness/gate'
 import { bytes, ticks } from '@abide/harness/server'
 

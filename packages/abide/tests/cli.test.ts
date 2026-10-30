@@ -8,7 +8,9 @@
 // test here reports a build that succeeded over eighty-five pages whose imports cannot resolve.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname

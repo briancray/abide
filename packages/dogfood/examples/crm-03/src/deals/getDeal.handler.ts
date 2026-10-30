@@ -1,5 +1,6 @@
 import { refuse } from '@abide/abide'
 import { GET } from '@abide/abide/server'
+
 import { DEALS } from './lib/DEALS.server.ts'
 
 /** Answers at /deals/getDeal?id=…; the argument type is the schema. */

@@ -1,5 +1,6 @@
 <script>
 import { reactive, refresh } from '@abide/abide'
+
 import olderActivity from '../olderActivity.handler.ts'
 
 const entries = reactive(() => olderActivity())

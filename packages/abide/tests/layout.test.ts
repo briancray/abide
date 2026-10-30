@@ -7,7 +7,9 @@
 // `Bun.serve` refuses one it did not define.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
+
 import { addressOf, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 

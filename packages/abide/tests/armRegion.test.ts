@@ -5,6 +5,7 @@
 // region's nodes would still read right.
 
 import { expect, test } from 'bun:test'
+
 import { ArmRegion, ChosenRegion } from '#ui/ArmRegion.ts'
 import type { Region } from '#ui/regions.ts'
 import { Scope } from '#ui/Scope.ts'

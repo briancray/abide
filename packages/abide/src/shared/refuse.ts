@@ -8,8 +8,8 @@
 // cannot narrow against a name it never wrote. `Aborted` is the one the app asks for itself: it
 // comes back only from a call the app handed a signal and then aborted (16.49).
 
-import { FAILURE_STATUS_TEXT } from './FAILURE_STATUS_TEXT.ts'
 import { type Failed, failed, isFailed } from './Failed.ts'
+import { FAILURE_STATUS_TEXT } from './FAILURE_STATUS_TEXT.ts'
 import type { Issues } from './Issues.ts'
 import type { JsonValue } from './JsonValue.ts'
 import { namedLogger } from './log.ts'

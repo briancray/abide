@@ -1,7 +1,9 @@
 // Which callable shape this engine likes. Reports; asserts nothing, and at full size only under
 // `bun run bench` — `BENCH_SIZING`.
 import { execFileSync } from 'node:child_process'
+
 import { test } from '@playwright/test'
+
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname

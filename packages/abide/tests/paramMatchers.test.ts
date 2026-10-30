@@ -4,9 +4,12 @@
 // Built and served (spawned, for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { Glob } from 'bun'
+
 import { checkApp } from '#compiler/checkApp.ts'
 import { url } from '#shared'
+
 import { appFixture, buildApp, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -113,13 +116,19 @@ test('OpenAPI and MCP publish the pattern a segment takes, and no matcher name â
         await Bun.fetch(`${base}/__abide/mcp`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'tools/list',
+            }),
         })
     ).json()) as {
         result: {
             tools: {
                 name: string
-                inputSchema: { properties?: Record<string, { pattern?: string }> }
+                inputSchema: {
+                    properties?: Record<string, { pattern?: string }>
+                }
             }[]
         }
     }
@@ -144,9 +153,7 @@ const other = url('/tabs/[tab=TAB]', { tab: 'view' })
 <p>{tab} {other}</p>`,
     })
     const found = await checkApp(app)
-    expect(found.map(({ line, code }) => `${line} ${code}`)).toEqual([
-        '4 2322',
-    ])
+    expect(found.map(({ line, code }) => `${line} ${code}`)).toEqual(['4 2322'])
 }, 60_000)
 
 const refusedBuild = async (files: Record<string, string>): Promise<string> => {
@@ -158,9 +165,9 @@ const refusedBuild = async (files: Record<string, string>): Promise<string> => {
 // THE REVERT: drop the `found === undefined` refusal from `matchersOf`; the build passes, and the
 // route table names a matcher nothing resolves.
 test('a segment naming no param file is refused â€” 23.26', async () => {
-    expect(
-        await refusedBuild({ 'a/[x=NOPE].abide': '<p>x</p>' }),
-    ).toContain('RULEBOOK 23.26')
+    expect(await refusedBuild({ 'a/[x=NOPE].abide': '<p>x</p>' })).toContain(
+        'RULEBOOK 23.26',
+    )
 }, 30_000)
 
 // THE REVERT: drop the `other.found !== found` refusal from `matchersOf`; a page under `/a/[x=WORD]`

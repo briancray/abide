@@ -1,5 +1,6 @@
 <script>
 import { reactive, route } from '@abide/abide'
+
 import getCompany from './getCompany.handler.ts'
 import CompanyTabs from './lib/CompanyTabs.abide'
 

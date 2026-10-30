@@ -23,6 +23,7 @@ import { PATCH_SINKS } from '#shared/reactive/PATCH_SINKS.ts'
 import { unowned } from '#shared/reactive/watch.ts'
 import { refuse } from '#shared/refuse.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
+
 import { handlerKey, type Mounted } from './answerRpc.ts'
 import { argsFor } from './argsFor.ts'
 import { positiveSetting } from './config.ts'
@@ -32,8 +33,8 @@ import { sendOrClose } from './muxUpgrade.ts'
 import {
     heldByApp,
     inOpenScope,
-    type RequestScope,
     releaseScope,
+    type RequestScope,
     scopeFor,
 } from './requestScope.ts'
 import { EVENT_STREAM_OPENER, streamEvent } from './streamEvent.ts'

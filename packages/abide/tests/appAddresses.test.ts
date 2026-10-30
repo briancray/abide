@@ -7,10 +7,12 @@
 // (37.1, 37.2, 16.72).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
 import { surfaceName } from '#server/surfaceOf.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
+
 import { appFixture, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'

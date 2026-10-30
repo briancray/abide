@@ -4,6 +4,7 @@
 // staying put.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { addressOf, appFixture, BIN, buildApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

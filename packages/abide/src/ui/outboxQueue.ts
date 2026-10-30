@@ -17,7 +17,7 @@ import {
 } from '#shared/answerOf.ts'
 import { failedFrom, isFailed, problemOf } from '#shared/Failed.ts'
 import type { Problem } from '#shared/Failed.ts'
-import { type ShownCall, showLine, showSending } from '#shared/outbox.ts'
+import { showLine, type ShownCall, showSending } from '#shared/outbox.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
 import {
     isReactive,

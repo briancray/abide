@@ -1,5 +1,6 @@
 import { type Dirent, readdirSync, realpathSync, statSync } from 'node:fs' // Bun exposes no sync directory listing or realpath of its own
 import { basename, dirname, join, resolve } from 'node:path' // Bun exposes no path helpers of its own
+
 import {
     getTouchingPropertyName,
     type Node,
@@ -8,7 +9,6 @@ import {
 } from 'typescript/unstable/ast'
 import {
     API,
-    type Symbol as CheckedSymbol,
     type Checker,
     type CompletionEntry,
     type CompletionInfo,
@@ -17,31 +17,34 @@ import {
     type Project,
     SignatureKind,
     type Snapshot,
+    type Symbol as CheckedSymbol,
     SymbolFlags,
     type Type,
 } from 'typescript/unstable/async'
+
 import { placeOf } from '#server/placement.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
+
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReadsIn.ts'
 import type { AppLayout, AppRoute, PlacedSource } from './appLayout.ts'
 import { argsDefaultsIn } from './argsDefaultsIn.ts'
-import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import {
+    checkedShadow,
     COMPONENT_MODULE,
     COMPONENT_STAND_IN,
-    checkedShadow,
     moduleConfigShadow,
 } from './checkedShadow.ts'
+import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import type { Finding } from './Finding.ts'
 import { isIgnored } from './isIgnored.ts'
-import { CHECKED_VALUES } from './Lowering.ts'
 import { diagnosisAt, lineOf } from './lineOf.ts'
+import { CHECKED_VALUES } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { projectShadow, type Span } from './projectShadow.ts'
 import { type Abide, abideIn, isReactiveType } from './reactiveTypes.ts'
-import type { ParsedSource, ReadSource } from './readSources.ts'
 import { readsIn, type ShadowSpans } from './readsIn.ts'
+import type { ParsedSource, ReadSource } from './readSources.ts'
 import {
     CHECKED_SUFFIX,
     mapForward,
@@ -1604,7 +1607,8 @@ function routesDeclaration(
 /** The union of the literals an anchored matcher source alternates between, or `undefined`. */
 function literalsOf(source: string | undefined): string | undefined {
     const body = source?.match(/^\^\(\?!\\\.\\\.\?\$\)\(\?:(.*)\)\$$/)?.[1]
-    if (body === undefined || !/^[\w~-]+(?:\|[\w~-]+)*$/.test(body)) return undefined
+    if (body === undefined || !/^[\w~-]+(?:\|[\w~-]+)*$/.test(body))
+        return undefined
     return body
         .split('|')
         .map((literal) => JSON.stringify(literal))
@@ -1802,8 +1806,7 @@ const CATEGORIES = ['warning', 'error', 'suggestion', 'message'] as const
 function flatten(diagnostic: {
     text: string
     messageChain?:
-        | readonly { text: string; messageChain?: unknown }[]
-        | undefined
+        readonly { text: string; messageChain?: unknown }[] | undefined
 }): string {
     let message = diagnostic.text
     const chain = diagnostic.messageChain ?? []

@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { createApp } from '@abide/abide/server'
 
 const titlesOf = (html: string) => html.match(/<title>[^<]*<\/title>/g)

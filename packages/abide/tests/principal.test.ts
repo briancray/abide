@@ -1,6 +1,7 @@
 // SECTION 26 — THE PRINCIPAL, over a served app (spawned, for `serve.test.ts`'s reason).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { handlerFiles, serveApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

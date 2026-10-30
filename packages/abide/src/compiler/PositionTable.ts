@@ -1,4 +1,5 @@
 import type { Node } from 'typescript/unstable/ast'
+
 import type { Span } from './projectShadow.ts'
 
 /**

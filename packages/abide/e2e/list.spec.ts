@@ -19,6 +19,7 @@
 // a relocation. What it DOES assert is each arm's final row order.
 
 import { execFileSync } from 'node:child_process'
+
 import { expect, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname

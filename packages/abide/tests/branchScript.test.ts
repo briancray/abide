@@ -3,8 +3,10 @@
 // hydrated and then driven on the client, because each side builds a body its own way.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { parseAbide } from '#compiler'
 import { flushSync } from '#shared'
+
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, mountPage, TYPED_ROOT, typedSession } from './typed.ts'
 
@@ -225,7 +227,12 @@ const inner = reactive('s')
         const answer = await session.reads(path, file)
         const { diagnoses } = await session.diagnose(
             [{ path, text: source, file, answer }],
-            { root: `${TYPED_ROOT}src`, addresses: [], handlers: [], routes: [] },
+            {
+                root: `${TYPED_ROOT}src`,
+                addresses: [],
+                handlers: [],
+                routes: [],
+            },
             false,
         )
         return diagnoses

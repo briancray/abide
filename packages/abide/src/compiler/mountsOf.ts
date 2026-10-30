@@ -10,8 +10,10 @@
 
 import { realpathSync, statSync } from 'node:fs' // bun exposes no sync stat or realpath of its own
 import { dirname, relative, resolve } from 'node:path' // bun exposes no path helpers of its own
+
 import { appFiles } from '#server/appTree.ts'
 import { placeOf } from '#server/placement.ts'
+
 import { nearest } from './nearest.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import { Refusals } from './Refusals.ts'

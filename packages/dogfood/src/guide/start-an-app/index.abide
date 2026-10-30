@@ -1,22 +1,23 @@
 <script>
 import { url } from '@abide/abide'
-import Code from '#src/lib/Code.abide'
-import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Section from '#src/lib/Section.abide'
 import ContactList from 'crm-01/src/contacts/lib/ContactList.abide'
 import contactListSource from 'crm-01/src/contacts/lib/ContactList.abide' with { type: 'text' }
-import listContactsSource from 'crm-01/src/contacts/listContacts.handler.ts' with { type: 'text' }
 import contactListTestSource from 'crm-01/src/contacts/lib/ContactList.test.ts' with { type: 'text' }
+import ContactNote from 'crm-01/src/contacts/lib/ContactNote.abide'
+import contactNoteSource from 'crm-01/src/contacts/lib/ContactNote.abide' with { type: 'text' }
+import contactNoteTestSource from 'crm-01/src/contacts/lib/ContactNote.test.ts' with { type: 'text' }
 import PageTiming from 'crm-01/src/contacts/lib/PageTiming.abide'
 import pageTimingSource from 'crm-01/src/contacts/lib/PageTiming.abide' with { type: 'text' }
 import pageTimingTestSource from 'crm-01/src/contacts/lib/PageTiming.test.ts' with { type: 'text' }
 import StarButton from 'crm-01/src/contacts/lib/StarButton.abide'
 import starButtonSource from 'crm-01/src/contacts/lib/StarButton.abide' with { type: 'text' }
 import starButtonTestSource from 'crm-01/src/contacts/lib/StarButton.test.ts' with { type: 'text' }
-import ContactNote from 'crm-01/src/contacts/lib/ContactNote.abide'
-import contactNoteSource from 'crm-01/src/contacts/lib/ContactNote.abide' with { type: 'text' }
-import contactNoteTestSource from 'crm-01/src/contacts/lib/ContactNote.test.ts' with { type: 'text' }
+import listContactsSource from 'crm-01/src/contacts/listContacts.handler.ts' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
@@ -26,12 +27,12 @@ bun install
 bun run dev`} />
 
     <p>The scaffold writes a root layout, a page, a handler file the page calls, and a test of
-    each. <code>bun run dev</code> runs <code>abide dev</code>, which serves the app on
-    <code>localhost:3000</code> and restarts it on every save, with the open tab reloading behind
-    it.</p>
+        each. <code>bun run dev</code> runs <code>abide dev</code>, which serves the app on
+        <code>localhost:3000</code> and restarts it on every save, with the open tab reloading behind
+        it.</p>
 
     <p>Every chapter ends with the CRM it built, as an app you can download and run. Each card
-    below is a file from that app, with the test the app runs on it.</p>
+        below is a file from that app, with the test the app runs on it.</p>
 
     <Section title="A file's path is the address it answers">
         <p>A file's path below <code>src</code> is its address. Nothing else names a route.</p>
@@ -48,7 +49,7 @@ bun run dev`} />
         </table>
 
         <p>Code that is not an address goes in a directory that never is, and a file's name
-        decides where it runs:</p>
+            decides where it runs:</p>
 
         <table>
             <thead><tr><th>Path</th><th>What goes in it</th><th>Where it runs</th></tr></thead>
@@ -64,8 +65,8 @@ bun run dev`} />
         </table>
 
         <p>Any other file beside the pages fails the build, so listing a directory lists its
-        routes. The CRM keeps its contacts in <code>src/contacts/lib/CONTACTS.server.ts</code>, and
-        only the handler reads it.</p>
+            routes. The CRM keeps its contacts in <code>src/contacts/lib/CONTACTS.server.ts</code>, and
+            only the handler reads it.</p>
     </Section>
 
     <Section title="A page reads a handler like a value">
@@ -84,12 +85,12 @@ bun run dev`} />
         </Example>
 
         <p><code>listContacts.handler.ts</code> runs on the server. The list imports it like any module,
-        and the browser is sent a call under the same name in its place, so there is no
-        <code>fetch</code>, no route to register, and no second copy of the contact type.</p>
+            and the browser is sent a call under the same name in its place, so there is no
+            <code>fetch</code>, no route to register, and no second copy of the contact type.</p>
 
         <p>The test imports the same handler and calls it, in process. A handler only one page
-        calls can live in that page's <code>&lt;script server&gt;</code> instead. See
-        <a href={url('/guide/talk-to-the-server')}>Talk to the server</a>.</p>
+            calls can live in that page's <code>&lt;script server&gt;</code> instead. See
+            <a href={url('/guide/talk-to-the-server')}>Talk to the server</a>.</p>
     </Section>
 
     <Section title="The page is sent before the data lands">
@@ -107,16 +108,16 @@ bun run dev`} />
         </Example>
 
         <p>Reading <code>contacts</code> starts the load, and the document does not wait for it.
-        The page goes out as soon as it is built, with a hole where the list goes, and the hole
-        fills when the contacts land. Neither file has a loading branch in it.</p>
+            The page goes out as soon as it is built, with a hole where the list goes, and the hole
+            fills when the contacts land. Neither file has a loading branch in it.</p>
 
         <p>The browser's call for the contacts is answered from what the server render already
-        fetched, so the handler runs once. The cost is a client with no JavaScript: its hole
-        stays empty.</p>
+            fetched, so the handler runs once. The cost is a client with no JavaScript: its hole
+            stays empty.</p>
 
         <p>A page's <code>&lt;script&gt;</code> runs on the server to render it, then again in the
-        browser. That is why the card reads <code>location</code> inside the click and not at the
-        top of its script.</p>
+            browser. That is why the card reads <code>location</code> inside the click and not at the
+            top of its script.</p>
     </Section>
 
     <Section title="A value is read and written by name">
@@ -134,9 +135,9 @@ bun run dev`} />
         </Example>
 
         <p>Naming <code>starred</code> in the markup reads it and follows it from then on.
-        Assigning to it writes it and wakes everything that read it. There is no store to declare
-        and no re-render to ask for. A <code>.ts</code> file has no markup around it, so it writes
-        the same value as <code>starred()</code> and <code>starred.set(true)</code>.</p>
+            Assigning to it writes it and wakes everything that read it. There is no store to declare
+            and no re-render to ask for. A <code>.ts</code> file has no markup around it, so it writes
+            the same value as <code>starred()</code> and <code>starred.set(true)</code>.</p>
 
     </Section>
 
@@ -155,12 +156,12 @@ bun run dev`} />
         </Example>
 
         <p>A value the page owns, a value derived from it, a value loaded from a handler, and a
-        value that waits for its first write: all four come from <code>reactive</code>, and all
-        four are a <code>Reactive</code>. <code>ready()</code> asks each one the same question, so
-        the branch you write for "not here yet" works on every one of them.</p>
+            value that waits for its first write: all four come from <code>reactive</code>, and all
+            four are a <code>Reactive</code>. <code>ready()</code> asks each one the same question, so
+            the branch you write for "not here yet" works on every one of them.</p>
 
         <p>Swapping a local value for a loaded one changes how it is declared and nothing that
-        reads it.</p>
+            reads it.</p>
     </Section>
 
     <Section title="The `abide` command">
@@ -176,14 +177,14 @@ bun run dev`} />
         </table>
 
         <p><code>abide dev</code> runs the same server <code>abide start</code> does, so a bug you
-        see while you work is a bug you can reproduce in production. A stack trace names the
-        <code>.abide</code> file and the line you wrote.</p>
+            see while you work is a bug you can reproduce in production. A stack trace names the
+            <code>.abide</code> file and the line you wrote.</p>
     </Section>
 
     <Section title="Next">
         <ul>
             <li><a href={url('/guide/edit-a-contact')}>Edit a contact</a> — hold a contact the page
-            can edit, and show what follows from it</li>
+                can edit, and show what follows from it</li>
         </ul>
     </Section>
 </Doc>

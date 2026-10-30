@@ -16,6 +16,7 @@ import {
     isStringLiteral,
 } from 'typescript/unstable/ast/is'
 import { type Checker, SymbolFlags, type Type } from 'typescript/unstable/async'
+
 import type { Finding } from './Finding.ts'
 import { optionNamed, reactiveOptions } from './reactiveOptions.ts'
 

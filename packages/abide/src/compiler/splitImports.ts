@@ -1,5 +1,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
+
 import { COMPONENT_QUERY, TEXT_QUERY } from '#server/MODULE_QUERIES.ts'
+
 import { isContextualKeyword, type Token, tokenize } from './tokenize.ts'
 
 /**

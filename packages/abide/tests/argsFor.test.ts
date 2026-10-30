@@ -3,6 +3,7 @@
 // and `abide call` alike), text coerced to the declared types, and the result held to the annotation.
 
 import { expect, test } from 'bun:test'
+
 import { GET } from '#server'
 import type { Mounted } from '#server/answerRpc.ts'
 import { argsFor } from '#server/argsFor.ts'

@@ -3,7 +3,10 @@
 // where the version it holds is not the server's, and the writes of each patch over it (18.6, 18.11).
 
 import { SOCKET_ADDRESS } from '#shared/ADDRESSES.ts'
+import { applyPatch } from '#shared/applyPatch.ts'
 import { mounted } from '#shared/mount.ts'
+import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
+import { onPrincipalRotated } from '#shared/principalRotated.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
 import {
     heldGenerationOf,
@@ -14,9 +17,7 @@ import {
     writtenLocally,
 } from '#shared/reactive/index.ts'
 import { PATCHES } from '#shared/reactive/PATCHES.ts'
-import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
-import { applyPatch } from '#shared/applyPatch.ts'
-import { onPrincipalRotated } from '#shared/principalRotated.ts'
+
 import { HYDRATE_LOG } from './Mismatch.ts'
 import { undelivered, whenDelivered } from './outboxQueue.ts'
 

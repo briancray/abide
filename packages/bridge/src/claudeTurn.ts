@@ -10,7 +10,9 @@
 
 import { mkdtemp, rm } from 'node:fs/promises' // bun has no temporary directory or recursive remove of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
+
 import type { AssistantEvent, ClaudeCodeConfig } from '@abide/abide/server'
+
 import { readLines } from './readLines.ts'
 
 // What Claude Code names the one MCP server it is handed, and so the prefix on each tool it calls.
@@ -109,7 +111,7 @@ function siteFlags(config: Omit<ClaudeCodeConfig, 'tools'>): string[] {
  */
 function takeFlag(args: string[], spellings: string[]): string[] | undefined {
     let values: string[] | undefined
-    for (let index = 0; index < args.length; ) {
+    for (let index = 0; index < args.length;) {
         const arg = args[index] as string
         const [flag, inline] = arg.split(/=(.*)/s) as [string, string?]
         if (!spellings.includes(flag)) {

@@ -19,8 +19,7 @@ export type Document = {
 /** The document a handler's `args` schema declares, or `undefined`. */
 export function argsDocumentOf(handler: Gated<unknown>): Document | undefined {
     const gate = gateOf(handler) as
-        | { '~standard'?: { jsonSchema?: { input?: () => unknown } } }
-        | undefined
+        { '~standard'?: { jsonSchema?: { input?: () => unknown } } } | undefined
     const document = gate?.['~standard']?.jsonSchema?.input?.()
     return document !== null && typeof document === 'object'
         ? (document as Document)

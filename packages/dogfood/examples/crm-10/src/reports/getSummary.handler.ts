@@ -1,4 +1,5 @@
 import { GET } from '@abide/abide/server'
+
 import { DEALS } from './lib/DEALS.server.ts'
 
 /** Answers at /reports/getSummary; the summary tiles and their test read it. */

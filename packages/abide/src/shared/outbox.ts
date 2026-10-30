@@ -9,9 +9,9 @@
 
 import type { Failed } from './Failed.ts'
 import type { JsonValue } from './JsonValue.ts'
+import { OUTBOX_SENDING } from './OUTBOX_SENDING.ts'
 import { ambient, type Reactive, type Selection } from './reactive/index.ts'
 import { matchesPattern } from './reactive/matchesPattern.ts'
-import { OUTBOX_SENDING } from './OUTBOX_SENDING.ts'
 import type { Method } from './rpc.ts'
 
 /** One call `outbox` holds: what it sends, when it was queued, how often it was sent, and its value. */

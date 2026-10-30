@@ -47,11 +47,13 @@ type Reflected<Element> = {
 
 /** `Element`'s keys without its index signatures. */
 type Named<Element> = keyof {
-    [Key in keyof Element as string extends Key
-        ? never
-        : number extends Key
-          ? never
-          : Key]: Element[Key]
+    [
+        Key in keyof Element as string extends Key
+            ? never
+            : number extends Key
+              ? never
+              : Key
+    ]: Element[Key]
 }
 
 /** The properties whose attribute is not their name lowercased. */
@@ -119,9 +121,11 @@ export type Attributes<
 
 /** An HTML element's attributes, derived from what its DOM type reflects. */
 type HtmlAttributes<Tag extends keyof HTMLElementTagNameMap> = {
-    [Key in Reflected<HTMLElementTagNameMap[Tag]> as Key extends `on${string}`
-        ? never
-        : AttributeName<Key>]?: Written<
+    [
+        Key in Reflected<
+            HTMLElementTagNameMap[Tag]
+        > as Key extends `on${string}` ? never : AttributeName<Key>
+    ]?: Written<
         AttributeName<Key>,
         NonNullable<HTMLElementTagNameMap[Tag][Key]>
     > | null

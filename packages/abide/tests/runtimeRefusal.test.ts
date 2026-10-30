@@ -4,8 +4,10 @@
 // THE REVERT: answer `undefined` whatever the version; the first test reads no refusal.
 
 import { expect, test } from 'bun:test'
-import abidePackage from '../package.json' with { type: 'json' }
+
 import { runtimeRefusal } from '#server/runtimeRefusal.ts'
+
+import abidePackage from '../package.json' with { type: 'json' }
 
 test('a bun below the range is refused, naming it and the range — 38.123', () => {
     expect(runtimeRefusal('1.4.3', '>=1.4.4')).toBe(

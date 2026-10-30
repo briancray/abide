@@ -7,8 +7,10 @@
 // actually depends on is asserted through a region that LEAVES.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { emitClient, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
+
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, mountPage } from './typed.ts'
 

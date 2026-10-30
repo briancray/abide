@@ -7,12 +7,15 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
+
 import { measure } from '@abide/harness/abide'
+
 import { flushSync, reactive } from '#shared'
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
 import { List, listAt, updateList } from '#ui/List.ts'
 import { noUpdate } from '#ui/rows.ts'
 import { EMPTY_SCOPE, Scope } from '#ui/Scope.ts'
+
 import { removeTemporaryModules } from './temporaryModule.ts'
 import {
     clientOf,

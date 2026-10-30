@@ -13,6 +13,7 @@
 // server painted is ADOPTED the first time its contributor is reconciled, matched in chain order.
 
 import { headKeyOf } from '#shared/headKeyOf.ts'
+
 import { markupNodes } from './parseMarkup.ts'
 
 /** One contributor's head, parsed once per text it reads. */

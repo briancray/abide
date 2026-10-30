@@ -4,6 +4,7 @@
 // through `GET`; these hold the module those reach.
 
 import { afterEach, expect, test } from 'bun:test'
+
 import { flushSync, reactive } from '#shared'
 import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
 import { callLoad } from '#shared/reactive/callLoad.ts'

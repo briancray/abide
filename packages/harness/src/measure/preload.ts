@@ -8,6 +8,7 @@
 // members once per case, for the process. `arm()`/`disarm()` swap the record instead,
 // so the prototype shape is fixed for the process lifetime.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
+
 import { install } from './install.ts'
 
 // A child spawned with this env would paint its output in ANSI off a pipe (bun's console, and

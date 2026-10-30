@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import moveDeal from '../moveDeal.handler.ts'
 
 test('a closed deal is refused by name, with its stage as data', async () => {

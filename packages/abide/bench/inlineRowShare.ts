@@ -11,7 +11,9 @@
 // `bun packages/harness/scripts/inlineRowShare.ts [rows]`
 
 import { chromium } from '@playwright/test'
+
 import { LAYER_RECONCILE } from '#ui/LAYER_NAMES.ts'
+
 import { buildCompiledPage, openCompiledPage } from './buildCompiledPage.ts'
 import { median, spread } from './median.ts'
 import { milliseconds } from './milliseconds.ts'

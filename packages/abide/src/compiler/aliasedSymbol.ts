@@ -1,6 +1,6 @@
 import {
-    type Symbol as CheckedSymbol,
     type Checker,
+    type Symbol as CheckedSymbol,
     SymbolFlags,
 } from 'typescript/unstable/async'
 

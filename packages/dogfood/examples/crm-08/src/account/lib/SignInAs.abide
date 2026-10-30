@@ -1,5 +1,6 @@
 <script>
 import { principal } from '@abide/abide'
+
 import signIn from '../signIn.handler.ts'
 import signOut from '../signOut.handler.ts'
 
@@ -13,8 +14,8 @@ const become = (email: string) => (email === '' ? signOut() : signIn({ email }))
 </script>
 
 <div class="tabs">
-{#for one of PEOPLE}
-    <button aria-selected={(principal.resolved().name ?? 'Nobody') === one.name}
-        onclick={() => become(one.email)}>{one.name}</button>
-{/for}
+    {#for one of PEOPLE}
+        <button aria-selected={(principal.resolved().name ?? 'Nobody') === one.name}
+            onclick={() => become(one.email)}>{one.name}</button>
+    {/for}
 </div>

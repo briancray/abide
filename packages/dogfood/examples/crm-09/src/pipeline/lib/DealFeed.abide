@@ -1,5 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
+
 import listDeals from '../listDeals.handler.ts'
 import { dollars } from './dollars.ts'
 
@@ -24,10 +25,10 @@ function applyNextUpdate() {
 </script>
 
 <ul class="fields">
-{#for deal of deals.ready() ? deals : [] by deal.id}
-    <li><span>{deal.stage}</span><strong>{dollars(deal.amount)}</strong>
-        {deal.name}</li>
-{/for}
+    {#for deal of deals.ready() ? deals : [] by deal.id}
+        <li><span>{deal.stage}</span><strong>{dollars(deal.amount)}</strong>
+            {deal.name}</li>
+    {/for}
 </ul>
 
 <div class="row">

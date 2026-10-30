@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
+
 import QuickLog from './QuickLog.abide'
 
 test('a reader the logger never names follows what it logs', async () => {

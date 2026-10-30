@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { measure, mount } from '@abide/harness/abide'
+
 import ProfileSummary from './ProfileSummary.abide'
 
 const shown = () =>

@@ -11,6 +11,7 @@
 // What no chunk covers is the framework's own scaffolding, and maps to nothing.
 
 import { encodeMappings, type Segment } from '#server/sourceMappings.ts'
+
 import type { LoweredChunk } from './Lowering.ts'
 import type { Origin } from './projectShadow.ts'
 import { mapBack } from './ShadowMap.ts'

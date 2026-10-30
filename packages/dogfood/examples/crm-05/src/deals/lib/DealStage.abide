@@ -1,5 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
+
 import getDeal from '../getDeal.handler.ts'
 import moveDeal from '../moveDeal.handler.ts'
 
@@ -21,10 +22,13 @@ async function move(stage: string) {
 </script>
 
 <div class="tabs">
-{#for one of ['d2', 'd3']}
-    <button aria-selected={id === one}
-        onclick={() => { id = one; refusal = '' }}>{one}</button>
-{/for}
+    {#for one of ['d2', 'd3']}
+        <button aria-selected={id === one}
+            onclick={() => {
+                id = one
+                refusal = ''
+            }}>{one}</button>
+    {/for}
 </div>
 
 <ul class="fields">
@@ -32,9 +36,9 @@ async function move(stage: string) {
 </ul>
 
 <div class="row">
-{#for stage of ['lead', 'qualified', 'proposal']}
-    <button onclick={() => move(stage)}>{stage}</button>
-{/for}
+    {#for stage of ['lead', 'qualified', 'proposal']}
+        <button onclick={() => move(stage)}>{stage}</button>
+    {/for}
 </div>
 
 <p class="status">{refusal}</p>

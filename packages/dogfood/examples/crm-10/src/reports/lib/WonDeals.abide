@@ -1,5 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
+
 import { money } from './money.ts'
 
 let won = reactive([{ company: 'Analytical Engines', amount: 8000 }])

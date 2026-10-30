@@ -2,6 +2,7 @@
 // imports one of them through it must not load the modules behind the rest.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { appFixture, buildApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

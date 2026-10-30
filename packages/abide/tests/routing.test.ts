@@ -7,6 +7,7 @@
 // where it stands because its region is not empty, and the page navigated to fills because it is.
 
 import { afterAll, afterEach, expect, test } from 'bun:test'
+
 import { emitClient, emitComponent, parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { routeOf } from '#server/placement.ts'
@@ -27,6 +28,7 @@ import {
 } from '#shared/routePattern.ts'
 import { reconcileHead } from '#ui/reconcileHead.ts'
 import { listenForRoutes, type PageMount, startRouter } from '#ui/routing.ts'
+
 import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 

@@ -8,6 +8,7 @@
 // the dev case answers `null` too — the command set it, and the worker never saw it.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { addressOf, appFixture, BIN, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

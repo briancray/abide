@@ -1,5 +1,6 @@
 <script>
 import { reactive, refresh } from '@abide/abide'
+
 import listDeals from '../listDeals.handler.ts'
 
 const deals = reactive(() => listDeals())

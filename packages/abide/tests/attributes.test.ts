@@ -8,6 +8,7 @@
 // signatures collapse every named key into one.
 
 import { expect, test } from 'bun:test'
+
 import type { Attributes } from '#shared'
 
 test('Attributes admits what writes an attribute, and refuses what an element lacks — 33.23, 33.24', () => {

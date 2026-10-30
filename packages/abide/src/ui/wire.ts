@@ -33,11 +33,12 @@ import { LOAD_OFFLINE } from '#shared/LOAD_OFFLINE.ts'
 import { LOAD_SIGNAL } from '#shared/LOAD_SIGNAL.ts'
 import { reactive, standIn, structural } from '#shared/reactive/index.ts'
 import {
-    type Defaults,
     declareDefaults,
+    type Defaults,
 } from '#shared/reactive/parameterDefaults.ts'
 import { declare, type Method } from '#shared/rpc.ts'
 import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
+
 import { enqueue, undelivered } from './outboxQueue.ts'
 import { followRpc } from './socketWire.ts'
 

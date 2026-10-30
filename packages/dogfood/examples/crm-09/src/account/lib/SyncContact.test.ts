@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { reachable } from '@abide/abide/server'
 
 test('a host is asked once, however many calls ask after it', async () => {

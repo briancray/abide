@@ -4,6 +4,7 @@
 // the RUNS, because the output cannot tell one run from two.
 
 import { expect, test } from 'bun:test'
+
 import { GET } from '#server'
 import { inScope } from '#server/requestScope.ts'
 import { reactive } from '#shared'

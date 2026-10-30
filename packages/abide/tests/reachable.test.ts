@@ -3,6 +3,7 @@
 // answered from the first one's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { reachable } from '#server/reachable.ts'
 
 const unstubbedFetch = globalThis.fetch

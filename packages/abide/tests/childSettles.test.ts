@@ -4,6 +4,7 @@
 // is what is asserted: an arm painted is an arm the early-call script must agree with.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

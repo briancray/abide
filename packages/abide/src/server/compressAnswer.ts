@@ -10,9 +10,10 @@
 // BUN'S GZIP parts from zlib's past ~130 KB, which only the off-loop lane reaches — so that lane takes
 // zlib's, the loop keeps bun's, and the two make the same bytes.
 import { brotliCompress, brotliCompressSync, constants, gzip } from 'node:zlib' // bun has no brotli, and no compression off the loop
+
 import {
-    ENCODINGS,
     type Encoding,
+    ENCODINGS,
     negotiateEncoding,
 } from './negotiateEncoding.ts'
 

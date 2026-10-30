@@ -11,6 +11,7 @@
 // invocation placed as an element; a region the walk never descends into.
 
 import { expect, test } from 'bun:test'
+
 import { parseAbide } from '#compiler'
 import { Cursor, placeTemplate, REGION_ROOT } from '#compiler/Cursor.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'

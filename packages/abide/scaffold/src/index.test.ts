@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { measure, mount } from '@abide/harness/abide'
+
 import Index from './index.abide'
 
 test('a click rewrites the count and builds nothing', async () => {

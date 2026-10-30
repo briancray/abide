@@ -4,6 +4,7 @@
 // process, and its `WebSocket` is not bun's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { BIN, handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 

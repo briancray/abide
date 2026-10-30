@@ -1,5 +1,6 @@
 <script server>
 import { onHealth } from '@abide/abide/server'
+
 import { pool } from './pool.server.ts'
 
 // Lets a page read `account.database` as a string.

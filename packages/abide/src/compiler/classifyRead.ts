@@ -17,6 +17,7 @@ import {
     isPropertyAccessExpression,
     isShorthandPropertyAssignment,
 } from 'typescript/unstable/ast/is'
+
 import type { Span } from './projectShadow.ts'
 import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
 

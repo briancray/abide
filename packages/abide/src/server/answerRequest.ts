@@ -19,23 +19,23 @@ import {
 } from '#shared/ADDRESSES.ts'
 import { APP_META } from '#shared/APP_META.ts'
 import { DEBUG_META } from '#shared/DEBUG_META.ts'
-import { ICON_ADDRESSES } from '#shared/LAUNCHER_FILES.ts'
-import { OFFLINE_META } from '#shared/OFFLINE_META.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { ERROR_META } from '#shared/ERROR_META.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
+import { health } from '#shared/health.ts'
 import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
 import { KEEP_OPENED } from '#shared/KEEP_OPENED.ts'
-import { health } from '#shared/health.ts'
+import { ICON_ADDRESSES } from '#shared/LAUNCHER_FILES.ts'
 import { appName } from '#shared/log.ts'
-import { compose } from '#shared/Middleware.ts'
-import { MOUNT_META } from '#shared/MOUNT_META.ts'
 import { matchOf, type Params, partsOf } from '#shared/matchRoute.ts'
+import { compose } from '#shared/Middleware.ts'
 import { MOUNT, mounted } from '#shared/mount.ts'
+import { MOUNT_META } from '#shared/MOUNT_META.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
-import { refuse, notFound as refusedNotFound } from '#shared/refuse.ts'
+import { OFFLINE_META } from '#shared/OFFLINE_META.ts'
+import { notFound as refusedNotFound, refuse } from '#shared/refuse.ts'
 import { arrive } from '#shared/route.ts'
 import {
     parseRoutePattern,
@@ -44,29 +44,30 @@ import {
 } from '#shared/routePattern.ts'
 import type { Method, Rpc } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
+
 import { answered, answerFailure } from './answerFailure.ts'
 import {
     answerRpc,
     type Mounted,
-    type MountRow,
     mountedOwn,
     mountHandlers,
+    type MountRow,
 } from './answerRpc.ts'
 import { answerBlobTagged, answerValue, contentEtag } from './answerValue.ts'
-import { answerBridge } from './bridgeRelay.ts'
-import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
-import { appManifest } from './appManifest.ts'
 import { answerWorker } from './answerWorker.ts'
+import { appManifest } from './appManifest.ts'
+import { answerBridge } from './bridgeRelay.ts'
 import { callerOrMint } from './callerOf.ts'
-import { settingOn } from './config.ts'
+import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import { compressAnswer } from './compressAnswer.ts'
-import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
-import { OFFLINE_STALE } from './OFFLINE_STALE.ts'
+import { settingOn } from './config.ts'
 import { noteCallInRender } from './deferredBuilds.ts'
+import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
 import { answerMcp, openApi } from './generatedSurfaces.ts'
 import { type AppRung, failureOf, rungsOver } from './hooks.ts'
 import { chunksOf, type Manifest } from './manifestOf.ts'
 import { muxAdmission } from './muxUpgrade.ts'
+import { OFFLINE_STALE } from './OFFLINE_STALE.ts'
 import { plainAnswer } from './plainAnswer.ts'
 import { prefers } from './prefers.ts'
 import { PRINCIPAL_MOUNT } from './principal.ts'
@@ -78,8 +79,8 @@ import {
     renderDocument,
 } from './render.ts'
 import {
-    type AnsweringApp,
     adoptRequest,
+    type AnsweringApp,
     beginRender,
     currentRequestScope,
     type PageRender,

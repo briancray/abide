@@ -10,7 +10,9 @@
 import { afterAll, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
+
 import { spawned } from '@abide/harness/gate'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname

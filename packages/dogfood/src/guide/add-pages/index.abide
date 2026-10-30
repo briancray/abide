@@ -1,15 +1,15 @@
 <script>
 import { url } from '@abide/abide'
-import Code from '#src/lib/Code.abide'
-import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Section from '#src/lib/Section.abide'
 import idPageSource from 'crm-06/src/companies/[id=SLUG].abide' with { type: 'text' }
+import companyPageTestSource from 'crm-06/src/companies/CompanyPage.test.ts' with { type: 'text' }
 import errorPageSource from 'crm-06/src/companies/error.abide' with { type: 'text' }
+import errorPageTestSource from 'crm-06/src/companies/ErrorPage.test.ts' with { type: 'text' }
 import exportCompaniesSource from 'crm-06/src/companies/exportCompanies.handler.ts' with { type: 'text' }
 import getCompanySource from 'crm-06/src/companies/getCompany.handler.ts' with { type: 'text' }
+import headTestSource from 'crm-06/src/companies/Head.test.ts' with { type: 'text' }
 import indexPageSource from 'crm-06/src/companies/index.abide' with { type: 'text' }
 import layoutSource from 'crm-06/src/companies/layout.abide' with { type: 'text' }
+import layoutTestSource from 'crm-06/src/companies/Layout.test.ts' with { type: 'text' }
 import CompaniesFrame from 'crm-06/src/companies/lib/CompaniesFrame.abide'
 import companiesFrameSource from 'crm-06/src/companies/lib/CompaniesFrame.abide' with { type: 'text' }
 import CompanyPages from 'crm-06/src/companies/lib/CompanyPages.abide'
@@ -17,32 +17,33 @@ import companyPagesSource from 'crm-06/src/companies/lib/CompanyPages.abide' wit
 import companySheetSource from 'crm-06/src/companies/lib/CompanySheet.abide' with { type: 'text' }
 import CompanyTabs from 'crm-06/src/companies/lib/CompanyTabs.abide'
 import companyTabsSource from 'crm-06/src/companies/lib/CompanyTabs.abide' with { type: 'text' }
+import companyTabsTestSource from 'crm-06/src/companies/lib/CompanyTabs.test.ts' with { type: 'text' }
 import ExportButton from 'crm-06/src/companies/lib/ExportButton.abide'
 import exportButtonSource from 'crm-06/src/companies/lib/ExportButton.abide' with { type: 'text' }
+import exportButtonTestSource from 'crm-06/src/companies/lib/ExportButton.test.ts' with { type: 'text' }
 import MissingCompany from 'crm-06/src/companies/lib/MissingCompany.abide'
-import matcherTestSource from 'crm-06/src/companies/Matcher.test.ts' with { type: 'text' }
+import missingCompanySource from 'crm-06/src/companies/lib/MissingCompany.abide' with { type: 'text' }
 import PastedName from 'crm-06/src/companies/lib/PastedName.abide'
 import pastedNameSource from 'crm-06/src/companies/lib/PastedName.abide' with { type: 'text' }
-import slugSource from 'crm-06/src/companies/SLUG.param.ts' with { type: 'text' }
-import missingCompanySource from 'crm-06/src/companies/lib/MissingCompany.abide' with { type: 'text' }
 import SheetPreview from 'crm-06/src/companies/lib/SheetPreview.abide'
 import sheetPreviewSource from 'crm-06/src/companies/lib/SheetPreview.abide' with { type: 'text' }
-import TransitionFrame from 'crm-06/src/companies/lib/TransitionFrame.abide'
-import transitionFrameSource from 'crm-06/src/companies/lib/TransitionFrame.abide' with { type: 'text' }
+import sheetPreviewTestSource from 'crm-06/src/companies/lib/SheetPreview.test.ts' with { type: 'text' }
 import SlowCompany from 'crm-06/src/companies/lib/SlowCompany.abide'
 import slowCompanySource from 'crm-06/src/companies/lib/SlowCompany.abide' with { type: 'text' }
 import TabTitle from 'crm-06/src/companies/lib/TabTitle.abide'
 import tabTitleSource from 'crm-06/src/companies/lib/TabTitle.abide' with { type: 'text' }
+import TransitionFrame from 'crm-06/src/companies/lib/TransitionFrame.abide'
+import transitionFrameSource from 'crm-06/src/companies/lib/TransitionFrame.abide' with { type: 'text' }
+import matcherTestSource from 'crm-06/src/companies/Matcher.test.ts' with { type: 'text' }
 import previewCompanySource from 'crm-06/src/companies/previewCompany.handler.ts' with { type: 'text' }
-import companyPageTestSource from 'crm-06/src/companies/CompanyPage.test.ts' with { type: 'text' }
-import companyTabsTestSource from 'crm-06/src/companies/lib/CompanyTabs.test.ts' with { type: 'text' }
-import errorPageTestSource from 'crm-06/src/companies/ErrorPage.test.ts' with { type: 'text' }
-import exportButtonTestSource from 'crm-06/src/companies/lib/ExportButton.test.ts' with { type: 'text' }
-import headTestSource from 'crm-06/src/companies/Head.test.ts' with { type: 'text' }
-import layoutTestSource from 'crm-06/src/companies/Layout.test.ts' with { type: 'text' }
-import sheetPreviewTestSource from 'crm-06/src/companies/lib/SheetPreview.test.ts' with { type: 'text' }
+import slugSource from 'crm-06/src/companies/SLUG.param.ts' with { type: 'text' }
 import streamingTestSource from 'crm-06/src/companies/Streaming.test.ts' with { type: 'text' }
 import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.ts' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
@@ -60,8 +61,8 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </table>
 
         <p>An <code>**/index.abide</code> answers its directory's own address, and any other
-        <code>**/&lt;name&gt;.abide</code> adds its name. A part of the path in brackets is a value
-        the page reads:</p>
+            <code>**/&lt;name&gt;.abide</code> adds its name. A part of the path in brackets is a value
+            the page reads:</p>
 
         <table>
             <thead><tr><th>Named</th><th>Matches</th><th>In <code>route.params</code></th></tr></thead>
@@ -89,8 +90,8 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </Example>
 
         <p><code>route.params.id</code> is the segment the address matched. It is a reactive value
-        like any other, so moving from one company to the next reloads the company rather than
-        rebuilding the page.</p>
+            like any other, so moving from one company to the next reloads the company rather than
+            rebuilding the page.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -119,10 +120,10 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </Example>
 
         <p>A segment names its matcher after an <code>=</code>. <code>[id=SLUG]</code> takes a part
-        only where the whole of it, decoded, matches the <code>SLUG</code> in
-        <code>SLUG.param.ts</code>, found beside the page or in the nearest directory above it. A part
-        it refuses goes to the next route that could answer the address. The companies have none, so
-        <code>Hopper &amp; Co</code> is a 404, painted by <code>error.abide</code>.</p>
+            only where the whole of it, decoded, matches the <code>SLUG</code> in
+            <code>SLUG.param.ts</code>, found beside the page or in the nearest directory above it. A part
+            it refuses goes to the next route that could answer the address. The companies have none, so
+            <code>Hopper &amp; Co</code> is a 404, painted by <code>error.abide</code>.</p>
 
         <table>
             <thead><tr><th>Named</th><th>Matches</th></tr></thead>
@@ -134,16 +135,16 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </table>
 
         <p>The build reads a param file without running it, so it holds one
-        <code>export const</code> named as the file, a regular expression with no flags, and no
-        import. A pattern that repeats a group that itself repeats, or that refers back to a group,
-        is refused: either can make one crafted address slow to test.</p>
+            <code>export const</code> named as the file, a regular expression with no flags, and no
+            import. A pattern that repeats a group that itself repeats, or that refers back to a group,
+            is refused: either can make one crafted address slow to test.</p>
 
         <p>A segment with no matcher never takes a part with a period in it, which is why
-        <code>/favicon.ico</code> never reaches a company page. A matcher replaces that rule for its
-        segment, so one that allows a period lets <code>url</code> write one too. <code>.</code> and
-        <code>..</code> are never taken. Under <code>abide check</code>, a matcher that is a choice
-        of words, <code>/deals|notes/</code>, types the param as those words in
-        <code>route.params</code> and in <code>url</code>.</p>
+            <code>/favicon.ico</code> never reaches a company page. A matcher replaces that rule for its
+            segment, so one that allows a period lets <code>url</code> write one too. <code>.</code> and
+            <code>..</code> are never taken. Under <code>abide check</code>, a matcher that is a choice
+            of words, <code>/deals|notes/</code>, types the param as those words in
+            <code>route.params</code> and in <code>url</code>.</p>
     </Section>
 
     <Section title="A layout holds what the companies pages share">
@@ -162,26 +163,26 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </Example>
 
         <p>A <code>**/layout.abide</code> wraps every page at its directory and below, and
-        <code>&lt;slot/&gt;</code> is where the page renders. A navigation between two of its pages
-        swaps what is in the slot and leaves the layout alone, so its inputs, its scroll and
-        anything it was loading stay as they were. Layouts nest: the root layout wraps this one.</p>
+            <code>&lt;slot/&gt;</code> is where the page renders. A navigation between two of its pages
+            swaps what is in the slot and leaves the layout alone, so its inputs, its scroll and
+            anything it was loading stay as they were. Layouts nest: the root layout wraps this one.</p>
 
         <p>A layout's <code>&lt;script server&gt;</code> files hooks for the same pages. The
-        companies layout files its <code>onError</code> hook there.</p>
+            companies layout files its <code>onError</code> hook there.</p>
 
         <p>A package can ship pages too. <code>import '…' with &#123; type: 'routes' &#125;</code>
-        in a file of your app serves every page and handler in the named directory below that
-        file's directory, and moving the line moves them.</p>
+            in a file of your app serves every page and handler in the named directory below that
+            file's directory, and moving the line moves them.</p>
     </Section>
 
     <Section title="A link names a route, and `url` fills it in">
         <p>The list links each company with
-        <code>url('/companies/[id=SLUG]', &#123; id: company.id &#125;)</code>. You write the pattern a
-        page is filed under, matcher and all, rather than the address, and <code>url</code> fills in
-        the segments.
-        Leaving out a required one is a compile error, and a pattern no page is filed under is
-        refused by <code>abide check</code>. A query goes last:
-        <code>url('/companies', &#123;&#125;, &#123; city: 'London' &#125;)</code>.</p>
+            <code>url('/companies/[id=SLUG]', &#123; id: company.id &#125;)</code>. You write the pattern a
+            page is filed under, matcher and all, rather than the address, and <code>url</code> fills in
+            the segments.
+            Leaving out a required one is a compile error, and a pattern no page is filed under is
+            refused by <code>abide check</code>. A query goes last:
+            <code>url('/companies', &#123;&#125;, &#123; city: 'London' &#125;)</code>.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -199,8 +200,8 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </table>
 
         <p>You never write the last six. They are how <code>url</code>'s signature is read off the
-        pattern, and a compile error naming <code>RequiredNames</code> is naming the segment you
-        left out.</p>
+            pattern, and a compile error naming <code>RequiredNames</code> is naming the segment you
+            left out.</p>
     </Section>
 
     <Section title="`navigate` moves the address from code">
@@ -218,13 +219,13 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </Example>
 
         <p>An address the page already shown matches moves <code>route.url</code> and keeps the
-        page mounted. Another page's address mounts that page in place, without reloading the
-        document. <code>replace: true</code> writes over the history entry, so Back leaves the
-        company rather than stepping through every tab.</p>
+            page mounted. Another page's address mounts that page in place, without reloading the
+            document. <code>replace: true</code> writes over the history entry, so Back leaves the
+            company rather than stepping through every tab.</p>
 
         <p>A plain <code>&lt;a href&gt;</code> click does the same. Reach for
-        <code>navigate</code> when code decides where to go. <code>route.navigating</code> is
-        true while a navigation is in flight, which is what a progress bar reads.</p>
+            <code>navigate</code> when code decides where to go. <code>route.navigating</code> is
+            true while a navigation is in flight, which is what a progress bar reads.</p>
     </Section>
 
     <Section title="A view transition carries the company across pages">
@@ -244,10 +245,10 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </Example>
 
         <p>Elements on two pages that share a <code>view-transition-name</code> are animated from
-        one place to the other. A <code>&lt;style&gt;</code> rule naming a view transition turns
-        them on. The build reads it, so an app with none never looks for one at run time. A
-        navigation waits for the DOM to be written, not for the animation. A browser without view
-        transitions navigates as it otherwise would.</p>
+            one place to the other. A <code>&lt;style&gt;</code> rule naming a view transition turns
+            them on. The build reads it, so an app with none never looks for one at run time. A
+            navigation waits for the DOM to be written, not for the animation. A browser without view
+            transitions navigates as it otherwise would.</p>
     </Section>
 
     <Section title="`<head>` in a page replaces its layout's">
@@ -267,10 +268,10 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </Example>
 
         <p>A <code>&lt;head&gt;</code> sits at the top level of a file, never inside a block. A
-        <code>&lt;title&gt;</code>, a <code>&lt;meta&gt;</code> by its name and a
-        <code>&lt;link&gt;</code> by its <code>rel</code> and <code>href</code> each have a key,
-        and the deepest contribution for a key wins. One with no key is appended. Leaving a page puts its layout's
-        title back.</p>
+            <code>&lt;title&gt;</code>, a <code>&lt;meta&gt;</code> by its name and a
+            <code>&lt;link&gt;</code> by its <code>rel</code> and <code>href</code> each have a key,
+            and the deepest contribution for a key wins. One with no key is appended. Leaving a page puts its layout's
+            title back.</p>
     </Section>
 
     <Section title="The page goes out before the company lands">
@@ -290,8 +291,8 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </Example>
 
         <p>Nothing holds the document for a value. The page gets one turn to start its loads, and
-        a value that answers in that turn is painted. A value still in flight leaves a hole, and
-        the browser's own call fills it, so the document carries no copy of the answer.</p>
+            a value that answers in that turn is painted. A value still in flight leaves a hole, and
+            the browser's own call fills it, so the document carries no copy of the answer.</p>
 
         <table>
             <thead><tr><th>The hole</th><th>What fills</th></tr></thead>
@@ -322,14 +323,14 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </Example>
 
         <p>An <code>**/error.abide</code> is found the way a layout is: the nearest one above the
-        page that failed. It gets the refusal as <code>failure</code>, and each refusal's
-        <code>is</code> narrows it. An address no page answers is <code>notFound</code> too. A
-        page asked with a method other than <code>GET</code> or <code>HEAD</code> is a 405,
-        painted by the same page, with <code>allow: GET, HEAD</code> on the answer.</p>
+            page that failed. It gets the refusal as <code>failure</code>, and each refusal's
+            <code>is</code> narrows it. An address no page answers is <code>notFound</code> too. A
+            page asked with a method other than <code>GET</code> or <code>HEAD</code> is a 405,
+            painted by the same page, with <code>allow: GET, HEAD</code> on the answer.</p>
 
         <p>The refusal has to come in the page's first turn to set the status. That is why
-        <code>getCompany</code> refuses before it waits. An error page that fails itself hands
-        off to the next one up.</p>
+            <code>getCompany</code> refuses before it waits. An error page that fails itself hands
+            off to the next one up.</p>
     </Section>
 
     <Section title="`onError` reports what the caller is not told">
@@ -349,8 +350,8 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </Example>
 
         <p><code>onError</code> runs on an unexpected error in any request below the file that
-        called it. Send the error to a tracker there. The caller gets a 500 with nothing about the
-        cause, so a stack trace never reaches a browser.</p>
+            called it. Send the error to a tracker there. The caller gets a 500 with nothing about the
+            cause, so a stack trace never reaches a browser.</p>
     </Section>
 
     <Section title="`render` builds a document from a component">
@@ -370,30 +371,30 @@ import viewTransitionTestSource from 'crm-06/src/companies/ViewTransition.test.t
         </Example>
 
         <p><code>CompanySheet(&#123; company &#125;)</code> is a <code>Component</code>: the
-        component bound to its props, not yet rendered. <code>render</code> turns it into the
-        document's bytes, built whole, and <code>page</code> answers with them as HTML.</p>
+            component bound to its props, not yet rendered. <code>render</code> turns it into the
+            document's bytes, built whole, and <code>page</code> answers with them as HTML.</p>
 
         <p>A component written inside <code>&lt;html&gt;</code> is the whole document, so the
-        sheet carries its own styles and no bundle. The CRM's root layout writes its document the
-        same way.</p>
+            sheet carries its own styles and no bundle. The CRM's root layout writes its document the
+            same way.</p>
     </Section>
 
     <Section title="Serve the CRM under a sub-path">
         <Code code={`APP_URL=https://example.com/crm abide start`} />
 
         <p>Set <code>APP_URL</code> and every page, handler and asset answers below its path.
-        Nothing is rebuilt: <code>url</code>, a handler's address and every asset reference are
-        resolved when they are read, never baked into the build. An address you write out by hand
-        is not, which is one more reason to build them with <code>url</code>.</p>
+            Nothing is rebuilt: <code>url</code>, a handler's address and every asset reference are
+            resolved when they are read, never baked into the build. An address you write out by hand
+            is not, which is one more reason to build them with <code>url</code>.</p>
 
         <p>Everything abide serves for itself, from handler calls to the health check, is below
-        <code>/__abide/**</code>, so a proxy in front of the CRM forwards one path family.</p>
+            <code>/__abide/**</code>, so a proxy in front of the CRM forwards one path family.</p>
     </Section>
 
     <Section title="Next">
         <ul>
             <li><a href={url('/guide/decide-who-sees-what')}>Who sees what</a> — sign a user in,
-            and decide what each caller may read</li>
+                and decide what each caller may read</li>
         </ul>
     </Section>
 </Doc>

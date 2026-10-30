@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { closedTo, crossingOrigin } from '#server/crossingOrigin.ts'
 
 // 36.2 — THE OWN ORIGIN IS THE REQUEST'S where no `APP_URL` names one, and a request with no

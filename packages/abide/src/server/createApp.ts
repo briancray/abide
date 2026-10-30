@@ -5,17 +5,19 @@
 
 import { existsSync } from 'node:fs' // bun exposes no sync existence check of its own
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
+
 import { FAILURE_STATUS_TEXT } from '#shared/FAILURE_STATUS_TEXT.ts'
 import { framingOf } from '#shared/framing.ts'
 import { IN_PROCESS_ORIGIN } from '#shared/IN_PROCESS_ORIGIN.ts'
-import { LONGEST_DELAY } from '#shared/LONGEST_DELAY.ts'
 import { namedLogger } from '#shared/log.ts'
+import { LONGEST_DELAY } from '#shared/LONGEST_DELAY.ts'
 import { compose } from '#shared/Middleware.ts'
 import { MOUNT, unmounted } from '#shared/mount.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
+
 import { servedTable } from './abideModules.ts'
-import { type AppSources, answerRequest } from './answerRequest.ts'
+import { answerRequest, type AppSources } from './answerRequest.ts'
 import type { Mount } from './answerRpc.ts'
 import { Mux, type MuxConnection } from './answerSocket.ts'
 import { appDirectories } from './appDirectories.ts'

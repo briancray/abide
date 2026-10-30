@@ -1,9 +1,11 @@
 import { afterAll, expect, test } from 'bun:test'
 import { rmSync, symlinkSync } from 'node:fs' // bun has no sync symlink/rm of its own
+
 import { emitComponent, parseAbide } from '#compiler'
 import type { CheckerAnswer } from '#compiler/CheckerAnswer.ts'
 import { TypeSession } from '#compiler/TypeSession.ts'
 import { renderDocument } from '#server/render.ts'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { namesRead } from './typed.ts'
 
@@ -216,7 +218,9 @@ test('a kept session holds one snapshot however many it has taken', async () => 
         const ask = (at: number) =>
             kept.reads(
                 `${ROOT}src/kept.abide`,
-                parseAbide(`<script>\nconst value${at} = ${at}\n</script><p>{value${at}}</p>`),
+                parseAbide(
+                    `<script>\nconst value${at} = ${at}\n</script><p>{value${at}}</p>`,
+                ),
             )
         for (let at = 0; at < 3; at += 1) await ask(at)
         expect(kept.snapshots).toBe(3)

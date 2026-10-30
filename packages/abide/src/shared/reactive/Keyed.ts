@@ -15,8 +15,8 @@ import {
     normalized,
     PARAMETER_DEFAULTS,
 } from './argsContract.ts'
-import { CELL } from './CELL.ts'
 import { canonicalKey } from './canonicalKey.ts'
+import { CELL } from './CELL.ts'
 import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
 import { armTimer } from './Expiry.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
@@ -43,8 +43,8 @@ import {
     newSubscriber,
     newTracked,
     type Subscriber,
-    TRACKING,
     type Tracked,
+    TRACKING,
     trackProbe,
 } from './tracking.ts'
 import { owned, owning } from './watch.ts'

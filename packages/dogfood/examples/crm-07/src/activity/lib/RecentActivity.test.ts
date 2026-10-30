@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
+
 import RecentActivity from './RecentActivity.abide'
 
 test('logging past three adds one entry and drops the oldest', async () => {

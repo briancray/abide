@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { measure, mount } from '@abide/harness/abide'
+
 import Tags from './Tags.abide'
 
 test('removing a tag removes its row and rewrites no other', async () => {

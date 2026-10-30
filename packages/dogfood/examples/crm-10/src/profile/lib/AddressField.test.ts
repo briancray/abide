@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
+
 import AddressField from './AddressField.abide'
 
 test('a write to the city reaches the record it sits in', async () => {

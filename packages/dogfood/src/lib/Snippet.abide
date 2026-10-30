@@ -3,6 +3,7 @@
 // a sample cannot drift from the file it quotes, and an anchor matching none or two throws where
 // the page renders (40.10).
 import { props } from '@abide/abide'
+
 import Code from './Code.abide'
 import { EXCERPT } from './highlight.ts'
 import { slice } from './slice.ts'
@@ -23,4 +24,4 @@ const code =
     code={code}
     language={path.slice(path.lastIndexOf('.') + 1)}
     caption={from.length === 0 ? path : `${path}${EXCERPT}`}
-/>
+ />

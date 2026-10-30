@@ -4,6 +4,7 @@
 // specifier, an `onLoad` for a path), and this decides what the answer is.
 
 import type { JsonValue } from '#shared/JsonValue.ts'
+
 import { HANDLER_SUFFIX, SERVER_QUERY } from './MODULE_QUERIES.ts'
 
 // A VIRTUAL FACE'S PATH: its file's, with a suffix that is not a query. Both registries key a module
@@ -38,13 +39,7 @@ export type Face = { path: string; namespace: string }
  * module (`?server`), a `.abide` named bare, or a module that may be a handler file.
  */
 export type Asked =
-    | 'text'
-    | 'style'
-    | 'component'
-    | 'client'
-    | 'server'
-    | 'abide'
-    | 'handler'
+    'text' | 'style' | 'component' | 'client' | 'server' | 'abide' | 'handler'
 
 /**
  * One handler file, as `Compilation.handlers` holds it — and 19.9's schema its default's annotation

@@ -2,12 +2,12 @@ import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Read } from './classifyRead.ts'
 import { isComponentTag } from './classifyTemplate.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
-import { Lowering } from './Lowering.ts'
 import { diagnosisAt } from './lineOf.ts'
+import { Lowering } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
-    type Body,
     bodiesOf,
+    type Body,
     type ForBlock,
     type TemplateNode,
     visitBodies,

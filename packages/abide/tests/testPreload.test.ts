@@ -4,8 +4,11 @@
 // because a preload is read when a run starts, and this run is already under happy-dom's.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
+
 import { BUNFIG } from '#compiler/scaffold.ts'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 afterAll(removeTemporaryModules)

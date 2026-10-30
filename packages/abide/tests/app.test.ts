@@ -4,7 +4,9 @@
 // `serve.test.ts`'s reason: happy-dom's preload clobbers `Response`.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
+
 import abidePackage from '../package.json' with { type: 'json' }
 import {
     appFixture,

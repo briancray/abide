@@ -3,8 +3,10 @@
 // refused batch left behind is what every later answer is read against.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { parseAbide } from '#compiler'
 import { TypeSession } from '#compiler/TypeSession.ts'
+
 import { namesRead, refusal } from './typed.ts'
 
 const ROOT = new URL('./fixtures/typed/', import.meta.url).pathname

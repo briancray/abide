@@ -5,9 +5,10 @@
 // TypeScript syntax error about a `#` or an `@`.
 
 import { expect, test } from 'bun:test'
+
 import { parseAbide } from '#compiler/parseAbide.ts'
-import { Refusals } from '#compiler/Refusals.ts'
 import { parseSources } from '#compiler/readSources.ts'
+import { Refusals } from '#compiler/Refusals.ts'
 
 const refusalOf = (source: string): string => {
     try {

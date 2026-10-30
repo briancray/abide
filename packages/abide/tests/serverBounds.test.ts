@@ -3,6 +3,7 @@
 // many values one connection follows. In process (`inMemoryApp.ts`), over a stand-in socket.
 
 import { afterEach, expect, test } from 'bun:test'
+
 import { GET } from '#server'
 import {
     answerBridge,
@@ -13,6 +14,7 @@ import {
 } from '#server/bridgeRelay.ts'
 import { config } from '#server/config.ts'
 import type { BootedApp } from '#server/createApp.ts'
+
 import { inMemoryApp } from './inMemoryApp.ts'
 
 // Who a pairing made outside every request was minted by: no one signed in (44.33).

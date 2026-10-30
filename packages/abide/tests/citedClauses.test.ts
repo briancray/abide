@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+
 import { citedClauses } from '#compiler/citedClauses.ts'
 import { isIgnored } from '#compiler/isIgnored.ts'
 

@@ -16,6 +16,7 @@
 // would fire hardest on the tutorial, where addressing the reader is the form. Both were dropped.
 
 import { beforeAll, expect, test } from 'bun:test'
+
 import { docsPages, renderedMarkdown } from './docsPages.ts'
 
 // EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay

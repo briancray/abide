@@ -1,5 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
+
 import askAssistant from '../askAssistant.handler.ts'
 
 const QUESTION = 'Which company is Ada at?'
@@ -15,23 +16,25 @@ const events = reactive(() =>
 <ul class="chat">
     <li data-speaker="you"><span>you</span><p>{QUESTION}</p></li>
 {#for event of events}
-    {#if event.type === 'tool'}
-        <li><span>tool call</span>
-            <p class="font-mono text-chrome">{event.name}</p></li>
-    {:else if event.type === 'input'}
-        <li><span>with input</span>
-            <p class="font-mono text-chrome">
-                {JSON.stringify(event.input)}
-            </p></li>
-    {:else if event.type === 'result'}
-        <li><span>your handler answered</span>
-            <p class="font-mono text-chrome">{event.text}</p></li>
-    {:else if event.type === 'text'}
-        <li><span>assistant</span><p>{event.text}</p></li>
-    {/if}
-{/for}
+        {#if event.type === 'tool'}
+            <li><span>tool call</span>
+                <p class="font-mono text-chrome">{event.name}</p></li>
+        {:else if event.type === 'input'}
+            <li><span>with input</span>
+                <p class="font-mono text-chrome">
+                    {JSON.stringify(event.input)}
+                </p></li>
+        {:else if event.type === 'result'}
+            <li><span>your handler answered</span>
+                <p class="font-mono text-chrome">{event.text}</p></li>
+        {:else if event.type === 'text'}
+            <li><span>assistant</span><p>{event.text}</p></li>
+        {/if}
+    {/for}
 </ul>
 
 <div class="row">
-    <button disabled={asked} onclick={() => { asked = true }}>Ask</button>
+    <button disabled={asked} onclick={() => {
+        asked = true
+    }}>Ask</button>
 </div>

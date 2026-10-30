@@ -16,7 +16,7 @@ const notes = reactive(() => getNotes({ id: 'd1' }))
 </script>
 
 <ul class="fields stacked">
-{#for note of notes}
-    <li><span>note</span><strong>{note}</strong></li>
-{/for}
+    {#for note of notes}
+        <li><span>note</span><strong>{note}</strong></li>
+    {/for}
 </ul>

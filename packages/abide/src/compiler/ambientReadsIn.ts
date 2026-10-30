@@ -10,6 +10,7 @@ import {
     isPropertyAssignment,
 } from 'typescript/unstable/ast/is'
 import type { Checker } from 'typescript/unstable/async'
+
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import {
     isWrittenInPlace,

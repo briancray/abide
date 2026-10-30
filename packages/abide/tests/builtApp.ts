@@ -3,9 +3,11 @@
 // `abide start`. The app is a temporary module, so `removeTemporaryModules` takes it away.
 
 import { spawned } from '@abide/harness/gate'
+
 import { type Compilation, servedTable } from '#server/abideModules.ts'
 import { COMPILATION } from '#server/CLIENT_BUILD.ts'
 import { serveBuild } from '#server/serveBuild.ts'
+
 import { temporaryModule } from './temporaryModule.ts'
 
 export const BIN = new URL('../bin/abide.ts', import.meta.url).pathname

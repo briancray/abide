@@ -3,6 +3,7 @@
 // `handlerImports.test.ts` and `mounts.test.ts` are where bun's hooks are seen to hand it the ask.
 
 import { expect, test } from 'bun:test'
+
 import {
     BOUND,
     BOUND_NAMESPACE,

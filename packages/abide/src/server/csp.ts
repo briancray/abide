@@ -6,6 +6,7 @@
 // rung writing a document's header — so the two agree, and an answer that is not a document mints none.
 
 import type { Middleware } from '#shared/Middleware.ts'
+
 import { randomToken } from './randomToken.ts'
 import { EARLY_CALL_HASH } from './render.ts'
 import { within } from './requestScope.ts'

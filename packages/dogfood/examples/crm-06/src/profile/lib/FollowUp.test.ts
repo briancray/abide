@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
+
 import FollowUp from './FollowUp.abide'
 
 const dateField = () => document.querySelector('input[type="date"]')

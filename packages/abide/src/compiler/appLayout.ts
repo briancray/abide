@@ -1,4 +1,5 @@
 import { relative as relativeTo } from 'node:path' // bun exposes no path helpers of its own
+
 import { appFiles } from '#server/appTree.ts'
 import { type Placement, placement, routeOf } from '#server/placement.ts'
 import {
@@ -13,14 +14,15 @@ import {
     parseRoutePattern,
     type Segment,
 } from '#shared/routePattern.ts'
+
 import { abideImportsOf, componentGraph } from './componentGraph.ts'
 import type { HandlerFile } from './handlersUnder.ts'
 import { hookCalls, hooksIn } from './hookCalls.ts'
-import { type MountedTree, matchersOf } from './matchersOf.ts'
+import { matchersOf, type MountedTree } from './matchersOf.ts'
 import { mountsOf } from './mountsOf.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
-import { Refusals } from './Refusals.ts'
 import { type ParsedSource, parseSources } from './readSources.ts'
+import { Refusals } from './Refusals.ts'
 import { resolverIn } from './resolverIn.ts'
 import { attributedImports } from './splitImports.ts'
 import type { Diagnosis } from './TypeSession.ts'

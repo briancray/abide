@@ -7,6 +7,7 @@
 // asks something first, so a Start with no configuration to ask for has none and starts at once.
 
 import { escapeAttribute, escapeText } from '#shared/escapeText.ts'
+
 import type { ConfigField } from './configFields.ts'
 import { inkOn } from './iconAccent.ts'
 
@@ -77,8 +78,7 @@ export function launcherPage(page: Launch): string {
     // field shows them.
     const failureLine = (
         failure:
-            | { message: string; issues: Record<string, string[]> }
-            | undefined,
+            { message: string; issues: Record<string, string[]> } | undefined,
     ): string => {
         if (failure === undefined) return ''
         let line = `<p class="failure" role="alert">${escapeText(failure.message)}</p>`

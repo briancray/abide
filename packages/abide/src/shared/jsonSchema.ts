@@ -31,9 +31,7 @@ export function jsonSchema<T = Untyped>(
             vendor: 'abide',
             validate(value: unknown) {
                 const found = validateJson(document, value) as
-                    | Record<string, string[]>
-                    | string[]
-                    | null
+                    Record<string, string[]> | string[] | null
                 if (found === null) return { value: value as T }
                 const issues: { message: string; path: string[] }[] = []
                 // A value that is not an object came back as the bare list, every issue on `''`.

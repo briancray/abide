@@ -4,9 +4,10 @@ import {
     isVariableDeclarationList,
 } from 'typescript/unstable/ast/is'
 import type {
-    Symbol as CheckedSymbol,
     Checker,
+    Symbol as CheckedSymbol,
 } from 'typescript/unstable/async'
+
 import { classifyRead, FUNCTIONS } from './classifyRead.ts'
 import type { Finding } from './Finding.ts'
 import type { Span } from './projectShadow.ts'

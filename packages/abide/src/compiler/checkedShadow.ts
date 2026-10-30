@@ -1,4 +1,5 @@
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
+
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Finding } from './Finding.ts'
 import { hookCalls } from './hookCalls.ts'
@@ -10,8 +11,8 @@ import {
     Lowering,
     type Routed,
 } from './Lowering.ts'
-import { holdsReactive } from './PositionTable.ts'
 import type { AbideFile } from './parseAbide.ts'
+import { holdsReactive } from './PositionTable.ts'
 import { NO_PROPS, type Origin, type Span } from './projectShadow.ts'
 import { CHECKED_SUFFIX } from './ShadowMap.ts'
 import { abideImports } from './splitImports.ts'

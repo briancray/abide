@@ -3,6 +3,7 @@
 // spawned shell (`shell.test.ts` drives the terminal-less loop end to end).
 
 import { expect, test } from 'bun:test'
+
 import { GET } from '#server'
 import type { Mount, Mounted } from '#server/answerRpc.ts'
 import {

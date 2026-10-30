@@ -1,4 +1,5 @@
 import { relative, resolve } from 'node:path' // bun exposes no path helpers of its own
+
 import type { Compilation } from './abideModules.ts'
 import { COMPONENT_NAMESPACE } from './faceOf.ts'
 import { COMPONENT_QUERY } from './MODULE_QUERIES.ts'

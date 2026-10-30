@@ -9,7 +9,9 @@
 // not by construction.
 
 import { execFileSync } from 'node:child_process'
+
 import { expect, test } from '@playwright/test'
+
 import { CASES } from './CASES.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname

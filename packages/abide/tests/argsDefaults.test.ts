@@ -4,9 +4,11 @@
 // Standard Schema's declared input and output — and a `.ts` as much as a `.abide`.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
 import type { Diagnosis } from '#compiler/TypeSession.ts'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

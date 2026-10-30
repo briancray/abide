@@ -2,6 +2,7 @@ import { tablePath } from '#server/abideModules.ts'
 import type { AppPackage } from '#server/config.ts'
 import type { SourceMaps } from '#server/installSourceMaps.ts'
 import { SERVER_TABLE } from '#server/TABLES.ts'
+
 import abidePackage from '../../package.json' with { type: 'json' }
 
 // What the executable starts from: `abide compile`'s, and `abide bundle`'s window over it (38.70).

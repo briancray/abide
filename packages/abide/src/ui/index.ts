@@ -50,12 +50,7 @@ export { contributeHead } from './Level.ts'
 export { listAt, updateList } from './List.ts'
 export { warnMismatch } from './Mismatch.ts'
 export { markupNodes, namespaceUnder } from './parseMarkup.ts'
-export {
-    fillEmpty,
-    fillRegion,
-    isEmptyRegion,
-    type Region,
-} from './regions.ts'
+export { fillEmpty, fillRegion, isEmptyRegion, type Region } from './regions.ts'
 export { rowKeyOf } from './rowKeyOf.ts'
 export { itemOf, noUpdate, replaceRow, rowCell } from './rows.ts'
 export { EMPTY_SCOPE, Scope } from './Scope.ts'

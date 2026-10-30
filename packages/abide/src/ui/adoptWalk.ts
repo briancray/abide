@@ -1,6 +1,7 @@
 import { RAW_CLOSE, RAW_OPEN } from '#shared/ANCHORS.ts'
+
 import { Mismatch } from './Mismatch.ts'
-import { type RawRun, rawCloseOf, rawRunEndingAt } from './RawRun.ts'
+import { rawCloseOf, type RawRun, rawRunEndingAt } from './RawRun.ts'
 import { closeOf, opensRegion, type Region } from './regions.ts'
 
 // WHERE A NODE IS WHEN THE SERVER ALREADY WROTE IT — the adopt half of every region's mount: the

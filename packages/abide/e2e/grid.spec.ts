@@ -10,8 +10,10 @@
 // three schemes have to be INTERLEAVED, so all three are on one page, each under its own root.
 
 import { execFileSync } from 'node:child_process'
+
 import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
+
 import { type Report, reportScript } from './reportScript.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname

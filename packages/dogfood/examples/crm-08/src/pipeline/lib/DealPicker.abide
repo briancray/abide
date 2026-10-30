@@ -1,5 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
+
 import listDeals from '../listDeals.handler.ts'
 import DealDetail from './DealDetail.abide'
 import DealRow from './DealRow.abide'
@@ -10,10 +11,10 @@ const deals = reactive(() => listDeals())
 reactive.share('selectedDeal', () => reactive('d1'))
 </script>
 
-<DealDetail/>
+<DealDetail />
 
 <div class="row">
-{#for deal of deals.ready() ? deals : [] by deal.id}
-    <DealRow id={deal.id} name={deal.name}/>
-{/for}
+    {#for deal of deals.ready() ? deals : [] by deal.id}
+        <DealRow id={deal.id} name={deal.name} />
+    {/for}
 </div>

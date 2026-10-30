@@ -7,6 +7,7 @@
 // long a browser may keep it.
 
 import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
+
 import { abideModules, type Compilation, tablePath } from './abideModules.ts'
 import { appPlugins } from './appPlugins.ts'
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'

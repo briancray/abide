@@ -7,7 +7,9 @@
 // an awaited operand then warns too — `one` and `three` join the two due (4 against 2).
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { compileApp } from '#compiler/compileApp.ts'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

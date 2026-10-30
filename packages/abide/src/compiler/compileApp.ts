@@ -1,5 +1,6 @@
 import { realpathSync } from 'node:fs' // bun exposes no sync realpath of its own
 import { dirname, posix } from 'node:path' // bun exposes no path helpers of its own
+
 import {
     type Compilation,
     type CompiledFile,
@@ -13,10 +14,11 @@ import { VIRTUAL_DIRECTORY } from '#server/VIRTUAL_DIRECTORY.ts'
 import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
 import { ROUTING_SPECIFIER, WIRE_SPECIFIER } from '#shared/SPECIFIERS.ts'
+
 import {
     type AppLayout,
-    type AppRoute,
     appLayout,
+    type AppRoute,
     type PlacedSource,
     shapeOf,
 } from './appLayout.ts'
@@ -25,8 +27,8 @@ import { handlersUnder } from './handlersUnder.ts'
 import { isAbideSpecifier } from './hookCalls.ts'
 import { nearest } from './nearest.ts'
 import { projectShadow } from './projectShadow.ts'
-import { Refusals } from './Refusals.ts'
 import { type ReadSource, readSources } from './readSources.ts'
+import { Refusals } from './Refusals.ts'
 import { respecified } from './splitImports.ts'
 import { type Diagnosis, TypeSession } from './TypeSession.ts'
 import { writeDefaultProject } from './writeDefaultProject.ts'

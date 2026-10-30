@@ -14,18 +14,19 @@ import {
     isVariableDeclaration,
 } from 'typescript/unstable/ast/is'
 import {
-    type Symbol as CheckedSymbol,
     type Checker,
     ObjectFlags,
     type ObjectType,
     type Project,
     SignatureKind,
+    type Symbol as CheckedSymbol,
     SymbolFlags,
     type Type,
     TypeFlags,
     type TypeReference,
     type UnionOrIntersectionType,
 } from 'typescript/unstable/async'
+
 import type { Mount } from '#server/answerRpc.ts'
 import type { CopyOptions } from '#shared/CopyOptions.ts'
 import {
@@ -33,6 +34,7 @@ import {
     defaultsInSource,
 } from '#shared/reactive/parameterDefaults.ts'
 import type { Method } from '#shared/rpc.ts'
+
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { defaultedMembers, parameterPattern } from './argsDefaultsIn.ts'
 import {
@@ -42,7 +44,6 @@ import {
     type Walk,
 } from './argsSchemaOf.ts'
 import { diagnosisAt } from './lineOf.ts'
-import type { Refusals } from './Refusals.ts'
 import { isReactiveCall, METHODS, optionNamed } from './reactiveOptions.ts'
 import {
     abideIn,
@@ -50,6 +51,7 @@ import {
     isReactiveMember,
     valueTypeOf,
 } from './reactiveTypes.ts'
+import type { Refusals } from './Refusals.ts'
 import type { Diagnosis } from './TypeSession.ts'
 
 /**

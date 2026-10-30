@@ -13,7 +13,9 @@
 // flush would be zero for every case here and prove nothing.
 
 import { expect, test } from 'bun:test'
+
 import { measure } from '@abide/harness/abide'
+
 import { flushSync, reactive, watch } from '#shared'
 
 function bind(value: () => number, count: number): (() => void)[] {

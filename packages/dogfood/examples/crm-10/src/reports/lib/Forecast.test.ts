@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
+
 import Forecast from './Forecast.abide'
 
 test('advancing a deal moves the forecast by its weighted amount', async () => {

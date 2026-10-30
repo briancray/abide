@@ -1,4 +1,5 @@
 import { POST } from '@abide/abide/server'
+
 import { DEALS } from './lib/DEALS.server.ts'
 
 /** Moves the first open lead to won, and answers with its id. */

@@ -1,8 +1,9 @@
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
+
 import { LAYER_FILL } from './LAYER_NAMES.ts'
 import { anyLeaving, leave } from './leave.ts'
-import { Mismatch } from './Mismatch.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
+import { Mismatch } from './Mismatch.ts'
 
 export type Region = { open: Comment; close: Comment }
 

@@ -1,8 +1,10 @@
 import { expect, test } from 'bun:test'
+
 import { mount } from '@abide/harness/abide'
+
 import getStage from '../getStage.handler.ts'
-import StageTiles from './StageTiles.abide'
 import { LOADS } from './LOADS.server.ts'
+import StageTiles from './StageTiles.abide'
 
 function pick(index: number, stage: string): void {
     const select = document.querySelectorAll('select')[index]

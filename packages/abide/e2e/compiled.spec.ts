@@ -11,6 +11,7 @@
 // a threshold on somebody else's machine under somebody else's load.
 
 import { execFileSync } from 'node:child_process'
+
 import { expect, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname

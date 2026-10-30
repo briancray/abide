@@ -8,6 +8,7 @@
 // `busy()` is not answering about it. The server's arm, scope and `global`, is in `scope.test.ts`.
 
 import { beforeAll, expect, test } from 'bun:test'
+
 import {
     busy,
     flushSync,

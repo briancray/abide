@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
 import { gate, spawned } from '@abide/harness/gate'
 
 const GATE = new URL('../src/gate/index.ts', import.meta.url).pathname

@@ -3,13 +3,16 @@
 // failure clears comes back.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { measure } from '@abide/harness/abide'
+
 import { parseAbide } from '#compiler'
 import { flushSync, NotLanded } from '#shared'
 import { Mismatch } from '#ui/Mismatch.ts'
 import { markupNodes } from '#ui/parseMarkup.ts'
 import { BOUNDARY, Scope } from '#ui/Scope.ts'
 import { TryRegion } from '#ui/TryRegion.ts'
+
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage } from './typed.ts'
 

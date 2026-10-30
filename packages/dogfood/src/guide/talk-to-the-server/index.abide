@@ -1,43 +1,44 @@
 <script>
 import { url } from '@abide/abide'
-import Code from '#src/lib/Code.abide'
-import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Section from '#src/lib/Section.abide'
+import createDealSource from 'crm-03/src/deals/createDeal.handler.ts' with { type: 'text' }
+import exportDealsHandlerSource from 'crm-03/src/deals/exportDeals.handler.ts' with { type: 'text' }
+import getDealSource from 'crm-03/src/deals/getDeal.handler.ts' with { type: 'text' }
 import DealDetail from 'crm-03/src/deals/lib/DealDetail.abide'
 import dealDetailSource from 'crm-03/src/deals/lib/DealDetail.abide' with { type: 'text' }
-import getDealSource from 'crm-03/src/deals/getDeal.handler.ts' with { type: 'text' }
 import dealDetailTestSource from 'crm-03/src/deals/lib/DealDetail.test.ts' with { type: 'text' }
 import DealNotes from 'crm-03/src/deals/lib/DealNotes.abide'
 import dealNotesSource from 'crm-03/src/deals/lib/DealNotes.abide' with { type: 'text' }
 import dealNotesTestSource from 'crm-03/src/deals/lib/DealNotes.test.ts' with { type: 'text' }
-import NewDeal from 'crm-03/src/deals/lib/NewDeal.abide'
-import newDealSource from 'crm-03/src/deals/lib/NewDeal.abide' with { type: 'text' }
-import createDealSource from 'crm-03/src/deals/createDeal.handler.ts' with { type: 'text' }
-import newDealTestSource from 'crm-03/src/deals/lib/NewDeal.test.ts' with { type: 'text' }
 import DealStage from 'crm-03/src/deals/lib/DealStage.abide'
 import dealStageSource from 'crm-03/src/deals/lib/DealStage.abide' with { type: 'text' }
-import moveDealSource from 'crm-03/src/deals/moveDeal.handler.ts' with { type: 'text' }
 import dealStageTestSource from 'crm-03/src/deals/lib/DealStage.test.ts' with { type: 'text' }
 import ExportDeals from 'crm-03/src/deals/lib/ExportDeals.abide'
 import exportDealsSource from 'crm-03/src/deals/lib/ExportDeals.abide' with { type: 'text' }
-import exportDealsHandlerSource from 'crm-03/src/deals/exportDeals.handler.ts' with { type: 'text' }
 import exportDealsTestSource from 'crm-03/src/deals/lib/ExportDeals.test.ts' with { type: 'text' }
+import NewDeal from 'crm-03/src/deals/lib/NewDeal.abide'
+import newDealSource from 'crm-03/src/deals/lib/NewDeal.abide' with { type: 'text' }
+import newDealTestSource from 'crm-03/src/deals/lib/NewDeal.test.ts' with { type: 'text' }
 import Pipeline from 'crm-03/src/deals/lib/Pipeline.abide'
 import pipelineSource from 'crm-03/src/deals/lib/Pipeline.abide' with { type: 'text' }
-import listDealsSource from 'crm-03/src/deals/listDeals.handler.ts' with { type: 'text' }
 import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { type: 'text' }
+import listDealsSource from 'crm-03/src/deals/listDeals.handler.ts' with { type: 'text' }
+import moveDealSource from 'crm-03/src/deals/moveDeal.handler.ts' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc>
     <p>Every server call in this chapter is a handler: a function wrapped in <code>GET</code>,
-    <code>POST</code>, <code>PATCH</code> or one of their siblings. A page imports it and calls it
-    like any function. There is no route table, no <code>fetch</code> and no client to keep in step
-    with the server.</p>
+        <code>POST</code>, <code>PATCH</code> or one of their siblings. A page imports it and calls it
+        like any function. There is no route table, no <code>fetch</code> and no client to keep in step
+        with the server.</p>
 
     <Section title="A handler file answers at its own path">
         <p>A file named <code>&lt;name&gt;.handler.ts</code> beside the pages is a handler file. Its
-        default export is the handler, and its path below <code>src</code> is the address it answers on.</p>
+            default export is the handler, and its path below <code>src</code> is the address it answers on.</p>
 
         <table>
             <thead><tr><th>File below <code>src</code></th><th>Answers on</th></tr></thead>
@@ -52,7 +53,7 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
         </table>
 
         <p>A handler file exports its handler and nothing else. A page imports it, a script calls
-        its address, and the CLI and MCP offer it as a command and a tool.</p>
+            its address, and the CLI and MCP offer it as a command and a tool.</p>
     </Section>
 
     <Section title="A page calls a handler with typed arguments">
@@ -71,20 +72,20 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
         </Example>
 
         <p>The annotation <code>{'{ id: string }'}</code> is the handler's <code>Args</code>, and
-        what it returns is its <code>Value</code>. <code>GET</code> builds the runtime schema from
-        that annotation, so a request whose arguments do not match it is refused with 422 before the
-        handler runs.</p>
+            what it returns is its <code>Value</code>. <code>GET</code> builds the runtime schema from
+            that annotation, so a request whose arguments do not match it is refused with 422 before the
+            handler runs.</p>
 
         <p>In the browser the import is an <code>Rpc</code>: a call under the same name, with the
-        same types, sent over http. The call hands back a reactive value rather than a promise, so
-        the page reads <code>deal.name</code> by name and the probes are on the result.</p>
+            same types, sent over http. The call hands back a reactive value rather than a promise, so
+            the page reads <code>deal.name</code> by name and the probes are on the result.</p>
 
         <p>Reading <code>deal</code> starts the load. The page renders with a hole where each
-        field goes, and the holes fill when the deal lands. A read outside the markup, in a click
-        handler, throws <code>NotLanded</code> until then.</p>
+            field goes, and the holes fill when the deal lands. A read outside the markup, in a click
+            handler, throws <code>NotLanded</code> until then.</p>
 
         <p>The <code>description</code> is the sentence every surface shows for the handler:
-        OpenAPI, MCP and the CLI. <code>refuse(404)</code> answers a deal that does not exist.</p>
+            OpenAPI, MCP and the CLI. <code>refuse(404)</code> answers a deal that does not exist.</p>
     </Section>
 
     <Section title="A handler only one file calls stays in that file">
@@ -102,13 +103,13 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
         </Example>
 
         <p>A <code>&lt;script server&gt;</code> runs on the server alone. It declares
-        <code>getNotes</code> as a <code>const</code>, and the same file's script and markup call it
-        by name. A <code>.abide</code> exports nothing, so no other file can reach it.</p>
+            <code>getNotes</code> as a <code>const</code>, and the same file's script and markup call it
+            by name. A <code>.abide</code> exports nothing, so no other file can reach it.</p>
 
         <p>It still answers over http, below <code>/__abide/handlers</code> at its file's path and
-        then its name. That address is listed on no surface, and the test calls it to show it is
-        there. When a second file needs the handler, move it into a handler file:
-        <code>const getNotes =</code> becomes <code>export default</code>.</p>
+            then its name. That address is listed on no surface, and the test calls it to show it is
+            there. When a second file needs the handler, move it into a handler file:
+            <code>const getNotes =</code> becomes <code>export default</code>.</p>
     </Section>
 
     <Section title="Four methods declare a write">
@@ -123,9 +124,9 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
         </table>
 
         <p><code>POST</code> / <code>PUT</code> / <code>PATCH</code> / <code>DELETE</code> each take
-        what <code>GET</code> takes and are called the way it is. The page never names the method;
-        the declaration carries it. A <code>GET</code> must not write, because a link on another
-        site can reach it with your user's cookie attached.</p>
+            what <code>GET</code> takes and are called the way it is. The page never names the method;
+            the declaration carries it. A <code>GET</code> must not write, because a link on another
+            site can reach it with your user's cookie attached.</p>
     </Section>
 
     <Section title="A new deal is checked before it is written">
@@ -144,12 +145,12 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
         </Example>
 
         <p><code>args</code> gates the arguments before the handler runs. A request that fails it
-        is refused with 422 and a <code>ValidationError</code>, whose data is
-        <code>Issues&lt;T&gt;</code>: the messages, keyed by the field's path. The card lists each
-        field with its first message, and <code>issues.company</code> is the company's.</p>
+            is refused with 422 and a <code>ValidationError</code>, whose data is
+            <code>Issues&lt;T&gt;</code>: the messages, keyed by the field's path. The card lists each
+            field with its first message, and <code>issues.company</code> is the company's.</p>
 
         <p>Two presses of Add inside one flight send one request and write one deal, and both get
-        its answer.</p>
+            its answer.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -183,18 +184,18 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
         </Example>
 
         <p><code>refuse.named</code> declares a refusal with a name, a status, a message and a
-        schema for its data. The handler refuses by returning it: <code>return myError(data)</code>
-        is the one spelling. A bare <code>myError(data)</code> statement, built and dropped, is a
-        compile error, because the write would carry on as if nothing had been refused.</p>
+            schema for its data. The handler refuses by returning it: <code>return myError(data)</code>
+            is the one spelling. A bare <code>myError(data)</code> statement, built and dropped, is a
+            compile error, because the write would carry on as if nothing had been refused.</p>
 
         <p>Every refusal is a <code>Failed&lt;Name, Data&gt;</code>, in process and over the wire
-        alike. The ones a handler can return are its <code>Failures</code>, so
-        <code>rpc.isError</code> narrows by name and types <code>error.data</code> from the
-        schema. <code>s.isError</code> is the same check on any reactive value, for a refusal the
-        page made itself.</p>
+            alike. The ones a handler can return are its <code>Failures</code>, so
+            <code>rpc.isError</code> narrows by name and types <code>error.data</code> from the
+            schema. <code>s.isError</code> is the same check on any reactive value, for a refusal the
+            page made itself.</p>
 
         <p><code>refuse(status)</code> is for where the status is the whole answer. It has no name a
-        caller can narrow to.</p>
+            caller can narrow to.</p>
 
         <table>
             <thead><tr><th>abide's own refusal</th><th>Status</th><th>When</th></tr></thead>
@@ -222,8 +223,8 @@ import pipelineTestSource from 'crm-03/src/deals/lib/Pipeline.test.ts' with { ty
         </Example>
 
         <p>A handler that returns a <code>Blob</code> answers with the blob's own type, so this one
-        is <code>text/csv</code>. A link cannot call a handler, so it takes the address:
-        <code>rpc.url</code> is derived from the file's path and the mount, never typed out.</p>
+            is <code>text/csv</code>. A link cannot call a handler, so it takes the address:
+            <code>rpc.url</code> is derived from the file's path and the mount, never typed out.</p>
 
         <table>
             <thead><tr><th>You return</th><th>The caller gets</th></tr></thead>
@@ -268,8 +269,8 @@ GET    /deals/listDeals             deals/listDeals.handler.ts
 PATCH  /deals/moveDeal              deals/moveDeal.handler.ts`} />
 
         <p><code>abide routes [--json]</code> prints each address, its method and the file
-        answering it, with every private handler marked <code>(private)</code>. With
-        <code>--json</code> it prints the same as one document.</p>
+            answering it, with every private handler marked <code>(private)</code>. With
+            <code>--json</code> it prints the same as one document.</p>
     </Section>
 
     <Section title="A refresh keeps the figures on screen">
@@ -288,9 +289,9 @@ PATCH  /deals/moveDeal              deals/moveDeal.handler.ts`} />
         </Example>
 
         <p>A first load is <code>busy()</code> with nothing <code>ready()</code>. A refresh is
-        <code>busy()</code> and still <code>ready()</code>, so the tile keeps the figure it has
-        while the new one loads. One loading flag cannot tell the two apart, and blanks the page on
-        every refresh.</p>
+            <code>busy()</code> and still <code>ready()</code>, so the tile keeps the figure it has
+            while the new one loads. One loading flag cannot tell the two apart, and blanks the page on
+            every refresh.</p>
 
         <table>
             <thead><tr><th>Probe</th><th>Answers</th></tr></thead>
@@ -304,15 +305,15 @@ PATCH  /deals/moveDeal              deals/moveDeal.handler.ts`} />
         </table>
 
         <p>A probe never throws and never starts a load, so it is safe to read before anything has
-        landed. The value is also a promise, for a handler or a test: <code>await deals</code>
-        waits for it, and <code>s.then</code>, <code>s.catch</code> and <code>s.finally</code> reach the same
-        settling.</p>
+            landed. The value is also a promise, for a handler or a test: <code>await deals</code>
+            waits for it, and <code>s.then</code>, <code>s.catch</code> and <code>s.finally</code> reach the same
+            settling.</p>
     </Section>
 
     <Section title="Next">
         <ul>
             <li><a href={url('/guide/keep-it-current')}>Keep it current</a> — load each deal once,
-            and reload it when it goes stale</li>
+                and reload it when it goes stale</li>
         </ul>
     </Section>
 </Doc>

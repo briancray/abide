@@ -11,6 +11,7 @@
 // `Object.hasOwn` — `&constructor;` decodes to `Object`'s source text.
 
 import { expect, test } from 'bun:test'
+
 import { decodeCharacterReferences } from '#compiler/decodeCharacterReferences.ts'
 
 const attribute = (text: string): string =>

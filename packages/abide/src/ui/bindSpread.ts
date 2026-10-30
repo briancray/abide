@@ -3,6 +3,7 @@
 // function becomes the element's listener, replaced when the value hands over another.
 
 import { spreadEntries } from '#shared/spread.ts'
+
 import type { Scope } from './Scope.ts'
 import { addAttribute } from './setAttribute.ts'
 

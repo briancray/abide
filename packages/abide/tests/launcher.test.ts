@@ -5,12 +5,14 @@
 // icon reads as a gray-green near its ground rather than the teal of its mark.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { HOOKS } from '#server/hooks.ts'
 import { iconAccent, inkOn } from '#server/iconAccent.ts'
 import { launcherOf } from '#server/launcherOptions.ts'
 import { type Launch, launcherPage } from '#server/launcherPage.ts'
 import { serveBuild } from '#server/serveBuild.ts'
 import { LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
+
 import { appFixture, buildApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

@@ -8,8 +8,10 @@
 // on working after they have been mounted inside somebody else's region.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { emitComponent, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
+
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage } from './typed.ts'
 

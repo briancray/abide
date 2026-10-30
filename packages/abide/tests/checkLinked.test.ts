@@ -10,8 +10,10 @@
 
 import { afterAll, expect, test } from 'bun:test'
 import { symlinkSync, unlinkSync } from 'node:fs' // bun exposes no symlink of its own
+
 import { checkSource } from '#compiler/checkApp.ts'
 import { openChecker } from '#compiler/compileApp.ts'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

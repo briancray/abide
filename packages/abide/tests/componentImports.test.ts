@@ -6,6 +6,7 @@
 // rather than the `abide-bound` face. Both lanes then answer 500 rather than 200, 2 of 2.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { addressOf, appFixture, BIN, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

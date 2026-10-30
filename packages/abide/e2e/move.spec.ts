@@ -30,6 +30,7 @@
 // the whole reason this file is in the browser lane rather than beside them.
 
 import { execFileSync } from 'node:child_process'
+
 import { expect, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname

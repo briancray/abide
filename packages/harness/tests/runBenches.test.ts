@@ -4,6 +4,7 @@
 import { expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs' // bun has no temporary-directory api of its own
 import { tmpdir } from 'node:os' // nor a reading of the system's temporary directory
+
 import { inAFreshProcess, spawned } from '@abide/harness/gate'
 
 const REPORT = new URL('../src/report/index.ts', import.meta.url).pathname

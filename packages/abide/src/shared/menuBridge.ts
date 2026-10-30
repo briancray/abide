@@ -5,8 +5,7 @@
  * page inside a desktop app loads. 38.88.
  */
 export function menuBridge():
-    | { postMessage(message: string): void }
-    | undefined {
+    { postMessage(message: string): void } | undefined {
     return (
         globalThis as {
             webkit?: {

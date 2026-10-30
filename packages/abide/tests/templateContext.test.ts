@@ -2,7 +2,9 @@
 // held to the parser's.
 
 import { expect, test } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
+
 import { parseAbide } from '#compiler/parseAbide.ts'
 import { TEMPLATE_BLOCKS } from '#compiler/TEMPLATE_BLOCKS.ts'
 import { templateContext } from '#compiler/templateContext.ts'

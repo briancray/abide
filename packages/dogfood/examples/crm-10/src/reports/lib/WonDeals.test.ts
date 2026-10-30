@@ -1,7 +1,9 @@
 import { expect, spyOn } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
 import { gate } from '@abide/harness/gate'
+
 import { money } from './money.ts'
 import WonDeals from './WonDeals.abide'
 

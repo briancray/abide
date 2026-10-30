@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
+
 import { flushSync } from '@abide/abide'
 import { measure, mount } from '@abide/harness/abide'
+
 import DealFeed from './DealFeed.abide'
 
 test('an update rewrites one amount and builds nothing', async () => {

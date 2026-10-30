@@ -1,8 +1,9 @@
 <script>
 import { reactive } from '@abide/abide'
+
 import { preferenceStore } from './preferenceStore.ts'
-import StageTile from './StageTile.abide'
 import { STAGES } from './STAGES.ts'
+import StageTile from './StageTile.abide'
 
 const VIEWS = ['board', 'list']
 
@@ -11,14 +12,14 @@ let view = reactive('board', { store: preferenceStore('view') })
 </script>
 
 <div class="tabs">
-{#for one of VIEWS}
-    <button aria-selected={view === one} onclick={() => (view = one)}>
-        {one}</button>
-{/for}
+    {#for one of VIEWS}
+        <button aria-selected={view === one} onclick={() => (view = one)}>
+            {one}</button>
+    {/for}
 </div>
 
 <ul class={view === 'board' ? 'tiles' : 'fields'}>
-{#for stage of STAGES}
-    <StageTile stage={stage}/>
-{/for}
+    {#for stage of STAGES}
+        <StageTile stage={stage} />
+    {/for}
 </ul>

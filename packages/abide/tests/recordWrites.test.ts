@@ -3,10 +3,11 @@
 // not keep them. Anything else is writes landing somewhere else on a browser, silently.
 
 import { expect, test } from 'bun:test'
+
+import { applyPatch } from '#shared/applyPatch.ts'
 import type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
 import { PATCHES } from '#shared/reactive/PATCHES.ts'
 import { recordWrites } from '#shared/reactive/recordWrites.ts'
-import { applyPatch } from '#shared/applyPatch.ts'
 
 type Row = { id: string; name: string; place: { city: string } }
 

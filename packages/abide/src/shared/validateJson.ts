@@ -13,8 +13,8 @@
 // `description`, `default` and the rest say nothing about whether a value is valid, and a
 // generated document carries them.
 
-import type { Issues } from './Issues.ts'
 import { isRecord } from './isRecord.ts'
+import type { Issues } from './Issues.ts'
 import { issuesOf } from './issuesOf.ts'
 import type { JsonValue } from './JsonValue.ts'
 import { note } from './note.ts'

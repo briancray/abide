@@ -3,6 +3,7 @@
 // path (19.5), which is what `jsonSchema` carries into the Standard form of `Schema`.
 
 import { expect, test } from 'bun:test'
+
 import { GET } from '#server'
 import type { JsonValue, StandardSchemaV1 } from '#shared'
 import { jsonSchema, reactive, validateJson } from '#shared'
@@ -390,8 +391,7 @@ test('const compares by value, not by serialization', () => {
 // so the initial value is refused too and a read would throw what `set` handed back (2.2).
 // What a gate hands back from `set`; `Failures` is `never` where no refusal is declared.
 type Refusal =
-    | { name: string; data: string[] | Record<string, string[]> }
-    | undefined
+    { name: string; data: string[] | Record<string, string[]> } | undefined
 
 test('a bare JSON Schema document refuses, naming the wrapper', () => {
     const gated = reactive(1, { schema: { type: 'number' } as never })

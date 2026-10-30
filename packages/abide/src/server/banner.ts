@@ -1,6 +1,8 @@
 import { networkInterfaces } from 'node:os' // bun exposes no network interface list of its own
+
 import { useColor } from '#shared/log.ts'
 import { paint as painted } from '#shared/paint.ts'
+
 import type { AppPackage } from './config.ts'
 
 /**

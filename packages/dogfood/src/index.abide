@@ -1,5 +1,6 @@
 <script>
 import { url } from '@abide/abide'
+
 import Doc from '#src/lib/Doc.abide'
 import Lead from '#src/lib/Lead.abide'
 import Section from '#src/lib/Section.abide'
@@ -7,12 +8,12 @@ import Section from '#src/lib/Section.abide'
 
 <Doc>
     <p>In abide a value on the server is something a page reads, and reading it loads it. The
-    handler you would have written anyway is the whole of the API, its type is the same on both
-    sides, and loading, reloading, streaming and failing are all one type.</p>
+        handler you would have written anyway is the whole of the API, its type is the same on both
+        sides, and loading, reloading, streaming and failing are all one type.</p>
 
     <p>These docs build one app, a CRM, in ten chapters. Each chapter adds what the CRM needs next,
-    and ends with the CRM as an app you can download and run. Every card is a file from that app,
-    with the tests and the bench the app runs on it.</p>
+        and ends with the CRM as an app you can download and run. Every card is a file from that app,
+        with the tests and the bench the app runs on it.</p>
 
     <Section title="1. Start an app">
         <Lead of="/guide/start-an-app" />

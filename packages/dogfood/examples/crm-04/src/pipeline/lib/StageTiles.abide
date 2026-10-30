@@ -4,6 +4,6 @@ import StageValue from './StageValue.abide'
 </script>
 
 <div class="row">
-    <StageCount/>
-    <StageValue/>
+    <StageCount />
+    <StageValue />
 </div>

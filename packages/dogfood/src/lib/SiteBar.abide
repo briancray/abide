@@ -6,6 +6,7 @@
 // `aria-current="true"` rather than `"page"`: a tab marks the PLACE you are in, and the sidebar's
 // link is the page — two `"page"` marks on one document would each claim the same thing.
 import { route, url } from '@abide/abide'
+
 //
 // SPANS EVERY COLUMN of the body grid, and its own two are the sidebar's and the reading column's,
 // so the brand sits over the nav and the tabs start where a page's title does. Sticky, which is why
@@ -26,12 +27,12 @@ const TAB =
 </script>
 
 {#if !isFramed(route.name())}
-<header class="site sticky top-0 z-1 col-span-full grid h-bar grid-cols-[15.5rem_minmax(0,1fr)] border-b border-rule bg-paper max-lg:grid-cols-[auto_minmax(0,1fr)]">
-    <a class="brand flex items-baseline gap-tight self-center px-4 font-display text-title/5 font-bold tracking-display text-ink no-underline *:font-mono *:text-micro/2 *:font-medium *:tracking-brand *:text-muted *:uppercase" href={url('/')}>abide<span>docs</span></a>
-    <nav class="flex gap-flow overflow-x-auto px-10 max-lg:px-5" aria-label="Site">
-        {#for tab of SITE_TABS}
-            {#if tab.href === tabOf(route.name())}<a class="{TAB} border-signal text-ink" href={url(tab.href)} aria-current="true">{tab.label}</a>{:else}<a class="{TAB} border-transparent text-muted hover:text-ink" href={url(tab.href)}>{tab.label}</a>{/if}
-        {/for}
-    </nav>
-</header>
+    <header class="site sticky top-0 z-1 col-span-full grid h-bar grid-cols-[15.5rem_minmax(0,1fr)] border-b border-rule bg-paper max-lg:grid-cols-[auto_minmax(0,1fr)]">
+        <a class="brand flex items-baseline gap-tight self-center px-4 font-display text-title/5 font-bold tracking-display text-ink no-underline *:font-mono *:text-micro/2 *:font-medium *:tracking-brand *:text-muted *:uppercase" href={url('/')}>abide<span>docs</span></a>
+        <nav class="flex gap-flow overflow-x-auto px-10 max-lg:px-5" aria-label="Site">
+            {#for tab of SITE_TABS}
+                {#if tab.href === tabOf(route.name())}<a class="{TAB} border-signal text-ink" href={url(tab.href)} aria-current="true">{tab.label}</a>{:else}<a class="{TAB} border-transparent text-muted hover:text-ink" href={url(tab.href)}>{tab.label}</a>{/if}
+            {/for}
+        </nav>
+    </header>
 {/if}

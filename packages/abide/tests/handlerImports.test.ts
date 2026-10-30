@@ -9,8 +9,10 @@
 // still probes.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { serveCompilation } from '#server/abideModules.ts'
 import { HANDLER_SUFFIX } from '#server/MODULE_QUERIES.ts'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 afterAll(removeTemporaryModules)
@@ -44,7 +46,9 @@ export { relative, withExtension, withoutExtension }
         tables: {},
     })
     const spellings = await import(`${dir}/lib/spellings.ts`)
-    const mounted = await import(`${dir}/media/getGrid.handler.ts${HANDLER_SUFFIX}`)
+    const mounted = await import(
+        `${dir}/media/getGrid.handler.ts${HANDLER_SUFFIX}`
+    )
     expect(spellings.withExtension).toBe(mounted.default)
     expect(spellings.withoutExtension).toBe(mounted.default)
     expect(spellings.relative).toBe(mounted.default)

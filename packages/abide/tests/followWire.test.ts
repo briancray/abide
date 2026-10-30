@@ -3,12 +3,14 @@
 // asserted is what the wire sends and what the copy does with what it is sent.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { flushSync, invalidate, refresh, watch } from '#shared'
 import { answerOf } from '#shared/answerOf.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import type { Reactive } from '#shared/reactive/index.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { wire } from '#ui/wire.ts'
+
 import { disarmMuxes } from './disarmMuxes.ts'
 
 type Sent = {

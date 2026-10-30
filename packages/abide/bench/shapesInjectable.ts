@@ -3,8 +3,8 @@
 // dictionary-mode candidate in V8 and is merely large in JSC, so the shape that wins on
 // retained bytes may lose on every property access.
 import {
-    type BatchSpec,
     batch,
+    type BatchSpec,
     emulatedDom,
     type Sample,
 } from '@abide/harness/report'

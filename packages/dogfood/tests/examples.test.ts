@@ -3,7 +3,9 @@
 // report, so a red one here is a card claiming a test the app fails.
 
 import { expect, test } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
+
 import { CHAPTER_FEATURES } from '../scripts/CHAPTER_FEATURES.ts'
 import { DOGFOOD } from './docsPages.ts'
 

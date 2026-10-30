@@ -3,7 +3,9 @@
 // call counted — the contract is "tells the window once per turn", which the menus alone cannot show.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { flushSync, reactive } from '#shared'
+
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { closeTyped, renderPage } from './typed.ts'
 

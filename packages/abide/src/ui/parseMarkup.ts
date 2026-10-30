@@ -50,7 +50,8 @@ export function parseMarkup(parent: Node, markup: string): DocumentFragment {
         TEMPLATES.set(document, template)
     }
     const space = namespaceUnder(parent)
-    const wrapper = space === HTML_NAMESPACE ? undefined : space === SVG ? 'svg' : 'math'
+    const wrapper =
+        space === HTML_NAMESPACE ? undefined : space === SVG ? 'svg' : 'math'
     if (wrapper === undefined) {
         template.innerHTML = markup
         return template.content

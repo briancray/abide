@@ -7,10 +7,10 @@ const density = reactive(() => cookies().get('density') ?? 'comfortable')
 </script>
 
 <div class="tabs">
-{#for one of DENSITIES}
-    <button aria-selected={density === one}
-        onclick={() => cookies().set('density', one)}>{one}</button>
-{/for}
+    {#for one of DENSITIES}
+        <button aria-selected={density === one}
+            onclick={() => cookies().set('density', one)}>{one}</button>
+    {/for}
 </div>
 
 <ul class={density === 'compact' ? 'fields gap-0' : 'fields gap-flow'}>

@@ -12,8 +12,9 @@
 
 import { namedLogger } from '#shared/log.ts'
 import { refuse } from '#shared/refuse.ts'
-import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
+
 import { type McpReply, McpSurface } from './generatedSurfaces.ts'
+import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
 import { request, within } from './requestScope.ts'
 
 /** A piece of a turn: words, or an image as base64 with its type. */

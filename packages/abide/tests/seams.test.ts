@@ -1,5 +1,7 @@
 import { afterAll, expect, test } from 'bun:test'
+
 import { emitClient, parseAbide } from '@abide/abide/compiler'
+
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 afterAll(removeTemporaryModules)

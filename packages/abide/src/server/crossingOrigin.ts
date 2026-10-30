@@ -4,6 +4,7 @@
 
 import type { Failed } from '#shared/Failed.ts'
 import { refuse } from '#shared/refuse.ts'
+
 import { appOrigin } from './config.ts'
 
 /**

@@ -5,6 +5,7 @@
 import type { Problem } from '#shared/Failed.ts'
 import type { Framed } from '#shared/framing.ts'
 import { REFUSAL_KEY } from '#shared/REFUSAL_KEY.ts'
+
 import { HEARTBEAT_MILLISECONDS } from './HEARTBEAT_MILLISECONDS.ts'
 
 /** AN EVENT STREAM OPENS ON A COMMENT, so a proxy has bytes to pass before the first event. */

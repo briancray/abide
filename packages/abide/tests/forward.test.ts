@@ -9,7 +9,9 @@
 // to the document but those anchors.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { elementHere, regionFound, regionHere, textHere } from '#ui'
+
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { clientOf, closeTyped } from './typed.ts'
 

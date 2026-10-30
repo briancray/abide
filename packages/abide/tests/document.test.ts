@@ -4,12 +4,14 @@
 // own `<html>` and `<body>`, as on any element.
 
 import { afterAll, expect, test } from 'bun:test'
+
 import { parseAbide } from '#compiler'
 import { compileApp } from '#compiler/compileApp.ts'
 import { emitSource } from '#compiler/emitSource.ts'
 import { render } from '#server'
 import { placement } from '#server/placement.ts'
 import { flushSync } from '#shared'
+
 import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import {
@@ -103,10 +105,9 @@ const { number } = props<{ number: string }>()
 // `emitComponent`; the bytes carry neither `lang` nor the body's class.
 test('a component rendered on its own writes the document — 35.6, 35.15', async () => {
     const file = parseAbide(INVOICE)
-    const reads = await (await typedSession()).reads(
-        `${TYPED_ROOT}src/Invoice.abide`,
-        file,
-    )
+    const reads = await (
+        await typedSession()
+    ).reads(`${TYPED_ROOT}src/Invoice.abide`, file)
     const emitted = emitSource({
         ...placement('lib/Invoice.abide'),
         file,

@@ -10,6 +10,7 @@ import {
     constants,
     gzipSync,
 } from 'node:zlib' // bun has no brotli, and the lane under test compresses gzip with zlib's
+
 import { compressAnswer } from '#server/compressAnswer.ts'
 import { ENCODINGS, negotiateEncoding } from '#server/negotiateEncoding.ts'
 import { prefers } from '#server/prefers.ts'

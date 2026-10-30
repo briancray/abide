@@ -1,8 +1,10 @@
 import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs' // bun has no sync mkdtemp/symlink/rm of its own
 import { tmpdir } from 'node:os' // bun exposes no temp-directory helper of its own
+
 import { compileApp } from '#compiler/compileApp.ts'
 import { isServerFile, placement, placeOf } from '#server/placement.ts'
+
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'

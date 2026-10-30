@@ -1,6 +1,7 @@
 import { STYLE_QUERY } from '#server/MODULE_QUERIES.ts'
-import type { JsonValue } from '#shared/JsonValue.ts'
 import type { Placement } from '#server/placement.ts'
+import type { JsonValue } from '#shared/JsonValue.ts'
+
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import { emitClient } from './emitClient.ts'
 import { emitComponent } from './emitComponent.ts'

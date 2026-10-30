@@ -26,13 +26,14 @@ import {
     isVariableStatement,
 } from 'typescript/unstable/ast/is'
 import {
-    type Symbol as CheckedSymbol,
     type Checker,
     SignatureKind,
+    type Symbol as CheckedSymbol,
     SymbolFlags,
     type Type,
     TypeFlags,
 } from 'typescript/unstable/async'
+
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { CheckerAnswer } from './CheckerAnswer.ts'
 import {
@@ -45,13 +46,13 @@ import {
     TRANSPARENT,
 } from './classifyRead.ts'
 import type { Finding } from './Finding.ts'
+import type { AbideFile } from './parseAbide.ts'
 import {
     holdsReactive,
     type Position,
     type PositionKind,
     type PositionTable,
 } from './PositionTable.ts'
-import type { AbideFile } from './parseAbide.ts'
 import { INLINE_PROPS, type Span } from './projectShadow.ts'
 import { REACTIVE_MEMBERS } from './REACTIVE_MEMBERS.ts'
 import { optionNamed, reactiveOptions } from './reactiveOptions.ts'

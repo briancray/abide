@@ -4,6 +4,7 @@
 // the same page, and only the count tells them apart (41.13).
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 

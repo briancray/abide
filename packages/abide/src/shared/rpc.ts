@@ -17,12 +17,11 @@ import { DERIVED_ARGS } from './DERIVED_ARGS.ts'
 import { type Failed, isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { HandlerRoute } from './HandlerRoute.ts'
-import type { Issues } from './Issues.ts'
 import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
+import type { Issues } from './Issues.ts'
 import { compose, type Middleware } from './Middleware.ts'
 import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
 import { principalRotated } from './principalRotated.ts'
-import { RPC_SERVER } from './RPC_SERVER.ts'
 import {
     contractOf,
     type Gated,
@@ -42,18 +41,19 @@ import {
     type Keyed,
     type OptionalParameter,
     type Reactive,
-    type Refusals,
     reactive,
+    type Refusals,
     type Shaping,
     STREAMING,
-    type Streams,
     streamingOrSettled,
+    type Streams,
 } from './reactive/index.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
 import { dropAnswered } from './reactive/Reactive.ts'
-import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
+import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { checkArgs, validationError } from './refuse.ts'
+import { RPC_SERVER } from './RPC_SERVER.ts'
 import { rpcRequest } from './rpcRequest.ts'
 import type { Schema } from './Schema.ts'
 
@@ -150,8 +150,7 @@ type Annotated<Args> = 0 extends 1 & Args
       : Derived<Exclude<Args, undefined>>
 // `Member` is distributed over and `Whole` is not: a member that is not the whole is one arm of a union.
 type Derived<Member, Whole = Member> = Member extends
-    | readonly unknown[]
-    | ((...given: never[]) => unknown)
+    readonly unknown[] | ((...given: never[]) => unknown)
     ? never
     : Member extends object
       ? [Whole] extends [Member]
@@ -215,8 +214,7 @@ export type Plain = { invalidate?: never }
 // every function arm, whose `& Plain` only passes assignability. The guard is the whole parameter
 // because `& Plain` kept `GET(0)` the literal `0`, and a bound of `Plain` refuses every primitive.
 type Held<Accepted> = Accepted extends
-    | ((...given: never[]) => unknown)
-    | { invalidate: unknown }
+    ((...given: never[]) => unknown) | { invalidate: unknown }
     ? never
     : Accepted | PromiseLike<Accepted>
 
@@ -262,8 +260,7 @@ type Declare = {
     >
     <Chunk, Shaped = Chunk[], Gate = Schema<Chunk[]>>(
         handler: (() =>
-            | AsyncGenerator<Chunk>
-            | Promise<AsyncGenerator<Chunk>>) &
+            AsyncGenerator<Chunk> | Promise<AsyncGenerator<Chunk>>) &
             Plain,
         options?: Shaping<Chunk[], Shaped, never, Gate> & RpcOptions<undefined>,
     ): Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Chunk[]>, Chunk>

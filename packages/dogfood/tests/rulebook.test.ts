@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
+
 import { SyntaxKind } from 'typescript/unstable/ast'
+
 import { tokenize } from '../../abide/src/compiler/tokenize.ts'
 import { rulebookClauses } from '../scripts/rulebookClauses.ts'
 

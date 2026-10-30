@@ -1,4 +1,5 @@
 import type { Store } from '@abide/abide'
+
 import getPreference from '../getPreference.handler.ts'
 import setPreference from '../setPreference.handler.ts'
 

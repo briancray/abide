@@ -4,6 +4,7 @@
 
 import type { TestRow } from '@abide/harness/rows'
 import { runBenches } from '@abide/harness/runner'
+
 import type { ExampleResults } from '../src/lib/ExampleResults.ts'
 
 const EXAMPLES = new URL('../examples/', import.meta.url)

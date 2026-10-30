@@ -17,6 +17,7 @@ import {
     type Sample,
 } from '@abide/harness/report'
 import { allocated, closures } from '@abide/harness/server'
+
 import { openBenchCompiler, type Render } from './openBenchCompiler.ts'
 import {
     abideCardSource,
@@ -124,7 +125,8 @@ function bytes(flat: string, nested: string, size: number): void {
         Bun.gzipSync(new TextEncoder().encode(text)).length
     console.log(
         `\n  ANCHORS — ${((plain(nested) - plain(flat)) / size).toFixed(1)} bytes a row, ${(
-            (zipped(nested) - zipped(flat)) / size
+            (zipped(nested) - zipped(flat)) /
+            size
         ).toFixed(2)} gzipped`,
     )
 }
@@ -145,12 +147,14 @@ function allocations(flat: Render, nested: Render, size: number): void {
     const nestedObjects = allocated(nested, 20).perRep.Object ?? 0
     console.log(
         `  CLOSURES — inline ${flatClosures}, component ${nestedClosures} (${(
-            (nestedClosures - flatClosures) / size
+            (nestedClosures - flatClosures) /
+            size
         ).toFixed(2)} a row)`,
     )
     console.log(
         `  OBJECTS — inline ${flatObjects.toFixed(1)}, component ${nestedObjects.toFixed(1)} a render (${(
-            (nestedObjects - flatObjects) / size
+            (nestedObjects - flatObjects) /
+            size
         ).toFixed(2)} a row)`,
     )
 }

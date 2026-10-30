@@ -3,15 +3,16 @@ import type { CheckerAnswer } from '#compiler/CheckerAnswer.ts'
 import { emitSource } from '#compiler/emitSource.ts'
 import { Lowering } from '#compiler/Lowering.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
-import { Refusals } from '#compiler/Refusals.ts'
 import { parseSources, readSources } from '#compiler/readSources.ts'
-import { TypeSession } from '#compiler/TypeSession.ts'
+import { Refusals } from '#compiler/Refusals.ts'
 import { type Token, tokenize } from '#compiler/tokenize.ts'
+import { TypeSession } from '#compiler/TypeSession.ts'
 import { placement } from '#server/placement.ts'
 import { renderDocument } from '#server/render.ts'
 import { flushSync } from '#shared'
 import { pageRegion } from '#ui/regions.ts'
 import type { Scope } from '#ui/Scope.ts'
+
 import { servedModules } from './servedModules.ts'
 
 // THE CHECKER DECIDES WHAT IS REACTIVE, so a test that means "`n` is a `Reactive` here" has to say

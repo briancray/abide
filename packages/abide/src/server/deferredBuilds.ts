@@ -10,6 +10,7 @@
 
 import { regionMarkup } from '#shared/anchorMarkup.ts'
 import { isReactive, isStreaming, loadOf } from '#shared/reactive/index.ts'
+
 import type { Rendered } from './render.ts'
 import type { PageCall } from './requestScope.ts'
 

@@ -2,6 +2,7 @@
 // with it. A `Level` alone, with no router: the head is the chain's, reconciled from all of it.
 
 import { expect, test } from 'bun:test'
+
 import { contributeHead, Level } from '#ui/Level.ts'
 import { reconcileHead } from '#ui/reconcileHead.ts'
 import type { Region } from '#ui/regions.ts'

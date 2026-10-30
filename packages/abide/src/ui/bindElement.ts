@@ -1,6 +1,7 @@
 import { isReactive } from '#shared/reactive/isReactive.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
 import type { Disposer } from '#shared/reactive/watch.ts'
+
 import { holdWhileLeaving } from './leave.ts'
 
 /**

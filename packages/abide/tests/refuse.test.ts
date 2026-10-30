@@ -4,9 +4,10 @@
 // (15.9). None of those can be read off the value that comes back.
 
 import { expect, test } from 'bun:test'
+
 import {
-    type Failed,
     aborted,
+    type Failed,
     flushSync,
     isFailed,
     jsonSchema,

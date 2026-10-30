@@ -20,6 +20,7 @@
 
 import { DEV_ADDRESS } from '#shared/ADDRESSES.ts'
 import { escapeText } from '#shared/escapeText.ts'
+
 import {
     type Compilation,
     serveCompilation,
@@ -34,7 +35,7 @@ import {
     clientBundle,
     type ServedFile,
 } from './clientBundle.ts'
-import { type BootedApp, bootApp, originUnder } from './createApp.ts'
+import { bootApp, type BootedApp, originUnder } from './createApp.ts'
 import { keepServing } from './faultPolicy.ts'
 import { type Manifest, NO_MANIFEST } from './manifestOf.ts'
 import { admitsMux, muxSocketOptions } from './muxUpgrade.ts'

@@ -7,7 +7,9 @@
 // (24.5) while a sibling running concurrently names its own.
 
 import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLocalStorage and has no context-carrying api of its own
+
 import { writeSpan } from '#shared/log.ts'
+
 import { randomToken } from './randomToken.ts'
 import {
     currentRequestScope,

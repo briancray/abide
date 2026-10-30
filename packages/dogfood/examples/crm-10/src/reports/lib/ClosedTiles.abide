@@ -1,5 +1,6 @@
 <script>
 import { reactive } from '@abide/abide'
+
 import { closedTotals } from './closedTotals.ts'
 
 let days = reactive(7)

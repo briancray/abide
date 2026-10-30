@@ -5,6 +5,7 @@
 // `bun packages/harness/scripts/benchShared.ts`, V8 with `bun run bench` — `shared.spec.ts`, which
 // the e2e gate runs only as a one-rep smoke.
 import { jsonSchema, reactive, validateJson } from '@abide/abide'
+
 import { putOwn } from '#shared/putOwn.ts'
 import { canonicalKey } from '#shared/reactive/canonicalKey.ts'
 
