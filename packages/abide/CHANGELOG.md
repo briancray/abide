@@ -1,5 +1,16 @@
 # @abide/abide
 
+## 0.119.0
+
+### Minor Changes
+
+- a9f8ad1: abide format formats every .abide — its scripts, styles and expressions by bun fmt, its markup by its nesting — and leaves one as written where the template would change (RULEBOOK 38.125-38.130) ([`fb0b837`](https://github.com/briancray/abide/commit/fb0b837b1264a4193371388a61fb64ec81f16638))
+
+### Patch Changes
+
+- a9f8ad1: bun fmt replaces biome, and an unused local or parameter is a type error ([`259f9b1`](https://github.com/briancray/abide/commit/259f9b18b9c2bd12b6ab5c9d9784adb2b8d2edd1))
+- a9f8ad1: format the repo with abide format and bun fmt ([`d7cd46d`](https://github.com/briancray/abide/commit/d7cd46da1e0cd523631d38d923f8bb08d1f0716f))
+
 ## 0.118.0
 
 ### Minor Changes
