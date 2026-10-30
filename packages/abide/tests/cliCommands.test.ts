@@ -2,7 +2,9 @@
 // against a scaffolded tree or a served app.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
+
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -73,7 +75,6 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
         'src/index.test.ts',
         'package.json',
         'tsconfig.json',
-        'biome.json',
         'AGENTS.md',
         'CLAUDE.md',
         // Written rather than copied: a packer drops both from the tarball.

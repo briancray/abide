@@ -1,0 +1,18 @@
+{
+    "formatter": {
+        "external": {
+            "command": "bun",
+            "arguments": [
+                "fmt",
+                "--no-script",
+                "--stdin-filepath",
+                "{buffer_path}"
+            ]
+        }
+    },
+    "languages": {
+        "abide": {
+            "formatter": "language_server"
+        }
+    }
+}

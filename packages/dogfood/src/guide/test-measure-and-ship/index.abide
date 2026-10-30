@@ -1,47 +1,48 @@
 <script>
 import { url } from '@abide/abide'
-import Code from '#src/lib/Code.abide'
-import Doc from '#src/lib/Doc.abide'
-import Example from '#src/lib/Example.abide'
-import Section from '#src/lib/Section.abide'
-import Snippet from '#src/lib/Snippet.abide'
 import bunfigSource from 'crm-10/bunfig.toml' with { type: 'text' }
+import topDealsSpecSource from 'crm-10/e2e/TopDeals.test.ts' with { type: 'text' }
 import launcherSource from 'crm-10/src/launcher.abide' with { type: 'text' }
 import getSummarySource from 'crm-10/src/reports/getSummary.handler.ts' with { type: 'text' }
 import reportsPageSource from 'crm-10/src/reports/index.abide' with { type: 'text' }
 import ClosedTiles from 'crm-10/src/reports/lib/ClosedTiles.abide'
 import closedTilesSource from 'crm-10/src/reports/lib/ClosedTiles.abide' with { type: 'text' }
+import closedTilesTestSource from 'crm-10/src/reports/lib/ClosedTiles.test.ts' with { type: 'text' }
 import closedTotalsSource from 'crm-10/src/reports/lib/closedTotals.ts' with { type: 'text' }
 import DealsExport from 'crm-10/src/reports/lib/DealsExport.abide'
 import dealsExportSource from 'crm-10/src/reports/lib/DealsExport.abide' with { type: 'text' }
+import dealsExportTestSource from 'crm-10/src/reports/lib/DealsExport.test.ts' with { type: 'text' }
 import dealsOfSource from 'crm-10/src/reports/lib/dealsOf.ts' with { type: 'text' }
 import Forecast from 'crm-10/src/reports/lib/Forecast.abide'
 import forecastSource from 'crm-10/src/reports/lib/Forecast.abide' with { type: 'text' }
+import forecastBenchSource from 'crm-10/src/reports/lib/Forecast.bench.ts' with { type: 'text' }
+import forecastTestSource from 'crm-10/src/reports/lib/Forecast.test.ts' with { type: 'text' }
 import forecastLogicSource from 'crm-10/src/reports/lib/forecast.ts' with { type: 'text' }
 import moneySource from 'crm-10/src/reports/lib/money.ts' with { type: 'text' }
 import PipelineSummary from 'crm-10/src/reports/lib/PipelineSummary.abide'
 import pipelineSummarySource from 'crm-10/src/reports/lib/PipelineSummary.abide' with { type: 'text' }
+import pipelineSummaryTestSource from 'crm-10/src/reports/lib/PipelineSummary.test.ts' with { type: 'text' }
 import rankDealsSource from 'crm-10/src/reports/lib/rankDeals.ts' with { type: 'text' }
 import StageTiles from 'crm-10/src/reports/lib/StageTiles.abide'
 import stageTilesSource from 'crm-10/src/reports/lib/StageTiles.abide' with { type: 'text' }
+import stageTilesTestSource from 'crm-10/src/reports/lib/StageTiles.test.ts' with { type: 'text' }
 import summarizeStageSource from 'crm-10/src/reports/lib/summarizeStage.ts' with { type: 'text' }
 import TopDeals from 'crm-10/src/reports/lib/TopDeals.abide'
 import topDealsSource from 'crm-10/src/reports/lib/TopDeals.abide' with { type: 'text' }
 import WonDeals from 'crm-10/src/reports/lib/WonDeals.abide'
 import wonDealsSource from 'crm-10/src/reports/lib/WonDeals.abide' with { type: 'text' }
-import closedTilesTestSource from 'crm-10/src/reports/lib/ClosedTiles.test.ts' with { type: 'text' }
-import dealsExportTestSource from 'crm-10/src/reports/lib/DealsExport.test.ts' with { type: 'text' }
-import forecastBenchSource from 'crm-10/src/reports/lib/Forecast.bench.ts' with { type: 'text' }
-import forecastTestSource from 'crm-10/src/reports/lib/Forecast.test.ts' with { type: 'text' }
-import pipelineSummaryTestSource from 'crm-10/src/reports/lib/PipelineSummary.test.ts' with { type: 'text' }
-import stageTilesTestSource from 'crm-10/src/reports/lib/StageTiles.test.ts' with { type: 'text' }
-import topDealsSpecSource from 'crm-10/e2e/TopDeals.test.ts' with { type: 'text' }
 import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { type: 'text' }
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+import Snippet from '#src/lib/Snippet.abide'
 </script>
 
 <Doc>
     <p>Each card is a file of the reports page, beside the test or the bench that proves it. The
-    commands that ship the CRM close the chapter.</p>
+        commands that ship the CRM close the chapter.</p>
 
     <Section title="A test holds the app with `createApp`">
         <Example
@@ -59,10 +60,10 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </Example>
 
         <p><code>createApp</code> builds the app from the directory it runs in, the way
-        <code>abide start</code> does, and binds no port. Run <code>bun test</code> from the app's
-        own directory. <code>app.fetch</code> takes a <code>Request</code> through everything a
-        served one goes through: the middleware, the argument checks, the headers and the status a
-        refusal carries.</p>
+            <code>abide start</code> does, and binds no port. Run <code>bun test</code> from the app's
+            own directory. <code>app.fetch</code> takes a <code>Request</code> through everything a
+            served one goes through: the middleware, the argument checks, the headers and the status a
+            refusal carries.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -77,11 +78,11 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </table>
 
         <p>Hold the app with <code>await using</code> and it stops when the test ends, a failed one
-        included. An app nobody stops leaves open whatever <code>onStart</code> opened, and the
-        suite hangs with no report at all.</p>
+            included. An app nobody stops leaves open whatever <code>onStart</code> opened, and the
+            suite hangs with no report at all.</p>
 
         <p>A <code>.test.ts</code> has no address, so a test sits beside the file it tests and is
-        never served.</p>
+            never served.</p>
     </Section>
 
     <Section title="A test mounts a component and counts what a click did">
@@ -100,13 +101,13 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </Example>
 
         <p><code>mount</code> renders the component the way the server does and hydrates it with
-        the module the browser loads, so the test clicks the listener a reader clicks. It hands
-        back a <code>Mounted</code>, and <code>using</code> stops it when the test ends.</p>
+            the module the browser loads, so the test clicks the listener a reader clicks. It hands
+            back a <code>Mounted</code>, and <code>using</code> stops it when the test ends.</p>
 
         <p><code>measure</code> counts every DOM call its body makes. A version that rebuilt the
-        tiles shows the same numbers on screen and fails on <code>nodesCreated</code>. The one from
-        <code>@abide/harness/abide</code> hands back an <code>AbideWork</code>: the DOM counts, plus
-        <code>wakes</code>, <code>bindingRuns</code> and <code>descents</code> from abide itself.</p>
+            tiles shows the same numbers on screen and fails on <code>nodesCreated</code>. The one from
+            <code>@abide/harness/abide</code> hands back an <code>AbideWork</code>: the DOM counts, plus
+            <code>wakes</code>, <code>bindingRuns</code> and <code>descents</code> from abide itself.</p>
 
         <table>
             <thead><tr><th>Row of a <code>Work</code></th><th>Counts</th></tr></thead>
@@ -123,10 +124,10 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </table>
 
         <p>A DOM member the harness does not count throws while a case is open, rather than
-        reading as zero. <code>patchSet()</code> lists every member it does count.</p>
+            reading as zero. <code>patchSet()</code> lists every member it does count.</p>
 
         <p>The DOM under <code>bun test</code> comes from one line in <code>bunfig.toml</code>,
-        which the scaffold writes:</p>
+            which the scaffold writes:</p>
 
         <Snippet source={bunfigSource} path="bunfig.toml" />
 
@@ -140,9 +141,9 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </table>
 
         <p>The emulated DOM is JavaScript, so a count from it holds in a browser and a millisecond
-        does not. Count under <code>bun test</code>, and time in a bench. The DOM counts alone come
-        from <code>@abide/harness/measure</code> › <code>measure</code>, which hands back a plain
-        <code>Work</code>.</p>
+            does not. Count under <code>bun test</code>, and time in a bench. The DOM counts alone come
+            from <code>@abide/harness/measure</code> › <code>measure</code>, which hands back a plain
+            <code>Work</code>.</p>
     </Section>
 
     <Section title="Publish a count the DOM cannot see">
@@ -161,24 +162,24 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </Example>
 
         <p>A recomputation writes nothing to the DOM, so no DOM count can see it. The module counts
-        its own passes on a record under <code>globalThis.__HARNESS_WORK__</code>, the global
-        <code>PUBLISHED_WORK_KEY</code> names. <code>measure</code> zeroes every published record
-        when a case opens, and copies it into <code>work.published</code>, a
-        <code>PublishedWork</code>, when it closes.</p>
+            its own passes on a record under <code>globalThis.__HARNESS_WORK__</code>, the global
+            <code>PUBLISHED_WORK_KEY</code> names. <code>measure</code> zeroes every published record
+            when a case opens, and copies it into <code>work.published</code>, a
+            <code>PublishedWork</code>, when it closes.</p>
 
         <p><code>publishedBy</code> reads one source back by the fields you expect. A source that
-        published nothing reads as <code>null</code>, and a field the record does not carry
-        throws, so a misspelled counter never reads as one that stayed at zero.</p>
+            published nothing reads as <code>null</code>, and a field the record does not carry
+            throws, so a misspelled counter never reads as one that stayed at zero.</p>
 
         <p>The three tiles read one derived value, so the summary runs once however many tiles
-        show it. Give each tile its own call and the test reports three.</p>
+            show it. Give each tile its own call and the test reports three.</p>
     </Section>
 
     <Section title="A gate fails with the fix taken out">
         <Example
             id="crm-10-gate"
             app="crm-10"
-            title={'`gate(name, { revert, worth }, body)` — a test that runs its own revert'}
+            title={    '`gate(name, { revert, worth }, body)` — a test that runs its own revert'}
             summary="Every amount on the reports goes through one formatter. Winning a deal builds none, and the gate puts the formatter-per-amount version back to prove the test can tell."
             files={{
                 'src/reports/lib/WonDeals.abide': wonDealsSource,
@@ -190,15 +191,15 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </Example>
 
         <p>A test about work passes with the fix in or out, because the screen reads the same
-        either way. <code>gate</code> carries the version the fix replaced, as a
-        <code>GateSpec</code>: <code>revert</code> installs it and hands back the undo, and
-        <code>worth</code> is the number that version reports.</p>
+            either way. <code>gate</code> carries the version the fix replaced, as a
+            <code>GateSpec</code>: <code>revert</code> installs it and hands back the undo, and
+            <code>worth</code> is the number that version reports.</p>
 
         <Code code={`HARNESS_VERIFY_GATES=1 bun test`} />
 
         <p>With that set, every gate runs a second time with the revert installed, and that run
-        passes only if the test fails reporting every number in <code>worth</code>. A test that
-        cannot tell the two versions apart fails here.</p>
+            passes only if the test fails reporting every number in <code>worth</code>. A test that
+            cannot tell the two versions apart fails here.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -226,15 +227,15 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </Example>
 
         <p>A millisecond describes the machine it was taken on. A ratio between two sizes of the
-        same structure says how the cost grows, and that holds on any machine. Near 1, the op costs
-        the same however many deals there are. Near 10, it grows with the deals: the forecast reads
-        every one of them.</p>
+            same structure says how the cost grows, and that holds on any machine. Near 1, the op costs
+            the same however many deals there are. Near 10, it grows with the deals: the forecast reads
+            every one of them.</p>
 
         <p><code>batch</code> times every arm in one run, interleaved, and sizes each sample to a
-        hundred times what the clock can resolve. It runs the first arm against itself too, and
-        the spread between those two runs is the floor. <code>ratio</code> reports a difference
-        inside the floor as a tag rather than a number, and <code>claimOf</code> is the one line a
-        report prints.</p>
+            hundred times what the clock can resolve. It runs the first arm against itself too, and
+            the spread between those two runs is the floor. <code>ratio</code> reports a difference
+            inside the floor as a tag rather than a number, and <code>claimOf</code> is the one line a
+            report prints.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -254,15 +255,15 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </table>
 
         <p><code>batch</code> throws on a duration whose op touched an emulated DOM, and on a sample
-        taken in a parallel test worker. That is why the bench builds no component: it times the
-        derived value the component reads. Run the benches with <code>bun run bench</code>, never
-        inside <code>bun test</code>.</p>
+            taken in a parallel test worker. That is why the bench builds no component: it times the
+            derived value the component reads. Run the benches with <code>bun run bench</code>, never
+            inside <code>bun test</code>.</p>
 
         <p>The <code>bench</code> script is <code>harness-bench</code>, which hands
-        <code>runBenches</code> every <code>*.bench.ts</code> under <code>src</code>, wherever one
-        sits beside the code it times, and prints each
-        arm's time and the claim between them. A bench file's <code>CEILINGS</code> names the most
-        each arm may take, in milliseconds, and the run fails where an arm takes more.</p>
+            <code>runBenches</code> every <code>*.bench.ts</code> under <code>src</code>, wherever one
+            sits beside the code it times, and prints each
+            arm's time and the claim between them. A bench file's <code>CEILINGS</code> names the most
+            each arm may take, in milliseconds, and the run fails where an arm takes more.</p>
     </Section>
 
     <Section title="Find which layer a click spends its time in">
@@ -281,20 +282,20 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </Example>
 
         <p>A faster sort saves at most the part of the click the sort was. Find that part before
-        changing the sort. The code marks its layer with <code>performance.measure</code>, and the
-        spec marks the whole click the same way, from the click to the frame that shows it.</p>
+            changing the sort. The code marks its layer with <code>performance.measure</code>, and the
+            spec marks the whole click the same way, from the click to the frame that shows it.</p>
 
         <p><code>traceOp</code> records what Chromium did over that window, as a
-        <code>Trace</code>: the user timing, and the style recalculations, layouts, paints and
-        forced layouts. <code>shares</code> divides the layer by the op, as a
-        <code>SharesSpec</code> names them, and hands back a <code>Shares</code>.
-        <code>ceilingCpu</code> is the part of the processor's time the layer took.
-        <code>ceilingObserved</code> is zero whenever the whole click fits in a frame, because a
-        person sees the result at the same frame either way.</p>
+            <code>Trace</code>: the user timing, and the style recalculations, layouts, paints and
+            forced layouts. <code>shares</code> divides the layer by the op, as a
+            <code>SharesSpec</code> names them, and hands back a <code>Shares</code>.
+            <code>ceilingCpu</code> is the part of the processor's time the layer took.
+            <code>ceilingObserved</code> is zero whenever the whole click fits in a frame, because a
+            person sees the result at the same frame either way.</p>
 
         <p><code>measuresNamed</code> lists every measure of one name in a trace, and
-        <code>durationOf</code> sums them. The trace is read over the DevTools protocol, so the
-        spec is a Playwright test that runs in Chromium against the served app.</p>
+            <code>durationOf</code> sums them. The trace is read over the DevTools protocol, so the
+            spec is a Playwright test that runs in Chromium against the served app.</p>
     </Section>
 
     <Section title="A render's bytes grow by the same amount per deal">
@@ -313,9 +314,9 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </Example>
 
         <p><code>bytes</code> measures a <code>Response</code>, a <code>Blob</code>, a string or a
-        buffer by its length. One size says little, because the table around the rows is in it
-        too. Three sizes say how the cost grows. An export that repeated earlier rows in every new
-        one passes at 20 deals and fails here.</p>
+            buffer by its length. One size says little, because the table around the rows is in it
+            too. Three sizes say how the cost grows. An export that repeated earlier rows in every new
+            one passes at 20 deals and fails here.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -328,8 +329,8 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
         </table>
 
         <p>The last three read the engine's heap, and throw where a DOM is preloaded, because the
-        DOM's own objects would be counted with yours. Run them through
-        <code>inAFreshProcess</code>.</p>
+            DOM's own objects would be counted with yours. Run them through
+            <code>inAFreshProcess</code>.</p>
     </Section>
 
     <Section title="Test and bench results on a page">
@@ -337,9 +338,9 @@ import wonDealsTestSource from 'crm-10/src/reports/lib/WonDeals.test.ts' with { 
 bun scripts/testRows.ts --scope all --filter reports`} />
 
         <p><code>testRows</code> runs each test file of a <code>TestSuite</code> in a process of its
-        own, and prints one <code>TestRow</code> per line as each file finishes, with a
-        <code>TestCase</code> per test. The cards in this chapter read their results from those
-        rows.</p>
+            own, and prints one <code>TestRow</code> per line as each file finishes, with a
+            <code>TestCase</code> per test. The cards in this chapter read their results from those
+            rows.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -353,7 +354,7 @@ bun scripts/testRows.ts --scope all --filter reports`} />
         </table>
 
         <p>A file whose runner wrote no report is <code>broken</code>, which is different from a
-        red result: a suite that hangs reports nothing.</p>
+            red result: a suite that hangs reports nothing.</p>
     </Section>
 
     <Section title="Check, build and start the CRM">
@@ -361,13 +362,19 @@ bun scripts/testRows.ts --scope all --filter reports`} />
 abide start --port 8080`} />
 
         <p><code>abide check [dir…]</code> type-checks the <code>.abide</code> files as well as
-        the TypeScript, and reports on the line you wrote. <code>abide lsp</code> is the same check
-        in your editor. Run it first in CI, because it is the cheapest failure to report.</p>
+            the TypeScript, and reports on the line you wrote. <code>abide lsp</code> is the same check
+            in your editor. Run it first in CI, because it is the cheapest failure to report.</p>
+
+        <p><code>abide format [--check] [dir…]</code> formats every <code>.abide</code> the way
+            <code>bun fmt</code> formats everything else: its scripts, styles and expressions under
+            the <code>[fmt]</code> options in <code>bunfig.toml</code>, and its markup indented by its
+            nesting. <code>--check</code> writes nothing and fails where a file would change, and
+            <code>abide lsp</code> formats on save the same way.</p>
 
         <p><code>abide build</code> writes content-hashed chunks and a manifest naming them.
-        <code>abide start [--port &lt;n&gt;]</code> serves what was built, and builds first where
-        nothing was. Configuration is checked as it starts, so a misconfigured deployment fails to
-        come up.</p>
+            <code>abide start [--port &lt;n&gt;]</code> serves what was built, and builds first where
+            nothing was. Configuration is checked as it starts, so a misconfigured deployment fails to
+            come up.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -381,7 +388,7 @@ abide start --port 8080`} />
         </table>
 
         <p>A chunk can be cached for a year because changing it changes its address. A public file
-        keeps its address across deploys, so it revalidates instead.</p>
+            keeps its address across deploys, so it revalidates instead.</p>
     </Section>
 
     <Section title="Compile the CRM to a single binary">
@@ -389,11 +396,11 @@ abide start --port 8080`} />
 abide compile --platforms linux-x64,darwin-arm64`} />
 
         <p><code>abide compile [--target] [--out] [--platforms]</code> writes one executable with
-        the built client, the server and the runtime inside it. <code>--target</code> picks one
-        platform, <code>--platforms</code> builds several in one run, and <code>--out</code> names
-        the file. The executable is <code>abide</code> for this one app:
-        <code>./crm-10 start</code> serves it, and <code>config()</code> still reads the
-        environment.</p>
+            the built client, the server and the runtime inside it. <code>--target</code> picks one
+            platform, <code>--platforms</code> builds several in one run, and <code>--out</code> names
+            the file. The executable is <code>abide</code> for this one app:
+            <code>./crm-10 start</code> serves it, and <code>config()</code> still reads the
+            environment.</p>
     </Section>
 
     <Section title="Ship the CRM as a desktop app">
@@ -401,29 +408,29 @@ abide compile --platforms linux-x64,darwin-arm64`} />
 abide bundle --out ~/Applications/CRM.app`} />
 
         <p><code>abide bundle [--out]</code> wraps the compiled executable in a macOS
-        <code>.app</code> that opens the CRM in a window of its own. Its icon is
-        <code>src/public/icon.png</code> · <code>src/public/icon.icns</code>. The first launch
-        offers Start, which runs the app here, and Connect…, which opens one running at a URL.</p>
+            <code>.app</code> that opens the CRM in a window of its own. Its icon is
+            <code>src/public/icon.png</code> · <code>src/public/icon.icns</code>. The first launch
+            offers Start, which runs the app here, and Connect…, which opens one running at a URL.</p>
 
         <Snippet source={launcherSource} path="src/launcher.abide" />
 
         <p><code>src/launcher.abide</code> sits beside the root layout, and what its
-        <code>onLauncher</code> answers sets the window and the forms. The answer is a
-        <code>LauncherOptions</code>: the window's size and floor, and <code>start</code> or
-        <code>connect</code> set to <code>false</code> to drop a form. Markup in the same file
-        replaces the launch page, and is rendered with a <code>Launch</code>, whose
-        <code>fields</code> hold one <code>ConfigField</code> per input the start form asks
-        for.</p>
+            <code>onLauncher</code> answers sets the window and the forms. The answer is a
+            <code>LauncherOptions</code>: the window's size and floor, and <code>start</code> or
+            <code>connect</code> set to <code>false</code> to drop a form. Markup in the same file
+            replaces the launch page, and is rendered with a <code>Launch</code>, whose
+            <code>fields</code> hold one <code>ConfigField</code> per input the start form asks
+            for.</p>
 
         <Snippet source={reportsPageSource} path="src/reports/index.abide" from={['const printReport', 'onMenu(', 'watch(']} />
 
         <p>The reports page adds a Reports menu while it is showing. <code>onMenu</code> is read
-        the way markup is, so the menus follow the page's state. Each entry is a
-        <code>MenuItem</code>: <code>'separator'</code>, an item with an <code>href</code>, one
-        with a <code>MenuRole</code> the platform performs, or a <code>MenuEntry</code> made by
-        <code>menuItem</code>. <code>MenuEntry.on</code> files what runs when it is picked, and
-        hands back what stops it, which is what <code>watch</code> takes. In a browser nothing
-        picks an item, and the page runs unchanged.</p>
+            the way markup is, so the menus follow the page's state. Each entry is a
+            <code>MenuItem</code>: <code>'separator'</code>, an item with an <code>href</code>, one
+            with a <code>MenuRole</code> the platform performs, or a <code>MenuEntry</code> made by
+            <code>menuItem</code>. <code>MenuEntry.on</code> files what runs when it is picked, and
+            hands back what stops it, which is what <code>watch</code> takes. In a browser nothing
+            picks an item, and the page runs unchanged.</p>
     </Section>
 
     <Section title="Keep the CRM readable offline">
@@ -431,11 +438,11 @@ abide bundle --out ~/Applications/CRM.app`} />
 ABIDE_OFFLINE=0 abide start`} />
 
         <p>Each page the CRM opens is kept on the device, with the answers its handlers gave, the
-        public files it loaded and the bundle it runs, until <code>ABIDE_OFFLINE=0</code> turns
-        that off where the CRM is served. A kept page opens at once, however weak the signal, and
-        the network is asked for the next copy behind it. With the network gone, a page opened in
-        the last year loads again with its data and works. One never opened says the device is
-        offline, and a link to it leaves the page you are on standing.</p>
+            public files it loaded and the bundle it runs, until <code>ABIDE_OFFLINE=0</code> turns
+            that off where the CRM is served. A kept page opens at once, however weak the signal, and
+            the network is asked for the next copy behind it. With the network gone, a page opened in
+            the last year loads again with its data and works. One never opened says the device is
+            offline, and a link to it leaves the page you are on standing.</p>
 
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
@@ -447,22 +454,22 @@ ABIDE_OFFLINE=0 abide start`} />
         </table>
 
         <p>What is kept is what those headers allow, and nothing else decides it. A handler that
-        writes <code>cache-control: no-store</code> through <code>response</code> is never kept,
-        and an answer with a <code>ttl</code> is shown from the device until its
-        <code>max-age</code> runs out. A refresh always asks the network.</p>
+            writes <code>cache-control: no-store</code> through <code>response</code> is never kept,
+            and an answer with a <code>ttl</code> is shown from the device until its
+            <code>max-age</code> runs out. A refresh always asks the network.</p>
 
         <p>With <code>src/public/icon.png</code> beside it, each page also links a manifest, so a
-        phone can add the CRM to its home screen, which is what keeps what was saved there for
-        good.</p>
+            phone can add the CRM to its home screen, which is what keeps what was saved there for
+            good.</p>
 
         <p>A kept page shows what it showed when it was last opened, live updates stop, and a
-        change fails until the network is back. A sign-in, a sign-out or a submitted form clears
-        what was kept, and a new build replaces it. <code>abide dev</code> keeps nothing.</p>
+            change fails until the network is back. A sign-in, a sign-out or a submitted form clears
+            what was kept, and a new build replaces it. <code>abide dev</code> keeps nothing.</p>
     </Section>
 
     <Section title="Next">
         <p>That is the CRM: contacts, deals, a live feed, pages, access, operations, machines, and
-        now reports, tested and shipped. Start again from
-        <a href={url('/guide/start-an-app')}>Start an app</a> with an app of your own.</p>
+            now reports, tested and shipped. Start again from
+            <a href={url('/guide/start-an-app')}>Start an app</a> with an app of your own.</p>
     </Section>
 </Doc>

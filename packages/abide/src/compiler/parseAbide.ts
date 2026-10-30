@@ -1,16 +1,18 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
+
 import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
+
 import { isComponentTag, isSlot, propKeyOf } from './classifyTemplate.ts'
 import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import { lineOf } from './lineOf.ts'
 import { PositionedRefusal } from './PositionedRefusal.ts'
-import { TEMPLATE_BLOCKS } from './TEMPLATE_BLOCKS.ts'
 import { importedNames } from './splitImports.ts'
+import { TEMPLATE_BLOCKS } from './TEMPLATE_BLOCKS.ts'
 import {
     type Attribute,
-    type Branch,
     bodiesOf,
+    type Branch,
     type ElementNode,
     type ForBlock,
     type InlineComponent,
@@ -106,6 +108,8 @@ type Origins = {
     names: Map<object, number>
     /** 38.116 — per element closed by a tag of its own, where that close tag's name starts. */
     closes: Map<object, number>
+    /** Where each block body's `<script>` setup starts — 32.48, 14.8. */
+    setups: number[]
 }
 
 /**
@@ -216,6 +220,7 @@ export function parseAbide(source: string): AbideFile {
         bindings: new Map(),
         names: new Map(),
         closes: new Map(),
+        setups: [],
     }
     const root: TemplateNode[] = []
     // The open elements, innermost last. `root` is the floor and is never popped.
@@ -365,8 +370,7 @@ export function parseAbide(source: string): AbideFile {
                 if (block === styles && blocks.length > 0) {
                     const owner = bodyOf(
                         blocks[blocks.length - 1] as
-                            | TemplateNode
-                            | InlineComponent,
+                            TemplateNode | InlineComponent,
                     )
                     owner.style =
                         owner.style === null
@@ -377,8 +381,7 @@ export function parseAbide(source: string): AbideFile {
                 }
                 if (block === scripts && blocks.length > 0) {
                     const holder = blocks[blocks.length - 1] as
-                        | TemplateNode
-                        | InlineComponent
+                        TemplateNode | InlineComponent
                     const owner = bodyOf(holder)
                     if (owner.setup !== null)
                         throw new Error(
@@ -388,6 +391,7 @@ export function parseAbide(source: string): AbideFile {
                         )
                     owner.setup = { text: raw.body }
                     origins.holders.set(owner.setup, tag.end)
+                    origins.setups.push(tag.end)
                     at = raw.end
                     continue
                 }
@@ -1072,7 +1076,7 @@ function rawBody(
  * already `trim()`s for this, which is one question with two answers until now — so the end is
  * handed back rather than recomputed from the tag's length.
  */
-function closeTagAt(
+export function closeTagAt(
     source: string,
     tag: string,
     from: number,
@@ -1113,6 +1117,9 @@ function pushText(
     return next
 }
 
+/** The ` if` after `{:else` — a whole word, so `{:elseif}` and `{:else ifValid}` are not one. */
+export const ELSE_IF = /^\s+if(?=[\s(])/
+
 /**
  * Where the condition on a `{:else …}` arm starts in `inner`, or its end for the bare `{:else}`
  * that always takes.
@@ -1124,7 +1131,7 @@ function pushText(
 function elseSubjectAt(inner: string): number {
     const rest = inner.slice(':else'.length)
     if (rest.trim() === '') return inner.length
-    const keyword = /^\s+if(?=[\s(])/.exec(rest)
+    const keyword = ELSE_IF.exec(rest)
     if (keyword === null || rest.slice(keyword[0].length).trim() === '')
         throw new Error(
             `abide: {${inner}} is not a control block. Write {:else} or {:else if <condition>}.`,
@@ -1147,28 +1154,18 @@ function trimmed(
 }
 
 /**
- * Parses a `{#for}` header into its item, index, subject and key.
+ * The `of`, the `,` and the `by` that divide a `{#for}` header — each the first at depth zero.
  *
- * `item, index of list by key` — `index` and `by` are optional, and everything after `of` up to
- * a top-level `by` is the subject. Split on the KEYWORDS rather than on commas, because the
- * subject may hold both.
- *
- * THE SEPARATOR IS THE ONE AT DEPTH ZERO AND OUTSIDE A STRING — all three of them, and each was
- * wrong its own way. `{#for { id, name } of rows}` split on the pattern's own comma and the item
- * became `{ id`, which the emitters write straight into a parameter list. `{#for x of
- * names.filter(n => n !== "run by me")}` split on the ` by ` inside the string literal and the
- * subject ended mid-quote. One scanner for all three rather than one fix for the comma.
+ * THE HEADER IS TOKENS, read by the scanner a slot is: an `of`, a `,` or a `by` inside a string,
+ * a call or an object pattern is the expression's own, and only one at depth zero divides the
+ * header. `by` is a word rather than a keyword, so a member named `by` is not one.
  */
-function forBlock(
-    file: string,
-    header: { text: string; at: number },
-    origins: Origins,
-): ForBlock {
-    const source = header.text
-    // THE HEADER IS TOKENS, read by the scanner a slot is: an `of`, a `,` or a `by` inside a string,
-    // a call or an object pattern is the expression's own, and only one at depth zero divides the
-    // header. `by` is a word rather than a keyword, so a member named `by` is not one.
-    const tokens = tokenize(source)
+export function forSeparators(header: string): {
+    of: Token | undefined
+    comma: Token | undefined
+    by: Token | undefined
+} {
+    const tokens = tokenize(header)
     let depth = 0
     let of: Token | undefined
     let comma: Token | undefined
@@ -1191,6 +1188,29 @@ function forBlock(
         )
             by = token
     }
+    return { of, comma, by }
+}
+
+/**
+ * Parses a `{#for}` header into its item, index, subject and key.
+ *
+ * `item, index of list by key` — `index` and `by` are optional, and everything after `of` up to
+ * a top-level `by` is the subject. Split on the KEYWORDS rather than on commas, because the
+ * subject may hold both.
+ *
+ * THE SEPARATOR IS THE ONE AT DEPTH ZERO AND OUTSIDE A STRING — all three of them, and each was
+ * wrong its own way. `{#for { id, name } of rows}` split on the pattern's own comma and the item
+ * became `{ id`, which the emitters write straight into a parameter list. `{#for x of
+ * names.filter(n => n !== "run by me")}` split on the ` by ` inside the string literal and the
+ * subject ended mid-quote. One scanner for all three rather than one fix for the comma.
+ */
+function forBlock(
+    file: string,
+    header: { text: string; at: number },
+    origins: Origins,
+): ForBlock {
+    const source = header.text
+    const { of, comma, by } = forSeparators(source)
     // A `{#for}` with nothing to iterate rendered as a block over the subject '' — zero rows,
     // forever, with nothing saying why (32.22 is an ABSENT subject, not a missing one).
     if (of === undefined)

@@ -2825,6 +2825,28 @@ the range.
 
 38.124 The project `abide scaffold` writes MUST carry a `bench` script that runs `harness-bench`.
 
+38.125 `abide format` MUST hand each `<script>` block and each `<style>` of every `.abide` under the
+directories named, or under the app where none are, to `bun fmt` as TypeScript and as CSS, under the
+options `bun fmt` reads for that file, and MUST leave as written a file those options'
+`ignorePatterns` name.
+
+38.126 `abide format` MUST hand each expression a slot, an attribute, a spread, a `{#if}`, a
+`{:else if}` or a `{#for}` holds to `bun fmt` as an expression, and MUST keep one as written where
+the printed expression would end the attribute value it stands in.
+
+38.127 `abide format` MUST indent the markup by its element and block nesting, and MUST NOT change
+the template the file parses to: a run 33.17 drops between two nodes MUST NOT gain indentation, and
+the body of a `<pre>`, a `<textarea>` and a markup `<script>` MUST stay as written.
+
+38.128 `abide format` MUST leave as written a file the parser refuses, a file whose formatted text
+would parse to a different template (38.127), and a piece `bun fmt` refuses, MUST report each on its
+line, MUST go on formatting the rest, and MUST exit non-zero where it reports one.
+
+38.129 `abide format --check` MUST write nothing, and MUST exit non-zero where a file would change.
+
+38.130 `abide lsp` MUST answer a formatting request with what `abide format` makes of the text the
+editor holds.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

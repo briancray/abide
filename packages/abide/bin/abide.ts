@@ -4,17 +4,19 @@
 
 import { existsSync, realpathSync } from 'node:fs' // bun exposes no sync existence check or realpath of its own
 import { mkdir, rename, rm } from 'node:fs/promises' // bun exposes no directory creation, rename or recursive directory removal of its own
-import { dirname, resolve } from 'node:path' // bun exposes no path helpers of its own
+import { dirname, relative, resolve } from 'node:path' // bun exposes no path helpers of its own
 import { brotliCompress, constants } from 'node:zlib' // bun's brotli is `CompressionStream`, which compresses on the main thread — 1390 ms against this pool's 300 ms over the docs bundle
+
 import { paints } from '#compiler/appLayout.ts'
 import { appMap, mapText } from '#compiler/appMap.ts'
 import { checkApp } from '#compiler/checkApp.ts'
 import {
-    type CompiledApp,
     compilationOf,
     compileApp,
+    type CompiledApp,
 } from '#compiler/compileApp.ts'
 import { compiledEntry } from '#compiler/compiledEntry.ts'
+import { formatAbide } from '#compiler/formatAbide.ts'
 import { formatDiagnosis } from '#compiler/formatDiagnosis.ts'
 import { parseAbide } from '#compiler/parseAbide.ts'
 import { scaffold } from '#compiler/scaffold.ts'
@@ -40,17 +42,22 @@ import { appOnDisk, appRoot, noAppHere } from '#server/createApp.ts'
 import { executableName } from '#server/executableName.ts'
 import { iconAccent } from '#server/iconAccent.ts'
 import { namesUnder } from '#server/namesUnder.ts'
+import { skipped } from '#server/placement.ts'
 import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
 import { runtimeRefusal } from '#server/runtimeRefusal.ts'
 import { pathsUnder, serveBuild } from '#server/serveBuild.ts'
 import { serveDev } from '#server/serveDev.ts'
 import { escapeText } from '#shared/escapeText.ts'
 import { ICON_ADDRESSES, LAUNCHER_PAGE } from '#shared/LAUNCHER_FILES.ts'
+
 import abidePackage from '../package.json' with { type: 'json' }
 
 // 38.123 — the bun this process runs on, held to abide's `engines.bun` before anything is built or
 // booted. A compiled app carries the bun `abide compile` ran on, which this held already.
 const RUNTIME_REFUSAL = runtimeRefusal(Bun.version, abidePackage.engines.bun)
+
+/** How many files `abide format` formats at once, each spawning `bun fmt` for its pieces. */
+const FILES_AT_ONCE = 8
 
 /** Where the app a command builds or serves is, and where its build goes — both absolute. */
 type AppDirectories = { root: string; out: string }
@@ -81,6 +88,10 @@ const DISK: Host = {
         dev: inApp(dev),
         build: inApp(build),
         check: inApp(check),
+        format: (given) =>
+            given.positionals.length > 1
+                ? format(namedDirectories(given.positionals), given)
+                : inApp(({ root }) => format([root], given))(given),
         routes: inApp(routes),
         compile: inApp(compile),
         bundle: inApp(bundle),
@@ -699,9 +710,9 @@ async function scaffoldCommand({
         return 1
     }
     const into = resolve(name)
-    const { written, skipped } = await scaffold(name, into)
+    const { written, skipped: kept } = await scaffold(name, into)
     for (const path of written) console.log(`  wrote   ${path}`)
-    for (const path of skipped) console.log(`  kept    ${path}`)
+    for (const path of kept) console.log(`  kept    ${path}`)
     console.log(
         // The starter's own script: `abide` alone is on no PATH until it is installed globally.
         `\nabide scaffold: ${into}\n\n  cd ${name}\n  bun install\n  bun run dev`,
@@ -729,13 +740,7 @@ async function check(
     { root }: AppDirectories,
     { positionals }: Given,
 ): Promise<number> {
-    const within: string[] = []
-    for (const directory of positionals.slice(1))
-        within.push(
-            existsSync(directory)
-                ? realpathSync(resolve(directory))
-                : resolve(directory),
-        )
+    const within = namedDirectories(positionals)
     const found = await checkApp(root)
     let errors = 0
     let warnings = 0
@@ -758,6 +763,64 @@ async function check(
         `abide check: ${errors} error${errors === 1 ? '' : 's'}, ${warnings} warning${warnings === 1 ? '' : 's'}`,
     )
     return errors > 0 ? 1 : 0
+}
+
+/** The directories a command's `[dir…]` names, each as the real path a finding is filed under. */
+function namedDirectories(positionals: string[]): string[] {
+    const named: string[] = []
+    for (const directory of positionals.slice(1))
+        named.push(
+            existsSync(directory)
+                ? realpathSync(resolve(directory))
+                : resolve(directory),
+        )
+    return named
+}
+
+/**
+ * `abide format`: formats every `.abide` under `within` — the directories named, or the app where
+ * none are — and fails where any file was left as written. 38.125, 38.128.
+ *
+ * `--check` writes nothing, and fails where a file would change. 38.129.
+ *
+ * NAMED DIRECTORIES NEED NO APP, unlike `check`'s: a formatter reads one file at a time, so a
+ * monorepo formats every app under it in one run.
+ */
+async function format(within: string[], { values }: Given): Promise<number> {
+    const paths: string[] = []
+    for (const directory of within)
+        for (const name of namesUnder(directory, '**/*.abide'))
+            if (!name.split('/').some(skipped))
+                paths.push(`${directory}/${name}`)
+    let changed = 0
+    let errors = 0
+    // A file's pieces are formatted in parallel already, so files are taken a few at a time.
+    let next = 0
+    const take = async (): Promise<void> => {
+        while (next < paths.length) {
+            const path = paths[next] as string
+            next += 1
+            const text = await Bun.file(path).text()
+            const formatted = await formatAbide(path, text)
+            for (const finding of formatted.findings) {
+                errors += 1
+                console.log(formatDiagnosis(finding, process.cwd()))
+            }
+            if (formatted.text === text) continue
+            changed += 1
+            if (values.check)
+                console.log(
+                    `${relative(process.cwd(), path)} - needs formatting`,
+                )
+            else await Bun.write(path, formatted.text)
+        }
+    }
+    await Promise.all(Array.from({ length: FILES_AT_ONCE }, take))
+    const files = `${changed} file${changed === 1 ? '' : 's'}`
+    console.log(
+        `abide format: ${values.check ? `${files} to format` : `${files} formatted`} of ${paths.length}, ${errors} error${errors === 1 ? '' : 's'}`,
+    )
+    return errors > 0 || (values.check && changed > 0) ? 1 : 0
 }
 
 /**

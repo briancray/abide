@@ -484,6 +484,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`cache-control: public, max-age=0, must-revalidate`',
                         '`etag`',
                         '`abide check [dir…]`',
+                        '`abide format [--check] [dir…]`',
                         '`abide lsp`',
                         '`abide compile [--target] [--out] [--platforms]`',
                         '`abide bundle [--out]`',

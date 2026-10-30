@@ -1,11 +1,16 @@
 import { existsSync, type FSWatcher, watch } from 'node:fs' // bun exposes no file watcher or sync existence check of its own
 import { dirname } from 'node:path' // bun exposes no path helpers of its own
+
 import { realOrAsGiven } from '#server/realOrAsGiven.ts'
+
 import { checkSource, lowerApp } from './checkApp.ts'
 import { citedClauses } from './citedClauses.ts'
 import { type AppChecker, openChecker } from './compileApp.ts'
 import { DOCS_SITE } from './DOCS_SITE.ts'
+import { formatAbide } from './formatAbide.ts'
+import { formatDiagnosis } from './formatDiagnosis.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
+import { lineOf, offsetOf } from './lineOf.ts'
 import { nearest } from './nearest.ts'
 import type { Diagnosis, Inspection, Place } from './TypeSession.ts'
 
@@ -290,6 +295,7 @@ export async function serveLanguage(
                             definitionProvider: true,
                             referencesProvider: true,
                             renameProvider: { prepareProvider: true },
+                            documentFormattingProvider: true,
                             completionProvider: {
                                 triggerCharacters: ['.', '<', '#', ':', '/'],
                             },
@@ -392,8 +398,7 @@ export async function serveLanguage(
                 const found = await references(params)
                 const declarations = (
                     params?.context as
-                        | { includeDeclaration?: boolean }
-                        | undefined
+                        { includeDeclaration?: boolean } | undefined
                 )?.includeDeclaration
                 const locations: object[] = []
                 for (const place of found?.occurrences ?? [])
@@ -454,6 +459,45 @@ export async function serveLanguage(
                 send({
                     id: message.id,
                     result: found === undefined ? null : { changes },
+                })
+                return true
+            }
+            case 'textDocument/formatting': {
+                // 38.130 — the text the editor holds, formatted as `abide format` formats a file:
+                // one edit replacing the whole of it, none where nothing moves.
+                const uri = (params?.textDocument as { uri: string }).uri
+                const document = documents.get(uri)
+                if (document === undefined) {
+                    send({ id: message.id, result: null })
+                    return true
+                }
+                const path = Bun.fileURLToPath(uri)
+                const text = document.text
+                const formatted = await formatAbide(path, text)
+                // Shown rather than published: a publish would replace what the check reported.
+                for (const finding of formatted.findings)
+                    send({
+                        method: 'window/showMessage',
+                        params: {
+                            type: 2,
+                            message: formatDiagnosis(finding, dirname(path)),
+                        },
+                    })
+                send({
+                    id: message.id,
+                    result:
+                        formatted.text === text
+                            ? []
+                            : [
+                                  {
+                                      range: rangeOf({
+                                          path,
+                                          start: { line: 1, column: 1 },
+                                          end: lineOf(text, text.length),
+                                      }),
+                                      newText: formatted.text,
+                                  },
+                              ],
                 })
                 return true
             }
@@ -540,23 +584,6 @@ function appRootOf(path: string): string | undefined {
 function wordLength(line: string, character: number): number {
     const word = /^[\w$]+/.exec(line.slice(character))?.[0]
     return word === undefined ? 1 : word.length
-}
-
-/**
- * The protocol's `{ line, character }`, from 0, as an offset into `text`. A character is a UTF-16
- * code unit in the protocol and in a JavaScript string alike.
- */
-function offsetOf(
-    text: string,
-    position: { line: number; character: number },
-): number {
-    let at = 0
-    for (let line = 0; line < position.line; line += 1) {
-        const end = text.indexOf('\n', at)
-        if (end === -1) return text.length
-        at = end + 1
-    }
-    return at + position.character
 }
 
 /** A `Place` at `path`, lines and columns from 1, as the protocol's `Location`, from 0. */

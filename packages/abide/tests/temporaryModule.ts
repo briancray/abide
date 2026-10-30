@@ -13,8 +13,15 @@ mkdirSync(ROOT, { recursive: true })
 
 const made: string[] = []
 
-export function temporaryModule(files: Record<string, string>): string {
-    const dir = mkdtempSync(`${ROOT}m-`)
+/**
+ * `files` written to a fresh directory under `root` — the repo's `.test-modules` unless a test needs
+ * a directory nothing above it ignores.
+ */
+export function temporaryModule(
+    files: Record<string, string>,
+    root: string = ROOT,
+): string {
+    const dir = mkdtempSync(`${root}m-`)
     made.push(dir)
     // A name may carry directories, so a caller can lay out a tree rather than a flat folder.
     for (const [name, text] of Object.entries(files)) {

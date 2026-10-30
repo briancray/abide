@@ -20,6 +20,23 @@ export function lineOf(
     return { line, column: end - lineStart + 1 }
 }
 
+/**
+ * The protocol's `{ line, character }`, from 0, as an offset into `text`. A character is a UTF-16
+ * code unit in the protocol and in a JavaScript string alike.
+ */
+export function offsetOf(
+    text: string,
+    position: { line: number; character: number },
+): number {
+    let at = 0
+    for (let line = 0; line < position.line; line += 1) {
+        const end = text.indexOf('\n', at)
+        if (end === -1) return text.length
+        at = end + 1
+    }
+    return at + position.character
+}
+
 /** abide's own finding at `offset` into `text`, or at line 0 where the text was not handed in. */
 export function diagnosisAt(
     path: string,

@@ -4,9 +4,12 @@
 // disk's.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
+
 import { DOCS_SITE } from '#compiler/DOCS_SITE.ts'
+
 import { appFixture } from './builtApp.ts'
-import { removeTemporaryModules } from './temporaryModule.ts'
+import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
 
@@ -956,6 +959,48 @@ test('a finding citing a clause carries it as its code — 38.118', async () => 
         ],
     })
 }, 60_000)
+
+// THE REVERT: answer `textDocument/formatting` with what is on disk; the editor's unsaved slot is
+// not the one formatted. Outside the repo for the reason `formatAbide.test.ts` gives: `bun fmt`
+// hands back a gitignored file as it stands.
+test('a formatting request formats the text the editor holds — 38.130', async () => {
+    const directory = temporaryModule(
+        {
+            'bunfig.toml': '[fmt]\nsemi = false\n',
+            'index.abide': '<p>{ saved }</p>\n',
+        },
+        `${tmpdir()}/`,
+    )
+    const uri = Bun.pathToFileURL(`${directory}/index.abide`).href
+    send({
+        method: 'textDocument/didOpen',
+        params: {
+            textDocument: {
+                uri,
+                languageId: 'abide',
+                version: 1,
+                text: '<p>{ a+1 }</p>\n',
+            },
+        },
+    })
+    send({
+        id: 40,
+        method: 'textDocument/formatting',
+        params: { textDocument: { uri } },
+    })
+    const answered = await next((message) => message.id === 40)
+    expect(answered).toMatchObject({
+        result: [
+            {
+                range: {
+                    start: { line: 0, character: 0 },
+                    end: { line: 1, character: 0 },
+                },
+                newText: '<p>{a + 1}</p>\n',
+            },
+        ],
+    })
+}, 30_000)
 
 test('the server shuts down when asked — 38.11', async () => {
     send({ id: 2, method: 'shutdown' })

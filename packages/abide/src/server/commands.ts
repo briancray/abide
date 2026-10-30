@@ -5,8 +5,10 @@
 
 import { resolve } from 'node:path' // bun exposes no path helpers of its own
 import { parseArgs } from 'node:util' // bun exposes no argv parser of its own yet
+
 import { MCP_ADDRESS, OPENAPI_ADDRESS } from '#shared/ADDRESSES.ts'
 import { IN_PROCESS_ORIGIN } from '#shared/IN_PROCESS_ORIGIN.ts'
+
 import { banner } from './banner.ts'
 import { type App, type AppHandle, enterApp } from './createApp.ts'
 import { stopOnSignalOrFault } from './faultPolicy.ts'
@@ -32,6 +34,7 @@ type SourceCommands = Record<
     | 'dev'
     | 'build'
     | 'check'
+    | 'format'
     | 'routes'
     | 'compile'
     | 'bundle'
@@ -195,6 +198,11 @@ function commandsOf(host: Host): Row[] {
             'check',
         ),
         fromSource(
+            'format [--check] [dir…]',
+            'format every .abide — its code by bun fmt, its markup by its nesting',
+            'format',
+        ),
+        fromSource(
             'routes [--json]',
             'every address the app answers, its file, and where each hook is filed',
             'routes',
@@ -288,6 +296,7 @@ function parseFlags(argv: string[]) {
             target: { type: 'string' },
             platforms: { type: 'string' },
             json: { type: 'boolean' },
+            check: { type: 'boolean' },
             help: { type: 'boolean', short: 'h' },
             version: { type: 'boolean', short: 'v' },
         },

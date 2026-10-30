@@ -5,6 +5,7 @@
 // half-made project finishes it rather than overwriting it.
 
 import { withoutTrailingSlash } from '#server/withoutTrailingSlash.ts'
+
 import abidePackage from '../../package.json' with { type: 'json' }
 import { COMPILER_OPTIONS } from './writeDefaultProject.ts'
 
@@ -39,7 +40,7 @@ const SOURCE_ALIAS = { '#src/*': ['./src/*', './src/*.ts'] }
  * lands first on the PATH inside `bun run`, shadowing the bun that runs everything else.
  */
 export const BUNFIG =
-    '# 38.122 — a peer is not installed: an installed `bun` would shadow this one inside `bun run`.\n[install]\npeer = false\n\n# 38.109, 38.119 — a DOM to mount into and measure, then the app\'s `.abide` files as modules.\n[test]\nroot = "src"\npreload = ["@abide/harness/abide/preload"]\n'
+    '# 38.122 — a peer is not installed: an installed `bun` would shadow this one inside `bun run`.\n[install]\npeer = false\n\n# 38.109, 38.119 — a DOM to mount into and measure, then the app\'s `.abide` files as modules.\n[test]\nroot = "src"\npreload = ["@abide/harness/abide/preload"]\n\n# What `bun fmt` and `abide format` print.\n[fmt]\ntabWidth = 4\nsemi = false\nsingleQuote = true\nsortImports = true\n'
 
 // WRITTEN, NOT COPIED, beside the manifests: a packer drops a `bunfig.toml` or a `.gitignore` from
 // the tarball (`bun pm pack` both, `npm pack` the second), so neither survives as a starter file.
@@ -55,6 +56,8 @@ function filesFor(name: string): Record<string, string> {
                 scripts: {
                     // 38.103 — the checker over `.abide`, which `tsc` does not read.
                     check: 'abide check',
+                    // 38.125 — every `.abide`, then every other file `bun fmt` reads.
+                    format: 'abide format && bun fmt',
                     dev: 'abide dev',
                     build: 'abide build',
                     start: 'abide start',
@@ -97,16 +100,6 @@ function filesFor(name: string): Record<string, string> {
                     paths: SOURCE_ALIAS,
                 },
                 include: ['src'],
-            },
-            null,
-            4,
-        )}\n`,
-        'biome.json': `${JSON.stringify(
-            {
-                formatter: { indentStyle: 'space', indentWidth: 4 },
-                javascript: {
-                    formatter: { quoteStyle: 'single', semicolons: 'asNeeded' },
-                },
             },
             null,
             4,
