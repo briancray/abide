@@ -1,14 +1,16 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
+
 import { PRIVATE_EXPORT } from '#server/PRIVATE_EXPORT.ts'
 import { isEventName } from '#shared/isEventName.ts'
+
 import { isComponentTag, propKeyOf } from './classifyTemplate.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
+import type { AbideFile } from './parseAbide.ts'
 import {
     type Position,
     type PositionKind,
     PositionTable,
 } from './PositionTable.ts'
-import type { AbideFile } from './parseAbide.ts'
 import {
     attributedImports,
     IMPORT_ATTRIBUTES,
@@ -501,12 +503,17 @@ function project(file: AbideFile): Projection {
                 body(node.children, node.components)
                 continue
             }
-            // 32.16 — the catch arm binds the failure, and the checker has to see the name.
+            // 32.16 — the catch arm binds the failure, and the checker has to see the name. Read once
+            // with `void`, as a `catch` binding is never reported unused. An arm that names none binds
+            // nothing.
             if (node.block === 'try') {
                 const [tried, caught] = node.branches as [Branch, Branch]
                 text += '{\n'
                 inBody(tried)
-                text += `}\n{ const ${node.error === '' ? '__failure' : node.error}: any = undefined\n`
+                text +=
+                    node.error === ''
+                        ? '}\n{\n'
+                        : `}\n{ const ${node.error}: any = undefined; void ${node.error}\n`
                 inBody(caught)
                 text += '}\n'
                 continue

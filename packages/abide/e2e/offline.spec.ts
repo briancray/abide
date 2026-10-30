@@ -10,6 +10,7 @@
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+
 import { expect, type Page, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname
@@ -37,7 +38,7 @@ let count = reactive(0)
 let server: ChildProcess | undefined
 let base = ''
 
-// biome-ignore lint/correctness/noEmptyPattern: playwright's "no fixtures" spelling — see `routing.spec.ts`.
+// Playwright's "no fixtures" spelling — see `routing.spec.ts`.
 test.beforeAll(async ({}, testInfo) => {
     if (testInfo.project.name !== 'abide') return
     const app = join(REPO, `.test-modules/e2e-offline-${testInfo.project.name}`)
@@ -225,7 +226,7 @@ test.afterAll(() => {
     server?.kill()
 })
 
-// biome-ignore lint/correctness/noEmptyPattern: playwright's "no fixtures" spelling — see `routing.spec.ts`.
+// Playwright's "no fixtures" spelling — see `routing.spec.ts`.
 test.beforeEach(({}, testInfo) => {
     test.skip(
         testInfo.project.name !== 'abide',

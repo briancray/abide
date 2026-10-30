@@ -5,6 +5,7 @@
 // app serves for what a reader reads (`docsPages.ts`).
 
 import { beforeAll, expect, test } from 'bun:test'
+
 import {
     declaredExports,
     generatedOnDisk,
@@ -23,8 +24,8 @@ import { BUILTIN_TYPES } from './BUILTIN_TYPES.ts'
 import {
     allCards,
     cardsOf,
-    DOGFOOD,
     docsPages,
+    DOGFOOD,
     pageFileOf,
     renderedMarkdown,
 } from './docsPages.ts'
@@ -646,10 +647,12 @@ test('a link is labeled with the nav of the page it points at', async () => {
 
 // A sample renders in `main`'s column, and past the formatter's line width it is a thing to scroll
 // rather than a thing to read. THE WIDTH IS READ FROM THE FORMATTER rather than restated, so the two
-// cannot disagree; biome formats no `.abide`, so this is what holds an example's own file to it.
+// cannot disagree; `abide format` wraps no markup, so this is what holds an example's own file to it.
 const COLUMN: number = (
-    await Bun.file(new URL('../../../biome.json', import.meta.url)).json()
-).formatter.lineWidth
+    Bun.TOML.parse(
+        await Bun.file(new URL('../../../bunfig.toml', import.meta.url)).text(),
+    ) as { fmt: { printWidth: number } }
+).fmt.printWidth
 
 test('no code sample is wider than the column it renders in', async () => {
     const wide: string[] = []

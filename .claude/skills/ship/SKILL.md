@@ -42,7 +42,7 @@ re-prompting, but report the per-package version bumps before merging as a sanit
      `packages/bridge/{bin,src}`, `packages/harness/{src,scripts/buildInjectable.ts}`) become
      changelog entries — docs, tests and dogfood do not.
 
-3. **Gate locally** — from the repo root: `bun run lint`, `bun run typecheck`, `bun run test`.
+3. **Gate locally** — from the repo root: `bun run typecheck`, `bun run format:check`, `bun run test`.
    All must be clean. CI's verify job runs the same three before
    anything publishes, so a red gate here only wastes a release run. A TIMING failure under
    `--parallel` is rerun with `bun run test:serial` before it is believed (CLAUDE.md, "checks").
@@ -53,7 +53,7 @@ re-prompting, but report the per-package version bumps before merging as a sanit
    Commit them: `git commit -m "chore: add changesets for <summary>" -- .changeset`.
 
 5. **Push once** — `git push origin main`. The `.githooks/pre-push` hook runs `bun run verify`
-   (lint · typecheck · test); let it run.
+   (typecheck · format check · test); let it run.
 
 6. **Wait for the Version Packages PR**:
    ```

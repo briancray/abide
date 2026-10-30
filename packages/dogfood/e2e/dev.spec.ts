@@ -14,6 +14,7 @@
 
 import { type ChildProcess, spawn } from 'node:child_process'
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+
 import { expect, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname
@@ -37,7 +38,7 @@ let original = ''
 // SKIPPED IN `beforeAll`, not `beforeEach`: a `beforeAll` runs before the first `beforeEach` does,
 // so a skip there still spawned the second dev server — over a copy made fresh in the directory
 // `root`'s was being served from.
-// biome-ignore lint/correctness/noEmptyPattern: playwright refuses a first parameter that is not a destructuring pattern, and this hook reads only the second.
+// Playwright refuses a first parameter that is not a destructuring pattern, and this hook reads only the second.
 test.beforeAll(async ({}, testInfo) => {
     testInfo.skip(testInfo.project.name !== 'root', 'one dev server is enough')
     rmSync(COPY, { recursive: true, force: true })

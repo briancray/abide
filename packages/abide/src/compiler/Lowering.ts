@@ -1,15 +1,17 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
+
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Read } from './classifyRead.ts'
 import { holdsSlot } from './classifyTemplate.ts'
 import type { Finding } from './Finding.ts'
-import type { AbideFile } from './parseAbide.ts'
+import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import {
     type Origin,
     type Projection,
     projectShadow,
     type Span,
 } from './projectShadow.ts'
+import { importedNames } from './splitImports.ts'
 import type { InlineComponent, Setup, TemplateNode } from './TemplateNode.ts'
 import { nesting, type Token, tokenize } from './tokenize.ts'
 
@@ -83,6 +85,11 @@ export class Lowering {
      */
     readonly checking: boolean
     /**
+     * Whether a script imports abide's own `raw`, which a checked lowering then leaves a template's
+     * `raw(x)` calling — the same function, and the import read where the author reads it.
+     */
+    private readonly importsRaw: boolean
+    /**
      * The names a checked lowering read, each with whether it was read through a props accessor.
      *
      * A read is `__values.name` there rather than `name()`: two calls are two values to the
@@ -133,6 +140,7 @@ export class Lowering {
         this.answer = answer
         this.holdsSlot = holdsSlot(file.template)
         this.checking = checking
+        this.importsRaw = importsAbideRaw(file)
         this.chunks = chunks
         this.routed = routed
     }
@@ -804,7 +812,9 @@ export class Lowering {
             // template are the same object. The read exists only where a template expression held
             // the call (`expressionFacts`), so a `<script>`'s `raw` stays the file's.
             case 'raw':
-                return this.use('raw')
+                return this.checking && this.importsRaw
+                    ? undefined
+                    : this.use('raw')
             // 27.13 — the call bound to a name, for the checker to read the defaults' type off.
             case 'config':
                 return this.checking
@@ -895,6 +905,14 @@ export class Lowering {
             : `((${STORED}) => (${name}.set(${writePath}${STORED})), ${STORED}))(${stored})`
         return short ? `${current} ${op} ${write}` : write
     }
+}
+
+function importsAbideRaw(file: AbideFile): boolean {
+    for (const body of scriptBodies(file))
+        for (const { name, specifier } of importedNames(body))
+            if (name === 'raw' && specifier.startsWith('@abide/abide'))
+                return true
+    return false
 }
 
 function isRawCallee(read: Read): boolean {

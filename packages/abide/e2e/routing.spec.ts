@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { join, normalize } from 'node:path'
+
 import { expect, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname
@@ -51,7 +52,7 @@ let port = 0
 // Playwright reads the FIRST parameter to decide which fixtures to build, and `{}` is how it is
 // told "none" while still handing back `testInfo` in the second. A named parameter there asks for
 // the whole fixtures object instead.
-// biome-ignore lint/correctness/noEmptyPattern: playwright's "no fixtures" spelling — see above.
+// Playwright's "no fixtures" spelling — see above.
 test.beforeAll(async ({}, testInfo) => {
     APP = join(REPO, `.test-modules/e2e-routeapp-${testInfo.project.name}`)
     // WRITTEN FROM HERE, not from a `bun -e`. Nothing about laying the fixture out is bun-only —

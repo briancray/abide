@@ -35,7 +35,7 @@ let CURRENT: ShareScope | null = null
  * Empty here: an app widens it, and a key it declares is checked against it where a key it does
  * not is inferred from the thunk.
  */
-// biome-ignore lint/suspicious/noEmptyInterface: 10.3 — an app merges its own keys into this.
+// 10.3 — an app merges its own keys into this.
 export interface Shared {}
 
 /** The value held under `key` by this component or its nearest ancestor, or one created here. */

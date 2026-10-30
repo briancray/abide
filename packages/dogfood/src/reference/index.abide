@@ -1,5 +1,6 @@
 <script>
 import { raw, reactive, type RouteLiteral, url } from '@abide/abide'
+
 import Doc from '#src/lib/Doc.abide'
 import { inline, slugify } from '#src/lib/inline.ts'
 import { REFERENCE } from '#src/lib/REFERENCE.ts'
@@ -28,24 +29,24 @@ headings = groups.map((group) => ({
 
 <Doc>
     <p>Arrive here knowing which name you want. Each page is read off the registry: the name's
-    signature, what it is, the rules that govern it, its members and options, and the guide that
-    teaches it. What an app writes in place rather than imports, such as template syntax, files and
-    commands, has one page per area.</p>
+        signature, what it is, the rules that govern it, its members and options, and the guide that
+        teaches it. What an app writes in place rather than imports, such as template syntax, files and
+        commands, has one page per area.</p>
 
     {#for group of groups}
         <section><div class="flow">
-            <h2 id={slugify(group.section)}>{group.section}</h2>
-            <table>
-                <thead><tr><th>Page</th><th>Imported from</th></tr></thead>
-                <tbody>
-                    {#for page of group.pages}
-                        <tr>
-                            <td><a href={url(page.route as RouteLiteral)}>{raw(inline(page.nav))}</a></td>
-                            <td>{raw(inline(ENTRY.get(page.route) ?? 'written in place'))}</td>
-                        </tr>
-                    {/for}
-                </tbody>
-            </table>
-        </div></section>
+                <h2 id={slugify(group.section)}>{group.section}</h2>
+                <table>
+                    <thead><tr><th>Page</th><th>Imported from</th></tr></thead>
+                    <tbody>
+                        {#for page of group.pages}
+                            <tr>
+                                <td><a href={url(page.route as RouteLiteral)}>{raw(inline(page.nav))}</a></td>
+                                <td>{raw(inline(ENTRY.get(page.route) ?? 'written in place'))}</td>
+                            </tr>
+                        {/for}
+                    </tbody>
+                </table>
+            </div></section>
     {/for}
 </Doc>

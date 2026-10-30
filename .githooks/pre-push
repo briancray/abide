@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-push gate — runs the full local verify (lint · typecheck · test), the same
+# Pre-push gate — runs the full local verify (typecheck · format check · test), the same
 # checks CI gates `main` on, before any push. Wired via core.hooksPath=.githooks, which the root
 # `prepare` script sets on install. Bypass a single push with `git push --no-verify`.
 echo "pre-push: running 'bun run verify' before push…"

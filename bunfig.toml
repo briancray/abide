@@ -9,3 +9,15 @@ peer = false
 # REPO ROOT or this path does not resolve, and the suites measure a different code
 # path while still passing — see CLAUDE.md, "checks".
 preload = ["./packages/harness/src/measure/preload.ts"]
+
+# `bun fmt` and `abide format` read this. Markdown, YAML, TOML and HTML were never formatted by
+# Biome, and stay as written; the reference pages are `scripts/referencePages.ts`'s to write, and
+# `editors/tree-sitter-abide/src/` is `tree-sitter generate`'s.
+[fmt]
+tabWidth = 4
+printWidth = 80
+semi = false
+singleQuote = true
+trailingComma = "all"
+sortImports = true
+ignorePatterns = ["**/*.md", "**/*.mdx", "**/*.yml", "**/*.yaml", "**/*.toml", "**/*.html", "explorations/probes/", "test-timings.json", "**/*.css", "packages/dogfood/src/reference/", "packages/dogfood/src/lib/REFERENCE.ts", "editors/tree-sitter-abide/src/"]

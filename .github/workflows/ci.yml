@@ -15,8 +15,9 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
-      - run: bun run lint
       - run: bun run typecheck
+      # RULEBOOK 38.129 — every `.abide` as `abide format` writes it, and the rest as `bun fmt` does.
+      - run: bun run format:check
       # The gate CLAUDE.md names. A timing failure here is rerun with
       # `bun run test:serial` before it is believed (CLAUDE.md, "checks").
       - run: bun run test

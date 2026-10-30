@@ -31,23 +31,23 @@ import { NotLanded } from './NotLanded.ts'
 import { PATCH_SINKS, type PatchOp } from './PATCH_SINKS.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
-import { STREAMING } from './STREAMING.ts'
 import { currentScope, runInScope, type Scope } from './scoping.ts'
+import { STREAMING } from './STREAMING.ts'
 import {
     CHECK,
     CLEAN,
-    DIRTY,
     detach,
+    DIRTY,
     dropProbeReader,
     newSubscriber,
     newTracked,
     RELEASING,
     revive,
     type Subscriber,
-    TRACKING,
-    type Tracked,
     tombstone,
     track,
+    type Tracked,
+    TRACKING,
     trackProbe,
     truncate,
     truncateProbes,
@@ -252,12 +252,12 @@ export type Reactive<
             | Accepted
             | PromiseLike<Accepted>
             | Reactive<Accepted, unknown, Failures, unknown>,
-        // biome-ignore lint/suspicious/noConfusingVoidType: same reason as `watch` below — a `set` that returns nothing infers `void`, and 4.18's refusal is the other arm.
+        // Same reason as `watch` below — a `set` that returns nothing infers `void`, and 4.18's refusal is the other arm.
     ): void | Failures
     patch(mutate: (value: Stored) => void): void
     refresh(): void
     invalidate(): void
-    // biome-ignore lint/suspicious/noConfusingVoidType: `void` is the RETURN POSITION of an author's effect, and it is load-bearing. `undefined` there refuses `(v) => { read(v) }` — a block body returning nothing infers `void`, which is not assignable to `undefined` — so the rule's fix would reject the ordinary effect.
+    // `void`, not `undefined`: see `Effect` in `watch.ts` — `(v) => { read(v) }` infers `void`.
     watch(effect: (value: Stored) => void | (() => void)): () => void
     /** What one run produced: the settled value once, or a stream's chunks to its close (2.5, 2.6). */
     [Symbol.asyncIterator](): AsyncIterator<Produced>
@@ -658,8 +658,7 @@ class Cell {
      * keyed on `.id` read every number as the same `undefined` and never woke again.
      */
     declare declaredIdentityFn:
-        | ((next: unknown, previous: unknown) => boolean)
-        | null
+        ((next: unknown, previous: unknown) => boolean) | null
     declare transform: ((value: unknown) => unknown) | null
     /**
      * `null` on every value that declares no `schema`, which keeps the gate off the write
@@ -859,8 +858,7 @@ class Cell {
         )
         this.declaredIdentityFn = this.identityFn
         this.transform = (options?.transform ?? null) as
-            | ((value: unknown) => unknown)
-            | null
+            ((value: unknown) => unknown) | null
         this.schema = (options?.schema ?? null) as Schema<unknown> | null
         this.ring = EMPTY_RING
         this.ringBase = 0
@@ -906,9 +904,7 @@ class Cell {
                       unwatch: null,
                   }
         this.by = (options?.by ?? null) as
-            | string
-            | ((element: unknown) => unknown)
-            | null
+            string | ((element: unknown) => unknown) | null
         this.probePass = 0
         this.owes = OWES_NOTHING
         this.isEffect = false
@@ -3502,7 +3498,7 @@ function settled(cell: Cell, untilStreaming = false): Promise<unknown> {
  */
 function watchCell(
     cell: Cell,
-    // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
+    // `void`, not `undefined`: see `Effect` in `watch.ts`.
     effect: (value: unknown) => void | (() => void),
 ): () => void {
     return owned(
@@ -4459,7 +4455,7 @@ const MEMBERS = {
     },
     watch(
         this: Callable,
-        // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
+        // `void`, not `undefined`: see `Effect` in `watch.ts`.
         effect: (value: unknown) => void | (() => void),
     ): () => void {
         return watchCell(this[CELL], effect)
@@ -4467,7 +4463,7 @@ const MEMBERS = {
     [Symbol.asyncIterator](this: Callable): AsyncIterator<unknown> {
         return producedRun(this[CELL])
     },
-    // biome-ignore lint/suspicious/noThenProperty: RULEBOOK 1.4 — a `Reactive` MUST be thenable, which is what this rule warns about. Banning it buys a discrimination rather than a semantics, and 16.4's in-process `Rpc` arm is what that discrimination would have cost. 1.6 is the guard that makes thenability safe — the brand is read before `then`.
+    // RULEBOOK 1.4 — a `Reactive` MUST be thenable. Banning it buys a discrimination rather than a semantics, and 16.4's in-process `Rpc` arm is what that discrimination would have cost. 1.6 is the guard that makes thenability safe — the brand is read before `then`.
     then(
         this: Callable,
         onSettled?: (value: unknown) => unknown,

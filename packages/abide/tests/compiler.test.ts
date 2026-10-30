@@ -1,10 +1,12 @@
 import { afterAll, expect, spyOn, test } from 'bun:test'
+
 import { emitClient, parseAbide } from '#compiler'
 import { HOOK_NAMES } from '#compiler/hookCalls.ts'
 import { projectShadow } from '#compiler/projectShadow.ts'
 import type { TemplateNode } from '#compiler/TemplateNode.ts'
 import { attributeText, escapeStyleValue, escapeText, safeUrl } from '#server'
 import { renderDocument } from '#server/render.ts'
+
 import { servedModules } from './servedModules.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import {
@@ -737,8 +739,6 @@ test('a for index and a destructured item shadow as the item does', async () => 
 // `pushQuoted` call in `readTag` and push the raw quoted value as a literal again; the braces then
 // reach the document verbatim — `class="badge {tone}"` is served as the author's source, and the
 // scheme check 32.20 asks for never runs on the interpolated `href` at all.
-// biome-ignore-start lint/suspicious/noTemplateCurlyInString: the emitted template literal IS the
-// subject — an interpolated attribute lowers to one, and asserting it means spelling it.
 test('an interpolated quoted attribute is one expression', async () => {
     const emitted = await serverOf('<div class="badge {tone}">x</div>', [
         'tone',
@@ -812,8 +812,6 @@ test('an interpolated style lowers to one attribute per property', async () => {
         '32.19',
     )
 })
-// biome-ignore-end lint/suspicious/noTemplateCurlyInString: the emitted template literal IS the
-// subject.
 
 // 34.2 — A `<script module>` IS MODULE SCOPE ON BOTH SIDES, which is not where a `<script>` goes.
 // THE REVERT: have `scriptBlock` hand back `scripts` for the `module` attribute too; both bodies

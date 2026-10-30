@@ -231,7 +231,7 @@ export function reactive<
  */
 export function reactive<
     Body extends (args?: never) => unknown,
-    Optional extends OptionalParameter<Body>,
+    _Optional extends OptionalParameter<Body>,
     Shaped = ChunkOf<Body>[],
     Gate = Schema<ChunkOf<Body>[]>,
     ArgsGate = Schema<Parameters<Body>[0]>,
@@ -291,7 +291,7 @@ export function reactive<
  */
 export function reactive<
     Body extends (args?: never) => unknown,
-    Optional extends OptionalParameter<Body>,
+    _Optional extends OptionalParameter<Body>,
     Shaped = Awaited<ReturnType<Body>>,
     Gate = Schema<Awaited<ReturnType<Body>>>,
     ArgsGate = Schema<Parameters<Body>[0]>,
@@ -388,8 +388,7 @@ export function reactive(
     // `store`, built where it is first reached (11.71). `global` is what keeps a value process-wide
     // (11.34).
     const options = given[1] as
-        | { global?: boolean; store?: unknown }
-        | undefined
+        { global?: boolean; store?: unknown } | undefined
     if (outsideScope(options?.global === true))
         return scoped(
             () => build(given, keyed),

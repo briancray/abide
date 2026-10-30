@@ -238,7 +238,7 @@ export function browserCookies(): Cookies {
     const jar = new Cookies(
         document.cookie,
         (serialized) => {
-            // biome-ignore lint/suspicious/noDocumentCookie: the Cookie Store API is asynchronous and missing from some browsers, and a read of the jar is synchronous.
+            // The Cookie Store API is asynchronous and missing from some browsers, and a read of the jar is synchronous.
             document.cookie = serialized
         },
         true,

@@ -346,9 +346,9 @@ The full token set is `packages/dogfood/src/ui/app.css`; it is the source, not a
 A snippet renders in a 44rem column at 12px mono — about 81 characters before it scrolls. Past
 that a sample is a thing to scroll rather than a thing to read, so the width is a property of the
 SOURCE rather than of the block. **The number is the formatter's**: `coverage.test.ts` reads
-`lineWidth` out of `biome.json` rather than restating it, because the copy that restated it drifted
-and broke. What the check is FOR is the files biome does not reach — a markdown fence, a `.abide`
-template — never a second opinion about how wide a line should be.
+`printWidth` out of `bunfig.toml`'s `[fmt]` rather than restating it, because the copy that restated
+it drifted and broke. What the check is FOR is the lines `bun fmt` does not wrap — a markdown fence,
+a `.abide` template's markup — never a second opinion about how wide a line should be.
 
 **Every length is a multiple of .25rem** — padding, gap, margin, width, height, inset, font-size,
 line-height. The exceptions are the three things that draw a LINE rather than occupy space: a

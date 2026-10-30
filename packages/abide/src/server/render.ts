@@ -9,6 +9,7 @@ import { headKeyOf } from '#shared/headKeyOf.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
 import type { ShareScope } from '#shared/reactive/share.ts'
 import { setUpLevels } from '#shared/setUpLevels.ts'
+
 import { buildDeferred, markPainted } from './deferredBuilds.ts'
 import { currentRequestScope, type PageCall } from './requestScope.ts'
 
@@ -23,7 +24,7 @@ import { currentRequestScope, type PageCall } from './requestScope.ts'
  * satisfy the linter would put the code and the registry row out of step, which is the drift
  * the documents exist to stop.
  */
-// biome-ignore lint/suspicious/noEmptyInterface: REGISTRY declares `interface Component {}`.
+// REGISTRY declares `interface Component {}`.
 export interface Component {}
 
 /**
@@ -364,8 +365,7 @@ export async function renderDocument(
  */
 function earlyCallScript(calls: PageCall[]): string {
     const rows: (
-        | [string, string, RequestInit]
-        | [string, string, RequestInit, 1]
+        [string, string, RequestInit] | [string, string, RequestInit, 1]
     )[] = []
     for (const { request, painted } of calls)
         rows.push(

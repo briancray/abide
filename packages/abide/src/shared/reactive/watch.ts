@@ -22,15 +22,15 @@ import {
     detach,
     newSubscriber,
     type Subscriber,
-    TRACKING,
     type Tracked,
+    TRACKING,
     truncate,
     truncateProbes,
     untracked,
 } from './tracking.ts'
 
 export type Disposer = () => void
-// biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
+// `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so every caller that does not return a disposer would be rejected.
 export type Effect = () => void | Disposer
 
 const WATCH_LOG = namedLogger('abide:watch')
@@ -186,7 +186,7 @@ export function watchOver(
     adopter: Tracked | null,
     effect: Effect,
 ): Disposer {
-    // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
+    // `void`, not `undefined`: see `Effect`.
     let dispose: Disposer | void
     // The sources are declared rather than tracked. `detach` still tears this down: it truncates
     // from the cursor, and the cursor of a body that never tracked is zero.
@@ -259,7 +259,7 @@ export function watchOver(
  * adoption mirror's too. Two literals keep that call site to the effects a template makes.
  */
 export function watchTracked(effect: Effect): Disposer {
-    // biome-ignore lint/suspicious/noConfusingVoidType: `void` is an EFFECT'S RETURN POSITION and is load-bearing. `undefined` there refuses the ordinary effect — a block body that returns nothing infers `void`, which is not assignable to `undefined` — so the rule's own fix would reject every caller that does not return a disposer.
+    // `void`, not `undefined`: see `Effect`.
     let dispose: Disposer | void
     const reader: Subscriber = newSubscriber([], null)
     // 11.32 — A RERUN READS THROUGH THE SCOPE THE WATCH WAS OPENED IN, not the ambient one. The

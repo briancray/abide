@@ -84,15 +84,16 @@ reading `SITE.ts`, each `index.abide`, and the pages and markdown the built app 
 
 ## Checks
 
-    bun run typecheck     TypeScript 7 over all four packages
+    bun run typecheck     TypeScript 7 over all four packages, unused locals and parameters included
     bun run test          abide build, then bun test --parallel
     bun run test:serial   the same, unparallelized — rerun a TIMING failure here before believing it
     bun run test:changed  only what a change reaches
-    bun run lint          unused locals, imports and parameters
+    bun run format        abide format over every .abide, then bun fmt over the rest
+    bun run format:check  the same, writing nothing — fails where a file would change
     bun run e2e           playwright: abide's and the harness's browser specs in chromium and
                           webkit, and the docs app at the root and under a sub-path
     bun run knip          exports and files nothing resolves through
-    bun run verify        lint, typecheck, test
+    bun run verify        typecheck, format:check, test
 
 Run everything from the REPO ROOT: `bunfig.toml`'s DOM preload is resolved relative to it,
 and the suites measure a different code path while still passing if it is not found.

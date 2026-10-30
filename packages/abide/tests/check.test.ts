@@ -1175,3 +1175,46 @@ test('abide check fails on an error and passes on warnings alone — 38.3', asyn
     expect(warned.exitCode).toBe(0)
     expect(warned.stdout).toContain('0 errors, 8 warnings')
 }, 60_000)
+
+// 38.31 — UNDER `noUnusedLocals`, A FILE IS JUDGED BY WHAT ITS AUTHOR READ. The lowering calls the
+// framework's own `raw` where a template wrote `raw(x)`, and a `{#try}` binds the failure whether or
+// not its catch arm reads it, so both read as unused in the program checked though neither is in
+// the file. THE REVERT: have the checked lowering call `this.use('raw')` again, or drop the `void`
+// after the catch binding; each page then carries one unused error it never wrote.
+test('an author reading raw in markup and a {#try} with no binding check clean under noUnusedLocals — 38.31', async () => {
+    const strict = appFixture({
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                noUnusedLocals: true,
+                noUnusedParameters: true,
+                strict: true,
+                target: 'esnext',
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                noEmit: true,
+                skipLibCheck: true,
+            },
+        }),
+        'index.abide': `<script>
+import { raw } from '@abide/abide'
+const html = '<b>x</b>'
+</script>
+
+<div>{raw(html)}</div>`,
+        'tried/index.abide': '{#try}<p>a</p>{:catch}<p>b</p>{/try}',
+        'unused/index.abide': `<script>
+import { raw } from '@abide/abide'
+</script>
+
+<p>x</p>`,
+    })
+    const found = (await checkApp(strict)).filter(
+        (diagnosis) => diagnosis.category === 'error',
+    )
+    expect(
+        found.map((diagnosis) =>
+            relative(realpathSync(strict), diagnosis.path),
+        ),
+    ).toEqual(['unused/index.abide'])
+}, 60_000)

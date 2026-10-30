@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
+
 import { SyntaxKind } from 'typescript/unstable/ast'
+
 import { parseAbide } from '#compiler/parseAbide.ts'
 import { slotEnd, tokenize } from '#compiler/tokenize.ts'
 
@@ -78,14 +80,12 @@ test('a prefix bang opens a regex and a postfix bang divides', () => {
 // object literal's own `}` ends the substitution there and the code after it becomes text — the
 // read of `n` in the substitution is lost, 0 names where 1 is due.
 test('a template literal with nested braces', () => {
-    // biome-ignore-start lint/suspicious/noTemplateCurlyInString: the substitution IS the subject.
     expect(namesIn('`${ f({ a: { b: 1 } }) } n`', 'n')).toBe(0)
     expect(namesIn('`${ { a: 1 }.a + n } n`', 'n')).toBe(1)
     expect(regexes('`${ { a: 1 }.a / n / 2 }`')).toBe(0)
     expect(regexes('`${ `${ x }` / n / 2 }`')).toBe(0)
     expect(regexes('`${x}` / n / 2')).toBe(0)
     expect(regexes('`a${ /}/.test(s) }b`')).toBe(1)
-    // biome-ignore-end lint/suspicious/noTemplateCurlyInString: the substitution IS the subject.
 })
 
 // A SLOT'S END IS THE SAME SCAN, so a literal after a condition no longer runs past it. THE

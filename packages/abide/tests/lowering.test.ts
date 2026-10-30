@@ -1,10 +1,13 @@
 import { afterAll, expect, test } from 'bun:test'
+
 import { SyntaxKind } from 'typescript/unstable/ast'
+
 import { emitComponent } from '#compiler'
 import { REACTIVE_MEMBERS } from '#compiler/REACTIVE_MEMBERS.ts'
 import { tokenize } from '#compiler/tokenize.ts'
 import { reactive } from '#shared'
 import { writePath } from '#shared/writePath.ts'
+
 import { closeTyped, lower, refusal, typed } from './typed.ts'
 
 afterAll(closeTyped)
@@ -106,11 +109,9 @@ test('an explicit read or write is left alone', async () => {
 test('a string, a comment and a member are not the name', async () => {
     expect(await lower("'n is not a name'", N)).toBe("'n is not a name'")
     expect(await lower('obj.n', N)).toBe('obj.n')
-    // biome-ignore-start lint/suspicious/noTemplateCurlyInString: the slot IS the subject.
     expect(await lower('`n in a template ${n}`', N)).toBe(
         '`n in a template ${n()}`',
     )
-    // biome-ignore-end lint/suspicious/noTemplateCurlyInString: the slot IS the subject.
     expect(await lower('other', N)).toBe('other')
     expect(await lower('notn + nn', N)).toBe('notn + nn')
 })
@@ -892,11 +893,9 @@ test('a template literal continues the value across a line break', async () => {
     expect(await lower('n = css\n`color: red`', N)).toBe(
         'n.set(css\n`color: red`)',
     )
-    // biome-ignore-start lint/suspicious/noTemplateCurlyInString: the slot IS the subject.
     expect(await lower('n = css\n`color: ${x}`', N)).toBe(
         'n.set(css\n`color: ${x}`)',
     )
-    // biome-ignore-end lint/suspicious/noTemplateCurlyInString: the slot IS the subject.
 })
 
 // `assert` IS THE EARLIER SPELLING OF THE IMPORT-ATTRIBUTES CLAUSE AND IS NOT A KEYWORD, so the

@@ -4,6 +4,7 @@
 // more than the happy path.
 
 import { expect, test } from 'bun:test'
+
 import { slice } from '../src/lib/slice.ts'
 
 const SOURCE = `<script>
@@ -78,7 +79,7 @@ test('the card puts its component above its files', async () => {
     const card = await Bun.file(
         new URL('../src/lib/Example.abide', import.meta.url),
     ).text()
-    const render = card.indexOf('<div class="ex-render"><slot/></div>')
+    const render = card.indexOf('<div class="ex-render"><slot /></div>')
     expect(render).toBeGreaterThan(-1)
     expect(render).toBeLessThan(card.indexOf('class="ex-files"'))
 })

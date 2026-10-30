@@ -8,6 +8,7 @@
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+
 import { expect, type Page, test } from '@playwright/test'
 
 const REPO = new URL('../../../', import.meta.url).pathname
@@ -48,7 +49,7 @@ const pressed = reactive('')
 let server: ChildProcess | undefined
 let base = ''
 
-// biome-ignore lint/correctness/noEmptyPattern: playwright's "no fixtures" spelling — see `routing.spec.ts`.
+// Playwright's "no fixtures" spelling — see `routing.spec.ts`.
 test.beforeAll(async ({}, testInfo) => {
     const app = join(REPO, `.test-modules/e2e-hydrate-${testInfo.project.name}`)
     rmSync(app, { recursive: true, force: true })

@@ -77,7 +77,7 @@ type Narrowed<P extends string> = P extends keyof Routes
  * 30.26 — the route literals an app files its pages under, which `abide check` declares for the app
  * it checks. Where nothing declared them any literal is taken, so a plain `tsc` still compiles.
  */
-// biome-ignore lint/suspicious/noEmptyInterface: filled by declaration merging, per app — each literal to `true`, or to the params it narrows (23.9)
+// Filled by declaration merging, per app — each literal to `true`, or to the params it narrows (23.9)
 export interface Routes {}
 
 /** 30.26 — what `url` takes: one of the app's route literals, or any where none were declared. */
