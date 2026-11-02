@@ -19,6 +19,7 @@ import {
     forwardOf,
     type Provider,
 } from './assistant.ts'
+import { BRIDGE_SCHEME } from './BRIDGE_SCHEME.ts'
 import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
 import {
     followSignIn,
@@ -50,8 +51,15 @@ export type ClaudeCodeConfig = {
 /** The built-in tools a pairing command grants, as the visitor would after its `--`. 44.32. */
 type PairingOptions = Pick<ClaudeCodeConfig, 'tools'>
 
-/** Whether this browser's bridge is connected, and the command that pairs one where it is not. */
-export type BridgeStatus = { paired: boolean; command: string | undefined }
+/**
+ * Whether this browser's bridge is connected, and the command and the link that pair one where it is
+ * not.
+ */
+export type BridgeStatus = {
+    paired: boolean
+    command: string | undefined
+    link: string | undefined
+}
 
 /** The visitor's own Claude Code, reached through the bridge paired to their browser. */
 function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
@@ -149,35 +157,40 @@ function askingCaller(): string {
     return caller
 }
 
+/** One pairing code, as the command a visitor runs and the link they open, and when it stops standing. */
+type Pairing = { command: string; link: string; expires: number }
+
 /**
- * The command that pairs a bridge with this browser, and when its code stops standing. 44.14. The
- * `tools` it is given are written after its `--`, so the visitor running it grants them (44.29, 44.32).
+ * The command and the link that pair a bridge with this browser, and when their code stops standing.
+ * 44.14. The `tools` it is given are written after the command's `--` and in the link, so the visitor
+ * running either grants them (44.29, 44.32, 44.40).
  */
-function bridgeCommand(options: PairingOptions = {}): {
-    command: string
-    expires: number
-} {
+function bridgeCommand(options: PairingOptions = {}): Pairing {
     return commandFor(askingCaller(), signedInAs(), options)
 }
 
-/** The command pairing a bridge with `caller` signed in as `signedIn` (44.33). */
+/** The command and the link pairing a bridge with `caller` signed in as `signedIn` (44.33). */
 function commandFor(
     caller: string,
     signedIn: string,
     { tools }: PairingOptions,
-): { command: string; expires: number } {
+): Pairing {
     const { code, expires } = mintCode(caller, signedIn)
     const site = `${appOrigin() ?? new URL(request().url).origin}${mounted('')}`
-    const grant = tools?.length ? ` -- --tools ${tools.join(',')}` : ''
+    const granted = tools?.length ? tools.join(',') : undefined
+    const query = new URLSearchParams({ site, code, version: BRIDGE_VERSION })
+    if (granted !== undefined) query.set('tools', granted)
+    const grant = granted === undefined ? '' : ` -- --tools ${granted}`
     return {
         command: `bunx @abide/bridge@${BRIDGE_VERSION} ${site} ${code}${grant}`,
+        link: `${BRIDGE_SCHEME}://pair?${query}`,
         expires,
     }
 }
 
 /**
- * This browser's pairing as it changes: unpaired with the command to run, then paired the moment a
- * bridge connects, and unpaired again if it goes. 44.20.
+ * This browser's pairing as it changes: unpaired with the command to run and the link to open, then
+ * paired the moment a bridge connects, and unpaired again if it goes. 44.20.
  *
  * 44.34 — IT FOLLOWS WHOEVER SIGNS IN AT THE BROWSER, though its own request carries the cookies it
  * opened with: a sign-in or a sign-out made since is the pairing it watches from then on, and the
@@ -203,7 +216,7 @@ async function* bridge(
         rouse()
     }
     signal.addEventListener('abort', rouse)
-    let pairing: { command: string; expires: number } | undefined
+    let pairing: Pairing | undefined
     let said = ''
     try {
         while (!signal.aborted) {
@@ -225,7 +238,9 @@ async function* bridge(
             const status: BridgeStatus = {
                 paired,
                 command: paired ? undefined : pairing?.command,
+                link: paired ? undefined : pairing?.link,
             }
+            // The link is minted with the command, so the command alone tells a new pairing.
             const saying = `${status.paired} ${status.command}`
             if (saying !== said) {
                 said = saying

@@ -3398,6 +3398,19 @@ its type, in its place in its turn.
 44.39 `assistant` MUST hand a `Provider` each turn as its `AssistantContent` pieces, a turn's string
 as one text piece.
 
+44.40 A pairing `claudeCode.bridgeCommand` or `claudeCode.bridge` mints MUST carry, beside its command,
+a link in the `abide-bridge` scheme naming the same site, code, bridge release and built-in tools.
+
+44.41 A bridge MUST open only a link of the `abide-bridge` scheme whose site is https or loopback and
+whose release is a version alone, and MUST run the release it names.
+
+44.42 A bridge opening an `abide-bridge` link MUST ask the visitor before it pairs, every time, naming
+the site, the built-in tools and the bridge release the link asks for.
+
+44.43 `abide-bridge install` MUST write the app that opens links under the visitor's own Application
+Support and register it there, and `abide-bridge uninstall` MUST unregister it and remove all
+install wrote.
+
 # 45. Offline
 
 45.1 Where `ABIDE_OFFLINE` is on, a page `abide build` built MUST register the worker

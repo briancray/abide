@@ -17,7 +17,7 @@ function fromPage(
     })
 }
 
-test('unpaired: asking is refused, the bridge shows a command', async () => {
+test('unpaired: refused, with a command and a link', async () => {
     await using app = await createApp()
     const refused = await app.fetch(
         fromPage('/assistant/askClaudeCode', {
@@ -38,9 +38,12 @@ test('unpaired: asking is refused, the bridge shows a command', async () => {
     const reader = (status.body as ReadableStream<Uint8Array>).getReader()
     const first = new TextDecoder().decode((await reader.read()).value)
     watching.abort()
-    const { paired, command } = JSON.parse(first.split('\n')[0] ?? '')
+    const { paired, command, link } = JSON.parse(first.split('\n')[0] ?? '')
     expect(paired).toBe(false)
     expect(command).toMatch(
         /^bunx @abide\/bridge@\S+ http:\/\/crm.invalid \S+$/,
+    )
+    expect(new URL(link).searchParams.get('code')).toBe(
+        command.split(' ').at(-1),
     )
 })

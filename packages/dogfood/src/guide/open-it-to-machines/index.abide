@@ -228,7 +228,7 @@ import Section from '#src/lib/Section.abide'
             id="crm-09-claude-code"
             app="crm-09"
             title="`claudeCode(config)` — a turn on the reader's own Claude Code"
-            summary="The assistant on whatever Claude Code is paired with this browser. Ask first and it is refused; connect, run the command in a terminal, and ask again."
+            summary="The assistant on whatever Claude Code is paired with this browser. Ask first and it is refused; connect, run the command in a terminal or open the link, and ask again."
             files={{
                 'src/assistant/lib/ClaudeCodeBridge.abide': claudeCodeBridgeSource,
                 'src/assistant/bridge.handler.ts': bridgeSource,
@@ -260,6 +260,18 @@ import Section from '#src/lib/Section.abide'
         <p>The visitor pairs once per visit by running a command, which dials out to the site.
             Asking with nothing paired is refused 409.</p>
 
+        <p>On a Mac the visitor can pair with a click instead. Each status carries a
+            <code>link</code> beside its command, the same pairing in the <code>abide-bridge</code>
+            scheme, and a visitor who has run this once opens it from the page:</p>
+
+        <Code code={`bunx @abide/bridge install`} />
+
+        <p>That builds a small app under their own Application Support folder, nowhere in
+            Applications, and registers it for the scheme. Opening a link asks them every time, naming
+            the site, the tools and the bridge release it asks for, and then runs that release, as
+            the command would. A link only proves the site minted its code, never that this visitor
+            asked for it, so no answer is kept for a site. <code>bunx @abide/bridge uninstall</code> takes it away.</p>
+
         <p>The tools the conversation calls run as the visitor, on the sign-in their ask carried,
             so a tool reads <code>principal</code> as any handler does. The pairing belongs to that
             sign-in too. If someone else signs in at the same browser, their asks are refused 409
@@ -269,9 +281,9 @@ import Section from '#src/lib/Section.abide'
         <table>
             <thead><tr><th>Name</th><th>What it does for the CRM</th></tr></thead>
             <tbody>
-                <tr><td><code>claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired with the command to run, then paired.</td></tr>
-                <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, command }'}</code>.</td></tr>
-                <tr><td><code>claudeCode.bridgeCommand</code></td><td>Mints the command alone, for a page that wants the line without the stream. Its code expires unused after ten minutes.</td></tr>
+                <tr><td><code>claudeCode.bridge</code></td><td>Streams this browser's pairing: unpaired with the command to run and the link to open, then paired.</td></tr>
+                <tr><td><code>BridgeStatus</code></td><td>One status in that stream, <code>{'{ paired, command, link }'}</code>.</td></tr>
+                <tr><td><code>claudeCode.bridgeCommand</code></td><td>Mints the command and the link alone, for a page that wants them without the stream. Its code expires unused after ten minutes.</td></tr>
                 <tr><td><code>/__abide/bridge</code></td><td>Where the visitor's bridge connects. It opens the first time a command is minted.</td></tr>
             </tbody>
         </table>

@@ -13,7 +13,9 @@ import {
     RESUME_MILLISECONDS as BRIDGE_RESUME_MILLISECONDS,
     SILENCE_MILLISECONDS,
 } from '../../bridge/src/bridge.ts'
+import { PAIRING_SCHEME, pairingOf } from '../../bridge/src/pairingLink.ts'
 import { readLines } from '../../bridge/src/readLines.ts'
+import { BRIDGE_SCHEME } from '../src/server/BRIDGE_SCHEME.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
 import { mintCode, RESUME_MILLISECONDS } from '../src/server/bridgeRelay.ts'
 import type { ClaudeCodeConfig } from '../src/server/claudeCode.ts'
@@ -592,6 +594,32 @@ test('a pairing command minted with tools grants them to the bridge it starts �
     expect(args[args.indexOf('--tools') + 1]).toBe('WebSearch,WebFetch')
 }, 30_000)
 
+// 44.40, 44.41 — THE LINK IS THE COMMAND'S PAIRING: the bridge reads from it the site, code, release and
+// tools the command beside it carries, and its code pairs. THE REVERT: mint the link a code of its
+// own, and its code is no pairing this page's command stands for.
+test('a pairing link carries what its command does, and its code pairs — 44.40, 44.41', async () => {
+    const answer = await Bun.fetch(`${base}/granting`, {
+        headers: asPage('nine'),
+    })
+    const { command, link } = (await answer.json()) as {
+        command: string
+        link: string
+    }
+    const [pairing = '', claudeArgs = ''] = command.split(' -- ')
+    const [, , site, code] = pairing.split(' ')
+    const read = pairingOf(link)
+    expect(read).toEqual({
+        site: site as string,
+        code: code as string,
+        version: BRIDGE_VERSION,
+        tools: claudeArgs.split(' ')[1]?.split(',') ?? [],
+    })
+    await pairBridge('nine', read?.code)
+    const lines = await statusOf('nine')
+    expect((await lines.next()).value).toEqual({ paired: true })
+    await lines.return(undefined)
+}, 30_000)
+
 // 44.16 — AN OPTION THAT REACHES THE VISITOR'S MACHINE IS NOT THE SITE'S TO SET: the turn fails naming
 // it, before Claude Code runs. THE REVERT: lay every option on as its flag, and the fake runs with
 // `--add-dir /`.
@@ -814,6 +842,11 @@ test('the pairing command names the bridge package’s own version', async () =>
 // sides to one address — apart, the bridge dials a path nothing answers.
 test('the bridge dials the address the site relays at', () => {
     expect(BRIDGE_PATH).toBe(BRIDGE_ADDRESS)
+})
+
+// The same for the link's scheme — apart, the site shows a link no installed bridge opens.
+test('the bridge opens the scheme the site writes its links in', () => {
+    expect(PAIRING_SCHEME).toBe(BRIDGE_SCHEME)
 })
 
 /** What a bridge run to its end against a `fakeBridgeSite` misbehaving as `how` said, and the site saw. */
