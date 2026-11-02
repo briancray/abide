@@ -18,5 +18,5 @@ languages = ["abide"]
 # committed and this pins the commit.
 [grammars.abide]
 repository = "https://github.com/briancray/abide"
-commit = "0000000000000000000000000000000000000000"
+commit = "d7cd46da1e0cd523631d38d923f8bb08d1f0716f"
 path = "editors/tree-sitter-abide"
