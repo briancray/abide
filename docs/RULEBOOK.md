@@ -1959,8 +1959,8 @@ body.
 MUST NOT be built as a string.
 
 32.20 An interpolation in a URL-typed attribute MUST be scheme-checked, and a scheme outside
-`http:`, `https:`, `mailto:`, `tel:`, `blob:`, `data:` or a relative reference MUST be dropped and warned on
-`abide:render`, naming the attribute and not the value.
+`http:`, `https:`, `mailto:`, `tel:`, `blob:`, `data:`, `abide-bridge:` (44.40) or a relative
+reference MUST be dropped and warned on `abide:render`, naming the attribute and not the value.
 
 32.21 A control block MUST bind each reactive read and probe call in its subject once for the body.
 

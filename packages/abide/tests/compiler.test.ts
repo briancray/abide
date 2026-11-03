@@ -103,9 +103,8 @@ test('escapeText rewrites only what a parse would read', () => {
     expect(escapeText(null)).toBe('')
 })
 
-// 32.20 — a scheme outside http:, https:, mailto:, tel:, blob: or data: is dropped. THE REVERT: return the
-// value unconditionally from `safeUrl`; the emitted markup then carries 1 `javascript:` href where
-// 0 is due, and this test reports it.
+// 32.20 — a scheme outside `SAFE_SCHEMES` is dropped. THE REVERT: return the value unconditionally from `safeUrl`; the emitted markup then
+// carries 1 `javascript:` href where 0 is due, and this test reports it.
 test('an unsafe url scheme is dropped and a relative reference is kept', async () => {
     expect(await serverOf(`<a href="javascript:alert(1)">x</a>`)).not.toContain(
         'javascript:',
@@ -127,6 +126,19 @@ test('a blob: or data: url is kept', () => {
     expect(safeUrl('data:image/png;base64,iVBORw0KGgo=')).toBe(
         'data:image/png;base64,iVBORw0KGgo=',
     )
+})
+
+// 32.20's set includes `abide-bridge:` — a pairing's `link` (44.40) is what the visitor opens, and
+// written empty it opens nothing. THE REVERT: take it out of `SAFE_SCHEMES`; the link comes back ''.
+// Only that scheme: another custom one is still dropped.
+test('an abide-bridge: pairing link is kept, and no other custom scheme', () => {
+    const link = 'abide-bridge://pair?site=https%3A%2F%2Fexample.com&code=abc'
+    expect(safeUrl(link)).toBe(link)
+    expect(safeUrl('ABIDE-BRIDGE://pair?code=abc')).toBe(
+        'ABIDE-BRIDGE://pair?code=abc',
+    )
+    expect(safeUrl('vscode://file/etc/passwd')).toBe('')
+    expect(safeUrl('abide-bridgex://pair')).toBe('')
 })
 
 // The client bundle is the point of this stage: a static page ships no runtime. THE REVERT: emit

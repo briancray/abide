@@ -6,15 +6,22 @@
 //
 // The warning on `abide:render` the clause also asks for is `attributeText`'s, which knows the
 // attribute's name.
+//
+// `abide-bridge:` IS IN THE SET because abide mints it: a pairing's `link` (44.40) is written into an
+// `href` or the visitor cannot open it, and the docs' own pairing page does exactly that. It is the
+// one scheme, not custom schemes generally — what it opens asks the visitor before it does anything,
+// every time, naming the site it pairs with (44.42), so a link from anywhere can do no more than ask.
+import { BRIDGE_SCHEME } from './BRIDGE_SCHEME.ts'
 import { textOf } from './Raw.ts'
 
-const SAFE_SCHEMES = new Set([
+export const SAFE_SCHEMES = new Set([
     'http:',
     'https:',
     'mailto:',
     'tel:',
     'blob:',
     'data:',
+    `${BRIDGE_SCHEME}:`,
 ])
 
 /** A URL attribute's text, or `''` where its scheme is outside the safe set. */

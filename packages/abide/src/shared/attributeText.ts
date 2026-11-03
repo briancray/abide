@@ -10,7 +10,7 @@ import { BOOLEAN_ATTRIBUTES } from './BOOLEAN_ATTRIBUTES.ts'
 import { escapeAttribute } from './escapeText.ts'
 import { RENDER_LOG } from './log.ts'
 import { textOf } from './Raw.ts'
-import { safeUrl } from './safeUrl.ts'
+import { SAFE_SCHEMES, safeUrl } from './safeUrl.ts'
 import { URL_ATTRIBUTES } from './URL_ATTRIBUTES.ts'
 
 /**
@@ -31,7 +31,7 @@ export function attributeText(name: string, value: unknown): string | null {
     const safe = safeUrl(text)
     if (safe !== text)
         RENDER_LOG.warning(
-            `abide: \`${name}\` was handed a URL whose scheme is not http:, https:, mailto:, tel:, blob: or data:, and is written empty. RULEBOOK 32.20.`,
+            `abide: \`${name}\` was handed a URL whose scheme is not one of ${[...SAFE_SCHEMES].join(' ')}, and is written empty. RULEBOOK 32.20.`,
         )
     return safe
 }
