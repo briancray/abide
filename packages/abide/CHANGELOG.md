@@ -1,5 +1,16 @@
 # @abide/abide
 
+## 0.121.0
+
+### Minor Changes
+
+- 980d729: the agent instructions ship in the package and a scaffolded CLAUDE.md imports them, and the starter comes with tailwind wired (RULEBOOK 38.104, 38.106, 38.131) ([`c95852e`](https://github.com/briancray/abide/commit/c95852e7bc195cb9f5ef53f0623e31700362b302))
+
+### Patch Changes
+
+- 980d729: the shipped agent instructions are ABIDE.md, so no agent working on abide reads them as its own, and a gate holds their citations and the starter's tailwind to what resolves (RULEBOOK 38.104, 38.106, 38.131) ([`2880551`](https://github.com/briancray/abide/commit/2880551b777247a88e7042fa5bdd462fab3e40b2))
+- 980d729: one dangling-citation scan and one built-stylesheet read in the tests, and the shipped agent instructions state each rule once ([`602cb8f`](https://github.com/briancray/abide/commit/602cb8fd87f136ea23a58dd006bdac43ca65ebe4))
+
 ## 0.120.0
 
 ### Minor Changes
