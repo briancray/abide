@@ -4,6 +4,7 @@
 
 import { expect, test } from 'bun:test'
 
+import { answered } from '#server/answerFailure.ts'
 import { Mux } from '#server/answerSocket.ts'
 import { config } from '#server/config.ts'
 import { fileRoute, middleware, onConfig, rungsOver } from '#server/hooks.ts'
@@ -69,7 +70,7 @@ test("a GET followed over the mux passes its route's middleware — 18.26", asyn
                     handler,
                     ui: true,
                     route: '/vault',
-                    rungs: rungsOver('/vault'),
+                    rungs: rungsOver('/vault', answered),
                     address: '/vault/gold',
                 } as never,
             ],
@@ -126,7 +127,7 @@ test('a route rung that re-heads the answer still admits the follow — 18.26', 
                     handler,
                     ui: true,
                     route: '/traced',
-                    rungs: rungsOver('/traced'),
+                    rungs: rungsOver('/traced', answered),
                     address: '/traced/trail',
                 } as never,
             ],

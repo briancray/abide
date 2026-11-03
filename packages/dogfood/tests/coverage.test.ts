@@ -546,6 +546,14 @@ async function declaredTypes(): Promise<Set<string>> {
                 `\`${signature.slice(own.length + 1)}`,
             ).split(','))
                 declared.add(/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ?? '')
+        // AND ITS BODY A GENERIC SIGNATURE — `Middleware<Answer, Extra> = <Given, Result>(…)` —
+        // binds a second list, the call's, where the alias's ends.
+        const body = (signature ?? '').indexOf('> = <')
+        if (own !== undefined && body !== -1)
+            for (const part of binder(`\`${signature?.slice(body + 4)}`).split(
+                ',',
+            ))
+                declared.add(/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ?? '')
         // A MAPPED TYPE binds its key where it uses it — `[K in RequiredNames<P>]` is the
         // same declaration a leading `<…>` makes, in the other syntax. `ParamsOf<P>` is
         // three of them, and without this the key reads as a type nothing declares.

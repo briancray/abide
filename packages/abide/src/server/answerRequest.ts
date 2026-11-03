@@ -22,7 +22,7 @@ import { DEBUG_META } from '#shared/DEBUG_META.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { ERROR_META } from '#shared/ERROR_META.ts'
 import { escapeAttribute } from '#shared/escapeText.ts'
-import { type Failed, isFailed } from '#shared/Failed.ts'
+import { isFailed } from '#shared/Failed.ts'
 import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import { health } from '#shared/health.ts'
 import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
@@ -45,7 +45,7 @@ import {
 import type { Method, Rpc } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 
-import { answered, answerFailure } from './answerFailure.ts'
+import { answerFailure, laneFailure } from './answerFailure.ts'
 import {
     answerRpc,
     type Mounted,
@@ -64,12 +64,11 @@ import { settingOn } from './config.ts'
 import { noteCallInRender } from './deferredBuilds.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
 import { answerMcp, openApi } from './generatedSurfaces.ts'
-import { type AppRung, failureOf, rungsOver } from './hooks.ts'
+import { failureOf, type LaneRung, rungsOver } from './hooks.ts'
 import { chunksOf, type Manifest } from './manifestOf.ts'
 import { muxAdmission } from './muxUpgrade.ts'
 import { OFFLINE_STALE } from './OFFLINE_STALE.ts'
 import { plainAnswer } from './plainAnswer.ts'
-import { prefers } from './prefers.ts'
 import { PRINCIPAL_MOUNT } from './principal.ts'
 import {
     boundPage,
@@ -625,7 +624,18 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
         if (row.page !== undefined)
             row.answers.set(
                 row.page,
-                answerInside(sources, row.page, rungsOver(row.pattern)),
+                answerInside(
+                    sources,
+                    row.page,
+                    // 37.14 — a page's lane paints a refusal as its error page does (35.2).
+                    rungsOver(row.pattern, (failure, request) =>
+                        answerFailure(
+                            sources,
+                            new URL(request.url).pathname,
+                            failure,
+                        ),
+                    ),
+                ),
             )
         for (const handler of row.handlers.values())
             row.answers.set(
@@ -640,7 +650,7 @@ export async function appSources(parts: SourceParts): Promise<AppSources> {
 function answerInside(
     app: AppSources,
     found: Ranked | Mounted,
-    rungs: AppRung[],
+    rungs: LaneRung[],
 ): (ctx: { request: Request }) => Promise<Response> {
     return compose(rungs, ({ request }) => answerMatched(app, request, found))
 }
@@ -772,21 +782,6 @@ async function methodRefused(
             : await laneFailure(app, pathname, failure, request)
     answer.headers.set('allow', allowed.join(', '))
     return answer
-}
-
-/**
- * A failure at an address whose lane only the request can say: a page's, painted, where it prefers
- * a document, and a handler's otherwise. 15.22.
- */
-function laneFailure(
-    app: AppSources,
-    pathname: string,
-    failure: Failed<string, unknown>,
-    request: Request,
-): Response | Promise<Response> {
-    return prefers(request, 'text/html', 'application/json')
-        ? answerFailure(app, pathname, failure)
-        : answered(failure)
 }
 
 /**

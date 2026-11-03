@@ -10,6 +10,7 @@ import { coversRoute, parseRoutePattern } from '#shared/routePattern.ts'
 
 import type { AppSources } from './answerRequest.ts'
 import { DOCUMENT_HEADERS } from './DOCUMENT_HEADERS.ts'
+import { prefers } from './prefers.ts'
 import { boundPage, renderDocument } from './render.ts'
 import { beginRender, currentRequestScope } from './requestScope.ts'
 
@@ -99,4 +100,19 @@ export async function answerFailure(
     }
     headers.set('content-type', 'text/plain; charset=utf-8')
     return new Response(failure.message, { status, headers })
+}
+
+/**
+ * A failure at an address whose lane only the request can say: a page's, painted, where it prefers
+ * a document, and a handler's otherwise. 15.22.
+ */
+export function laneFailure(
+    app: ErrorPages,
+    pathname: string,
+    failure: Failed<string, unknown>,
+    request: Request,
+): Response | Promise<Response> {
+    return prefers(request, 'text/html', 'application/json')
+        ? answerFailure(app, pathname, failure)
+        : answered(failure)
 }

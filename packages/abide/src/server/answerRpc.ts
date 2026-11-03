@@ -44,7 +44,7 @@ import {
     crossingOrigin,
     crossingRefusal,
 } from './crossingOrigin.ts'
-import { type AppRung, failureOf, rungsOver } from './hooks.ts'
+import { failureOf, type LaneRung, rungsOver } from './hooks.ts'
 import { OFFLINE_STALE } from './OFFLINE_STALE.ts'
 import { prefers } from './prefers.ts'
 import {
@@ -120,7 +120,7 @@ export type Mounted = Mount & {
      * The rungs filed over `scope`, read once at mount (16.14) — what an http call and a socket
      * subscription to it both pass through (37.2, 18.26).
      */
-    rungs: AppRung[]
+    rungs: LaneRung[]
     handler: Rpc<unknown, unknown> & Gated<unknown> & HeldToAnnotation
     /**
      * The args' JSON Schema, probed once at mount.
@@ -203,7 +203,8 @@ export async function mountHandlers(
             ...mount,
             // 37.1, 16.72 — the route its file's hooks are filed at, which the build read off
             // where the file answers (23.19's mount for a package's), never its place on disk.
-            rungs: rungsOver(mount.scope),
+            // 37.14 — a handler's lane answers a refusal as Problem Details (15.1).
+            rungs: rungsOver(mount.scope, answered),
             handler,
             argsDocument: declared ?? (mount.args as Document | undefined),
         })

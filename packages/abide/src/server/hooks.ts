@@ -13,7 +13,7 @@
 
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { namedLogger } from '#shared/log.ts'
-import type { Middleware } from '#shared/Middleware.ts'
+import type { Rung } from '#shared/Middleware.ts'
 import { aborted, refuse } from '#shared/refuse.ts'
 import {
     coversRoute,
@@ -26,7 +26,25 @@ import { config } from './config.ts'
 import type { LauncherOptions } from './launcherOptions.ts'
 import { currentRequestScope } from './requestScope.ts'
 
-export type AppRung = Middleware<{ request: Request }, Response>
+type AppContext = { request: Request }
+
+/** A rung `middleware` files: what `next` answered passed on, or a refusal in its place (37.14). */
+export type AppRung = (
+    next: (ctx?: AppContext) => Promise<Response>,
+    ctx: AppContext,
+) =>
+    | Response
+    | Failed<string, unknown>
+    | Promise<Response | Failed<string, unknown>>
+
+/** An app rung as its lane composes it, a refusal it returned already answered (37.14). */
+export type LaneRung = Rung<AppContext, Response>
+
+/** How a lane answers a refusal one of its rungs returned, in that lane's representation (37.14). */
+export type RefusalAnswer = (
+    failure: Failed<string, unknown>,
+    request: Request,
+) => Response | Promise<Response>
 
 export type Env = Record<string, string | undefined>
 export type ConfigDefaults = (env: Env) => unknown
@@ -106,11 +124,24 @@ export function inOrder<T>(list: readonly Filed<T>[]): T[] {
     return items
 }
 
+/**
+ * `rung` with a refusal it returns answered by `answer`.
+ *
+ * 37.14, 37.15 — PER LINK, not at the onion's edge: a rung outside this one is handed the answer
+ * from `next`, so one that reads a `Response` (29.2's) reads one whichever rung inside it refused.
+ */
+function answering(rung: AppRung, answer: RefusalAnswer): LaneRung {
+    return async (next, ctx) => {
+        const result = await rung(next, ctx)
+        return isFailed(result) ? answer(result, ctx.request) : result
+    }
+}
+
 /** The rungs filed at the root route, which run before routing. 37.3. */
-export function rootRungs(): AppRung[] {
-    const rungs: AppRung[] = []
+export function rootRungs(answer: RefusalAnswer): LaneRung[] {
+    const rungs: LaneRung[] = []
     for (const entry of HOOKS.rungs)
-        if (entry.route === ROOT) rungs.push(entry.item)
+        if (entry.route === ROOT) rungs.push(answering(entry.item, answer))
     return rungs
 }
 
@@ -120,12 +151,12 @@ export function rootRungs(): AppRung[] {
  * 37.2 — every rung filed at `route` or at a route that is its front, the root's aside: those ran
  * before routing (37.3).
  */
-export function rungsOver(route: string): AppRung[] {
+export function rungsOver(route: string, answer: RefusalAnswer): LaneRung[] {
     const segments = parseRoutePattern(route)
-    const rungs: AppRung[] = []
+    const rungs: LaneRung[] = []
     for (const entry of HOOKS.rungs)
         if (entry.route !== ROOT && coversRoute(entry.segments, segments))
-            rungs.push(entry.item)
+            rungs.push(answering(entry.item, answer))
     return rungs
 }
 

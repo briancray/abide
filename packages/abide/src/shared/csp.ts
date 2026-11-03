@@ -3,9 +3,9 @@
 // mint one for, so `csp.nonce` answers the one its document was served with, which is what a
 // binding that wrote it on the server hydrates to.
 
-import type { Middleware } from './Middleware.ts'
+import type { Rung as LaneRung } from './Middleware.ts'
 
-type Rung = Middleware<{ request: Request }, Response>
+type Rung = LaneRung<{ request: Request }, Response>
 
 /**
  * The server's content-security-policy half, as slots `#server/installServer.ts` fills from

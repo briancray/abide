@@ -7,6 +7,7 @@ import getStatementSource from 'crm-07/src/account/getStatement.handler.ts' with
 import AddContact from 'crm-07/src/account/lib/AddContact.abide'
 import addContactComponentSource from 'crm-07/src/account/lib/AddContact.abide' with { type: 'text' }
 import addContactTestSource from 'crm-07/src/account/lib/AddContact.test.ts' with { type: 'text' }
+import adminsOnlySource from 'crm-07/src/account/lib/adminsOnly.ts' with { type: 'text' }
 import Badge from 'crm-07/src/account/lib/Badge.abide'
 import badgeSource from 'crm-07/src/account/lib/Badge.abide' with { type: 'text' }
 import badgeTestSource from 'crm-07/src/account/lib/Badge.test.ts' with { type: 'text' }
@@ -190,6 +191,7 @@ import Section from '#src/lib/Section.abide'
             files={{
                 'src/account/lib/ExportContacts.abide': exportContactsComponentSource,
                 'src/account/exportContacts.handler.ts': exportContactsSource,
+                'src/account/lib/adminsOnly.ts': adminsOnlySource,
                 'src/account/lib/ExportContacts.test.ts': exportContactsTestSource,
             }}
         >
@@ -197,7 +199,7 @@ import Section from '#src/lib/Section.abide'
         </Example>
 
         <p>A rung is a <code>Middleware</code>: it is handed <code>next</code> and the call's
-            context, and either returns <code>next(ctx)</code> or answers in the handler's place.
+            context, and either returns <code>next()</code> or answers in the handler's place.
             Returning <code>refuse(403, …)</code> refuses, and neither the handler nor any rung after
             it runs. A throw escapes every rung rather than unwinding through them.</p>
 
@@ -208,17 +210,15 @@ import Section from '#src/lib/Section.abide'
 
         <p>To guard a whole section, call <code>middleware(…)</code> in its
             <code>layout.abide</code>, such as <code>src/account/admin/layout.abide</code>. That rung
-            runs over every page and handler below it, and it has the request and nothing else:</p>
+            runs over every page and handler below it, and it has the request and nothing else. The
+            same <code>adminsOnly</code> fits there, and its refusal is painted by the section's
+            <code>error.abide</code> over a page and answered as Problem Details over a handler:</p>
 
         <Code language="abide" caption="abide" code={`<script server>
-import { principal } from '@abide/abide'
 import { middleware } from '@abide/abide/server'
+import { adminsOnly } from '#src/account/lib/adminsOnly.ts'
 
-middleware(async (next) => {
-    const { role } = await principal.resolved
-    if (role !== 'admin') return new Response('Admins only.', { status: 403 })
-    return next()
-})
+middleware(adminsOnly)
 </script>
 
 <slot/>`} />

@@ -17,6 +17,7 @@ import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { servedTable } from './abideModules.ts'
+import { laneFailure } from './answerFailure.ts'
 import { answerRequest, type AppSources } from './answerRequest.ts'
 import type { Mount } from './answerRpc.ts'
 import { Mux, type MuxConnection } from './answerSocket.ts'
@@ -278,7 +279,10 @@ export async function bootEntered(
     // 16.14, 37.3 — THE APP LANE'S ONION, composed once over the whole request path: the root
     // route's rungs, the ones below it running after routing (37.2, `answerRequest`). 21.20 — the
     // center takes its own time back out of what `fetch` counts for the whole onion.
-    const rungs = rootRungs()
+    // 37.14 — before routing, the lane is the request's to say (15.22).
+    const rungs = rootRungs((failure, request) =>
+        laneFailure(booted, new URL(request.url).pathname, failure, request),
+    )
     const answer = compose(rungs, async ({ request }) => {
         const began = performance.now()
         const answered = await answerRequest(booted, request)

@@ -41,10 +41,10 @@ ${contents}${body}`
 
 // The request a root middleware is handed is addressed below the mount, as a route is, so it is
 // matched against addresses below the mount rather than against `url()`, which adds it.
-export const serveDownloads: Middleware<
-    { request: Request },
-    Response
-> = async (next, { request }) => {
+export const serveDownloads: Middleware<Response> = async (
+    next,
+    { request },
+) => {
     const { pathname, origin } = new URL(request.url)
     const archived = /^\/examples\/([^/]+)\.tar\.gz$/.exec(pathname)
     if (archived) {

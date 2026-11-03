@@ -2454,6 +2454,13 @@ through `App.stop`, and the process MUST then exit with 0.
 37.13 A lifecycle hook called in a module of the app's own that is neither a `.abide` nor a handler
 file MUST be a build error naming the module and the hook.
 
+37.14 A `Failed` a `middleware` rung returns MUST be answered in the lane the rung is filed over: by
+the nearest `error.abide` per 35.2 over a page, as 15.21 states over a handler, and as 15.22 paints
+a 405 for a rung filed at the root route.
+
+37.15 A `middleware` rung outside one that returned a `Failed` MUST be handed 37.14's answer from
+`next`, and MUST NOT be handed the `Failed`.
+
 # 38. Commands
 
 ## The commands

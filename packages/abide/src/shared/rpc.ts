@@ -19,7 +19,7 @@ import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { HandlerRoute } from './HandlerRoute.ts'
 import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
 import type { Issues } from './Issues.ts'
-import { compose, type Middleware } from './Middleware.ts'
+import { compose, type Rung } from './Middleware.ts'
 import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
 import { principalRotated } from './principalRotated.ts'
 import {
@@ -192,7 +192,7 @@ const SENT: unique symbol = Symbol('abide.sent')
 
 export type RpcOptions<Args = unknown> = {
     description?: string
-    middleware?: Middleware<RpcContext<Args>, unknown>[]
+    middleware?: Rung<RpcContext<Args>, unknown>[]
     timeout?: number
     clients?: Clients
     crossOrigin?: boolean | string[]
