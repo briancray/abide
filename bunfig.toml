@@ -9,6 +9,9 @@ peer = false
 # REPO ROOT or this path does not resolve, and the suites measure a different code
 # path while still passing — see CLAUDE.md, "checks".
 preload = ["./packages/harness/src/measure/preload.ts"]
+# A path filter is a substring match, so the repo checkout zed builds the grammar from
+# (`editors/zed/grammars/abide`) would otherwise run its own stale copy of every suite.
+pathIgnorePatterns = ["editors/**"]
 
 # `bun fmt` and `abide format` read this. Markdown, YAML, TOML and HTML were never formatted by
 # Biome, and stay as written; the reference pages are `scripts/referencePages.ts`'s to write, and
