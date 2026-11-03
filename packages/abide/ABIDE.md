@@ -57,6 +57,10 @@ affected code saying what it did, and tell the user.
   scripts, the CLI and MCP alike.
 - A `.abide` cannot export. A `<script server>` in one holds that file's private handlers
   (`const save = POST(…)`), callable by that file alone, and its hooks (`onStart`, `middleware`, …).
+- A rung shared between handlers or layouts is typed `Middleware` and nothing else:
+  `export const signedIn: Middleware = async (next) => (await principal.authenticated) ? next() : refuse(401)`
+  fits a handler's `middleware: […]` and a layout's `middleware(…)` alike (RULEBOOK 37.14). No
+  `<Ctx, Result>` of its own, and no `as` on a `refuse`.
 - A directory holds addresses, tests, benches, `.d.ts` declarations and two fenced directories
   alone: `lib/` for components and modules, and `public/` for files served as they are. Anything
   else beside the pages is a build error.
