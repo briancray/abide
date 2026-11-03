@@ -11,27 +11,48 @@
 import { type Pairing, pairingOf } from './pairingLink.ts'
 import { readLines } from './readLines.ts'
 
-/** What install found, kept beside this file: `bun`, `claude`, and the `PATH` it was run on. */
-export type HandlerSettings = { bun: string; claude: string; path: string }
+/**
+ * What install found, kept beside this file: `bun`, `claude`, and the `PATH` it was run on — and what
+ * the visitor gave it for every link (44.44): the Claude Code options after its `--` and each `--env`.
+ */
+export type HandlerSettings = {
+    bun: string
+    claude: string
+    path: string
+    claudeArgs: string[]
+    env: Record<string, string>
+}
 
 /**
  * What the visitor is asked before `pairing` runs. EVERY LINK IS ASKED (44.42): a code proves only
  * that the site minted it, never that this visitor's browser asked for it, so an answer kept for a
  * site would pair any page's link to whoever minted its code.
  */
-export function question(pairing: Pairing): string {
+export function question(pairing: Pairing, settings: HandlerSettings): string {
     const tools =
         pairing.tools.length === 0
             ? 'It gets none of this Mac’s tools.'
             : `It also asks for these tools of this Mac’s: ${pairing.tools.join(', ')}.`
-    return `${pairing.site} wants to use your Claude Code as its assistant, with its own tools, on your Claude account.\n\n${tools}\n\nIt runs @abide/bridge ${pairing.version}. Allow it only if you just asked to pair on that site.`
+    // A variable's value is only named, never shown: it is as likely a token as a host.
+    const names = Object.keys(settings.env)
+    const kept =
+        settings.claudeArgs.length === 0 && names.length === 0
+            ? ''
+            : `\n\nIt also gets what you gave install for every site: ${[...settings.claudeArgs, ...names].join(' ')}.`
+    return `${pairing.site} wants to use your Claude Code as its assistant, with its own tools, on your Claude account.\n\n${tools}${kept}\n\nIt runs @abide/bridge ${pairing.version}. Allow it only if you just asked to pair on that site.`
 }
 
-/** The bridge the link names, run as the command a site shows would run it. 44.32. */
+/**
+ * The bridge the link names, run as the command a site shows would run it (44.32), with the options
+ * install kept ahead of the link's tools (44.44).
+ */
 export function bridgeArguments(
     pairing: Pairing,
     settings: HandlerSettings,
 ): string[] {
+    const claudeArgs = [...settings.claudeArgs]
+    if (pairing.tools.length > 0)
+        claudeArgs.push('--tools', pairing.tools.join(','))
     return [
         settings.bun,
         'x',
@@ -40,9 +61,7 @@ export function bridgeArguments(
         pairing.code,
         '--claude',
         settings.claude,
-        ...(pairing.tools.length === 0
-            ? []
-            : ['--', '--tools', pairing.tools.join(',')]),
+        ...(claudeArgs.length === 0 ? [] : ['--', ...claudeArgs]),
     ]
 }
 
@@ -76,13 +95,16 @@ async function appleScript(
 }
 
 /** Asks the visitor about `pairing` in a dialog; closing it is a no. */
-async function allowed(pairing: Pairing): Promise<boolean> {
+async function allowed(
+    pairing: Pairing,
+    settings: HandlerSettings,
+): Promise<boolean> {
     const pressed = await appleScript(
         [
             'display dialog (item 1 of argv) with title "abide bridge" buttons {"Don’t Allow", "Allow"} default button "Don’t Allow" cancel button "Don’t Allow" with icon caution',
             'button returned of result',
         ],
-        question(pairing),
+        question(pairing, settings),
     )
     return pressed === 'Allow'
 }
@@ -134,11 +156,12 @@ async function open(link: string): Promise<number> {
     const settings = (await Bun.file(
         `${import.meta.dir}/settings.json`,
     ).json()) as HandlerSettings
-    if (!(await allowed(pairing))) return 0
+    if (!(await allowed(pairing, settings))) return 0
     const running = Bun.spawn(bridgeArguments(pairing, settings), {
         stdout: 'ignore',
         stderr: 'pipe',
-        env: { ...Bun.env, PATH: searchPath(settings) },
+        // The visitor's own `--env` last, so a `PATH` they gave install wins over the one it found.
+        env: { ...Bun.env, PATH: searchPath(settings), ...settings.env },
     })
     for await (const line of readLines(
         running.stderr as ReadableStream<Uint8Array>,

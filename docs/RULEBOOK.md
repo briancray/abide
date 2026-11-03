@@ -3409,11 +3409,16 @@ a link in the `abide-bridge` scheme naming the same site, code, bridge release a
 whose release is a version alone, and MUST run the release it names.
 
 44.42 A bridge opening an `abide-bridge` link MUST ask the visitor before it pairs, every time, naming
-the site, the built-in tools and the bridge release the link asks for.
+the site, the built-in tools and the bridge release the link asks for, and the options and the names
+of the variables `abide-bridge install` kept (44.44).
 
 44.43 `abide-bridge install` MUST write the app that opens links under the visitor's own Application
 Support and register it there, and `abide-bridge uninstall` MUST unregister it and remove all
 install wrote.
+
+44.44 `abide-bridge install` MUST keep the Claude Code options after its `--` and each `--env
+NAME=VALUE` it is given, and a bridge opening an `abide-bridge` link MUST run Claude Code with those
+options ahead of the link's built-in tools and with those variables set, and a link MUST NOT set either.
 
 # 45. Offline
 

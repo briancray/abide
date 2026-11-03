@@ -1,33 +1,48 @@
 #!/usr/bin/env bun
-// `abide-bridge <site> <code> [--claude <path>] [-- <claude options>]` — the command an abide site shows
-// you to connect your Claude Code to its assistant. `--claude <path>` names the executable where `claude`
-// is not on PATH; whatever follows `--` is passed to Claude Code as you wrote it, and is how you give a
-// site what reaches this machine — `-- --tools WebSearch,WebFetch` for the built-in tools it asks for.
+// `abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]` — the command
+// an abide site shows you to connect your Claude Code to its assistant. `--claude <path>` names the
+// executable where `claude` is not on PATH; each `--env` sets a variable Claude Code runs with; whatever
+// follows `--` is passed to Claude Code as you wrote it, and is how you give a site what reaches this
+// machine — `-- --tools WebSearch,WebFetch` for the built-in tools it asks for.
 //
-// `abide-bridge install [--claude <path>]` builds and registers, on macOS, the app that opens the pairing
-// link a site shows beside its command, so a click pairs instead of a terminal; `abide-bridge uninstall`
-// takes it away.
+// `abide-bridge install` takes the same options and builds and registers, on macOS, the app that opens the
+// pairing link a site shows beside its command, so a click pairs instead of a terminal — every link it
+// opens runs with the `--env` and the `--` options given here (44.44); `abide-bridge uninstall` takes it
+// away.
 
 import { bridge } from '../src/bridge.ts'
 import { install, installDirectory, uninstall } from '../src/install.ts'
+
+const USAGE =
+    'usage: abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge install [--claude <path>] [--env NAME=VALUE]... [-- <claude options>]\n       abide-bridge uninstall'
 
 const all = process.argv.slice(2)
 const split = all.indexOf('--')
 const args = split === -1 ? all : all.slice(0, split)
 const claudeArgs = split === -1 ? [] : all.slice(split + 1)
-const flag = args.indexOf('--claude')
-const claude = flag === -1 ? undefined : args[flag + 1]
-const [site, code] = args.filter(
-    (_arg, index) => flag === -1 || (index !== flag && index !== flag + 1),
-)
+let claude: string | undefined
+const env: Record<string, string> = {}
+const positional: string[] = []
+let malformed = false
+for (let index = 0; index < args.length; index++) {
+    const arg = args[index] as string
+    if (arg === '--claude') claude = args[++index]
+    else if (arg === '--env') {
+        const assignment = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s.exec(
+            args[++index] ?? '',
+        )
+        if (assignment === null) malformed = true
+        else env[assignment[1] as string] = assignment[2] as string
+    } else positional.push(arg)
+}
+const [site, code] = positional
 
 if (
+    malformed ||
     site === undefined ||
     (site !== 'uninstall' && site !== 'install' && code === undefined)
 ) {
-    console.error(
-        'usage: abide-bridge <site> <code> [--claude <path>] [-- <claude options>]\n       abide-bridge install [--claude <path>]\n       abide-bridge uninstall',
-    )
+    console.error(USAGE)
     process.exit(2)
 }
 
@@ -49,17 +64,22 @@ try {
                 bun: process.execPath,
                 claude: found,
                 path: Bun.env.PATH ?? '',
+                claudeArgs,
+                env,
             })
             console.error(
                 `Installed ${app}. A site's pairing link now opens here, and asks you before it pairs. \`abide-bridge uninstall\` removes it.`,
             )
-        } else
+        } else {
+            // Claude Code is started with this process's environment.
+            Object.assign(process.env, env)
             await bridge({
                 site,
                 code: code as string,
                 claudeArgs,
                 claude: found,
             })
+        }
     }
     process.exit(0)
 } catch (thrown) {

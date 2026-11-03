@@ -39,6 +39,21 @@ function linkOf(fields: Record<string, string>): string {
 
 const GOOD = { ...PAIRING, tools: PAIRING.tools.join(',') }
 
+const SETTINGS = {
+    bun: '/opt/bun/bin/bun',
+    claude: '/opt/claude/claude',
+    path: '/opt/node/bin:/opt/bun/bin:/usr/bin',
+    claudeArgs: [],
+    env: {},
+}
+
+// What a visitor gave install for every link: their own MCP servers, and a host one of them reads.
+const KEPT = {
+    ...SETTINGS,
+    claudeArgs: ['--mcp-config', '/Users/me/sources.mcp.json'],
+    env: { GH_HOST: 'github.example', GH_TOKEN: 'secret-token' },
+}
+
 test('a link is read as the pairing it names — 44.41', () => {
     expect(pairingOf(linkOf(GOOD))).toEqual(PAIRING)
     const { tools: _tools, ...untooled } = GOOD
@@ -74,20 +89,29 @@ test('a link that would be read as more than a pairing is refused — 44.41', ()
 // 44.42 — EVERY LINK IS ASKED, and the question names what the link would run. There is no kept
 // answer to test: a code proves the site minted it, not that this visitor asked for it.
 test('the question names the site, every tool and the release it asks for — 44.42', () => {
-    const asked = question(PAIRING)
+    const asked = question(PAIRING, SETTINGS)
     expect(asked).toContain(PAIRING.site)
     expect(asked).toContain('WebSearch, WebFetch')
     expect(asked).toContain(`@abide/bridge ${PAIRING.version}`)
-    expect(question({ ...PAIRING, tools: [] })).toContain('none of this Mac’s')
+    expect(asked).not.toContain('gave install')
+    expect(question({ ...PAIRING, tools: [] }, SETTINGS)).toContain(
+        'none of this Mac’s',
+    )
+})
+
+// 44.42, 44.44 — WHAT INSTALL KEPT IS ASKED ABOUT TOO: it reaches every site the visitor allows, so the
+// question names each option and each variable — by name, since a value may be a token.
+test('the question names the options and variables install kept, and no value — 44.42, 44.44', () => {
+    const asked = question(PAIRING, KEPT)
+    expect(asked).toContain('--mcp-config /Users/me/sources.mcp.json')
+    expect(asked).toContain('GH_HOST GH_TOKEN')
+    expect(asked).not.toContain('secret-token')
+    expect(asked).not.toContain('github.example')
 })
 
 // 44.41, 44.32 — THE RELEASE THE LINK NAMES, run as the command beside it would be.
 test('a link runs the release it names, granting its tools after the --', () => {
-    const settings = {
-        bun: '/opt/bun/bin/bun',
-        claude: '/opt/claude/claude',
-        path: '/opt/node/bin:/opt/bun/bin:/usr/bin',
-    }
+    const settings = SETTINGS
     expect(bridgeArguments(PAIRING, settings)).toEqual([
         '/opt/bun/bin/bun',
         'x',
@@ -109,6 +133,23 @@ test('a link runs the release it names, granting its tools after the --', () => 
     )
 })
 
+// 44.44 — WHAT INSTALL KEPT RUNS WITH EVERY LINK, ahead of the link's tools, so the bridge reads both
+// as the visitor's command line; a link with no tools still carries them.
+test('a link runs with the options install kept, ahead of its tools — 44.44', () => {
+    expect(bridgeArguments(PAIRING, KEPT).slice(7)).toEqual([
+        '--',
+        '--mcp-config',
+        '/Users/me/sources.mcp.json',
+        '--tools',
+        'WebSearch,WebFetch',
+    ])
+    expect(bridgeArguments({ ...PAIRING, tools: [] }, KEPT).slice(7)).toEqual([
+        '--',
+        '--mcp-config',
+        '/Users/me/sources.mcp.json',
+    ])
+})
+
 afterAll(removeTemporaryModules)
 
 // 44.43 — THE APP OPENS THE SCHEME AND NOTHING SHOWS: built here, its plist claims `abide-bridge`, it
@@ -118,11 +159,7 @@ test.skipIf(process.platform !== 'darwin')(
     'install builds a signed app that opens the scheme, and uninstall removes it — 44.43',
     async () => {
         const directory = temporaryModule({}, `${tmpdir()}/`)
-        const settings = {
-            bun: process.execPath,
-            claude: '/opt/claude/claude',
-            path: '/usr/bin:/bin',
-        }
+        const settings = { ...KEPT, bun: process.execPath }
         const app = await install(settings, { directory, register: false })
         expect(app).toBe(appIn(directory))
         const plist = await spawned(
