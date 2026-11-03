@@ -105,18 +105,18 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
     )
     // 38.103, 38.104 — the checker `tsc` cannot stand in for, and an agent handed the instructions
     // the package installs with, which name its docs. THE REVERT: drop `check` from the scripts, the
-    // import from CLAUDE.md, or the paths from the package's AGENTS.md.
+    // import from CLAUDE.md, or the paths from the package's ABIDE.md.
     expect(manifest.scripts.check).toBe('abide check')
     // 38.124 — THE REVERT: drop `bench` from the scripts.
     expect(manifest.scripts.bench).toBe('harness-bench')
     expect(await Bun.file(`${app}/CLAUDE.md`).text()).toBe(
-        '@node_modules/@abide/abide/AGENTS.md\n@AGENTS.md\n',
+        '@node_modules/@abide/abide/ABIDE.md\n@AGENTS.md\n',
     )
     expect(await Bun.file(`${app}/AGENTS.md`).text()).toContain(
-        'node_modules/@abide/abide/AGENTS.md',
+        'node_modules/@abide/abide/ABIDE.md',
     )
     const instructions = await Bun.file(
-        new URL('../AGENTS.md', import.meta.url),
+        new URL('../ABIDE.md', import.meta.url),
     ).text()
     for (const shipped of ['abide.md', 'REGISTRY.md', 'RULEBOOK.md'])
         expect(instructions).toContain(
@@ -144,6 +144,15 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
     const built = await spawned(['bun', BIN, 'build'], { cwd: app })
     expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
+    // 38.131 — THE TAILWIND THE STARTER INSTALLS IS THE ONE THE DOCS APP IS BUILT WITH, the only
+    // place this repository runs it. THE REVERT: bump either range alone; the two disagree here.
+    const dogfood = await Bun.file(
+        new URL('../../dogfood/package.json', import.meta.url),
+    ).json()
+    for (const name of ['bun-plugin-tailwind', 'tailwindcss'])
+        expect(manifest.devDependencies[name]).toBe(
+            dogfood.devDependencies[name] ?? dogfood.dependencies[name],
+        )
     // 38.131 — the starter's page styled by tailwind: a utility it writes is a rule in the built
     // stylesheet. THE REVERT: drop the plugin from the bunfig, and bun's own CSS parser refuses the
     // stylesheet's `source(…)`; drop the layout's import, and no stylesheet is built at all.
@@ -166,13 +175,13 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
 
 // 38.104, 38.105, 38.106 — WHAT AN INSTALL CARRIES BESIDE THE CODE: the instructions a scaffolded
 // CLAUDE.md imports, and the docs they name, written by `prepack` into a directory `files` ships.
-// THE REVERT: drop `AGENTS.md` or `docs` from `files`, or the `prepack` that writes the docs, and
+// THE REVERT: drop `ABIDE.md` or `docs` from `files`, or the `prepack` that writes the docs, and
 // what a scaffolded app points its agent at is absent from every install.
 test('the published package carries the instructions, the docs and the rulebook — 38.104, 38.105, 38.106', async () => {
     const manifest = await Bun.file(
         new URL('../package.json', import.meta.url),
     ).json()
-    expect(manifest.files).toContain('AGENTS.md')
+    expect(manifest.files).toContain('ABIDE.md')
     expect(manifest.files).toContain('docs')
     expect(manifest.scripts.prepack).toBe('bun ../../scripts/packDocs.ts')
     const packDocs = await Bun.file(

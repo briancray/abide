@@ -100,8 +100,9 @@ affected code saying what it did, and tell the user.
   right and a write repaints. The browser sends it, so check what it holds before trusting it.
   `localStorage` is for a working set the browser alone needs: the server cannot read it, and
   renders the initial value.
-- A value that has not landed leaves its place in markup empty and fills it when it lands (RULEBOOK
-  32.23), so markup needs no guard. Do not paper over it with `?? []` or `x.ready() ? x : undefined`
+- A value that has not landed leaves its place in markup as it was — empty before it first lands,
+  the last value while it reloads — and fills it when it lands (RULEBOOK 32.23), so markup needs no
+  guard. Do not paper over it with `?? []` or `x.ready() ? x : undefined`
   — that makes "not loaded yet" read as "empty". Branch on `x.ready()` or `x.busy()` only where a
   placeholder is actually wanted.
 

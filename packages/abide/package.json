@@ -72,7 +72,7 @@
         "prepack": "bun ../../scripts/packDocs.ts"
     },
     "files": [
-        "AGENTS.md",
+        "ABIDE.md",
         "src",
         "bin",
         "scaffold",

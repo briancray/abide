@@ -382,6 +382,22 @@ test('every clause the working notes cite exists', async () => {
     expect([...new Set(dangling)]).toEqual([])
 })
 
+// THE INSTRUCTIONS EVERY INSTALL SHIPS cite the rulebook to an agent in an app, which has no other
+// copy to check them against — so a citation a renumber left behind sends it to the wrong rule in
+// every app at once. Every clause number in the file is read, as BRAND's are.
+// THE REVERT: plant `RULEBOOK 99.1` in packages/abide/ABIDE.md; it is named as dangling.
+test('every clause the shipped agent instructions cite exists', async () => {
+    const instructions = await Bun.file(
+        new URL('../packages/abide/ABIDE.md', DOCS),
+    ).text()
+    const ids = new Set(clauses().map((clause) => clause.id))
+    const dangling: string[] = []
+    for (const match of instructions.matchAll(/\b(\d+\.\d+)\b/g))
+        if (!ids.has(match[1] ?? '')) dangling.push(match[1] ?? '')
+    expect(ids.size).toBeGreaterThan(0)
+    expect([...new Set(dangling)]).toEqual([])
+})
+
 // The check above reads only what follows the word RULEBOOK, so a bare `(40.17, 40.18)` in the
 // notes resolves or dangles with nothing looking. A parenthesized clause number is a citation, and
 // one written without its document is one the check cannot see.

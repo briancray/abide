@@ -1,2 +1,2 @@
-@node_modules/@abide/abide/AGENTS.md
+@node_modules/@abide/abide/ABIDE.md
 @AGENTS.md

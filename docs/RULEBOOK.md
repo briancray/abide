@@ -2762,8 +2762,8 @@ documentation, the registry and the rulebook.
 38.105 Every clause an `abide check` diagnostic or a refusal cites MUST resolve in a rulebook the
 published package holds.
 
-38.106 The documentation the instructions of a project `abide scaffold` writes name (38.104) MUST be
-every page as one markdown file, in reading order.
+38.106 The documentation named by the instructions a project `abide scaffold` writes imports (38.104)
+MUST be every page as one markdown file, in reading order.
 
 38.107 `onLauncher` called anywhere but `src/launcher.abide` MUST be a build error naming that file.
 
