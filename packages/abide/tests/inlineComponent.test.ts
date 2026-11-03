@@ -328,6 +328,13 @@ import Outer from '../lib/Outer.abide'
 <Outer title="t">{#component Item({ n }: { n: string })}<li>{n}</li>{/component}</Outer>
 <Outer title="u">{#component Item({ n }: { n: number })}<li>{n}</li>{/component}</Outer>
 <Item n={1}/>`,
+        'lib/Frame.abide': '<div><slot/></div>',
+        'nested/index.abide': `<script>
+import Frame from '../lib/Frame.abide'
+import Outer from '../lib/Outer.abide'
+</script>
+
+<Frame><Outer title="t">{#component Item({ n }: { n: number })}<li>{n}</li>{/component}</Outer></Frame>`,
     })
 }, 60_000)
 
@@ -337,6 +344,8 @@ import Outer from '../lib/Outer.abide'
 // passed component (`invocation` skipping `node.passed`) — each `<Outer>` reports `Item` missing
 // (TS2741) and the `n: string` mismatch is not; or declare the passed components without braces
 // around the call — `<Item n={1}/>` after the tags resolves, and two `Item`s collide (TS2393).
+// `nested/` passes one to a tag inside another's body: end the close tag's read without its `;` in
+// `invocation` and `(Frame)` before the braces parses as an arrow's head (TS1005, TS7006, TS6133).
 test('abide check holds an inline component to its props and a passed one to its receiver — 32.40, 32.51, 32.54, 38.40', async () => {
     const found = await checkApp(app)
     const reported: {
