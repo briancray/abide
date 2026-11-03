@@ -7,6 +7,10 @@ onStart(async (start) => {
 })
 </script>
 
+<script>
+import '#src/lib/app.css'
+</script>
+
 <html lang="en">
     <head>
         <meta charset="utf-8" />

@@ -2755,14 +2755,15 @@ open on the refusal, and the `connect` menu role MUST show the connect dialog op
 
 38.103 The project `abide scaffold` writes MUST carry a `check` script that runs `abide check`.
 
-38.104 The project `abide scaffold` writes MUST carry instructions for a coding agent that name where
-the installed package holds the documentation, the registry and the rulebook.
+38.104 The project `abide scaffold` writes MUST carry instructions for a coding agent that import the
+ones the installed package holds, and those MUST name where the installed package holds the
+documentation, the registry and the rulebook.
 
 38.105 Every clause an `abide check` diagnostic or a refusal cites MUST resolve in a rulebook the
 published package holds.
 
-38.106 The documentation the instructions `abide scaffold` writes name (38.104) MUST be every page
-as one markdown file, in reading order.
+38.106 The documentation the instructions of a project `abide scaffold` writes name (38.104) MUST be
+every page as one markdown file, in reading order.
 
 38.107 `onLauncher` called anywhere but `src/launcher.abide` MUST be a build error naming that file.
 
@@ -2846,6 +2847,9 @@ line, MUST go on formatting the rest, and MUST exit non-zero where it reports on
 
 38.130 `abide lsp` MUST answer a formatting request with what `abide format` makes of the text the
 editor holds.
+
+38.131 The project `abide scaffold` writes MUST carry Tailwind wired: `bun-plugin-tailwind` declared
+in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its root layout imports.
 
 # 39. Head and view transitions
 

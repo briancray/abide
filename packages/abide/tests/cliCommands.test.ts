@@ -60,7 +60,7 @@ afterAll(() => {
 
 // 38.1 — THE LAYOUT, WRITTEN, and a step already done is skipped rather than overwritten. The
 // scaffolded app then builds, which is what "a starter project" has to mean.
-test('scaffold writes a starter project, skips what is there, builds and passes its tests — 38.1, 38.42, 38.103, 38.104, 38.112, 38.119, 38.122', async () => {
+test('scaffold writes a starter project, skips what is there, builds and passes its tests — 38.1, 38.42, 38.103, 38.104, 38.112, 38.119, 38.122, 38.131', async () => {
     const into = temporaryModule({ 'readme.md': 'here\n' })
     const first = await spawned(['bun', BIN, 'scaffold', 'ledger'], {
         cwd: into,
@@ -73,6 +73,7 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
         'src/getGreeting.handler.ts',
         'src/getGreeting.test.ts',
         'src/index.test.ts',
+        'src/lib/app.css',
         'package.json',
         'tsconfig.json',
         'AGENTS.md',
@@ -95,20 +96,32 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
     expect(Object.keys(manifest.devDependencies)).toEqual([
         '@abide/harness',
         '@types/bun',
+        'bun-plugin-tailwind',
+        'tailwindcss',
     ])
     // 38.119 — the harness the starter's mounted test measures with, from this checkout too.
     expect(manifest.devDependencies['@abide/harness']).toBe(
         `file:${new URL('../../harness', import.meta.url).pathname}`,
     )
-    // 38.103, 38.104 — the checker `tsc` cannot stand in for, and an agent pointed at the docs the
-    // package installs with. THE REVERT: drop `check` from the scripts, or the paths from AGENTS.md.
+    // 38.103, 38.104 — the checker `tsc` cannot stand in for, and an agent handed the instructions
+    // the package installs with, which name its docs. THE REVERT: drop `check` from the scripts, the
+    // import from CLAUDE.md, or the paths from the package's AGENTS.md.
     expect(manifest.scripts.check).toBe('abide check')
     // 38.124 — THE REVERT: drop `bench` from the scripts.
     expect(manifest.scripts.bench).toBe('harness-bench')
-    const agents = await Bun.file(`${app}/AGENTS.md`).text()
+    expect(await Bun.file(`${app}/CLAUDE.md`).text()).toBe(
+        '@node_modules/@abide/abide/AGENTS.md\n@AGENTS.md\n',
+    )
+    expect(await Bun.file(`${app}/AGENTS.md`).text()).toContain(
+        'node_modules/@abide/abide/AGENTS.md',
+    )
+    const instructions = await Bun.file(
+        new URL('../AGENTS.md', import.meta.url),
+    ).text()
     for (const shipped of ['abide.md', 'REGISTRY.md', 'RULEBOOK.md'])
-        expect(agents).toContain(`node_modules/@abide/abide/docs/${shipped}`)
-    expect(await Bun.file(`${app}/CLAUDE.md`).text()).toBe('@AGENTS.md\n')
+        expect(instructions).toContain(
+            `node_modules/@abide/abide/docs/${shipped}`,
+        )
     // 38.122 — THE REVERT: drop `[install]` from the bunfig, and `peer` is undefined.
     expect(
         Bun.TOML.parse(await Bun.file(`${app}/bunfig.toml`).text()),
@@ -131,6 +144,14 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
     const built = await spawned(['bun', BIN, 'build'], { cwd: app })
     expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
+    // 38.131 — the starter's page styled by tailwind: a utility it writes is a rule in the built
+    // stylesheet. THE REVERT: drop the plugin from the bunfig, and bun's own CSS parser refuses the
+    // stylesheet's `source(…)`; drop the layout's import, and no stylesheet is built at all.
+    const sheets = [...new Bun.Glob('*.css').scanSync(`${app}/.abide/client`)]
+    expect(sheets.length).toBe(1)
+    expect(
+        await Bun.file(`${app}/.abide/client/${sheets[0]}`).text(),
+    ).toContain('.bg-black')
 
     // 38.112, 38.119 — the starter's tests, run as its own script runs them: the handler called, and
     // the page mounted and a click measured. THE REVERT: drop `test` from the scripts, and
@@ -143,13 +164,15 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
     ).toBe('0 true')
 }, 60_000)
 
-// 38.105, 38.106 — WHAT AN INSTALL CARRIES BESIDE THE CODE: the docs the scaffold's AGENTS.md
-// names, written by `prepack` into a directory `files` ships. THE REVERT: drop `docs` from `files`,
-// or the `prepack` that writes it, and the paths AGENTS.md names are absent from every install.
-test('the published package carries the docs and the rulebook — 38.105, 38.106', async () => {
+// 38.104, 38.105, 38.106 — WHAT AN INSTALL CARRIES BESIDE THE CODE: the instructions a scaffolded
+// CLAUDE.md imports, and the docs they name, written by `prepack` into a directory `files` ships.
+// THE REVERT: drop `AGENTS.md` or `docs` from `files`, or the `prepack` that writes the docs, and
+// what a scaffolded app points its agent at is absent from every install.
+test('the published package carries the instructions, the docs and the rulebook — 38.104, 38.105, 38.106', async () => {
     const manifest = await Bun.file(
         new URL('../package.json', import.meta.url),
     ).json()
+    expect(manifest.files).toContain('AGENTS.md')
     expect(manifest.files).toContain('docs')
     expect(manifest.scripts.prepack).toBe('bun ../../scripts/packDocs.ts')
     const packDocs = await Bun.file(
