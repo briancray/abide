@@ -93,6 +93,13 @@ affected code saying what it did, and tell the user.
   the DOM, a timer, an imperative API — and never assigns state; a user action's effect belongs in
   its event handler. A `watch` runs during a server render too (RULEBOOK 12.5), so one that starts a
   timer or touches a browser global returns a `Disposer`.
+- A preference the page renders — a currency, a theme, a panel left open — lives in a cookie:
+  `const theme = reactive(() => cookies().get('theme') ?? 'light')`, written with
+  `cookies().set('theme', next)`. `cookies()` is the request's on the server and the document's in
+  the browser, and a read by name is tracked (RULEBOOK 22.2, 22.4), so the first paint is already
+  right and a write repaints. The browser sends it, so check what it holds before trusting it.
+  `localStorage` is for a working set the browser alone needs: the server cannot read it, and
+  renders the initial value.
 - A value that has not landed leaves its place in markup empty and fills it when it lands (RULEBOOK
   32.23), so markup needs no guard. Do not paper over it with `?? []` or `x.ready() ? x : undefined`
   — that makes "not loaded yet" read as "empty". Branch on `x.ready()` or `x.busy()` only where a
