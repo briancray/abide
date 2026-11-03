@@ -5,7 +5,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
-import { handlerFiles, serveApp } from './builtApp.ts'
+import { builtStylesheet, handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const BIN = new URL('../bin/abide.ts', import.meta.url).pathname
@@ -156,11 +156,7 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
     // 38.131 — the starter's page styled by tailwind: a utility it writes is a rule in the built
     // stylesheet. THE REVERT: drop the plugin from the bunfig, and bun's own CSS parser refuses the
     // stylesheet's `source(…)`; drop the layout's import, and no stylesheet is built at all.
-    const sheets = [...new Bun.Glob('*.css').scanSync(`${app}/.abide/client`)]
-    expect(sheets.length).toBe(1)
-    expect(
-        await Bun.file(`${app}/.abide/client/${sheets[0]}`).text(),
-    ).toContain('.bg-black')
+    expect(await builtStylesheet(app)).toContain('.bg-black')
 
     // 38.112, 38.119 — the starter's tests, run as its own script runs them: the handler called, and
     // the page mounted and a click measured. THE REVERT: drop `test` from the scripts, and
@@ -218,11 +214,7 @@ test('build runs the plugins bunfig.toml declares over the client — 38.43', as
     })
     const built = await spawned(['bun', BIN, 'build'], { cwd: app })
     expect(built.stderr).toBe('')
-    const sheets = [...new Bun.Glob('*.css').scanSync(`${app}/.abide/client`)]
-    expect(sheets.length).toBe(1)
-    expect(
-        await Bun.file(`${app}/.abide/client/${sheets[0]}`).text(),
-    ).toContain('.stamped-by-plugin')
+    expect(await builtStylesheet(app)).toContain('.stamped-by-plugin')
 })
 
 // 38.2 — EVERYTHING AFTER THE FILE IS THE SCRIPT'S, its own flags included, and the script runs in a

@@ -45,6 +45,15 @@ function clauses(): { id: string; text: string }[] {
     return rulebookClauses(body(rulebook))
 }
 
+/** Every clause number in `text` that names no clause — each number read, not only a `RULEBOOK` one. */
+function danglingClauses(text: string): string[] {
+    const ids = new Set(clauses().map((clause) => clause.id))
+    const dangling = new Set<string>()
+    for (const match of text.matchAll(/\b(\d+\.\d+)\b/g))
+        if (!ids.has(match[1] ?? '')) dangling.add(match[1] ?? '')
+    return [...dangling]
+}
+
 // The categories the clauses are written over, read from the rulebook's own Terms table rather
 // than listed here — a term added there without a definition is what this would otherwise miss.
 const TERMS = (() => {
@@ -344,15 +353,8 @@ test('every document the brand names exists', async () => {
 // BRAND format rule 1. A claim cites a clause, and the citation has to resolve — otherwise the
 // column reads as authority and points at nothing. Every citation in the document is read, not
 // just the load-bearing claims table.
-test('every clause the brand cites exists', async () => {
-    const ids = new Set(clauses().map((clause) => clause.id))
-    const dangling: string[] = []
-    for (const line of brandBody.split('\n')) {
-        for (const match of line.matchAll(/\b(\d+\.\d+)\b/g)) {
-            if (!ids.has(match[1] ?? '')) dangling.push(match[1] ?? '')
-        }
-    }
-    expect([...new Set(dangling)]).toEqual([])
+test('every clause the brand cites exists', () => {
+    expect(danglingClauses(brandBody)).toEqual([])
 })
 
 // CLAUDE.md is the document every session reads first, and it named none of the other four while
@@ -390,12 +392,7 @@ test('every clause the shipped agent instructions cite exists', async () => {
     const instructions = await Bun.file(
         new URL('../packages/abide/ABIDE.md', DOCS),
     ).text()
-    const ids = new Set(clauses().map((clause) => clause.id))
-    const dangling: string[] = []
-    for (const match of instructions.matchAll(/\b(\d+\.\d+)\b/g))
-        if (!ids.has(match[1] ?? '')) dangling.push(match[1] ?? '')
-    expect(ids.size).toBeGreaterThan(0)
-    expect([...new Set(dangling)]).toEqual([])
+    expect(danglingClauses(instructions)).toEqual([])
 })
 
 // The check above reads only what follows the word RULEBOOK, so a bare `(40.17, 40.18)` in the

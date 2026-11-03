@@ -38,7 +38,6 @@ const SOURCE_ALIAS = { '#src/*': ['./src/*', './src/*.ts'] }
  * nothing booted first. Its test root is `src`, so a browser test under `e2e` is playwright's alone.
  * 38.122 — and no peer installed: `bun-plugin-tailwind` names `bun` as one, and an installed copy
  * lands first on the PATH inside `bun run`, shadowing the bun that runs everything else.
- * 38.131 — that plugin is the one `abide build` and `abide dev` run over the client (38.43).
  */
 export const BUNFIG =
     '# 38.122 — a peer is not installed: an installed `bun` would shadow this one inside `bun run`.\n[install]\npeer = false\n\n# 38.43, 38.131 — the plugin that builds the stylesheet `src/lib/app.css` opens.\n[serve.static]\nplugins = ["bun-plugin-tailwind"]\n\n# 38.109, 38.119 — a DOM to mount into and measure, then the app\'s `.abide` files as modules.\n[test]\nroot = "src"\npreload = ["@abide/harness/abide/preload"]\n\n# What `bun fmt` and `abide format` print.\n[fmt]\ntabWidth = 4\nsemi = false\nsingleQuote = true\nsortImports = true\n'

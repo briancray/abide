@@ -2,6 +2,8 @@
 // holds across the real process boundary: a browser's call, a cookie, a response streamed off
 // `abide start`. The app is a temporary module, so `removeTemporaryModules` takes it away.
 
+import { expect } from 'bun:test'
+
 import { spawned } from '@abide/harness/gate'
 
 import { type Compilation, servedTable } from '#server/abideModules.ts'
@@ -23,6 +25,13 @@ export function appFixture(files: Record<string, string>): string {
         }),
         ...files,
     })
+}
+
+/** The one stylesheet a build of `app` wrote, as text. */
+export async function builtStylesheet(app: string): Promise<string> {
+    const sheets = [...new Bun.Glob('*.css').scanSync(`${app}/.abide/client`)]
+    expect(sheets.length).toBe(1)
+    return Bun.file(`${app}/.abide/client/${sheets[0]}`).text()
 }
 
 export function buildApp(

@@ -1,8 +1,7 @@
 # Working on this app
 
 This is an abide app. Before writing code, read `node_modules/@abide/abide/ABIDE.md`: how an abide
-app is laid out, checked and tested, and what this file is for. It ships with abide and updates
-with it.
+app is laid out, checked and tested, and what this file is for.
 
 ## This app
 
