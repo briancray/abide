@@ -22,13 +22,18 @@ import { CELL } from './CELL.ts'
 import { CAUGHT_UP, Cursor, hasCursorBehind, keepPlaces } from './Cursor.ts'
 import { ENTRY_LIVES } from './ENTRY_LIVES.ts'
 import { armTimer, type Expiry, expiryFor } from './Expiry.ts'
-import { FOLLOWED } from './FOLLOWED.ts'
 import { isReactive } from './isReactive.ts'
 import { isThenable } from './isThenable.ts'
 import { MUTATION } from './MUTATION.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
-import { PATCH_SINKS, type PatchOp } from './PATCH_SINKS.ts'
+import {
+    holdLog,
+    logOf,
+    PatchLog,
+    type PatchOp,
+    sendInvalidate,
+} from './patchLog.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
 import { currentScope, runInScope, type Scope } from './scoping.ts'
@@ -3522,7 +3527,7 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
         // served: patching the served one overwrote the held production with it, and the write
         // the window held was never seen.
         const head = cap?.holding && cell.body === null ? cap.held : cell.value
-        recordWrites(head, mutate, PATCH_SINKS.get(cell))
+        recordWrites(head, mutate, logOf(cell))
         // 5.7: REPLACES THE HEAD PRODUCTION RATHER THAN APPENDING ONE, so the ordinal does not
         // move: the follow's version tells a patch from a production by exactly that, and sends a
         // patch as its writes (18.11). A cursor reads the change off the object's patch epoch
@@ -3542,10 +3547,8 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
     const before = stream.chunks.length
     // A CURSOR BEHIND needs where the patch wrote, which its ops say: the follow's own sink, or one
     // of this patch's alone where nothing follows the value.
-    const followed = PATCH_SINKS.get(cell)
     const sink =
-        followed ??
-        (hasCursorBehind(cell) ? { ops: [], lost: false } : undefined)
+        logOf(cell) ?? (hasCursorBehind(cell) ? new PatchLog(null) : undefined)
     const from = sink === undefined ? 0 : sink.ops.length
     recordWrites(stream.chunks, mutate, sink)
     // 5.7 AS THE VALUE BRANCH KEEPS IT: a patch mints no ordinal, so an accumulation it grew or
@@ -3681,8 +3684,7 @@ function reloadOwed(cell: Cell): void {
  */
 function invalidateOne(cell: Cell): void {
     // 7.6 — sent on to the browsers following it whether or not there is a producer to mark.
-    const followed = FOLLOWED.get(cell)
-    if (followed !== undefined) for (const sendOn of followed) sendOn()
+    sendInvalidate(cell)
     if (!reloads(cell)) return
     // Not directly servable, so the next read goes a frame in and settles the debt.
     cell.direct = false
@@ -4491,6 +4493,17 @@ const MEMBERS = {
  */
 export function servedCellOf(value: unknown): { readonly ordinal: number } {
     return adoptedCellOf(value)
+}
+
+/**
+ * Holds a patch log on the cell `value` serves from, with `invalidated` called on its every
+ * invalidate; returns what releases both. 18.11, 7.10.
+ */
+export function followServed(
+    value: unknown,
+    invalidated: () => void,
+): () => void {
+    return holdLog(adoptedCellOf(value), invalidated)
 }
 
 /**

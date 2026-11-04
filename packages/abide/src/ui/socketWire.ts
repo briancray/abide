@@ -16,7 +16,7 @@ import {
     type Reactive,
     writtenLocally,
 } from '#shared/reactive/index.ts'
-import { PATCHES } from '#shared/reactive/PATCHES.ts'
+import { patchEpoch, writtenSince } from '#shared/reactive/patchMarks.ts'
 
 import { HYDRATE_LOG } from './Mismatch.ts'
 import { undelivered, whenDelivered } from './outboxQueue.ts'
@@ -64,18 +64,13 @@ class Following {
     inStep(): void {
         const copy = this.entry()
         this.generation = loadOf(copy) ?? heldGenerationOf(copy)
-        this.epoch = PATCHES.epoch
+        this.epoch = patchEpoch()
     }
 
     /** Whether the copy was written to since it was last in step. 18.21. */
     diverged(copy: unknown): boolean {
         if (heldGenerationOf(copy) !== this.generation) return true
-        const held = (copy as Reactive<unknown>).peek()
-        return (
-            held !== null &&
-            typeof held === 'object' &&
-            (PATCHES.written.get(held) ?? 0) > this.epoch
-        )
+        return writtenSince((copy as Reactive<unknown>).peek(), this.epoch)
     }
 
     /**

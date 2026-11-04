@@ -14,8 +14,8 @@
 // slow tab missed. A production that was not a patch breaks the chain.
 
 import { servedCellOf } from '#shared/reactive/index.ts'
-import { PATCH_SINKS, type PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
-import { PATCHES } from '#shared/reactive/PATCHES.ts'
+import { drainLog, type PatchOp } from '#shared/reactive/patchLog.ts'
+import { writtenAt } from '#shared/reactive/patchMarks.ts'
 
 let next = Date.now() * 1000
 
@@ -41,10 +41,7 @@ const STAMPS = new WeakMap<object, Stamp>()
 export function versionOf(value: unknown): number {
     const cell = servedCellOf(value)
     const held = (value as { peek(): unknown }).peek()
-    const patched =
-        held !== null && typeof held === 'object'
-            ? (PATCHES.written.get(held) ?? 0)
-            : 0
+    const patched = writtenAt(held)
     const stamp = STAMPS.get(cell)
     if (
         stamp !== undefined &&
@@ -54,19 +51,13 @@ export function versionOf(value: unknown): number {
     )
         return stamp.version
     // THE WRITES SINCE THE LAST STAMP stand for the change only where nothing else moved it.
-    const sink = PATCH_SINKS.get(cell)
-    const onlyPatched =
+    const drained = drainLog(cell)
+    const ops =
         stamp !== undefined &&
         stamp.ordinal === cell.ordinal &&
         stamp.held === held
-    const ops =
-        onlyPatched && sink !== undefined && !sink.lost && sink.ops.length > 0
-            ? sink.ops
+            ? drained
             : null
-    if (sink !== undefined) {
-        sink.ops = []
-        sink.lost = false
-    }
     next += 1
     // The chain carries on from the stamp this replaces, whose array it takes over.
     const recent = ops === null || stamp === undefined ? [] : stamp.recent

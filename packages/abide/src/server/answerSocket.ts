@@ -16,10 +16,8 @@ import { namedLogger } from '#shared/log.ts'
 import { compose } from '#shared/Middleware.ts'
 import { unmounted } from '#shared/mount.ts'
 import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
-import { FOLLOWED } from '#shared/reactive/FOLLOWED.ts'
-import { servedCellOf } from '#shared/reactive/index.ts'
+import { followServed } from '#shared/reactive/index.ts'
 import { matchesPattern } from '#shared/reactive/matchesPattern.ts'
-import { PATCH_SINKS } from '#shared/reactive/PATCH_SINKS.ts'
 import { unowned } from '#shared/reactive/watch.ts'
 import { refuse } from '#shared/refuse.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
@@ -182,7 +180,7 @@ export function broadcast(
     for (const follower of followed.all) {
         if (!matchesPattern(follower.args, pattern)) continue
         // A fed copy is refreshed by the production the reload mints (7.18), and invalidated through
-        // the cell it is fed from (`FOLLOWED`), whichever trigger reached it — where the entry it is
+        // the cell it is fed from (`followServed`), whichever trigger reached it — where the entry it is
         // fed from is still the one standing.
         if (attach(rpc as Mounted['handler'], follower) !== undefined) continue
         follower.peer.send(follower.id, TRIGGERS[member])
@@ -622,19 +620,12 @@ function feed(serving: unknown, fed: Follower): () => void {
 }
 
 function startFeed(serving: unknown): Feed {
-    const past = servedCellOf(serving)
-    const release = sinkFor(past)
     const fed = new Set<Follower>()
-    // 7.10 — an invalidate of the value, however it was spelled, reaches every copy it feeds.
-    const invalidated = (): void => {
+    // 18.11 — A VALUE FED TO A FOLLOWER KEEPS ITS PATCHES AS DATA while anyone is fed it, and 7.10 —
+    // an invalidate of the value, however it was spelled, reaches every copy it feeds.
+    const release = followServed(serving, () => {
         for (const one of fed) one.peer.send(one.id, TRIGGERS.invalidate)
-    }
-    let followed = FOLLOWED.get(past)
-    if (followed === undefined) {
-        followed = new Set()
-        FOLLOWED.set(past, followed)
-    }
-    followed.add(invalidated)
+    })
     const shared: Feed = {
         fed,
         landed: false,
@@ -642,8 +633,6 @@ function startFeed(serving: unknown): Feed {
             stopWatch()
             release()
             FEEDS.delete(serving as object)
-            followed.delete(invalidated)
-            if (followed.size === 0) FOLLOWED.delete(past)
         },
     }
     FEEDS.set(serving as object, shared)
@@ -697,20 +686,4 @@ function sendAll(serving: unknown, fed: Iterable<Follower>): void {
 function addressIn(named: string): string {
     const path = URL.parse(named)?.pathname ?? named
     return unmounted(path) ?? path
-}
-
-/**
- * Holds a patch sink on `cell`; returns what releases it.
- *
- * 18.11 — A VALUE FED TO A FOLLOWER KEEPS ITS PATCHES AS DATA while anyone is fed it, and stops
- * when the last one goes: a sink nobody drains grows with every patch.
- */
-function sinkFor(cell: object): () => void {
-    const sink = PATCH_SINKS.get(cell) ?? { ops: [], lost: false, fed: 0 }
-    PATCH_SINKS.set(cell, sink)
-    sink.fed += 1
-    return () => {
-        sink.fed -= 1
-        if (sink.fed === 0) PATCH_SINKS.delete(cell)
-    }
 }

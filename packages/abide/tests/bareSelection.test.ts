@@ -20,7 +20,7 @@ import {
 } from '#shared'
 import { online } from '#shared/online.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
-import { FOLLOWED } from '#shared/reactive/FOLLOWED.ts'
+import { followServed } from '#shared/reactive/index.ts'
 import { unfileProducers } from '#shared/reactive/Reactive.ts'
 
 function cellOf<Fields>(value: unknown): Fields {
@@ -69,14 +69,9 @@ test('a bare invalidate marks every load, starts none of them, and skips a value
     const published = reactive(0)
     published.set(5)
     let told = 0
-    FOLLOWED.set(
-        cellOf<object>(published),
-        new Set([
-            () => {
-                told += 1
-            },
-        ]),
-    )
+    followServed(published, () => {
+        told += 1
+    })
     const stop = watch(() => {
         loaded()
     })

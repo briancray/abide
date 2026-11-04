@@ -6,7 +6,7 @@
 // patch records passes, so the check costs a browser replaying its server nothing, and an op naming
 // `__proto__` or a member off the prototype chain is refused at 400 rather than reached. A `test` that fails is 409, the patch's precondition rather than its form.
 import { putOwn } from './putOwn.ts'
-import type { PatchOp } from './reactive/PATCH_SINKS.ts'
+import type { PatchOp } from './reactive/patchLog.ts'
 import { structural } from './reactive/structural.ts'
 import { refuse } from './refuse.ts'
 

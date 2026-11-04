@@ -1,4 +1,4 @@
-import { PATCHES } from '#shared/reactive/PATCHES.ts'
+import { patchEpoch, writtenSince } from '#shared/reactive/patchMarks.ts'
 
 import { LAYER_RECONCILE } from './LAYER_NAMES.ts'
 import type { List } from './List.ts'
@@ -116,7 +116,7 @@ export function reconcile(list: List, data: unknown[]): void {
             const value = data[at]
             if (!Object.is(existing.data, value) || patchedSince(existing))
                 updateRow(existing, value)
-            existing.seen = PATCHES.epoch
+            existing.seen = patchEpoch()
             survivor[at] = existing
             from[at] = existing.at
             if (existing.at < lastSurvivor) ordered = false
@@ -210,10 +210,8 @@ function clear(list: List): void {
  * one integer compare a row and never reaches the map.
  */
 function patchedSince(row: Row): boolean {
-    if (row.seen === PATCHES.epoch) return false
-    const item = row.data
-    if (item === null || typeof item !== 'object') return false
-    return (PATCHES.written.get(item) ?? 0) > row.seen
+    if (row.seen === patchEpoch()) return false
+    return writtenSince(row.data, row.seen)
 }
 
 /**

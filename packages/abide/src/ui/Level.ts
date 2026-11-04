@@ -1,7 +1,7 @@
 import {
     currentShare,
+    enterShare,
     leaveShare,
-    resumeShare,
     type ShareScope,
 } from '#shared/reactive/share.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
@@ -141,11 +141,7 @@ export class Level {
     mount<Result>(run: () => Result): Result {
         // 39.1 — THE LEVEL RIDES THE SHARE SCOPE, so a component finds it as it finds a shared key,
         // whether it mounts now or in an arm or a row after (`contributeHead`).
-        const back = resumeShare({
-            parent: currentShare(),
-            values: new Map(),
-            level: this,
-        })
+        const back = enterShare(this)
         this.unapplied = false
         let unapplied: boolean
         let result: Result
