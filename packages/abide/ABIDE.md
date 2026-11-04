@@ -7,7 +7,7 @@ rather than guessing from Svelte, Vue or React. It installs with the package:
 
 - `node_modules/@abide/abide/docs/abide.md` — every documentation page in reading order, with a
   working example for each task. It is long: read its Contents, then search for the page's
-  address, which heads each page as a comment — `<!-- values/show-a-value-that-changes.md -->`.
+  address, which heads each page as a comment — `<!-- guide/keep-it-current.md -->`.
 - `node_modules/@abide/abide/docs/REGISTRY.md` — every name an app can import or write, with its
   signature and the rules that govern it.
 - `node_modules/@abide/abide/docs/RULEBOOK.md` — every rule, numbered. A compiler or server
@@ -46,6 +46,8 @@ affected code saying what it did, and tell the user.
   your changes are done.
 - `bun run dev` — serves the app on a local port and rebuilds when a file changes.
 - `bun run build` then `bun run start` — the production build, and the app served from it.
+- `docker build .` — the scaffold's `Dockerfile` runs `abide compile` and ships the one executable it
+  writes on a distroless image, and nothing else of the app (RULEBOOK 38.132).
 
 ## Layout
 
