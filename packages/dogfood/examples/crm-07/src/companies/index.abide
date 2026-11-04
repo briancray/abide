@@ -16,5 +16,7 @@ const companies = reactive(() => listCompanies())
 </ul>
 
 <style>
-::view-transition-group(*) { animation-duration: 0.5s; }
+::view-transition-group(*) {
+    animation-duration: 0.5s;
+}
 </style>
