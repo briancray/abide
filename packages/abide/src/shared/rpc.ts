@@ -407,6 +407,12 @@ export function declare(method: Method): Declare {
             rungs.length === 0
                 ? null
                 : compose(rungs, async (ctx: RpcContext) => {
+                      // 16.7 behind rungs — the handler's spent answer is dropped HERE, once the
+                      // rungs let the call through: reading an unkeyed value's cell builds this
+                      // request's instance, which starts its body (1.7), and dropped in `call` that
+                      // ran the body ahead of every rung (16.11, 16.16).
+                      if (cacheOptions !== undefined && !keyed)
+                          dropAnswered(value)
                       const reached = reach(argsOf(ctx))
                       const started = performance.now()
                       try {
@@ -464,8 +470,9 @@ export function declare(method: Method): Declare {
             }
             // 16.7 — a mutation's call is a write each time, even where the last one settled this
             // turn: a keyed value's reach evicts an outlived entry itself, and an unkeyed one's
-            // spent answer is dropped here.
-            if (cacheOptions !== undefined && !keyed) dropAnswered(value)
+            // spent answer is dropped here — or, behind rungs, in the onion's center.
+            if (cacheOptions !== undefined && !keyed && wrapped === null)
+                dropAnswered(value)
             const reached = callLoad(
                 reachThrough,
                 args,
