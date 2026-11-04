@@ -14,24 +14,16 @@ import { refuse } from '#shared/refuse.ts'
 
 import {
     type AssistantContent,
-    type AssistantEvent,
     type AssistantMessage,
     blocksOf,
     forwardOf,
     type Provider,
 } from './assistant.ts'
 import { BRIDGE_VERSION } from './BRIDGE_VERSION.ts'
-import {
-    followSignIn,
-    mintCode,
-    openTurn,
-    pairedBridge,
-    watchPairing,
-} from './bridgeRelay.ts'
+import { mintCode, pairingStatus, runTurn } from './bridgeRelay.ts'
 import { callerOf } from './callerOf.ts'
 import { appOrigin } from './config.ts'
 import { mcpFailure } from './generatedSurfaces.ts'
-import { Inbox } from './Inbox.ts'
 import { signedInAs } from './principal.ts'
 import { request } from './requestScope.ts'
 
@@ -65,53 +57,19 @@ export type BridgeStatus = {
 function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
     return {
         async *run(messages, tools, { maxTurns, signal }) {
-            const bridge = pairedBridge(askingCaller(), signedInAs())
-            // 44.13, 44.33 — nothing paired by this sign-in is the page's cue to show the command.
-            if (bridge === undefined)
-                throw refuse(
-                    409,
-                    'No Claude Code is paired with this browser as the one signed in. claudeCode.bridgeCommand() is the command that pairs one.',
-                )
-            const turn = openTurn(bridge)
-            bridge.frames.push({
-                type: 'turn',
-                id: turn.id,
+            yield* runTurn({
+                caller: askingCaller(),
+                signedIn: signedInAs(),
                 prompt: foldedContent(messages),
                 config,
                 maxTurns,
+                // 44.17 — answered by the app's own MCP surface, through the turn's `Toolbox`.
+                answer: (method, params) =>
+                    forwardOf(tools)(method, params).catch((thrown: unknown) =>
+                        mcpFailure(-32603, String(thrown)),
+                    ),
+                signal,
             })
-            // 44.18 — a caller hanging up ends the run on the bridge.
-            const cancel = (): void => {
-                bridge.frames.push({ type: 'cancel', turn: turn.id })
-            }
-            signal.addEventListener('abort', cancel)
-            try {
-                for await (const item of turn.inbox) {
-                    if (item.kind === 'event')
-                        yield item.event as AssistantEvent
-                    else if (item.kind === 'mcp')
-                        // 44.17 — answered by the app's own MCP surface, through the turn's `Toolbox`.
-                        void forwardOf(tools)(item.method, item.params)
-                            .catch((thrown: unknown) =>
-                                mcpFailure(-32603, String(thrown)),
-                            )
-                            .then((reply) => {
-                                bridge.frames.push({
-                                    type: 'reply',
-                                    turn: turn.id,
-                                    id: item.id,
-                                    reply,
-                                })
-                            })
-                    else if (item.kind === 'end') return
-                    // 44.21.
-                    else
-                        throw refuse(502, `Claude Code failed: ${item.message}`)
-                }
-            } finally {
-                signal.removeEventListener('abort', cancel)
-                turn.close()
-            }
         },
     }
 }
@@ -166,16 +124,15 @@ type Pairing = { command: string; link: string; expires: number }
  * running either grants them (44.29, 44.32, 44.40).
  */
 function bridgeCommand(options: PairingOptions = {}): Pairing {
-    return commandFor(askingCaller(), signedInAs(), options)
+    const { code, expires } = mintCode(askingCaller(), signedInAs())
+    return { ...commandFor(code, options), expires }
 }
 
-/** The command and the link pairing a bridge with `caller` signed in as `signedIn` (44.33). */
+/** The command and the link that pair a bridge by `code`, granting `tools`. */
 function commandFor(
-    caller: string,
-    signedIn: string,
+    code: string,
     { tools }: PairingOptions,
-): Pairing {
-    const { code, expires } = mintCode(caller, signedIn)
+): { command: string; link: string } {
     const site = `${appOrigin() ?? new URL(request().url).origin}${mounted('')}`
     const granted = tools?.length ? tools.join(',') : undefined
     const query = new URLSearchParams({ site, code, version: BRIDGE_VERSION })
@@ -184,80 +141,25 @@ function commandFor(
     return {
         command: `bunx @abide/bridge@${BRIDGE_VERSION} ${site} ${code}${grant}`,
         link: `${BRIDGE_SCHEME}://pair?${query}`,
-        expires,
     }
 }
 
 /**
  * This browser's pairing as it changes: unpaired with the command to run and the link to open, then
- * paired the moment a bridge connects, and unpaired again if it goes. 44.20.
- *
- * 44.34 — IT FOLLOWS WHOEVER SIGNS IN AT THE BROWSER, though its own request carries the cookies it
- * opened with: a sign-in or a sign-out made since is the pairing it watches from then on, and the
- * command it offers is that sign-in's.
+ * paired the moment a bridge connects, and unpaired again if it goes — following whoever signs in at
+ * the browser since. 44.20, 44.34.
  */
 async function* bridge(
     options: PairingOptions = {},
 ): AsyncGenerator<BridgeStatus> {
-    let caller = askingCaller()
-    let signedIn = signedInAs()
-    const signal = request().signal
-    // A change landing while the loop was not waiting — paused at its `yield` — stays queued, so it
-    // looks again; a look that finds nothing new yields nothing.
-    const changes = new Inbox<undefined>()
-    const waiting = changes[Symbol.asyncIterator]()
-    const rouse = (): void => changes.push(undefined)
-    let watchingAs = ''
-    let unwatch = (): void => {}
-    let unfollow = (): void => {}
-    const follow = (now: string, next: string): void => {
-        caller = now
-        signedIn = next
-        rouse()
-    }
-    signal.addEventListener('abort', rouse)
-    let pairing: Pairing | undefined
-    let said = ''
-    try {
-        while (!signal.aborted) {
-            const watching = `${caller} ${signedIn}`
-            if (watching !== watchingAs) {
-                unwatch()
-                unfollow()
-                unwatch = watchPairing(caller, signedIn, rouse)
-                unfollow = followSignIn(caller, follow)
-                watchingAs = watching
-                pairing = undefined
-            }
-            const paired = pairedBridge(caller, signedIn) !== undefined
-            if (
-                !paired &&
-                (pairing === undefined || pairing.expires <= Date.now())
-            )
-                pairing = commandFor(caller, signedIn, options)
-            const status: BridgeStatus = {
-                paired,
-                command: paired ? undefined : pairing?.command,
-                link: paired ? undefined : pairing?.link,
-            }
-            // The link is minted with the command, so the command alone tells a new pairing.
-            const saying = `${status.paired} ${status.command}`
-            if (saying !== said) {
-                said = saying
-                yield status
-            }
-            // A code that expires while nothing is paired is replaced with a fresh one.
-            const renew = paired
-                ? undefined
-                : setTimeout(rouse, (pairing?.expires ?? 0) - Date.now())
-            await waiting.next()
-            clearTimeout(renew)
-        }
-    } finally {
-        signal.removeEventListener('abort', rouse)
-        unwatch()
-        unfollow()
-    }
+    for await (const { paired, code } of pairingStatus(
+        askingCaller(),
+        signedInAs(),
+        request().signal,
+    ))
+        yield code === undefined
+            ? { paired, command: undefined, link: undefined }
+            : { paired, ...commandFor(code, options) }
 }
 
 /** The visitor's own Claude Code as a provider, with the pairing that reaches it. */

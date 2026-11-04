@@ -16,9 +16,10 @@ import {
 import { PAIRING_SCHEME, pairingOf } from '../../bridge/src/pairingLink.ts'
 import { readLines } from '../../bridge/src/readLines.ts'
 import { BRIDGE_VERSION } from '../src/server/BRIDGE_VERSION.ts'
-import { mintCode, RESUME_MILLISECONDS } from '../src/server/bridgeRelay.ts'
+import { mintCode } from '../src/server/bridgeRelay.ts'
 import type { ClaudeCodeConfig } from '../src/server/claudeCode.ts'
 import { HEARTBEAT_MILLISECONDS } from '../src/server/HEARTBEAT_MILLISECONDS.ts'
+import { RESUME_MILLISECONDS } from '../src/server/RESUME_MILLISECONDS.ts'
 import { BRIDGE_ADDRESS } from '../src/shared/ADDRESSES.ts'
 import { BRIDGE_SCHEME } from '../src/shared/BRIDGE_SCHEME.ts'
 import { handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
@@ -426,7 +427,7 @@ test('nothing paired refuses 409, and a pairing code pairs only once — 44.13, 
 // as unpaired rather than run on Ada's machine, and Bo pairing his own leaves Ada's standing.
 //
 // THE REVERTS: have `pairingKey` file by `caller` alone; Ada's bridge is Bo's too, the open stream
-// stays paired through his sign-in, and `nextStatus` throws. Drop `signedInAt` from `principal.set`;
+// stays paired through his sign-in, and `nextStatus` throws. Drop `signInChanged` from `principal.set`;
 // the stream goes on watching Ada's pairing, and `nextStatus` throws the same.
 test('a pairing answers only the sign-in that minted its code, and an open status follows a sign-in — 44.33, 44.34', async () => {
     const done = (answer: Response) =>
@@ -462,7 +463,7 @@ test('a pairing answers only the sign-in that minted its code, and an open statu
 
 // 44.34, 26.9 — A SIGN-OUT ROTATES THE BROWSER'S CALLER, and an open status stream follows it there:
 // the command it turns to pairs the browser the page is now, signed out. THE REVERT: drop
-// `signedInAt` from `principal.clear`; the stream goes on watching Dee's pairing and `nextStatus`
+// `signInChanged` from `principal.clear`; the stream goes on watching Dee's pairing and `nextStatus`
 // throws.
 test('an open status follows a sign-out to the caller it rotates to — 44.34, 26.9', async () => {
     await signIn('leaving', 'dee')
