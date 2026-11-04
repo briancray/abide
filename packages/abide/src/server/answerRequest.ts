@@ -60,7 +60,7 @@ import { callsOnly, seedFor } from './seedBuffer.ts'
 // One row of the server's table the compiler writes (`SERVER_TABLE`). The loader is a dynamic import
 // so a page's markup is off the boot path until an address asks for it, which is the same reason
 // the client table's loaders are (30.11).
-export type ServerRoute = {
+type ServerRoute = {
     pattern: string
     load: () => Promise<{ default: Component }>
     // 35.1 — the layouts this page renders inside, outermost first, as the compiler found them.
@@ -73,7 +73,7 @@ export type ServerRoute = {
 }
 
 // 35.2 — an error page, and the directory it answers for.
-export type ServerError = Omit<ServerRoute, 'clientModules'>
+type ServerError = Omit<ServerRoute, 'clientModules'>
 
 export type RankedError = ServerError & { segments: Segment[] }
 
