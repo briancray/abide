@@ -6,8 +6,8 @@ import { expect, test } from 'bun:test'
 
 import { GET } from '#server'
 import { type Mounted, mountHandlers } from '#server/answerRpc.ts'
-import { handlerFileMount } from '#server/handlerFileMount.ts'
 import { argsFor, collapsed, derivedArgs } from '#server/argsContract.ts'
+import { handlerFileMount } from '#server/handlerFileMount.ts'
 import { isFailed } from '#shared/Failed.ts'
 
 const SCHEMA = {
@@ -100,7 +100,7 @@ test("a path's parameters join the args, coerced, and are never named twice — 
 // 19.9 — A ROW'S DERIVED SCHEMA REACHES A HANDLER ITS MODULE NEVER HELD TO IT: a bundled
 // executable's handler faces file no `derivedArgs`, so the row the build wrote is what the mount
 // holds it to. THE REVERT: drop the `derivedArgs` call from `mountHandlers`; `id` arrives as '42'.
-test("a mounted row holds its handler to the schema the build derived — 19.9", async () => {
+test('a mounted row holds its handler to the schema the build derived — 19.9', async () => {
     const loose = GET((_args: { id: number }) => 1)
     const { handlers } = await mountHandlers([
         {

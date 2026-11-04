@@ -53,11 +53,13 @@ export function holdLog(cell: object, invalidated: () => void): () => void {
         log = new PatchLog(new Set())
         LOGS.set(cell, log)
     }
-    const followers = log.followers as Set<() => void>
+    const held = log
+    const followers = held.followers as Set<() => void>
     followers.add(invalidated)
+    // A release run twice, after another follower opened a fresh log, leaves that log standing.
     return () => {
         followers.delete(invalidated)
-        if (followers.size === 0) LOGS.delete(cell)
+        if (followers.size === 0 && LOGS.get(cell) === held) LOGS.delete(cell)
     }
 }
 

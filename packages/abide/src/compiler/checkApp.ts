@@ -2,7 +2,7 @@ import { relative } from 'node:path' // bun exposes no path helpers of its own
 
 import { placement } from '#server/placement.ts'
 
-import { type PlacedSource, paints } from './appLayout.ts'
+import { paints, type PlacedSource } from './appLayout.ts'
 import { type AppChecker, compiled, compiledSources } from './compileApp.ts'
 import { abideImportsOf } from './componentGraph.ts'
 import { type Diagnosis, Diagnostics } from './Diagnostics.ts'

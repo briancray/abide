@@ -5,7 +5,12 @@
 import { expect, test } from 'bun:test'
 
 import { applyPatch } from '#shared/applyPatch.ts'
-import { PatchLog, type PatchOp } from '#shared/reactive/patchLog.ts'
+import {
+    holdLog,
+    logOf,
+    PatchLog,
+    type PatchOp,
+} from '#shared/reactive/patchLog.ts'
 import { patchEpoch, writtenAt } from '#shared/reactive/patchMarks.ts'
 import { recordWrites } from '#shared/reactive/recordWrites.ts'
 
@@ -463,4 +468,18 @@ test('a patch walking a Map or a Set marks everything it walked — 32.33', () =
     })
     expect(byId.size).toBe(3)
     expect(state.again).toBe(byId)
+})
+
+// 18.11 — A RELEASE RUN TWICE LEAVES A LOG ANOTHER FOLLOWER OPENED SINCE. THE REVERT: drop the
+// `LOGS.get(cell) === held` check from `holdLog`'s release; the second follower's log is gone.
+test('a release run again does not drop the log a later follower holds — 18.11', () => {
+    const cell = {}
+    const release = holdLog(cell, () => {})
+    release()
+    const live = holdLog(cell, () => {})
+    const held = logOf(cell)
+    release()
+    expect(logOf(cell)).toBe(held)
+    live()
+    expect(logOf(cell)).toBeUndefined()
 })
