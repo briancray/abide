@@ -7,6 +7,7 @@ import {
     isBinaryExpression,
     isCallExpression,
     isClassDeclaration,
+    isElementAccessExpression,
     isEnumDeclaration,
     isExpressionStatement,
     isForOfStatement,
@@ -32,9 +33,11 @@ import {
     SymbolFlags,
     type Type,
     TypeFlags,
+    type TypeReference,
 } from 'typescript/unstable/async'
 
 import { aliasedSymbol } from './aliasedSymbol.ts'
+import { ARRAY_MUTATORS } from './ARRAY_MUTATORS.ts'
 import { CheckerAnswer } from './CheckerAnswer.ts'
 import {
     classifyPropRead,
@@ -249,12 +252,15 @@ export async function readsIn(
     const owned = await ownMembers(checker, nodes.flat(), (node) =>
         valueTypeOf(checker, node),
     )
+    const lifted = await liftedMutators(checker, nodes.flat(), (node) =>
+        valueTypeOf(checker, node),
+    )
     const holding: Promise<void>[] = []
     const located: { node: Node; read: Read }[] = []
     for (let index = 0; index < nodes.length; index += 1)
         for (const node of nodes[index] as (Node | undefined)[]) {
             if (node === undefined) continue
-            const read = classifyRead(node, owned.has(node))
+            const read = classifyRead(node, owned.has(node), lifted.has(node))
             if (read === undefined) continue
             read.byValue = byValue[index] as boolean
             read.local = index >= topLevel
@@ -1111,6 +1117,9 @@ async function propsReads(
     const owned = await ownMembers(checker, found.flat(), (node) =>
         checker.getTypeAtLocation(node),
     )
+    const lifted = await liftedMutators(checker, found.flat(), (node) =>
+        checker.getTypeAtLocation(node),
+    )
     // 33.27 — each prop asked whether its position holds the `Reactive`, all at once.
     const holding: Promise<void>[] = []
     for (let at = 0; at < found.length; at += 1) {
@@ -1128,11 +1137,12 @@ async function propsReads(
                 node.parent?.kind === SyntaxKind.BindingElement
             )
                 continue
-            const read = classifyRead(node, owned.has(node))
+            const read = classifyRead(node, owned.has(node), lifted.has(node))
             if (read === undefined) continue
             if (
                 read.shape === 'write' ||
                 read.shape === 'update' ||
+                read.shape === 'mutate' ||
                 isBindOperand(positions, node) ||
                 writesThrough(node, owned)
             )
@@ -1230,6 +1240,108 @@ async function ownMembers(
     }
     await Promise.all(asked)
     return owned
+}
+
+/**
+ * 31.9 — the occurrences among `nodes` that call an array mutator through a member path, where the
+ * receiver's type is an array: `tags.push(t)`, `deal.notes.splice(0, 1)`. The name says which
+ * method and the type says whose, so a class's own `push` is left a call on the class.
+ *
+ * The receiver's type is walked down from the value's, step by step: in the projection a member of
+ * the name is the `Reactive`'s, which declares none of the value's.
+ */
+async function liftedMutators(
+    checker: Checker,
+    nodes: readonly (Node | undefined)[],
+    valueOf: (node: Node) => Promise<Type | undefined>,
+): Promise<Set<Node>> {
+    const lifted = new Set<Node>()
+    const asked: Promise<void>[] = []
+    for (const node of nodes) {
+        if (node === undefined) continue
+        const steps: (string | undefined)[] = []
+        let receiver: Node = node
+        let mutator = false
+        while (true) {
+            const up = receiver.parent
+            if (isPropertyAccessExpression(up) && up.expression === receiver) {
+                if (
+                    ARRAY_MUTATORS.has(up.name.text) &&
+                    isCallExpression(up.parent) &&
+                    up.parent.expression === up
+                ) {
+                    mutator = true
+                    break
+                }
+                steps.push(up.name.text)
+            } else if (
+                isElementAccessExpression(up) &&
+                up.expression === receiver
+            )
+                steps.push(undefined)
+            else break
+            receiver = up
+        }
+        if (!mutator) continue
+        asked.push(
+            valueOf(node).then(async (value) => {
+                if (value === undefined) return
+                let types: Type[] = [value]
+                for (const step of steps)
+                    types = await stepTypes(checker, types, step)
+                if (types.length === 0) return
+                for (const type of types)
+                    if (
+                        !(await checker.isArrayType(type)) &&
+                        !(await checker.isTupleType(type))
+                    )
+                        return
+                lifted.add(node)
+            }),
+        )
+    }
+    await Promise.all(asked)
+    return lifted
+}
+
+/**
+ * The types one step down from `types`, `null` and `undefined` aside: a property's by its name, and
+ * an element's or an index signature's where the step is computed.
+ */
+async function stepTypes(
+    checker: Checker,
+    types: readonly Type[],
+    step: string | undefined,
+): Promise<Type[]> {
+    const next: Type[] = []
+    for (const type of types)
+        for (const held of await unionMembers(type)) {
+            if ((held.flags & NULLISH) !== 0) continue
+            if (step !== undefined) {
+                const member = await checker.getPropertyOfType(held, step)
+                const stepped =
+                    member === undefined
+                        ? undefined
+                        : await checker.getTypeOfSymbol(member)
+                if (stepped !== undefined)
+                    next.push(...(await unionMembers(stepped)))
+                continue
+            }
+            if (await checker.isArrayType(held)) {
+                const [element] = await checker.getTypeArguments(
+                    held as TypeReference,
+                )
+                if (element !== undefined)
+                    next.push(...(await unionMembers(element)))
+                continue
+            }
+            for (const index of await checker.getIndexInfosOfType(held))
+                next.push(...(await unionMembers(index.valueType)))
+        }
+    const present: Type[] = []
+    for (const type of next)
+        if ((type.flags & NULLISH) === 0) present.push(type)
+    return present
 }
 
 /**

@@ -17,6 +17,8 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     'markupRun',
     'RAW_WRITES',
     'writePath',
+    // 31.9 — an array mutator lifted to a write through its receiver's path.
+    'mutatePath',
     'listOf',
     // 32.23's abort, which only the server lane can need: a client binding is its own `watch`
     // and gets one from 2.12. Emitted on both sides because `renderMarkup` is both sides.

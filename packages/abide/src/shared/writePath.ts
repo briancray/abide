@@ -93,3 +93,32 @@ function copyOf(value: unknown, step: string | number): Level {
         return (typeof step === 'number' ? [] : {}) as unknown as Level
     return { ...(value as object) }
 }
+
+/**
+ * What `mutate` hands back, called on a copy of the array at `path` that `target` then holds.
+ *
+ * 31.9 — A MUTATOR IS A WRITE THROUGH ITS RECEIVER'S PATH. `tags.push(t)` run on the held array
+ * grows it in place, so the identity a reader wakes on never moves (31.8's failure, spelled as a
+ * call). The compiler lifts a call here only where the receiver's TYPE is an array, so a class's
+ * own `push` stays a call on the class. A level that is not plain data on the way (31.14), or a
+ * receiver that is not an array when the call runs, takes the call in place, waking nobody.
+ */
+export function mutatePath<Result>(
+    target: { (): unknown; set(value: unknown): unknown },
+    path: readonly (string | number)[],
+    mutate: (receiver: never) => Result,
+): Result {
+    const value = target()
+    let receiver = value
+    let plain = true
+    for (const step of path) {
+        plain &&= isPlain(receiver)
+        receiver = (receiver as Level | null | undefined)?.[step]
+    }
+    if (!plain) return mutate(receiver as never)
+    if (!Array.isArray(receiver)) return mutate(receiver as never)
+    const copy = receiver.slice()
+    const result = mutate(copy as never)
+    target.set(writePath(value, path, copy))
+    return result
+}

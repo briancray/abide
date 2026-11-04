@@ -90,12 +90,11 @@ affected code saying what it did, and tell the user.
 - Export a `Reactive` itself, never wrapped in an object — one per file, even when several belong
   together: an `.abide` file reads and writes it by name (RULEBOOK 31.1), and one reached through a
   property is left to `x()` and `x.set(v)` (31.7).
-- Change part of a value by writing through its path — `edits.kind = kind` (RULEBOOK 31.8) — not by
-  rebuilding it (`edits = { ...edits, kind }`). A mutator call is not lifted yet (31.9 is unbuilt):
-  `items.push(item)` changes the array in place and wakes nothing, so grow a list with
-  `items = [...items, item]`, or `items.patch((value) => { value.push(item) })`. Bind through the
-  path too: `bind:value={edits.kind}` (32.5), not a `{ get, set }` pair. In a `.ts` file the same
-  write is `edits.patch((value) => { value.kind = kind })`, not `edits.set({ ...edits(), kind })`.
+- Change part of a value by writing through its path — `edits.kind = kind`, `items.push(item)`
+  (RULEBOOK 31.8, 31.9) — not by rebuilding it (`edits = { ...edits, kind }`,
+  `items = [...items, item]`). Bind through the path too: `bind:value={edits.kind}` (32.5), not a
+  `{ get, set }` pair. In a `.ts` file the same write is
+  `edits.patch((value) => { value.kind = kind })`, not `edits.set({ ...edits(), kind })`.
 - Derive a value with `reactive(() => …)`. `watch` is only for reaching outside the reactive graph —
   the DOM, a timer, an imperative API — and its run never assigns state, a value computed from what
   it read being a derived value. What a timer or a call it started hands back is written when that

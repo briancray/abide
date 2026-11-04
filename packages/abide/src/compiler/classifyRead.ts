@@ -46,7 +46,8 @@ export type Read = {
      * `value` lowers to `n()`; `asWritten` stays as written (`n.set(v)`, 31.5); `member` is one of
      * the `Reactive`'s own members referenced rather than called, named by `path`; `call` is the
      * explicit `n()` (31.7), which `arguments` says was given any; `shorthand` is `{ n }`;
-     * `write` and `update` are 31.4, and 31.8 where `path` is not empty.
+     * `write` and `update` are 31.4, and 31.8 where `path` is not empty. `mutate` is 31.9: an
+     * array mutator called through `path`, its `value` the call from the receiver's end.
      *
      * 33's five: the `props<Props>()` call, which lowers to the record the caller passed; the pair
      * that brackets a binding element's initializer, which together make a default an accessor;
@@ -63,6 +64,7 @@ export type Read = {
         | 'shorthand'
         | 'write'
         | 'update'
+        | 'mutate'
         | 'props'
         | 'defaultOpen'
         | 'defaultClose'
@@ -244,6 +246,7 @@ export function classifyPropRead(node: Node): Read | undefined {
 export function classifyRead(
     node: Node,
     valueMember = false,
+    mutator = false,
 ): Read | undefined {
     const parent = node.parent
     if (isNotARead(parent)) return undefined
@@ -325,6 +328,18 @@ export function classifyRead(
         top = up
     }
 
+    // 31.9 — the walk took the mutator's own name as a step: it is the call, not the path.
+    if (
+        mutator &&
+        isPropertyAccessExpression(top) &&
+        isCallExpression(top.parent)
+    ) {
+        read.path.pop()
+        read.shape = 'mutate'
+        read.to = top.parent.end
+        read.value = { start: top.expression.end, end: top.parent.end }
+        return read
+    }
     const outer = top.parent
     if (isAssigned(outer, top)) {
         read.shape = 'write'

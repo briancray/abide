@@ -169,10 +169,10 @@ import Section from '#src/lib/Section.abide'
             changed in place is the object it already was, and nothing downstream has a reason to
             read it again.</p>
 
-        <p><code>foo.bar = v</code> is that write wherever you spell it. <code>foo.push(v)</code> is
-            not one yet: <code>tags.push(tag)</code> is the array's own <code>push</code>, which changes
-            the array in place and wakes nothing. Write the new array instead:
-            <code>tags = [...tags, tag]</code>.</p>
+        <p><code>foo.bar = v</code> is that write wherever you spell it, and so is
+            <code>foo.push(v)</code>: where the value is an array, <code>tags.push(tag)</code> runs on a
+            copy and writes the copy back. The array's type decides it, so a class's own
+            <code>push</code> stays the class's call.</p>
     </Section>
 
     <Section title="An expression in the markup follows what it reads">

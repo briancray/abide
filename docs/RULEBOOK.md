@@ -1893,8 +1893,8 @@ member, and the value's method otherwise.
 31.8 A write through a member path into plain data MUST copy down that path and then write, and the
 copy MUST NOT be optimized away.
 
-31.9 A mutator lifted per 31.8 MUST be resolved from the type of the `Reactive` rather than from
-the member name.
+31.9 A call of an array's mutator through a member path MUST be a write per 31.8, run on a copy of
+the receiver, and MUST be resolved from the type of the receiver rather than from the member name.
 
 31.10 A template-local binding MUST shadow a name bound to a `Reactive` for the body it is bound in.
 
@@ -1905,8 +1905,8 @@ the member name.
 31.13 A name MUST hold the `Reactive` where the declared type of its position is a `Selection`, or a
 type parameter constrained by one.
 
-31.14 A write through a member path that reaches a value which is not plain data — an array, or an
-object whose prototype is `Object.prototype` or `null` — MUST assign on that value itself, MUST NOT
+31.14 A write through a member path that reaches a value which is not plain data — anything but an
+array or an object whose prototype is `Object.prototype` or `null` — MUST assign on that value itself, MUST NOT
 copy it or any level above it, and MUST NOT wake a reader.
 
 31.15 `route.url`, `route.params`, `route.name` and `route.navigating` MUST each be read and written

@@ -817,6 +817,21 @@ export class Lowering {
                 return this.checking && this.importsRaw
                     ? undefined
                     : this.use('raw')
+            // 31.9 — an array mutator called through a path: run on a copy the name then holds.
+            // The checker reads it as the call on the value it is, so its result is typed as one.
+            case 'mutate': {
+                const call = this.lower(read.value as Span).trim()
+                if (this.checking)
+                    return `${this.valueOf(spelled, read, name)}${this.lower({ start: read.end, end: (read.value as Span).start })}${call}`
+                const segments: string[] = []
+                for (const segment of read.path)
+                    segments.push(
+                        segment.name === undefined
+                            ? this.lower(segment)
+                            : JSON.stringify(segment.name),
+                    )
+                return `${this.use('mutatePath')}(${name}, [${segments.join(', ')}], (${MUTATED}) => ${MUTATED}${call})`
+            }
             // 27.13 — the call bound to a name, for the checker to read the defaults' type off.
             case 'config':
                 return this.checking
@@ -999,3 +1014,5 @@ function writeParts(
 // `__` for the reason every framework name in an emitted module is (`importClause`).
 const STORED = '__stored'
 const PREVIOUS = '__previous'
+// 31.9 — the copy a lifted mutator is called on.
+const MUTATED = '__mutated'

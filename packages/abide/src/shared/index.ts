@@ -119,4 +119,4 @@ export {
     url,
 } from './url.ts'
 export { validateJson } from './validateJson.ts'
-export { writePath } from './writePath.ts'
+export { mutatePath, writePath } from './writePath.ts'
