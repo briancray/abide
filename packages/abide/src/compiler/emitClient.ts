@@ -143,7 +143,7 @@ class RegionEmission {
  */
 export type SelfFill = 'none' | 'routed' | 'invoked' | 'both'
 
-// The mount's third argument, which only the router passes (`Router.mountFrom`).
+// The mount's third argument, which only the router passes (`LevelChain.mountFrom`).
 const ROUTED = '__routed'
 
 /**
