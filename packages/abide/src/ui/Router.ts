@@ -6,36 +6,14 @@ import { unmounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
 import { OFFLINE_SAVED } from '#shared/OFFLINE_CACHES.ts'
 import { REACHED_MESSAGE } from '#shared/REACHED_MESSAGE.ts'
-import type { ShareScope } from '#shared/reactive/share.ts'
 import { arrive, route } from '#shared/route.ts'
 import { rankRoutes, type Segment } from '#shared/routePattern.ts'
-import { setUpLevels } from '#shared/setUpLevels.ts'
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 
-import { LAYER_MOUNT, LAYER_NAVIGATE } from './LAYER_NAMES.ts'
-import { Level } from './Level.ts'
+import { LAYER_NAVIGATE } from './LAYER_NAMES.ts'
+import { LevelChain, type PageModule } from './LevelChain.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
-import { fillRegion, pageRegion, type Region } from './regions.ts'
-import type { Scope, Stoppable } from './Scope.ts'
-
-/**
- * A page's client mount, called against the region the router owns.
- *
- * The same default export a page already has — the router is a CALLER of a page exactly as a page
- * is a caller of a component, which is why nothing about the emitted module changes to be routable.
- */
-export type PageMount = (
-    root: Region,
-    props?: Record<string, unknown>,
-    // 39.6 — A LEVEL'S HEAD IS ITS OWN MOUNT'S TO APPLY, from inside the instance its slots read
-    // (`emitClient`), so the router hands the module a region and says it is the router by handing
-    // it the level it stands at — a file invoked as a component too is mounted without it, and
-    // applies no head a row. 39.14 — the level is where the mount leaves its head for the router
-    // to read when it withdraws.
-    routed?: Level,
-) => Scope
-
-type PageModule = { default: PageMount }
+import { pageRegion, type Region } from './regions.ts'
 
 export type Route = {
     /** The route literal, in the bracket spelling the page's directory is already written in. */
@@ -82,32 +60,25 @@ const SUPERSEDED = 'superseded'
  *
  * It holds what it put on the page, so a navigation can take it back off. A page mounted into the
  * region owns a `Scope` (12.13) and the router is the only thing that can remove its nodes, so the
- * router is where that scope is stopped.
+ * router — through its `LevelChain` — is where that scope is stopped. The router keeps the address,
+ * the history and the scroll.
  */
 export class Router {
-    region: Region
-    routes: Compiled[]
+    readonly region: Region
+    private readonly routes: Compiled[]
     /** The chain standing in the document, outermost layout first and the page last. */
-    levels: Level[]
-    /**
-     * The chain the address resolved to.
-     *
-     * A kept layout's `<slot/>` mounts from it whenever its region opens — read at that moment
-     * rather than captured when the layout mounted, or a slot reopened after a navigation put back
-     * the page the reader had left.
-     */
-    chain: PageModule[]
+    readonly levels: LevelChain
     /**
      * The path the standing chain was mounted for: a step to it that moves only the query or the
      * fragment keeps the page (30.23, 30.24).
      */
-    mounted: string | undefined
+    private mounted: string | undefined
     /**
      * The route the standing page was matched by.
      *
      * 30.23 — an address it matches again keeps it.
      */
-    standing: Compiled | undefined
+    private standing: Compiled | undefined
     /**
      * The ticket of the live navigation; a superseded one stops when it sees its own aborted.
      *
@@ -124,40 +95,39 @@ export class Router {
      * 30.31 — AN `AbortController`, so superseding a navigation also aborts the `middleware` request
      * it is still waiting on, rather than leaving it to finish for nobody.
      */
-    navigation: AbortController
+    private navigation: AbortController
     /**
      * 35.18 — whether the document is an error page's. Its markup is no page this router has, so
      * nothing hydrates over it, and leaving it is a document load.
      */
-    errorPage: boolean
+    private readonly errorPage: boolean
     /** The place in this document's history of the entry the address bar stands at (`Entry`). */
-    index: number
+    private index: number
     /**
      * 30.29 — the scroll each entry was left at, by its `index`.
      *
      * HELD HERE AS WELL AS IN `history.state`, because a back or forward step has already moved the
      * bar when `popstate` arrives, so the entry it left can no longer be written to.
      */
-    scrolls: (Scroll | undefined)[]
+    private readonly scrolls: (Scroll | undefined)[]
     /**
      * The routes whose chunks `prefetch` has already asked for.
      *
      * `pointerover` bubbles, so a pointer crossing a link's children asks again at every edge, and
      * after the first time the answer is the module cache's anyway.
      */
-    prefetched: Set<Compiled>
+    private readonly prefetched: Set<Compiled>
     /**
      * Whether a navigation's write is a view transition, as the build read it (39.7, 39.8).
      *
      * Read off the compiled `<style>` blocks. Nothing here looks at the document's stylesheets.
      */
-    transitions: boolean
+    private readonly transitions: boolean
 
     constructor(region: Region, routes: Compiled[], transitions: boolean) {
         this.region = region
         this.routes = routes
-        this.levels = []
-        this.chain = []
+        this.levels = new LevelChain(region)
         this.mounted = undefined
         this.standing = undefined
         this.navigation = new AbortController()
@@ -214,10 +184,30 @@ export class Router {
      * fills itself from the template it carries. One module, both ways in — the `fillEmpty`
      * the emitter already writes is the whole of the difference.
      */
-    async go(
+    go(url: URL | string, options: NavigateOptions = {}): Promise<void> {
+        return this.travel(url, options, PUSHED)
+    }
+
+    /**
+     * Arrives at the entry a back or forward step has already moved the address bar to.
+     *
+     * The page is mounted where the bar already points and nothing is pushed for it. 30.20 — a step
+     * within the standing page, back over an in-page `#anchor` jump, is `follow`'s: nothing asked,
+     * nothing remounted. 30.29 — the scroll is put back once the page it belongs to is mounted.
+     */
+    popped(): Promise<void> {
+        return this.travel(
+            location.href,
+            { replace: true, keepScroll: true },
+            this.stepped(),
+        )
+    }
+
+    /** `go`, arriving as `step` says: a push, or a history step with the scroll it restores. */
+    private async travel(
         url: URL | string,
-        options: NavigateOptions = {},
-        step: Step = PUSHED,
+        options: NavigateOptions,
+        step: Step,
     ): Promise<void> {
         const target =
             typeof url === 'string' ? new URL(url, location.href) : url
@@ -354,7 +344,7 @@ export class Router {
      * browser pushed itself — a link to a fragment — so it is stamped as the next entry, and
      * arrived at as a push.
      */
-    stepped(): Step {
+    private stepped(): Step {
         this.scrolls[this.index] = [scrollX, scrollY]
         const state = history.state as Partial<Entry> | null
         if (typeof state?.index !== 'number') {
@@ -468,37 +458,15 @@ export class Router {
         // honest is which fraction of click -> paint the router's WORK is.
         beginLayer(LAYER_NAVIGATE)
         try {
-            // 41.11 — WHAT THE TWO ADDRESSES SHARE IS NOT REBUILT. The comparison is by the MOUNT
-            // rather than by the loader or the module record: the table holds an arrow per row, so
-            // two routes under one layout name the same file through two different functions, and a
-            // table written by hand may answer with a fresh record each call. The function a module
-            // exports is the same function either way.
-            const shared = this.sharedLevels(arriving)
-            // RECONCILED BEFORE THE STOP, while the leaving levels' heads read what they read on
-            // screen: what the server painted for them is adopted as theirs, so it leaves with them.
-            Level.reconcile(this.levels)
+            // 41.11 — WHAT THE TWO ADDRESSES SHARE IS NOT REBUILT.
+            const kept = this.levels.sharedWith(arriving)
+            // Read before anything is written: read after a region was emptied, it forces a layout
+            // and reads the offset that layout clamped.
             const left: Scroll = [scrollX, scrollY]
-            this.stopFrom(shared)
-            // The region the arriving part goes into: the page region where nothing is kept, and
-            // the deepest kept layout's own slot where something is.
-            //
-            // NOWHERE, where that slot's region is closed: the arriving part is mounted by the slot
-            // when it opens, off `chain`, and not into a region no longer in the document.
-            const into =
-                shared === 0
-                    ? this.region
-                    : (this.levels[shared - 1] as Level).slot
-            // EMPTIED THROUGH THE PRIMITIVE EVERY OTHER REGION IS. `fillRegion(region)` with no
-            // build is this removal, and it carries the 41.10 refusal for a region no longer in a
-            // document that a hand-written walk swallows.
-            if (into !== undefined) fillRegion(into)
-            this.writeAddress(target, options.replace === true, left)
-            // 39.6 — each arriving level applies its own head as it mounts into its emptied region,
-            // outermost first; a kept layout is not mounted again, so neither is its head.
-            this.mountChain(target, found, arriving, shared, into)
-            // 39.14 — what the leaving levels keyed and the arriving ones did not goes back to the
-            // nearest kept layout's, else leaves; their keyless nodes leave with them (39.16).
-            Level.reconcile(this.levels)
+            this.levels.replace(kept, arriving, () => {
+                this.writeAddress(target, options.replace === true, left)
+                this.arriveAt(target, found)
+            })
             // 30.29 — where the entry was left, on a history step; else the top of the page, or —
             // as the browser does on a load — the fragment's element.
             if (step.scroll !== undefined)
@@ -507,134 +475,6 @@ export class Router {
         } finally {
             endLayer(LAYER_NAVIGATE)
         }
-    }
-
-    /**
-     * How many levels of the arriving chain are already standing.
-     *
-     * Layouts only: a page reached here is another route's, the same route's being followed instead
-     * (30.23).
-     *
-     * EVERY STANDING LEVEL IS COMPARED, the page included: a page is never a layout, so it cannot
-     * match one, and a layout whose slot is closed stands with nothing below it.
-     */
-    private sharedLevels(arriving: PageModule[]): number {
-        const layouts = arriving.length - 1
-        let shared = 0
-        while (
-            shared < layouts &&
-            shared < this.levels.length &&
-            (this.chain[shared] as PageModule).default ===
-                (arriving[shared] as PageModule).default
-        )
-            shared += 1
-        return shared
-    }
-
-    /**
-     * Stops every level from `at` down, inside out, and drops them.
-     *
-     * Stopped from the INSIDE OUT, so a layout's disposers run after the page's — the order a
-     * scope's own teardown already has, and the one an author reading two `watch` cleanups in
-     * two files would expect.
-     */
-    private stopFrom(at: number): void {
-        for (let index = this.levels.length - 1; index >= at; index -= 1) {
-            const level = this.levels[index] as Level
-            // OUT OF THE CHAIN BEFORE IT STOPS, so a slot stop it fires on the way finds it gone
-            // (`release`) and leaves the head to whoever stopped it.
-            this.levels.length = index
-            // The level's head leaves whole, so none of its components withdraws its own.
-            level.contributed.clear()
-            level.scope?.stop()
-        }
-    }
-
-    /**
-     * Mounts the chain from level `at` into `region`, each level handed the next as `children`.
-     *
-     * 35.1 — each level is handed the one below it as `children` (32.18), so a layout puts the page
-     * in its `<slot/>` with the same mechanism a caller writing markup between two tags uses — and
-     * the router learns where that slot is on the way past, which is what lets it swap the page
-     * there later without the layout knowing.
-     *
-     * THE CHILD'S SCOPE IS THE ROUTER'S, not the layout's, so a kept layout cannot stop the page
-     * arriving under it. What `mount` hands the layout is a stop for WHATEVER STANDS IN THE SLOT
-     * when the slot's region leaves — a `<slot/>` inside a closed `{#if}` — rather than for the
-     * page that happened to be mounted first. And the slot mounts from `chain`, so a slot that
-     * opens again mounts the page the address resolves to now.
-     */
-    private mountFrom(at: number, region: Region): void {
-        setUpLevels(
-            at,
-            this.chain.length,
-            this.levels[at - 1]?.share,
-            ROUTE_PROPS,
-            (below, props) => this.setUp(below, region, props),
-        )
-        this.markUp(at, region)
-    }
-
-    /**
-     * Runs level `at`'s setup over `props`, leaving its markup on the level for `markUp`, and
-     * answers the share scope the setup left.
-     */
-    private setUp(
-        at: number,
-        region: Region,
-        props: Record<string, (() => unknown) | undefined>,
-    ): ShareScope | null {
-        const module = this.chain[at] as PageModule
-        const level = new Level(this.levels, at)
-        this.levels[at] = level
-        if (at < this.chain.length - 1)
-            props.children = () => ({
-                // NO BUILD, because the level below carries its own (32.17): a module a route
-                // reaches fills the region it is mounted against when that region is empty, so
-                // the build and the mount are one call rather than two.
-                build: undefined,
-                mount: (slot: Region): Stoppable => {
-                    // The level below as `mountFrom` set it up, the first time its slot opens; a
-                    // slot opening again sets it up afresh.
-                    const pending = this.levels[at + 1]?.markup !== undefined
-                    if (!pending) this.release(level, at)
-                    level.slot = slot
-                    if (pending) this.markUp(at + 1, slot)
-                    else this.mountFrom(at + 1, slot)
-                    return { stop: () => this.release(level, at) }
-                },
-            })
-        // The region a level's markup lands in is its slot above, known only once that markup
-        // runs; a module mounted by the router leaves its markup rather than using this one.
-        // A deferred level answers the scope its setup made, so the watches that setup opened are
-        // stopped with the level even where its markup never runs — a slot that never opens.
-        level.scope = level.mount(() => module.default(region, props, level))
-        return level.share
-    }
-
-    /** Runs the markup level `at`'s setup left, into `region`. */
-    private markUp(at: number, region: Region): void {
-        const level = this.levels[at] as Level
-        const markup = level.markup
-        if (markup === undefined) return
-        level.markup = undefined
-        level.scope = level.mount(() => markup(region))
-    }
-
-    /**
-     * Stops what stands below `level` and forgets its slot.
-     *
-     * A no-op once the level itself has been replaced, which is how a stop handed to a layout that
-     * has since left does nothing.
-     */
-    private release(level: Level, at: number): void {
-        if (this.levels[at] !== level) return
-        level.slot = undefined
-        // 39.14, 39.16 — THE LEVELS BELOW LEAVE WITH THE SLOT'S REGION, and their head with them:
-        // reconciled first, so what the server painted for them is adopted as theirs.
-        Level.reconcile(this.levels)
-        this.stopFrom(at + 1)
-        Level.reconcile(this.levels)
     }
 
     /**
@@ -663,38 +503,22 @@ export class Router {
         if (ticket.signal.aborted) return
         // THE HYDRATE SHARE. Same name as the navigation's mount because it is the same work on the
         // same chain — what differs is the op it is a fraction of.
-        this.mountChain(new URL(location.href), found, standing, 0, this.region)
+        this.arriveAt(new URL(location.href), found)
+        this.levels.hydrate(standing)
         // 30.30 — A RELOAD lands on an entry that carries the scroll `remember` wrote on the way out.
         const scroll = (history.state as Partial<Entry> | null)?.scroll
         if (scroll != null) scrollTo(scroll[0], scroll[1])
     }
 
     /**
-     * Records the arriving chain as standing and mounts it from level `from` into `into`.
+     * Records the arriving route as standing at `target`.
      *
-     * AT THE TOP OF THE CHAIN, NOT INSIDE `mountFrom`: it recurses one level per layout, and
-     * `shares()` SUMS every measure of a name inside the op — so a pair inside the recursion would
-     * count the innermost level once per level above it. 23.1 — WRITTEN BEFORE THE ARRIVING PAGE'S
-     * SETUP, which reads it.
+     * 23.1 — WRITTEN BEFORE THE ARRIVING PAGE'S SETUP, which reads it.
      */
-    private mountChain(
-        target: URL,
-        found: Found,
-        modules: PageModule[],
-        from: number,
-        into: Region | undefined,
-    ): void {
+    private arriveAt(target: URL, found: Found): void {
         arrive(target.href, found.route.pattern, found.params)
-        this.chain = modules
         this.standing = found.route
         this.mounted = target.pathname
-        if (into === undefined) return
-        beginLayer(LAYER_MOUNT)
-        try {
-            this.mountFrom(from, into)
-        } finally {
-            endLayer(LAYER_MOUNT)
-        }
     }
 }
 
@@ -763,21 +587,6 @@ async function ask(
         return undefined
     }
 }
-
-/**
- * The props a routed page or layout is set up over, `children` aside: `params` as a live accessor.
- *
- * 33.4 — A PROP IS AN ACCESSOR. A page is mounted as any other component is, so its one prop is
- * passed the way `renderComponent` passes a child's and the way `answerRequest` paints one: a
- * function per key. Passed as the plain record it lowered to `params()` on a value that was not
- * one, so every page with a `[param]` in its address hydrated dead — with its server markup
- * already on screen, which is what kept it quiet.
- *
- * 33.5 — AND A LIVE ONE: `params` reads `route.params`, which every navigation writes. A layout
- * kept across `/users/1` -> `/users/2` is not mounted again, so an accessor over the params it was
- * mounted with went on answering user 1.
- */
-const ROUTE_PROPS = { params: (): Params => route.params() }
 
 function entryAt(index: number, scroll: Scroll | null): Entry {
     return { index, scroll }

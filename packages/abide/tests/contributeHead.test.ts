@@ -7,6 +7,11 @@ import { contributeHead, Level } from '#ui/Level.ts'
 import { reconcileHead } from '#ui/reconcileHead.ts'
 import type { Region } from '#ui/regions.ts'
 
+/** What a level reconciles through: the head of `levels`, as a `LevelChain` reconciles its own. */
+const chainOf = (levels: Level[]) => ({
+    reconcile: () => Level.reconcile(levels),
+})
+
 /** A region with `content` between its anchors — empty for one the client fills. */
 function region(content: Node[]): Region {
     const open = document.createComment('')
@@ -19,7 +24,7 @@ function region(content: Node[]): Region {
 // 100,000 rows reads through 100,000 nested calls and overflows the stack.
 test("a level's head reads every row's contribution in one walk — 39.1", () => {
     const levels: Level[] = []
-    const level = new Level(levels, 0)
+    const level = new Level(chainOf(levels))
     levels.push(level)
     level.setHead(() => '<title>page</title>')
     // A region the server painted: nothing is reconciled, only joined.
@@ -28,7 +33,7 @@ test("a level's head reads every row's contribution in one walk — 39.1", () =>
         for (let row = 0; row < 100_000; row += 1)
             contributeHead(painted, () => '<i>')
     })
-    const chain = Level.chain(levels)
+    const chain = Level.contributors(levels)
     expect(chain[0]?.[1]).toBe('<title>page</title>')
     expect(chain.length).toBe(1 + 100_000)
 })
@@ -39,9 +44,9 @@ test("a level's head reads every row's contribution in one walk — 39.1", () =>
 test("a component's head lands with its level and leaves with it — 39.1, 39.14, 39.16", () => {
     document.head.innerHTML = '<title>Layout</title>'
     const levels: Level[] = []
-    const layout = new Level(levels, 0)
+    const layout = new Level(chainOf(levels))
     layout.setHead(() => '<title>Layout</title>')
-    const page = new Level(levels, 1)
+    const page = new Level(chainOf(levels))
     levels.push(layout, page)
     // An empty region is one the client builds, so its head is written once the level is mounted.
     page.mount(() => {
@@ -84,9 +89,9 @@ test('a contributor takes only its own keyless nodes when it leaves — 39.16', 
     // The server painted both, layout first.
     document.head.innerHTML = layoutHead + pageHead
     const levels: Level[] = []
-    const layout = new Level(levels, 0)
+    const layout = new Level(chainOf(levels))
     layout.setHead(() => layoutHead)
-    const page = new Level(levels, 1)
+    const page = new Level(chainOf(levels))
     page.setHead(() => pageHead)
     levels.push(layout, page)
     const order = () =>

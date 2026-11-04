@@ -9,9 +9,8 @@ import { answerOf } from '#shared/answerOf.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import type { Reactive } from '#shared/reactive/index.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
+import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
-
-import { disarmMuxes } from './disarmMuxes.ts'
 
 type Sent = {
     op: string
@@ -84,12 +83,11 @@ beforeAll(() => {
     }) as unknown as typeof fetch
 })
 
-// The muxes this file opens are disarmed with it (`disarmMuxes`).
-const disarm = disarmMuxes()
+// The muxes this file opens are forgotten with it (`resetSocketWire`).
 afterAll(() => {
     globalThis.WebSocket = unstubbedSocket
     globalThis.fetch = unstubbedFetch
-    disarm()
+    resetSocketWire()
 })
 
 const settle = (): Promise<void> => new Promise((done) => setTimeout(done, 10))

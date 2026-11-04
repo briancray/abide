@@ -11,8 +11,22 @@ type Boundary = {
 }
 
 /** The boundary a scope built now falls under, or `undefined` outside every `{#try}` body. */
-export const BOUNDARY: { current: Boundary | undefined } = {
-    current: undefined,
+let ambientBoundary: Boundary | undefined
+
+/**
+ * Runs `run` with every scope it builds falling under `boundary` (32.16), restoring the one around it.
+ *
+ * The ambient is this module's so `Scope`'s field reads a local at construction; `TryRegion` is the
+ * one writer, and a page with no `{#try}` does not import it.
+ */
+export function underBoundary<T>(boundary: Boundary, run: () => T): T {
+    const previous = ambientBoundary
+    ambientBoundary = boundary
+    try {
+        return run()
+    } finally {
+        ambientBoundary = previous
+    }
 }
 
 /**
@@ -54,7 +68,7 @@ export class Scope {
      *
      * 32.16 — read once at construction.
      */
-    boundary: Boundary | undefined = BOUNDARY.current
+    boundary: Boundary | undefined = ambientBoundary
     /**
      * 32.67 — where in `stops` a row's item watches start (`itemWatch`), and how many there are:
      * opened one after another by a row's mount, so two numbers find them and the row allocates

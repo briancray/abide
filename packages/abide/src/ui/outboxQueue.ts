@@ -69,9 +69,9 @@ let askedToPersist = false
  */
 const VALUES = new Map<string, Reactive<unknown>>()
 /** What wants to hear the line empty of calls not yet delivered (18.35). */
-const DRAINED: (() => void)[] = []
+const DRAINED = new Set<() => void>()
 
-const shelf: Shelf =
+let shelf: Shelf =
     typeof indexedDB === 'undefined' ? memoryShelf() : databaseShelf()
 const channel =
     typeof BroadcastChannel === 'undefined'
@@ -87,7 +87,25 @@ export function undelivered(): number {
 
 /** Runs `listener` each time the line holds no call waiting to be delivered (18.35). */
 export function whenDelivered(listener: () => void): void {
-    DRAINED.push(listener)
+    DRAINED.add(listener)
+}
+
+/**
+ * Empties the line and its timers onto a fresh in-memory shelf.
+ *
+ * A page never does; a test does between cases, rather than discarding a call at a time and waiting
+ * out each discard's write.
+ */
+export function resetOutbox(): void {
+    clearTimeout(retrying)
+    retrying = undefined
+    backoff = RETRY_FLOOR_MS
+    held = false
+    waiting = false
+    LINE = []
+    VALUES.clear()
+    shelf = memoryShelf()
+    publish()
 }
 
 /**

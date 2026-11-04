@@ -7,6 +7,7 @@ import { afterAll, expect, test } from 'bun:test'
 
 import { flushSync, invalidate, watch } from '#shared'
 import { rowKeyOf } from '#ui/rowKeyOf.ts'
+import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
 
 import { appFixture, buildApp, builtCompilation } from './builtApp.ts'
@@ -25,6 +26,7 @@ globalThis.WebSocket = class {
     static OPEN = 1
     readyState = 0
     send(): void {}
+    close(): void {}
 } as unknown as typeof WebSocket
 // A browser with no route to the server: `fetch` rejects, as it does offline.
 let unreachable = false
@@ -39,6 +41,7 @@ globalThis.fetch = (async () => {
     })
 }) as unknown as typeof fetch
 afterAll(() => {
+    resetSocketWire()
     globalThis.WebSocket = unstubbedSocket
     globalThis.fetch = unstubbedFetch
     removeTemporaryModules()

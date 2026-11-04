@@ -88,10 +88,7 @@ export class ArmRegion {
 
     swap(next: unknown): void {
         const region = this.region
-        const filling =
-            this.at !== undefined ||
-            isEmptyRegion(region) ||
-            this.paintedOther(next)
+        const filling = this.fills(next)
         const arm = this.armOf(next)
         const scope = this.scope
         if (filling) {
@@ -100,6 +97,15 @@ export class ArmRegion {
         }
         scope?.own(arm.mount(region))
         this.at = next
+    }
+
+    /** Whether swapping in `next` fills the region rather than hydrating what the server painted. */
+    fills(next: unknown): boolean {
+        return (
+            this.at !== undefined ||
+            isEmptyRegion(this.region) ||
+            this.paintedOther(next)
+        )
     }
 
     armOf(next: unknown): Arm {

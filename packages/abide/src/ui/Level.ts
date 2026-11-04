@@ -14,18 +14,14 @@ import type { Scope } from './Scope.ts'
 /**
  * ONE LEVEL OF A ROUTED CHAIN — a layout or the page — and the head it contributes (39.1, 39.14).
  *
- * 41.11 — the router holds these rather than letting each level own the one below it, which is
- * what makes a shared layout something it can KEEP: a scope stopped from above takes its children
- * with it, and a layout that survives a navigation must not take the page it was holding a moment
- * ago. The module standing here is the router's `chain` at the same index.
+ * 41.11 — a `LevelChain` holds these rather than letting each level own the one below it.
  *
  * ON EVERY PAGE'S STATIC CLOSURE, because `contributeHead` is on the runtime barrel — so it knows
- * nothing of the router, and the router knows it only through `levels`.
+ * the chain it stands in only as what reconciles the head, and nothing of the router.
  */
 export class Level {
-    /** The chain this level stands in, and where: a live head yields to every level below it. */
-    levels: Level[]
-    at: number
+    /** The chain this level stands in: a live head yields to every level below it. */
+    chain: { reconcile(): void }
     scope: Scope | undefined = undefined
     /**
      * Where this level's `<slot/>` is, learned when the level below it mounted there, and
@@ -64,9 +60,8 @@ export class Level {
      */
     contributed = new Set<HeadContribution>()
 
-    constructor(levels: Level[], at: number) {
-        this.levels = levels
-        this.at = at
+    constructor(chain: { reconcile(): void }) {
+        this.chain = chain
     }
 
     /** Left by the level's mount (`emitClient`), painted or not. */
@@ -85,7 +80,7 @@ export class Level {
 
     /** Reconciles the document head from the chain this level stands in (`reconcileHead`). */
     reconcile(): void {
-        Level.reconcile(this.levels)
+        this.chain.reconcile()
     }
 
     /**
@@ -94,11 +89,11 @@ export class Level {
      * a head read here is followed by its own watch, not by whatever wrote.
      */
     static reconcile(levels: Level[]): void {
-        reconcileHead(untracked(Level.chain, levels, undefined))
+        reconcileHead(untracked(Level.contributors, levels, undefined))
     }
 
     /** Every contributor in `levels` and the head it reads now, outermost first. */
-    static chain(
+    static contributors(
         levels: Level[],
         _?: undefined,
     ): [who: object, text: string][] {

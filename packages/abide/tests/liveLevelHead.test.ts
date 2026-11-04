@@ -363,7 +363,7 @@ const { name } = props<{ name: string }>()
 // back to the layout's, and what it wrote without a key leaves. The slot opening again mounts the
 // page, and its head with it.
 //
-// THE REVERT: drop the two reconciles from `Router.release`. The page's title outlives it — this
+// THE REVERT: drop the two reconciles from `LevelChain.release`. The page's title outlives it — this
 // reports `Page` where `Layout` is due — and so does its keyless `<meta>`.
 test("a page's head leaves with its layout's slot — 39.14, 39.16", async () => {
     await arrive(

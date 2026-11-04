@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { buildFiles } from '#server/appBuild.ts'
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
+import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
 
 import {
@@ -17,7 +18,6 @@ import {
     builtHandlers,
     serveApp,
 } from './builtApp.ts'
-import { disarmMuxes } from './disarmMuxes.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 // A STRING NO BROWSER MAY EVER RECEIVE. The handler module imports it, the page imports the
@@ -132,11 +132,10 @@ globalThis.WebSocket = class {
     send(): void {}
     close(): void {}
 } as unknown as typeof WebSocket
-// The muxes this file opens are disarmed with it (`disarmMuxes`).
-const disarm = disarmMuxes()
+// The muxes this file opens are forgotten with it (`resetSocketWire`).
 afterAll(() => {
     globalThis.WebSocket = unstubbedSocket
-    disarm()
+    resetSocketWire()
 })
 
 beforeAll(async () => {

@@ -19,13 +19,8 @@ import { type Disposer, watchTracked } from '#shared/reactive/watch.ts'
 
 import { type Arm, type ArmMakers, ArmRegion } from './ArmRegion.ts'
 import { Mismatch } from './Mismatch.ts'
-import {
-    fillRegion,
-    isEmptyRegion,
-    type Region,
-    removeUntil,
-} from './regions.ts'
-import { BOUNDARY, type Scope, type Stoppable } from './Scope.ts'
+import { fillRegion, type Region, removeUntil } from './regions.ts'
+import { type Scope, type Stoppable, underBoundary } from './Scope.ts'
 
 /**
  * The body until something in it fails, then the catch until the failure clears. Arm `0` is the
@@ -40,7 +35,7 @@ import { BOUNDARY, type Scope, type Stoppable } from './Scope.ts'
  * anchor names as arm 1 (`namedArm`) — it keeps until the body has been tried behind it
  * (`mountBehind`), and adopts where the body fails here too, so the catch the server sent is the
  * one on the page. A body that succeeds here after failing there replaces it. So 41.24 is already
- * this region's shape — its open names the arm — and `paintedOther` is never asked here.
+ * this region's shape — its open names the arm — and `paintedOther` answers no.
  */
 export class TryRegion extends ArmRegion {
     readonly failure: Reactive<unknown>
@@ -114,17 +109,13 @@ export class TryRegion extends ArmRegion {
      * `again` IS WHAT A RETRY RERUNS: the binding that threw, or the body mounted again.
      */
     guard<T>(run: () => T, again: () => unknown): T | undefined {
-        const previous = BOUNDARY.current
-        BOUNDARY.current = this
         try {
-            return run()
+            return underBoundary(this, run)
         } catch (thrown) {
             if (thrown instanceof Mismatch || thrown instanceof NotLanded)
                 throw thrown
             this.fail(thrown, again)
             return undefined
-        } finally {
-            BOUNDARY.current = previous
         }
     }
 
@@ -139,11 +130,9 @@ export class TryRegion extends ArmRegion {
         const scope = this.scope as Scope
         let next = first
         while (next !== this.at) {
-            const painted = this.at === undefined && !isEmptyRegion(region)
+            const filling = this.fills(next)
             this.at = next
-            const arm = (this.arms[next as number] as ArmMakers[number])(
-                this.failure.peek(),
-            )
+            const arm = this.armOf(next)
             const standing = next === 0 ? this.standing : undefined
             if (standing !== undefined) {
                 this.standing = undefined
@@ -151,7 +140,7 @@ export class TryRegion extends ArmRegion {
                 scope.own(standing)
                 continue
             }
-            if (!painted) {
+            if (filling) {
                 scope.stop()
                 if (
                     next === 0 &&
@@ -173,6 +162,17 @@ export class TryRegion extends ArmRegion {
             if (next === 1) this.startRetry()
             next = this.failure.peek() === undefined ? 0 : 1
         }
+    }
+
+    /** The catch is handed the failure it binds. */
+    override armOf(next: unknown): Arm {
+        return (this.arms[next as number] as ArmMakers[number])(
+            this.failure.peek(),
+        )
+    }
+
+    override paintedOther(): boolean {
+        return false
     }
 
     private fail(error: unknown, again: () => unknown): void {
@@ -238,14 +238,14 @@ export class TryRegion extends ArmRegion {
             open: region.close.previousSibling as Comment,
             close: region.close,
         }
-        const previous = BOUNDARY.current
-        BOUNDARY.current = this
         this.trying = true
         this.triedFailed = false
         let mounted: Stoppable | undefined
         try {
-            fillRegion(body, arm.build)
-            mounted = arm.mount(body)
+            mounted = underBoundary(this, () => {
+                fillRegion(body, arm.build)
+                return arm.mount(body)
+            })
         } catch (thrown) {
             fillRegion(body)
             if (thrown instanceof Mismatch || thrown instanceof NotLanded)
@@ -254,7 +254,6 @@ export class TryRegion extends ArmRegion {
             this.triedError = thrown
             this.triedAgain = undefined
         } finally {
-            BOUNDARY.current = previous
             this.trying = false
         }
         if (!this.triedFailed) {

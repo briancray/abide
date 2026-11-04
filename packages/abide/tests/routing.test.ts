@@ -182,7 +182,7 @@ test('a navigation lands where the server redirected it — 30.15, 30.17', async
 })
 
 // 30.18 — ANYTHING BUT A GO-AHEAD IS THE DOCUMENT'S: the router mounts nothing and writes no history
-// entry. THE REVERT: drop the status check in `Router.go`; the invoice mounts under a refusal.
+// entry. THE REVERT: drop the status check in `Router.travel`; the invoice mounts under a refusal.
 test('a navigation the server refuses is left to the document — 30.18', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())
@@ -213,7 +213,7 @@ test('a navigation the server refuses is left to the document — 30.18', async 
 })
 
 // 30.27 — A SERVER THAT CANNOT BE REACHED: the request throws and so does the page's chunk. THE
-// REVERT: call `load` in place of `loadOrMiss` in `Router.go`; the rejection escapes a click's
+// REVERT: call `load` in place of `loadOrMiss` in `Router.travel`; the rejection escapes a click's
 // `void`, the address is never handed over and `left` stays ''.
 test('a navigation whose chunks fail to load is left to the document — 30.27', async () => {
     history.replaceState(null, '', '/')
@@ -266,7 +266,7 @@ test('a navigation whose chunks fail to load is left to the document — 30.27',
 
 // 30.32 — OFFLINE, THE PAGE STAYS: the request throws with `navigator.onLine` false, and the document
 // load 30.27 would make could only paint the browser's error page. THE REVERT: drop the offline arm
-// from `Router.go`; the address is handed to the document and `left` reports it.
+// from `Router.travel`; the address is handed to the document and `left` reports it.
 test('a navigation whose request fails while offline leaves the page standing — 30.32', async () => {
     history.replaceState(null, '', '/')
     const r = router(await pages())
@@ -305,7 +305,7 @@ test('a navigation whose request fails while offline leaves the page standing �
 
 // 23.1, 23.2, 23.6 — THE ROUTER FILLS `route`: at hydration from the address the server painted, and
 // on a navigation BEFORE the arriving page mounts, with `navigating` true for as long as its chunk
-// is loading. THE REVERT: move `arrive` after `mountFrom` in `Router.go`; the page's setup reads
+// is loading. THE REVERT: move `arriveAt` after `levels.replace` in `Router.commit`; the page's setup reads
 // the params of the address it left, and this reports `{}` where `{ id: '7' }` is due.
 test('the router fills route on hydration and on a navigation — 23.1, 23.2', async () => {
     history.replaceState(null, '', '/')
@@ -423,7 +423,7 @@ test("a shell's own body markup stays outside the page region — 41.9", async (
 })
 
 // 12.13 through the router: the page it replaced owned a scope, and the router is the only thing
-// that can remove its nodes. THE REVERT: drop the `this.stopFrom(shared)` call from `Router.go` —
+// that can remove its nodes. THE REVERT: drop the `this.stopFrom(kept)` call from `LevelChain.replace` —
 // the old page's binding goes on waking for every write into nodes no longer in the document.
 test('the page a navigation replaced stops its bindings — 12.13', async () => {
     history.replaceState(null, '', '/')
@@ -431,7 +431,7 @@ test('the page a navigation replaced stops its bindings — 12.13', async () => 
     const r = router(mounts)
     await r.hydrate()
     flushSync()
-    const scope = r.levels.at(-1)?.scope
+    const scope = r.levels.scopeAt(-1)
     expect(scope?.stops.length).toBeGreaterThan(0)
 
     await navigate('/invoices/42')
@@ -1026,7 +1026,7 @@ test('a page that is also a component applies its head only where it is routed �
 // all: the later navigation lands last and wins by accident, which is what made this look fine
 // for as long as every route's chunk was already cached.
 //
-// THE REVERT: drop the `this.navigation !== ticket` check from `Router.go`. The invoice page
+// THE REVERT: drop the `this.navigation !== ticket` check from `Router.travel`. The invoice page
 // mounts over the home page that replaced it, and this reports `/invoices/42` where `/` is due.
 test('a superseded navigation does not mount over the one that replaced it', async () => {
     history.replaceState(null, '', '/')
@@ -1056,7 +1056,7 @@ test('a superseded navigation does not mount over the one that replaced it', asy
     const winner = r.go('/')
     await winner
     flushSync()
-    const settled = r.levels.at(-1)?.scope
+    const settled = r.levels.scopeAt(-1)
 
     landInvoice()
     await superseded
@@ -1067,7 +1067,7 @@ test('a superseded navigation does not mount over the one that replaced it', asy
     expect(document.querySelector('#home h1')?.textContent).toBe('Home')
     // AND THE WINNER'S SCOPE IS STILL THE ROUTER'S — the superseded mount never replaced it, so
     // there is no page left awake with nothing able to stop it.
-    expect(r.levels.at(-1)?.scope).toBe(settled)
+    expect(r.levels.scopeAt(-1)).toBe(settled)
 })
 
 // 35.1 AND 41.11 ON THE CLIENT. A layout is mounted once and the page under it is what a
@@ -1133,7 +1133,7 @@ async function chained(): Promise<{
 // each level itself rather than inside the one above, so a page under a layout opened a share
 // chain of its own: the server painted the layout's value, hydration overwrote it with the page's,
 // and a write in the layout never reached the page. THE REVERT: drop the `resumeShare` around
-// `module.default` in `Router.setUp` — the page reads `page-own` where `dark` is due.
+// `module.default` in `LevelChain.setUp` — the page reads `page-own` where `dark` is due.
 test("a page under a layout reads the layout's share, hydrated and navigated to — 10.5", async () => {
     history.replaceState(null, '', '/')
     const sources = {
@@ -1527,7 +1527,7 @@ test('a navigation that moves only the query keeps the page — 30.23, 30.24, 30
     flushSync()
     ;(document.querySelector('#bump') as HTMLElement).click()
     flushSync()
-    const scope = r.levels.at(-1)?.scope
+    const scope = r.levels.scopeAt(-1)
     const scrolled: unknown[] = []
     const scrollTo = globalThis.scrollTo
     globalThis.scrollTo = ((...to: unknown[]) => {
@@ -1540,7 +1540,7 @@ test('a navigation that moves only the query keeps the page — 30.23, 30.24, 30
         globalThis.scrollTo = scrollTo
     }
     expect(asked).toEqual([])
-    expect(r.levels.at(-1)?.scope).toBe(scope)
+    expect(r.levels.scopeAt(-1)).toBe(scope)
     expect(document.querySelector('#home p')?.textContent).toBe('1')
     expect(route.url().search).toBe('?genre=fantasy')
     expect(location.search).toBe('?genre=fantasy')
@@ -1557,13 +1557,13 @@ test('a navigation to another path of the same route asks, and keeps the page �
     await r.hydrate()
     await navigate('/invoices/42')
     flushSync()
-    const scope = r.levels.at(-1)?.scope
+    const scope = r.levels.scopeAt(-1)
     const heading = document.querySelector('#invoice h1')
     asked.length = 0
     await navigate('/invoices/7')
     flushSync()
     expect(asked).toEqual(['/invoices/7'])
-    expect(r.levels.at(-1)?.scope).toBe(scope)
+    expect(r.levels.scopeAt(-1)).toBe(scope)
     expect(document.querySelector('#invoice h1')).toBe(heading)
     expect(route.params()).toEqual({ id: '7' })
     expect(location.pathname).toBe('/invoices/7')
@@ -1585,7 +1585,7 @@ test('back over a fragment of the standing page neither asks nor remounts, and m
     const stop = listenForRoutes(r)
     ;(document.querySelector('#bump') as HTMLElement).click()
     flushSync()
-    const scope = r.levels.at(-1)?.scope
+    const scope = r.levels.scopeAt(-1)
 
     // What the browser does for Forward onto `/#setup`: the bar moved before `popstate` is
     // dispatched. 30.33 — `route.url` follows it, and the page stands.
@@ -1602,7 +1602,7 @@ test('back over a fragment of the standing page neither asks nor remounts, and m
     flushSync()
 
     expect(asked).toEqual([])
-    expect(r.levels.at(-1)?.scope).toBe(scope)
+    expect(r.levels.scopeAt(-1)).toBe(scope)
     expect(document.querySelector('#home p')?.textContent).toBe('1')
     expect(route.url().hash).toBe('')
     expect(route.url().href).toBe(location.href)
@@ -1635,7 +1635,7 @@ test('a routed link with a fragment scrolls to its element, remounting nothing i
             target.id = id
             document.body.append(target)
         }
-        const scope = r.levels.at(-1)?.scope
+        const scope = r.levels.scopeAt(-1)
         const link = document.createElement('a')
         link.href = '/#install'
         document.body.append(link)
@@ -1649,7 +1649,7 @@ test('a routed link with a fragment scrolls to its element, remounting nothing i
         await Bun.sleep(0)
         flushSync()
         expect(asked).toEqual([])
-        expect(r.levels.at(-1)?.scope).toBe(scope)
+        expect(r.levels.scopeAt(-1)).toBe(scope)
         expect(location.hash).toBe('#install')
         // 30.33 — the address moved, and `route.url` with it.
         expect(route.url().hash).toBe('#install')
@@ -1763,13 +1763,13 @@ test("a kept layout's slot mounts the current page whenever it opens — 35.1, 1
     await r.go('/users/1/edit')
     flushSync()
     expect(document.querySelector('#edit')?.textContent).toBe('edit 0')
-    const editing = r.levels.at(-1)
-    expect(editing?.scope?.stops.length).toBeGreaterThan(0)
+    const editing = r.levels.scopeAt(-1)
+    expect(editing?.stops.length).toBeGreaterThan(0)
     ;(document.querySelector('#fold') as HTMLElement).click()
     flushSync()
     expect(document.querySelector('#edit')).toBeNull()
-    expect(r.levels).toHaveLength(1)
-    expect(editing?.scope?.stops.length).toBe(0)
+    expect(r.levels.depth).toBe(1)
+    expect(editing?.stops.length).toBe(0)
 
     ;(document.querySelector('#fold') as HTMLElement).click()
     flushSync()
@@ -1787,7 +1787,7 @@ test("a kept layout's slot mounts the current page whenever it opens — 35.1, 1
     flushSync()
     expect(document.querySelector('#profile')?.textContent).toBe('profile 2')
     expect(document.querySelector('#edit')).toBeNull()
-    expect(r.levels).toHaveLength(2)
+    expect(r.levels.depth).toBe(2)
 })
 
 // 39.14 — WHAT A LEAVING LEVEL KEYED AND NO ARRIVING ONE DOES GOES BACK TO THE NEXT-OUTER
@@ -2074,14 +2074,16 @@ test('back and forward restore the scroll each entry was left at — 30.29', asy
 })
 
 // 30.30 THROUGH A RELOAD: the scroll the entry was written with on the way out is where the
-// hydrated page lands. THE REVERT, run: drop the restore from `hydrate`; the page stays at 0.
+// hydrated page lands, and the entry keeps its place: the next push is the one after it. THE
+// REVERT, run: drop the restore from `hydrate`; the page stays at 0.
 test('a reloaded entry hydrates at the scroll it was left at — 30.30', async () => {
     history.replaceState({ index: 4, scroll: [0, 250] }, '', '/')
     const r = router(await pages())
-    expect(r.index).toBe(4)
     await r.hydrate()
     expect(scrollY).toBe(250)
     scrollTo(0, 0)
+    await r.go('/invoices/42')
+    expect(history.state).toEqual({ index: 5, scroll: null })
 })
 
 // 30.31 — A SUPERSEDED NAVIGATION'S REQUEST IS ABORTED, not left to finish for nobody. THE REVERT,

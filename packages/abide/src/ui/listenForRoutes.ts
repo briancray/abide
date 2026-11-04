@@ -29,11 +29,8 @@ export function listenForRoutes(router: Router): () => void {
         if (url !== undefined) router.prefetch(url.pathname)
     }
 
-    // BACK AND FORWARD HAVE ALREADY MOVED THE ADDRESS BAR by the time this runs, so the page is
-    // mounted where the bar already points and nothing is pushed for it. 30.20 — a step within the
-    // standing page, back over an in-page `#anchor` jump, is `go`'s to keep: nothing asked, nothing
-    // remounted. 30.29 — the scroll is the router's to put back, once the page it belongs to is
-    // mounted: the browser's own restoration runs before that page exists.
+    // BACK AND FORWARD HAVE ALREADY MOVED THE ADDRESS BAR by the time this runs (`popped`). 30.29 —
+    // the browser's own scroll restoration runs before the page it restores exists, so it is off.
     const onPop = (): void => {
         if (router.match(location.pathname) === undefined) {
             // The bar already stands at the entry being loaded, so the `pagehide` this reload
@@ -42,11 +39,7 @@ export function listenForRoutes(router: Router): () => void {
             location.reload()
             return
         }
-        void router.go(
-            location.href,
-            { replace: true, keepScroll: true },
-            router.stepped(),
-        )
+        void router.popped()
     }
 
     const listening = new AbortController()

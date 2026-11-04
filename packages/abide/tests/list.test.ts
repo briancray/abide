@@ -1731,7 +1731,7 @@ const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
 test('a {#for} over a followed GET adopts the rows the server painted, over the mux — 41.8, 41.10', async () => {
     const { Mux } = await import('#server/answerSocket.ts')
     const { GET } = await import('#shared/rpc.ts')
-    const { MUXES } = await import('#ui/socketWire.ts')
+    const { resetSocketWire } = await import('#ui/socketWire.ts')
     const { wire } = await import('#ui/wire.ts')
     // AN ORIGIN OF THIS CASE'S OWN, for `followWire.test.ts`'s reason: the browser's follows are
     // process-wide, keyed by address.
@@ -1791,6 +1791,7 @@ test('a {#for} over a followed GET adopts the rows the server painted, over the 
         send(text: string): void {
             setTimeout(() => void this.connection.message(text), 0)
         }
+        close(): void {}
     }
     const side = globalThis as {
         transcriptSubject?: unknown
@@ -1818,7 +1819,7 @@ const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
         })
     }
     // THE MUX IS THIS CASE'S, whatever ran first: a page's muxes stand for its life.
-    MUXES.clear()
+    resetSocketWire()
     const warned: string[] = []
     const warn = console.warn
     console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
@@ -1845,7 +1846,7 @@ const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
         side.WebSocket = realSocket
         side.fetch = realFetch
         side.transcriptSubject = undefined
-        MUXES.clear()
+        resetSocketWire()
         mux.closeAll(1000, 'the case is over')
     }
     expect({

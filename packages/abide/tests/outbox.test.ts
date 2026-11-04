@@ -7,7 +7,8 @@
 import { afterAll, afterEach, expect, test } from 'bun:test'
 
 import { busy, outbox } from '#shared'
-import { deliver } from '#ui/outboxQueue.ts'
+import { deliver, resetOutbox } from '#ui/outboxQueue.ts'
+import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
 
 type Sent = { method: string; path: string; key: string | null }
@@ -22,6 +23,7 @@ globalThis.WebSocket = class {
     static OPEN = 1
     readyState = 0
     send(): void {}
+    close(): void {}
 } as unknown as typeof WebSocket
 globalThis.fetch = (async (input: string, init?: RequestInit) => {
     const path = new URL(input, 'http://app.test').pathname
@@ -36,15 +38,12 @@ globalThis.fetch = (async (input: string, init?: RequestInit) => {
     return Response.json({ from: 'server', path })
 }) as unknown as typeof fetch
 afterAll(() => {
+    resetSocketWire()
     globalThis.WebSocket = unstubbedSocket
     globalThis.fetch = unstubbedFetch
 })
-afterEach(async () => {
-    // Dropped while the network is still off, so a retry the test left armed has nothing to send.
-    for (let tries = 0; outbox().length !== 0 && tries < 10; tries += 1) {
-        for (const call of outbox()) call.discard()
-        await settle()
-    }
+afterEach(() => {
+    resetOutbox()
     network = true
     answers.clear()
     sent.length = 0
