@@ -1559,9 +1559,11 @@ error naming the mount.
 23.21 A `.abide` of the app's own directly in a directory under no fence MUST be a page, save a
 `layout.abide`, an `error.abide` and the root's `launcher.abide`.
 
-23.22 A file of the app's own directly in a directory under no fence that is neither a `.abide`, a
-handler file, a param file, a test file, a bench file nor a declaration file MUST be a build error naming the file and a `lib` directory, save one
-beside the `package.json` of a root that holds it, nor a `.ts`.
+23.22 A file of the app's own directly in a directory under no fence MUST be a `.abide`, a handler
+file (`<name>.handler.ts`), a param file (`<NAME>.param.ts`), a test file (`<name>.test.ts`), a bench
+file (`<name>.bench.ts`) or a declaration file (`<name>.d.ts`), and any other MUST be a build error
+naming the file and a `lib` directory — save a file directly in a root that holds its package's
+`package.json`, which MAY be any file but a `.ts`.
 
 23.23 A server file of the app's own under no `lib` directory MUST be a build error naming the file
 and a `lib` directory.
