@@ -697,6 +697,7 @@ declare function ${BOUND}<Value>(value: ${REACTIVE}<Value, any, any, any>): Valu
 declare function ${BOUND}<Value>(value: { get(): Value; set(value: Value): unknown }): Value
 declare function __restValues<Accessors>(record: Accessors): { [Key in keyof Accessors]: NonNullable<Accessors[Key]> extends () => infer Value ? Value : never }
 declare function __propCell<Value>(read: () => Value): () => ${REACTIVE}<Value>
+declare function __heldProp<Value>(read: () => Value): ${REACTIVE}<Value, Value, any, any>
 declare function __raw(value: unknown): unknown
 declare function __writePath<Root>(root: Root, path: readonly PropertyKey[], value: unknown): Root
 declare type __RouteParams<Pattern extends string, Kind extends string> = Kind extends 'layout' ? ${ROUTE_PARAMS}<Pattern> & { [name: string]: string | string[] | undefined } : ${ROUTE_PARAMS}<Pattern>

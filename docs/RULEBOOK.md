@@ -1871,16 +1871,17 @@ the routes 30.9 ranks after that route.
 
 31.3 A name MUST hold the `Reactive` only where the declared type of its position is a `Reactive`: an
 annotated binding, an annotated return, a `Reactive`-typed parameter, a `bind:` operand, an `await`
-operand — or where 31.14 holds it.
+operand — or where 31.13 holds it.
 
 31.4 Assignment to such a name MUST be a write, and the assigned value MAY be settled, a load, or a
 `Reactive`.
 
 31.5 A property access on such a name MUST reach the value, except a member declared on the
-`Reactive` type, which MUST reach that member bound to the `Reactive`.
+`Reactive` type that the value's type does not declare, which MUST reach that member bound to the
+`Reactive`.
 
-31.6 A call on such a name MUST reach the `Reactive` API where the member is declared on the
-`Reactive` type, and the value's method otherwise.
+31.6 A call on such a name MUST reach the `Reactive` API where 31.5 reaches the `Reactive`'s
+member, and the value's method otherwise.
 
 31.7 `s` and `s.set` MUST keep compiling inside a `.abide` file.
 
@@ -1896,17 +1897,14 @@ the member name.
 
 31.12 A destructuring pattern or a spread over such a name MUST read it once.
 
-31.13 The compiler MUST warn where 31.5 reaches a `Reactive` member the value's type also declares,
-naming the explicit read.
-
-31.14 A name MUST hold the `Reactive` where the declared type of its position is a `Selection`, or a
+31.13 A name MUST hold the `Reactive` where the declared type of its position is a `Selection`, or a
 type parameter constrained by one.
 
-31.15 A write through a member path that reaches a value which is not plain data — an array, or an
+31.14 A write through a member path that reaches a value which is not plain data — an array, or an
 object whose prototype is `Object.prototype` or `null` — MUST assign on that value itself, MUST NOT
 copy it or any level above it, and MUST NOT wake a reader.
 
-31.16 `route.url`, `route.params`, `route.name` and `route.navigating` MUST each be read and written
+31.15 `route.url`, `route.params`, `route.name` and `route.navigating` MUST each be read and written
 as a name bound to a `Reactive` is, per 31.1 to 31.7.
 
 # 32. Templating
@@ -2218,6 +2216,10 @@ that element as its `currentTarget`.
 33.26 `Attributes<Tag>` over an SVG element MUST type the SVG attributes, presentation attributes
 included, under the names SVG spells them, and a tag both HTML and SVG name MUST be typed as the HTML
 element.
+
+33.27 A name `props` binds MUST hold a `Reactive` wherever 31.3 or 31.13 has a name hold its
+`Reactive` or 31.5 has it reach its `Reactive`'s member, and that `Reactive`'s probes MUST answer for
+every `Reactive` the caller's expression read.
 
 # 34. Script and style blocks
 

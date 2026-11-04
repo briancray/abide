@@ -21,6 +21,24 @@ export function propCell(read: Accessor): () => Reactive<unknown> {
     return () => cell
 }
 
+// Each read prop's `heldProp`, built on the first ask and kept for as long as its accessor is.
+const HELD = new WeakMap<Accessor, Reactive<unknown>>()
+
+/**
+ * 33.27 — a prop the child only reads, where its position holds the `Reactive` (31.3, 31.13): the
+ * one cell `propCell` would have built, over the caller's accessor. So `busy(rows)` asks what the
+ * caller's expression read — the caller's own `Reactive` where it bound one — and a plain value's is
+ * a cell nothing loads. Built only where one is asked for, and once per accessor.
+ */
+export function heldProp(read: Accessor): Reactive<unknown> {
+    let cell = HELD.get(read)
+    if (cell === undefined) {
+        cell = propCell(read)()
+        HELD.set(read, cell)
+    }
+    return cell
+}
+
 /**
  * 33.20 — a defaulted prop's accessor: the caller's, answering the default wherever it reads
  * `undefined`, and the default alone where the caller passed nothing. A bound accessor asked to

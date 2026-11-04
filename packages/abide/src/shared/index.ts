@@ -54,8 +54,9 @@ export { online } from './online.ts'
 export { outbox, type QueuedCall } from './outbox.ts'
 export { onMenu } from './onMenu.ts'
 export { type Principal, principal } from './principal.ts'
-// EMITTED CODE'S: a prop the child writes (33.6, 33.7).
+// EMITTED CODE'S: a prop the child writes (33.6, 33.7), and one it hands where a `Reactive` is due (33.27).
 export {
+    heldProp,
     propCell,
     propCells,
     propOr,

@@ -1,7 +1,7 @@
 // 38.3 — `abide check`, ON THE `.abide` LINE. A page is checked as the program it runs as rather
 // than as it was written, so a name read and written by name is not a type error, and every error
 // that is one lands on the line and column the author typed. And the compiler's own warnings —
-// 14.14 to 14.17 and 31.13 — each where the read is, and nowhere a near miss stands.
+// 14.14 to 14.17 — each where the read is, and nowhere a near miss stands.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { realpathSync } from 'node:fs' // bun exposes no realpath of its own
@@ -110,8 +110,6 @@ let one = reactive(1)
 let two = reactive(2)
 let name = reactive('ada')
 let maybe = reactive<string | undefined>(undefined)
-let thing = reactive({ refresh: () => 1 })
-let optional = reactive<{ refresh: () => number } | undefined>(undefined)
 let rows = reactive([{ id: 1 }])
 let keyed = reactive(
     [{ id: 1 }],
@@ -133,8 +131,6 @@ const fallback = reactive(() => name ?? 'nobody')
 const unsure = reactive(() => maybe ?? 'nobody')
 </script>
 
-<button onclick={() => thing.refresh()}>go</button>
-<button onclick={() => optional?.refresh()}>go</button>
 {#for row of rows}<input value={row.id}/>{/for}
 {#for row of rows by row.id}<input value={row.id}/>{/for}
 {#for label of ['a', 'b']}<input value={label}/>{/for}
@@ -561,10 +557,8 @@ test('a .ts file beside the pages is checked as it stands — 38.3', () => {
 // THE REVERTS, one per clause: drop the `awaitsIn` loop and `one` after the `await` goes unwarned
 // (0 against 1); treat every created function as deferred and `[1].map(() => one)` warns (2 against
 // 1); drop `read.name !== name` from `decidesARead` and `same` warns (2 against 1); drop
-// `admitsNullish` and `maybe ?? …` warns (2 against 1); drop the property scan and `thing.refresh`
-// goes unwarned (0 against 1); scan the union whole rather than per member and `optional?.refresh`
-// goes unwarned (1 against 2), because `undefined` shares no property with anything.
-test('each tracking warning lands on its read and on no near miss — 14.14, 14.15, 14.16, 14.17, 31.13', () => {
+// `admitsNullish` and `maybe ?? …` warns (2 against 1).
+test('each tracking warning lands on its read and on no near miss — 14.14, 14.15, 14.16, 14.17', () => {
     const warnings = inFile('warned/index.abide').filter(
         (diagnosis) => diagnosis.category === 'warning',
     )
@@ -576,11 +570,7 @@ test('each tracking warning lands on its read and on no near miss — 14.14, 14.
     expect(by('14.15')).toEqual([place(WARNED, 'flag ? one')])
     expect(by('14.16')).toEqual([place(WARNED, 'two, 0')])
     expect(by('14.17')).toEqual([place(WARNED, "name ?? 'nobody'")])
-    expect(by('31.13')).toEqual([
-        place(WARNED, 'thing.refresh'),
-        place(WARNED, 'optional?.refresh'),
-    ])
-    expect(warnings.length).toBe(8)
+    expect(warnings.length).toBe(6)
 })
 
 // THE REVERT: drop the `isIgnored` test from `TypeSession.readsFor`; the two silenced reads are
@@ -697,7 +687,7 @@ const run = () => thing?.go()
     expect(await checkApp(loose)).toEqual([])
 }, 60_000)
 
-// 31.1, 31.4, 31.16 — A VALUE OPENING AT A READ'S MEMBER IS A `Reactive` THE FILE READS AND WRITES BY
+// 31.1, 31.4, 31.15 — A VALUE OPENING AT A READ'S MEMBER IS A `Reactive` THE FILE READS AND WRITES BY
 // NAME. In the projection `route.url.pathname` asks a `Reactive<URL>` for a member it does not declare,
 // and the error type resolves `reactive`'s overloads to a `Keyed`, so the binding was no `Reactive`.
 // THE REVERT: drop the rounds after the first in `TypeSession.classify`; each write is a string
@@ -825,6 +815,41 @@ function other(film: { id: string; label: string; year: string }) { void film }
         { file: 'index.abide', line: 9, code: 2322 },
         { file: 'index.abide', line: 10, code: 2322 },
     ])
+}, 60_000)
+
+// 33.27 — A PROP STANDS WHERE A `Selection` IS DUE AS A PAGE'S OWN NAME DOES, typed by nothing but
+// its value: the child asks `busy(rows)` and `rows.ready()` of a prop declared as the rows a streamed call yields,
+// and the page passes the call. A row's field the value lacks is still refused, so the value's type
+// came through. THE REVERT: make `holdsProp` answer false for a position and `busy(rows)` is
+// refused (TS2345), and for a member and `rows.ready()` is (TS2339) — each beside the one finding due.
+test('a probe takes a prop typed by its value alone — 33.27', async () => {
+    const probed = appFixture({
+        'runs/sweep.handler.ts': `import { POST } from '@abide/abide/server'
+
+export default POST(async function* () {
+    yield { step: 1, label: 'start' }
+})
+`,
+        'lib/Status.abide': `<script>
+import { busy, props } from '@abide/abide'
+const { rows } = props<{ rows: { step: number; label: string }[] }>()
+</script>
+<p>{busy(rows) ? 'running' : rows.ready() ? rows.map((row) => row.label).join() : 'waiting'}</p>
+<p>{rows.map((row) => row.missing).join()}</p>`,
+        'index.abide': `<script>
+import Status from '#src/lib/Status.abide'
+import sweep from '#src/runs/sweep.handler.ts'
+const running = sweep()
+</script>
+<Status rows={running}/>`,
+    })
+    expect(
+        (await checkApp(probed)).map(({ path, line, code }) => ({
+            file: path.slice(path.lastIndexOf('/') + 1),
+            line,
+            code,
+        })),
+    ).toEqual([{ file: 'Status.abide', line: 6, code: 2339 }])
 }, 60_000)
 
 // 32.32 — A VALUE DECLARED IN ANOTHER MODULE KEYS BY ITS `by` TOO, imported under its own name or
@@ -1148,11 +1173,11 @@ import Held from '#src/lib/Held.abide'
 }, 60_000)
 
 // THE SAME WARNINGS FROM THE BUILD, which is what `abide build` and `abide dev` print. THE REVERT:
-// hand back `[]` for `warnings` in `compileApp`; this reads 0 where 8 are due.
+// hand back `[]` for `warnings` in `compileApp`; this reads 0 where 6 are due.
 test('a compile carries the warnings a check reports — 14.14, 32.14', async () => {
     const warnedOnly = appFixture({ 'index.abide': WARNED })
     const compiled = await compileApp(warnedOnly)
-    expect(compiled.warnings.length).toBe(8)
+    expect(compiled.warnings.length).toBe(6)
     expect(compiled.warnings[0]?.path).toEndWith('index.abide')
 }, 60_000)
 
@@ -1173,7 +1198,7 @@ test('abide check fails on an error and passes on warnings alone — 38.3', asyn
         { cwd: app },
     )
     expect(warned.exitCode).toBe(0)
-    expect(warned.stdout).toContain('0 errors, 8 warnings')
+    expect(warned.stdout).toContain('0 errors, 6 warnings')
 }, 60_000)
 
 // 38.31 — UNDER `noUnusedLocals`, A FILE IS JUDGED BY WHAT ITS AUTHOR READ. The lowering calls the

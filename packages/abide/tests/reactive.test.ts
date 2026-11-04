@@ -6595,7 +6595,7 @@ test('a write through a member path mints a new identity', () => {
     stop()
 })
 
-// 31.15 — AN OBJECT WITH ITS OWN BEHAVIOR IS WRITTEN, NOT COPIED. `video.currentTime = t` over a
+// 31.14 — AN OBJECT WITH ITS OWN BEHAVIOR IS WRITTEN, NOT COPIED. `video.currentTime = t` over a
 // `bind:element` ref is a seek: the element's setter is the whole point, and a spread of it is a
 // plain object holding a few own fields. THE REVERT: drop the `isPlain` walk from `writePath`; the
 // setter never runs (seeked reads undefined where 5 is due), the `Reactive` holds a husk rather than

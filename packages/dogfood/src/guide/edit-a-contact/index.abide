@@ -87,7 +87,7 @@ import Section from '#src/lib/Section.abide'
                 <tr><td><code>const [a, b] = foo</code> / <code>...foo</code></td><td>one read, taken apart</td></tr>
                 <tr><td><code>foo = bar</code></td><td>a write</td></tr>
                 <tr><td><code>foo.bar</code></td><td>the value's <code>bar</code></td></tr>
-                <tr><td><code>foo.bar(…)</code></td><td>the value's method, or a member of the <code>Reactive</code> such as <code>busy</code></td></tr>
+                <tr><td><code>foo.bar(…)</code></td><td>the value's method where it has one, and otherwise a member of the <code>Reactive</code> such as <code>busy</code></td></tr>
                 <tr><td><code>foo()</code> / <code>foo.set(v)</code></td><td>the explicit read and write</td></tr>
                 <tr><td><code>await foo</code></td><td>the value, once it has settled</td></tr>
                 <tr><td><code>refresh(foo)</code> / a <code>Selection</code>-typed parameter</td><td>the <code>Reactive</code> itself</td></tr>

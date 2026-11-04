@@ -52,8 +52,7 @@ export type Read = {
      * that brackets a binding element's initializer, which together make a default an accessor;
      * `absent`, which gives a binding with no default an accessor of `undefined` (33.4); and
      * `restMember`, a member of the rest element, which calls that key's accessor (33.15), beside
-     * `restWhole`, the rest element handed on as one value (33.22). The
-     * pair and `absent` are INSERTIONS — zero-width, so what stands between the pair goes on being
+     * `restWhole`, the rest element handed on as one value (33.22). The pair and `absent` are INSERTIONS — zero-width, so what stands between the pair goes on being
      * lowered by the same walk, and a default reading a `Reactive` still reads it.
      */
     shape:
@@ -96,6 +95,12 @@ export type Read = {
      * pair, that the default is one too.
      */
     through: boolean
+    /**
+     * 33.27 — the name is a prop the child only reads, standing where a `Reactive` is due.
+     *
+     * So the `Reactive` every rewrite reaches is a cell over its accessor, `heldProp(name)`.
+     */
+    held: boolean
     /** 32.32 — the name is bound to a `reactive(…)` whose options declare `by`. */
     byValue: boolean
     /** 14.8 — the name is declared by a branch-local `<script>`, inside the body it scopes. */
@@ -136,6 +141,7 @@ export function newRead(
         path: [],
         value: undefined,
         through: false,
+        held: false,
         byValue: false,
         local: false,
         keys: [],
@@ -235,7 +241,10 @@ export function classifyPropRead(node: Node): Read | undefined {
  * `undefined` for an occurrence that is not a read at all: the declaration itself, an import or
  * export specifier, and a `typeof n` in a type.
  */
-export function classifyRead(node: Node): Read | undefined {
+export function classifyRead(
+    node: Node,
+    valueMember = false,
+): Read | undefined {
     const parent = node.parent
     if (isNotARead(parent)) return undefined
     if (
@@ -278,7 +287,12 @@ export function classifyRead(node: Node): Read | undefined {
         if (isPropertyAccessExpression(up) && up.expression === top) {
             // 31.5 — the `Reactive`'s own member is the API, and no path. Called, it stays as
             // written; REFERENCED, it is handed over bound, so `promise.then(n.set)` writes `n`.
-            if (top === node && REACTIVE_MEMBERS.has(up.name.text)) {
+            // `valueMember` where the value's own type declares one of that name (31.5).
+            if (
+                top === node &&
+                !valueMember &&
+                REACTIVE_MEMBERS.has(up.name.text)
+            ) {
                 const outer = up.parent
                 if (
                     (isCallExpression(outer) && outer.expression === up) ||

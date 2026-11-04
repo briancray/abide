@@ -912,3 +912,153 @@ let show = reactive(false)
     const flags = document.querySelectorAll('.flag')
     expect(flags[1]?.textContent).toBe('boolean:true|string:')
 })
+
+const STATUS = `<script>
+import { busy, props, ready } from '@abide/abide'
+
+const { n } = props<{ n: number }>()
+</script>
+
+<b>{busy(n) ? 'busy' : 'idle'} {ready(n) ? n : 'waiting'}</b>`
+
+// The same probe on a prop the child also writes, whose name is already its cell (33.6).
+const WRITTEN_STATUS = `<script>
+import { busy, props, ready } from '@abide/abide'
+
+const { n } = props<{ n: number }>()
+</script>
+
+<b onclick={() => { n = 0 }}>{busy(n) ? 'busy' : 'idle'} {ready(n) ? n : 'waiting'}</b>`
+
+// The probes as the prop's own members, beside a prop whose value has an `error` of its own.
+const METHOD_STATUS = `<script>
+import { props } from '@abide/abide'
+
+const { n, field } = props<{ n: number; field: { error: string } }>()
+</script>
+
+<b>{n.busy() ? 'busy' : 'idle'} {n.ready() ? n : 'waiting'} {field.error}</b>`
+
+const PROBED = `<script>
+import { reactive } from '@abide/abide'
+import Status from './Status.abide'
+import Written from './Written.abide'
+import Method from './Method.abide'
+
+let count = reactive(1)
+</script>
+
+<p id="name"><Status n={count}/></p><p id="expression"><Status n={count * 2}/></p><p id="plain"><Status n={5}/></p><p id="written"><Written n={count}/></p><p id="method"><Method n={count} field={{ error: 'own' }}/></p>
+<button onclick={() => { count = new Promise((settle) => { globalThis.__settle = () => settle(7) }) }}>load</button>`
+
+// 33.27 — A PROP IS ASKED ABOUT AS THE CALLER'S EXPRESSION, with no type but the value's: the child
+// hands `busy` and `ready` its prop, and what they answer is what the caller passed — its own
+// `Reactive` named alone, the values an expression read, and a plain value that never loads. THE
+// REVERT: drop `read.held` from `nameOf`; `busy` is handed a number and the first render throws —
+// drop the written props' `holdIn` in `propsReads` and the written one's does, and make `holdsProp`
+// answer false for a member and the method form's does.
+test('a probe on a prop asks what the caller passed — 33.27', async () => {
+    const { html, mount } = await renderPage(PROBED, {
+        Status: STATUS,
+        Written: WRITTEN_STATUS,
+        Method: METHOD_STATUS,
+    })
+    expect(html).toContain('<b>idle 1</b>')
+    expect(html).toContain('<b>idle 2</b>')
+    expect(html).toContain('<b>idle 5</b>')
+    mount()
+    flushSync()
+    const text = (id: string): string =>
+        (document.getElementById(id) as Element).textContent ?? ''
+    ;(document.querySelector('button') as HTMLElement).click()
+    flushSync()
+    expect([
+        text('name'),
+        text('expression'),
+        text('plain'),
+        text('written'),
+        text('method'),
+    ]).toEqual(['busy 1', 'busy 2', 'idle 5', 'busy 1', 'busy 1 own'])
+    ;(globalThis as { __settle?: () => void }).__settle?.()
+    await Bun.sleep(0)
+    flushSync()
+    expect([
+        text('name'),
+        text('expression'),
+        text('plain'),
+        text('written'),
+        text('method'),
+    ]).toEqual(['idle 7', 'idle 14', 'idle 5', 'idle 7', 'idle 7 own'])
+})
+
+// A prop the child only reads, standing where its `Reactive` is due in two more places, beside one
+// it writes by the explicit spelling and a `Map` prop whose `set` is the map's.
+const HANDLERS = `<script>
+import { props, reactive } from '@abide/abide'
+
+const { n, m } = props<{ n: number; m: Map<string, number> }>()
+const isReady = n.ready
+let seen = reactive('none')
+let size = reactive(0)
+const wait = async () => { seen = String(await n) }
+</script>
+
+<b id="ready">{isReady() ? 'ready' : 'waiting'}</b><b id="seen">{seen}</b><b id="size">{size}</b>
+<button id="wait" onclick={() => { void wait() }}>wait</button>
+<button id="map" onclick={() => { m.set('a', 1); size = m.size }}>map</button>`
+
+const WRITES = `<script>
+import { props } from '@abide/abide'
+
+const { n } = props<{ n: number }>()
+</script>
+
+<b id="written">{n}</b><button id="set" onclick={() => n.set(5)}>set</button>`
+
+const HANDLED = `<script>
+import { reactive } from '@abide/abide'
+import Handlers from './Handlers.abide'
+import Writes from './Writes.abide'
+
+let count = reactive(1)
+const map = new Map<string, number>()
+</script>
+
+<Handlers n={count} m={map}/><Writes n={count}/>
+<button id="load" onclick={() => { count = new Promise((settle) => { globalThis.__settleHandled = () => settle(7) }) }}>load</button>`
+
+// 33.27 OVER 31.3 AND 31.5 — A READ PROP HOLDS ITS `Reactive` as a page's name does: a member
+// referenced rather than called is handed over BOUND, and an `await` operand waits for the settling
+// rather than reading what has landed. 33.7 — `n.set(5)` on a prop the caller did not bind is a
+// write by name, and stands in the child; a `Map` prop's `set` is still the map's. THE REVERTS:
+// drop `read.held` from `nameOf` and `n.ready` reaches the number's — the render throws `n.ready is
+// not a function`; make `holdsProp` answer false for an `await` operand and the wait reads what has
+// landed, so `seen` is `1` rather than `7`; drop `writesThrough` and the write goes to a cell `{n}`
+// never reads, so `written` stays `1`.
+test('a read prop holds its Reactive where a name would — 33.27, 33.7', async () => {
+    const { mount } = await renderPage(HANDLED, {
+        Handlers: HANDLERS,
+        Writes: WRITES,
+    })
+    mount()
+    flushSync()
+    const text = (id: string): string =>
+        (document.getElementById(id) as Element).textContent ?? ''
+    const click = (id: string): void =>
+        (document.getElementById(id) as HTMLElement).click()
+    expect(text('ready')).toBe('ready')
+    click('set')
+    flushSync()
+    expect(text('written')).toBe('5')
+    click('map')
+    flushSync()
+    expect(text('size')).toBe('1')
+    click('load')
+    flushSync()
+    click('wait')
+    ;(globalThis as { __settleHandled?: () => void }).__settleHandled?.()
+    await Bun.sleep(0)
+    await Bun.sleep(0)
+    flushSync()
+    expect(text('seen')).toBe('7')
+})

@@ -111,7 +111,7 @@ export type Abide = {
     route: string | undefined
     reactive: CheckedSymbol | undefined
     /**
-     * 31.14 — abide's `Selection` alias, which a position may be typed as rather than as a `Reactive`.
+     * 31.13 — abide's `Selection` alias, which a position may be typed as rather than as a `Reactive`.
      */
     selection: CheckedSymbol | undefined
     props: string | undefined
@@ -185,7 +185,7 @@ export async function isReactiveType(
 /**
  * Whether a type is abide's `Selection`, or a type parameter constrained by one.
  *
- * 31.14 — A POSITION TYPED AS A `Selection`, or as a type parameter constrained by one (the free
+ * 31.13 — A POSITION TYPED AS A `Selection`, or as a type parameter constrained by one (the free
  * `refresh`, `invalidate`, `busy` and `ready` take `Chosen extends Selection`). A value is never a
  * selection of itself, so a read there hands `refresh` the invoice rather than the thing to reload.
  */

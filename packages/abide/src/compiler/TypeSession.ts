@@ -625,7 +625,7 @@ export class TypeSession {
      * shadow is asked is `readsIn`'s.
      *
      * WHAT IT HAS TO SAY THAT IS NOT A TYPE ERROR comes back beside the reads: the compiler's own
-     * warnings (14.14 to 14.17, 31.13, 32.14), each on the `.abide` line where the source's text
+     * warnings (14.14 to 14.17, 32.14), each on the `.abide` line where the source's text
      * was handed in.
      */
     async readsFor(

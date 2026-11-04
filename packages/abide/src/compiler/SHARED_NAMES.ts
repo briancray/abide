@@ -29,6 +29,8 @@ export const SHARED_NAMES: ReadonlySet<string> = new Set([
     // 32.6, 33.6, 33.7 — a component's `bind:`, and the cell a child writing that prop builds.
     'boundProp',
     'propCell',
+    // 33.27 — a read prop where its position holds the `Reactive`.
+    'heldProp',
     'propCells',
     // 33.20 — a default answering where the caller's accessor reads `undefined`.
     'propOr',

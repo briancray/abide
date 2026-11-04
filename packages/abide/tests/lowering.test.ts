@@ -307,10 +307,50 @@ test('a position declared as a Reactive holds the Reactive — 31.3', async () =
     expect(await lower('const r: number = n', NM)).toBe('const r: number = n()')
 })
 
-// 31.14 — A `Selection` POSITION HOLDS THE `Reactive`: the free `refresh`, `invalidate`, `busy` and
+// 31.5, 31.6 — A MEMBER THE VALUE DECLARES IS THE VALUE'S, and one only the `Reactive` declares is the
+// `Reactive`'s: an object's own `refresh`, an optional one's, a `Map`'s `set` and a field named
+// `error` are the value's, where a number's `refresh` and `ready` stay the `Reactive`'s — and a value
+// typed `any` declares nothing, so its `ready` is the `Reactive`'s too. THE REVERT: classify with
+// `false` rather than `owned.has(node)` in `readsIn`; the first four lower as the `Reactive`'s,
+// `m.set('a', 1)` writing the map away for `'a'`.
+test("a member the value declares is the value's — 31.5, 31.6", async () => {
+    const head = "import { reactive } from '@abide/abide'\n"
+    const lowered = async (body: string): Promise<string> =>
+        (await lower(head + body)).slice(head.length)
+    expect(
+        await lowered(
+            'const thing = reactive({ refresh: () => 1 })\nthing.refresh()',
+        ),
+    ).toBe('const thing = reactive({ refresh: () => 1 })\nthing().refresh()')
+    expect(
+        await lowered(
+            'const optional = reactive<{ refresh: () => number } | undefined>(undefined)\noptional?.refresh()',
+        ),
+    ).toBe(
+        'const optional = reactive<{ refresh: () => number } | undefined>(undefined)\noptional()?.refresh()',
+    )
+    expect(
+        await lowered(
+            "const m = reactive(new Map<string, number>())\nm.set('a', 1)",
+        ),
+    ).toBe("const m = reactive(new Map<string, number>())\nm().set('a', 1)")
+    expect(
+        await lowered(
+            "const field = reactive({ error: 'x' })\nconst e = field.error",
+        ),
+    ).toBe("const field = reactive({ error: 'x' })\nconst e = field().error")
+    expect(await lowered('const n = reactive(1)\nn.refresh()')).toBe(
+        'const n = reactive(1)\nn.refresh()',
+    )
+    expect(await lowered('const a = reactive<any>(1)\na.ready()')).toBe(
+        'const a = reactive<any>(1)\na.ready()',
+    )
+})
+
+// 31.13 — A `Selection` POSITION HOLDS THE `Reactive`: the free `refresh`, `invalidate`, `busy` and
 // `ready` take `Chosen extends Selection`, optional, and a value is never a selection of itself.
 // THE REVERT: drop the `isSelection` call in `isReactiveType`; all four lower to a read, and `refresh(n())` hands `refresh` the number.
-test('a position typed as a Selection holds the Reactive — 31.14', async () => {
+test('a position typed as a Selection holds the Reactive — 31.13', async () => {
     const NM = new Set(['n', 'm'])
     const free =
         "import { busy, invalidate, ready, refresh } from '@abide/abide'\n"

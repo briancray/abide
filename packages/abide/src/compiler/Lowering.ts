@@ -686,7 +686,8 @@ export class Lowering {
     /**
      * The read's name as emitted: `name()` for a written prop, whose cell its accessor hands back.
      *
-     * 33.6 — a written prop's cell is reached through its accessor.
+     * 33.6 — a written prop's cell is reached through its accessor. 33.27 — a read prop where a
+     * `Reactive` is due, a cell over its accessor.
      */
     private nameOf(read: Read): string {
         const spelled = this.projection.text.slice(read.start, read.end)
@@ -694,6 +695,7 @@ export class Lowering {
         // reads the one `route` every page shares.
         if (this.routed !== undefined && read.routeParams)
             return `(${spelled} as unknown as () => __RouteParams<${JSON.stringify(this.routed.route)}, ${JSON.stringify(this.routed.kind)}>)`
+        if (read.held) return `${this.use('heldProp')}(${spelled})`
         return read.through ? `${spelled}()` : spelled
     }
 
@@ -734,7 +736,7 @@ export class Lowering {
         const name = this.nameOf(read)
         switch (read.shape) {
             case 'asWritten':
-                return read.through ? name : undefined
+                return read.through || read.held ? name : undefined
             // 31.5 — the member BOUND to the `Reactive`, arguments and all.
             case 'member':
                 return this.checking

@@ -14,7 +14,7 @@ import { putOwn } from './putOwn.ts'
  * object where an array was, and `length`, `map` and every later `{#for}` over it go with it. The
  * shape is decided here, where the value is.
  *
- * 31.15 — ONLY PLAIN DATA IS COPIED. An element, a class instance, a `Map`: anything whose prototype
+ * 31.14 — ONLY PLAIN DATA IS COPIED. An element, a class instance, a `Map`: anything whose prototype
  * is not `Object.prototype`, `null` or `Array.prototype` owns its own state, and its setters say
  * what a write means — `video.currentTime = t` seeks. A spread of one is a plain object holding a
  * few own fields, so the write reached nothing and the `Reactive` came to hold the husk. The write

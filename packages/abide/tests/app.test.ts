@@ -539,10 +539,10 @@ test('a server-rendered page reads route and online — 23.1, 23.8', async () =>
     expect(second).toContain('/invoices/[id]|7|/invoices/7|false|true')
 })
 
-// 31.16 — `route`'s FOUR VALUES ARE READ BY NAME, each as a name bound to a `Reactive` is: a member
+// 31.15 — `route`'s FOUR VALUES ARE READ BY NAME, each as a name bound to a `Reactive` is: a member
 // after one reaches the value. THE REVERT: drop `routeReads` from the classify pass; `route.name`
 // is handed on as the `Reactive`, `toUpperCase` is not a member of one, and the page answers 500.
-test('route.name, params, url and navigating are read by name — 31.16', async () => {
+test('route.name, params, url and navigating are read by name — 31.15', async () => {
     const page = await (await Bun.fetch(`${base}/invoices/42`)).text()
     expect(page).toContain('/INVOICES/[ID]|42|/invoices/42|still')
 })
