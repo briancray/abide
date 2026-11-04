@@ -92,6 +92,27 @@ test('every expression a slot, an attribute, a spread or a block head holds is f
 `)
 })
 
+// THE REVERT: dedent only the lines after the first of an argument `bun fmt` broke onto lines of its
+// own; the expression opens one indent in from its brace, `{    name`.
+test('an expression too long for its line opens at its brace — 38.126', async () => {
+    const source = `<span>
+    {name.split(' ').map((word) => word.charAt(0)).join('')}
+    <code>{'a string far too long to fit on the line it stands on, so bun fmt breaks the call'}</code>
+</span>
+`
+    const first = await formatted(source)
+    expect(first.text).toBe(`<span>
+    {name
+        .split(' ')
+        .map((word) => word.charAt(0))
+        .join('')}
+    <code>{'a string far too long to fit on the line it stands on, so bun fmt breaks the call'}</code>
+</span>
+`)
+    expect((await formatted(first.text)).text).toBe(first.text)
+    expect(sameTemplate(parseAbide(source), parseAbide(first.text))).toBe(true)
+})
+
 // THE REVERT: drop the `fit` check; `'b'` lands inside `class='…'` and the attribute ends there.
 test('an expression the printer would let out of its attribute value is kept as written — 38.126', async () => {
     const { text } =

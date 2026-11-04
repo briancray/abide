@@ -669,12 +669,11 @@ function unwrap(entry: string, unit: string): string {
     if (inner.endsWith(';')) inner = inner.slice(0, -1)
     if (inner.endsWith(')')) inner = inner.slice(0, -1)
     if (!inner.startsWith('\n')) return inner.trimEnd()
-    inner = shiftLines(
-        inner.slice(1),
-        (line) =>
-            line.startsWith(unit) ? line.slice(unit.length) : line.trimStart(),
-        'ts',
-    ).trimEnd()
+    const outdent = (line: string): string =>
+        line.startsWith(unit) ? line.slice(unit.length) : line.trimStart()
+    // The first line opens the expression, so it is never inside a template literal — and
+    // `shiftLines` leaves it alone for that reason, which is why it is outdented here.
+    inner = outdent(shiftLines(inner.slice(1), outdent, 'ts')).trimEnd()
     return inner.endsWith(',') ? inner.slice(0, -1) : inner
 }
 
