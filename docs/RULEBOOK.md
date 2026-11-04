@@ -3357,8 +3357,8 @@ run no turn for 30 seconds.
 44.23 A post to `/__abide/bridge` carrying a line that is not JSON MUST be refused 400, and none of
 its lines MUST be relayed.
 
-44.24 A bridge MUST answer an MCP request its Claude Code made with a failure where the report
-carrying it was not taken by `/__abide/bridge`, or where no reply arrived within 120 seconds.
+44.24 A bridge MUST answer an MCP request its Claude Code made with a failure where
+`/__abide/bridge` sent no reply within 120 seconds.
 
 44.25 A bridge whose stream from `/__abide/bridge` ends unasked MUST redial it with its pairing's
 token, each wait twice the last, until it is refused or 60 seconds have passed.
@@ -3430,6 +3430,12 @@ install wrote.
 44.44 `abide-bridge install` MUST keep the Claude Code options after its `--` and each `--env
 NAME=VALUE` it is given, and a bridge opening an `abide-bridge` link MUST run Claude Code with those
 options ahead of the link's built-in tools and with those variables set, and a link MUST NOT set either.
+
+44.45 A bridge MUST say that `/__abide/bridge` did not take a report once, and not again until a
+report is taken, and MUST NOT say it while it redials per 44.25.
+
+44.46 A bridge MUST end a turn once `/__abide/bridge` did not take a report carrying it, and MUST
+report that turn failed.
 
 # 45. Offline
 

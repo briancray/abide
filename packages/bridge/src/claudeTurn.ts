@@ -210,7 +210,7 @@ export async function claudeTurn(
     const { flags, ungranted } = launchFlags(turn.config, options.claudeArgs)
     if (ungranted.length > 0)
         options.say(
-            `The site asked for ${ungranted.join(', ')}, which this bridge was not given. Run it with \`-- --tools ${ungranted.join(',')}\` to allow it.`,
+            `The site asked for ${ungranted.join(', ')}, which this bridge wasn’t given. Add \`-- --tools ${ungranted.join(',')}\` to allow it.`,
         )
     const directory = await mkdtemp(`${tmpdir()}/abide-bridge-`)
     const config = `${directory}/mcp.json`

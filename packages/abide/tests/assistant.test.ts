@@ -851,7 +851,7 @@ test('the bridge opens the scheme the site writes its links in', () => {
 
 /** What a bridge run to its end against a `fakeBridgeSite` misbehaving as `how` said, and the site saw. */
 async function againstFakeSite(
-    how: 'drop' | 'mute' | 'refuse' | 'silent',
+    how: 'drop' | 'lose' | 'mute' | 'refuse' | 'silent' | 'vanish',
     replyMilliseconds: number,
     silenceMilliseconds?: number,
 ): Promise<{ exitCode: number; stderr: string; saw: string[] }> {
@@ -904,26 +904,26 @@ async function recordedReply(): Promise<unknown> {
     return ((await Bun.file(RECORD).json()) as { reply: unknown }).reply
 }
 
-// 44.24 — A REPORT THE SITE REFUSED IS A FAILED TOOL CALL, not one Claude Code waits on for good: the
-// site answers every post 500, and the call the post carried is answered failed with what the site
-// said. THE REVERT: swallow the post's failure (`.catch(() => {})`, no `answer`); the call waits out
-// the 60-second reply deadline, and the bridge outlives the 15-second wait here.
-test('a report the site refused answers its tool call failed — 44.24', async () => {
-    const { exitCode } = await againstFakeSite('refuse', 60_000)
+// 44.46 — A TURN THE SITE MISSED PART OF IS ENDED, and reported failed: every report is refused, and
+// the turn is one Claude Code never ends on its own. THE REVERT: drop the `abort` from `flush`; Claude
+// Code runs on, and the bridge outlives the 15-second wait here.
+test('a bridge ends a turn the site did not take a report of — 44.46', async () => {
+    const { exitCode, saw } = await againstFakeSite('lose', 60_000)
     expect(exitCode).toBe(0)
-    expect(await recordedReply()).toEqual({
-        jsonrpc: '2.0',
-        id: 1,
-        result: {
-            content: [
-                {
-                    type: 'text',
-                    text: expect.stringContaining('refused a report (500)'),
-                },
-            ],
-            isError: true,
-        },
-    })
+    const failed = saw.find((line) => line.includes('"type":"fail"'))
+    expect(failed).toContain('missed part of this turn')
+    const { pid } = (await Bun.file(RECORD).json()) as { pid: number }
+    expect(() => process.kill(pid, 0)).toThrow()
+}, 30_000)
+
+// 44.45 — A SITE THAT WENT AWAY MID-TURN IS SAID AS THE REDIAL, not as every report that then fails:
+// the stream drops with the first report, and every post after it is refused. THE REVERT: drop
+// `failingSaid = true` from `redial`; the refusal is said beside the redial.
+test('a bridge says nothing of a report it posts while it redials — 44.45', async () => {
+    const { stderr, saw } = await againstFakeSite('vanish', 60_000)
+    expect(saw.filter((line) => line === 'refused').length).toBeGreaterThan(1)
+    expect(stderr).toContain('Reconnecting…')
+    expect(stderr).not.toContain('didn’t take Claude Code’s reply')
 }, 30_000)
 
 // 44.24 — A REPLY THAT NEVER COMES IS A FAILED TOOL CALL once the deadline passes. THE REVERT: drop

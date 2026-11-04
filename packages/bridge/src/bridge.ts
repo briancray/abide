@@ -62,6 +62,9 @@ type Waiting = {
     deadline: ReturnType<typeof setTimeout>
 }
 
+/** 44.46 — the abort reason of a turn the site missed part of, which it reports failed with. */
+class MissedTurn extends Error {}
+
 /** What Claude Code is answered where the site never replied: a failed call, or a JSON-RPC error. */
 function unanswered(method: string, message: string): Record<string, unknown> {
     return method === 'tools/call'
@@ -85,6 +88,9 @@ export async function bridge(options: {
     silenceMilliseconds?: number
 }): Promise<void> {
     const site = options.site.replace(/\/+$/, '')
+    // WHAT IS SAID IS READ AS A NOTIFICATION, where a link opened the bridge (`opened.ts`): one short
+    // sentence naming the site by its host. The detail goes to Claude Code, in the failure it is answered.
+    const host = new URL(site).host
     const say = options.say ?? ((line: string) => console.error(line))
     const replyMilliseconds = options.replyMilliseconds ?? REPLY_MILLISECONDS
     const silenceMilliseconds =
@@ -100,7 +106,7 @@ export async function bridge(options: {
     )
     if (!stream.ok || stream.body === null)
         throw new Error(
-            `${site} refused the pairing (${stream.status}): ${await stream.text()}`,
+            `${host} refused to pair (${stream.status}). ${await stream.text()}`,
         )
 
     let token = ''
@@ -115,6 +121,9 @@ export async function bridge(options: {
     const outbox: Report[] = []
     let flushing: Promise<void> = Promise.resolve()
     let scheduled = false
+    // 44.45 — `failing` once a report the site did not take has been said, until one is taken; a
+    // redial is what is said while it lasts (44.25), and no failed report is.
+    let link: 'up' | 'failing' | 'redialing' = 'up'
     const flush = async (): Promise<void> => {
         scheduled = false
         const batch = outbox.splice(0)
@@ -122,6 +131,7 @@ export async function bridge(options: {
         const lines: string[] = []
         for (const item of batch) lines.push(JSON.stringify(item))
         let failure: string | undefined
+        let notice = ''
         try {
             const posted = await fetch(`${site}${BRIDGE_PATH}`, {
                 method: 'POST',
@@ -131,18 +141,32 @@ export async function bridge(options: {
                 },
                 body: lines.join('\n'),
             })
-            if (!posted.ok)
+            if (!posted.ok) {
                 failure = `${site} refused a report (${posted.status}): ${await posted.text()}`
-            else await posted.body?.cancel()
+                notice = `${host} didn’t take Claude Code’s reply (${posted.status}), so it stopped.`
+            } else await posted.body?.cancel()
         } catch (thrown) {
             failure = `${site} could not be reached: ${thrown instanceof Error ? thrown.message : String(thrown)}`
+            notice = `Can’t reach ${host}, so Claude Code stopped its reply.`
         }
-        if (failure === undefined) return
-        say(failure)
-        // 44.24 — a request the site never heard of is answered failed rather than waited on.
+        if (failure === undefined) {
+            if (link === 'failing') link = 'up'
+            return
+        }
+        if (link === 'up') {
+            say(notice)
+            link = 'failing'
+        }
+        // 44.46 — a turn the site missed part of has no answer left to give, and is ended: what it
+        // still waits on is answered as `run` ends it, and the reason is what it reports it failed with.
         for (const item of batch)
-            if (item.type === 'mcp')
-                answer(item.id, unanswered(item.method, failure))
+            turns
+                .get(item.turn)
+                ?.abort(
+                    new MissedTurn(
+                        `The site missed part of this turn, so it was ended: ${failure}`,
+                    ),
+                )
     }
     // One post at a time, in order: a turn's `end` never overtakes its last event.
     const report = (item: Report): void => {
@@ -236,6 +260,11 @@ export async function bridge(options: {
     const run = async (turn: TurnRequest): Promise<void> => {
         const controller = new AbortController()
         turns.set(turn.id, controller)
+        // A cancel or a signal aborts with no reason of its own, and ends the turn as asked.
+        const missed = (): string | undefined =>
+            controller.signal.reason instanceof MissedTurn
+                ? controller.signal.reason.message
+                : undefined
         try {
             await claudeTurn(turn, {
                 claude: options.claude ?? 'claude',
@@ -246,13 +275,16 @@ export async function bridge(options: {
                     report({ type: 'event', turn: turn.id, event }),
                 say: sayOnce,
             })
-            report({ type: 'end', turn: turn.id })
+            const message = missed()
+            if (message === undefined) report({ type: 'end', turn: turn.id })
+            else report({ type: 'fail', turn: turn.id, message })
         } catch (thrown) {
             report({
                 type: 'fail',
                 turn: turn.id,
                 message:
-                    thrown instanceof Error ? thrown.message : String(thrown),
+                    missed() ??
+                    (thrown instanceof Error ? thrown.message : String(thrown)),
             })
         } finally {
             turns.delete(turn.id)
@@ -266,7 +298,8 @@ export async function bridge(options: {
     // stops holding the pairing.
     const redial = async (): Promise<Response | undefined> => {
         if (token === '') return undefined
-        say(`Lost ${site}; reconnecting.`)
+        say(`Lost ${host}. Reconnecting…`)
+        link = 'redialing'
         const until = Date.now() + RESUME_MILLISECONDS
         let delay = FIRST_REDIAL_MILLISECONDS
         while (Date.now() < until) {
@@ -282,7 +315,8 @@ export async function bridge(options: {
                     signal: dialed.signal,
                 })
                 if (resumed.ok && resumed.body !== null) {
-                    say(`Reconnected to ${site}.`)
+                    say(`Reconnected to ${host}.`)
+                    link = 'up'
                     return resumed
                 }
                 await resumed.body?.cancel()
@@ -314,7 +348,7 @@ export async function bridge(options: {
                     if (frame.type === 'paired') {
                         token = frame.token
                         say(
-                            `Connected to ${site}. Keep this running while you chat; it ends when you close the page.`,
+                            `Connected to ${host}. Close the page to disconnect.`,
                         )
                     } else if (frame.type === 'turn') void run(frame)
                     else if (frame.type === 'reply')
@@ -343,6 +377,6 @@ export async function bridge(options: {
         await flushing
         await flush()
         shim.stop(true)
-        say(`Disconnected from ${site}.`)
+        say(`Disconnected from ${host}.`)
     }
 }

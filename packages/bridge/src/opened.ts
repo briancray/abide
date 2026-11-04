@@ -149,7 +149,7 @@ async function open(link: string): Promise<number> {
     }
     const pairing = pairingOf(link)
     if (pairing === undefined) {
-        say('That link is not a pairing this bridge opens.')
+        say('That link isn’t one this bridge can pair with.')
         await notifications.settled()
         return 1
     }
