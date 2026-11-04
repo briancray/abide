@@ -1,5 +1,12 @@
 # @abide/abide
 
+## 0.123.0
+
+### Minor Changes
+
+- 0e5f83e: an unfinished conversation's log line says why — aborted, failed with the throw, or stopped (RULEBOOK 44.31) ([`042aea3`](https://github.com/briancray/abide/commit/042aea3150ae0fd29959bbe1346d1595b86617bc))
+- 0e5f83e: Breaking: a member the value's type declares is the value's, and a read prop holds a Reactive where one is due (RULEBOOK 31.5, 31.6, 33.27) ([`50b1151`](https://github.com/briancray/abide/commit/50b1151d46389185df0b61d0dd82241566446275))
+
 ## 0.122.0
 
 ### Minor Changes
