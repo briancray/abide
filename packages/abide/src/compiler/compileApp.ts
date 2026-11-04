@@ -84,7 +84,7 @@ export type AppChecker = {
      * The same nearest tsconfig and package.json, neither touched since. Asked rather than heard,
      * because either can sit above the watched root — the dogfood's do — and either changes what
      * every file resolves to. Where it is, the session is told every move `saw` held
-     * (`TypeSession.edited`); where it is not, the caller opens another.
+     * (`TypeSession.edited`); where it is not, `KeptChecker` opens another.
      */
     current: () => boolean
     close: () => Promise<void>
@@ -106,8 +106,7 @@ export async function openChecker(appRoot: string): Promise<AppChecker> {
         found === undefined
             ? await writeDefaultProject(root)
             : { tsconfig: found, remove: async (): Promise<void> => {} }
-    const session = await TypeSession.open(project.tsconfig)
-    session.root = root
+    const session = await TypeSession.open(project.tsconfig, root)
     const moved = new Set<string>()
     let movedSomewhere = false
     let layout: Promise<AppLayout> | undefined

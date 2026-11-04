@@ -104,9 +104,11 @@ export class TypeSession {
         api: API,
         tsconfig: string,
         keyOf: (path: string) => string,
+        root: string,
     ) {
         this.api = api
         this.tsconfig = tsconfig
+        this.root = root
         this.opened = `${dirname(tsconfig)}/${SESSION_CONFIG}`
         this.keyOf = keyOf
     }
@@ -152,8 +154,8 @@ export class TypeSession {
      */
     private stoodIn = new Set<string>()
 
-    /** The app's root, real — set by `openChecker`. */
-    root = ''
+    /** The app's root, real. */
+    readonly root: string
 
     /**
      * `path` below the app's root, where it lies under it.
@@ -228,8 +230,11 @@ export class TypeSession {
         return COMPONENT_MODULE
     }
 
-    /** Opens a session on the project `tsconfig` configures. */
-    static async open(tsconfig: string): Promise<TypeSession> {
+    /**
+     * Opens a session on the project `tsconfig` configures, for the app at `root` — real, and empty
+     * for a session asked about no app's routes.
+     */
+    static async open(tsconfig: string, root = ''): Promise<TypeSession> {
         const api = new API({
             cwd: dirname(tsconfig),
             fs: {
@@ -261,7 +266,7 @@ export class TypeSession {
             throw new Error(
                 'abide: the TypeScript API no longer keeps `toPath` where the type session reads it, so a path cannot be keyed as the checker keys it.',
             )
-        const session = new TypeSession(api, tsconfig, toPath)
+        const session = new TypeSession(api, tsconfig, toPath, root)
         return session
     }
 
