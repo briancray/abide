@@ -241,10 +241,17 @@ class Mux {
     receive(frame: ServerFrame): void {
         this.subscriptions.get(frame.id)?.receive(frame)
     }
+
+    /** Lets go of every subscription and the socket, so a sign-in or a retry reaches nothing. */
+    dispose(): void {
+        clearTimeout(this.retrying)
+        this.retrying = undefined
+        this.subscriptions.clear()
+        this.reopen()
+    }
 }
 
-// Exported for a test to forget: a page never does, and a test process outlives one.
-export const MUXES = new Map<string, Mux>()
+const MUXES = new Map<string, Mux>()
 
 /**
  * The mux a handler's address is carried over, made on first use.
@@ -275,6 +282,19 @@ function muxFor(address: string): Mux {
  * reconnect then names (18.9).
  */
 const FOLLOWING = new Map<string, Following>()
+
+/**
+ * Forgets every mux and follow this page opened, their timers and sockets with them.
+ *
+ * A page never does; a test process outlives one, and a later file's sign-in (18.25) would reopen
+ * every mux an earlier file left standing.
+ */
+export function resetSocketWire(): void {
+    for (const following of FOLLOWING.values()) clearTimeout(following.expiry)
+    FOLLOWING.clear()
+    for (const mux of MUXES.values()) mux.dispose()
+    MUXES.clear()
+}
 
 /**
  * Reads again every followed copy written here, once the outbox holds no call waiting.
