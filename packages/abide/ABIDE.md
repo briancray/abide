@@ -96,8 +96,9 @@ affected code saying what it did, and tell the user.
   `{ get, set }` pair. In a `.ts` file the same write is `edits.patch((value) => { value.kind = kind })`,
   not `edits.set({ ...edits(), kind })`.
 - Derive a value with `reactive(() => …)`. `watch` is only for reaching outside the reactive graph —
-  the DOM, a timer, an imperative API — and never assigns state; a user action's effect belongs in
-  its event handler. A `watch` runs during a server render too (RULEBOOK 12.5), so one that starts a
+  the DOM, a timer, an imperative API — and its run never assigns state, a value computed from what
+  it read being a derived value. What a timer or a call it started hands back is written when that
+  lands, the way an event handler writes. A user action's effect belongs in its event handler. A `watch` runs during a server render too (RULEBOOK 12.5), so one that starts a
   timer or touches a browser global returns a `Disposer`.
 - A preference the page renders — a currency, a theme, a panel left open — lives in a cookie:
   `const theme = reactive(() => cookies().get('theme') ?? 'light')`, written with
