@@ -72,7 +72,7 @@ with where the audience knows what an MCP server costs to maintain.
 | | Why |
 | --- | --- |
 | A static marketing site | It renders one, but nothing here earns its keep if nothing on the page changes |
-| Gradual adoption into an existing app | The `page` / `layout` / `error` files and the `.server.ts` files are the mechanism, not a convention. There is no partial mode |
+| Gradual adoption into an existing app | The page files (`index.abide`, `<name>.abide`), `layout`, `error`, the `<name>.handler.ts` files and the `.server.ts` files are the mechanism, not a convention. There is no partial mode |
 | A team that wants to swap the runtime | abide is Bun and web standards deliberately, and uses Bun's APIs rather than abstracting over them |
 
 Saying these out loud is part of the positioning, not a disclaimer to bury. A framework that
@@ -80,8 +80,8 @@ claims to fit everything is read as fitting nothing.
 
 # Load-bearing claims
 
-Most of what is below is not checkable today, the compiler, the server and the transports being
-unwritten — see Status. The right-hand
+Every claim below runs in the published `@abide/abide`, and a card in the guide reruns most of them —
+see Status. The right-hand
 column is the CLAUSE each claim rests on, which makes it a design commitment rather than copy: if
 the rule changes, the claim goes with it. `docs/RULEBOOK.md` is the source and this column cites
 it by number, so where the two disagree the rulebook is right and the claim is stale.
@@ -91,12 +91,12 @@ it by number, so where the two disagree the rulebook is right and the claim is s
 | **Call a server function from a page.** No fetch, no client. | 16.28, 16.29 — the client module is GENERATED rather than shaken out of the server's, and importing a `.server.ts` file is a compile error. 16.11, 16.4 — a page's render-time read goes through the same handler a browser calls, so there is one call rather than two paths |
 | **One handler, four surfaces.** A page, an OpenAPI operation, an MCP tool, a CLI command. | 20.1 — all four DERIVED from the route table, so none can describe a handler that does not exist. 38.9 — the CLI derives from the same table. 20.2, 20.3, 20.4 — `clients` withholds a surface and is not access control |
 | **One type back.** | 1.1 — every producer hands back `Reactive`. 11.2, 16.4 — the keyed forms hand back a factory you call with its arguments first |
-| **Same name, both sides.** | 16.27, 22.1, 23.7, 23.8 — a name resolves on either side, each answering from what its side has, and where one genuinely cannot it throws rather than no-opping |
+| **Same name, both sides.** | 16.4, 22.2 — a name resolves on either side. 23.7, 23.8 — each side answers from what it has. 22.1 — and where one genuinely cannot it throws rather than no-opping |
 | **Reaching loads it.** | 1.7, 1.8 — reaching a value starts the work it is for, and a second reach joins the standing work. 11.4, 11.5 — a keyed entry is computed when its key is reached, and an unkeyed derived value reruns when what it read moves. 11.6 — `ttl`, `invalidate` and `refresh` are a keyed value's ways back. 41.7, 41.13 — the browser's read is answered by what the render already fetched |
 | **It does not block.** | 2.1 — a read returns what it has, and never awaits. 2.10 — `s.peek` answers where nothing has landed yet. 3.4 — a busy value with nothing to serve opens a sink and the hole fills. 11.21 — that reaches a derived value |
 | **A refusal is a value.** | 15.1, 15.2, 15.6 — declared, structural, and landing in the `Failures` of the value that produced it. 4.9, 4.10, 4.11 — a refused write keeps the last accepted value on screen beside the message |
 | **The schema is the type.** | 19.9, 19.10 — derived from the annotation and the argument defaults. 19.11 — where inference cannot reach, the schema WIDENS rather than the file being refused. 16.26 — a shape rides on the `Reactive`. 38.3 — `abide check` reports on the `.abide` line |
-| **Bun and web standards, not a wrapper over them.** | 22.2 — `cookies` is one name on both sides, over Bun's own `CookieMap`. 36.1 — the port is read from the environment rather than from a config of ours. 17.1, 16.36 — handlers speak `Values`, `Request` and `Response` |
+| **Bun and web standards, not a wrapper over them.** | 22.2 — `cookies` is one name on both sides, a jar shaped like Bun's own `CookieMap`. 36.1 — the port is read from the environment rather than from a config of ours. 17.1, 16.36 — handlers speak `Values`, `Request` and `Response` |
 
 # What we do not say
 
@@ -106,17 +106,17 @@ lets the claims above be short. Breaking it once makes every other claim a guess
 | Do not say | Until |
 | --- | --- |
 | Fast, faster, zero-cost, no overhead | There is a RATIO against hand-written code in the same substrate. Absolute milliseconds from a DOM emulator describe the emulator |
-| A bundle-size number | The build exists and the number is measured, not estimated |
+| A bundle-size number | The number is measured on a build, not estimated |
 | Production-ready, battle-tested, stable | Something is in production |
 | A comparison to a named framework | The comparison has been run on the same input, in the same engine, with the work counted — not just the wall clock |
 | "Magic", "black box", "it figures it out" | Never. abide is transparent on purpose: every name is imported, no type is invented, and the compiled output is readable. Magic claims the opposite of the product |
 | "It just works" | An example is adjacent. The code underneath makes it a demonstration rather than a promise; alone it is the one claim a reader cannot check |
 | "Deletes", "kills", "no more X" | Never as the HEADLINE. Offer first and contrast second — "Call a server function from a page. No route, no fetch, no client." An absence is evidence for something already offered, never the offer itself |
 
-**Today the honest frame is a DESIGN, not a product.** The workspace, the seams, the
-measurement lanes, the reactive core and the documentation are real; the compiler, the server and
-the transports are not written. Say so. The
-docs already do, and being early in public is only a liability if the copy pretends otherwise.
+**Today the honest frame is an EARLY PRODUCT.** Everything the claims above describe runs, in a
+package anyone can install, and the guide's cards rerun it. What is not there yet is anybody's
+production — so the rows above that wait on one still wait. Say so; being early in public is only
+a liability if the copy pretends otherwise.
 
 # The app an example is drawn from
 
@@ -138,7 +138,7 @@ clause it lands on, and the clause is the page's title rather than the card's.
 | --- | --- | --- |
 | Contacts and their profile | Reopening a contact you already opened · a phone stored raw and shown formatted · your unsaved edit wiped by a reload · a save button that has to know in-flight from first-load | a keyed `reactive`, `transform`, a write to a derived value, `busy` against `ready` |
 | Deals and the pipeline | A list that must not refetch because you sorted it · a total that follows its filter · a figure three tiles want and one load answers · a search that fires per keystroke | an unkeyed and a keyed `reactive` body, `global`, `debounce`, `patch` |
-| The activity feed | A feed that grows without being rebuilt · one update every open tab sees · a summary streamed as it is written | a channel, `history`, an async generator handler |
+| The activity feed | A feed that grows without being rebuilt · one update every open tab sees · a summary streamed as it is written | a channel, `patch`, an async generator handler |
 | Companies, accounts and operations | A page per company · a field only some users see · a server an operator has to watch | routes and layouts, `principal`, `log`, `health` |
 
 **Why one app.** Cards drawn from several worlds make the reader enter a new world per card while
@@ -226,7 +226,7 @@ three pages later.
 | probe | flag, status boolean | `busy()`, `ready()`, `error()` — what a probe will not do is 3.1, 3.2 and 3.14 |
 | sink, hole | placeholder, suspense boundary, slot | What 35.7 defines. TWO REGISTERS OF ONE THING, the way `Reactive` and "reactive value" are: the SINK is the mechanism and the HOLE is what a reader sees, so "opens a sink; the hole fills" is one sentence about one thing. `slot` is `<slot/>` and nothing else — a value's position in text is a text position — and a `<slot/>` takes CHILDREN, never "holes" |
 | adoption, adopt | wrapping, proxying, unwrapping, transparent forwarding | A body returning a `Reactive` ADOPTS it, per 11.13 and 11.15, so the outer is always its own `Reactive` and every option applies to itself. What mirroring carries and what delegation carries are different halves, so "forwards" names the one it is not |
-| production | value, message, chunk, item (as the general noun for what is retained) | What the rulebook's Terms table defines. `Produced` is the separate word for what a producer YIELDED, which on a stream is a chunk and is not a production. `history` and `ttl` count productions, so reaching for any of the four as the general noun breaks the unit rule |
+| production | value, message, chunk, item (as the general noun for what is retained) | What the rulebook's Terms table defines. `Produced` is the separate word for what a producer YIELDED, which on a stream is a chunk and is not a production. `ttl` is the life of a production, so reaching for any of the four as the general noun breaks the unit rule |
 | seed buffer | sink, hydration data, embedded state | The seed buffer is how DATA reaches the client, by answering the client's own request; a sink is a hole in the MARKUP a late value fills. Two mechanisms, two lifetimes, and a document carries no copy of any answer |
 | claims, principal, session | any one of the three for another | THREE THINGS. CLAIMS are the proof and the only thing in the cookie; the PRINCIPAL is what `onPrincipal` resolved that proof into, and is PUBLIC by definition; SESSION is app data addressed by what the claims identify, behind an ordinary handler. Collapsing them to "session" puts something that grows into a cookie. `caller` is a fourth and none of them — a handle for WHICH BROWSER, carried whether or not anyone authenticated |
 | surface | client, target, integration | `ui`, `openapi`, `mcp`, `cli` — one handler spoken in another vocabulary, and what `clients` withholds |
@@ -264,9 +264,9 @@ three pages later.
   has accepted, and pricing each of them turns the device into furniture.
 * **Second person, imperative.** What *you* write, what *it* does. "You write one instead", not
   "an author writes one instead".
-* **Say it plainly. The instruction is the shortest a claim comes in.** "Set `history` to keep
-  more" against "Retention past that is a memory ceiling you name, and it is the same option
-  wherever the value came from" — same fact, and the first is checkable in the time it takes to
+* **Say it plainly. The instruction is the shortest a claim comes in.** "Set `ttl` to keep it
+  longer" against "A life past that is a duration you name, and it is the same option wherever
+  the value came from" — same fact, and the first is checkable in the time it takes to
   read. THE TEST IS NOT THE GERUND: "Reading loads a value" is a CLAIM about the system, its
   subject is a gerund, and it is one of the shortest sentences here. TWO SHAPES COST, and both
   defer the verb. A NOMINALIZED INSTRUCTION makes the reader convert it before they can act —
@@ -372,7 +372,7 @@ The thing an example is for is the thing that runs, and a reader who has to find
 seeing one has been handed source to read instead of something to try.
 
 A stub marker takes `--color-muted`. It marks an ABSENCE, so it takes the ground's own recessive
-tone rather than a reserved color, and it goes when the framework is written — which is why it has
+tone rather than a reserved color, and it goes when its page is written — which is why it has
 no row here to inherit.
 
 **The signature is the code-block spine.** Every snippet of SOURCE carries a colored edge and a
@@ -398,6 +398,6 @@ page still carries until its example exists; they are a stage, not a second spel
 
 | | |
 | --- | --- |
-| Real today | The workspace, the seams, the three measurement lanes, the reactive core in `packages/abide/src/shared/reactive/`, `docs/REGISTRY.md`, `docs/RULEBOOK.md`, and the documentation site |
-| Not written | The compiler, the rendering runtime, the server and the transports |
-| Therefore | Every claim above describes a DESIGN, and an app a reader can run needs the compiler. None of them may be phrased as something a reader can run yet |
+| Real today | `@abide/abide` on npm — the compiler, the rendering runtime, the server, the transports and the `abide` CLI — beside `@abide/harness` and `@abide/bridge`; `docs/REGISTRY.md`, `docs/RULEBOOK.md`; and the documentation site, whose ten chapter apps each pass their own tests |
+| Not yet | Anybody's production, and a comparison to a named framework run on the same input in the same engine |
+| Therefore | A claim above is phrased as something a reader can run, and the card under it is the proof. The rows of What we do not say that wait on production or on a comparison still wait |

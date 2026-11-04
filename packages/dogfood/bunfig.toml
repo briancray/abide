@@ -1,10 +1,10 @@
 # The docs app's own bundler plugins, read by `abide build` and `abide dev` (RULEBOOK 38.43) — the
-# setup `/templates/scope-styles-to-a-component` teaches, dogfooded.
+# setup `/guide/edit-a-contact` teaches, dogfooded.
 [serve.static]
 plugins = ["bun-plugin-tailwind"]
 
 # A test mounts and measures the docs app's components (RULEBOOK 38.119), importing its `.abide`
-# files as the components they compile to (38.109) — the setup `/ship/call-your-app-from-a-test`
+# files as the components they compile to (38.109) — the setup `/guide/test-measure-and-ship`
 # teaches. Read only by `bun test` run from this directory.
 [test]
 preload = ["@abide/harness/abide/preload"]

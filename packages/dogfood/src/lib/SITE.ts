@@ -16,8 +16,9 @@ export type SitePage = {
     /** Title and intent decided, prose not written. */
     stub?: boolean
     /**
-     * 40.35, 40.36 — a teaching page with no card: what it teaches is done by a `command` run in a terminal,
-     * or decided by the `deployment` an app is served from, and no component running on it can show it.
+     * 40.35, 40.36 — a teaching page with no card at all: what it teaches is done by a `command` run in a
+     * terminal, or decided by the `deployment` an app is served from, and no component running on it can
+     * show it. A section with no card on a page that has one is marked by nothing.
      */
     cardless?: 'command' | 'deployment'
 }
@@ -42,6 +43,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                     lead: 'This chapter starts the CRM the rest of the docs build: a contacts page reading a handler, a star you can click, and a note on a contact. Four commands get it running.',
                     covers: [
                         '`Reactive`',
+                        '`isReactive`',
                         '`src/**`',
                         '`src/**/`',
                         '`**/lib/**/<name>.server.<extension>`',
@@ -318,6 +320,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`expiresAt`',
                         '`error`',
                         '`cookies`',
+                        '`Cookies`',
                         '`ABIDE_PRINCIPAL_SECRET`',
                         '`ABIDE_PRINCIPAL_TTL`',
                         '`Middleware`',
@@ -445,6 +448,9 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                         '`claudeCode.bridge`',
                         '`BridgeStatus`',
                         '`/__abide/bridge`',
+                        '`abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]… [-- <options>]`',
+                        '`abide-bridge install [--claude <path>] [--env NAME=VALUE]… [-- <options>]`',
+                        '`abide-bridge uninstall`',
                         '`Clients`',
                         'rpc › `clients`',
                         'Generated surfaces › `clients`',

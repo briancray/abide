@@ -1,8 +1,8 @@
 // THE ONE FACTORY, and the barrel it is the address of. `state`, `memo` and `channel`
-// collapsed into overloads on one name — a channel being a value declaring `history` — and the
-// refusal behind that split survives rather than being reversed: what it refused was ONE
-// SIGNATURE WITH AN OPTIONAL PARAMETER, not one name, and overloads handing back two result
-// types is the shape its reason forces.
+// collapsed into overloads on one name — a channel being a value over an array its `patch`
+// appends to — and the refusal behind that split survives rather than being reversed: what it
+// refused was ONE SIGNATURE WITH AN OPTIONAL PARAMETER, not one name, and overloads handing
+// back two result types is the shape its reason forces.
 //
 // THE ORDER IS FORCED, and getting it wrong breaks the design silently: `() => C` is
 // assignable to `(args: A) => C` but not the reverse, so keyed-first swallows the

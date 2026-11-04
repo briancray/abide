@@ -2,6 +2,9 @@
 
 Every name an app author can write, with its type and what it is.
 
+`@abide/abide/compiler`, and the `/runtime`, `/routing` and `/wire` entries a compiled bundle
+imports, are tooling rather than surface an app author writes, and none of their names is a row.
+
 ## What this document is
 
 A **registry**. One row per name, and the row answers exactly one question: *what is this?*
@@ -51,6 +54,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Reactive` | `Reactive<Stored = undefined, Accepted = Stored, Failures = never, Produced = Stored>` | The value type every producer in this design hands back. | 1.1, 1.2, 1.3, 1.4, 1.6, 1.7, 1.8, 9.1, 9.14 |
+| `isReactive` | `(value: unknown) => value is Reactive<unknown>` | Whether a value is a `Reactive`. | 1.6 |
 | `Keyed` | `Keyed<Stored, Args, Accepted = Stored, Failures = never, Produced = Stored>` | What a body declaring a parameter hands back: a factory carrying the probes and the triggers. | 4.13, 11.2, 11.4, 11.6, 11.23, 11.55 |
 | `Accepted` | `unknown` | What a factory and a write take, before the gates run. | 4.1, 4.2 |
 | `Stored` | `unknown` | What is held, and what a read returns. | 4.7, 5.2 |
@@ -213,27 +217,44 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures, Produced = Value>(args?: Args, options?: { signal?: AbortSignal; offline?: (args: Args) => Value }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 16.79, 16.80, 16.85 |
+| `Rpc` | `<Value, Args, Failures = never, Produced = Value>(args?: Args, options?: { signal?: AbortSignal; offline?: (args: Args) => Value }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 16.79, 16.80, 16.85 |
 | `offline` | `(args: Args) => Value` | What a call settles to where a browser could not get its answer. | 16.81, 16.82, 16.83, 16.84 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.30 |
 | `Produced` | `unknown` | What it yields, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.15 |
 | `Middleware` | `Middleware<Answer = never, Extra extends object = object> = <Given extends { request: Request } & Extra, Result>(next: (ctx?: Given) => Promise<Result>, ctx: Given) => Result \| Answer \| Failed<string, unknown> \| Promise<Result \| Answer \| Failed<string, unknown>>` | One rung, written once for every lane whose context carries `Extra`. | 16.14, 16.15, 16.16, 16.21, 37.14, 37.15 |
-| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: Reactive<Value, Value, Failures, Produced> \| Keyed<Value, Args, Value, Failures, Produced>, options?: RpcOptions<Args, RungFailures>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.76, 16.34, 16.35, 16.36, 16.37, 16.39, 16.44, 16.45, 16.46, 16.47, 16.75, 16.50, 16.51, 16.52, 16.64, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24, 18.27 |
-| `GET` | `<Value, Args, Failures, RungFailures, Produced = Value>(handler: (args?: Args) => Value, options?: RpcOptions<Args, RungFailures> & ReactiveOptions<Value, Value, Failures, Args>) => Rpc<Value, Args, Failures \| RungFailures, Produced>` | The plain-function overload, whose `ReactiveOptions` (`ttl`, `global`, `debounce` and the rest) build the value it becomes beside its address. | 16.1, 16.6, 16.7 |
-| `GET` | `<Value, Failures, RungFailures>(handler: Value \| PromiseLike<Value>, options?: RpcOptions<undefined, RungFailures> & ReactiveOptions<Value, Value, Failures>) => Rpc<Value, undefined, Failures \| RungFailures>` | The value overload, for what the handler owns outright, whose `ReactiveOptions` build the value it becomes. | 16.1, 16.6, 16.7 |
+| `GET` | `<Stored, Accepted, Failures, Produced>(handler: Reactive<Stored, Accepted, Failures, Produced>, options?: RpcOptions<undefined>) => Rpc<Stored, undefined, Failures, Produced>` | Declares a read any surface may call. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.76, 16.34, 16.35, 16.36, 16.37, 16.39, 16.44, 16.45, 16.46, 16.47, 16.75, 16.50, 16.51, 16.52, 16.64, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24, 18.27 |
+| `GET` | `<Stored, Args, Accepted, Failures, Produced>(handler: Keyed<Stored, Args, Accepted, Failures, Produced>, options?: RpcOptions<Args>) => Rpc<Stored, Args, Failures, Produced>` | The keyed overload, for a `Keyed` given an address. | 11.2, 16.1, 16.3, 16.6 |
+| `GET` | `<Chunk, Shaped = Chunk[], Gate = Schema<Chunk[]>>(handler: () => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Shaping<Chunk[], Shaped, never, Gate> & RpcOptions<undefined>) => Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Chunk[]>, Chunk>` | The streaming overload, whose options build the value it becomes beside its address. | 16.1, 16.6, 16.7, 16.44, 16.45, 16.46, 16.47 |
+| `GET` | `<Chunk, Args, Shaped = Chunk[], Gate = Schema<Chunk[]>, ArgsGate = Schema<Args>>(handler: (args: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Shaping<Chunk[], Shaped, Args, Gate, ArgsGate> & RpcOptions<Args>) => Rpc<Kept<Shaped>, Args, Refusals<Shaped, Gate, Chunk[], ArgsGate, Args>, Chunk>` | The keyed streaming overload. | 11.2, 16.1, 16.6, 16.7 |
+| `GET` | `<Chunk, Args, Shaped = Chunk[], Gate = Schema<Chunk[]>, ArgsGate = Schema<Args \| undefined>>(handler: (args?: Args) => AsyncGenerator<Chunk> \| Promise<AsyncGenerator<Chunk>>, options?: Shaping<Chunk[], Shaped, Args \| undefined, Gate, ArgsGate> & RpcOptions<Args \| undefined>) => Rpc<Kept<Shaped>, Args \| undefined, Refusals<Shaped, Gate, Chunk[], ArgsGate, Args \| undefined>, Chunk>` | The keyed streaming overload for a body whose parameter is optional. | 11.2 |
+| `GET` | `<Computed, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>>(handler: () => Computed, options?: Shaping<Awaited<Computed>, Shaped, never, Gate> & RpcOptions<undefined>) => Rpc<Kept<Shaped>, undefined, AdoptedFailures<Computed> \| Refusals<Shaped, Gate, Awaited<Computed>>, AdoptedProduced<Computed, Kept<Shaped>>>` | The plain-function overload, whose options (`ttl`, `global`, `debounce` and the rest) build the value it becomes beside its address. | 16.1, 16.6, 16.7 |
+| `GET` | `<Computed, Args, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>, ArgsGate = Schema<Args>>(handler: (args: Args) => Computed, options?: Shaping<Awaited<Computed>, Shaped, Args, Gate, ArgsGate> & RpcOptions<Args>) => Rpc<Kept<Shaped>, Args, AdoptedFailures<Computed> \| Refusals<Shaped, Gate, Awaited<Computed>, ArgsGate, Args>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed plain-function overload. | 11.2, 16.1, 16.6, 16.7 |
+| `GET` | `<Computed, Args, Shaped = Awaited<Computed>, Gate = Schema<Awaited<Computed>>, ArgsGate = Schema<Args \| undefined>>(handler: (args?: Args) => Computed, options?: Shaping<Awaited<Computed>, Shaped, Args \| undefined, Gate, ArgsGate> & RpcOptions<Args \| undefined>) => Rpc<Kept<Shaped>, Args \| undefined, AdoptedFailures<Computed> \| Refusals<Shaped, Gate, Awaited<Computed>, ArgsGate, Args \| undefined>, AdoptedProduced<Computed, Kept<Shaped>>>` | The keyed plain-function overload for a body whose parameter is optional. | 11.2 |
+| `GET` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(handler: Accepted \| PromiseLike<Accepted>, options?: Shaping<Accepted, Shaped, never, Gate> & RpcOptions<undefined>) => Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Accepted>>` | The value overload, for what the handler owns outright, whose options build the value it becomes. | 16.1, 16.6, 16.7 |
 | `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET` | Declares a mutation. | 16.2, 16.7, 16.32, 16.68, 16.76, 16.38, 16.53 |
 | `rpc.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to the handler's matching entries. | 13.2, 13.3, 13.12, 13.19, 46.11 |
 | `rpc.ready` | `(pattern?: Partial<Args>) => boolean` | `ready` narrowed to the handler's matching entries. | 13.11, 13.12, 13.19 |
 | `rpc.synced` | `(pattern?: Partial<Args>) => boolean` | `synced` narrowed to the handler's matching entries. | 13.12, 13.18, 13.19 |
 | `rpc.invalidate` | `(pattern?: Partial<Args>) => void` | `invalidate` narrowed to the handler's matching entries. | 7.2, 7.3, 13.4, 13.12, 13.19 |
 | `rpc.refresh` | `(pattern?: Partial<Args>) => void` | `refresh` narrowed to the handler's matching entries. | 7.4, 7.5, 13.4, 13.12, 13.19 |
-| `rpc.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. | 16.8 |
+| `rpc.isError` | `<Name extends string>(error: unknown, name: Name) => error is Extract<Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, { name: Name }>` | Whether a caught failure is the one named. | 16.8 |
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The same call handed back as the raw response. | 16.11, 16.42 |
 | `rpc.method` | `string` | The HTTP method. | 16.2 |
 | `rpc.url` | `(args?: Args) => string` | The address, resolved against the mount. | 16.9, 16.10, 30.28 |
 | `rpc.description` | `string \| undefined` | The human description. | 16.28 |
 | `PatchOp` | `{ op: 'add' \| 'replace' \| 'test'; path: string; value: unknown } \| { op: 'remove'; path: string } \| { op: 'move' \| 'copy'; from: string; path: string }` | One JSON Patch operation (RFC 6902), its paths JSON Pointers, as a followed `GET` is sent what an `s.patch` wrote. | 18.11, 18.13 |
+
+The aliases a call's failures and a plain handler's options are spelled through are declared
+rather than listed, none of them being a name an app writes. `Annotated` is the `ValidationError` of
+16.8, `never` wherever 19.9 derives no object's schema from `Args`:
+
+```ts
+type Annotated<Args> = 0 extends 1 & Args ? never : unknown extends Args ? never : Derived<Exclude<Args, undefined>>
+type Derived<Member, Whole = Member> = Member extends readonly unknown[] | ((...given: never[]) => unknown) ? never : Member extends object ? [Whole] extends [Member] ? [keyof Member] extends [never] ? [string] extends [Member] ? Failed<'ValidationError', Issues<Whole>> : never : Failed<'ValidationError', Issues<Whole>> : never : never
+type Shaping<Accepted, Shaped, Args = never, Gate = Schema<Accepted>, ArgsGate = Schema<Args>> = Omit<ReactiveOptions<Accepted, Kept<NoInfer<Shaped>>, never, Args>, 'transform' | 'schema' | 'args'> & { transform?: (value: Accepted) => Shaped; schema?: Gate & Schema<Accepted>; args?: [Args] extends [never] ? never : ArgsGate & Schema<Args> }
+type Refusals<Shaped, Gate, Stored, ArgsGate = Schema<never>, Args = never> = Refused<Shaped> | Gated<Gate, Stored> | Gated<ArgsGate, Args>
+```
 
 ### `RpcOptions`
 
@@ -349,9 +370,9 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.24, 44.25, 44.27, 44.30, 44.33, 44.45, 44.46 |
+| `claudeCode` | `(config?: ClaudeCodeConfig) => Provider` | The visitor's own Claude Code, reached through the bridge paired with their browser, as a provider. | 44.5, 44.13, 44.17, 44.18, 44.19, 44.33 |
 | `ClaudeCodeConfig` | `{ model?: string; fallbackModel?: string; systemPrompt?: string; appendSystemPrompt?: string; effort?: 'low' \| 'medium' \| 'high' \| 'xhigh' \| 'max'; maxBudgetUsd?: number; betas?: string[]; disallowedTools?: string[]; tools?: string[] }` | The Claude Code options a site may set for a turn, and the built-in tools it asks the visitor for. | 44.16, 44.29 |
-| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; link: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the built-in tools it is given. | 44.14, 44.32, 44.33, 44.40, 44.41, 44.42, 44.43, 44.44 |
+| `claudeCode.bridgeCommand` | `(options?: { tools?: string[] }) => { command: string; link: string; expires: number }` | The command and the link that pair a bridge with this browser, granting the built-in tools it is given. | 44.14, 44.32, 44.33, 44.40 |
 | `claudeCode.bridge` | `(options?: { tools?: string[] }) => AsyncGenerator<BridgeStatus>` | This browser's pairing, as it changes. | 44.20, 44.22, 44.32, 44.33, 44.34, 44.40 |
 | `BridgeStatus` | `{ paired: boolean; command: string \| undefined; link: string \| undefined }` | Whether a bridge is paired, and the command and the link that pair one where none is. | 44.20, 44.40 |
 | `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 16.57, 16.78 |
@@ -362,7 +383,8 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `cookies` | `() => CookieMap` | The cookies of the request being served, live and mutable. | 22.2, 22.3, 22.4, 22.5, 22.6, 22.7, 22.8, 22.10 |
+| `cookies` | `() => Cookies` | The cookies of the request being served, live and mutable. | 22.2, 22.3, 22.4, 22.5, 22.6, 22.7, 22.8, 22.10 |
+| `Cookies` | `class Cookies implements Iterable<[string, string]> { get(name: string): string \| null; has(name: string): boolean; set(name: string, value: string, options?: CookieInit): void; set(options: CookieInit): void; delete(name: string, options?: Omit<CookieStoreDeleteOptions, 'name'>): void; delete(options: CookieStoreDeleteOptions): void; size: number; toJSON(): Record<string, string>; toSetCookieHeaders(): string[] }` | A cookie jar shaped like Bun's `CookieMap`. | 22.4, 22.5, 22.6 |
 
 ## `request`
 
@@ -499,7 +521,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `csp` | `(sources?: Record<string, string[]>) => (next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request }) => Promise<Response>` | The rung that sets `content-security-policy`. | 29.1, 29.2, 29.5, 29.6, 29.7, 29.8 |
+| `csp` | `(sources?: Record<string, string[]>) => (next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request }) => Response \| Promise<Response>` | The rung that sets `content-security-policy`. | 29.1, 29.2, 29.5, 29.6, 29.7, 29.8 |
 | `csp.nonce` | `() => string` | This response's nonce, for the app's own inline script. | 29.3, 29.4, 29.9, 29.11 |
 
 ## `url`
@@ -539,7 +561,7 @@ type Gated<Gate, Accepted> = [Schema<Accepted>] extends [Gate] ? never : Failed<
 | `foo.push(v)` | the same | 31.8, 31.9 |
 | `const [a, b] = foo` / `...foo` | one read of the value | 31.12 |
 | `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one the value does not | 31.5 |
-| `foo.bar(…)` | the `Reactive` API where `bar` is a member | 31.6 |
+| `foo.bar(…)` | a call of the value's `bar`, or of the `Reactive`'s own `bar` where it declares one the value does not | 31.6 |
 | `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.11 |
 
 ## Templating
@@ -876,3 +898,14 @@ rows a runner prints, and an adapter for an abide app.
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |
+
+## `abide-bridge` — the bridge
+
+`@abide/bridge`, a package of its own: what a visitor runs to put their own Claude Code behind a
+site's `claudeCode`.
+
+| Command | Meaning | Rules |
+| --- | --- | --- |
+| `abide-bridge <site> <code> [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | This machine's Claude Code, paired with the browser a site minted the code for. | 44.15, 44.16, 44.24, 44.25, 44.27, 44.30, 44.44, 44.45, 44.46 |
+| `abide-bridge install [--claude <path>] [--env NAME=VALUE]… [-- <options>]` | The app that opens a site's `abide-bridge` links on this machine, registered. | 44.41, 44.42, 44.43, 44.44 |
+| `abide-bridge uninstall` | `abide-bridge install`, undone. | 44.43 |

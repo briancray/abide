@@ -42,7 +42,8 @@ export const BUILTIN_TYPES = new Set([
     'URL',
     'URLSearchParams',
     // Bun
-    'CookieMap',
+    'CookieInit',
+    'CookieStoreDeleteOptions',
     'Server',
     // Interop
     'StandardSchemaV1',
