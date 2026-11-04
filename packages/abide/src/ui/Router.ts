@@ -60,7 +60,8 @@ const SUPERSEDED = 'superseded'
  *
  * It holds what it put on the page, so a navigation can take it back off. A page mounted into the
  * region owns a `Scope` (12.13) and the router is the only thing that can remove its nodes, so the
- * router is where that scope is stopped.
+ * router — through its `LevelChain` — is where that scope is stopped. The router keeps the address,
+ * the history and the scroll.
  */
 export class Router {
     readonly region: Region
