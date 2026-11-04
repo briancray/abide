@@ -22,8 +22,8 @@
 // holds it directly: `list.push(row); row.name = x`. So a placed object is SENT AS IT STANDS WHEN THE
 // CALLBACK RETURNS — every op's value is copied then rather than at its write — and a write made
 // under one is not kept, since that copy already carries it.
-import type { PatchOp } from './PATCH_SINKS.ts'
-import { PATCHES } from './PATCHES.ts'
+import type { PatchLog, PatchOp } from './patchLog.ts'
+import { markWritten, openPatch } from './patchMarks.ts'
 import { RESHAPING } from './RESHAPING.ts'
 
 // The reshaping methods JSON Patch has no op for: the array they leave is sent whole instead.
@@ -39,7 +39,7 @@ const REORDERING: ReadonlySet<string> = new Set([
 const TARGET = Symbol('target')
 
 /**
- * Runs `mutate` over a proxy of `root`, marking every object it writes to in `PATCHES`.
+ * Runs `mutate` over a proxy of `root`, marking every object it writes to (`patchMarks.ts`).
  *
  * Where a `sink` is handed in, each write is also kept there as a `PatchOp`, or the sink is marked
  * `lost` where it cannot be. A `root` that is not an array or a plain object is handed over as is.
@@ -47,7 +47,7 @@ const TARGET = Symbol('target')
 export function recordWrites<Value>(
     root: Value,
     mutate: (value: Value) => void,
-    sink?: { ops: PatchOp[]; lost: boolean },
+    sink?: PatchLog,
 ): void {
     if (!isWrappable(root)) {
         // A root no proxy can stand in for is written as a whole: what the callback reads out of it
@@ -56,14 +56,12 @@ export function recordWrites<Value>(
             mutate(root)
             return
         }
-        PATCHES.epoch += 1
-        PATCHES.written.set(root, PATCHES.epoch)
-        mutate(heldView(root, PATCHES.epoch) as Value)
+        const epoch = openPatch()
+        markWritten(root, epoch)
+        mutate(heldView(root, epoch) as Value)
         return
     }
-    PATCHES.epoch += 1
-    const epoch = PATCHES.epoch
-    const written = PATCHES.written
+    const epoch = openPatch()
     // EVERY OBJECT THE PATCH REACHED, by what it is: the one proxy it is handed out as, so
     // `list[0] === list[0]` inside the callback, and its parent. ONE ENTRY rather than a map for each,
     // because a row read is the loop this runs per row and each map is a lookup and an insert there.
@@ -83,7 +81,7 @@ export function recordWrites<Value>(
         const entry = reached.get(held) as Reached
         if (entry.marked) return
         entry.marked = true
-        written.set(held, epoch)
+        markWritten(held, epoch)
         const above = entry.parent
         if (above instanceof Parents) for (const one of above.all) mark(one)
         else mark(above)
@@ -428,7 +426,7 @@ class Reached {
     proxy: object | null
     parent: object | Parents | null
     /**
-     * Written in this patch, directly or below — `PATCHES.written` holds this patch's epoch for it.
+     * Written in this patch, directly or below — its mark is this patch's epoch.
      */
     marked: boolean
     /** What one no proxy can stand in for is handed out as: `heldView` of it. */
@@ -556,8 +554,7 @@ function* markedEach(
 }
 
 function markedOut<Value>(value: Value, epoch: number): Value {
-    if (typeof value === 'object' && value !== null)
-        PATCHES.written.set(value, epoch)
+    if (typeof value === 'object' && value !== null) markWritten(value, epoch)
     return value
 }
 

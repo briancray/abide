@@ -3,7 +3,7 @@
 // `patch` an event stream writes as events (18.20), multiplexed by `id`.
 
 import type { Problem } from './Failed.ts'
-import type { PatchOp } from './reactive/PATCH_SINKS.ts'
+import type { PatchOp } from './reactive/patchLog.ts'
 
 /**
  * What a browser sends over the mux: a subscription, naming the version it holds (18.9), or its end.

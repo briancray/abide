@@ -1,6 +1,6 @@
 import { REGION_CLOSE, ROW_OPEN } from '#shared/ANCHORS.ts'
 import { moveItem, rowItem } from '#shared/reactive/index.ts'
-import { PATCHES } from '#shared/reactive/PATCHES.ts'
+import { patchEpoch } from '#shared/reactive/patchMarks.ts'
 
 import { leave } from './leave.ts'
 import { moveNode } from './moveNode.ts'
@@ -291,7 +291,7 @@ function newRow(key: unknown, data: unknown, node: ChildNode, at: number): Row {
         // for the record's whole life.
         scope: EMPTY_SCOPE,
         at,
-        seen: PATCHES.epoch,
+        seen: patchEpoch(),
     }
 }
 

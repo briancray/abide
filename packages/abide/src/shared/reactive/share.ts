@@ -64,14 +64,20 @@ export function share<Key extends string, Value>(
  * Opens a share scope around an emitted component's body, and returns the previous one.
  *
  * The PREVIOUS scope comes back rather than the new one: restoring is the whole of the close
- * (`leaveShare`), and a component that threw still has to restore it.
+ * (`leaveShare`), and a component that threw still has to restore it. `level` is handed in by a
+ * routed level opening its own scope (39.1); every other scope carries its parent's down.
  */
-export function enterShare(): ShareScope | null {
+export function enterShare(level?: unknown): ShareScope | null {
     const previous = CURRENT
     CURRENT = {
         parent: previous,
         values: new Map(),
-        level: previous === null ? undefined : previous.level,
+        level:
+            level !== undefined
+                ? level
+                : previous === null
+                  ? undefined
+                  : previous.level,
     }
     return previous
 }

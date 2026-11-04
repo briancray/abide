@@ -5,8 +5,8 @@
 import { expect, test } from 'bun:test'
 
 import { applyPatch } from '#shared/applyPatch.ts'
-import type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
-import { PATCHES } from '#shared/reactive/PATCHES.ts'
+import { PatchLog, type PatchOp } from '#shared/reactive/patchLog.ts'
+import { patchEpoch, writtenAt } from '#shared/reactive/patchMarks.ts'
 import { recordWrites } from '#shared/reactive/recordWrites.ts'
 
 type Row = { id: string; name: string; place: { city: string } }
@@ -34,7 +34,7 @@ function replayedOver<Value extends object>(
     ops: PatchOp[]
 } {
     const before = structuredClone(value)
-    const sink = { ops: [] as PatchOp[], lost: false }
+    const sink = new PatchLog(null)
     recordWrites(value, mutate, sink)
     if (sink.lost) return { kept: false, same: false, ops: sink.ops }
     // AS A BROWSER HAS THEM, which is parsed off the wire: the replay puts a pushed row into the copy,
@@ -407,8 +407,7 @@ type Entry = { id: number; n: number }
 // How many of `rows` the last patch marked written.
 function markedOf(rows: readonly Entry[]): number {
     let marked = 0
-    for (const row of rows)
-        if (PATCHES.written.get(row) === PATCHES.epoch) marked += 1
+    for (const row of rows) if (writtenAt(row) === patchEpoch()) marked += 1
     return marked
 }
 

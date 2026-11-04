@@ -14,7 +14,7 @@ import { installServer } from './installServer.ts'
 // markup with, 32.20's `safeUrl`, and 31.8's `writePath`.
 export * from '#shared'
 // 18.11 — one write a patch made, as a followed `GET`'s `patch` carries it.
-export type { PatchOp } from '#shared/reactive/PATCH_SINKS.ts'
+export type { PatchOp } from '#shared/reactive/patchLog.ts'
 export {
     type Clients,
     DELETE,

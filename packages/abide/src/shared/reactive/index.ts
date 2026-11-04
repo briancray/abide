@@ -47,6 +47,7 @@ export {
     deadlineOf,
     failedTransiently,
     flushSync,
+    followServed,
     heldGenerationOf,
     type Identity,
     isStreaming,
