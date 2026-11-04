@@ -1,4 +1,20 @@
+<script server>
+import { onConfig } from '@abide/abide/server'
+
+// No defaults of its own: a check over the whole document, run last.
+onConfig(null, {
+    schema: (document) => {
+        const { RETRIES } = document as { RETRIES: number }
+        if (!Number.isInteger(RETRIES) || RETRIES < 0 || RETRIES > 10)
+            throw new Error('RETRIES is a whole number from 0 to 10.')
+        return { RETRIES }
+    },
+})
+</script>
+
 <script>
+import { online, refresh, watch } from '@abide/abide'
+
 import CallLog from './lib/CallLog.abide'
 import Console from './lib/Console.abide'
 import Health from './lib/Health.abide'
@@ -6,6 +22,11 @@ import OfflineBanner from './lib/OfflineBanner.abide'
 import Pool from './lib/Pool.abide'
 import Retries from './lib/Retries.abide'
 import Sync from './lib/Sync.abide'
+
+// Back online: read again everything on screen.
+watch(() => {
+    if (online) refresh()
+})
 </script>
 
 <head><title>Operations — CRM</title></head>
