@@ -26,4 +26,4 @@ export function rulebookClauses(
  * A measurement carries the same digits, so a reader that cares tells the two apart by what
  * follows.
  */
-export const CITATION = /\b(\d{1,2}\.\d{1,2})\b/g
+export const CITATION = /\b(\d{1,2}\.\d{1,3})\b/g

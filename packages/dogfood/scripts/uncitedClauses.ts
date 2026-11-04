@@ -23,7 +23,14 @@ const ROOT = new URL('../../../', import.meta.url)
 const SCANNED = [
     'packages/abide/src',
     'packages/abide/tests',
+    'packages/abide/e2e',
+    'packages/abide/bench',
     'packages/dogfood/tests',
+    'packages/harness/src',
+    'packages/harness/tests',
+    'packages/harness/e2e',
+    'packages/bridge/bin',
+    'packages/bridge/src',
 ]
 
 /**
