@@ -347,7 +347,7 @@ export const SITE: readonly { section: string; pages: readonly SitePage[] }[] =
                 },
                 {
                     route: '/guide/run-it',
-                    title: 'Run it',
+                    title: 'Run the CRM',
                     nav: 'Run it',
                     intent: 'Configure the app, run code at start and stop, and see what it is doing.',
                     lead: 'A CRM in production has to be configured, started, stopped and watched. This chapter does each, with the logs, traces and health checks an operator reads.',

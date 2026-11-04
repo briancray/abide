@@ -2,7 +2,7 @@
     "name": "crm-08",
     "private": true,
     "type": "module",
-    "description": "The CRM at the end of chapter 8, Run it",
+    "description": "The CRM at the end of chapter 8, Run the CRM",
     "scripts": {
         "check": "abide check",
         "format": "abide format && bun fmt",

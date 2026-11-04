@@ -5,7 +5,7 @@ app is laid out, checked and tested, and what this file is for.
 
 ## This app
 
-The CRM at the end of chapter 8, Run it, from the abide guide.
+The CRM at the end of chapter 8, Run the CRM, from the abide guide.
 Each chapter is one directory under `src`:
 
 - `src/contacts` — Contacts

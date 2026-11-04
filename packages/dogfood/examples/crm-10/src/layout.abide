@@ -1,8 +1,7 @@
 <script server>
 import { csp, middleware } from '@abide/abide/server'
 
-// Every page: the build's own scripts and styles load, and nothing else.
-// The companies pages frame the CRM's own pages, so only this site may frame.
+// The build's own scripts load, and only this site may frame a page.
 middleware(csp({ 'frame-ancestors': ["'self'"] }))
 </script>
 
