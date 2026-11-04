@@ -35,10 +35,19 @@ export function setAttribute(
         if (element.hasAttribute(name)) element.removeAttribute(name)
         return
     }
+    writeAttribute(element, name, next)
+}
+
+/** Writes `text` to `element`'s `name` unless it already reads `text` — `setAttribute`'s compare, shared with a spread. */
+export function writeAttribute(
+    element: Element,
+    name: string,
+    text: string,
+): void {
     const standing = element.getAttribute(name)
-    if (standing === next) return
-    if (standing === null) addAttribute(element, name, next)
-    else element.setAttribute(name, next)
+    if (standing === text) return
+    if (standing === null) addAttribute(element, name, text)
+    else element.setAttribute(name, text)
 }
 
 /**
