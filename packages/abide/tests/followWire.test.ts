@@ -9,9 +9,8 @@ import { answerOf } from '#shared/answerOf.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import type { Reactive } from '#shared/reactive/index.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
-import { wire } from '#ui/wire.ts'
-
 import { resetSocketWire } from '#ui/socketWire.ts'
+import { wire } from '#ui/wire.ts'
 
 type Sent = {
     op: string

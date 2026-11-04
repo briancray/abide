@@ -19,11 +19,7 @@ import { type Disposer, watchTracked } from '#shared/reactive/watch.ts'
 
 import { type Arm, type ArmMakers, ArmRegion } from './ArmRegion.ts'
 import { Mismatch } from './Mismatch.ts'
-import {
-    fillRegion,
-    type Region,
-    removeUntil,
-} from './regions.ts'
+import { fillRegion, type Region, removeUntil } from './regions.ts'
 import { type Scope, type Stoppable, underBoundary } from './Scope.ts'
 
 /**
