@@ -868,11 +868,13 @@ export class TypeSession {
      * 11.30 — `unkeyed`: every `args` defaulting a member its body's parameter does not, as warnings.
      * Both over every `.ts` under `within` and each of `sources` as the shadow `readsFor` registered
      * for it, because a keyed value is declared in a `.ts` as often as in a `.abide` — one walk of
-     * the files for the two, each finding on its own line of the file an author wrote.
+     * the files for the two, each finding on its own line of the file an author wrote. `scripts`
+     * as `diagnose` reads it: an editor asking about one page does not walk the app's `.ts`.
      */
     async lints(
         within: string,
         sources: readonly Omit<ParsedSource, 'quiet'>[],
+        scripts = true,
     ): Promise<{ ambient: Diagnosis[]; unkeyed: Diagnosis[] }> {
         using _held = this.hold()
         const ambient: Diagnosis[] = []
@@ -905,10 +907,13 @@ export class TypeSession {
         // A file of this session's own is one of `sources`' shadows or not walked at all: a
         // checked module is the lowering's, and placed nowhere an author wrote.
         const files: string[] = []
-        for (const path of this.rootsUnder(project, within)) {
-            const key = this.keyOf(path)
-            if (authored.has(key) || !this.shadows.has(key)) files.push(path)
-        }
+        if (scripts)
+            for (const path of this.rootsUnder(project, within)) {
+                const key = this.keyOf(path)
+                if (authored.has(key) || !this.shadows.has(key))
+                    files.push(path)
+            }
+        else for (const { map } of authored.values()) files.push(map.shadowPath)
         await Promise.all(
             files.map(async (path) => {
                 const sourceFile = await project.program.getSourceFile(path)

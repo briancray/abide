@@ -27,7 +27,11 @@ import { handlersUnder } from './handlersUnder.ts'
 import { isAbideSpecifier } from './hookCalls.ts'
 import { nearest } from './nearest.ts'
 import { projectShadow } from './projectShadow.ts'
-import { type ReadSource, readSources } from './readSources.ts'
+import {
+    type ParsedSource,
+    type ReadSource,
+    readSources,
+} from './readSources.ts'
 import { Refusals } from './Refusals.ts'
 import { respecified } from './splitImports.ts'
 import { type Diagnosis, TypeSession } from './TypeSession.ts'
@@ -231,62 +235,111 @@ export async function compiled(
     // One session for the whole compile: opening it spawns the checker, and the cost is paid once
     // rather than per file.
     return withChecker(root, kept, async (session) => {
-        // 38.33 — A FILE WHOSE PROJECTION IS REFUSED (34.3, 34.17) is refused at its file, found here
-        // because every later step projects it and would refuse it for the whole app.
-        const projected: PlacedSource[] = []
-        for (const source of layout.sources)
-            try {
-                projectShadow(source.file)
-                projected.push(source)
-            } catch (thrown) {
-                refusals.at(source.path, thrown)
-            }
-        const { read, warnings } = await readSources(
+        const found = await compiledSources(
+            layout,
             session,
-            projected,
+            layout.sources,
+            [],
+            refusals,
+            checking,
+            true,
+        )
+        if (found.emitted !== undefined) Object.assign(app, found.emitted)
+        app.warnings = found.warnings
+        return { app, findings: found.findings }
+    })
+}
+
+/**
+ * What the compile makes of `own` and finds in it — THE ONE STEP `abide check` runs over the app and
+ * an editor over the one file it holds (38.11), so the squiggle and the line CI fails on are one
+ * finding: the projection, the reads, the checker's diagnoses (`checking`), the lints and the emit.
+ *
+ * `beside` is lowered quietly with `own`, for the types it lends (33.4) and reported on by nobody;
+ * `scripts` is whether the app's `.ts` files are checked and read for handlers too, which an editor
+ * asking about one page does not want. `emitted` is `undefined` where the emit threw, which
+ * `refusals` holds at the root.
+ */
+export async function compiledSources(
+    layout: AppLayout,
+    session: TypeSession,
+    own: readonly PlacedSource[],
+    beside: readonly ParsedSource[],
+    refusals: Refusals,
+    checking: boolean,
+    scripts: boolean,
+): Promise<{
+    emitted: Awaited<ReturnType<typeof emitApp>> | undefined
+    warnings: Diagnosis[]
+    findings: Diagnosis[]
+}> {
+    // 38.33 — A FILE WHOSE PROJECTION IS REFUSED (34.3, 34.17) is refused at its file, found here
+    // because every later step projects it and would refuse it for the whole app.
+    const projected: PlacedSource[] = []
+    for (const source of own)
+        try {
+            projectShadow(source.file)
+            projected.push(source)
+        } catch (thrown) {
+            refusals.at(source.path, thrown)
+        }
+    const { read, warnings } = await readSources(
+        session,
+        [...projected, ...beside],
+        refusals,
+    )
+    const placed: ReadSource<PlacedSource>[] = []
+    for (const source of read)
+        if (!source.quiet) placed.push(source as ReadSource<PlacedSource>)
+    let found: Diagnosis[] = []
+    let emittable = placed
+    if (checking) {
+        // THE APP'S OWN FILES ARE REPORTED ON: a dependency's is compiled with them (34.23), and
+        // what is wrong inside a package is the package's to report.
+        const reported: typeof read = []
+        for (const source of read)
+            if (source.quiet || !(source as Partial<PlacedSource>).dependency)
+                reported.push(source)
+        const diagnosed = await session.diagnose(reported, layout, scripts)
+        found = diagnosed.diagnoses
+        // A FILE WHOSE LOWERING REFUSED is `found` already, at its line, and is not emitted.
+        emittable = []
+        for (const source of placed)
+            if (!diagnosed.refused.has(source.path)) emittable.push(source)
+    }
+    const { ambient, unkeyed } = await session.lints(
+        layout.root,
+        projected,
+        scripts,
+    )
+    // 11.37 — a build error, every read named.
+    refusals.adopt(ambient)
+    // What the emit throws with no one file to name is refused at the root; a refusal of a file
+    // is refused at it.
+    let emitted: Awaited<ReturnType<typeof emitApp>> | undefined
+    try {
+        emitted = await emitApp(
+            scripts ? layout : { ...layout, handlers: [] },
+            session,
+            emittable,
             refusals,
         )
-        let found: Diagnosis[] = []
-        let emittable = read
-        if (checking) {
-            // THE APP'S OWN FILES ARE REPORTED ON: a dependency's is compiled with them (34.23), and
-            // what is wrong inside a package is the package's to report.
-            const reported: typeof read = []
-            for (const source of read)
-                if (!source.dependency) reported.push(source)
-            const diagnosed = await session.diagnose(reported, layout)
-            found = diagnosed.diagnoses
-            // A FILE WHOSE LOWERING REFUSED is `found` already, at its line, and is not emitted.
-            emittable = []
-            for (const source of read)
-                if (!diagnosed.refused.has(source.path)) emittable.push(source)
-        }
-        const { ambient, unkeyed } = await session.lints(root, projected)
-        // 11.37 — a build error, every read named.
-        refusals.adopt(ambient)
-        // What the emit throws with no one file to name is refused at the root; a refusal of a file
-        // is refused at it.
-        let emitWarnings: Diagnosis[] = []
-        try {
-            const whole = await emitApp(layout, session, emittable, refusals)
-            Object.assign(app, whole)
-            emitWarnings = whole.warnings
-        } catch (thrown) {
-            refusals.at(root, thrown)
-        }
-        // 11.30 — warned on, and the build goes on.
-        app.warnings = [...warnings, ...unkeyed, ...emitWarnings]
-        return {
-            app,
-            findings: [
-                ...refusals.found,
-                ...unkeyed,
-                ...warnings,
-                ...emitWarnings,
-                ...found,
-            ],
-        }
-    })
+    } catch (thrown) {
+        refusals.at(layout.root, thrown)
+    }
+    const emitWarnings = emitted?.warnings ?? []
+    // 11.30 — warned on, and the build goes on.
+    return {
+        emitted,
+        warnings: [...warnings, ...unkeyed, ...emitWarnings],
+        findings: [
+            ...refusals.found,
+            ...unkeyed,
+            ...warnings,
+            ...emitWarnings,
+            ...found,
+        ],
+    }
 }
 
 /** The emit half of `compiled`, over sources already laid out and read. */

@@ -1,9 +1,9 @@
 import { relative } from 'node:path' // bun exposes no path helpers of its own
 
-import { type Placement, placement } from '#server/placement.ts'
+import { placement } from '#server/placement.ts'
 
 import type { PlacedSource } from './appLayout.ts'
-import { type AppChecker, compiled } from './compileApp.ts'
+import { type AppChecker, compiled, compiledSources } from './compileApp.ts'
 import { abideImportsOf } from './componentGraph.ts'
 import { hooksIn } from './hookCalls.ts'
 import { parseAbide, scriptBodies } from './parseAbide.ts'
@@ -50,74 +50,79 @@ export async function checkSource(
 ): Promise<Diagnosis[]> {
     const { session, root } = checker
     const layout = await checker.layout()
+    const refusals = new Refusals(root, true)
     // 38.33 — WHAT THE TREE REFUSES OF IT, off the layout the checker keeps until a move is heard.
     // What the parser refuses is the held text's, below, never the disk's (`layout.unparsed`).
-    const tree: Diagnosis[] = []
-    for (const refused of layout.refused)
-        if (refused.path === path) tree.push(refused)
-    const refusals = new Refusals(root, true)
+    refusals.adopt(layout.refused)
     const [page] = parseSources([{ path, text }], refusals)
-    if (page === undefined) return [...tree, ...refusals.found]
     // 23.19 — WHERE THE APP PLACES IT, so a mounted page's `route.params` is typed by the route its
     // mount gives it, as `checkApp` types it; a file the layout has not seen is placed at its path.
-    const placed: Pick<Placement, 'kind' | 'route'> =
-        layout.sources.find((source) => source.path === path) ??
-        placement(relative(root, path))
-    const imports: { path: string; text: string; quiet: boolean }[] = []
-    for (const imported of abideImportsOf(
-        path,
-        page.file,
-        layout.resolve,
-    ).values())
-        try {
-            imports.push({
-                path: imported,
-                text: held(imported) ?? (await Bun.file(imported).text()),
-                quiet: true,
-            })
-        } catch {
-            // A component that cannot be read takes anything here.
-        }
-    // 27.13 — AND EVERY FILE FILING `onConfig`, quietly, so a page that only reads `config()` is
-    // typed by defaults it never imported — as `checkApp`'s whole-app program types it. The calls
-    // only name candidates; the checker decides which file.
-    const lowered = new Set(imports.map((one) => one.path))
-    for (const other of layout.sources) {
-        if (other.path === path || lowered.has(other.path)) continue
-        const editing = held(other.path)
-        if (
-            editing === undefined || editing === other.text
-                ? other.hooks.includes('onConfig')
-                : filesConfig(editing)
+    const own: PlacedSource[] = []
+    const beside: { path: string; text: string; quiet: boolean }[] = []
+    if (page !== undefined) {
+        const laid = layout.sources.find((source) => source.path === path)
+        own.push(
+            laid === undefined
+                ? {
+                      ...placement(relative(root, path)),
+                      ...page,
+                      paints: true,
+                      invoked: false,
+                      hooks: hooksIn(scriptBodies(page.file)),
+                  }
+                : { ...laid, ...page },
         )
-            imports.push({
-                path: other.path,
-                text: editing ?? other.text,
-                quiet: true,
-            })
+        for (const imported of abideImportsOf(
+            path,
+            page.file,
+            layout.resolve,
+        ).values())
+            try {
+                beside.push({
+                    path: imported,
+                    text: held(imported) ?? (await Bun.file(imported).text()),
+                    quiet: true,
+                })
+            } catch {
+                // A component that cannot be read takes anything here.
+            }
+        // 27.13 — AND EVERY FILE FILING `onConfig`, quietly, so a page that only reads `config()`
+        // is typed by defaults it never imported — as `checkApp`'s whole-app program types it. The
+        // calls only name candidates; the checker decides which file.
+        const lowered = new Set(beside.map((one) => one.path))
+        for (const other of layout.sources) {
+            if (other.path === path || lowered.has(other.path)) continue
+            const editing = held(other.path)
+            if (
+                editing === undefined || editing === other.text
+                    ? other.hooks.includes('onConfig')
+                    : filesConfig(editing)
+            )
+                beside.push({
+                    path: other.path,
+                    text: editing ?? other.text,
+                    quiet: true,
+                })
+        }
     }
     // A component that does not parse, or that the checker refuses, is its own file's finding and
     // takes anything here: a quiet source's refusal is reported by nobody.
-    const { read, warnings } = await readSources(
-        session,
-        [page, ...parseSources(imports, refusals)],
-        refusals,
-    )
-    if (refusals.found.length > 0) return [...tree, ...refusals.found]
-    const own: Diagnosis[] = []
-    for (const warning of warnings) if (warning.path === path) own.push(warning)
-    const [checked, ...beside] = read
-    const { diagnoses } = await session.diagnose(
-        checked === undefined
-            ? beside
-            : [
-                  { ...checked, kind: placed.kind, route: placed.route },
-                  ...beside,
-              ],
-        layout,
-        false,
-    )
-    return [...tree, ...own, ...diagnoses]
+    const { findings } =
+        own.length === 0
+            ? { findings: refusals.found }
+            : await compiledSources(
+                  layout,
+                  session,
+                  own,
+                  parseSources(beside, refusals),
+                  refusals,
+                  true,
+                  false,
+              )
+    const found: Diagnosis[] = []
+    for (const finding of findings)
+        if (finding.path === path) found.push(finding)
+    return found
 }
 
 /**
