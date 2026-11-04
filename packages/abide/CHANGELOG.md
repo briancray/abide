@@ -1,5 +1,32 @@
 # @abide/abide
 
+## 0.123.3
+
+### Patch Changes
+
+- abfff21: Router's doc names the LevelChain that stops a page's scope ([`00c3d2d`](https://github.com/briancray/abide/commit/00c3d2d8038c673e5a067b01402b0d270fa485b8))
+- abfff21: a spread writes through setAttribute's compare-then-write (writeAttribute) ([`017a6ff`](https://github.com/briancray/abide/commit/017a6ff26a1e9ba460973b63b2c8ffc5f9e2f863))
+- abfff21: the routed mount argument comment names LevelChain.mountFrom ([`0942e6e`](https://github.com/briancray/abide/commit/0942e6e9d6545dd24d41579fd5ec28e9478892d9))
+- abfff21: a patch-log release run twice leaves a log a later follower opened ([`206d8df`](https://github.com/briancray/abide/commit/206d8dfde626592eb5ca885567f30afeed6b0b6e))
+- abfff21: one patch log for followed values, and patch marks behind functions ([`3cdda11`](https://github.com/briancray/abide/commit/3cdda118d9a8ed4cbd32834c8cd7823c26f0b5fb))
+- abfff21: one args contract for every way a handler is called ([`4e2dcab`](https://github.com/briancray/abide/commit/4e2dcab0bddaf555404fc22687e2efd41d28b500))
+- abfff21: the {#try} ambient is Scope's private, set only through underBoundary; TryRegion swaps through ArmRegion's fills/armOf ([`54e6a91`](https://github.com/briancray/abide/commit/54e6a9158bd9fe167578479a3ce4669d13797457))
+- abfff21: a file the layout has not seen is checked as painting only where it paints ([`587597f`](https://github.com/briancray/abide/commit/587597f23cdeb331816049ff0670b99eebcb1cd8))
+- abfff21: one diagnostics sink owns the finding type, its placement, abide-ignore, order and printing for build, dev, check, format and the language server ([`6d11f57`](https://github.com/briancray/abide/commit/6d11f57adc226b45bd0ddf1b4a305ee6d7a7a000))
+- abfff21: socketWire and outboxQueue each reset in one call (resetSocketWire, resetOutbox); tests stop reaching into Mux internals and draining the outbox by timing ([`721774f`](https://github.com/briancray/abide/commit/721774f93df6040e20015f03755879c4cf534a38))
+- abfff21: a mounted handler is held to the schema its row derived, so a bundled executable coerces and validates its args (RULEBOOK 19.9) ([`76c92a5`](https://github.com/briancray/abide/commit/76c92a51f0b3f49ee95e95d8088c320d7a896341))
+- abfff21: an editor shows the findings abide check has for a file — lints, handler warnings and the emit's refusals included (RULEBOOK 38.11) ([`9824535`](https://github.com/briancray/abide/commit/9824535e191b0f9748edaafadc0bc8ecc08f75d0))
+- abfff21: simplify pass — one placedSource, packageDirectory in appTree, derivedArgs probes once, manifest read beside the table, PatchLog followers always a set, pairingStatus yields the code alone, KeptChecker's heard takes nothing ([`9a6e663`](https://github.com/briancray/abide/commit/9a6e66361364b841cb53362ace080eb1e7d0372f))
+- abfff21: ServerRoute and ServerError stay private to answerRequest ([`9c51de6`](https://github.com/briancray/abide/commit/9c51de674db98e4c2793fa8f496ebe54924c087f))
+- abfff21: the build on disk is one module, and booting from a compilation is one ordering ([`a3a5349`](https://github.com/briancray/abide/commit/a3a5349baa9c55c9a931f00d635a57743ddf1cdc))
+  
+  An app with no `src/` — its root is its package — now keeps its default `.abide` build and its `bun test` build cache inside the package rather than in the directory above it, as RULEBOOK 38.27 has a build sit beside its app; an app with a `src/` is unchanged.
+- abfff21: a LevelChain owns the routed levels and their head bracketing; Router takes a popped history step through one entry and keeps its step bookkeeping private ([`a4d9641`](https://github.com/briancray/abide/commit/a4d9641105f9d1f9958b9bb6fcf90323c07cd6a8))
+- abfff21: a kept checker reopens a stale project, drops one that threw and owns its watchers, for dev and the language server alike ([`c733d7e`](https://github.com/briancray/abide/commit/c733d7ea7b648a02ed366ffe172aa3b996c7e0de))
+- abfff21: a handler file's mount row is built once, for the compiler and the in-memory test app ([`c7db045`](https://github.com/briancray/abide/commit/c7db0459e89ba4ea74918f29d7823c87a9e01d47))
+- abfff21: format the try and wire changes ([`c85913a`](https://github.com/briancray/abide/commit/c85913a0a36bc8e828885b795ba31340057a22ff))
+- abfff21: the bridge relay writes its own frames and hears sign-ins rather than being told ([`ed69e87`](https://github.com/briancray/abide/commit/ed69e87be6e92f9980cb4f9b66edc59f56f7a88f))
+
 ## 0.123.2
 
 ### Patch Changes
