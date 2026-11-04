@@ -167,8 +167,8 @@ export async function* runTurn({
 }
 
 /**
- * The pairing of `caller` signed in as `signedIn` as it changes, until `signal` aborts: unpaired with
- * the code that pairs it, then paired the moment a bridge connects, and unpaired again if it goes. A
+ * The pairing of `caller` signed in as `signedIn` as it changes, until `signal` aborts: the code that
+ * pairs it while unpaired, then `undefined` the moment a bridge connects, and a code again if it goes. A
  * code that expires while nothing is paired is replaced with a fresh one. 44.20.
  *
  * 44.34 — IT FOLLOWS WHOEVER SIGNS IN AT THE BROWSER: a sign-in or a sign-out made since is the
@@ -178,7 +178,7 @@ export async function* pairingStatus(
     caller: string,
     signedIn: string,
     signal: AbortSignal,
-): AsyncGenerator<{ paired: boolean; code: string | undefined }> {
+): AsyncGenerator<string | undefined> {
     // A change landing while the loop was not waiting — paused at its `yield` — stays queued, so it
     // looks again; a look that finds nothing new yields nothing.
     const changes = new Inbox<undefined>()
@@ -193,7 +193,8 @@ export async function* pairingStatus(
     let unwatch = (): void => {}
     let unfollow = (): void => {}
     let pairing: { code: string; expires: number } | undefined
-    let said: string | undefined
+    // `null` until the first is said; `undefined` says paired.
+    let said: string | undefined | null = null
     signal.addEventListener('abort', rouse)
     try {
         while (!signal.aborted) {
@@ -213,10 +214,9 @@ export async function* pairingStatus(
             )
                 pairing = mintCode(caller, signedIn)
             const code = paired ? undefined : pairing?.code
-            // A code is never empty, so `''` says paired.
-            if ((code ?? '') !== said) {
-                said = code ?? ''
-                yield { paired, code }
+            if (code !== said) {
+                said = code
+                yield code
             }
             const renew = paired
                 ? undefined

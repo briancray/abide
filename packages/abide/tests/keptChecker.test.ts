@@ -87,20 +87,16 @@ test('a checker a question threw from is dropped, and the next opens another —
 // never told, `[]` where the path is due.
 test('a move is told to the checker before whoever asked to hear it — 38.4', async () => {
     const counts = opener()
-    const heard: (string | undefined)[] = []
+    let heard = 0
     const root = temporaryModule({})
-    const kept = new KeptChecker(
-        root,
-        (path) => void heard.push(path),
-        counts.open,
-    )
+    const kept = new KeptChecker(root, () => void (heard += 1), counts.open)
     try {
         await kept.live()
         kept.saw(`${root}/index.abide`)
         await kept.live()
         expect({ seen: counts.seen, heard }).toEqual({
             seen: [`${root}/index.abide`],
-            heard: [`${root}/index.abide`],
+            heard: 1,
         })
     } finally {
         await kept.close()

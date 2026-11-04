@@ -3548,7 +3548,7 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
     // A CURSOR BEHIND needs where the patch wrote, which its ops say: the follow's own sink, or one
     // of this patch's alone where nothing follows the value.
     const sink =
-        logOf(cell) ?? (hasCursorBehind(cell) ? new PatchLog(null) : undefined)
+        logOf(cell) ?? (hasCursorBehind(cell) ? new PatchLog() : undefined)
     const from = sink === undefined ? 0 : sink.ops.length
     recordWrites(stream.chunks, mutate, sink)
     // 5.7 AS THE VALUE BRANCH KEEPS IT: a patch mints no ordinal, so an accumulation it grew or

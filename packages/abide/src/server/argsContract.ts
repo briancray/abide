@@ -72,9 +72,12 @@ export function derivedArgs(
     handler: HeldToAnnotation & Gated<unknown>,
     schema: JsonValue,
 ): void {
-    if (declaredDocument(handler) !== undefined) return
-    DOCUMENTS.set(handler, schema as Document)
-    handler[DERIVED_ARGS] = (args) => validateJson(schema, args ?? {})
+    // Held already, by the module it loaded through, to the schema its row names as well.
+    if (handler[DERIVED_ARGS] !== undefined) return
+    const declared = declaredDocument(handler)
+    DOCUMENTS.set(handler, declared ?? (schema as Document))
+    if (declared === undefined)
+        handler[DERIVED_ARGS] = (args) => validateJson(schema, args ?? {})
 }
 
 /**

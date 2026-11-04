@@ -23,17 +23,13 @@ export type PatchOp =
 
 /**
  * The writes patches made, as `recordWrites` keeps them. `lost` where one could not be kept as data,
- * and then the change is sent as the value (18.13). `followers` is `null` on a log one patch keeps
+ * and then the change is sent as the value (18.13). `followers` stays empty on a log one patch keeps
  * for itself rather than one the server holds.
  */
 export class PatchLog {
     ops: PatchOp[] = []
     lost = false
-    readonly followers: Set<() => void> | null
-
-    constructor(followers: Set<() => void> | null) {
-        this.followers = followers
-    }
+    readonly followers = new Set<() => void>()
 }
 
 const LOGS = new WeakMap<object, PatchLog>()
@@ -50,11 +46,11 @@ export function logOf(cell: object): PatchLog | undefined {
 export function holdLog(cell: object, invalidated: () => void): () => void {
     let log = LOGS.get(cell)
     if (log === undefined) {
-        log = new PatchLog(new Set())
+        log = new PatchLog()
         LOGS.set(cell, log)
     }
     const held = log
-    const followers = held.followers as Set<() => void>
+    const followers = held.followers
     followers.add(invalidated)
     // A release run twice, after another follower opened a fresh log, leaves that log standing.
     return () => {
@@ -78,7 +74,6 @@ export function drainLog(cell: object): PatchOp[] | null {
 
 /** Calls every follower of `cell`'s log: an invalidate reached it. 7.6. */
 export function sendInvalidate(cell: object): void {
-    const followers = LOGS.get(cell)?.followers
-    if (followers !== undefined && followers !== null)
-        for (const sendOn of followers) sendOn()
+    const log = LOGS.get(cell)
+    if (log !== undefined) for (const sendOn of log.followers) sendOn()
 }

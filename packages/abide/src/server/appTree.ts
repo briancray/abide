@@ -12,7 +12,7 @@
 // A WALK RATHER THAN A GLOB: a glob descends `node_modules` and the build output before a filter
 // can drop them.
 
-import { type Dirent, existsSync, readdirSync } from 'node:fs' // bun has no directory listing or sync existence check of its own
+import { type Dirent, readdirSync } from 'node:fs' // bun has no directory listing of its own
 
 import type { Diagnostics } from '#compiler/Diagnostics.ts'
 import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
@@ -21,6 +21,7 @@ import {
     RESERVED_DIRECTORIES,
 } from '#shared/RESERVED_DIRECTORIES.ts'
 
+import { packageDirectory } from './packageDirectory.ts'
 import {
     DIRECTORY_FILES,
     isBenchFile,
@@ -64,7 +65,7 @@ export function appFiles(root: string, refusals: Diagnostics): AppFiles {
     }
     // 23.22, 38.25 — a root that is its package's directory holds the package's own files beside its
     // pages.
-    const packaged = existsSync(`${root}/package.json`)
+    const packaged = packageDirectory(root) === root
     walk(root, '', undefined, files, refusals, packaged)
     files.abide.sort()
     files.handlers.sort()

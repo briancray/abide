@@ -2,7 +2,7 @@ import { relative } from 'node:path' // bun exposes no path helpers of its own
 
 import { placement } from '#server/placement.ts'
 
-import { paints, type PlacedSource } from './appLayout.ts'
+import { type PlacedSource, placedSource } from './appLayout.ts'
 import { type AppChecker, compiled, compiledSources } from './compileApp.ts'
 import { abideImportsOf } from './componentGraph.ts'
 import { type Diagnosis, Diagnostics } from './Diagnostics.ts'
@@ -62,13 +62,7 @@ export async function checkSource(
         const laid = layout.sources.find((source) => source.path === path)
         own.push(
             laid === undefined
-                ? {
-                      ...placement(relative(root, path)),
-                      ...page,
-                      paints: paints(page.file),
-                      invoked: false,
-                      hooks: hooksIn(scriptBodies(page.file)),
-                  }
+                ? placedSource(page, placement(relative(root, path)), false)
                 : { ...laid, ...page },
         )
         for (const imported of abideImportsOf(

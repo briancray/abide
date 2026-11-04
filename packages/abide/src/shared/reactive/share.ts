@@ -72,12 +72,7 @@ export function enterShare(level?: unknown): ShareScope | null {
     CURRENT = {
         parent: previous,
         values: new Map(),
-        level:
-            level !== undefined
-                ? level
-                : previous === null
-                  ? undefined
-                  : previous.level,
+        level: level ?? previous?.level,
     }
     return previous
 }

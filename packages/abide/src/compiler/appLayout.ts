@@ -139,13 +139,7 @@ export async function appLayout(root: string): Promise<AppLayout> {
             found.positions.get(source.path) ?? relative,
         )
         refusePlace(source, placed, resolve, refusals)
-        sources.push({
-            ...source,
-            ...placed,
-            paints: paints(source.file),
-            invoked: invoked.has(source.path),
-            hooks: hooksIn(scriptBodies(source.file)),
-        })
+        sources.push(placedSource(source, placed, invoked.has(source.path)))
     }
     const texts = await textsAt(found.handlers.map((file) => file.path))
     const placedHandlers: PlacedHandler[] = []
@@ -346,6 +340,21 @@ export async function withDependencies(
 }
 
 /** Whether a page or an error page has anything to paint: a template, or a head. 23.3, 35.14. */
+/** `source` at `placed`, with what its own text says it paints and calls. */
+export function placedSource(
+    source: ParsedSource,
+    placed: Placement,
+    invoked: boolean,
+): PlacedSource {
+    return {
+        ...source,
+        ...placed,
+        paints: paints(source.file),
+        invoked,
+        hooks: hooksIn(scriptBodies(source.file)),
+    }
+}
+
 export function paints(file: AbideFile): boolean {
     return file.template.length > 0 || file.head.length > 0
 }

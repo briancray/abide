@@ -39,7 +39,7 @@ function replayedOver<Value extends object>(
     ops: PatchOp[]
 } {
     const before = structuredClone(value)
-    const sink = new PatchLog(null)
+    const sink = new PatchLog()
     recordWrites(value, mutate, sink)
     if (sink.lost) return { kept: false, same: false, ops: sink.ops }
     // AS A BROWSER HAS THEM, which is parsed off the wire: the replay puts a pushed row into the copy,

@@ -15,7 +15,7 @@ import { type AppChecker, openChecker } from './compileApp.ts'
  */
 export class KeptChecker {
     readonly root: string
-    private readonly heard: (path: string | undefined) => void
+    private readonly heard: () => void
     private readonly watchers: FSWatcher[] = []
     private readonly watched = new Set<string>()
     private checker: Promise<AppChecker> | undefined
@@ -23,7 +23,7 @@ export class KeptChecker {
 
     constructor(
         root: string,
-        heard: (path: string | undefined) => void = () => {},
+        heard: () => void,
         open: (root: string) => Promise<AppChecker> = openChecker,
     ) {
         this.root = root
@@ -75,7 +75,7 @@ export class KeptChecker {
             (checker) => checker.saw(path),
             () => {},
         )
-        this.heard(path)
+        this.heard()
     }
 
     /** Stops watching and closes the checker. */

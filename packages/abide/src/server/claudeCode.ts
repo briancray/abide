@@ -115,15 +115,16 @@ function askingCaller(): string {
     return caller
 }
 
-/** One pairing code, as the command a visitor runs and the link they open, and when it stops standing. */
-type Pairing = { command: string; link: string; expires: number }
-
 /**
  * The command and the link that pair a bridge with this browser, and when their code stops standing.
  * 44.14. The `tools` it is given are written after the command's `--` and in the link, so the visitor
  * running either grants them (44.29, 44.32, 44.40).
  */
-function bridgeCommand(options: PairingOptions = {}): Pairing {
+function bridgeCommand(options: PairingOptions = {}): {
+    command: string
+    link: string
+    expires: number
+} {
     const { code, expires } = mintCode(askingCaller(), signedInAs())
     return { ...commandFor(code, options), expires }
 }
@@ -152,14 +153,14 @@ function commandFor(
 async function* bridge(
     options: PairingOptions = {},
 ): AsyncGenerator<BridgeStatus> {
-    for await (const { paired, code } of pairingStatus(
+    for await (const code of pairingStatus(
         askingCaller(),
         signedInAs(),
         request().signal,
     ))
         yield code === undefined
-            ? { paired, command: undefined, link: undefined }
-            : { paired, ...commandFor(code, options) }
+            ? { paired: true, command: undefined, link: undefined }
+            : { paired: false, ...commandFor(code, options) }
 }
 
 /** The visitor's own Claude Code as a provider, with the pairing that reaches it. */

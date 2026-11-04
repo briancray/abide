@@ -130,6 +130,9 @@ export async function servedBuild(
         // A FRESH HANDLE: one taken before the build wrote the file reads it as empty.
         if (!(await Bun.file(marker).exists())) return undefined
     }
+    // Read beside the table's import rather than after it; a boot that never loads drops it.
+    const files = builtFiles(out)
+    files.catch(() => {})
     const served = await serveApp(
         root,
         (await Bun.file(marker).json()) as Compilation,
@@ -140,7 +143,7 @@ export async function servedBuild(
             builtSources({
                 table: served.table,
                 handlers: served.table.handlers,
-                ...(await builtFiles(out)),
+                ...(await files),
             }),
     }
 }
